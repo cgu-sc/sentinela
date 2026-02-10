@@ -359,6 +359,13 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
     ws.write('B3', f"{dados_prescritores.get('razaoSocial', '')} | CNPJ: {cnpj_fmt}", fmt_subtitulo)
     ws.write('B4', f"{dados_prescritores.get('municipio', '')} - {dados_prescritores.get('uf', '')}", fmt_subtitulo)
 
+    # --- Link para Documentação ---
+    fmt_link_doc = wb.add_format({
+        'font_size': 9, 'font_color': 'blue', 'underline': True, 
+        'align': 'left', 'valign': 'top'
+    })
+    ws.write_url('B5', 'https://cgu-sc.github.io/sentinela/', fmt_link_doc, string='📘 Acesse a Documentação')
+
     # =================================================================
     # CARDS DE RESUMO - LINHA 1 (Concentração e Anomalias)
     # =================================================================

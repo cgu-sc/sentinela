@@ -488,7 +488,16 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     # INÍCIO DA ESCRITA DO EXCEL
     # =================================================================
     output = f"{cnpj_analise} ({'Completo' if tipo_relatorio == 1 else 'Resumido'}).xlsx"
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    
+    try:
+        writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    except PermissionError:
+        print(f"\n❌ ERRO: O arquivo '{output}' parece estar aberto.")
+        print("   ⚠️  Por favor, FECHE O ARQUIVO EXCEL e tente novamente.")
+        return "ARQUIVO_ABERTO"
+    except Exception as e:
+        print(f"Erro ao criar arquivo Excel: {e}")
+        return "ERRO_CRIACAO"
 
     try:
         wb = writer.book
@@ -927,6 +936,13 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             # Escreve na célula B4
             ws_ind.write('B4', texto_demografico, fmt_subtitulo)
+            
+            # --- Link para Documentação ---
+            fmt_link_doc = wb.add_format({
+                'font_size': 9, 'font_color': 'blue', 'underline': True, 
+                'align': 'left', 'valign': 'top'
+            })
+            ws_ind.write_url('B5', 'https://cgu-sc.github.io/sentinela/', fmt_link_doc, string='📘 Acesse a Documentação')
 
             # =================================================================
 

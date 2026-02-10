@@ -12,7 +12,7 @@ Esta seção detalha as tabelas criadas pelo sistema para armazenar os resultado
 | ------------------ | ---------------------------------------------------- |
 | **Nome da Tabela** | `temp_CGUSC.dbo.processamentosFP`                    |
 | **Função**         | Registrar o status de processamento de cada farmácia |
-| **Criada por**     | Script de preparação (Fase 1)                        |
+| **Criada por**     | Script de Preparação (Fase 1)                        |
 | **Populada por**   | Script Python (Fase 2)                               |
 
 ### 1.2. Descrição

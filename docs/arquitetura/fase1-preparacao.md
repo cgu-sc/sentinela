@@ -8,7 +8,7 @@ A Fase 1 é responsável por **estruturar e limpar os dados brutos** para proces
 
 ### 1.1. Objetivo
 
-Preparar o ambiente de dados para que o script Python (Fase 2) possa processar cada farmácia de forma eficiente e isolada.
+Preparar o ambiente de dados para que o script Python (Fase 2) possa processar cada estabelecimento de forma eficiente e isolada.
 
 ### 1.2. Script Principal
 

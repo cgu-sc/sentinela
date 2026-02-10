@@ -12,7 +12,7 @@ No centro de toda a análise do Sistema Sentinela estão **duas tabelas transaci
 | ------------------ | ---------------------------------------------------- |
 | **Nome da Tabela** | `[dbo].[relatorio_movimentacao_2015_2024]`           |
 | **Base de Dados**  | `db_farmaciapopular`                                 |
-| **Fonte Original** | Sistema Autorizador do Ministério da Saúde (DATASUS) |
+| **Fonte Original** | Sistema Autorizador do Ministério da Saúde           |
 | **Tipo**           | Transacional                                         |
 | **Granularidade**  | Um registro por item vendido                         |
 

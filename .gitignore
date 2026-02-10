@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+site/
+site2/
 env/
 relatorios/
 dist/

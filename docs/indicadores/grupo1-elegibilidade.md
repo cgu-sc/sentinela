@@ -38,7 +38,7 @@ Este é um dos indicadores mais fortes de fraude, pois representa uma transaçã
 ### 1.4. Fórmula
 
 $$
-\\% \text{Falecidos} = \frac{\sum \text{Valor das Vendas após Óbito}}{\sum \text{Faturamento Total}} \times 100
+\% \text{Falecidos} = \frac{\sum \text{Valor das Vendas após Óbito}}{\sum \text{Faturamento Total}} \times 100
 $$
 
 ### 1.5. Interpretação

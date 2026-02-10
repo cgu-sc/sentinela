@@ -1,7 +1,7 @@
 site_name: Projeto Sentinela
 site_description: Sistema de Auditoria Automatizada do Programa Farmácia Popular do Brasil
 site_author: CGU - Núcleo de Estudos e Pesquisas (NEP/SC)
-site_url: https://paineis.cgu.gov.br/sentinela
+site_url: https://cgu-sc.github.io/sentinela/
 
 # Permite abrir os arquivos HTML diretamente do disco (offline)
 use_directory_urls: false

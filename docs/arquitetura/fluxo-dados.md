@@ -1,6 +1,6 @@
 # Fluxo de Dados
 
-Este documento apresenta uma visão integrada de como os dados fluem através do Sistema Sentinela, desde a entrada até a geração dos produtos finais.
+Este documento apresenta uma visão integrada de como os dados fluem através do Sentinela, desde a entrada até a geração dos produtos finais.
 
 ---
 

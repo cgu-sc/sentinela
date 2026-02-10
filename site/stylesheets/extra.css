@@ -1,0 +1,171 @@
+/* Estilos customizados para documentação do Projeto Sentinela */
+
+/* Cores institucionais CGU */
+:root {
+  --cgu-primary: #1f4e78;
+  --cgu-secondary: #e8f4fd;
+  --cgu-accent: #4472c4;
+}
+
+/* Melhorias de tipografia */
+.md-typeset h1 {
+  font-weight: 700;
+  color: var(--cgu-primary);
+}
+
+.md-typeset h2 {
+  border-bottom: 2px solid var(--cgu-primary);
+  padding-bottom: 0.3em;
+}
+
+/* Cards de grid */
+.md-typeset .grid.cards > ul > li {
+  border-left: 4px solid var(--cgu-primary);
+}
+
+/* Admonitions customizados */
+.md-typeset .admonition.quote {
+  border-left-color: var(--cgu-primary);
+}
+
+.md-typeset .admonition.quote > .admonition-title {
+  background-color: var(--cgu-secondary);
+}
+
+/* Tabelas com estilo */
+.md-typeset table:not([class]) th {
+  background-color: var(--cgu-primary);
+  color: white;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: var(--cgu-secondary);
+}
+
+/* Tags de risco */
+.risk-critical {
+  background-color: #8b0000;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.risk-high {
+  background-color: #ff8c00;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.risk-medium {
+  background-color: #ffd700;
+  color: black;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.risk-low {
+  background-color: #90ee90;
+  color: black;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.risk-minimal {
+  background-color: #228b22;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+/* Melhoria para diagrams mermaid */
+.mermaid {
+  text-align: center;
+  margin: 1em 0;
+}
+
+/* Footer personalizado */
+.md-footer-meta {
+  background-color: var(--cgu-primary);
+}
+
+/* Header com logo */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.2rem;
+}
+
+/* Melhor espaçamento para código */
+.md-typeset pre > code {
+  border-radius: 8px;
+}
+
+/* Destacar links */
+.md-typeset a {
+  color: var(--cgu-accent);
+}
+
+.md-typeset a:hover {
+  text-decoration: underline;
+}
+
+/* Estilos para o índice lateral (TOC) */
+.md-sidebar--secondary {
+  font-size: 0.75rem; /* Tamanho da fonte reduzido */
+  line-height: 1.4; /* Altura da linha para melhor leitura */
+}
+
+.md-sidebar__content nav ul {
+  font-size: 0.75rem; /* Tamanho da fonte dos itens do índice */
+  line-height: 1.4; /* Altura da linha consistente */
+  padding-left: 0.5em; /* Espaçamento à esquerda */
+}
+
+.md-sidebar__content nav a {
+  color: var(--md-default-fg-color); /* Cor do texto */
+  text-decoration: none;
+  transition: color 0.2s ease; /* Transição suave ao passar o mouse */
+  display: block;
+  padding: 0.25em 0; /* Espaçamento interno */
+  border-left: 2px solid transparent; /* Borda esquerda sutil */
+}
+
+.md-sidebar__content nav a:hover {
+  color: var(--md-accent-fg-color); /* Cor ao passar o mouse */
+  border-left-color: var(--md-accent-fg-color); /* Destaque na borda ao passar o mouse */
+}
+
+.md-sidebar__content nav li {
+  margin: 0.15em 0; /* Espaçamento entre itens */
+}
+
+/* Estilo para o título do índice */
+.md-sidebar__title {
+  font-weight: 600; /* Peso da fonte */
+  color: var(--cgu-primary); /* Cor institucional */
+  border-bottom: 1px solid var(--cgu-primary); /* Linha inferior */
+  padding-bottom: 0.3em; /* Espaçamento inferior */
+  margin-bottom: 0.8em; /* Espaçamento inferior externo */
+}
+
+/* Estilo para itens ativos */
+.md-sidebar__content nav .active > a {
+  color: var(--md-accent-fg-color); /* Cor para item ativo */
+  border-left-color: var(--md-accent-fg-color); /* Borda para item ativo */
+  font-weight: 500; /* Peso da fonte para item ativo */
+}
+
+/* Mostrar apenas a navegação inferior e ocultar o resto do footer */
+.md-footer-nav {
+  display: block !important;
+}
+
+.md-footer-meta {
+  display: none !important;
+}
+

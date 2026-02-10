@@ -1,0 +1,12 @@
+pandas>=2.0.0               # Manipulação de dados e Excel
+pyodbc>=5.0.0               # Conexão com bancos de dados ODBC
+Pillow>=10.0.0              # Processamento de imagens (PIL)
+tqdm>=4.66.0                # Barras de progresso
+art>=6.0                    # Arte ASCII para interfaces texto
+xlsxwriter>=3.0.0           # Engine para geração de Excel
+openpyxl>=3.1.0             # Suporte adicional para Excel
+
+# Documentação
+mkdocs>=1.6.0               # Framework de documentação
+mkdocs-material>=9.5.0      # Tema Material para MkDocs
+mkdocs-mermaid2-plugin>=1.2.1 # Suporte a diagramas Mermaid

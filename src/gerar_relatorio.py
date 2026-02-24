@@ -1416,14 +1416,34 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             med_uf /= 100.0
                             med_br /= 100.0
 
-                        # Lógica de Cores (Só aplica se tem dados)
+                        # Lógica de Cores e Status (Matriz Específica)
+                        limiar_atencao = 3.0
+                        limiar_critico = 5.0
+                        
+                        # Exceção para o Teto Máximo (Devido à alta concenctração da média em 60%)
+                        if nome == "Dispensação em Teto Máximo":
+                            limiar_atencao = 1.3  # Ex: 60% * 1.3 = 78%
+                            limiar_critico = 1.5  # Ex: 60% * 1.5 = 90%
+                        # Exceção para Medicamentos de Alto Custo (Média em torno de 35%)
+                        elif nome == "Medicamentos de Alto Custo":
+                            limiar_atencao = 1.6  # Ex: 35% * 1.6 = 56%
+                            limiar_critico = 2.0  # Ex: 35% * 2.0 = 70%
+                        # Exceção para Concentração em Dias de Pico (Média em torno de 27%)
+                        elif nome == "Concentração em Dias de Pico":
+                            limiar_atencao = 1.8  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
+                            limiar_critico = 2.2  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
+                        # Exceção para Pacientes Únicos (Média em torno de 41%)
+                        elif nome == "Pacientes Únicos":
+                            limiar_atencao = 1.6  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
+                            limiar_critico = 2.0  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
+                        
                         risco_base = r_uf
                         fmt_risco_usado = fmt_risco_verde
                         texto_status = "NORMAL"
-                        if risco_base >= 3:
+                        if risco_base >= limiar_atencao:
                             fmt_risco_usado = fmt_risco_amarelo
                             texto_status = "ATENÇÃO"
-                        if risco_base >= 5:
+                        if risco_base >= limiar_critico:
                             fmt_risco_usado = fmt_risco_vermelho
                             texto_status = "CRÍTICO"
 

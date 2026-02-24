@@ -1,0 +1,175 @@
+USE [temp_CGUSC]
+GO
+
+-- ============================================================================
+-- DEFINIÇÃO DE VARIÁVEIS
+-- ============================================================================
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim DATE = '2024-12-10';
+
+-- ============================================================================
+-- PASSO 1: CÁLCULO BASE POR FARMÁCIA (INDICADOR DEMOGRÁFICO)
+-- Tabela: temp_CGUSC.dbo.indicadorInconsistenciaClinica
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorInconsistenciaClinica;
+
+WITH CalculoDemografico AS (
+    SELECT 
+        A.cnpj,
+        A.num_autorizacao,
+        MIN(A.data_hora) AS data_hora_venda,
+        
+        -- Identifica se ESTA VENDA tem pelo menos 1 item suspeito
+        MAX(CASE 
+            WHEN C.Patologia = 'Osteoporose' AND B.idSexo = 'M' THEN 1
+            WHEN C.Patologia = 'Diabetes' AND (FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20) THEN 1
+            WHEN C.Patologia = 'Doenca De Parkinson' AND (FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50) THEN 1
+            WHEN C.Patologia = 'Hipertensão' AND (FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20) THEN 1
+            ELSE 0 
+        END) AS flag_venda_suspeita
+
+    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+    INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C 
+        ON C.codigo_barra = A.codigo_barra
+    INNER JOIN db_CPF.dbo.CPF B 
+        ON B.CPF = A.cpf
+
+    WHERE 
+        A.data_hora >= @DataInicio 
+        AND A.data_hora <= @DataFim
+        AND B.dataNascimento IS NOT NULL 
+
+    GROUP BY A.cnpj, A.num_autorizacao
+),
+AgregadoPorFarmacia AS (
+    SELECT 
+        cnpj,
+        COUNT(*) AS total_vendas_monitoradas,
+        SUM(flag_venda_suspeita) AS qtd_vendas_suspeitas
+    FROM CalculoDemografico
+    GROUP BY cnpj
+)
+
+SELECT 
+    cnpj,
+    total_vendas_monitoradas,
+    qtd_vendas_suspeitas,
+    
+    CAST(
+        CASE 
+            WHEN total_vendas_monitoradas > 0 THEN 
+                (CAST(qtd_vendas_suspeitas AS DECIMAL(18,2)) / CAST(total_vendas_monitoradas AS DECIMAL(18,2))) * 100.0
+            ELSE 0 
+        END 
+    AS DECIMAL(18,4)) AS percentual_demografico
+
+INTO temp_CGUSC.dbo.indicadorInconsistenciaClinica
+FROM AgregadoPorFarmacia
+WHERE total_vendas_monitoradas > 0;
+
+CREATE CLUSTERED INDEX IDX_IndDemo_CNPJ ON temp_CGUSC.dbo.indicadorInconsistenciaClinica(cnpj);
+
+
+-- ============================================================================
+-- PASSO 2: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorInconsistenciaClinica_UF;
+
+SELECT 
+    CAST(F.uf AS VARCHAR(2)) AS uf,
+    
+    SUM(I.total_vendas_monitoradas) AS total_vendas_uf,
+    SUM(I.qtd_vendas_suspeitas) AS total_suspeitas_uf,
+    
+    -- Média do Estado
+    CAST(
+        CASE 
+            WHEN SUM(I.total_vendas_monitoradas) > 0 THEN 
+                (CAST(SUM(I.qtd_vendas_suspeitas) AS DECIMAL(18,2)) / CAST(SUM(I.total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+            ELSE 0 
+        END 
+    AS DECIMAL(18,4)) AS percentual_demografico_uf
+
+INTO temp_CGUSC.dbo.indicadorInconsistenciaClinica_UF
+FROM temp_CGUSC.dbo.indicadorInconsistenciaClinica I
+INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+    ON F.cnpj = I.cnpj
+GROUP BY CAST(F.uf AS VARCHAR(2));
+
+CREATE CLUSTERED INDEX IDX_IndDemoUF_UF ON temp_CGUSC.dbo.indicadorInconsistenciaClinica_UF(uf);
+
+
+-- ============================================================================
+-- PASSO 3: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorInconsistenciaClinica_BR;
+
+SELECT 
+    'BR' AS pais,
+    SUM(total_vendas_monitoradas) AS total_vendas_br,
+    SUM(qtd_vendas_suspeitas) AS total_suspeitas_br,
+    
+    -- Média Nacional
+    CAST(
+        CASE 
+            WHEN SUM(total_vendas_monitoradas) > 0 THEN 
+                (CAST(SUM(qtd_vendas_suspeitas) AS DECIMAL(18,2)) / CAST(SUM(total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+            ELSE 0 
+        END 
+    AS DECIMAL(18,4)) AS percentual_demografico_br
+
+INTO temp_CGUSC.dbo.indicadorInconsistenciaClinica_BR
+FROM temp_CGUSC.dbo.indicadorInconsistenciaClinica;
+
+
+-- ============================================================================
+-- PASSO 4: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo;
+
+SELECT 
+    I.cnpj,
+    F.razaoSocial,
+    F.municipio,
+    CAST(F.uf AS VARCHAR(2)) AS uf,
+    
+    I.total_vendas_monitoradas,
+    I.qtd_vendas_suspeitas,
+    I.percentual_demografico,
+    
+    -- Comparativos
+    ISNULL(UF.percentual_demografico_uf, 0) AS media_estado,
+    BR.percentual_demografico_br AS media_pais,
+    
+    -- RISCO RELATIVO
+    CAST(
+        CASE 
+            WHEN UF.percentual_demografico_uf > 0 THEN 
+                I.percentual_demografico / UF.percentual_demografico_uf
+            ELSE 0 
+        END 
+    AS DECIMAL(18,4)) AS risco_relativo_uf,
+
+    CAST(
+        CASE 
+            WHEN BR.percentual_demografico_br > 0 THEN 
+                I.percentual_demografico / BR.percentual_demografico_br
+            ELSE 0 
+        END 
+    AS DECIMAL(18,4)) AS risco_relativo_br
+
+INTO temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo
+FROM temp_CGUSC.dbo.indicadorInconsistenciaClinica I
+INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+    ON F.cnpj = I.cnpj
+LEFT JOIN temp_CGUSC.dbo.indicadorInconsistenciaClinica_UF UF 
+    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+CROSS JOIN temp_CGUSC.dbo.indicadorInconsistenciaClinica_BR BR;
+
+-- Índices Finais
+CREATE CLUSTERED INDEX IDX_FinalDemo_CNPJ ON temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalDemo_Risco ON temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo(risco_relativo_uf DESC);
+GO
+
+-- Verificação rápida
+SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo ORDER BY risco_relativo_uf DESC;

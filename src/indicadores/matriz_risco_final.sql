@@ -81,11 +81,11 @@ END;
         I06.risco_relativo_uf AS risco_ticket_uf, I06.risco_relativo_br AS risco_ticket_br,
 
         I07.receita_por_paciente AS val_receita_paciente,
-        I07.media_estado AS avg_receita_paciente_uf, I07.media_pais AS avg_receita_paciente_br,
+        I07.media_mensal_estado AS avg_receita_paciente_uf, I07.media_mensal_pais AS avg_receita_paciente_br,
         I07.risco_relativo_uf AS risco_receita_paciente_uf, I07.risco_relativo_br AS risco_receita_paciente_br,
 
         I08.valor_per_capita AS val_per_capita,
-        I08.media_estado AS avg_per_capita_uf, I08.media_pais AS avg_per_capita_br,
+        I08.media_mensal_estado AS avg_per_capita_uf, I08.media_mensal_pais AS avg_per_capita_br,
         I08.risco_relativo_uf AS risco_per_capita_uf, I08.risco_relativo_br AS risco_per_capita_br,
 
         I09.percentual_vendas_consecutivas AS pct_vendas_rapidas,

@@ -41,8 +41,8 @@ def build():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Caminhos dos arquivos
-    main_script = os.path.join(current_dir, "sentinela_gui.py")
-    gerador_script = os.path.join(current_dir, "gerar_relatorio_memoriav8.py")
+    main_script = os.path.join(current_dir, "gerar_relatorio_gui.py")
+    gerador_script = os.path.join(current_dir, "gerar_relatorio.py")
     icon_file = os.path.join(current_dir, "Icone.ico")
     logo_file = os.path.join(current_dir, "logo_sentinela.png")
     

@@ -882,9 +882,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "Valor do Ticket Médio": "METODOLOGIA: Valor monetário médio de cada autorização de venda.",
 
-                "Faturamento Médio por Cliente": "METODOLOGIA: Faturamento total da farmácia dividido pelo número de CPFs distintos atendidos no período.",
+                "Faturamento Médio Mensal por Cliente": "METODOLOGIA: Faturamento médio mensal da farmácia dividido pelo número de CPFs distintos atendidos (normalizado pelo tempo de atividade).",
 
-                "Venda Per Capita Municipal": "METODOLOGIA: Faturamento total da farmácia dividido pela população total do município (estimativa IBGE). Cria um valor 'per capita' de venda.",
+                "Venda Per Capita Mensal Municipal": "METODOLOGIA: Faturamento médio mensal da farmácia dividido pela população total do município (estimativa IBGE).",
 
                 "Vendas Rápidas (<60s)": "METODOLOGIA: Percentual de vendas consecutivas realizadas em intervalo de tempo inferior a 60 segundos entre uma autorização e outra.",
 
@@ -965,13 +965,17 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             mapeamento_classificacao = {
                 'RISCO CRÍTICO': (COR_VERMELHO, '🔴 RISCO CRÍTICO'),
-                'RISCO ALTO': (COR_VERMELHO, '🟡 RISCO ALTO'),
+                'RISCO CRITICO': (COR_VERMELHO, '🔴 RISCO CRÍTICO'),
+                'RISCO ALTO': (COR_VERMELHO, '🔴 RISCO ALTO'),
                 'RISCO MÉDIO': (COR_AMARELO, '🟡 RISCO MÉDIO'),
+                'RISCO MEDIO': (COR_AMARELO, '🟡 RISCO MÉDIO'),
                 'RISCO BAIXO': (COR_VERDE, '🟢 BAIXO RISCO'),
-                'RISCO MÍNIMO': (COR_VERDE, '🟢 RISCO MÍNIMO')
+                'RISCO MÍNIMO': (COR_VERDE, '🟢 RISCO MÍNIMO'),
+                'RISCO MINIMO': (COR_VERDE, '🟢 RISCO MÍNIMO')
             }
 
-            cor_score, txt_score = mapeamento_classificacao.get(classificacao, (COR_VERDE, '🟢 BAIXO RISCO'))
+            classificacao_limpa = str(classificacao).upper().strip()
+            cor_score, txt_score = mapeamento_classificacao.get(classificacao_limpa, (COR_VERMELHO, '⚪ N/A'))
 
 
             fmt_score_num = wb.add_format({
@@ -1206,11 +1210,11 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     # --- LÓGICA DE RISCO (5 NÍVEIS) ---
                     raw_risco = str(item.get('CLASSIFICACAO_RISCO', '')).upper().strip()
 
-                    txt_risco = "BAIXO"
-                    bg_risco = '#E2EFDA'
-                    font_risco = '#006100'
+                    txt_risco = "N/A"
+                    bg_risco = '#F2F2F2'
+                    font_risco = '#000000'
 
-                    if raw_risco == 'RISCO CRÍTICO':
+                    if raw_risco in ('RISCO CRÍTICO', 'RISCO CRITICO'):
                         txt_risco = "CRÍTICO"
                         bg_risco = '#FFC7CE'  # Vermelho "Forte" (Padrão Excel Bad)
                         font_risco = '#9C0006'
@@ -1220,12 +1224,12 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         bg_risco = '#FFE1E1'  # <--- VERMELHO MAIS CLARO
                         font_risco = '#9C0006'  # Fonte Vinho (mesma do crítico para leitura)
 
-                    elif raw_risco == 'RISCO MÉDIO':
+                    elif raw_risco in ('RISCO MÉDIO', 'RISCO MEDIO'):
                         txt_risco = "MÉDIO"
                         bg_risco = '#FFF2CC'  # Amarelo
                         font_risco = '#9C5700'
 
-                    elif raw_risco == 'RISCO MÍNIMO':
+                    elif raw_risco in ('RISCO MÍNIMO', 'RISCO MINIMO'):
                         txt_risco = "MÍNIMO"
                         bg_risco = '#F6FAF4'
                         font_risco = '#548235'
@@ -1349,9 +1353,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 ("3. PADRÕES FINANCEIROS", [
                     ("Valor do Ticket Médio", "val_ticket_medio", "avg_ticket_uf", "avg_ticket_br",
                      "risco_ticket_uf", "risco_ticket_br", "val"),
-                    ("Faturamento Médio por Cliente", "val_receita_paciente", "avg_receita_paciente_uf",
+                    ("Faturamento Médio Mensal por Cliente", "val_receita_paciente", "avg_receita_paciente_uf",
                      "avg_receita_paciente_br", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
-                    ("Venda Per Capita Municipal", "val_per_capita", "avg_per_capita_uf", "avg_per_capita_br",
+                    ("Venda Per Capita Mensal Municipal", "val_per_capita", "avg_per_capita_uf", "avg_per_capita_br",
                      "risco_per_capita_uf", "risco_per_capita_br", "val"),
                     ("Medicamentos de Alto Custo", "pct_alto_custo", "avg_alto_custo_uf", "avg_alto_custo_br",
                      "risco_alto_custo_uf", "risco_alto_custo_br", "pct")
@@ -1422,8 +1426,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         
                         # Exceção para o Teto Máximo (Devido à alta concenctração da média em 60%)
                         if nome == "Dispensação em Teto Máximo":
-                            limiar_atencao = 1.3  # Ex: 60% * 1.3 = 78%
-                            limiar_critico = 1.5  # Ex: 60% * 1.5 = 90%
+                            limiar_atencao = 1.2  # Ex: 60% * 1.2 = 72%
+                            limiar_critico = 1.3  # Ex: 60% * 1.4 = 84%
                         # Exceção para Medicamentos de Alto Custo (Média em torno de 35%)
                         elif nome == "Medicamentos de Alto Custo":
                             limiar_atencao = 1.6  # Ex: 35% * 1.6 = 56%
@@ -1437,7 +1441,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             limiar_atencao = 1.6  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
                             limiar_critico = 2.0  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
                         
-                        risco_base = r_uf
+                        # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
+                        risco_base = round(r_uf, 1) 
+                        
                         fmt_risco_usado = fmt_risco_verde
                         texto_status = "NORMAL"
                         if risco_base >= limiar_atencao:

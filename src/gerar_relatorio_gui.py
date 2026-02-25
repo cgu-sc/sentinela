@@ -755,11 +755,11 @@ class SentinelaApp:
             else:
                 base_path = os.path.dirname(os.path.abspath(__file__))
 
-            module_path = os.path.join(base_path, 'gerar_relatorio_memoriav8.py')
+            module_path = os.path.join(base_path, 'gerar_relatorio.py')
 
             if not os.path.exists(module_path):
                 # Tenta no diretório atual como fallback
-                module_path = 'gerar_relatorio_memoriav8.py'
+                module_path = 'gerar_relatorio.py'
 
             spec = importlib.util.spec_from_file_location("gerador", module_path)
             gerador_module = importlib.util.module_from_spec(spec)
@@ -841,7 +841,7 @@ class SentinelaApp:
                 dados_risco = gerador_module.buscar_dados_risco(cursor, cnpj)
 
                 if dados_risco:
-                    score = dados_risco.get('SCORE_GERAL_RISCO', 'N/A')
+                    score = dados_risco.get('SCORE_RISCO_FINAL', 'N/A')
                     self._log(f"  └─ Score de risco: {score}", "success")
                 else:
                     self._log("  └─ Dados de risco não encontrados", "warning")
@@ -852,7 +852,8 @@ class SentinelaApp:
                 top20_prescritores = gerador_module.buscar_top20_prescritores(cursor, cnpj)
 
                 if dados_prescritores:
-                    self._log(f"  └─ Dados de prescritores encontrados (Top 20 carregado).", "success")
+                    score_presc = dados_prescritores.get('score_prescritores', 'N/A')
+                    self._log(f"  └─ Dados de prescritores encontrados (Score: {score_presc})", "success")
                 else:
                     self._log(f"  └─ Sem dados de prescritores para este CNPJ.", "warning")
 

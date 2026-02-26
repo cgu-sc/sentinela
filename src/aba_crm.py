@@ -5,12 +5,21 @@ from decimal import Decimal
 def buscar_dados_prescritores(cursor, cnpj):
     """
     Busca os indicadores consolidados de prescritores para um CNPJ.
-    Retorna dict com todas as métricas ou None se não encontrar.
+    Busca Razão Social e Município da matriz de risco para garantir consistência.
     """
     try:
+        # Faz JOIN com a matriz_risco_consolidada para pegar o cabeçalho que funciona lá
         cursor.execute('''
-            SELECT * FROM temp_CGUSC.fp.indicador_crm_detalhado 
-            WHERE cnpj = ?
+            SELECT 
+                I.*, 
+                M.razaoSocial, 
+                M.municipio, 
+                M.uf,
+                M.populacao as populacao_cidade,
+                M.total_municipio as estabelecimentos_cidade
+            FROM temp_CGUSC.fp.indicador_crm_detalhado I
+            LEFT JOIN temp_CGUSC.fp.matriz_risco_consolidada M ON M.cnpj = I.nu_cnpj
+            WHERE I.nu_cnpj = ?
         ''', cnpj)
         row = cursor.fetchone()
 
@@ -357,7 +366,17 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
 
     ws.write('B2', "ANÁLISE DE CRMs", fmt_titulo)
     ws.write('B3', f"{dados_prescritores.get('razaoSocial', '')} | CNPJ: {cnpj_fmt}", fmt_subtitulo)
-    ws.write('B4', f"{dados_prescritores.get('municipio', '')} - {dados_prescritores.get('uf', '')}", fmt_subtitulo)
+
+    # CABEÇALHO DEMOGRÁFICO ENRIQUECIDO (Igual à aba Indicadores)
+    mun = dados_prescritores.get('municipio', 'DESCONHECIDO')
+    uf = dados_prescritores.get('uf', '')
+    pop = int(dados_prescritores.get('populacao_cidade') or 0)
+    total_mun = int(dados_prescritores.get('estabelecimentos_cidade') or 0)
+    densidade = int(pop / total_mun) if total_mun > 0 else 0
+    pop_fmt = f"{pop:,.0f}".replace(",", ".")
+    
+    texto_demografico = f"📍 {mun} - {uf}   |   👥 População: {pop_fmt}   |   🏥 Estabelecimentos: {total_mun}   |   📊 Densidade: {densidade} hab/farmácia"
+    ws.write('B4', texto_demografico, fmt_subtitulo)
 
     # --- Link para Documentação ---
     fmt_link_doc = wb.add_format({

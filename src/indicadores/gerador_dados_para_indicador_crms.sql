@@ -221,10 +221,10 @@ GROUP BY nu_crm, sg_uf_crm
 
 
 -- ============================================================================
--- TABELA FINAL: indicador_crm_detalhado
+-- TABELA FINAL: dados_crm_detalhado
 -- ============================================================================
 -- ✅ NOVO: Incluído alerta6 na tabela final
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_detalhado
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_crm_detalhado
 SELECT
     A.nu_cnpj,
     A.no_municipio,
@@ -255,7 +255,7 @@ SELECT
     A.alerta4,
     A.alerta5,
     A.alerta6
-INTO temp_CGUSC.fp.indicador_crm_detalhado
+INTO temp_CGUSC.fp.dados_crm_detalhado
 FROM #lista_medicos_farmacia_popularFP_temp2 A
 INNER JOIN #prescricoes_todos_estabelecimentos B 
     ON B.nu_crm = A.nu_crm AND B.sg_uf_crm = A.sg_uf_crm
@@ -264,7 +264,7 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 -- ============================================================================
 -- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
-UPDATE temp_CGUSC.fp.indicador_crm_detalhado 
+UPDATE temp_CGUSC.fp.dados_crm_detalhado 
 SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
@@ -274,7 +274,7 @@ WHERE nu_prescricoes_dia > 30
 -- ============================================================================
 -- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
-UPDATE temp_CGUSC.fp.indicador_crm_detalhado 
+UPDATE temp_CGUSC.fp.dados_crm_detalhado 
 SET alerta4 = 'Foram registradas uma média de ' + 
               CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
@@ -284,13 +284,13 @@ SET alerta4 = 'Foram registradas uma média de ' +
 WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
 
 
-select * from indicador_crm_detalhado
+select * from dados_crm_detalhado
 
 -- ============================================================================
 -- ÍNDICE PARA PERFORMANCE
 -- ============================================================================
-CREATE NONCLUSTERED INDEX idx_indicador_crm_detalhado_performance
-ON temp_CGUSC.fp.indicador_crm_detalhado (id_medico, nu_CNPJ)
+CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
+ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_CNPJ)
 INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico);
 GO
 
@@ -316,8 +316,8 @@ PairedWithDistance AS (
         T2.sg_uf AS UF2, 
         T2.nu_prescricoes_medico AS P2,
         temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
-    FROM temp_CGUSC.fp.indicador_crm_detalhado T1
-    INNER JOIN temp_CGUSC.fp.indicador_crm_detalhado T2 
+    FROM temp_CGUSC.fp.dados_crm_detalhado T1
+    INNER JOIN temp_CGUSC.fp.dados_crm_detalhado T2 
         ON T1.id_medico = T2.id_medico AND T1.nu_CNPJ < T2.nu_CNPJ
 ),
 
@@ -399,7 +399,7 @@ SET AM.alerta5 =
             ISNULL(FAI.id_medico, 'N/I') + '.'
         ELSE ''
     END
-FROM temp_CGUSC.fp.indicador_crm_detalhado AM
+FROM temp_CGUSC.fp.dados_crm_detalhado AM
 INNER JOIN FinalAlertInfo FAI ON AM.id_medico = FAI.id_medico
 WHERE (AM.nu_CNPJ = FAI.Top_CNPJ1_orig OR AM.nu_CNPJ = FAI.Top_CNPJ2_orig);
 
@@ -417,7 +417,7 @@ SET AM.alerta6 =
     'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
     CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
     ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
-FROM temp_CGUSC.fp.indicador_crm_detalhado AM
+FROM temp_CGUSC.fp.dados_crm_detalhado AM
 INNER JOIN (
     SELECT 
         NU_CRM,
@@ -437,5 +437,8 @@ PRINT '  - Todos os alertas (1-6) populados corretamente';
 PRINT '  - NOVO: Alerta6 para prescrição antes do registro do CRM';
 PRINT '============================================================================';
 GO
+
+
+
 
 

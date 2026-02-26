@@ -15,7 +15,7 @@ SELECT
     -- NOVO: Conta meses reais de operação para normalização
     COUNT(DISTINCT FORMAT(A.data_hora, 'yyyyMM')) AS qtd_meses_ativos
 INTO #VendasPorFarmacia
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
@@ -181,4 +181,5 @@ GO
 
 -- Verificação rápida
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_venda_per_capita_detalhado ORDER BY risco_relativo_uf DESC;
+
 

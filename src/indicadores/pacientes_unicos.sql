@@ -24,7 +24,7 @@ SELECT
     A.cpf,
     COUNT(DISTINCT A.num_autorizacao) AS qtd_compras_cpf  -- DISTINCT é crítico aqui!
 INTO #RecorrenciaPorCPF
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
@@ -226,4 +226,5 @@ ORDER BY faixa_risco;
 
 
 select top 10 * from indicador_pacientes_unicos_detalhado
+
 

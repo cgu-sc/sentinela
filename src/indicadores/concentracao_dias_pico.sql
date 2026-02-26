@@ -18,7 +18,7 @@ SELECT
     CAST(data_hora AS DATE) AS data_venda,
     SUM(valor_pago) AS valor_dia
 INTO #VendasDiarias
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY cnpj, FORMAT(data_hora, 'yyyy-MM'), CAST(data_hora AS DATE);
 
@@ -137,4 +137,5 @@ CROSS JOIN temp_CGUSC.fp.indicador_concentracao_pico_br BR;
 
 CREATE CLUSTERED INDEX IDX_FinalPico_CNPJ ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(cnpj);
 GO
+
 

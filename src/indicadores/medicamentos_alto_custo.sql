@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS #LimiteAltoCusto;
 SELECT DISTINCT
     PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY valor_pago) OVER () AS valor_limite
 INTO #LimiteAltoCusto
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim;
 
 -- Cria ndice para otimizar o join (mesmo sendo tabela de 1 linha, boa prtica)
@@ -51,7 +51,7 @@ SELECT
     AS DECIMAL(18,4)) AS percentual_alto_custo
 
 INTO temp_CGUSC.fp.indicador_alto_custo
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 CROSS JOIN #LimiteAltoCusto L
 WHERE 
     A.data_hora >= @DataInicio 
@@ -166,4 +166,5 @@ GO
 
 -- Verificao rpida
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_alto_custo_detalhado ORDER BY risco_relativo_uf DESC;
+
 

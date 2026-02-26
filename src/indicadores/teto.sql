@@ -24,7 +24,7 @@ WITH VendasComTeto AS (
             ELSE 0 
         END) AS flag_venda_atingiu_teto
 
-    FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P 
@@ -169,4 +169,5 @@ GO
 
 -- Verificação rápida
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_teto_detalhado ORDER BY risco_relativo_uf DESC;
+
 

@@ -40,7 +40,7 @@ WITH CalculoUnificado AS (
             ELSE NULL 
         END) AS media_dias_apos_obito
 
-    FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     LEFT JOIN temp_CGUSC.fp.obitos_unificada B 
@@ -183,4 +183,5 @@ GO
 
 -- Verificação final
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_falecidos_detalhado ORDER BY risco_relativo_uf DESC;
+
 

@@ -25,7 +25,7 @@ WITH VendasPorHorario AS (
             ELSE 0 
         END) AS flag_madrugada
 
-    FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     WHERE 
@@ -165,4 +165,5 @@ GO
 
 
 select top 1000 * from indicador_horario_atipico_detalhado order by risco_relativo_uf desc
+
 

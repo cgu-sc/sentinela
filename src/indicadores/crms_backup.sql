@@ -516,7 +516,7 @@ WITH CRMsRankeados AS (
             NU_CRM,
             SG_uf,
             TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
-        FROM temp_CFM.fp.medicos_jul_2025_mod
+        FROM temp_CFM.dbo.medicos_jul_2025_mod
         WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
     ) CFM ON CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) AND CFM.SG_uf = P.sg_uf_crm
 )
@@ -562,6 +562,7 @@ DROP TABLE IF EXISTS #ParetoPorFarmacia;
 -- ============================================================================
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_crm_detalhado ORDER BY score_prescritores DESC;
 SELECT TOP 50 * FROM temp_CGUSC.fp.top20_crms_por_farmacia WHERE cnpj = (SELECT TOP 1 cnpj FROM temp_CGUSC.fp.indicador_crm_detalhado ORDER BY score_prescritores DESC);
+
 
 
 

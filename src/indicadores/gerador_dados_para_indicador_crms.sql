@@ -107,7 +107,7 @@ SET alerta1 = 'CRM/UF não localizado na base do CFM.'
 FROM #lista_medicos_farmacia_popularFP_temp A
 WHERE NOT EXISTS (
     SELECT 1 
-    FROM temp_CFM.fp.medicos_jul_2025_mod M
+    FROM temp_CFM.dbo.medicos_jul_2025_mod M
     WHERE M.NU_CRM = CAST(A.nu_crm AS VARCHAR(25)) 
       AND M.SG_uf = A.sg_uf_crm
 );
@@ -423,7 +423,7 @@ INNER JOIN (
         NU_CRM,
         SG_uf,
         TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
-    FROM temp_CFM.fp.medicos_jul_2025_mod
+    FROM temp_CFM.dbo.medicos_jul_2025_mod
     WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
 ) CFM ON CFM.NU_CRM = CAST(AM.nu_crm AS VARCHAR(25)) AND CFM.SG_uf = AM.sg_uf_crm
 WHERE CFM.dt_inscricao_convertida IS NOT NULL 
@@ -437,4 +437,5 @@ PRINT '  - Todos os alertas (1-6) populados corretamente';
 PRINT '  - NOVO: Alerta6 para prescrição antes do registro do CRM';
 PRINT '============================================================================';
 GO
+
 

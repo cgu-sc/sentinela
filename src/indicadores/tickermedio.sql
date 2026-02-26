@@ -18,7 +18,7 @@ SELECT
     A.num_autorizacao,
     SUM(A.valor_pago) AS valor_total_cupom
 INTO #ValorPorCupom
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
@@ -167,4 +167,5 @@ GO
 
 -- Verificação rápida
 SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_ticket_medio_detalhado ORDER BY risco_relativo_uf DESC;
+
 

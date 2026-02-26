@@ -35,9 +35,9 @@ END
 -- ============================================================================
 -- PASSO 1: TABELA DE CONTROLE DE PROCESSAMENTO
 -- ============================================================================
-IF OBJECT_ID('temp_CGUSC.fp.controle_processamento_geografico', 'U') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.indicador_controle_geografico', 'U') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.controle_processamento_geografico (
+    CREATE TABLE temp_CGUSC.fp.indicador_controle_geografico (
         id INT IDENTITY(1,1) PRIMARY KEY,
         cnpj VARCHAR(14) NOT NULL UNIQUE,
         data_inicio_processamento DATETIME,
@@ -50,14 +50,14 @@ BEGIN
         tentativas INT DEFAULT 0
     );
 
-    CREATE INDEX IDX_ControleGeo_Situacao ON temp_CGUSC.fp.controle_processamento_geografico(situacao, cnpj);
+    CREATE INDEX IDX_ControleGeo_Situacao ON temp_CGUSC.fp.indicador_controle_geografico(situacao, cnpj);
 END
 
 -- Carga inicial de CNPJs pendentes
-INSERT INTO temp_CGUSC.fp.controle_processamento_geografico (cnpj, situacao)
+INSERT INTO temp_CGUSC.fp.indicador_controle_geografico (cnpj, situacao)
 SELECT DISTINCT cnpj, 0 AS situacao
 FROM temp_CGUSC.fp.dados_farmacia
-WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.controle_processamento_geografico)
+WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.indicador_controle_geografico)
 ORDER BY cnpj;
 
 -- ============================================================================
@@ -70,7 +70,7 @@ DECLARE @DataFim DATE = '2024-12-10';
 -- ============================================================================
 -- PASSO 3: RECUPERAÇÃO DE PROCESSAMENTOS TRAVADOS
 -- ============================================================================
-UPDATE temp_CGUSC.fp.controle_processamento_geografico
+UPDATE temp_CGUSC.fp.indicador_controle_geografico
 SET situacao = 0, -- Volta para "Pendente"
     mensagem_erro = 'Reprocessamento (Reversão para modelo estável)'
 WHERE situacao = 1 -- Estava "Processando"
@@ -84,7 +84,7 @@ DECLARE @PendentesAgua INT;
 
 -- Verifica quantos faltam no início
 SELECT @PendentesAgua = COUNT(*) 
-FROM temp_CGUSC.fp.controle_processamento_geografico 
+FROM temp_CGUSC.fp.indicador_controle_geografico 
 WHERE situacao IN (0, 3) AND tentativas < 3;
 
 WHILE @PendentesAgua > 0
@@ -93,7 +93,7 @@ BEGIN
 
     DECLARE cursor_cnpjs CURSOR FOR
         SELECT TOP (@LoteTamanho) cnpj
-        FROM temp_CGUSC.fp.controle_processamento_geografico
+        FROM temp_CGUSC.fp.indicador_controle_geografico
         WHERE situacao IN (0, 3) 
           AND tentativas < 3
         ORDER BY cnpj;
@@ -105,7 +105,7 @@ BEGIN
     BEGIN
         BEGIN TRY
             -- MARCA COMO "PROCESSANDO"
-            UPDATE temp_CGUSC.fp.controle_processamento_geografico
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
             SET situacao = 1,
                 data_inicio_processamento = GETDATE(),
                 tentativas = tentativas + 1
@@ -118,9 +118,9 @@ BEGIN
                 MAX(B.unidadeFederacao) AS uf_paciente,
                 MAX(F.uf) AS uf_farmacia
             INTO #VendasTemp
-            FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A WITH(NOLOCK)
+            FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A WITH(NOLOCK)
             INNER JOIN temp_CGUSC.fp.dados_farmacia F WITH(NOLOCK) ON F.cnpj = A.cnpj
-            INNER JOIN db_CPF.fp.CPF B WITH(NOLOCK) ON B.CPF = A.cpf
+            INNER JOIN db_CPF.dbo.CPF B WITH(NOLOCK) ON B.CPF = A.cpf
             WHERE A.cnpj = @CNPJAtual
               AND A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
             GROUP BY A.num_autorizacao;
@@ -148,7 +148,7 @@ BEGIN
                 VALUES (@CNPJAtual, @TotalVendas, @QtdOutraUF, @Pct);
 
             -- MARCA COMO "CONCLUÍDO"
-            UPDATE temp_CGUSC.fp.controle_processamento_geografico
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
             SET situacao = 2,
                 data_fim_processamento = GETDATE(),
                 total_vendas = @TotalVendas,
@@ -159,7 +159,7 @@ BEGIN
 
         END TRY
         BEGIN CATCH
-            UPDATE temp_CGUSC.fp.controle_processamento_geografico
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
             SET situacao = 3,
                 data_fim_processamento = GETDATE(),
                 mensagem_erro = ERROR_MESSAGE()
@@ -176,7 +176,7 @@ BEGIN
 
     -- Atualiza contagem para o próximo loop
     SELECT @PendentesAgua = COUNT(*) 
-    FROM temp_CGUSC.fp.controle_processamento_geografico 
+    FROM temp_CGUSC.fp.indicador_controle_geografico 
     WHERE situacao IN (0, 3) AND tentativas < 3;
 END
 
@@ -184,7 +184,7 @@ END
 -- VERIFICAÇÃO E CONSOLIDAÇÃO FINAL
 -- ============================================================================
 DECLARE @Pendentes INT;
-SELECT @Pendentes = COUNT(*) FROM temp_CGUSC.fp.controle_processamento_geografico WHERE situacao IN (0, 1);
+SELECT @Pendentes = COUNT(*) FROM temp_CGUSC.fp.indicador_controle_geografico WHERE situacao IN (0, 1);
 
 IF @Pendentes > 0
 BEGIN
@@ -247,4 +247,7 @@ BEGIN
     PRINT '=======================================================================';
 END
 GO
+
+
+
 

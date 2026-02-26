@@ -541,7 +541,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                         -- PARTE 2: AQUISIÇÕES
                         select numeroNFE, 0 as valor_pago, fazenda.codigoBarra, [dataEmissaoNFE] as data_movimentacao, 
                                quantidade as qnt_caixas, 'C' as compra_venda, tipoOperacao as tipo_operacao
-                        from [db_farmaciapopular_nf].[fp].[aquisicoesFazenda_2015_2025] fazenda
+                        from db_farmaciapopular_nf.dbo.[aquisicoesFazenda_2015_2025] fazenda
                         inner join [temp_CGUSC].[fp].medicamentos_patologia med on med.codigo_barra = fazenda.codigoBarra
                         inner join [temp_CGUSC].[fp].farmacia_inicio_venda_gtin B on B.cnpj = fazenda.destinatarioNFE and B.codigo_barra = fazenda.codigoBarra
                         where destinatarioNFE = ? and [dataEmissaoNFE] >= ? and [dataEmissaoNFE] <= ? and tipoOperacao in (1,-1,0)
@@ -856,4 +856,5 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 # =============================================================================
 # FIM DO SCRIPT
 # =============================================================================
+
 

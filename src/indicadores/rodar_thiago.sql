@@ -35,7 +35,7 @@ SELECT
     valor_pago,
     B.dt_obito
 INTO #vendas_falecidos
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 LEFT JOIN temp_CGUSC.fp.obitos_unificada B ON B.cpf = A.CPF
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C ON C.codigo_barra = A.codigo_barra
 INNER JOIN temp_CGUSC.fp.processamento D ON D.cnpj = A.cnpj
@@ -61,7 +61,7 @@ SELECT
     a.cnpj,
     SUM(valor_pago) AS valor_total_vendas
 INTO #vendas_total
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C ON C.codigo_barra = A.codigo_barra
 INNER JOIN #cnpj_falecidos D ON D.cnpj = A.cnpj
 WHERE a.data_hora >= @data_inicial
@@ -95,7 +95,7 @@ SELECT
     A.cnpj,
     COUNT(DISTINCT A.num_autorizacao) AS total_autorizacoes
 INTO #autorizacoes 
-FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 AS A
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 AS A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia AS C ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @data_inicial 
     AND A.data_hora <= @data_final
@@ -305,5 +305,6 @@ select * from temp_CGUSC.fp.resultado_Sentinela_2021_2024_thiago
 
 select top 1000 * from temp_CGUSC.fp.resultado_Sentinela_2021_2024_thiago where cnpj='10411527000162';
 select top 1000 * from temp_CGUSC.fp.resultado_sentinela_2015_2024 where cnpj='10411527000162';
+
 
 

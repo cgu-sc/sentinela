@@ -30,10 +30,10 @@ END
 -- PASSO 1: TABELA DE CONTROLE DE PROCESSAMENTO
 -- ============================================================================
 IF NOT EXISTS (SELECT * FROM sys.objects 
-               WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.controle_processamento_vendas_consecutivas') 
+               WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.indicador_controle_vendas_consecutivas') 
                AND type in (N'U'))
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.controle_processamento_vendas_consecutivas (
+    CREATE TABLE temp_CGUSC.fp.indicador_controle_vendas_consecutivas (
         id INT IDENTITY(1,1) PRIMARY KEY,
         cnpj VARCHAR(14) NOT NULL UNIQUE,
         data_inicio_processamento DATETIME,
@@ -46,14 +46,14 @@ BEGIN
         tentativas INT DEFAULT 0
     );
 
-    CREATE INDEX IDX_Controle_Situacao ON temp_CGUSC.fp.controle_processamento_vendas_consecutivas(situacao, cnpj);
+    CREATE INDEX IDX_Controle_Situacao ON temp_CGUSC.fp.indicador_controle_vendas_consecutivas(situacao, cnpj);
 END
 
 -- Lista todos os CNPJs que precisam ser processados
-INSERT INTO temp_CGUSC.fp.controle_processamento_vendas_consecutivas (cnpj, situacao)
+INSERT INTO temp_CGUSC.fp.indicador_controle_vendas_consecutivas (cnpj, situacao)
 SELECT DISTINCT cnpj, 0 AS situacao
 FROM temp_CGUSC.fp.lista_cnpj_processamento
-WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.controle_processamento_vendas_consecutivas)
+WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas)
 ORDER BY cnpj;
 
 -- ============================================================================
@@ -66,7 +66,7 @@ DECLARE @DataFim DATE = '2024-12-10';
 -- ============================================================================
 -- PASSO 3: RECUPERAÇÃO DE PROCESSAMENTOS TRAVADOS
 -- ============================================================================
-UPDATE temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
 SET situacao = 0, -- Volta para "Pendente"
     mensagem_erro = 'Reprocessamento: execução anterior interrompida'
 WHERE situacao = 1 -- Estava "Processando"
@@ -80,7 +80,7 @@ DECLARE @Contador INT = 0;
 
 DECLARE cursor_cnpjs CURSOR FOR
     SELECT TOP (@LoteTamanho) cnpj
-    FROM temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
     WHERE situacao = 0 -- Apenas pendentes
     ORDER BY cnpj;
 
@@ -93,7 +93,7 @@ BEGIN
         -- ====================================================================
         -- MARCA COMO "PROCESSANDO"
         -- ====================================================================
-        UPDATE temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
         SET situacao = 1,
             data_inicio_processamento = GETDATE(),
             tentativas = tentativas + 1
@@ -110,7 +110,7 @@ BEGIN
             num_autorizacao,
             MIN(data_hora) AS data_hora_transacao
         INTO #AutorizacoesAgrupadas
-        FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024
+        FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
         WHERE cnpj = @CNPJAtual
           AND data_hora >= @DataInicio 
           AND data_hora <= @DataFim
@@ -166,7 +166,7 @@ BEGIN
         -- ====================================================================
         -- MARCA COMO CONCLUÍDO
         -- ====================================================================
-        UPDATE temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
         SET situacao = 2,
             data_fim_processamento = GETDATE(),
             total_autorizacoes = @TotalIntervalos,
@@ -188,7 +188,7 @@ BEGIN
         -- ====================================================================
         DECLARE @ErrorMsg NVARCHAR(MAX) = ERROR_MESSAGE();
         
-        UPDATE temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
         SET situacao = 3, -- Erro
             data_fim_processamento = GETDATE(),
             mensagem_erro = @ErrorMsg
@@ -215,7 +215,7 @@ SELECT
         WHEN 2 THEN 'Concluído'
         WHEN 3 THEN 'Erro'
     END AS status_descricao
-FROM temp_CGUSC.fp.controle_processamento_vendas_consecutivas
+FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
 GROUP BY situacao
 ORDER BY situacao;
 
@@ -224,7 +224,7 @@ ORDER BY situacao;
 -- ============================================================================
 DECLARE @Pendentes INT;
 SELECT @Pendentes = COUNT(*) 
-FROM temp_CGUSC.fp.controle_processamento_vendas_consecutivas 
+FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas 
 WHERE situacao IN (0, 1); -- Pendente ou Processando
 
 IF @Pendentes > 0
@@ -375,5 +375,6 @@ BEGIN
 END
 
 GO
+
 
 

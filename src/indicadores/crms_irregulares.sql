@@ -36,7 +36,7 @@ SELECT
     SG_uf,
     TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
 INTO #CFM_Base
-FROM temp_CFM.fp.medicos_jul_2025_mod;
+FROM temp_CFM.dbo.medicos_jul_2025_mod;
 
 CREATE CLUSTERED INDEX IDX_CFM_CRM_uf ON #CFM_Base(NU_CRM, SG_uf);
 
@@ -287,5 +287,6 @@ GO
 DROP TABLE IF EXISTS #CFM_Base;
 DROP TABLE IF EXISTS #CRMsPorFarmacia;
 DROP TABLE IF EXISTS #IrregularidadePorFarmacia;
+
 
 

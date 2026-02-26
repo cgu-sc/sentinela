@@ -20,8 +20,8 @@ SELECT
     A.num_autorizacao,
     COUNT(*) AS qtd_itens_distintos
 INTO #VendasPorCupom
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C 
+FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -35,7 +35,7 @@ CREATE CLUSTERED INDEX IDX_TempCupom_CNPJ ON #VendasPorCupom(cnpj);
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA (INDICADOR CESTA CHEIA)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorPolimedicamento;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPolimedicamento;
 
 SELECT 
     cnpj,
@@ -58,11 +58,11 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_polimedicamento
 
-INTO temp_CGUSC.dbo.indicadorPolimedicamento
+INTO temp_CGUSC.fp.indicadorPolimedicamento
 FROM #VendasPorCupom
 GROUP BY cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndPoli_CNPJ ON temp_CGUSC.dbo.indicadorPolimedicamento(cnpj);
+CREATE CLUSTERED INDEX IDX_IndPoli_CNPJ ON temp_CGUSC.fp.indicadorPolimedicamento(cnpj);
 
 -- Limpeza da temp table para liberar espaço
 DROP TABLE #VendasPorCupom;
@@ -71,7 +71,7 @@ DROP TABLE #VendasPorCupom;
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorPolimedicamento_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPolimedicamento_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -88,19 +88,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_polimedicamento_uf
 
-INTO temp_CGUSC.dbo.indicadorPolimedicamento_UF
-FROM temp_CGUSC.dbo.indicadorPolimedicamento I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorPolimedicamento_UF
+FROM temp_CGUSC.fp.indicadorPolimedicamento I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndPoliUF_UF ON temp_CGUSC.dbo.indicadorPolimedicamento_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndPoliUF_UF ON temp_CGUSC.fp.indicadorPolimedicamento_UF(uf);
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorPolimedicamento_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPolimedicamento_BR;
 
 SELECT 
     'BR' AS pais,
@@ -116,14 +116,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_polimedicamento_br
 
-INTO temp_CGUSC.dbo.indicadorPolimedicamento_BR
-FROM temp_CGUSC.dbo.indicadorPolimedicamento;
+INTO temp_CGUSC.fp.indicadorPolimedicamento_BR
+FROM temp_CGUSC.fp.indicadorPolimedicamento;
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorPolimedicamento_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPolimedicamento_Completo;
 
 SELECT 
     I.cnpj,
@@ -156,18 +156,18 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.dbo.indicadorPolimedicamento_Completo
-FROM temp_CGUSC.dbo.indicadorPolimedicamento I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorPolimedicamento_Completo
+FROM temp_CGUSC.fp.indicadorPolimedicamento I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorPolimedicamento_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorPolimedicamento_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorPolimedicamento_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorPolimedicamento_BR BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalPoli_CNPJ ON temp_CGUSC.dbo.indicadorPolimedicamento_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalPoli_Risco ON temp_CGUSC.dbo.indicadorPolimedicamento_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalPoli_CNPJ ON temp_CGUSC.fp.indicadorPolimedicamento_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalPoli_Risco ON temp_CGUSC.fp.indicadorPolimedicamento_Completo(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorPolimedicamento_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorPolimedicamento_Completo ORDER BY risco_relativo_uf DESC;

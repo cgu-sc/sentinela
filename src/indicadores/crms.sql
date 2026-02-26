@@ -1,27 +1,27 @@
-ï»¿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- INDICADOR DE PRESCRITORES - ANÃLISE DE CRM POR FARMÃCIA - VERSÃƒO 2
+-- INDICADOR DE PRESCRITORES - ANÁLISE DE CRM POR FARMÁCIA - VERSÃO 2
 -- ============================================================================
--- CORREÃ‡Ã•ES APLICADAS:
---   1. Contagem de prescriÃ§Ãµes usa COUNT(DISTINCT num_autorizacao) em vez de COUNT(*)
+-- CORREÇÕES APLICADAS:
+--   1. Contagem de prescrições usa COUNT(DISTINCT num_autorizacao) em vez de COUNT(*)
 --   2. JOIN com tb_analise_crm_farmacia_popular traz TODOS os alertas (1-6)
---   3. Removido filtro restritivo que excluÃ­a registros sem alerta5
+--   3. Removido filtro restritivo que excluía registros sem alerta5
 --   4. NOVO: Tabela final inclui top20 + TODOS os prescritores com alertas
---   5. NOVO: Alerta6 vem da tb_analise_crm_farmacia_popular (nÃ£o mais calculado inline)
+--   5. NOVO: Alerta6 vem da tb_analise_crm_farmacia_popular (não mais calculado inline)
 -- ============================================================================
 
 -- ============================================================================
--- DEFINIÃ‡ÃƒO DE VARIÃVEIS
+-- DEFINIÇÃO DE VARIÁVEIS
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim DATE = '2024-12-10';
 
 -- ============================================================================
--- PASSO 1: BASE DE PRESCRITORES POR FARMÃCIA
+-- PASSO 1: BASE DE PRESCRITORES POR FARMÁCIA
 -- ============================================================================
--- CORREÃ‡ÃƒO: Usar COUNT(DISTINCT num_autorizacao) para contar prescriÃ§Ãµes Ãºnicas
+-- CORREÇÃO: Usar COUNT(DISTINCT num_autorizacao) para contar prescrições únicas
 DROP TABLE IF EXISTS #CRMsPorFarmacia;
 
 SELECT 
@@ -29,13 +29,13 @@ SELECT
     CONCAT(crm, '/', crm_uf) AS id_medico,
     crm AS nu_crm,
     crm_uf AS sg_uf_crm,
-    -- âœ… CORREÃ‡ÃƒO: Contar autorizaÃ§Ãµes Ãºnicas, nÃ£o linhas
+    -- ? CORREÇÃO: Contar autorizações únicas, não linhas
     COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
     SUM(valor_pago) AS vl_total_prescricoes,
     MIN(data_hora) AS dt_primeira_prescricao,
     MAX(data_hora) AS dt_ultima_prescricao,
     DATEDIFF(DAY, MIN(data_hora), MAX(data_hora)) + 1 AS nu_dias_atividade,
-    -- âœ… CORREÃ‡ÃƒO: Usar COUNT(DISTINCT) tambÃ©m no cÃ¡lculo de prescriÃ§Ãµes/dia
+    -- ? CORREÇÃO: Usar COUNT(DISTINCT) também no cálculo de prescrições/dia
     CAST(
         CASE 
             WHEN DATEDIFF(DAY, MIN(data_hora), MAX(data_hora)) + 1 > 0 THEN 
@@ -59,7 +59,7 @@ GROUP BY cnpj, crm, crm_uf;
 CREATE CLUSTERED INDEX IDX_Presc_CNPJ ON #CRMsPorFarmacia(cnpj);
 
 -- ============================================================================
--- PASSO 2: TOTAIS POR FARMÃCIA (para calcular participaÃ§Ã£o %)
+-- PASSO 2: TOTAIS POR FARMÁCIA (para calcular participação %)
 -- ============================================================================
 DROP TABLE IF EXISTS #TotaisFarmacia;
 
@@ -78,31 +78,31 @@ CREATE CLUSTERED INDEX IDX_Totais_CNPJ ON #TotaisFarmacia(cnpj);
 
 -- ============================================================================
 -- SUBSTITUIR O PASSO 3 INTEIRO NO ARQUIVO crms.sql
--- Procure por "PASSO 3: CÃLCULO DE MÃ‰TRICAS POR FARMÃCIA"
--- e substitua TODO o bloco atÃ© o final do "CREATE CLUSTERED INDEX"
+-- Procure por "PASSO 3: CÁLCULO DE MÉTRICAS POR FARMÁCIA"
+-- e substitua TODO o bloco até o final do "CREATE CLUSTERED INDEX"
 -- ============================================================================
 
 -- ============================================================================
--- PASSO 3: CÃLCULO DE MÃ‰TRICAS POR FARMÃCIA (COM DADOS DE REDE) - CORRIGIDO
+-- PASSO 3: CÁLCULO DE MÉTRICAS POR FARMÁCIA (COM DADOS DE REDE) - CORRIGIDO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRM;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRM;
 
--- âœ… NOVO: Tabela intermediÃ¡ria com dados de REDE agregados por prescritor
+-- ? NOVO: Tabela intermediária com dados de REDE agregados por prescritor
 DROP TABLE IF EXISTS #DadosRedePorPrescritor;
 
 SELECT 
     A.nu_cnpj AS cnpj,
     A.id_medico,
-    -- Pegar o valor MÃXIMO (que Ã© o total da rede) pois pode haver duplicatas
+    -- Pegar o valor MÁXIMO (que é o total da rede) pois pode haver duplicatas
     MAX(A.nu_prescricoes_dia_em_todos_estabelecimentos) AS nu_prescricoes_dia_em_todos_estabelecimentos,
     MAX(A.nu_estabelecimentos_com_registro_mesmo_crm) AS nu_estabelecimentos_com_registro_mesmo_crm
 INTO #DadosRedePorPrescritor
-FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular A
+FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular A
 GROUP BY A.nu_cnpj, A.id_medico;
 
 CREATE CLUSTERED INDEX IDX_DadosRede ON #DadosRedePorPrescritor(cnpj, id_medico);
 
--- Top 5 por farmÃ¡cia (mantido igual)
+-- Top 5 por farmácia (mantido igual)
 DROP TABLE IF EXISTS #Top5PorFarmacia;
 WITH RankedPrescritores AS (
     SELECT 
@@ -137,7 +137,7 @@ INNER JOIN #TotaisFarmacia T ON T.cnpj = P.cnpj
 GROUP BY P.cnpj;
 CREATE CLUSTERED INDEX IDX_HHI_CNPJ ON #HHIPorFarmacia(cnpj);
 
--- RobÃ´s Locais (mantido igual)
+-- Robôs Locais (mantido igual)
 DROP TABLE IF EXISTS #RobosPorFarmacia;
 SELECT cnpj, COUNT(*) AS qtd_prescritores_robos
 INTO #RobosPorFarmacia
@@ -146,12 +146,12 @@ WHERE nu_prescricoes_dia > 30
 GROUP BY cnpj;
 CREATE CLUSTERED INDEX IDX_Robos_CNPJ ON #RobosPorFarmacia(cnpj);
 
--- CRM InvÃ¡lido (mantido igual)
+-- CRM Inválido (mantido igual)
 DROP TABLE IF EXISTS #CRMInvalidoPorFarmacia;
 SELECT P.cnpj, COUNT(*) AS qtd_crm_invalido
 INTO #CRMInvalidoPorFarmacia
 FROM #CRMsPorFarmacia P
-INNER JOIN temp_CGUSC.dbo.tb_uf_crm U ON U.uf = P.sg_uf_crm
+INNER JOIN temp_CGUSC.fp.tb_uf_crm U ON U.uf = P.sg_uf_crm
 WHERE P.nu_crm > U.nu_max_crm
 GROUP BY P.cnpj;
 CREATE CLUSTERED INDEX IDX_CRMInv_CNPJ ON #CRMInvalidoPorFarmacia(cnpj);
@@ -160,7 +160,7 @@ CREATE CLUSTERED INDEX IDX_CRMInv_CNPJ ON #CRMInvalidoPorFarmacia(cnpj);
 DROP TABLE IF EXISTS #TuristasPorFarmacia;
 SELECT nu_cnpj AS cnpj, COUNT(DISTINCT id_medico) AS qtd_prescritores_turistas
 INTO #TuristasPorFarmacia
-FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular
+FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular
 WHERE alerta5 IS NOT NULL AND alerta5 <> ''
 GROUP BY nu_cnpj;
 CREATE CLUSTERED INDEX IDX_Turistas_CNPJ ON #TuristasPorFarmacia(cnpj);
@@ -181,28 +181,28 @@ WHERE acumulado <= total_valor_farmacia * 0.80
 GROUP BY cnpj;
 CREATE CLUSTERED INDEX IDX_Pareto_CNPJ ON #ParetoPorFarmacia(cnpj);
 
--- âœ… CORREÃ‡ÃƒO: Dados de Rede usando a tabela intermediÃ¡ria
+-- ? CORREÇÃO: Dados de Rede usando a tabela intermediária
 DROP TABLE IF EXISTS #RedePorFarmacia;
 SELECT 
     P.cnpj,
     
-    -- âœ… RobÃ´ Oculto: Normal aqui (<=30), mas RobÃ´ no total (>30)
+    -- ? Robô Oculto: Normal aqui (<=30), mas Robô no total (>30)
     COUNT(DISTINCT CASE 
         WHEN P.nu_prescricoes_dia <= 30 
          AND ISNULL(R.nu_prescricoes_dia_em_todos_estabelecimentos, 0) > 30 
         THEN P.id_medico 
     END) AS qtd_prescritores_robos_ocultos,
     
-    -- âœ… Multi-FarmÃ¡cia: Atua em > 20 estabelecimentos
+    -- ? Multi-Farmácia: Atua em > 20 estabelecimentos
     COUNT(DISTINCT CASE 
         WHEN ISNULL(R.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 20 
         THEN P.id_medico 
     END) AS qtd_prescritores_multi_farmacia,
     
-    -- Ãndice de Rede: MÃ©dia de estabelecimentos por prescritor
+    -- Índice de Rede: Média de estabelecimentos por prescritor
     AVG(CAST(ISNULL(R.nu_estabelecimentos_com_registro_mesmo_crm, 1) AS DECIMAL(18,4))) AS indice_rede_suspeita,
     
-    -- âœ… MÃ©dia de prescriÃ§Ãµes/dia na rede
+    -- ? Média de prescrições/dia na rede
     AVG(CAST(ISNULL(R.nu_prescricoes_dia_em_todos_estabelecimentos, P.nu_prescricoes_dia) AS DECIMAL(18,4))) AS media_prescricoes_dia_rede
 
 INTO #RedePorFarmacia
@@ -231,13 +231,13 @@ SELECT
     ISNULL(TU.qtd_prescritores_turistas, 0) AS qtd_prescritores_turistas,
     ISNULL(PA.qtd_prescritores_80pct, 1) AS qtd_prescritores_80pct,
     
-    -- âœ… CAMPOS DE REDE CORRIGIDOS
+    -- ? CAMPOS DE REDE CORRIGIDOS
     ISNULL(RE.qtd_prescritores_robos_ocultos, 0) AS qtd_prescritores_robos_ocultos,
     ISNULL(RE.qtd_prescritores_multi_farmacia, 0) AS qtd_prescritores_multi_farmacia,
     ISNULL(RE.indice_rede_suspeita, 1.0) AS indice_rede_suspeita,
     ISNULL(RE.media_prescricoes_dia_rede, 0.0) AS media_prescricoes_dia_rede
 
-INTO temp_CGUSC.dbo.indicadorCRM
+INTO temp_CGUSC.fp.indicadorCRM
 FROM #TotaisFarmacia T
 LEFT JOIN #Top5PorFarmacia T5 ON T5.cnpj = T.cnpj
 LEFT JOIN #HHIPorFarmacia H ON H.cnpj = T.cnpj
@@ -247,12 +247,12 @@ LEFT JOIN #TuristasPorFarmacia TU ON TU.cnpj = T.cnpj
 LEFT JOIN #ParetoPorFarmacia PA ON PA.cnpj = T.cnpj
 LEFT JOIN #RedePorFarmacia RE ON RE.cnpj = T.cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndPresc_CNPJ ON temp_CGUSC.dbo.indicadorCRM(cnpj);
+CREATE CLUSTERED INDEX IDX_IndPresc_CNPJ ON temp_CGUSC.fp.indicadorCRM(cnpj);
 
 -- ============================================================================
--- PASSO 4: MÃ‰DIAS POR UF
+-- PASSO 4: MÉDIAS POR UF
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRM_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRM_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -265,18 +265,18 @@ SELECT
     AVG(CAST(qtd_prescritores_80pct AS DECIMAL(18,4))) AS media_pareto_uf,
     AVG(CAST(total_prescritores_distintos AS DECIMAL(18,4))) AS media_prescritores_uf
     
-INTO temp_CGUSC.dbo.indicadorCRM_UF
-FROM temp_CGUSC.dbo.indicadorCRM I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F ON F.cnpj = I.cnpj
+INTO temp_CGUSC.fp.indicadorCRM_UF
+FROM temp_CGUSC.fp.indicadorCRM I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndPrescUF_UF ON temp_CGUSC.dbo.indicadorCRM_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndPrescUF_UF ON temp_CGUSC.fp.indicadorCRM_UF(uf);
 
 
 -- ============================================================================
--- PASSO 5: MÃ‰DIAS NACIONAIS
+-- PASSO 5: MÉDIAS NACIONAIS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRM_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRM_BR;
 
 SELECT 
     'BR' AS pais,
@@ -288,15 +288,15 @@ SELECT
     AVG(CAST(qtd_prescritores_turistas AS DECIMAL(18,4))) AS media_turistas_br,
     AVG(CAST(qtd_prescritores_80pct AS DECIMAL(18,4))) AS media_pareto_br,
     AVG(CAST(total_prescritores_distintos AS DECIMAL(18,4))) AS media_prescritores_br
-INTO temp_CGUSC.dbo.indicadorCRM_BR
-FROM temp_CGUSC.dbo.indicadorCRM;
+INTO temp_CGUSC.fp.indicadorCRM_BR
+FROM temp_CGUSC.fp.indicadorCRM;
 
 
 -- ============================================================================
--- PASSO 6: TABELA CONSOLIDADA COM RISCO RELATIVO - VERSÃƒO CORRIGIDA
+-- PASSO 6: TABELA CONSOLIDADA COM RISCO RELATIVO - VERSÃO CORRIGIDA
 -- Procure por "PASSO 6" no arquivo crms.sql e substitua
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRM_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRM_Completo;
 
 SELECT 
     I.cnpj,
@@ -304,7 +304,7 @@ SELECT
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
     
-    -- MÃ©tricas Absolutas
+    -- Métricas Absolutas
     I.total_prescricoes_farmacia,
     I.total_valor_farmacia,
     I.total_prescritores_distintos,
@@ -316,7 +316,7 @@ SELECT
     I.qtd_prescritores_robos,
     I.qtd_crm_invalido,
     
-    -- % CRM InvÃ¡lido
+    -- % CRM Inválido
     CAST(CASE 
         WHEN I.total_prescritores_distintos > 0 
         THEN (CAST(I.qtd_crm_invalido AS DECIMAL(18,4)) / I.total_prescritores_distintos) * 100.0
@@ -326,11 +326,11 @@ SELECT
     I.qtd_prescritores_turistas,
     I.qtd_prescritores_80pct,
     
-    -- âœ… CAMPOS DE REDE (agora vÃªm diretamente de I)
+    -- ? CAMPOS DE REDE (agora vêm diretamente de I)
     I.qtd_prescritores_robos_ocultos,
     I.qtd_prescritores_multi_farmacia,
     
-    -- % Multi-FarmÃ¡cia
+    -- % Multi-Farmácia
     CAST(CASE 
         WHEN I.total_prescritores_distintos > 0 
         THEN (CAST(I.qtd_prescritores_multi_farmacia AS DECIMAL(18,4)) / I.total_prescritores_distintos) * 100.0
@@ -339,10 +339,10 @@ SELECT
 
     I.indice_rede_suspeita,
     
-    -- âœ… NOVO CAMPO: mÃ©dia_prescricoes_dia_rede
+    -- ? NOVO CAMPO: média_prescricoes_dia_rede
     I.media_prescricoes_dia_rede,
     
-    -- MÃ©dias UF
+    -- Médias UF
     ISNULL(UF.media_concentracao_uf, 0) AS media_concentracao_uf,
     ISNULL(UF.media_concentracao_top5_uf, 0) AS media_concentracao_top5_uf,
     ISNULL(UF.media_hhi_uf, 0) AS media_hhi_uf,
@@ -350,7 +350,7 @@ SELECT
     ISNULL(UF.media_crm_invalido_uf, 0) AS media_crm_invalido_uf,
     ISNULL(UF.media_turistas_uf, 0) AS media_turistas_uf,
     
-    -- MÃ©dias BR
+    -- Médias BR
     BR.media_concentracao_br,
     BR.media_concentracao_top5_br,
     BR.media_hhi_br,
@@ -358,7 +358,7 @@ SELECT
     BR.media_crm_invalido_br,
     BR.media_turistas_br,
     
-    -- MÃ©dias de Rede (valores neutros por enquanto - podem ser calculados no Passo 4 se necessÃ¡rio)
+    -- Médias de Rede (valores neutros por enquanto - podem ser calculados no Passo 4 se necessário)
     1.0 AS media_indice_rede_uf,
     1.0 AS media_indice_rede_br,
     0.0 AS risco_rede_uf,
@@ -372,7 +372,7 @@ SELECT
     CAST(CASE WHEN UF.media_hhi_uf > 0 THEN I.indice_hhi / UF.media_hhi_uf ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_uf,
     CAST(CASE WHEN BR.media_hhi_br > 0 THEN I.indice_hhi / BR.media_hhi_br ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_br,
     
-    -- Riscos RobÃ´s e Turistas com suavizaÃ§Ã£o
+    -- Riscos Robôs e Turistas com suavização
     CAST(CASE WHEN UF.media_robos_uf > 0 THEN (I.qtd_prescritores_robos + 0.001) / (UF.media_robos_uf + 0.001) ELSE CASE WHEN I.qtd_prescritores_robos > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_robos_uf,
     CAST(CASE WHEN BR.media_robos_br > 0 THEN (I.qtd_prescritores_robos + 0.001) / (BR.media_robos_br + 0.001) ELSE CASE WHEN I.qtd_prescritores_robos > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_robos_br,
     CAST(CASE WHEN UF.media_crm_invalido_uf > 0 THEN (I.qtd_crm_invalido + 0.001) / (UF.media_crm_invalido_uf + 0.001) ELSE CASE WHEN I.qtd_crm_invalido > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_crm_invalido_uf,
@@ -388,27 +388,27 @@ SELECT
         CASE WHEN I.qtd_prescritores_turistas > 0 THEN 5.0 ELSE 0 END
     ) / 4.0 AS DECIMAL(18,4)) AS score_prescritores
 
-INTO temp_CGUSC.dbo.indicadorCRM_Completo
-FROM temp_CGUSC.dbo.indicadorCRM I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorCRM_UF UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorCRM_BR BR;
+INTO temp_CGUSC.fp.indicadorCRM_Completo
+FROM temp_CGUSC.fp.indicadorCRM I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
+LEFT JOIN temp_CGUSC.fp.indicadorCRM_UF UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+CROSS JOIN temp_CGUSC.fp.indicadorCRM_BR BR;
 
-CREATE CLUSTERED INDEX IDX_FinalPresc_CNPJ ON temp_CGUSC.dbo.indicadorCRM_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalPresc_Score ON temp_CGUSC.dbo.indicadorCRM_Completo(score_prescritores DESC);
+CREATE CLUSTERED INDEX IDX_FinalPresc_CNPJ ON temp_CGUSC.fp.indicadorCRM_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalPresc_Score ON temp_CGUSC.fp.indicadorCRM_Completo(score_prescritores DESC);
 GO
 
 
 -- ============================================================================
--- PASSO 7: TABELA DE CRMs DE INTERESSE POR FARMÃCIA (TOP 20 + ALERTAS)
+-- PASSO 7: TABELA DE CRMs DE INTERESSE POR FARMÁCIA (TOP 20 + ALERTAS)
 -- ============================================================================
--- âœ… CORREÃ‡ÃƒO PRINCIPAL v2: 
+-- ? CORREÇÃO PRINCIPAL v2: 
 --    - Trazer TODOS os alertas (1-6)
 --    - Incluir top20 por volume + TODOS os prescritores com qualquer alerta
 --    - Alerta6 agora vem da tb_analise_crm_farmacia_popular
 --    - Inclui dt_inscricao_crm e flag_prescricao_antes_registro
 
-DROP TABLE IF EXISTS temp_CGUSC.dbo.top20CRMsPorFarmacia;
+DROP TABLE IF EXISTS temp_CGUSC.fp.top20CRMsPorFarmacia;
 
 WITH CRMsRankeados AS (
     SELECT 
@@ -422,7 +422,7 @@ WITH CRMsRankeados AS (
         P.dt_ultima_prescricao,
         P.nu_prescricoes_dia,
         
-        -- ParticipaÃ§Ã£o %
+        -- Participação %
         CAST(P.vl_total_prescricoes AS DECIMAL(18,4)) / 
             NULLIF(CAST(T.total_valor_farmacia AS DECIMAL(18,4)), 0) * 100.0 AS pct_participacao,
         
@@ -434,13 +434,13 @@ WITH CRMsRankeados AS (
         -- Ranking
         ROW_NUMBER() OVER (PARTITION BY P.cnpj ORDER BY P.vl_total_prescricoes DESC) AS ranking,
         
-        -- Flag CRM InvÃ¡lido (verifica se existe na base do CFM)
+        -- Flag CRM Inválido (verifica se existe na base do CFM)
         CASE WHEN CFM.NU_CRM IS NULL THEN 1 ELSE 0 END AS flag_crm_invalido,
         
-        -- Flag RobÃ´ (>30 prescriÃ§Ãµes/dia neste estabelecimento)
+        -- Flag Robô (>30 prescrições/dia neste estabelecimento)
         CASE WHEN P.nu_prescricoes_dia > 30 THEN 1 ELSE 0 END AS flag_robo,
         
-        -- âœ… Dados da rede (total Brasil)
+        -- ? Dados da rede (total Brasil)
         ISNULL(A.nu_prescricoes_medico_em_todos_estabelecimentos, P.nu_prescricoes) AS prescricoes_total_brasil,
         ISNULL(A.nu_prescricoes_dia_em_todos_estabelecimentos, P.nu_prescricoes_dia) AS prescricoes_dia_total_brasil,
         ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) AS qtd_estabelecimentos_atua,
@@ -453,24 +453,24 @@ WITH CRMsRankeados AS (
             ELSE 100.0
         END AS pct_volume_aqui_vs_total,
         
-        -- Flag RobÃ´ Oculto (parece normal aqui, mas >30/dia no total Brasil)
+        -- Flag Robô Oculto (parece normal aqui, mas >30/dia no total Brasil)
         CASE 
             WHEN ISNULL(A.nu_prescricoes_dia_em_todos_estabelecimentos, 0) > 30 
             THEN 1 
             ELSE 0 
         END AS flag_robo_oculto,
         
-        -- Flag Multi-FarmÃ¡cia (>20 estabelecimentos)
+        -- Flag Multi-Farmácia (>20 estabelecimentos)
         CASE 
             WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 20 
             THEN 1 
             ELSE 0 
         END AS flag_multi_farmacia,
         
-        -- âœ… NOVO: Data de inscriÃ§Ã£o do CRM (da tabela CFM)
+        -- ? NOVO: Data de inscrição do CRM (da tabela CFM)
         CFM.dt_inscricao_convertida AS dt_inscricao_crm,
         
-        -- âœ… NOVO: Flag para prescriÃ§Ã£o antes do registro do CRM
+        -- ? NOVO: Flag para prescrição antes do registro do CRM
         CASE 
             WHEN CFM.dt_inscricao_convertida IS NOT NULL 
              AND P.dt_primeira_prescricao < CFM.dt_inscricao_convertida 
@@ -478,7 +478,7 @@ WITH CRMsRankeados AS (
             ELSE 0 
         END AS flag_prescricao_antes_registro,
         
-        -- âœ… CORREÃ‡ÃƒO: Trazer TODOS os alertas (incluindo alerta6)
+        -- ? CORREÇÃO: Trazer TODOS os alertas (incluindo alerta6)
         ISNULL(A.alerta1, '') AS alerta1_crm_invalido,
         ISNULL(A.alerta2, '') AS alerta2_tempo_concentrado,
         ISNULL(A.alerta3, '') AS alerta3_robo_estabelecimento,
@@ -488,7 +488,7 @@ WITH CRMsRankeados AS (
         
     FROM #CRMsPorFarmacia P
     INNER JOIN #TotaisFarmacia T ON T.cnpj = P.cnpj
-    -- âœ… JOIN sem filtro restritivo - traz TODOS os registros
+    -- ? JOIN sem filtro restritivo - traz TODOS os registros
     LEFT JOIN (
         SELECT 
             nu_cnpj, 
@@ -502,25 +502,25 @@ WITH CRMsRankeados AS (
             MAX(alerta4) AS alerta4,
             MAX(alerta5) AS alerta5,
             MAX(alerta6) AS alerta6
-        FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular
+        FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular
         GROUP BY nu_cnpj, id_medico, 
                  nu_prescricoes_medico_em_todos_estabelecimentos,
                  nu_prescricoes_dia_em_todos_estabelecimentos,
                  nu_estabelecimentos_com_registro_mesmo_crm
     ) A ON A.nu_cnpj = P.cnpj AND A.id_medico = P.id_medico
-    -- âœ… JOIN com tabela do CFM para verificar existÃªncia e obter data de inscriÃ§Ã£o
+    -- ? JOIN com tabela do CFM para verificar existência e obter data de inscrição
     LEFT JOIN (
         SELECT 
             NU_CRM,
             SG_UF,
             TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
-        FROM temp_CFM.dbo.medicos_jul_2025_mod
+        FROM temp_CFM.fp.medicos_jul_2025_mod
     ) CFM ON CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) AND CFM.SG_UF = P.sg_uf_crm
 )
 
--- âœ… CORREÃ‡ÃƒO PRINCIPAL: top20 por volume OU qualquer prescritor com alerta
+-- ? CORREÇÃO PRINCIPAL: top20 por volume OU qualquer prescritor com alerta
 SELECT *
-INTO temp_CGUSC.dbo.top20CRMsPorFarmacia
+INTO temp_CGUSC.fp.top20CRMsPorFarmacia
 FROM CRMsRankeados
 WHERE ranking <= 20
    OR alerta1_crm_invalido <> ''
@@ -530,41 +530,41 @@ WHERE ranking <= 20
    OR alerta5_geografico <> ''
    OR alerta6_prescricao_antes_registro <> '';
 
-CREATE CLUSTERED INDEX IDX_Top20_CNPJ ON temp_CGUSC.dbo.top20CRMsPorFarmacia(cnpj, ranking);
+CREATE CLUSTERED INDEX IDX_Top20_CNPJ ON temp_CGUSC.fp.top20CRMsPorFarmacia(cnpj, ranking);
 
 
 -- ============================================================================
--- VERIFICAÃ‡ÃƒO
+-- VERIFICAÇÃO
 -- ============================================================================
-SELECT TOP 100 * FROM temp_CGUSC.dbo.top20CRMsPorFarmacia ORDER BY cnpj, ranking;
+SELECT TOP 100 * FROM temp_CGUSC.fp.top20CRMsPorFarmacia ORDER BY cnpj, ranking;
 
--- âœ… NOVO: Verificar quantos prescritores entraram por alerta (fora do top20)
+-- ? NOVO: Verificar quantos prescritores entraram por alerta (fora do top20)
 SELECT 
     'Total de registros' AS metrica,
     COUNT(*) AS valor
-FROM temp_CGUSC.dbo.top20CRMsPorFarmacia
+FROM temp_CGUSC.fp.top20CRMsPorFarmacia
 UNION ALL
 SELECT 
     'Registros no top20' AS metrica,
     COUNT(*) AS valor
-FROM temp_CGUSC.dbo.top20CRMsPorFarmacia
+FROM temp_CGUSC.fp.top20CRMsPorFarmacia
 WHERE ranking <= 20
 UNION ALL
 SELECT 
-    'Registros FORA do top20 (sÃ³ por alerta)' AS metrica,
+    'Registros FORA do top20 (só por alerta)' AS metrica,
     COUNT(*) AS valor
-FROM temp_CGUSC.dbo.top20CRMsPorFarmacia
+FROM temp_CGUSC.fp.top20CRMsPorFarmacia
 WHERE ranking > 20;
 
 PRINT '============================================================================';
-PRINT 'SCRIPT EXECUTADO COM SUCESSO - CORREÃ‡Ã•ES APLICADAS:';
-PRINT '  1. PrescriÃ§Ãµes contadas por COUNT(DISTINCT num_autorizacao)';
-PRINT '  2. Todos os alertas (1-6) incluÃ­dos na tabela top20CRMsPorFarmacia';
-PRINT '  3. Dados de rede (total Brasil) incluÃ­dos para cada prescritor';
-PRINT '  4. Flags de robÃ´ oculto e multi-farmÃ¡cia calculados';
+PRINT 'SCRIPT EXECUTADO COM SUCESSO - CORREÇÕES APLICADAS:';
+PRINT '  1. Prescrições contadas por COUNT(DISTINCT num_autorizacao)';
+PRINT '  2. Todos os alertas (1-6) incluídos na tabela top20CRMsPorFarmacia';
+PRINT '  3. Dados de rede (total Brasil) incluídos para cada prescritor';
+PRINT '  4. Flags de robô oculto e multi-farmácia calculados';
 PRINT '  5. NOVO: Tabela inclui top20 + TODOS prescritores com alertas';
-PRINT '  6. NOVO: Alerta6 (prescriÃ§Ã£o antes do registro) vem da tabela de anÃ¡lise';
-PRINT '  7. NOVO: dt_inscricao_crm e flag_prescricao_antes_registro incluÃ­dos';
+PRINT '  6. NOVO: Alerta6 (prescrição antes do registro) vem da tabela de análise';
+PRINT '  7. NOVO: dt_inscricao_crm e flag_prescricao_antes_registro incluídos';
 PRINT '============================================================================';
 GO
 
@@ -583,7 +583,7 @@ DROP TABLE IF EXISTS #ParetoPorFarmacia;
 
 
 -- ============================================================================
--- VERIFICAÃ‡ÃƒO FINAL
+-- VERIFICAÇÃO FINAL
 -- ============================================================================
-SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorCRM_Completo ORDER BY score_prescritores DESC;
-SELECT TOP 50 * FROM temp_CGUSC.dbo.top20CRMsPorFarmacia WHERE cnpj = (SELECT TOP 1 cnpj FROM temp_CGUSC.dbo.indicadorCRM_Completo ORDER BY score_prescritores DESC);
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorCRM_Completo ORDER BY score_prescritores DESC;
+SELECT TOP 50 * FROM temp_CGUSC.fp.top20CRMsPorFarmacia WHERE cnpj = (SELECT TOP 1 cnpj FROM temp_CGUSC.fp.indicadorCRM_Completo ORDER BY score_prescritores DESC);

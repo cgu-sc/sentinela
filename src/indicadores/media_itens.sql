@@ -18,8 +18,8 @@ SELECT
     A.num_autorizacao,
     COUNT(*) AS qtd_itens
 INTO #ContagemItensAutorizacao
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C 
+FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -32,7 +32,7 @@ CREATE CLUSTERED INDEX IDX_TempCont_CNPJ ON #ContagemItensAutorizacao(cnpj);
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA (MÉDIA SIMPLES)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorMediaItens;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorMediaItens;
 
 SELECT 
     cnpj,
@@ -49,11 +49,11 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS media_itens_autorizacao
 
-INTO temp_CGUSC.dbo.indicadorMediaItens
+INTO temp_CGUSC.fp.indicadorMediaItens
 FROM #ContagemItensAutorizacao
 GROUP BY cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndMedia_CNPJ ON temp_CGUSC.dbo.indicadorMediaItens(cnpj);
+CREATE CLUSTERED INDEX IDX_IndMedia_CNPJ ON temp_CGUSC.fp.indicadorMediaItens(cnpj);
 
 -- Limpeza da tabela temporária
 DROP TABLE #ContagemItensAutorizacao;
@@ -62,7 +62,7 @@ DROP TABLE #ContagemItensAutorizacao;
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorMediaItens_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorMediaItens_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -79,19 +79,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS media_itens_autorizacao_uf
 
-INTO temp_CGUSC.dbo.indicadorMediaItens_UF
-FROM temp_CGUSC.dbo.indicadorMediaItens I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorMediaItens_UF
+FROM temp_CGUSC.fp.indicadorMediaItens I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndMediaUF_UF ON temp_CGUSC.dbo.indicadorMediaItens_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndMediaUF_UF ON temp_CGUSC.fp.indicadorMediaItens_UF(uf);
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorMediaItens_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorMediaItens_BR;
 
 SELECT 
     'BR' AS pais,
@@ -107,14 +107,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS media_itens_autorizacao_br
 
-INTO temp_CGUSC.dbo.indicadorMediaItens_BR
-FROM temp_CGUSC.dbo.indicadorMediaItens;
+INTO temp_CGUSC.fp.indicadorMediaItens_BR
+FROM temp_CGUSC.fp.indicadorMediaItens;
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorMediaItens_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorMediaItens_Completo;
 
 SELECT 
     I.cnpj,
@@ -147,17 +147,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.dbo.indicadorMediaItens_Completo
-FROM temp_CGUSC.dbo.indicadorMediaItens I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorMediaItens_Completo
+FROM temp_CGUSC.fp.indicadorMediaItens I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorMediaItens_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorMediaItens_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorMediaItens_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorMediaItens_BR BR;
 
-CREATE CLUSTERED INDEX IDX_FinalMedia_CNPJ ON temp_CGUSC.dbo.indicadorMediaItens_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalMedia_Risco ON temp_CGUSC.dbo.indicadorMediaItens_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalMedia_CNPJ ON temp_CGUSC.fp.indicadorMediaItens_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalMedia_Risco ON temp_CGUSC.fp.indicadorMediaItens_Completo(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorMediaItens_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorMediaItens_Completo ORDER BY risco_relativo_uf DESC;

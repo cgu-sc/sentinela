@@ -9,7 +9,7 @@ def buscar_dados_prescritores(cursor, cnpj):
     """
     try:
         cursor.execute('''
-            SELECT * FROM temp_CGUSC.dbo.indicadorCRM_Completo 
+            SELECT * FROM temp_CGUSC.fp.indicadorCRM_Completo 
             WHERE cnpj = ?
         ''', cnpj)
         row = cursor.fetchone()
@@ -32,7 +32,7 @@ def buscar_top20_prescritores(cursor, cnpj):
     """
     try:
         cursor.execute('''
-            SELECT * FROM temp_CGUSC.dbo.top20CRMsPorFarmacia 
+            SELECT * FROM temp_CGUSC.fp.top20CRMsPorFarmacia 
             WHERE cnpj = ?
             ORDER BY ranking
         ''', cnpj)

@@ -36,7 +36,7 @@ SELECT
     SG_UF,
     TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
 INTO #CFM_Base
-FROM temp_CFM.dbo.medicos_jul_2025_mod;
+FROM temp_CFM.fp.medicos_jul_2025_mod;
 
 CREATE CLUSTERED INDEX IDX_CFM_CRM_UF ON #CFM_Base(NU_CRM, SG_UF);
 
@@ -123,7 +123,7 @@ CREATE CLUSTERED INDEX IDX_Irreg_CNPJ ON #IrregularidadePorFarmacia(cnpj);
 -- ============================================================================
 -- PASSO 3: TABELA BASE POR FARMÁCIA
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRMsIrregulares;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRMsIrregulares;
 
 SELECT 
     cnpj,
@@ -144,17 +144,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS pct_risco_irregularidade
 
-INTO temp_CGUSC.dbo.indicadorCRMsIrregulares
+INTO temp_CGUSC.fp.indicadorCRMsIrregulares
 FROM #IrregularidadePorFarmacia
 WHERE total_prescritores > 0;
 
-CREATE CLUSTERED INDEX IDX_IndIrreg_CNPJ ON temp_CGUSC.dbo.indicadorCRMsIrregulares(cnpj);
+CREATE CLUSTERED INDEX IDX_IndIrreg_CNPJ ON temp_CGUSC.fp.indicadorCRMsIrregulares(cnpj);
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRMsIrregulares_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRMsIrregulares_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -173,19 +173,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS pct_risco_irregularidade_uf
 
-INTO temp_CGUSC.dbo.indicadorCRMsIrregulares_UF
-FROM temp_CGUSC.dbo.indicadorCRMsIrregulares I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorCRMsIrregulares_UF
+FROM temp_CGUSC.fp.indicadorCRMsIrregulares I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndIrregUF_UF ON temp_CGUSC.dbo.indicadorCRMsIrregulares_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndIrregUF_UF ON temp_CGUSC.fp.indicadorCRMsIrregulares_UF(uf);
 
 
 -- ============================================================================
 -- PASSO 5: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRMsIrregulares_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRMsIrregulares_BR;
 
 SELECT 
     'BR' AS pais,
@@ -204,14 +204,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS pct_risco_irregularidade_br
 
-INTO temp_CGUSC.dbo.indicadorCRMsIrregulares_BR
-FROM temp_CGUSC.dbo.indicadorCRMsIrregulares;
+INTO temp_CGUSC.fp.indicadorCRMsIrregulares_BR
+FROM temp_CGUSC.fp.indicadorCRMsIrregulares;
 
 
 -- ============================================================================
 -- PASSO 6: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorCRMsIrregulares_Completo;
 
 SELECT 
     I.cnpj,
@@ -266,18 +266,18 @@ SELECT
         ELSE 'BAIXO'
     END AS classificacao_risco
 
-INTO temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo
-FROM temp_CGUSC.dbo.indicadorCRMsIrregulares I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorCRMsIrregulares_Completo
+FROM temp_CGUSC.fp.indicadorCRMsIrregulares I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorCRMsIrregulares_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorCRMsIrregulares_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorCRMsIrregulares_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorCRMsIrregulares_BR BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalIrreg_CNPJ ON temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Risco ON temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo(risco_relativo_uf DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Pct ON temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo(pct_risco_irregularidade DESC);
+CREATE CLUSTERED INDEX IDX_FinalIrreg_CNPJ ON temp_CGUSC.fp.indicadorCRMsIrregulares_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Risco ON temp_CGUSC.fp.indicadorCRMsIrregulares_Completo(risco_relativo_uf DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Pct ON temp_CGUSC.fp.indicadorCRMsIrregulares_Completo(pct_risco_irregularidade DESC);
 GO
 
 

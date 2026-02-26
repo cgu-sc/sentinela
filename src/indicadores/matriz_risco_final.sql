@@ -1,26 +1,26 @@
-ÔªøUSE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
--- SCRIPT: Matriz de Risco Final - Vers√£o 5.5 (VISUAL REAL / C√ÅLCULO CAPADO)
--- OBJETIVO: Consolida√ß√£o, Score de Risco, Rankings e Classifica√ß√£o
--- MUDAN√áAS:
---   1. Visualiza√ß√£o: Mostra o Risco Relativo REAL (ex: 34x) na tabela final.
---   2. C√°lculo: Aplica TETO DE 10x internamente apenas para calcular o Score e Multiplicadores.
---   3. Mant√©m a l√≥gica de "Sem Dados" (NULL) nas colunas originais.
+-- SCRIPT: Matriz de Risco Final - Vers„o 5.5 (VISUAL REAL / C¡LCULO CAPADO)
+-- OBJETIVO: ConsolidaÁ„o, Score de Risco, Rankings e ClassificaÁ„o
+-- MUDAN«AS:
+--   1. VisualizaÁ„o: Mostra o Risco Relativo REAL (ex: 34x) na tabela final.
+--   2. C·lculo: Aplica TETO DE 10x internamente apenas para calcular o Score e Multiplicadores.
+--   3. MantÈm a lÛgica de "Sem Dados" (NULL) nas colunas originais.
 -- ==========================================================================================
 
 SET NOCOUNT ON;
-PRINT '>> INICIANDO GERA√á√ÉO DA MATRIZ DE RISCO V5.5...';
+PRINT '>> INICIANDO GERA«√O DA MATRIZ DE RISCO V5.5...';
 
 -- 1. LIMPEZA DE AMBIENTE
-IF OBJECT_ID('temp_CGUSC.dbo.Matriz_Risco_Final', 'U') IS NOT NULL
+IF OBJECT_ID('temp_CGUSC.fp.Matriz_Risco_Final', 'U') IS NOT NULL
 BEGIN
-    DROP TABLE temp_CGUSC.dbo.Matriz_Risco_Final;
+    DROP TABLE temp_CGUSC.fp.Matriz_Risco_Final;
     PRINT '   > Tabela anterior removida.';
 END;
 
--- 2. CTE 1: CONSOLIDA√á√ÉO DOS DADOS BRUTOS (VALORES REAIS PARA EXIBI√á√ÉO)
+-- 2. CTE 1: CONSOLIDA«√O DOS DADOS BRUTOS (VALORES REAIS PARA EXIBI«√O)
 ;WITH IndicadoresPresenca AS (
     SELECT 
         F.cnpj,
@@ -30,10 +30,10 @@ END;
         CAST(F.uf AS VARCHAR(2)) AS uf,
         F.situacaoCadastral,
         
-        -- POPULA√á√ÉO
+        -- POPULA«√O
         ISNULL(F.populacao2019, 0) AS populacao,
 
-        -- FLAGS DE PRESEN√áA
+        -- FLAGS DE PRESEN«A
         CASE WHEN I01.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_falecidos,
         CASE WHEN I02.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_clinico,
         CASE WHEN I03.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_teto,
@@ -53,7 +53,7 @@ END;
         CASE WHEN I17.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crms_irregulares,
         
         -- ====================================================================================
-        -- DADOS ORIGINAIS REAIS (SEM TETO AQUI - PARA EXIBI√á√ÉO NO RELAT√ìRIO)
+        -- DADOS ORIGINAIS REAIS (SEM TETO AQUI - PARA EXIBI«√O NO RELAT”RIO)
         -- ====================================================================================
         
         I01.percentual_falecidos AS pct_falecidos,
@@ -124,27 +124,27 @@ END;
         I17.media_estado AS avg_crms_irregulares_uf, I17.media_pais AS avg_crms_irregulares_br,
         I17.risco_relativo_uf AS risco_crms_irregulares_uf, I17.risco_relativo_br AS risco_crms_irregulares_br
         
-    FROM temp_CGUSC.dbo.dadosFarmaciasFP F
-    LEFT JOIN temp_CGUSC.dbo.indicadorFalecidos_Completo I01 ON I01.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorDemografico_Completo I02 ON I02.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorTeto_Completo I03 ON I03.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorPolimedicamento_Completo I04 ON I04.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorMediaItens_Completo I05 ON I05.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorTicketMedio_Completo I06 ON I06.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo I07 ON I07.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorVendaPerCapita_Completo I08 ON I08.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorVendasConsecutivas_Completo I09 ON I09.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorHorarioAtipico_Completo I10 ON I10.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorGeografico_Completo I11 ON I11.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorAltoCusto_Completo I12 ON I12.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorConcentracaoPico_Completo I13 ON I13.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorPacientesUnicos_Completo I14 ON I14.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorCRM_Completo I15 ON I15.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo I16 ON I16.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.dbo.indicadorCRMsIrregulares_Completo I17 ON I17.cnpj = F.cnpj
+    FROM temp_CGUSC.fp.dadosFarmaciasFP F
+    LEFT JOIN temp_CGUSC.fp.indicadorFalecidos_Completo I01 ON I01.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorDemografico_Completo I02 ON I02.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorTeto_Completo I03 ON I03.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorPolimedicamento_Completo I04 ON I04.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorMediaItens_Completo I05 ON I05.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorTicketMedio_Completo I06 ON I06.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo I07 ON I07.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorVendaPerCapita_Completo I08 ON I08.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorVendasConsecutivas_Completo I09 ON I09.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorHorarioAtipico_Completo I10 ON I10.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorGeografico_Completo I11 ON I11.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorAltoCusto_Completo I12 ON I12.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorConcentracaoPico_Completo I13 ON I13.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorPacientesUnicos_Completo I14 ON I14.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorCRM_Completo I15 ON I15.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorExclusividadeCRM_Completo I16 ON I16.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicadorCRMsIrregulares_Completo I17 ON I17.cnpj = F.cnpj
 ),
 
--- 3. CTE 2: C√ÅLCULO DE SCORE COM TETO (AQUI √â A M√ÅGICA)
+-- 3. CTE 2: C¡LCULO DE SCORE COM TETO (AQUI … A M¡GICA)
 RiscosAjustados AS (
     SELECT 
         *,
@@ -153,7 +153,7 @@ RiscosAjustados AS (
          tem_madrugada + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
          tem_crm + tem_exclusividade_crm + tem_crms_irregulares) AS qtd_indicadores_preenchidos,
         
-        -- L√ìGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO C√ÅLCULO
+        -- L”GICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO C¡LCULO
         
         -- 1. FALECIDOS
         CASE 
@@ -164,7 +164,7 @@ RiscosAjustados AS (
         END AS risco_falecidos_ajustado,
         CASE WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_uf > 10 THEN 10 ELSE ISNULL(risco_falecidos_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_falecidos_critico,
         
-        -- 2. CL√çNICO
+        -- 2. CLÕNICO
         CASE 
             WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) >= 5 THEN (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) * 3
             WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) >= 3 THEN (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) * 2
@@ -311,13 +311,13 @@ RiscosAjustados AS (
     FROM IndicadoresPresenca
 ),
 
--- 4. CTE 3: CONSOLIDA√á√ÉO DOS RISCOS (SOMA)
+-- 4. CTE 3: CONSOLIDA«√O DOS RISCOS (SOMA)
 ScoreCalculado AS (
     SELECT 
         *,
         CAST(qtd_indicadores_preenchidos * 100.0 / 17.0 AS DECIMAL(5,2)) AS pct_completude,
         
-        -- Soma dos riscos ajustados (J√Å COM TETO APLICADO NA ETAPA ANTERIOR)
+        -- Soma dos riscos ajustados (J¡ COM TETO APLICADO NA ETAPA ANTERIOR)
         (risco_falecidos_ajustado + risco_clinico_ajustado + risco_teto_ajustado +
          risco_polimedicamento_ajustado + risco_media_itens_ajustado + risco_ticket_ajustado +
          risco_receita_paciente_ajustado + risco_per_capita_ajustado + risco_vendas_rapidas_ajustado +
@@ -326,7 +326,7 @@ ScoreCalculado AS (
          risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado
         ) AS soma_riscos_ajustados,
         
-        -- Contagem de flags cr√≠ticos
+        -- Contagem de flags crÌticos
         (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
          flag_polimedicamento_critico + flag_media_itens_critico + flag_ticket_critico +
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
@@ -337,7 +337,7 @@ ScoreCalculado AS (
     FROM RiscosAjustados
 ),
 
--- 5. CTE 4: C√ÅLCULO DOS SCORES FINAIS
+-- 5. CTE 4: C¡LCULO DOS SCORES FINAIS
 ScoreCalculadoFim AS (
     SELECT
         *,
@@ -347,7 +347,7 @@ ScoreCalculadoFim AS (
             THEN soma_riscos_ajustados / (qtd_indicadores_preenchidos * 1.0) ELSE 0 END 
         AS DECIMAL(18,4)) AS SCORE_BASE,
 
-        -- Score Final (com b√¥nus de reincid√™ncia aplicados)
+        -- Score Final (com bÙnus de reincidÍncia aplicados)
         CAST(
             CASE WHEN qtd_indicadores_preenchidos > 0 THEN
                 (soma_riscos_ajustados / (qtd_indicadores_preenchidos * 1.0)) *
@@ -371,19 +371,19 @@ ScoreCalculadoFim AS (
         -- Lista textual de problemas
         LTRIM(RTRIM(
             CASE WHEN flag_falecidos_critico = 1 THEN 'Falecidos, ' ELSE '' END +
-            CASE WHEN flag_clinico_critico = 1 THEN 'Cl√≠nico, ' ELSE '' END +
+            CASE WHEN flag_clinico_critico = 1 THEN 'ClÌnico, ' ELSE '' END +
             CASE WHEN flag_teto_critico = 1 THEN 'Teto, ' ELSE '' END +
             CASE WHEN flag_polimedicamento_critico = 1 THEN 'Polimedicamento, ' ELSE '' END +
-            CASE WHEN flag_media_itens_critico = 1 THEN 'M√©dia Itens, ' ELSE '' END +
-            CASE WHEN flag_ticket_critico = 1 THEN 'Ticket M√©dio, ' ELSE '' END +
+            CASE WHEN flag_media_itens_critico = 1 THEN 'MÈdia Itens, ' ELSE '' END +
+            CASE WHEN flag_ticket_critico = 1 THEN 'Ticket MÈdio, ' ELSE '' END +
             CASE WHEN flag_receita_paciente_critico = 1 THEN 'Receita/Paciente, ' ELSE '' END +
             CASE WHEN flag_per_capita_critico = 1 THEN 'Per Capita, ' ELSE '' END +
-            CASE WHEN flag_vendas_rapidas_critico = 1 THEN 'Vendas R√°pidas, ' ELSE '' END +
+            CASE WHEN flag_vendas_rapidas_critico = 1 THEN 'Vendas R·pidas, ' ELSE '' END +
             CASE WHEN flag_madrugada_critico = 1 THEN 'Madrugada, ' ELSE '' END +
-            CASE WHEN flag_geografico_critico = 1 THEN 'Geogr√°fico, ' ELSE '' END +
+            CASE WHEN flag_geografico_critico = 1 THEN 'Geogr·fico, ' ELSE '' END +
             CASE WHEN flag_alto_custo_critico = 1 THEN 'Alto Custo, ' ELSE '' END +
             CASE WHEN flag_pico_critico = 1 THEN 'Pico, ' ELSE '' END +
-            CASE WHEN flag_pacientes_unicos_critico = 1 THEN 'Pacientes √önicos, ' ELSE '' END +
+            CASE WHEN flag_pacientes_unicos_critico = 1 THEN 'Pacientes ⁄nicos, ' ELSE '' END +
             CASE WHEN flag_crm_critico = 1 THEN 'CRM HHI, ' ELSE '' END +
             CASE WHEN flag_exclusividade_crm_critico = 1 THEN 'Exclusividade CRM, ' ELSE '' END +
             CASE WHEN flag_crms_irregulares_critico = 1 THEN 'CRMs Irregulares, ' ELSE '' END + ''
@@ -391,32 +391,32 @@ ScoreCalculadoFim AS (
     FROM ScoreCalculado
 ),
 
--- 6. CTE 5: CLASSIFICA√á√ÉO FINAL
+-- 6. CTE 5: CLASSIFICA«√O FINAL
 ClassificacaoFinal AS (
     SELECT 
         *,
         CASE 
-            -- 1. CR√çTICO (Fraude Sist√™mica)
+            -- 1. CRÕTICO (Fraude SistÍmica)
             WHEN qtd_indicadores_criticos >= 3 THEN 'RISCO CRITICO'
 
             -- 2. ALTO (2 problemas graves OU Score alto)
             WHEN qtd_indicadores_criticos >= 2 THEN 'RISCO ALTO'
             WHEN SCORE_RISCO_FINAL >= 4.0 THEN 'RISCO ALTO' 
 
-            -- 3. M√âDIO (1 problema grave OU Score moderado)
+            -- 3. M…DIO (1 problema grave OU Score moderado)
             WHEN qtd_indicadores_criticos = 1 THEN 'RISCO MEDIO'
             WHEN SCORE_RISCO_FINAL >= 2.0 THEN 'RISCO MEDIO'
 
             -- 4. BAIXO
             WHEN SCORE_RISCO_FINAL >= 1.0 THEN 'RISCO BAIXO'
 
-            -- 5. M√çNIMO
+            -- 5. MÕNIMO
             ELSE 'RISCO MINIMO'
         END AS CLASSIFICACAO_RISCO
     FROM ScoreCalculadoFim
 )
 
--- 7. SELE√á√ÉO FINAL E CRIA√á√ÉO DA TABELA F√çSICA
+-- 7. SELE«√O FINAL E CRIA«√O DA TABELA FÕSICA
 SELECT 
     S.*,
     
@@ -426,53 +426,53 @@ SELECT
     RANK() OVER (PARTITION BY uf ORDER BY SCORE_RISCO_FINAL DESC) AS rank_uf,
     COUNT(*) OVER (PARTITION BY uf) AS total_uf,
     
-    -- INTELIG√äNCIA MUNICIPAL
+    -- INTELIG NCIA MUNICIPAL
     RANK() OVER (PARTITION BY uf, municipio ORDER BY SCORE_RISCO_FINAL DESC) AS rank_municipio,
     COUNT(*) OVER (PARTITION BY uf, municipio) AS total_municipio,
     
-    -- ESTAT√çSTICAS LOCAIS
+    -- ESTATÕSTICAS LOCAIS
     CAST(AVG(SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS avg_score_municipio,
     CAST(MAX(SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS max_score_municipio,
 
     -- PERCENTIL
     CAST(CUME_DIST() OVER (ORDER BY SCORE_RISCO_FINAL ASC) * 100 AS DECIMAL(5,2)) AS percentil_risco
 
-INTO temp_CGUSC.dbo.Matriz_Risco_Final
+INTO temp_CGUSC.fp.Matriz_Risco_Final
 FROM ClassificacaoFinal S;
 
-PRINT '   > Tabela temp_CGUSC.dbo.Matriz_Risco_Final (V5.5) criada com sucesso.';
+PRINT '   > Tabela temp_CGUSC.fp.Matriz_Risco_Final (V5.5) criada com sucesso.';
 
 -- ============================================================================
--- CRIA√á√ÉO DE √çNDICES OTIMIZADOS
+-- CRIA«√O DE ÕNDICES OTIMIZADOS
 -- ============================================================================
-PRINT '   > Recriando √≠ndices...';
+PRINT '   > Recriando Ìndices...';
 
 CREATE CLUSTERED INDEX IDX_MatrizFinal_CNPJ 
-    ON temp_CGUSC.dbo.Matriz_Risco_Final(cnpj);
+    ON temp_CGUSC.fp.Matriz_Risco_Final(cnpj);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_ScoreRiscoFinal 
-    ON temp_CGUSC.dbo.Matriz_Risco_Final(SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.Matriz_Risco_Final(SCORE_RISCO_FINAL DESC)
     INCLUDE (razaoSocial, uf, rank_nacional, CLASSIFICACAO_RISCO);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Municipio 
-    ON temp_CGUSC.dbo.Matriz_Risco_Final(uf, municipio, SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.Matriz_Risco_Final(uf, municipio, SCORE_RISCO_FINAL DESC)
     INCLUDE (rank_municipio, avg_score_municipio);
 
-PRINT '>> PROCESSO CONCLU√çDO COM SUCESSO.';
+PRINT '>> PROCESSO CONCLUÕDO COM SUCESSO.';
 GO
 
 -- ============================================================================
--- VALIDA√á√ÉO R√ÅPIDA
+-- VALIDA«√O R¡PIDA
 -- ============================================================================
 SELECT CLASSIFICACAO_RISCO, COUNT(*) as Qtd, 
        CAST(AVG(SCORE_RISCO_FINAL) as DECIMAL(10,2)) as Media_Score,
        MIN(SCORE_RISCO_FINAL) as Min_Score,
        MAX(SCORE_RISCO_FINAL) as Max_Score
-FROM temp_CGUSC.dbo.Matriz_Risco_Final
+FROM temp_CGUSC.fp.Matriz_Risco_Final
 GROUP BY CLASSIFICACAO_RISCO
 ORDER BY Media_Score DESC;
 
-select top 100 *  FROM temp_CGUSC.dbo.Matriz_Risco_Final where municipio = 'Florian√≥polis' 
+select top 100 *  FROM temp_CGUSC.fp.Matriz_Risco_Final where municipio = 'FlorianÛpolis' 
 
 
 select top 10 * from dadosFarmaciasFP
@@ -481,5 +481,5 @@ select top 10 * from dadosFarmaciasFP
 select top 10 * from resultado_Sentinela_2015_2024
 
 
-select CLASSIFICACAO_RISCO  FROM temp_CGUSC.dbo.Matriz_Risco_Final group by CLASSIFICACAO_RISCO
+select CLASSIFICACAO_RISCO  FROM temp_CGUSC.fp.Matriz_Risco_Final group by CLASSIFICACAO_RISCO
 

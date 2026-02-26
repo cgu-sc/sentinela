@@ -12,7 +12,7 @@ DECLARE @DataFim DATE = '2024-12-10';
 -- ============================================================================
 -- PASSO 1: CÁLCULO BASE POR FARMÁCIA (INDICADOR INDIVIDUAL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorFalecidos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorFalecidos;
 
 WITH CalculoUnificado AS (
     SELECT 
@@ -40,10 +40,10 @@ WITH CalculoUnificado AS (
             ELSE NULL 
         END) AS media_dias_apos_obito
 
-    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C 
+    FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+    INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
         ON C.codigo_barra = A.codigo_barra
-    LEFT JOIN temp_CGUSC.dbo.obitos_unificada B 
+    LEFT JOIN temp_CGUSC.fp.obitos_unificada B 
         ON B.cpf = A.CPF
     WHERE 
         A.data_hora >= @DataInicio 
@@ -68,17 +68,17 @@ SELECT
 
     ISNULL(media_dias_apos_obito, 0) AS media_dias_irregularidade
 
-INTO temp_CGUSC.dbo.indicadorFalecidos
+INTO temp_CGUSC.fp.indicadorFalecidos
 FROM CalculoUnificado
 WHERE valor_total_vendas > 0;
 
-CREATE CLUSTERED INDEX IDX_IndFalecidos_CNPJ ON temp_CGUSC.dbo.indicadorFalecidos(cnpj);
+CREATE CLUSTERED INDEX IDX_IndFalecidos_CNPJ ON temp_CGUSC.fp.indicadorFalecidos(cnpj);
 
 
 -- ============================================================================
 -- PASSO 2: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorFalecidos_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorFalecidos_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -96,19 +96,19 @@ SELECT
 
     AVG(I.media_dias_irregularidade) AS media_dias_uf
 
-INTO temp_CGUSC.dbo.indicadorFalecidos_UF
-FROM temp_CGUSC.dbo.indicadorFalecidos I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorFalecidos_UF
+FROM temp_CGUSC.fp.indicadorFalecidos I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndFalecidosUF_UF ON temp_CGUSC.dbo.indicadorFalecidos_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndFalecidosUF_UF ON temp_CGUSC.fp.indicadorFalecidos_UF(uf);
 
 
 -- ============================================================================
 -- PASSO 3: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorFalecidos_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorFalecidos_BR;
 
 SELECT 
     'BR' AS pais,
@@ -126,14 +126,14 @@ SELECT
 
     AVG(media_dias_irregularidade) AS media_dias_br
 
-INTO temp_CGUSC.dbo.indicadorFalecidos_BR
-FROM temp_CGUSC.dbo.indicadorFalecidos;
+INTO temp_CGUSC.fp.indicadorFalecidos_BR
+FROM temp_CGUSC.fp.indicadorFalecidos;
 
 
 -- ============================================================================
 -- PASSO 4: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorFalecidos_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorFalecidos_Completo;
 
 SELECT 
     I.cnpj,
@@ -168,18 +168,18 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.dbo.indicadorFalecidos_Completo
-FROM temp_CGUSC.dbo.indicadorFalecidos I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorFalecidos_Completo
+FROM temp_CGUSC.fp.indicadorFalecidos I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorFalecidos_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorFalecidos_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorFalecidos_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorFalecidos_BR BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_Final_CNPJ ON temp_CGUSC.dbo.indicadorFalecidos_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_Final_Risco ON temp_CGUSC.dbo.indicadorFalecidos_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_Final_CNPJ ON temp_CGUSC.fp.indicadorFalecidos_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_Final_Risco ON temp_CGUSC.fp.indicadorFalecidos_Completo(risco_relativo_uf DESC);
 GO
 
 -- Verificação final
-SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorFalecidos_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorFalecidos_Completo ORDER BY risco_relativo_uf DESC;

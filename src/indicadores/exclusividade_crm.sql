@@ -131,7 +131,7 @@ CREATE CLUSTERED INDEX IDX_Excl_CNPJ ON #ExclusividadePorFarmacia(cnpj);
 -- ============================================================================
 -- PASSO 3: CÁLCULO BASE POR FARMÁCIA (INDICADOR EXCLUSIVIDADE)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorExclusividadeCRM;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorExclusividadeCRM;
 
 SELECT 
     cnpj,
@@ -196,11 +196,11 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_valor_exclusivos
 
-INTO temp_CGUSC.dbo.indicadorExclusividadeCRM
+INTO temp_CGUSC.fp.indicadorExclusividadeCRM
 FROM #ExclusividadePorFarmacia
 WHERE total_prescritores > 0;  -- Apenas farmácias com prescritores
 
-CREATE CLUSTERED INDEX IDX_IndExcl_CNPJ ON temp_CGUSC.dbo.indicadorExclusividadeCRM(cnpj);
+CREATE CLUSTERED INDEX IDX_IndExcl_CNPJ ON temp_CGUSC.fp.indicadorExclusividadeCRM(cnpj);
 
 -- Limpeza
 DROP TABLE #ExclusividadePorFarmacia;
@@ -211,7 +211,7 @@ DROP TABLE #CRMsGlobal;
 -- ============================================================================
 -- PASSO 4: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorExclusividadeCRM_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorExclusividadeCRM_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -228,19 +228,19 @@ SELECT
     AVG(I.percentual_volume_exclusivos) AS percentual_volume_exclusivos_uf,
     AVG(I.percentual_valor_exclusivos) AS percentual_valor_exclusivos_uf
 
-INTO temp_CGUSC.dbo.indicadorExclusividadeCRM_UF
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorExclusividadeCRM_UF
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndExclUF_UF ON temp_CGUSC.dbo.indicadorExclusividadeCRM_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndExclUF_UF ON temp_CGUSC.fp.indicadorExclusividadeCRM_UF(uf);
 
 
 -- ============================================================================
 -- PASSO 5: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorExclusividadeCRM_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorExclusividadeCRM_BR;
 
 SELECT 
     'BR' AS pais,
@@ -255,14 +255,14 @@ SELECT
     AVG(percentual_volume_exclusivos) AS percentual_volume_exclusivos_br,
     AVG(percentual_valor_exclusivos) AS percentual_valor_exclusivos_br
 
-INTO temp_CGUSC.dbo.indicadorExclusividadeCRM_BR
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM;
+INTO temp_CGUSC.fp.indicadorExclusividadeCRM_BR
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM;
 
 
 -- ============================================================================
 -- PASSO 6: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorExclusividadeCRM_Completo;
 
 SELECT 
     I.cnpj,
@@ -348,18 +348,18 @@ SELECT
         ELSE 'MUITO BAIXO'
     END AS classificacao_exclusividade
 
-INTO temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorExclusividadeCRM_Completo
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorExclusividadeCRM_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorExclusividadeCRM_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorExclusividadeCRM_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorExclusividadeCRM_BR BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalExcl_CNPJ ON temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalExcl_Risco ON temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo(risco_relativo_uf DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalExcl_Percentual ON temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo(percentual_exclusividade DESC);
+CREATE CLUSTERED INDEX IDX_FinalExcl_CNPJ ON temp_CGUSC.fp.indicadorExclusividadeCRM_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalExcl_Risco ON temp_CGUSC.fp.indicadorExclusividadeCRM_Completo(risco_relativo_uf DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalExcl_Percentual ON temp_CGUSC.fp.indicadorExclusividadeCRM_Completo(percentual_exclusividade DESC);
 GO
 
 -- ============================================================================
@@ -378,7 +378,7 @@ SELECT TOP 100
     percentual_volume_exclusivos,
     classificacao_exclusividade,
     risco_relativo_uf
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo 
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM_Completo 
 ORDER BY percentual_exclusividade DESC;
 
 -- 2. Distribuição por classificação de risco
@@ -388,7 +388,7 @@ SELECT
     AVG(percentual_exclusividade) AS media_exclusividade,
     AVG(total_prescritores) AS media_prescritores,
     AVG(percentual_volume_exclusivos) AS media_volume_exclusivos
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM_Completo
 GROUP BY classificacao_exclusividade
 ORDER BY 
     CASE classificacao_exclusividade
@@ -407,7 +407,7 @@ SELECT
     AVG(media_estabelecimentos_por_crm) AS media_dispersao,
     AVG(percentual_volume_exclusivos) AS media_volume_exclusivos,
     SUM(CASE WHEN percentual_exclusividade >= 80 THEN 1 ELSE 0 END) AS farmacias_risco_muito_alto
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM_Completo
 GROUP BY uf
 ORDER BY media_exclusividade DESC;
 
@@ -422,7 +422,7 @@ SELECT
     COUNT(*) AS qtd_farmacias,
     AVG(percentual_exclusividade) AS media_exclusividade,
     AVG(percentual_volume_exclusivos) AS media_volume_exclusivos
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM_Completo
 GROUP BY 
     CASE 
         WHEN total_prescritores < 10 THEN '< 10 prescritores'
@@ -450,7 +450,7 @@ SELECT TOP 50
     total_valor_farmacia,
     percentual_volume_exclusivos,
     risco_relativo_uf
-FROM temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo
+FROM temp_CGUSC.fp.indicadorExclusividadeCRM_Completo
 WHERE percentual_exclusividade >= 70
   AND total_prescritores >= 20
 ORDER BY total_valor_farmacia DESC;
@@ -462,9 +462,9 @@ PRINT 'FONTE: relatorio_movimentacaoFP_2021_2024 (FONTE DIRETA)';
 PRINT 'PERÍODO: Controlado por @DataInicio e @DataFim';
 PRINT '';
 PRINT 'TABELAS GERADAS:';
-PRINT '  - temp_CGUSC.dbo.indicadorExclusividadeCRM (base)';
-PRINT '  - temp_CGUSC.dbo.indicadorExclusividadeCRM_UF (médias por estado)';
-PRINT '  - temp_CGUSC.dbo.indicadorExclusividadeCRM_BR (médias nacionais)';
-PRINT '  - temp_CGUSC.dbo.indicadorExclusividadeCRM_Completo (consolidado final)';
+PRINT '  - temp_CGUSC.fp.indicadorExclusividadeCRM (base)';
+PRINT '  - temp_CGUSC.fp.indicadorExclusividadeCRM_UF (médias por estado)';
+PRINT '  - temp_CGUSC.fp.indicadorExclusividadeCRM_BR (médias nacionais)';
+PRINT '  - temp_CGUSC.fp.indicadorExclusividadeCRM_Completo (consolidado final)';
 PRINT '============================================================================';
 GO

@@ -95,29 +95,29 @@ farmacia_inicio_venda = {}
 try:
     logging.info("Executando consultas iniciais para carregar tabelas acessorias")
 
-    cursor.execute('select count(cnpj) from [temp_CGUSC].dbo.classif')
+    cursor.execute('select count(cnpj) from [temp_CGUSC].fp.classif')
     total_cnpjs = cursor.fetchone()[0]
 
     cursor.execute('select min(data_estoque_inicial) data from estoque_inicialFP')
     row = cursor.fetchone()
     data_inicio_estoque = row[0] if row and row[0] else datetime.strptime('2015-01-01', '%Y-%m-%d').date()
 
-    cursor.execute('select cnpj,razaoSocial,municipio,uf from temp_CGUSC.[dbo].dadosFarmaciasFP')
+    cursor.execute('select cnpj,razaoSocial,municipio,uf from temp_CGUSC.[fp].dadosFarmaciasFP')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
         dados_farmacias[row[0]] = dict(zip(cols, row))
 
-    cursor.execute('select codigo_barra,principio_ativo from temp_CGUSC.[dbo].medicamentosPatologiaFP')
+    cursor.execute('select codigo_barra,principio_ativo from temp_CGUSC.[fp].medicamentosPatologiaFP')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
         dados_medicamentos[row[0]] = dict(zip(cols, row))
 
-    cursor.execute('select * from temp_CGUSC.[dbo].contatoFarmacia')
+    cursor.execute('select * from temp_CGUSC.[fp].contatoFarmacia')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
         contato_farmacia[row[0]] = dict(zip(cols, row))
 
-    cursor.execute('select * from [temp_CGUSC].dbo.farmacia_inicio_venda')
+    cursor.execute('select * from [temp_CGUSC].fp.farmacia_inicio_venda')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
         farmacia_inicio_venda[row[0]] = dict(zip(cols, row))
@@ -141,7 +141,7 @@ def verificar_processamento_existente(cursor, cnpj):
         # Busca o status mais recente do CNPJ
         cursor.execute('''
             SELECT TOP 1 situacao, data_processamento
-            FROM [temp_CGUSC].[dbo].[processamentosFP]
+            FROM [temp_CGUSC].[fp].[processamentosFP]
             WHERE cnpj = ? 
             ORDER BY data_processamento DESC
         ''', cnpj)
@@ -202,7 +202,7 @@ def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_brutos):
 
         # 3. Salva no Banco (Coluna VARBINARY)
         cursor.execute('''
-            INSERT INTO temp_CGUSC.dbo.memoria_calculo_consolidadaFP 
+            INSERT INTO temp_CGUSC.fp.memoria_calculo_consolidadaFP 
             (id_processamento, cnpj, dados_comprimidos)
             VALUES (?, ?, ?)
         ''', id_processamento, cnpj, dados_comprimidos)
@@ -224,7 +224,7 @@ def iniciar_processamento_cnpj(cursor, conn, cnpj, dt_inicio, dt_final, dados_cn
     """
     try:
         cursor.execute('''
-            INSERT INTO [temp_CGUSC].[dbo].[processamentosFP] 
+            INSERT INTO [temp_CGUSC].[fp].[processamentosFP] 
             (cnpj, razao_social, nome_fantasia, municipio, uf, 
              periodo_inicial, periodo_final, data_processamento, 
              situacao, status_detalhado) 
@@ -246,7 +246,7 @@ def iniciar_processamento_cnpj(cursor, conn, cnpj, dt_inicio, dt_final, dados_cn
         # Recupera o ID gerado
         cursor.execute('''
             SELECT TOP 1 id 
-            FROM [temp_CGUSC].[dbo].[processamentosFP] 
+            FROM [temp_CGUSC].[fp].[processamentosFP] 
             WHERE cnpj = ? 
             ORDER BY data_processamento DESC
         ''', cnpj)
@@ -280,7 +280,7 @@ def finalizar_processamento_sucesso(cursor, conn, id_processamento, cnpj,
         msg = 'Processamento concluído com sucesso'
 
         cursor.execute('''
-            UPDATE [temp_CGUSC].[dbo].[processamentosFP]
+            UPDATE [temp_CGUSC].[fp].[processamentosFP]
             SET situacao = ?,
                 status_detalhado = ?,
                 tempo_processamento_segundos = ?,
@@ -308,7 +308,7 @@ def finalizar_processamento_sem_dados(cursor, conn, id_processamento, cnpj,
         status = SIT_NO_DATA if 'sem dados' in motivo.lower() else SIT_NO_SALES
 
         cursor.execute('''
-            UPDATE [temp_CGUSC].[dbo].[processamentosFP]
+            UPDATE [temp_CGUSC].[fp].[processamentosFP]
             SET situacao = ?,
                 status_detalhado = ?,
                 tempo_processamento_segundos = ?
@@ -333,7 +333,7 @@ def finalizar_processamento_erro(cursor, conn, id_processamento, cnpj,
         erro_msg = f"ERRO: {str(erro)[:450]}"  # Limita tamanho da mensagem
 
         cursor.execute('''
-            UPDATE [temp_CGUSC].[dbo].[processamentosFP]
+            UPDATE [temp_CGUSC].[fp].[processamentosFP]
             SET situacao = ?,
                 status_detalhado = ?,
                 tempo_processamento_segundos = ?
@@ -354,7 +354,7 @@ def verificar_processamentos_pendentes(cursor):
     try:
         cursor.execute('''
             SELECT cnpj, data_processamento, id
-            FROM [temp_CGUSC].[dbo].[processamentosFP]
+            FROM [temp_CGUSC].[fp].[processamentosFP]
             WHERE situacao = ?
             ORDER BY data_processamento DESC
         ''', SIT_RUNNING)
@@ -367,7 +367,7 @@ def verificar_processamentos_pendentes(cursor):
 
             # Auto-cleanup (Opcional - Marcando como Falha Genérica)
             cursor.execute('''
-                UPDATE [temp_CGUSC].[dbo].[processamentosFP]
+                UPDATE [temp_CGUSC].[fp].[processamentosFP]
                 SET situacao = ?,
                     status_detalhado = 'FALHA AUTOMÁTICA: Execução anterior interrompida abruptamente'
                 WHERE situacao = ?
@@ -419,7 +419,7 @@ verificar_processamentos_pendentes(cursor)
 # =============================================================================
 # PREPARAÇÃO DOS LOTES (CLASSIF)
 # =============================================================================
-cursor.execute('select classif, count(*) from [temp_CGUSC].dbo.classif group by classif order by classif')
+cursor.execute('select classif, count(*) from [temp_CGUSC].fp.classif group by classif order by classif')
 classif_list = [row[0] for row in cursor.fetchall()]
 
 # =============================================================================
@@ -428,7 +428,7 @@ classif_list = [row[0] for row in cursor.fetchall()]
 for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=120):
     valor_i = i[0] if isinstance(i, (tuple, list)) else i
 
-    cursor.execute('select cnpj from [temp_CGUSC].dbo.classif where classif = ? ORDER BY cnpj', valor_i)
+    cursor.execute('select cnpj from [temp_CGUSC].fp.classif where classif = ? ORDER BY cnpj', valor_i)
     lista_cnpjs = [row[0] for row in cursor.fetchall()]
 
     logging.info(f"Executando [procPreparaDados] para Bloco: {valor_i}")
@@ -436,7 +436,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
     # Chama Procedure (SQL)
     try:
-        cursor.execute("SET NOCOUNT ON; DECLARE @r INT; EXEC [dbo].[procPreparaDados] @classif = ?, @rowcount = @r OUTPUT, @validar = 1; SELECT @r;", valor_i)
+        cursor.execute("SET NOCOUNT ON; DECLARE @r INT; EXEC [fp].[procPreparaDados] @classif = ?, @rowcount = @r OUTPUT, @validar = 1; SELECT @r;", valor_i)
         row_saida = cursor.fetchone()[0]
     except pyodbc.Error as e:
         logging.error(f"Erro na Procedure do Bloco {valor_i}: {e}")
@@ -467,7 +467,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             rf = None
             tabela_dados_cnpj = {}
             try:
-                cursor.execute('select * from temp_CGUSC.[dbo].dadosFarmaciasFP where cnpj = ?', cnpj)
+                cursor.execute('select * from temp_CGUSC.[fp].dadosFarmaciasFP where cnpj = ?', cnpj)
                 rf = cursor.fetchone()
                 tabela_dados_cnpj = {'razao_social': rf.razaoSocial, 'nome_fantasia': rf.nomeFantasia,
                                      'municipio': rf.municipio, 'uf': rf.uf} if rf else {}
@@ -532,8 +532,8 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                                TRY_CAST(mov.data_hora as date) as data_movimentacao, 
                                mov.qnt_autorizada / TRY_CAST(medicamentos.qnt_comprimidos_caixa as decimal(10,0)) as qnt_caixas, 
                                'V' as compra_venda, -1 as tipo_operacao 
-                        FROM temp_CGUSC.dbo.movimentacaoFP mov
-                        inner join temp_CGUSC.[dbo].[medicamentosPatologiaFP] medicamentos on medicamentos.codigo_barra = mov.codigo_barra
+                        FROM temp_CGUSC.fp.movimentacaoFP mov
+                        inner join temp_CGUSC.[fp].[medicamentosPatologiaFP] medicamentos on medicamentos.codigo_barra = mov.codigo_barra
                         where mov.data_hora >= ? and mov.data_hora <= ? and mov.cnpj = ?
 
                         union all
@@ -541,9 +541,9 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                         -- PARTE 2: AQUISIÇÕES
                         select numeroNFE, 0 as valor_pago, fazenda.codigoBarra, [dataEmissaoNFE] as data_movimentacao, 
                                quantidade as qnt_caixas, 'C' as compra_venda, tipoOperacao as tipo_operacao
-                        from [db_farmaciapopular_nf].[dbo].[aquisicoesFazenda_2015_2025] fazenda
-                        inner join [temp_CGUSC].[dbo].medicamentosPatologiaFP med on med.codigo_barra = fazenda.codigoBarra
-                        inner join [temp_CGUSC].[dbo].farmacia_inicio_venda_gtin B on B.cnpj = fazenda.destinatarioNFE and B.codigo_barra = fazenda.codigoBarra
+                        from [db_farmaciapopular_nf].[fp].[aquisicoesFazenda_2015_2025] fazenda
+                        inner join [temp_CGUSC].[fp].medicamentosPatologiaFP med on med.codigo_barra = fazenda.codigoBarra
+                        inner join [temp_CGUSC].[fp].farmacia_inicio_venda_gtin B on B.cnpj = fazenda.destinatarioNFE and B.codigo_barra = fazenda.codigoBarra
                         where destinatarioNFE = ? and [dataEmissaoNFE] >= ? and [dataEmissaoNFE] <= ? and tipoOperacao in (1,-1,0)
                     ) as t1 where qnt_caixas <> 0 order by codigoBarra, data_movimentacao asc, compra_venda asc
                     ''',
@@ -594,7 +594,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             # --- 3. QUERIES AUXILIARES ---
             t0 = time.time()
-            cursor.execute('select codigo_barra,estoque_inicial from [temp_CGUSC].[dbo].estoque_inicialFP where cnpj_estabelecimento = ?', cnpj)
+            cursor.execute('select codigo_barra,estoque_inicial from [temp_CGUSC].[fp].estoque_inicialFP where cnpj_estabelecimento = ?', cnpj)
             tabela_codigo_barra_estoque_inicial = {row.codigo_barra: row.estoque_inicial for row in cursor.fetchall()}
             t_query_aux = time.time() - t0 # ATUALIZA VARIÁVEL DE PERFORMANCE
 
@@ -770,7 +770,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                     for per, vals in periodos.items():
                         if vals['qnt_vendas_mes'] > 0:
                             cursor.execute('''
-                                            insert into [temp_CGUSC].[dbo].movimentacaoMensalCodigoBarraFP 
+                                            insert into [temp_CGUSC].[fp].movimentacaoMensalCodigoBarraFP 
                                             (id_processamento, codigo_barra, periodo, qnt_vendas, qnt_vendas_sem_comprovacao, [valor_vendas], [valor_sem_comprovacao]) 
                                             values (?,?,?,?,?,?,?)
                                         ''', id_proc_atual, cod, per + '-01', vals['qnt_vendas_mes'],
@@ -786,7 +786,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             dados_risco_cnpj = None
             try:
                 # Busca os indicadores calculados no SQL Server (Tabela criada no passo anterior)
-                cursor.execute('SELECT * FROM temp_CGUSC.dbo.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
+                cursor.execute('SELECT * FROM temp_CGUSC.fp.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
                 row_risco = cursor.fetchone()
 
                 # Se encontrar, converte para dicionário para passar para o Excel

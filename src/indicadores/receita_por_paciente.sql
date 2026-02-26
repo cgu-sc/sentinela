@@ -17,8 +17,8 @@ SELECT
     -- NOVO: Conta quantos meses distintos houve movimentação
     COUNT(DISTINCT FORMAT(A.data_hora, 'yyyyMM')) AS qtd_meses_ativos
 INTO #ConsolidadoPacientes
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C 
+FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
+INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -33,7 +33,7 @@ GO
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorReceitaPorPaciente;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorReceitaPorPaciente;
 
 SELECT 
     cnpj,
@@ -59,10 +59,10 @@ SELECT
         END 
     AS DECIMAL(18,2)) AS receita_por_paciente_mensal
 
-INTO temp_CGUSC.dbo.indicadorReceitaPorPaciente
+INTO temp_CGUSC.fp.indicadorReceitaPorPaciente
 FROM #ConsolidadoPacientes;
 
-CREATE CLUSTERED INDEX IDX_IndRecPac_CNPJ ON temp_CGUSC.dbo.indicadorReceitaPorPaciente(cnpj);
+CREATE CLUSTERED INDEX IDX_IndRecPac_CNPJ ON temp_CGUSC.fp.indicadorReceitaPorPaciente(cnpj);
 
 -- Limpeza da temp table (opcional aqui, pois ela morre com a sessão, mas boa prática)
 DROP TABLE #ConsolidadoPacientes;
@@ -73,7 +73,7 @@ GO
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorReceitaPorPaciente_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorReceitaPorPaciente_UF;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -96,20 +96,20 @@ SELECT
         AVG(I.receita_por_paciente_mensal)
     AS DECIMAL(18,2)) AS receita_por_paciente_mensal_uf
 
-INTO temp_CGUSC.dbo.indicadorReceitaPorPaciente_UF
-FROM temp_CGUSC.dbo.indicadorReceitaPorPaciente I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorReceitaPorPaciente_UF
+FROM temp_CGUSC.fp.indicadorReceitaPorPaciente I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndRecPacUF_UF ON temp_CGUSC.dbo.indicadorReceitaPorPaciente_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndRecPacUF_UF ON temp_CGUSC.fp.indicadorReceitaPorPaciente_UF(uf);
 GO
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorReceitaPorPaciente_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorReceitaPorPaciente_BR;
 
 SELECT 
     'BR' AS pais,
@@ -130,15 +130,15 @@ SELECT
         AVG(receita_por_paciente_mensal)
     AS DECIMAL(18,2)) AS receita_por_paciente_mensal_br
 
-INTO temp_CGUSC.dbo.indicadorReceitaPorPaciente_BR
-FROM temp_CGUSC.dbo.indicadorReceitaPorPaciente;
+INTO temp_CGUSC.fp.indicadorReceitaPorPaciente_BR
+FROM temp_CGUSC.fp.indicadorReceitaPorPaciente;
 GO
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo;
 
 SELECT 
     I.cnpj,
@@ -172,17 +172,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo
-FROM temp_CGUSC.dbo.indicadorReceitaPorPaciente I
-INNER JOIN temp_CGUSC.dbo.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo
+FROM temp_CGUSC.fp.indicadorReceitaPorPaciente I
+INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorReceitaPorPaciente_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicadorReceitaPorPaciente_UF UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.dbo.indicadorReceitaPorPaciente_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicadorReceitaPorPaciente_BR BR;
 
-CREATE CLUSTERED INDEX IDX_FinalRecPac_CNPJ ON temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalRecPac_Risco ON temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalRecPac_CNPJ ON temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalRecPac_Risco ON temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo(risco_relativo_uf DESC);
 GO
 
 -- Verificação final
-SELECT TOP 100 * FROM temp_CGUSC.dbo.indicadorReceitaPorPaciente_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo ORDER BY risco_relativo_uf DESC;

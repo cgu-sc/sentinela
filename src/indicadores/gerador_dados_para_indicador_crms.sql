@@ -12,7 +12,7 @@
 DROP TABLE IF EXISTS #socios_num_sociedades
 SELECT cpf_cnpj_Socio nu_cpf_socio, COUNT(*) num_sociedades 
 INTO #socios_num_sociedades
-FROM temp_CGUSC.dbo.tb_sociosFP A
+FROM temp_CGUSC.fp.tb_sociosFP A
 GROUP BY cpf_cnpj_Socio
 
 
@@ -107,7 +107,7 @@ SET alerta1 = 'CRM/UF não localizado na base do CFM.'
 FROM #lista_medicos_farmacia_popularFP_temp A
 WHERE NOT EXISTS (
     SELECT 1 
-    FROM temp_CFM.dbo.medicos_jul_2025_mod M
+    FROM temp_CFM.fp.medicos_jul_2025_mod M
     WHERE M.NU_CRM = CAST(A.nu_crm AS VARCHAR(25)) 
       AND M.SG_UF = A.sg_uf_crm
 );
@@ -176,7 +176,7 @@ SELECT
     A.alerta6
 INTO #lista_medicos_farmacia_popularFP_temp2
 FROM #lista_medicos_farmacia_popularFP_temp A
-LEFT JOIN temp_CGUSC.dbo.dadosFarmaciasFP B ON B.cnpj = A.nu_cnpj
+LEFT JOIN temp_CGUSC.fp.dadosFarmaciasFP B ON B.cnpj = A.nu_cnpj
 LEFT JOIN temp_CGUSC.sus.tb_ibge C ON C.id_ibge7 = B.codibge
 GROUP BY 
     B.codibge,
@@ -224,7 +224,7 @@ GROUP BY nu_crm, sg_uf_crm
 -- TABELA FINAL: tb_analise_crm_farmacia_popular
 -- ============================================================================
 -- ✅ NOVO: Incluído alerta6 na tabela final
-DROP TABLE IF EXISTS temp_CGUSC.dbo.tb_analise_crm_farmacia_popular
+DROP TABLE IF EXISTS temp_CGUSC.fp.tb_analise_crm_farmacia_popular
 SELECT
     A.nu_cnpj,
     A.no_municipio,
@@ -255,7 +255,7 @@ SELECT
     A.alerta4,
     A.alerta5,
     A.alerta6
-INTO temp_CGUSC.dbo.tb_analise_crm_farmacia_popular
+INTO temp_CGUSC.fp.tb_analise_crm_farmacia_popular
 FROM #lista_medicos_farmacia_popularFP_temp2 A
 INNER JOIN #prescricoes_todos_estabelecimentos B 
     ON B.nu_crm = A.nu_crm AND B.sg_uf_crm = A.sg_uf_crm
@@ -264,7 +264,7 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 -- ============================================================================
 -- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
-UPDATE temp_CGUSC.dbo.tb_analise_crm_farmacia_popular 
+UPDATE temp_CGUSC.fp.tb_analise_crm_farmacia_popular 
 SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
@@ -274,7 +274,7 @@ WHERE nu_prescricoes_dia > 30
 -- ============================================================================
 -- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
-UPDATE temp_CGUSC.dbo.tb_analise_crm_farmacia_popular 
+UPDATE temp_CGUSC.fp.tb_analise_crm_farmacia_popular 
 SET alerta4 = 'Foram registradas uma média de ' + 
               CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
@@ -290,7 +290,7 @@ select * from tb_analise_crm_farmacia_popular
 -- ÍNDICE PARA PERFORMANCE
 -- ============================================================================
 CREATE NONCLUSTERED INDEX idx_tb_analise_crm_farmacia_popular_performance
-ON temp_CGUSC.dbo.tb_analise_crm_farmacia_popular (id_medico, nu_CNPJ)
+ON temp_CGUSC.fp.tb_analise_crm_farmacia_popular (id_medico, nu_CNPJ)
 INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico);
 GO
 
@@ -315,9 +315,9 @@ PairedWithDistance AS (
         T2.no_municipio AS M2, 
         T2.sg_uf AS UF2, 
         T2.nu_prescricoes_medico AS P2,
-        temp_CGUSC.dbo.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
-    FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular T1
-    INNER JOIN temp_CGUSC.dbo.tb_analise_crm_farmacia_popular T2 
+        temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
+    FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular T1
+    INNER JOIN temp_CGUSC.fp.tb_analise_crm_farmacia_popular T2 
         ON T1.id_medico = T2.id_medico AND T1.nu_CNPJ < T2.nu_CNPJ
 ),
 
@@ -399,7 +399,7 @@ SET AM.alerta5 =
             ISNULL(FAI.id_medico, 'N/I') + '.'
         ELSE ''
     END
-FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular AM
+FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular AM
 INNER JOIN FinalAlertInfo FAI ON AM.id_medico = FAI.id_medico
 WHERE (AM.nu_CNPJ = FAI.Top_CNPJ1_orig OR AM.nu_CNPJ = FAI.Top_CNPJ2_orig);
 
@@ -417,13 +417,13 @@ SET AM.alerta6 =
     'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
     CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
     ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
-FROM temp_CGUSC.dbo.tb_analise_crm_farmacia_popular AM
+FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular AM
 INNER JOIN (
     SELECT 
         NU_CRM,
         SG_UF,
         TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
-    FROM temp_CFM.dbo.medicos_jul_2025_mod
+    FROM temp_CFM.fp.medicos_jul_2025_mod
     WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
 ) CFM ON CFM.NU_CRM = CAST(AM.nu_crm AS VARCHAR(25)) AND CFM.SG_UF = AM.sg_uf_crm
 WHERE CFM.dt_inscricao_convertida IS NOT NULL 

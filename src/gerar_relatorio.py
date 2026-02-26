@@ -97,12 +97,12 @@ def carregar_dados_auxiliares(cursor):
     dados_medicamentos = {}
     
     try:
-        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[dbo].dadosFarmaciasFP')
+        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[fp].dadosFarmaciasFP')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_farmacias[row[0]] = dict(zip(cols, row))
         
-        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[dbo].medicamentosPatologiaFP')
+        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[fp].medicamentosPatologiaFP')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_medicamentos[row[0]] = dict(zip(cols, row))
@@ -126,7 +126,7 @@ def carregar_memoria_calculo(cursor, cnpj):
     try:
         cursor.execute('''
             SELECT TOP 1 dados_comprimidos, id_processamento
-            FROM temp_CGUSC.dbo.memoria_calculo_consolidadaFP 
+            FROM temp_CGUSC.fp.memoria_calculo_consolidadaFP 
             WHERE cnpj = ?
             ORDER BY id_processamento DESC
         ''', cnpj)
@@ -178,7 +178,7 @@ def carregar_memoria_calculo(cursor, cnpj):
 def buscar_dados_risco(cursor, cnpj):
     """Busca os indicadores da Matriz de Risco."""
     try:
-        cursor.execute('SELECT * FROM temp_CGUSC.dbo.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
+        cursor.execute('SELECT * FROM temp_CGUSC.fp.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
         row = cursor.fetchone()
         
         if row:
@@ -208,10 +208,10 @@ def buscar_top15_municipio(cursor, uf, municipio):
                 ISNULL(S.valor_sem_comprovacao, 0) as valor_sem_comprovacao,
                 ISNULL(S.valor_vendas, 0) as valor_vendas,
                 D.dataFinalDadosMovimentacao as data_ultima_venda
-            FROM temp_CGUSC.dbo.Matriz_Risco_Final M
-            LEFT JOIN temp_CGUSC.dbo.resultado_Sentinela_2015_2024 S 
+            FROM temp_CGUSC.fp.Matriz_Risco_Final M
+            LEFT JOIN temp_CGUSC.fp.resultado_Sentinela_2015_2024 S 
                 ON S.cnpj = M.cnpj
-            LEFT JOIN temp_CGUSC.dbo.dadosFarmaciasFP D
+            LEFT JOIN temp_CGUSC.fp.dadosFarmaciasFP D
                 ON M.cnpj = D.cnpj
             WHERE M.uf = ? AND M.municipio = ?
             ORDER BY M.SCORE_RISCO_FINAL DESC
@@ -223,7 +223,7 @@ def buscar_top15_municipio(cursor, uf, municipio):
         # Busca o Total Financeiro do Município (Para o Share)
         sql_total = """
             SELECT SUM(valor_sem_comprovacao)
-            FROM temp_CGUSC.dbo.resultado_Sentinela_2015_2024
+            FROM temp_CGUSC.fp.resultado_Sentinela_2015_2024
             WHERE uf = ? AND municipio = ?
         """
         cursor.execute(sql_total, (uf, municipio))
@@ -290,7 +290,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     # Carrega Dados Auxiliares do Estoque Inicial
     try:
         cursor.execute(
-            'select * from temp_CGUSC.[dbo].notas_estoque_inicialFP where cnpj_estabelecimento = ? order by codigo_barra',
+            'select * from temp_CGUSC.[fp].notas_estoque_inicialFP where cnpj_estabelecimento = ? order by codigo_barra',
             cnpj_analise)
         notas_estoque_inicialFP = {}
         lista_temp = []
@@ -311,7 +311,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     tabela_codigo_barra_estoque_inicial = {}
     try:
         cursor.execute(
-            'select codigo_barra, estoque_inicial from temp_CGUSC.[dbo].estoque_inicialFP where cnpj_estabelecimento = ?',
+            'select codigo_barra, estoque_inicial from temp_CGUSC.[fp].estoque_inicialFP where cnpj_estabelecimento = ?',
             cnpj_analise)
         tabela_codigo_barra_estoque_inicial = {row.codigo_barra: row.estoque_inicial for row in cursor.fetchall()}
     except:
@@ -448,7 +448,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         periodo as data,
                         SUM(valor_vendas) as valor_total,
                         SUM(valor_sem_comprovacao) as valor_sem_comp
-                    FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP
+                    FROM temp_CGUSC.fp.movimentacaoMensalCodigoBarraFP
                     WHERE id_processamento = ?
                     GROUP BY periodo
                     ORDER BY periodo
@@ -1430,16 +1430,16 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             limiar_critico = 1.3  # Ex: 60% * 1.4 = 84%
                         # Exceção para Medicamentos de Alto Custo (Média em torno de 35%)
                         elif nome == "Medicamentos de Alto Custo":
-                            limiar_atencao = 1.6  # Ex: 35% * 1.6 = 56%
-                            limiar_critico = 2.0  # Ex: 35% * 2.0 = 70%
+                            limiar_atencao = 1.4  # Ex: 35% * 1.6 = 56%
+                            limiar_critico = 1.7  # Ex: 35% * 2.0 = 70%
                         # Exceção para Concentração em Dias de Pico (Média em torno de 27%)
                         elif nome == "Concentração em Dias de Pico":
-                            limiar_atencao = 1.8  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
-                            limiar_critico = 2.2  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
+                            limiar_atencao = 1.6  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
+                            limiar_critico = 2.0  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
                         # Exceção para Pacientes Únicos (Média em torno de 41%)
                         elif nome == "Pacientes Únicos":
-                            limiar_atencao = 1.6  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
-                            limiar_critico = 2.0  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
+                            limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
+                            limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
                         
                         # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
                         risco_base = round(r_uf, 1) 

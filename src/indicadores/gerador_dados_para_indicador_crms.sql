@@ -12,7 +12,7 @@
 DROP TABLE IF EXISTS #socios_num_sociedades
 SELECT cpf_cnpj_Socio nu_cpf_socio, COUNT(*) num_sociedades 
 INTO #socios_num_sociedades
-FROM temp_CGUSC.fp.tb_sociosFP A
+FROM temp_CGUSC.fp.socios A
 GROUP BY cpf_cnpj_Socio
 
 
@@ -34,8 +34,8 @@ SELECT
     MIN(data_hora) AS dt_prescricao_inicial_medico,
     MAX(data_hora) AS dt_prescricao_final_medico
 INTO #tb_info_medico_farmacia_popular
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
---FROM TESTE_relatorio_movimentacaoFP_2021_2024
+FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
+--FROM TESTE_relatorio_movimentacao_2021_2024
 WHERE crm_uf IS NOT NULL 
   AND crm IS NOT NULL 
   AND crm_uf <> 'BR'
@@ -62,8 +62,8 @@ SELECT
     MIN(data_hora) AS dt_venda_inicial_estabelecimento,
     MAX(data_hora) AS dt_venda_final_estabelecimento
 INTO #tb_info_estabelecimento
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
---FROM TESTE_relatorio_movimentacaoFP_2021_2024
+FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
+--FROM TESTE_relatorio_movimentacao_2021_2024
 GROUP BY cnpj
 
 
@@ -109,7 +109,7 @@ WHERE NOT EXISTS (
     SELECT 1 
     FROM temp_CFM.fp.medicos_jul_2025_mod M
     WHERE M.NU_CRM = CAST(A.nu_crm AS VARCHAR(25)) 
-      AND M.SG_UF = A.sg_uf_crm
+      AND M.SG_uf = A.sg_uf_crm
 );
 
 
@@ -176,7 +176,7 @@ SELECT
     A.alerta6
 INTO #lista_medicos_farmacia_popularFP_temp2
 FROM #lista_medicos_farmacia_popularFP_temp A
-LEFT JOIN temp_CGUSC.fp.dadosFarmaciasFP B ON B.cnpj = A.nu_cnpj
+LEFT JOIN temp_CGUSC.fp.dados_farmacia B ON B.cnpj = A.nu_cnpj
 LEFT JOIN temp_CGUSC.sus.tb_ibge C ON C.id_ibge7 = B.codibge
 GROUP BY 
     B.codibge,
@@ -221,10 +221,10 @@ GROUP BY nu_crm, sg_uf_crm
 
 
 -- ============================================================================
--- TABELA FINAL: tb_analise_crm_farmacia_popular
+-- TABELA FINAL: indicador_crm_detalhado
 -- ============================================================================
 -- ✅ NOVO: Incluído alerta6 na tabela final
-DROP TABLE IF EXISTS temp_CGUSC.fp.tb_analise_crm_farmacia_popular
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_detalhado
 SELECT
     A.nu_cnpj,
     A.no_municipio,
@@ -255,7 +255,7 @@ SELECT
     A.alerta4,
     A.alerta5,
     A.alerta6
-INTO temp_CGUSC.fp.tb_analise_crm_farmacia_popular
+INTO temp_CGUSC.fp.indicador_crm_detalhado
 FROM #lista_medicos_farmacia_popularFP_temp2 A
 INNER JOIN #prescricoes_todos_estabelecimentos B 
     ON B.nu_crm = A.nu_crm AND B.sg_uf_crm = A.sg_uf_crm
@@ -264,7 +264,7 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 -- ============================================================================
 -- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
-UPDATE temp_CGUSC.fp.tb_analise_crm_farmacia_popular 
+UPDATE temp_CGUSC.fp.indicador_crm_detalhado 
 SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
@@ -274,7 +274,7 @@ WHERE nu_prescricoes_dia > 30
 -- ============================================================================
 -- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
-UPDATE temp_CGUSC.fp.tb_analise_crm_farmacia_popular 
+UPDATE temp_CGUSC.fp.indicador_crm_detalhado 
 SET alerta4 = 'Foram registradas uma média de ' + 
               CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
               ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
@@ -284,13 +284,13 @@ SET alerta4 = 'Foram registradas uma média de ' +
 WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
 
 
-select * from tb_analise_crm_farmacia_popular
+select * from indicador_crm_detalhado
 
 -- ============================================================================
 -- ÍNDICE PARA PERFORMANCE
 -- ============================================================================
-CREATE NONCLUSTERED INDEX idx_tb_analise_crm_farmacia_popular_performance
-ON temp_CGUSC.fp.tb_analise_crm_farmacia_popular (id_medico, nu_CNPJ)
+CREATE NONCLUSTERED INDEX idx_indicador_crm_detalhado_performance
+ON temp_CGUSC.fp.indicador_crm_detalhado (id_medico, nu_CNPJ)
 INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico);
 GO
 
@@ -316,8 +316,8 @@ PairedWithDistance AS (
         T2.sg_uf AS UF2, 
         T2.nu_prescricoes_medico AS P2,
         temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
-    FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular T1
-    INNER JOIN temp_CGUSC.fp.tb_analise_crm_farmacia_popular T2 
+    FROM temp_CGUSC.fp.indicador_crm_detalhado T1
+    INNER JOIN temp_CGUSC.fp.indicador_crm_detalhado T2 
         ON T1.id_medico = T2.id_medico AND T1.nu_CNPJ < T2.nu_CNPJ
 ),
 
@@ -356,13 +356,13 @@ FinalAlertInfo AS (
         RP.DI1 AS Top_DI1, 
         RP.DF1 AS Top_DF1, 
         RP.M1 AS Top_M1, 
-        RP.UF1 AS Top_UF1, 
+        RP.UF1 AS Top_uf1, 
         RP.P1 AS Top_P1,
         RP.CNPJ2_orig AS Top_CNPJ2_orig, 
         RP.DI2 AS Top_DI2, 
         RP.DF2 AS Top_DF2, 
         RP.M2 AS Top_M2, 
-        RP.UF2 AS Top_UF2, 
+        RP.UF2 AS Top_uf2, 
         RP.P2 AS Top_P2,
         RP.DistanciaKM AS Top_DistanciaKM,
         CASE WHEN DOS.TotalValidPairsInDoctor > 0 THEN DOS.TotalValidPairsInDoctor - 1 ELSE 0 END AS CountOtherActualValidPairs,
@@ -384,11 +384,11 @@ FinalAlertInfo AS (
 UPDATE AM
 SET AM.alerta5 = 
     'A distância entre a farmácia ' + FAI.Fmtd_Top_CNPJ1 +
-    ' (' + ISNULL(FAI.Top_M1, 'N/I') + '/' + ISNULL(FAI.Top_UF1, 'N/I') + ')' +
+    ' (' + ISNULL(FAI.Top_M1, 'N/I') + '/' + ISNULL(FAI.Top_uf1, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI1, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF1, 103) +
     ' (' + ISNULL(CAST(FAI.Top_P1 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
     ' e a farmácia ' + FAI.Fmtd_Top_CNPJ2 +
-    ' (' + ISNULL(FAI.Top_M2, 'N/I') + '/' + ISNULL(FAI.Top_UF2, 'N/I') + ')' +
+    ' (' + ISNULL(FAI.Top_M2, 'N/I') + '/' + ISNULL(FAI.Top_uf2, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI2, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF2, 103) +
     ' (' + ISNULL(CAST(FAI.Top_P2 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
     ' é de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
@@ -399,7 +399,7 @@ SET AM.alerta5 =
             ISNULL(FAI.id_medico, 'N/I') + '.'
         ELSE ''
     END
-FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular AM
+FROM temp_CGUSC.fp.indicador_crm_detalhado AM
 INNER JOIN FinalAlertInfo FAI ON AM.id_medico = FAI.id_medico
 WHERE (AM.nu_CNPJ = FAI.Top_CNPJ1_orig OR AM.nu_CNPJ = FAI.Top_CNPJ2_orig);
 
@@ -417,15 +417,15 @@ SET AM.alerta6 =
     'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
     CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
     ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
-FROM temp_CGUSC.fp.tb_analise_crm_farmacia_popular AM
+FROM temp_CGUSC.fp.indicador_crm_detalhado AM
 INNER JOIN (
     SELECT 
         NU_CRM,
-        SG_UF,
+        SG_uf,
         TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
     FROM temp_CFM.fp.medicos_jul_2025_mod
     WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
-) CFM ON CFM.NU_CRM = CAST(AM.nu_crm AS VARCHAR(25)) AND CFM.SG_UF = AM.sg_uf_crm
+) CFM ON CFM.NU_CRM = CAST(AM.nu_crm AS VARCHAR(25)) AND CFM.SG_uf = AM.sg_uf_crm
 WHERE CFM.dt_inscricao_convertida IS NOT NULL 
   AND AM.dt_prescricao_inicial_medico < CFM.dt_inscricao_convertida;
 
@@ -437,3 +437,4 @@ PRINT '  - Todos os alertas (1-6) populados corretamente';
 PRINT '  - NOVO: Alerta6 para prescrição antes do registro do CRM';
 PRINT '============================================================================';
 GO
+

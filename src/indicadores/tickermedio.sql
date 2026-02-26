@@ -19,7 +19,7 @@ SELECT
     SUM(A.valor_pago) AS valor_total_cupom
 INTO #ValorPorCupom
 FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -33,7 +33,7 @@ CREATE CLUSTERED INDEX IDX_TempValor_CNPJ ON #ValorPorCupom(cnpj);
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA (TICKET MÉDIO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTicketMedio;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio;
 
 SELECT 
     cnpj,
@@ -53,11 +53,11 @@ SELECT
         END 
     AS DECIMAL(18,2)) AS valor_ticket_medio
 
-INTO temp_CGUSC.fp.indicadorTicketMedio
+INTO temp_CGUSC.fp.indicador_ticket_medio
 FROM #ValorPorCupom
 GROUP BY cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndTicket_CNPJ ON temp_CGUSC.fp.indicadorTicketMedio(cnpj);
+CREATE CLUSTERED INDEX IDX_IndTicket_CNPJ ON temp_CGUSC.fp.indicador_ticket_medio(cnpj);
 
 -- Limpeza
 DROP TABLE #ValorPorCupom;
@@ -66,7 +66,7 @@ DROP TABLE #ValorPorCupom;
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTicketMedio_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -83,19 +83,19 @@ SELECT
         END 
     AS DECIMAL(18,2)) AS ticket_medio_uf
 
-INTO temp_CGUSC.fp.indicadorTicketMedio_UF
-FROM temp_CGUSC.fp.indicadorTicketMedio I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_ticket_medio_uf
+FROM temp_CGUSC.fp.indicador_ticket_medio I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndTicketUF_UF ON temp_CGUSC.fp.indicadorTicketMedio_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndTicketUF_uf ON temp_CGUSC.fp.indicador_ticket_medio_uf(uf);
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTicketMedio_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_br;
 
 SELECT 
     'BR' AS pais,
@@ -111,14 +111,14 @@ SELECT
         END 
     AS DECIMAL(18,2)) AS ticket_medio_br
 
-INTO temp_CGUSC.fp.indicadorTicketMedio_BR
-FROM temp_CGUSC.fp.indicadorTicketMedio;
+INTO temp_CGUSC.fp.indicador_ticket_medio_br
+FROM temp_CGUSC.fp.indicador_ticket_medio;
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTicketMedio_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_detalhado;
 
 SELECT 
     I.cnpj,
@@ -152,18 +152,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorTicketMedio_Completo
-FROM temp_CGUSC.fp.indicadorTicketMedio I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_ticket_medio_detalhado
+FROM temp_CGUSC.fp.indicador_ticket_medio I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorTicketMedio_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_ticket_medio_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorTicketMedio_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_ticket_medio_br BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalTicket_CNPJ ON temp_CGUSC.fp.indicadorTicketMedio_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalTicket_Risco ON temp_CGUSC.fp.indicadorTicketMedio_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalTicket_CNPJ ON temp_CGUSC.fp.indicador_ticket_medio_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalTicket_Risco ON temp_CGUSC.fp.indicador_ticket_medio_detalhado(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorTicketMedio_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_ticket_medio_detalhado ORDER BY risco_relativo_uf DESC;
+

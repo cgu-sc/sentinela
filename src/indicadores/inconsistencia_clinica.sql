@@ -9,9 +9,9 @@ DECLARE @DataFim DATE = '2024-12-10';
 
 -- ============================================================================
 -- PASSO 1: CÁLCULO BASE POR FARMÁCIA (INDICADOR DEMOGRÁFICO)
--- Tabela: temp_CGUSC.fp.indicadorInconsistenciaClinica
+-- Tabela: temp_CGUSC.fp.indicador_inconsistencia_clinica
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorInconsistenciaClinica;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica;
 
 WITH CalculoDemografico AS (
     SELECT 
@@ -29,7 +29,7 @@ WITH CalculoDemografico AS (
         END) AS flag_venda_suspeita
 
     FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+    INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     INNER JOIN db_CPF.fp.CPF B 
         ON B.CPF = A.cpf
@@ -63,17 +63,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_demografico
 
-INTO temp_CGUSC.fp.indicadorInconsistenciaClinica
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica
 FROM AgregadoPorFarmacia
 WHERE total_vendas_monitoradas > 0;
 
-CREATE CLUSTERED INDEX IDX_IndDemo_CNPJ ON temp_CGUSC.fp.indicadorInconsistenciaClinica(cnpj);
+CREATE CLUSTERED INDEX IDX_IndDemo_CNPJ ON temp_CGUSC.fp.indicador_inconsistencia_clinica(cnpj);
 
 
 -- ============================================================================
 -- PASSO 2: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorInconsistenciaClinica_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -90,19 +90,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_demografico_uf
 
-INTO temp_CGUSC.fp.indicadorInconsistenciaClinica_UF
-FROM temp_CGUSC.fp.indicadorInconsistenciaClinica I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_uf
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndDemoUF_UF ON temp_CGUSC.fp.indicadorInconsistenciaClinica_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndDemoUF_uf ON temp_CGUSC.fp.indicador_inconsistencia_clinica_uf(uf);
 
 
 -- ============================================================================
 -- PASSO 3: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorInconsistenciaClinica_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_br;
 
 SELECT 
     'BR' AS pais,
@@ -118,14 +118,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_demografico_br
 
-INTO temp_CGUSC.fp.indicadorInconsistenciaClinica_BR
-FROM temp_CGUSC.fp.indicadorInconsistenciaClinica;
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_br
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica;
 
 
 -- ============================================================================
 -- PASSO 4: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorInconsistenciaClinica_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado;
 
 SELECT 
     I.cnpj,
@@ -158,18 +158,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorInconsistenciaClinica_Completo
-FROM temp_CGUSC.fp.indicadorInconsistenciaClinica I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorInconsistenciaClinica_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorInconsistenciaClinica_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica_br BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalDemo_CNPJ ON temp_CGUSC.fp.indicadorInconsistenciaClinica_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalDemo_Risco ON temp_CGUSC.fp.indicadorInconsistenciaClinica_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalDemo_CNPJ ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalDemo_Risco ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorInconsistenciaClinica_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado ORDER BY risco_relativo_uf DESC;
+

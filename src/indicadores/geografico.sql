@@ -2,11 +2,11 @@ USE [temp_CGUSC]
 GO
 
 -- 1. Garante que a coluna nova existe se a tabela já existir
-IF OBJECT_ID('temp_CGUSC.fp.indicadorGeografico', 'U') IS NOT NULL
+IF OBJECT_ID('temp_CGUSC.fp.indicador_geografico', 'U') IS NOT NULL
 BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('temp_CGUSC.fp.indicadorGeografico') AND name = 'data_calculo')
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('temp_CGUSC.fp.indicador_geografico') AND name = 'data_calculo')
     BEGIN
-        ALTER TABLE temp_CGUSC.fp.indicadorGeografico ADD data_calculo DATETIME DEFAULT GETDATE();
+        ALTER TABLE temp_CGUSC.fp.indicador_geografico ADD data_calculo DATETIME DEFAULT GETDATE();
     END
 END
 GO
@@ -18,9 +18,9 @@ GO
 -- ============================================================================
 -- PASSO 0: CRIAR TABELA DE RESULTADOS BASE (SE NÃO EXISTIR)
 -- ============================================================================
-IF OBJECT_ID('temp_CGUSC.fp.indicadorGeografico', 'U') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.indicador_geografico', 'U') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.indicadorGeografico (
+    CREATE TABLE temp_CGUSC.fp.indicador_geografico (
         id INT IDENTITY(1,1) PRIMARY KEY,
         cnpj VARCHAR(14) NOT NULL UNIQUE,
         total_vendas_monitoradas INT,
@@ -29,7 +29,7 @@ BEGIN
         data_calculo DATETIME DEFAULT GETDATE()
     );
     
-    CREATE INDEX IDX_IndGeo_CNPJ ON temp_CGUSC.fp.indicadorGeografico(cnpj);
+    CREATE INDEX IDX_IndGeo_CNPJ ON temp_CGUSC.fp.indicador_geografico(cnpj);
 END
 
 -- ============================================================================
@@ -56,7 +56,7 @@ END
 -- Carga inicial de CNPJs pendentes
 INSERT INTO temp_CGUSC.fp.controle_processamento_geografico (cnpj, situacao)
 SELECT DISTINCT cnpj, 0 AS situacao
-FROM temp_CGUSC.fp.dadosFarmaciasFP
+FROM temp_CGUSC.fp.dados_farmacia
 WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.controle_processamento_geografico)
 ORDER BY cnpj;
 
@@ -119,7 +119,7 @@ BEGIN
                 MAX(F.uf) AS uf_farmacia
             INTO #VendasTemp
             FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A WITH(NOLOCK)
-            INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F WITH(NOLOCK) ON F.cnpj = A.cnpj
+            INNER JOIN temp_CGUSC.fp.dados_farmacia F WITH(NOLOCK) ON F.cnpj = A.cnpj
             INNER JOIN db_CPF.fp.CPF B WITH(NOLOCK) ON B.CPF = A.cpf
             WHERE A.cnpj = @CNPJAtual
               AND A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
@@ -136,15 +136,15 @@ BEGIN
             SET @Pct = CASE WHEN @TotalVendas > 0 THEN (CAST(@QtdOutraUF AS DECIMAL(18,2)) / @TotalVendas) * 100.0 ELSE 0 END;
 
             -- SALVA RESULTADO INDIVIDUAL
-            IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicadorGeografico WHERE cnpj = @CNPJAtual)
-                UPDATE temp_CGUSC.fp.indicadorGeografico 
+            IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_geografico WHERE cnpj = @CNPJAtual)
+                UPDATE temp_CGUSC.fp.indicador_geografico 
                 SET total_vendas_monitoradas = @TotalVendas, 
                     qtd_vendas_outra_uf = @QtdOutraUF, 
                     percentual_geografico = @Pct,
                     data_calculo = GETDATE()
                 WHERE cnpj = @CNPJAtual;
             ELSE
-                INSERT INTO temp_CGUSC.fp.indicadorGeografico (cnpj, total_vendas_monitoradas, qtd_vendas_outra_uf, percentual_geografico)
+                INSERT INTO temp_CGUSC.fp.indicador_geografico (cnpj, total_vendas_monitoradas, qtd_vendas_outra_uf, percentual_geografico)
                 VALUES (@CNPJAtual, @TotalVendas, @QtdOutraUF, @Pct);
 
             -- MARCA COMO "CONCLUÍDO"
@@ -202,31 +202,31 @@ BEGIN
     PRINT '=======================================================================';
 
     -- Médias por UF
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorGeografico_UF;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
     SELECT 
         CAST(F.uf AS VARCHAR(2)) AS uf,
         SUM(I.total_vendas_monitoradas) AS total_vendas_uf,
         SUM(I.qtd_vendas_outra_uf) AS total_outra_uf,
         CAST((CAST(SUM(I.qtd_vendas_outra_uf) AS DECIMAL(18,2)) / NULLIF(SUM(I.total_vendas_monitoradas), 0)) * 100.0 AS DECIMAL(18,4)) AS percentual_geografico_uf
-    INTO temp_CGUSC.fp.indicadorGeografico_UF
-    FROM temp_CGUSC.fp.indicadorGeografico I
-    INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
+    INTO temp_CGUSC.fp.indicador_geografico_uf
+    FROM temp_CGUSC.fp.indicador_geografico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
     GROUP BY CAST(F.uf AS VARCHAR(2));
     
-    CREATE CLUSTERED INDEX IDX_IndGeoUF_UF ON temp_CGUSC.fp.indicadorGeografico_UF(uf);
+    CREATE CLUSTERED INDEX IDX_IndGeoUF_uf ON temp_CGUSC.fp.indicador_geografico_uf(uf);
     
     -- Médias BR
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorGeografico_BR;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
     SELECT 
         'BR' AS pais,
         SUM(total_vendas_monitoradas) AS total_vendas_br,
         SUM(qtd_vendas_outra_uf) AS total_outra_br,
         CAST((CAST(SUM(qtd_vendas_outra_uf) AS DECIMAL(18,2)) / NULLIF(SUM(total_vendas_monitoradas), 0)) * 100.0 AS DECIMAL(18,4)) AS percentual_geografico_br
-    INTO temp_CGUSC.fp.indicadorGeografico_BR
-    FROM temp_CGUSC.fp.indicadorGeografico;
+    INTO temp_CGUSC.fp.indicador_geografico_br
+    FROM temp_CGUSC.fp.indicador_geografico;
 
     -- Tabela Final
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorGeografico_Completo;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
     SELECT 
         I.cnpj, F.razaoSocial, F.municipio, CAST(F.uf AS VARCHAR(2)) AS uf,
         I.total_vendas_monitoradas, I.qtd_vendas_outra_uf, I.percentual_geografico,
@@ -234,16 +234,17 @@ BEGIN
         BR.percentual_geografico_br AS media_pais,
         CAST(I.percentual_geografico / NULLIF(UF.percentual_geografico_uf, 0) AS DECIMAL(18,4)) AS risco_relativo_uf,
         CAST(I.percentual_geografico / NULLIF(BR.percentual_geografico_br, 0) AS DECIMAL(18,4)) AS risco_relativo_br
-    INTO temp_CGUSC.fp.indicadorGeografico_Completo
-    FROM temp_CGUSC.fp.indicadorGeografico I
-    INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorGeografico_UF UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-    CROSS JOIN temp_CGUSC.fp.indicadorGeografico_BR BR;
+    INTO temp_CGUSC.fp.indicador_geografico_detalhado
+    FROM temp_CGUSC.fp.indicador_geografico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_geografico_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    CROSS JOIN temp_CGUSC.fp.indicador_geografico_br BR;
 
-    CREATE CLUSTERED INDEX IDX_FinalGeo_CNPJ ON temp_CGUSC.fp.indicadorGeografico_Completo(cnpj);
+    CREATE CLUSTERED INDEX IDX_FinalGeo_CNPJ ON temp_CGUSC.fp.indicador_geografico_detalhado(cnpj);
     
     PRINT '=======================================================================';
     PRINT 'PROCESSO COMPLETO FINALIZADO COM SUCESSO!';
     PRINT '=======================================================================';
 END
 GO
+

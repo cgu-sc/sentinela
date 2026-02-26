@@ -9,7 +9,7 @@ def buscar_dados_prescritores(cursor, cnpj):
     """
     try:
         cursor.execute('''
-            SELECT * FROM temp_CGUSC.fp.indicadorCRM_Completo 
+            SELECT * FROM temp_CGUSC.fp.indicador_crm_detalhado 
             WHERE cnpj = ?
         ''', cnpj)
         row = cursor.fetchone()
@@ -32,7 +32,7 @@ def buscar_top20_prescritores(cursor, cnpj):
     """
     try:
         cursor.execute('''
-            SELECT * FROM temp_CGUSC.fp.top20CRMsPorFarmacia 
+            SELECT * FROM temp_CGUSC.fp.top_20_crms_farmacia 
             WHERE cnpj = ?
             ORDER BY ranking
         ''', cnpj)
@@ -342,7 +342,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
     pct_crm_inv = (qtd_crm_inv / total_prescritores) * 100 if total_prescritores > 0 else 0
     pct_multi_farmacia = (qtd_multi_farmacia / total_prescritores) * 100 if total_prescritores > 0 else 0
 
-    # Dados que ainda vêm da indicadorCRM_Completo (métricas agregadas)
+    # Dados que ainda vêm da indicador_crm_detalhado (métricas agregadas)
     indice_rede = _get_valor(dados_prescritores, 'indice_rede_suspeita')
     media_presc_dia_rede = _get_valor(dados_prescritores, 'media_prescricoes_dia_rede')
 
@@ -947,3 +947,4 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
     ws.freeze_panes(6, 0)
 
     logging.info(f"Aba 'Análise de CRMs' v5.0 gerada com sucesso para CNPJ {cnpj}")
+

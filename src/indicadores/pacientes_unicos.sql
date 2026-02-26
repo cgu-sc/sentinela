@@ -25,7 +25,7 @@ SELECT
     COUNT(DISTINCT A.num_autorizacao) AS qtd_compras_cpf  -- DISTINCT é crítico aqui!
 INTO #RecorrenciaPorCPF
 FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -38,7 +38,7 @@ CREATE CLUSTERED INDEX IDX_TempRecorrencia_CNPJ ON #RecorrenciaPorCPF(cnpj);
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA (INDICADOR PACIENTES FANTASMA)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPacientesFantasma;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_pacientes_unicos;
 
 SELECT 
     cnpj,
@@ -64,11 +64,11 @@ SELECT
     -- ESTATÍSTICA ADICIONAL: Média de compras por CPF (para contexto)
     CAST(AVG(CAST(qtd_compras_cpf AS DECIMAL(18,2))) AS DECIMAL(18,2)) AS media_compras_por_cpf
 
-INTO temp_CGUSC.fp.indicadorPacientesFantasma
+INTO temp_CGUSC.fp.indicador_pacientes_unicos
 FROM #RecorrenciaPorCPF
 GROUP BY cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndFantasma_CNPJ ON temp_CGUSC.fp.indicadorPacientesFantasma(cnpj);
+CREATE CLUSTERED INDEX IDX_IndFantasma_CNPJ ON temp_CGUSC.fp.indicador_pacientes_unicos(cnpj);
 
 -- Limpeza
 DROP TABLE #RecorrenciaPorCPF;
@@ -77,7 +77,7 @@ DROP TABLE #RecorrenciaPorCPF;
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPacientesFantasma_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_pacientes_unicos_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -94,20 +94,20 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_pacientes_unicos_uf
 
-INTO temp_CGUSC.fp.indicadorPacientesFantasma_UF
-FROM temp_CGUSC.fp.indicadorPacientesFantasma I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_pacientes_unicos_uf
+FROM temp_CGUSC.fp.indicador_pacientes_unicos I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndFantasmaUF_UF ON temp_CGUSC.fp.indicadorPacientesFantasma_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndFantasmaUF_uf ON temp_CGUSC.fp.indicador_pacientes_unicos_uf(uf);
 
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPacientesFantasma_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_pacientes_unicos_br;
 
 SELECT 
     'BR' AS pais,
@@ -123,14 +123,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_pacientes_unicos_br
 
-INTO temp_CGUSC.fp.indicadorPacientesFantasma_BR
-FROM temp_CGUSC.fp.indicadorPacientesFantasma;
+INTO temp_CGUSC.fp.indicador_pacientes_unicos_br
+FROM temp_CGUSC.fp.indicador_pacientes_unicos;
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorPacientesUnicos_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_pacientes_unicos_detalhado;
 
 SELECT 
     I.cnpj,
@@ -165,23 +165,23 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorPacientesUnicos_Completo
-FROM temp_CGUSC.fp.indicadorPacientesFantasma I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_pacientes_unicos_detalhado
+FROM temp_CGUSC.fp.indicador_pacientes_unicos I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorPacientesFantasma_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_pacientes_unicos_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorPacientesFantasma_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_pacientes_unicos_br BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalFantasma_CNPJ ON temp_CGUSC.fp.indicadorPacientesUnicos_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalFantasma_Risco ON temp_CGUSC.fp.indicadorPacientesUnicos_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalFantasma_CNPJ ON temp_CGUSC.fp.indicador_pacientes_unicos_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalFantasma_Risco ON temp_CGUSC.fp.indicador_pacientes_unicos_detalhado(risco_relativo_uf DESC);
 GO
 -- ============================================================================
 -- VERIFICAÇÃO E ESTATÍSTICAS
 -- ============================================================================
 SELECT TOP 100 * 
-FROM temp_CGUSC.fp.indicadorPacientesUnicos_Completo 
+FROM temp_CGUSC.fp.indicador_pacientes_unicos_detalhado 
 ORDER BY risco_relativo_uf DESC;
 
 -- Estatísticas gerais do indicador
@@ -192,12 +192,12 @@ SELECT
     MIN(percentual_pacientes_unicos) AS minimo,
     MAX(percentual_pacientes_unicos) AS maximo,
     STDEV(percentual_pacientes_unicos) AS desvio_padrao
-FROM temp_CGUSC.fp.indicadorPacientesUnicos_Completo;
+FROM temp_CGUSC.fp.indicador_pacientes_unicos_detalhado;
 
 -- Mediana em query separada (COM OVER e usando subquery)
 SELECT DISTINCT
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_pacientes_unicos) OVER () AS mediana
-FROM temp_CGUSC.fp.indicadorPacientesUnicos_Completo;
+FROM temp_CGUSC.fp.indicador_pacientes_unicos_detalhado;
 
 -- Distribuição por faixas de risco
 SELECT 
@@ -211,7 +211,7 @@ SELECT
     END AS faixa_risco,
     COUNT(*) AS qtd_farmacias,
     CAST(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () AS DECIMAL(5,2)) AS percentual_farmacias
-FROM temp_CGUSC.fp.indicadorPacientesUnicos_Completo
+FROM temp_CGUSC.fp.indicador_pacientes_unicos_detalhado
 GROUP BY 
     CASE 
         WHEN risco_relativo_uf < 0.5 THEN '1. Muito Abaixo da Média (< 0.5x)'
@@ -225,4 +225,5 @@ ORDER BY faixa_risco;
 
 
 
-select top 10 * from indicadorPacientesUnicos_Completo
+select top 10 * from indicador_pacientes_unicos_detalhado
+

@@ -9,9 +9,9 @@ DECLARE @DataFim DATE = '2024-12-10';
 
 -- ============================================================================
 -- PASSO 1: CÁLCULO BASE POR FARMÁCIA (INDICADOR TETO MÁXIMO)
--- Tabela de Saída: temp_CGUSC.fp.indicadorTeto
+-- Tabela de Saída: temp_CGUSC.fp.indicador_teto
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTeto;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto;
 
 WITH VendasComTeto AS (
     SELECT 
@@ -25,7 +25,7 @@ WITH VendasComTeto AS (
         END) AS flag_venda_atingiu_teto
 
     FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+    INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P 
         ON P.PRINCIPIO_ATIVO = C.principio_ativo
@@ -59,17 +59,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_teto
 
-INTO temp_CGUSC.fp.indicadorTeto
+INTO temp_CGUSC.fp.indicador_teto
 FROM AgregadoPorFarmacia
 WHERE total_vendas_monitoradas > 0;
 
-CREATE CLUSTERED INDEX IDX_IndTeto_CNPJ ON temp_CGUSC.fp.indicadorTeto(cnpj);
+CREATE CLUSTERED INDEX IDX_IndTeto_CNPJ ON temp_CGUSC.fp.indicador_teto(cnpj);
 
 
 -- ============================================================================
 -- PASSO 2: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTeto_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -86,19 +86,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_teto_uf
 
-INTO temp_CGUSC.fp.indicadorTeto_UF
-FROM temp_CGUSC.fp.indicadorTeto I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_teto_uf
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndTetoUF_UF ON temp_CGUSC.fp.indicadorTeto_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndTetoUF_uf ON temp_CGUSC.fp.indicador_teto_uf(uf);
 
 
 -- ============================================================================
 -- PASSO 3: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTeto_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
 
 SELECT 
     'BR' AS pais,
@@ -114,14 +114,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_teto_br
 
-INTO temp_CGUSC.fp.indicadorTeto_BR
-FROM temp_CGUSC.fp.indicadorTeto;
+INTO temp_CGUSC.fp.indicador_teto_br
+FROM temp_CGUSC.fp.indicador_teto;
 
 
 -- ============================================================================
 -- PASSO 4: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorTeto_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_detalhado;
 
 SELECT 
     I.cnpj,
@@ -154,18 +154,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorTeto_Completo
-FROM temp_CGUSC.fp.indicadorTeto I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_teto_detalhado
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorTeto_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_teto_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorTeto_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_teto_br BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalTeto_CNPJ ON temp_CGUSC.fp.indicadorTeto_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalTeto_Risco ON temp_CGUSC.fp.indicadorTeto_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalTeto_CNPJ ON temp_CGUSC.fp.indicador_teto_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalTeto_Risco ON temp_CGUSC.fp.indicador_teto_detalhado(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorTeto_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_teto_detalhado ORDER BY risco_relativo_uf DESC;
+

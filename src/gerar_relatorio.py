@@ -1,7 +1,7 @@
 """
 SENTINELA - Gerador de Relatórios a partir da Memória de Cálculo
 ================================================================
-Este script lê os dados compactados da tabela memoria_calculo_consolidadaFP
+Este script lê os dados compactados da tabela memoria_calculo_consolidada
 e gera relatórios Excel idênticos aos gerados pelo script original.
 
 Uso: python gerar_relatorio_memoria.py <CNPJ> [tipo_relatorio]
@@ -97,12 +97,12 @@ def carregar_dados_auxiliares(cursor):
     dados_medicamentos = {}
     
     try:
-        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[fp].dadosFarmaciasFP')
+        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[fp].dados_farmacia')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_farmacias[row[0]] = dict(zip(cols, row))
         
-        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[fp].medicamentosPatologiaFP')
+        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[fp].medicamentos_patologia')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_medicamentos[row[0]] = dict(zip(cols, row))
@@ -120,13 +120,13 @@ def carregar_dados_auxiliares(cursor):
 # =============================================================================
 def carregar_memoria_calculo(cursor, cnpj):
     """
-    Busca os dados compactados da tabela memoria_calculo_consolidadaFP,
+    Busca os dados compactados da tabela memoria_calculo_consolidada,
     descompacta e retorna como lista de dicionários.
     """
     try:
         cursor.execute('''
             SELECT TOP 1 dados_comprimidos, id_processamento
-            FROM temp_CGUSC.fp.memoria_calculo_consolidadaFP 
+            FROM temp_CGUSC.fp.memoria_calculo_consolidada 
             WHERE cnpj = ?
             ORDER BY id_processamento DESC
         ''', cnpj)
@@ -178,7 +178,7 @@ def carregar_memoria_calculo(cursor, cnpj):
 def buscar_dados_risco(cursor, cnpj):
     """Busca os indicadores da Matriz de Risco."""
     try:
-        cursor.execute('SELECT * FROM temp_CGUSC.fp.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
+        cursor.execute('SELECT * FROM temp_CGUSC.fp.matriz_risco_consolidada WHERE cnpj = ?', cnpj)
         row = cursor.fetchone()
         
         if row:
@@ -208,10 +208,10 @@ def buscar_top15_municipio(cursor, uf, municipio):
                 ISNULL(S.valor_sem_comprovacao, 0) as valor_sem_comprovacao,
                 ISNULL(S.valor_vendas, 0) as valor_vendas,
                 D.dataFinalDadosMovimentacao as data_ultima_venda
-            FROM temp_CGUSC.fp.Matriz_Risco_Final M
-            LEFT JOIN temp_CGUSC.fp.resultado_Sentinela_2015_2024 S 
+            FROM temp_CGUSC.fp.matriz_risco_consolidada M
+            LEFT JOIN temp_CGUSC.fp.resultado_sentinela_2015_2024 S 
                 ON S.cnpj = M.cnpj
-            LEFT JOIN temp_CGUSC.fp.dadosFarmaciasFP D
+            LEFT JOIN temp_CGUSC.fp.dados_farmacia D
                 ON M.cnpj = D.cnpj
             WHERE M.uf = ? AND M.municipio = ?
             ORDER BY M.SCORE_RISCO_FINAL DESC
@@ -223,7 +223,7 @@ def buscar_top15_municipio(cursor, uf, municipio):
         # Busca o Total Financeiro do Município (Para o Share)
         sql_total = """
             SELECT SUM(valor_sem_comprovacao)
-            FROM temp_CGUSC.fp.resultado_Sentinela_2015_2024
+            FROM temp_CGUSC.fp.resultado_sentinela_2015_2024
             WHERE uf = ? AND municipio = ?
         """
         cursor.execute(sql_total, (uf, municipio))
@@ -290,28 +290,28 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     # Carrega Dados Auxiliares do Estoque Inicial
     try:
         cursor.execute(
-            'select * from temp_CGUSC.[fp].notas_estoque_inicialFP where cnpj_estabelecimento = ? order by codigo_barra',
+            'select * from temp_CGUSC.[fp].estoque_inicial_notas where cnpj_estabelecimento = ? order by codigo_barra',
             cnpj_analise)
-        notas_estoque_inicialFP = {}
+        estoque_inicial_notas = {}
         lista_temp = []
         codigo_barra_registro_anterior = -1
         for row in cursor.fetchall():
             codigo_barra_atual = row[2]
             if codigo_barra_atual != codigo_barra_registro_anterior:
-                notas_estoque_inicialFP[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
+                estoque_inicial_notas[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
                 lista_temp.clear()
             dt = row[3].strftime("%d/%m/%Y") if row[3] else ""
             lista_temp.append(f'NF {row[4]} - {dt} - | Qtde: {row[1]}')
             codigo_barra_registro_anterior = codigo_barra_atual
         if codigo_barra_registro_anterior != -1:
-            notas_estoque_inicialFP[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
+            estoque_inicial_notas[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
     except:
-        notas_estoque_inicialFP = {}
+        estoque_inicial_notas = {}
 
     tabela_codigo_barra_estoque_inicial = {}
     try:
         cursor.execute(
-            'select codigo_barra, estoque_inicial from temp_CGUSC.[fp].estoque_inicialFP where cnpj_estabelecimento = ?',
+            'select codigo_barra, estoque_inicial from temp_CGUSC.[fp].estoque_inicial where cnpj_estabelecimento = ?',
             cnpj_analise)
         tabela_codigo_barra_estoque_inicial = {row.codigo_barra: row.estoque_inicial for row in cursor.fetchall()}
     except:
@@ -355,7 +355,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             numero_vendas_gtin = 0
             cod = int(j['codigo_barra'])
             principio = dados_medicamentos.get(float(cod), {}).get('principio_ativo', 'DESCONHECIDO')
-            notas = ', '.join(notas_estoque_inicialFP.get(cod, []))
+            notas = ', '.join(estoque_inicial_notas.get(cod, []))
             est = tabela_codigo_barra_estoque_inicial.get(cod, 0)
             ultimo_estoque_valido = est
             j_copy = copy.deepcopy(j)
@@ -448,7 +448,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         periodo as data,
                         SUM(valor_vendas) as valor_total,
                         SUM(valor_sem_comprovacao) as valor_sem_comp
-                    FROM temp_CGUSC.fp.movimentacaoMensalCodigoBarraFP
+                    FROM temp_CGUSC.fp.movimentacao_mensal_gtin
                     WHERE id_processamento = ?
                     GROUP BY periodo
                     ORDER BY periodo
@@ -1616,3 +1616,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

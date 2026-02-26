@@ -11,7 +11,7 @@ DECLARE @DataFim DATE = '2024-12-10';
 -- PASSO 1: CÁLCULO BASE POR FARMÁCIA (HORÁRIO ATÍPICO)
 -- Consideramos madrugada: 00:00 até 05:59
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorHorarioAtipico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico;
 
 WITH VendasPorHorario AS (
     SELECT 
@@ -26,7 +26,7 @@ WITH VendasPorHorario AS (
         END) AS flag_madrugada
 
     FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+    INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
         ON C.codigo_barra = A.codigo_barra
     WHERE 
         A.data_hora >= @DataInicio 
@@ -56,17 +56,17 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_madrugada
 
-INTO temp_CGUSC.fp.indicadorHorarioAtipico
+INTO temp_CGUSC.fp.indicador_horario_atipico
 FROM AgregadoPorFarmacia
 WHERE total_vendas_monitoradas > 0;
 
-CREATE CLUSTERED INDEX IDX_IndHora_CNPJ ON temp_CGUSC.fp.indicadorHorarioAtipico(cnpj);
+CREATE CLUSTERED INDEX IDX_IndHora_CNPJ ON temp_CGUSC.fp.indicador_horario_atipico(cnpj);
 
 
 -- ============================================================================
 -- PASSO 2: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorHorarioAtipico_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -83,19 +83,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_madrugada_uf
 
-INTO temp_CGUSC.fp.indicadorHorarioAtipico_UF
-FROM temp_CGUSC.fp.indicadorHorarioAtipico I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_horario_atipico_uf
+FROM temp_CGUSC.fp.indicador_horario_atipico I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndHoraUF_UF ON temp_CGUSC.fp.indicadorHorarioAtipico_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndHoraUF_uf ON temp_CGUSC.fp.indicador_horario_atipico_uf(uf);
 
 
 -- ============================================================================
 -- PASSO 3: CÁLCULO DA MÉDIA NACIONAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorHorarioAtipico_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_br;
 
 SELECT 
     'BR' AS pais,
@@ -111,14 +111,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_madrugada_br
 
-INTO temp_CGUSC.fp.indicadorHorarioAtipico_BR
-FROM temp_CGUSC.fp.indicadorHorarioAtipico;
+INTO temp_CGUSC.fp.indicador_horario_atipico_br
+FROM temp_CGUSC.fp.indicador_horario_atipico;
 
 
 -- ============================================================================
 -- PASSO 4: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorHorarioAtipico_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_detalhado;
 
 SELECT 
     I.cnpj,
@@ -151,17 +151,18 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorHorarioAtipico_Completo
-FROM temp_CGUSC.fp.indicadorHorarioAtipico I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_horario_atipico_detalhado
+FROM temp_CGUSC.fp.indicador_horario_atipico I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorHorarioAtipico_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorHorarioAtipico_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_horario_atipico_br BR;
 
-CREATE CLUSTERED INDEX IDX_FinalHora_CNPJ ON temp_CGUSC.fp.indicadorHorarioAtipico_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicadorHorarioAtipico_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalHora_CNPJ ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf DESC);
 GO
 
 
-select top 1000 * from indicadorHorarioAtipico_Completo order by risco_relativo_uf desc
+select top 1000 * from indicador_horario_atipico_detalhado order by risco_relativo_uf desc
+

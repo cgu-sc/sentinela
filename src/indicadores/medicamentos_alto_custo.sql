@@ -25,9 +25,9 @@ CREATE CLUSTERED INDEX IDX_Limite ON #LimiteAltoCusto(valor_limite);
 
 -- ============================================================================
 -- PASSO 1: CLCULO BASE POR FARMCIA
--- Tabela de Sada: temp_CGUSC.fp.indicadorAltoCusto
+-- Tabela de Sada: temp_CGUSC.fp.indicador_alto_custo
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorAltoCusto;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo;
 
 SELECT 
     A.cnpj,
@@ -50,7 +50,7 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_alto_custo
 
-INTO temp_CGUSC.fp.indicadorAltoCusto
+INTO temp_CGUSC.fp.indicador_alto_custo
 FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
 CROSS JOIN #LimiteAltoCusto L
 WHERE 
@@ -59,13 +59,13 @@ WHERE
 GROUP BY A.cnpj
 HAVING SUM(A.valor_pago) > 5000; -- Filtro de corte mnimo conforme solicitado
 
-CREATE CLUSTERED INDEX IDX_IndAltoCusto_CNPJ ON temp_CGUSC.fp.indicadorAltoCusto(cnpj);
+CREATE CLUSTERED INDEX IDX_IndAltoCusto_CNPJ ON temp_CGUSC.fp.indicador_alto_custo(cnpj);
 
 
 -- ============================================================================
 -- PASSO 2: CLCULO DAS MDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorAltoCusto_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -82,19 +82,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_alto_custo_uf
 
-INTO temp_CGUSC.fp.indicadorAltoCusto_UF
-FROM temp_CGUSC.fp.indicadorAltoCusto I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_alto_custo_uf
+FROM temp_CGUSC.fp.indicador_alto_custo I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndAltoCustoUF_UF ON temp_CGUSC.fp.indicadorAltoCusto_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndAltoCustoUF_uf ON temp_CGUSC.fp.indicador_alto_custo_uf(uf);
 
 
 -- ============================================================================
 -- PASSO 3: CLCULO DA MDIA NACIONAL (BRASIL)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorAltoCusto_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
 
 SELECT 
     'BR' AS pais,
@@ -110,14 +110,14 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS percentual_alto_custo_br
 
-INTO temp_CGUSC.fp.indicadorAltoCusto_BR
-FROM temp_CGUSC.fp.indicadorAltoCusto;
+INTO temp_CGUSC.fp.indicador_alto_custo_br
+FROM temp_CGUSC.fp.indicador_alto_custo;
 
 
 -- ============================================================================
 -- PASSO 4: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorAltoCusto_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_detalhado;
 
 SELECT 
     I.cnpj,
@@ -151,18 +151,19 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorAltoCusto_Completo
-FROM temp_CGUSC.fp.indicadorAltoCusto I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_alto_custo_detalhado
+FROM temp_CGUSC.fp.indicador_alto_custo I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorAltoCusto_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorAltoCusto_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_alto_custo_br BR;
 
 -- ndices Finais
-CREATE CLUSTERED INDEX IDX_FinalAltoCusto_CNPJ ON temp_CGUSC.fp.indicadorAltoCusto_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalAltoCusto_Risco ON temp_CGUSC.fp.indicadorAltoCusto_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalAltoCusto_CNPJ ON temp_CGUSC.fp.indicador_alto_custo_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalAltoCusto_Risco ON temp_CGUSC.fp.indicador_alto_custo_detalhado(risco_relativo_uf DESC);
 GO
 
 -- Verificao rpida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorAltoCusto_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_alto_custo_detalhado ORDER BY risco_relativo_uf DESC;
+

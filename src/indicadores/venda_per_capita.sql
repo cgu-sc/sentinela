@@ -16,7 +16,7 @@ SELECT
     COUNT(DISTINCT FORMAT(A.data_hora, 'yyyyMM')) AS qtd_meses_ativos
 INTO #VendasPorFarmacia
 FROM db_farmaciapopular.fp.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentosPatologiaFP C 
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
     ON C.codigo_barra = A.codigo_barra
 WHERE 
     A.data_hora >= @DataInicio 
@@ -31,7 +31,7 @@ GO
 -- ============================================================================
 -- PASSO 2: CÁLCULO BASE POR FARMÁCIA (VENDA PER CAPITA)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendaPerCapita;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita;
 
 SELECT 
     F.cnpj,
@@ -58,14 +58,14 @@ SELECT
         END 
     AS DECIMAL(18,2)) AS valor_per_capita_mensal
 
-INTO temp_CGUSC.fp.indicadorVendaPerCapita
+INTO temp_CGUSC.fp.indicador_venda_per_capita
 FROM #VendasPorFarmacia V
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = V.cnpj
 INNER JOIN temp_CGUSC.sus.tb_ibge IBGE 
     ON CAST(F.codibge AS VARCHAR(7)) = IBGE.id_ibge7;
 
-CREATE CLUSTERED INDEX IDX_IndCapita_CNPJ ON temp_CGUSC.fp.indicadorVendaPerCapita(cnpj);
+CREATE CLUSTERED INDEX IDX_IndCapita_CNPJ ON temp_CGUSC.fp.indicador_venda_per_capita(cnpj);
 DROP TABLE #VendasPorFarmacia;
 GO
 -- O comando GO aqui garante que a coluna 'valor_per_capita_mensal' exista para o próximo passo
@@ -74,7 +74,7 @@ GO
 -- ============================================================================
 -- PASSO 3: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendaPerCapita_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
@@ -92,20 +92,20 @@ SELECT
         AVG(I.valor_per_capita_mensal) 
     AS DECIMAL(18,2)) AS valor_per_capita_mensal_uf
 
-INTO temp_CGUSC.fp.indicadorVendaPerCapita_UF
-FROM temp_CGUSC.fp.indicadorVendaPerCapita I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_venda_per_capita_uf
+FROM temp_CGUSC.fp.indicador_venda_per_capita I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndCapitaUF_UF ON temp_CGUSC.fp.indicadorVendaPerCapita_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndCapitaUF_uf ON temp_CGUSC.fp.indicador_venda_per_capita_uf(uf);
 GO
 
 
 -- ============================================================================
 -- PASSO 4: CÁLCULO DA MÉDIA NACIONAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendaPerCapita_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_br;
 
 SELECT 
     'BR' AS pais,
@@ -120,15 +120,15 @@ SELECT
         AVG(valor_per_capita_mensal)
     AS DECIMAL(18,2)) AS valor_per_capita_mensal_br
 
-INTO temp_CGUSC.fp.indicadorVendaPerCapita_BR
-FROM temp_CGUSC.fp.indicadorVendaPerCapita;
+INTO temp_CGUSC.fp.indicador_venda_per_capita_br
+FROM temp_CGUSC.fp.indicador_venda_per_capita;
 GO
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendaPerCapita_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_detalhado;
 
 SELECT 
     I.cnpj,
@@ -167,17 +167,18 @@ SELECT
         END 
     AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorVendaPerCapita_Completo
-FROM temp_CGUSC.fp.indicadorVendaPerCapita I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F 
+INTO temp_CGUSC.fp.indicador_venda_per_capita_detalhado
+FROM temp_CGUSC.fp.indicador_venda_per_capita I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F 
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorVendaPerCapita_UF UF 
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_uf UF 
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorVendaPerCapita_BR BR;
+CROSS JOIN temp_CGUSC.fp.indicador_venda_per_capita_br BR;
 
-CREATE CLUSTERED INDEX IDX_FinalCapita_CNPJ ON temp_CGUSC.fp.indicadorVendaPerCapita_Completo(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalCapita_Risco ON temp_CGUSC.fp.indicadorVendaPerCapita_Completo(risco_relativo_uf DESC);
+CREATE CLUSTERED INDEX IDX_FinalCapita_CNPJ ON temp_CGUSC.fp.indicador_venda_per_capita_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalCapita_Risco ON temp_CGUSC.fp.indicador_venda_per_capita_detalhado(risco_relativo_uf DESC);
 GO
 
 -- Verificação rápida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicadorVendaPerCapita_Completo ORDER BY risco_relativo_uf DESC;
+SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_venda_per_capita_detalhado ORDER BY risco_relativo_uf DESC;
+

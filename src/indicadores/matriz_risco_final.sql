@@ -14,9 +14,9 @@ SET NOCOUNT ON;
 PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V5.5...';
 
 -- 1. LIMPEZA DE AMBIENTE
-IF OBJECT_ID('temp_CGUSC.fp.Matriz_Risco_Final', 'U') IS NOT NULL
+IF OBJECT_ID('temp_CGUSC.fp.matriz_risco_consolidada', 'U') IS NOT NULL
 BEGIN
-    DROP TABLE temp_CGUSC.fp.Matriz_Risco_Final;
+    DROP TABLE temp_CGUSC.fp.matriz_risco_consolidada;
     PRINT '   > Tabela anterior removida.';
 END;
 
@@ -124,24 +124,24 @@ END;
         I17.media_estado AS avg_crms_irregulares_uf, I17.media_pais AS avg_crms_irregulares_br,
         I17.risco_relativo_uf AS risco_crms_irregulares_uf, I17.risco_relativo_br AS risco_crms_irregulares_br
         
-    FROM temp_CGUSC.fp.dadosFarmaciasFP F
-    LEFT JOIN temp_CGUSC.fp.indicadorFalecidos_Completo I01 ON I01.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorDemografico_Completo I02 ON I02.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorTeto_Completo I03 ON I03.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorPolimedicamento_Completo I04 ON I04.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorMediaItens_Completo I05 ON I05.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorTicketMedio_Completo I06 ON I06.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorReceitaPorPaciente_Completo I07 ON I07.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorVendaPerCapita_Completo I08 ON I08.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorVendasConsecutivas_Completo I09 ON I09.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorHorarioAtipico_Completo I10 ON I10.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorGeografico_Completo I11 ON I11.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorAltoCusto_Completo I12 ON I12.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorConcentracaoPico_Completo I13 ON I13.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorPacientesUnicos_Completo I14 ON I14.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorCRM_Completo I15 ON I15.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorExclusividadeCRM_Completo I16 ON I16.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorCRMsIrregulares_Completo I17 ON I17.cnpj = F.cnpj
+    FROM temp_CGUSC.fp.dados_farmacia F
+    LEFT JOIN temp_CGUSC.fp.indicador_falecidos_detalhado I01 ON I01.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado I02 ON I02.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_teto_detalhado I03 ON I03.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento_detalhado I04 ON I04.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_media_itens_detalhado I05 ON I05.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_ticket_medio_detalhado I06 ON I06.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_detalhado I07 ON I07.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_detalhado I08 ON I08.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado I09 ON I09.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_detalhado I10 ON I10.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_geografico_detalhado I11 ON I11.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_pacientes_unicos_detalhado I14 ON I14.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_detalhado I16 ON I16.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
 ),
 
 -- 3. CTE 2: CÁLCULO DE SCORE COM TETO (AQUI É A MÁGICA)
@@ -437,10 +437,10 @@ SELECT
     -- PERCENTIL
     CAST(CUME_DIST() OVER (ORDER BY SCORE_RISCO_FINAL ASC) * 100 AS DECIMAL(5,2)) AS percentil_risco
 
-INTO temp_CGUSC.fp.Matriz_Risco_Final
+INTO temp_CGUSC.fp.matriz_risco_consolidada
 FROM ClassificacaoFinal S;
 
-PRINT '   > Tabela temp_CGUSC.fp.Matriz_Risco_Final (V5.5) criada com sucesso.';
+PRINT '   > Tabela temp_CGUSC.fp.matriz_risco_consolidada (V5.5) criada com sucesso.';
 
 -- ============================================================================
 -- CRIAÇÃO DE ÍNDICES OTIMIZADOS
@@ -448,14 +448,14 @@ PRINT '   > Tabela temp_CGUSC.fp.Matriz_Risco_Final (V5.5) criada com sucesso.';
 PRINT '   > Recriando índices...';
 
 CREATE CLUSTERED INDEX IDX_MatrizFinal_CNPJ 
-    ON temp_CGUSC.fp.Matriz_Risco_Final(cnpj);
+    ON temp_CGUSC.fp.matriz_risco_consolidada(cnpj);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_ScoreRiscoFinal 
-    ON temp_CGUSC.fp.Matriz_Risco_Final(SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.matriz_risco_consolidada(SCORE_RISCO_FINAL DESC)
     INCLUDE (razaoSocial, uf, rank_nacional, CLASSIFICACAO_RISCO);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Municipio 
-    ON temp_CGUSC.fp.Matriz_Risco_Final(uf, municipio, SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.matriz_risco_consolidada(uf, municipio, SCORE_RISCO_FINAL DESC)
     INCLUDE (rank_municipio, avg_score_municipio);
 
 PRINT '>> PROCESSO CONCLUÍDO COM SUCESSO.';
@@ -468,18 +468,19 @@ SELECT CLASSIFICACAO_RISCO, COUNT(*) as Qtd,
        CAST(AVG(SCORE_RISCO_FINAL) as DECIMAL(10,2)) as Media_Score,
        MIN(SCORE_RISCO_FINAL) as Min_Score,
        MAX(SCORE_RISCO_FINAL) as Max_Score
-FROM temp_CGUSC.fp.Matriz_Risco_Final
+FROM temp_CGUSC.fp.matriz_risco_consolidada
 GROUP BY CLASSIFICACAO_RISCO
 ORDER BY Media_Score DESC;
 
-select top 100 *  FROM temp_CGUSC.fp.Matriz_Risco_Final where municipio = 'Florianópolis' 
+select top 100 *  FROM temp_CGUSC.fp.matriz_risco_consolidada where municipio = 'Florianópolis' 
 
 
-select top 10 * from dadosFarmaciasFP
+select top 10 * from dados_farmacia
 
 
-select top 10 * from resultado_Sentinela_2015_2024
+select top 10 * from resultado_sentinela_2015_2024
 
 
-select CLASSIFICACAO_RISCO  FROM temp_CGUSC.fp.Matriz_Risco_Final group by CLASSIFICACAO_RISCO
+select CLASSIFICACAO_RISCO  FROM temp_CGUSC.fp.matriz_risco_consolidada group by CLASSIFICACAO_RISCO
+
 

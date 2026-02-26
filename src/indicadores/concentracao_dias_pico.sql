@@ -58,18 +58,18 @@ HAVING MAX(total_mes) > 0; -- Evita divisão por zero
 -- ============================================================================
 -- PASSO 4: CÁLCULO BASE POR FARMÁCIA (MÉDIA DO PERÍODO)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorConcentracaoPico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico;
 
 SELECT 
     cnpj,
     COUNT(DISTINCT ano_mes) AS meses_analisados,
     -- Média das concentrações mensais
     CAST(AVG(pct_concentracao_top3_dias) AS DECIMAL(18,4)) AS percentual_concentracao_pico
-INTO temp_CGUSC.fp.indicadorConcentracaoPico
+INTO temp_CGUSC.fp.indicador_concentracao_pico
 FROM #ConcentracaoMensal
 GROUP BY cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndPico_CNPJ ON temp_CGUSC.fp.indicadorConcentracaoPico(cnpj);
+CREATE CLUSTERED INDEX IDX_IndPico_CNPJ ON temp_CGUSC.fp.indicador_concentracao_pico(cnpj);
 
 -- Limpeza
 DROP TABLE #VendasDiarias;
@@ -79,33 +79,33 @@ DROP TABLE #ConcentracaoMensal;
 -- ============================================================================
 -- PASSO 5: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorConcentracaoPico_UF;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_uf;
 
 SELECT 
     CAST(F.uf AS VARCHAR(2)) AS uf,
     CAST(AVG(I.percentual_concentracao_pico) AS DECIMAL(18,4)) AS percentual_concentracao_pico_uf
-INTO temp_CGUSC.fp.indicadorConcentracaoPico_UF
-FROM temp_CGUSC.fp.indicadorConcentracaoPico I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
+INTO temp_CGUSC.fp.indicador_concentracao_pico_uf
+FROM temp_CGUSC.fp.indicador_concentracao_pico I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
 GROUP BY CAST(F.uf AS VARCHAR(2));
 
-CREATE CLUSTERED INDEX IDX_IndPicoUF_UF ON temp_CGUSC.fp.indicadorConcentracaoPico_UF(uf);
+CREATE CLUSTERED INDEX IDX_IndPicoUF_uf ON temp_CGUSC.fp.indicador_concentracao_pico_uf(uf);
 
 -- ============================================================================
 -- PASSO 6: CÁLCULO DA MÉDIA NACIONAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorConcentracaoPico_BR;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
 
 SELECT 
     'BR' AS pais,
     CAST(AVG(percentual_concentracao_pico) AS DECIMAL(18,4)) AS percentual_concentracao_pico_br
-INTO temp_CGUSC.fp.indicadorConcentracaoPico_BR
-FROM temp_CGUSC.fp.indicadorConcentracaoPico;
+INTO temp_CGUSC.fp.indicador_concentracao_pico_br
+FROM temp_CGUSC.fp.indicador_concentracao_pico;
 
 -- ============================================================================
 -- PASSO 7: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorConcentracaoPico_Completo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_detalhado;
 
 SELECT 
     I.cnpj,
@@ -129,11 +129,12 @@ SELECT
         ELSE 0 
     END AS DECIMAL(18,4)) AS risco_relativo_br
 
-INTO temp_CGUSC.fp.indicadorConcentracaoPico_Completo
-FROM temp_CGUSC.fp.indicadorConcentracaoPico I
-INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicadorConcentracaoPico_UF UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-CROSS JOIN temp_CGUSC.fp.indicadorConcentracaoPico_BR BR;
+INTO temp_CGUSC.fp.indicador_concentracao_pico_detalhado
+FROM temp_CGUSC.fp.indicador_concentracao_pico I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+CROSS JOIN temp_CGUSC.fp.indicador_concentracao_pico_br BR;
 
-CREATE CLUSTERED INDEX IDX_FinalPico_CNPJ ON temp_CGUSC.fp.indicadorConcentracaoPico_Completo(cnpj);
+CREATE CLUSTERED INDEX IDX_FinalPico_CNPJ ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(cnpj);
 GO
+

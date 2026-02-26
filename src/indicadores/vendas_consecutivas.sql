@@ -10,10 +10,10 @@ GO
 -- PASSO 0: CRIAR TABELA DE RESULTADOS BASE (SE NÃO EXISTIR)
 -- ============================================================================
 IF NOT EXISTS (SELECT * FROM sys.objects 
-               WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.indicadorVendasConsecutivas') 
+               WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.indicador_vendas_consecutivas') 
                AND type in (N'U'))
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.indicadorVendasConsecutivas (
+    CREATE TABLE temp_CGUSC.fp.indicador_vendas_consecutivas (
         id INT IDENTITY(1,1) PRIMARY KEY,
         cnpj VARCHAR(14) NOT NULL UNIQUE,
         total_intervalos_analisados INT,
@@ -22,8 +22,8 @@ BEGIN
         data_calculo DATETIME DEFAULT GETDATE()
     );
     
-    CREATE INDEX IDX_Indicador_CNPJ ON temp_CGUSC.fp.indicadorVendasConsecutivas(cnpj);
-    CREATE INDEX IDX_Indicador_Percentual ON temp_CGUSC.fp.indicadorVendasConsecutivas(percentual_vendas_consecutivas);
+    CREATE INDEX IDX_Indicador_CNPJ ON temp_CGUSC.fp.indicador_vendas_consecutivas(cnpj);
+    CREATE INDEX IDX_Indicador_Percentual ON temp_CGUSC.fp.indicador_vendas_consecutivas(percentual_vendas_consecutivas);
 END
 
 -- ============================================================================
@@ -52,7 +52,7 @@ END
 -- Lista todos os CNPJs que precisam ser processados
 INSERT INTO temp_CGUSC.fp.controle_processamento_vendas_consecutivas (cnpj, situacao)
 SELECT DISTINCT cnpj, 0 AS situacao
-FROM temp_CGUSC.fp.lista_cnpjs
+FROM temp_CGUSC.fp.lista_cnpj_processamento
 WHERE cnpj NOT IN (SELECT cnpj FROM temp_CGUSC.fp.controle_processamento_vendas_consecutivas)
 ORDER BY cnpj;
 
@@ -147,9 +147,9 @@ BEGIN
         -- SALVA RESULTADO INDIVIDUAL
         -- ====================================================================
         
-        IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicadorVendasConsecutivas WHERE cnpj = @CNPJAtual)
+        IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_vendas_consecutivas WHERE cnpj = @CNPJAtual)
         BEGIN
-            UPDATE temp_CGUSC.fp.indicadorVendasConsecutivas
+            UPDATE temp_CGUSC.fp.indicador_vendas_consecutivas
             SET total_intervalos_analisados = @TotalIntervalos,
                 qtd_vendas_rapidas = @VendasRapidas,
                 percentual_vendas_consecutivas = @Percentual,
@@ -158,7 +158,7 @@ BEGIN
         END
         ELSE
         BEGIN
-            INSERT INTO temp_CGUSC.fp.indicadorVendasConsecutivas 
+            INSERT INTO temp_CGUSC.fp.indicador_vendas_consecutivas 
                 (cnpj, total_intervalos_analisados, qtd_vendas_rapidas, percentual_vendas_consecutivas)
             VALUES (@CNPJAtual, @TotalIntervalos, @VendasRapidas, @Percentual);
         END
@@ -248,18 +248,18 @@ BEGIN
     -- ========================================================================
     PRINT 'PASSO 5: Calculando médias por UF...';
     
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendasConsecutivas_UF;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_uf;
     
     SELECT 
         CAST(F.uf AS VARCHAR(2)) AS uf,
         COUNT(*) AS total_farmacias_uf,
         CAST(AVG(I.percentual_vendas_consecutivas) AS DECIMAL(18,4)) AS percentual_vendas_consecutivas_uf
-    INTO temp_CGUSC.fp.indicadorVendasConsecutivas_UF
-    FROM temp_CGUSC.fp.indicadorVendasConsecutivas I
-    INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
+    INTO temp_CGUSC.fp.indicador_vendas_consecutivas_uf
+    FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
     GROUP BY CAST(F.uf AS VARCHAR(2));
     
-    CREATE CLUSTERED INDEX IDX_IndVendasConsec_UF ON temp_CGUSC.fp.indicadorVendasConsecutivas_UF(uf);
+    CREATE CLUSTERED INDEX IDX_IndVendasConsec_uf ON temp_CGUSC.fp.indicador_vendas_consecutivas_uf(uf);
     
     PRINT CONCAT('? Médias calculadas para ', @@ROWCOUNT, ' estados');
     
@@ -268,14 +268,14 @@ BEGIN
     -- ========================================================================
     PRINT 'PASSO 6: Calculando média nacional...';
     
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendasConsecutivas_BR;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_br;
     
     SELECT 
         'BR' AS pais,
         COUNT(*) AS total_farmacias_br,
         CAST(AVG(percentual_vendas_consecutivas) AS DECIMAL(18,4)) AS percentual_vendas_consecutivas_br
-    INTO temp_CGUSC.fp.indicadorVendasConsecutivas_BR
-    FROM temp_CGUSC.fp.indicadorVendasConsecutivas;
+    INTO temp_CGUSC.fp.indicador_vendas_consecutivas_br
+    FROM temp_CGUSC.fp.indicador_vendas_consecutivas;
     
     PRINT '? Média nacional calculada';
     
@@ -284,7 +284,7 @@ BEGIN
     -- ========================================================================
     PRINT 'PASSO 7: Gerando tabela consolidada com riscos relativos...';
     
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicadorVendasConsecutivas_Completo;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado;
     
     SELECT 
         I.cnpj,
@@ -315,15 +315,15 @@ BEGIN
             ELSE 0 
         END AS DECIMAL(18,4)) AS risco_relativo_br
     
-    INTO temp_CGUSC.fp.indicadorVendasConsecutivas_Completo
-    FROM temp_CGUSC.fp.indicadorVendasConsecutivas I
-    INNER JOIN temp_CGUSC.fp.dadosFarmaciasFP F ON F.cnpj = I.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicadorVendasConsecutivas_UF UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
-    CROSS JOIN temp_CGUSC.fp.indicadorVendasConsecutivas_BR BR;
+    INTO temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado
+    FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    CROSS JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_br BR;
     
-    CREATE CLUSTERED INDEX IDX_FinalVendasConsec_CNPJ ON temp_CGUSC.fp.indicadorVendasConsecutivas_Completo(cnpj);
-    CREATE INDEX IDX_FinalVendasConsec_RiscoUF ON temp_CGUSC.fp.indicadorVendasConsecutivas_Completo(risco_relativo_uf);
-    CREATE INDEX IDX_FinalVendasConsec_RiscoBR ON temp_CGUSC.fp.indicadorVendasConsecutivas_Completo(risco_relativo_br);
+    CREATE CLUSTERED INDEX IDX_FinalVendasConsec_CNPJ ON temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado(cnpj);
+    CREATE INDEX IDX_FinalVendasConsec_RiscoUF ON temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado(risco_relativo_uf);
+    CREATE INDEX IDX_FinalVendasConsec_RiscoBR ON temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado(risco_relativo_br);
     
     PRINT CONCAT('? Tabela consolidada criada com ', @@ROWCOUNT, ' registros');
     
@@ -342,7 +342,7 @@ BEGIN
         CAST(AVG(risco_relativo_br) AS DECIMAL(10,2)) AS media_risco_br,
         CAST(MAX(risco_relativo_br) AS DECIMAL(10,2)) AS maior_risco_br,
         CAST(MIN(risco_relativo_br) AS DECIMAL(10,2)) AS menor_risco_br
-    FROM temp_CGUSC.fp.indicadorVendasConsecutivas_Completo;
+    FROM temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado;
     
     PRINT '';
     PRINT 'TOP 20 FARMÁCIAS COM MAIOR RISCO (BR):';
@@ -357,7 +357,7 @@ BEGIN
         CAST(media_pais AS DECIMAL(10,2)) AS media_br,
         CAST(risco_relativo_uf AS DECIMAL(10,2)) AS risco_uf,
         CAST(risco_relativo_br AS DECIMAL(10,2)) AS risco_br
-    FROM temp_CGUSC.fp.indicadorVendasConsecutivas_Completo
+    FROM temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado
     ORDER BY risco_relativo_br DESC;
     
     PRINT '';
@@ -365,13 +365,15 @@ BEGIN
     PRINT 'PROCESSO COMPLETO FINALIZADO COM SUCESSO!';
     PRINT '';
     PRINT 'Tabelas criadas:';
-    PRINT '  1. indicadorVendasConsecutivas (base)';
-    PRINT '  2. indicadorVendasConsecutivas_UF (médias por estado)';
-    PRINT '  3. indicadorVendasConsecutivas_BR (média nacional)';
-    PRINT '  4. indicadorVendasConsecutivas_Completo (tabela final com riscos)';
+    PRINT '  1. indicador_vendas_consecutivas (base)';
+    PRINT '  2. indicador_vendas_consecutivas_uf (médias por estado)';
+    PRINT '  3. indicador_vendas_consecutivas_br (média nacional)';
+    PRINT '  4. indicador_vendas_consecutivas_detalhado (tabela final com riscos)';
     PRINT '';
-    PRINT 'Use a tabela indicadorVendasConsecutivas_Completo para suas análises!';
+    PRINT 'Use a tabela indicador_vendas_consecutivas_detalhado para suas análises!';
     PRINT '=======================================================================';
 END
 
 GO
+
+

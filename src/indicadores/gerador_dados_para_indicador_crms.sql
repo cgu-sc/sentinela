@@ -1,71 +1,114 @@
+﻿-- ============================================================================
+-- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃƒO 2
 -- ============================================================================
--- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 2
--- ============================================================================
--- CORREÇÕES APLICADAS:
---   1. Contagem de prescrições agora usa COUNT(DISTINCT num_autorizacao) 
---      em vez de COUNT(*) para não inflar os números com múltiplos medicamentos
---   2. Mesma correção aplicada na contagem de autorizações por estabelecimento
---   3. NOVO: Adicionado alerta6 (prescrição antes do registro do CRM)
+-- CORREÃ‡Ã•ES APLICADAS:
+--   1. Contagem de prescriÃ§Ãµes agora usa COUNT(DISTINCT num_autorizacao) 
+--      em vez de COUNT(*) para nÃ£o inflar os nÃºmeros com mÃºltiplos medicamentos
+--   2. Mesma correÃ§Ã£o aplicada na contagem de autorizaÃ§Ãµes por estabelecimento
+--   3. NOVO: Adicionado alerta6 (prescriÃ§Ã£o antes do registro do CRM)
 -- ============================================================================
 
--- Número de Sociedades que o Sócio de um estabelecimento possui dentro do programa Farmácia Popular
+-- NÃºmero de Sociedades que o SÃ³cio de um estabelecimento possui dentro do programa FarmÃ¡cia Popular
 DROP TABLE IF EXISTS #socios_num_sociedades
 SELECT cpf_cnpj_Socio nu_cpf_socio, COUNT(*) num_sociedades 
 INTO #socios_num_sociedades
-FROM temp_CGUSC.fp.socios A
+FROM temp_CGUSC.fp.socios_farmacia A
 GROUP BY cpf_cnpj_Socio
 
 
 -- ============================================================================
--- CRIAR LISTA DE MEDICOS QUE PRESCREVERAM PARA O FARMACIA POPULAR
 -- ============================================================================
--- CORREÇÃO: Usar COUNT(DISTINCT num_autorizacao) para contar prescrições únicas
--- Uma autorização pode ter múltiplos medicamentos, mas representa UMA prescrição
+-- PASSO 0: AGREGAÇÃO POR MÉDICO/FARMÁCIA (OTIMIZADA PARA GRANDES VOLUMES)
+-- ============================================================================
+-- Agregamos cada base separadamente e depois unimos o resultado.
 
-DROP TABLE IF EXISTS #tb_info_medico_farmacia_popular
+-- A. Agregação Base Histórica (2015-2020)
+DROP TABLE IF EXISTS #Medicos_Hist;
+SELECT
+    cnpj, crm, crm_uf,
+    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
+    SUM(valor_pago) AS vl_pago,
+    MIN(data_hora) AS dt_ini,
+    MAX(data_hora) AS dt_fim
+INTO #Medicos_Hist
+FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+GROUP BY crm, crm_uf, cnpj;
+
+-- B. Agregação Base Recente (2021-2024)
+DROP TABLE IF EXISTS #Medicos_Recente;
+SELECT
+    cnpj, crm, crm_uf,
+    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
+    SUM(valor_pago) AS vl_pago,
+    MIN(data_hora) AS dt_ini,
+    MAX(data_hora) AS dt_fim
+INTO #Medicos_Recente
+FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+GROUP BY crm, crm_uf, cnpj;
+
+-- C. União Final dos Médicos
+DROP TABLE IF EXISTS #tb_info_medico_farmacia_popular;
 SELECT
     CONCAT(cnpj, crm, crm_uf) AS chave,
     crm AS nu_crm,
     crm_uf AS sg_uf_crm,
     cnpj AS nu_cnpj,
-    -- ✅ CORREÇÃO: Contar autorizações únicas, não linhas de medicamentos
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes_medico,
-    SUM(valor_pago) AS vl_autorizacoes_medico,
-    MIN(data_hora) AS dt_prescricao_inicial_medico,
-    MAX(data_hora) AS dt_prescricao_final_medico
+    SUM(nu_prescricoes) AS nu_prescricoes_medico,
+    SUM(vl_pago) AS vl_autorizacoes_medico,
+    MIN(dt_ini) AS dt_prescricao_inicial_medico,
+    MAX(dt_fim) AS dt_prescricao_final_medico
 INTO #tb_info_medico_farmacia_popular
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
---FROM TESTE_relatorio_movimentacao_2021_2024
-WHERE crm_uf IS NOT NULL 
-  AND crm IS NOT NULL 
-  AND crm_uf <> 'BR'
-GROUP BY crm, crm_uf, cnpj
+FROM (
+    SELECT * FROM #Medicos_Hist
+    UNION ALL
+    SELECT * FROM #Medicos_Recente
+) U
+GROUP BY crm, crm_uf, cnpj;
 
+-- ============================================================================
+-- PASSO 0.1: AGREGAÇÃO POR ESTABELECIMENTO
+-- ============================================================================
+DROP TABLE IF EXISTS #Estab_Hist;
+SELECT 
+    cnpj,
+    COUNT(DISTINCT num_autorizacao) AS nu_aut,
+    SUM(valor_pago) AS vl_pago,
+    MIN(data_hora) AS dt_ini,
+    MAX(data_hora) AS dt_fim
+INTO #Estab_Hist
+FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+GROUP BY cnpj;
+
+DROP TABLE IF EXISTS #Estab_Recente;
+SELECT 
+    cnpj,
+    COUNT(DISTINCT num_autorizacao) AS nu_aut,
+    SUM(valor_pago) AS vl_pago,
+    MIN(data_hora) AS dt_ini,
+    MAX(data_hora) AS dt_fim
+INTO #Estab_Recente
+FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+GROUP BY cnpj;
+
+DROP TABLE IF EXISTS #tb_info_estabelecimento;
+SELECT 
+    cnpj,
+    SUM(nu_aut) AS nu_autorizacoes_estabelecimento,
+    SUM(vl_pago) AS vl_autorizacoes_estabelecimento,
+    MIN(dt_ini) AS dt_venda_inicial_estabelecimento,
+    MAX(dt_fim) AS dt_venda_final_estabelecimento
+INTO #tb_info_estabelecimento
+FROM (
+    SELECT * FROM #Estab_Hist
+    UNION ALL
+    SELECT * FROM #Estab_Recente
+) U
+GROUP BY cnpj;
 
 USE [temp_CGUSC];
 GO
-
-
- 
-
--- ============================================================================
--- TOTAIS POR ESTABELECIMENTO
--- ============================================================================
--- CORREÇÃO: Usar COUNT(DISTINCT num_autorizacao) também aqui
-
-DROP TABLE IF EXISTS #tb_info_estabelecimento
-SELECT 
-    cnpj,
-    -- ✅ CORREÇÃO: Contar autorizações únicas
-    COUNT(DISTINCT num_autorizacao) AS nu_autorizacoes_estabelecimento,
-    SUM(valor_pago) AS vl_autorizacoes_estabelecimento,
-    MIN(data_hora) AS dt_venda_inicial_estabelecimento,
-    MAX(data_hora) AS dt_venda_final_estabelecimento
-INTO #tb_info_estabelecimento
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
---FROM TESTE_relatorio_movimentacao_2021_2024
-GROUP BY cnpj
-
 
 -- ============================================================================
 -- TABELA TEMPORÁRIA COM ALERTAS
@@ -262,54 +305,54 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 
 
 -- ============================================================================
--- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
+-- ALERTA 3: MÃ‰DIA >30 PRESCRIÃ‡Ã•ES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
+SET alerta3 = 'Foram registradas uma mÃ©dia de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
+              ' prescriÃ§Ãµes por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
 WHERE nu_prescricoes_dia > 30
 
 
 -- ============================================================================
--- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
+-- ALERTA 4: MÃ‰DIA >30 PRESCRIÃ‡Ã•ES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta4 = 'Foram registradas uma média de ' + 
+SET alerta4 = 'Foram registradas uma mÃ©dia de ' + 
               CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
+              ' prescriÃ§Ãµes por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' em todos os ' + 
               CAST(nu_estabelecimentos_com_registro_mesmo_crm AS VARCHAR(MAX)) + 
-              ' estabelecimentos em que há registros.'
+              ' estabelecimentos em que hÃ¡ registros.'
 WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
 
 
 select * from dados_crm_detalhado
 
 -- ============================================================================
--- ÍNDICE PARA PERFORMANCE
+-- ÃNDICE PARA PERFORMANCE
 -- ============================================================================
 CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
-ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_CNPJ)
+ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj)
 INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico);
 GO
 
 
 -- ============================================================================
--- ALERTA 5: DISTÂNCIA >400KM ENTRE FARMÁCIAS COM SOBREPOSIÇÃO DE DATAS
+-- ALERTA 5: DISTÃ‚NCIA >400KM ENTRE FARMÃCIAS COM SOBREPOSIÃ‡ÃƒO DE DATAS
 -- ============================================================================
 WITH
--- 1. Calcula a distância para todos os pares de T1 e T2 para cada médico
+-- 1. Calcula a distÃ¢ncia para todos os pares de T1 e T2 para cada mÃ©dico
 PairedWithDistance AS (
     SELECT
         T1.id_medico,
-        T1.nu_CNPJ AS CNPJ1_orig, 
+        T1.nu_cnpj AS CNPJ1_orig, 
         T1.dt_prescricao_inicial_medico AS DI1, 
         T1.dt_prescricao_final_medico AS DF1, 
         T1.no_municipio AS M1, 
         T1.sg_uf AS UF1, 
         T1.nu_prescricoes_medico AS P1,
-        T2.nu_CNPJ AS CNPJ2_orig, 
+        T2.nu_cnpj AS CNPJ2_orig, 
         T2.dt_prescricao_inicial_medico AS DI2, 
         T2.dt_prescricao_final_medico AS DF2, 
         T2.no_municipio AS M2, 
@@ -318,28 +361,28 @@ PairedWithDistance AS (
         temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
     FROM temp_CGUSC.fp.dados_crm_detalhado T1
     INNER JOIN temp_CGUSC.fp.dados_crm_detalhado T2 
-        ON T1.id_medico = T2.id_medico AND T1.nu_CNPJ < T2.nu_CNPJ
+        ON T1.id_medico = T2.id_medico AND T1.nu_cnpj < T2.nu_cnpj
 ),
 
--- 2. Filtra os pares válidos
+-- 2. Filtra os pares vÃ¡lidos
 AllValidPairsFiltered AS (
     SELECT *
     FROM PairedWithDistance
-    WHERE (DI1 <= DF2 AND DF1 >= DI2)  -- Sobreposição de datas
+    WHERE (DI1 <= DF2 AND DF1 >= DI2)  -- SobreposiÃ§Ã£o de datas
       AND DistanciaKM > 400
       AND DistanciaKM IS NOT NULL
-      AND P1 >= 100  -- Mínimo de prescrições no Estabelecimento 1
-      AND P2 >= 100  -- Mínimo de prescrições no Estabelecimento 2
+      AND P1 >= 100  -- MÃ­nimo de prescriÃ§Ãµes no Estabelecimento 1
+      AND P2 >= 100  -- MÃ­nimo de prescriÃ§Ãµes no Estabelecimento 2
 ),
 
--- 3. Ranqueia os pares por número de prescrições
+-- 3. Ranqueia os pares por nÃºmero de prescriÃ§Ãµes
 RankedValidPairs AS (
     SELECT *,
         ROW_NUMBER() OVER (PARTITION BY id_medico ORDER BY (P1 + P2) DESC, DistanciaKM DESC) AS rn
     FROM AllValidPairsFiltered
 ),
 
--- 4. Estatísticas por médico
+-- 4. EstatÃ­sticas por mÃ©dico
 DoctorOverallStats AS (
     SELECT
         id_medico,
@@ -383,38 +426,38 @@ FinalAlertInfo AS (
 -- Atualiza a tabela com o alerta5
 UPDATE AM
 SET AM.alerta5 = 
-    'A distância entre a farmácia ' + FAI.Fmtd_Top_CNPJ1 +
+    'A distÃ¢ncia entre a farmÃ¡cia ' + FAI.Fmtd_Top_CNPJ1 +
     ' (' + ISNULL(FAI.Top_M1, 'N/I') + '/' + ISNULL(FAI.Top_uf1, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI1, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF1, 103) +
-    ' (' + ISNULL(CAST(FAI.Top_P1 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
-    ' e a farmácia ' + FAI.Fmtd_Top_CNPJ2 +
+    ' (' + ISNULL(CAST(FAI.Top_P1 AS VARCHAR(10)), 'N/I') + ' PrescriÃ§Ãµes no perÃ­odo)' +
+    ' e a farmÃ¡cia ' + FAI.Fmtd_Top_CNPJ2 +
     ' (' + ISNULL(FAI.Top_M2, 'N/I') + '/' + ISNULL(FAI.Top_uf2, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI2, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF2, 103) +
-    ' (' + ISNULL(CAST(FAI.Top_P2 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
-    ' é de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
+    ' (' + ISNULL(CAST(FAI.Top_P2 AS VARCHAR(10)), 'N/I') + ' PrescriÃ§Ãµes no perÃ­odo)' +
+    ' Ã© de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
     CASE
         WHEN FAI.CountOtherActualValidPairs > 0 THEN
-            ' Há também outros ' + CAST(FAI.CountOtherActualValidPairs AS VARCHAR(10)) +
-            ' pares de estabelecimentos com distância maior que 400km que registraram prescrições do médico com registro CRM ' +
+            ' HÃ¡ tambÃ©m outros ' + CAST(FAI.CountOtherActualValidPairs AS VARCHAR(10)) +
+            ' pares de estabelecimentos com distÃ¢ncia maior que 400km que registraram prescriÃ§Ãµes do mÃ©dico com registro CRM ' +
             ISNULL(FAI.id_medico, 'N/I') + '.'
         ELSE ''
     END
 FROM temp_CGUSC.fp.dados_crm_detalhado AM
 INNER JOIN FinalAlertInfo FAI ON AM.id_medico = FAI.id_medico
-WHERE (AM.nu_CNPJ = FAI.Top_CNPJ1_orig OR AM.nu_CNPJ = FAI.Top_CNPJ2_orig);
+WHERE (AM.nu_cnpj = FAI.Top_CNPJ1_orig OR AM.nu_cnpj = FAI.Top_CNPJ2_orig);
 
 PRINT 'Coluna "alerta5" atualizada com sucesso.';
 GO
 
 
 -- ============================================================================
--- ALERTA 6: PRESCRIÇÃO ANTES DO REGISTRO DO CRM
+-- ALERTA 6: PRESCRIÃ‡ÃƒO ANTES DO REGISTRO DO CRM
 -- ============================================================================
--- ✅ NOVO: Verifica se a primeira prescrição do médico neste estabelecimento
---          ocorreu antes da data de inscrição do CRM no CFM
+-- âœ… NOVO: Verifica se a primeira prescriÃ§Ã£o do mÃ©dico neste estabelecimento
+--          ocorreu antes da data de inscriÃ§Ã£o do CRM no CFM
 UPDATE AM
 SET AM.alerta6 = 
-    'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
+    'PrescriÃ§Ã£o anterior ao registro do CRM (1Âª prescriÃ§Ã£o: ' + 
     CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
     ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
 FROM temp_CGUSC.fp.dados_crm_detalhado AM
@@ -431,12 +474,14 @@ WHERE CFM.dt_inscricao_convertida IS NOT NULL
 
 PRINT 'Coluna "alerta6" atualizada com sucesso.';
 PRINT '============================================================================';
-PRINT 'SCRIPT EXECUTADO COM CORREÇÕES:';
-PRINT '  - Prescrições contadas por COUNT(DISTINCT num_autorizacao)';
+PRINT 'SCRIPT EXECUTADO COM CORREÃ‡Ã•ES:';
+PRINT '  - PrescriÃ§Ãµes contadas por COUNT(DISTINCT num_autorizacao)';
 PRINT '  - Todos os alertas (1-6) populados corretamente';
-PRINT '  - NOVO: Alerta6 para prescrição antes do registro do CRM';
+PRINT '  - NOVO: Alerta6 para prescriÃ§Ã£o antes do registro do CRM';
 PRINT '============================================================================';
 GO
+
+
 
 
 

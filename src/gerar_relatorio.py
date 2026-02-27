@@ -43,6 +43,9 @@ logging.basicConfig(
 # =============================================================================
 # CONSTANTES GLOBAIS
 # =============================================================================
+# Versão do Sistema (usada para verificação de atualização obrigatória)
+VERSION = "3.1.0"
+
 DATA_INICIAL_ANALISE = '2015-07-01'
 DATA_FINAL_ANALISE = datetime.strptime('2024-12-10', '%Y-%m-%d').date()
 CRITERIO_ESTOQUE_INICIAL = 'Critério para estimativa do estoque inicial: Soma das duas últimas aquisições, considerando os 6 meses anteriores à primeira venda.'

@@ -14,6 +14,7 @@ import os
 import sys
 from datetime import datetime
 import ctypes
+import webbrowser
 
 
 def set_dark_title_bar(window):
@@ -70,22 +71,22 @@ gerador_module = None
 # CONFIGURAÇÃO DE CORES - TEMA ESCURO
 # =============================================================================
 COLORS = {
-    'bg_dark': '#1c2027',
-    'bg_medium': '#30302e',
-    'bg_light': '#2d3543',
-    'accent': '#3a6180',
-    'accent_hover': '#61afef',
-    'text_primary': '#ffffff',
-    'text_secondary': '#a0a0a0',
-    'text_muted': '#6c757d',
-    'success': '#00d26a',
-    'warning': '#ffc107',
-    'error': '#ff4757',
-    'info': '#17a2b8',
-    'border': '#374254',
-    'input_bg': '#242b36',
-    'button_bg': '#ac3d3e',
-    'button_hover': '#e85f60',
+    'bg_dark': '#020617',       # Tailwind slate-950
+    'bg_medium': '#0f172a',     # Tailwind slate-900
+    'bg_light': '#1e293b',      # Tailwind slate-800
+    'accent': '#3b82f6',        # Tailwind blue-500
+    'accent_hover': '#2563eb',  # Tailwind blue-600
+    'text_primary': '#f8fafc',  # Tailwind slate-50
+    'text_secondary': '#94a3b8',# Tailwind slate-400
+    'text_muted': '#64748b',    # Tailwind slate-500
+    'success': '#22c55e',       # Tailwind green-500
+    'warning': '#f59e0b',       # Tailwind amber-500
+    'error': '#ef4444',         # Tailwind red-500
+    'info': '#0ea5e9',          # Tailwind sky-500
+    'border': '#1e293b',        # Tailwind slate-800
+    'input_bg': '#0f172a',      # Tailwind slate-900
+    'button_bg': '#2563eb',     # Tailwind blue-600
+    'button_hover': '#1d4ed8',  # Tailwind blue-700
 }
 
 
@@ -95,7 +96,11 @@ COLORS = {
 class SentinelaApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gerador de Relatórios do Sentinela v3")
+        
+        # Versão Local do Sistema
+        self.versao_local = "3.1.0"
+        
+        self.root.title(f"Gerador de Relatórios do Sentinela v{self.versao_local}")
         self.root.geometry("900x750")
         self.root.minsize(800, 650)
         self.root.configure(bg=COLORS['bg_dark'])
@@ -119,6 +124,160 @@ class SentinelaApp:
         
         # Centralizar janela
         self._centralizar_janela()
+        
+        # Verificar se existe atualização obrigatória no banco
+        self.root.after(100, self._verificar_versao)
+    
+    def _verificar_versao(self):
+        """
+        Consulta o banco de dados para verificar se a versão atual do executável
+        é permitida. Caso contrário, obriga a atualização.
+        """
+        try:
+            import pyodbc
+            conn_str = (
+                'Driver={ODBC Driver 17 for SQL Server};'
+                'Server=SDH-DIE-BD;'
+                'Database=temp_CGUSC;'
+                'Trusted_Connection=yes;'
+                'Connection Timeout=5;'
+            )
+            cnxn = pyodbc.connect(conn_str)
+            cursor = cnxn.cursor()
+            
+            # Busca a versão mínima obrigatória
+            cursor.execute("SELECT valor FROM fp.config_sistema WHERE chave = 'versao_minima_obrigatoria'")
+            row = cursor.fetchone()
+            
+            if row:
+                versao_minima = row[0]
+                
+                # Comparação simples de versão (major.minor.patch)
+                def parse_version(v):
+                    return [int(x) for x in re.sub(r'[^0-9.]', '', v).split('.')]
+                
+                v_local = parse_version(self.versao_local)
+                v_minima = parse_version(versao_minima)
+                
+                if v_local < v_minima:
+                    self._exibir_aviso_atualizacao(versao_minima)
+                    return
+            
+            cursor.close()
+            cnxn.close()
+            
+        except Exception as e:
+            # Se não conseguir conectar ao banco para validar a versão, 
+            # apenas loga mas permite abrir (ou bloqueia se preferir ser mais rígido)
+            print(f"Aviso: Não foi possível validar a versão do sistema: {e}")
+
+    def _exibir_aviso_atualizacao(self, versao_minima):
+        """Exibe uma janela personalizada de atualização obrigatória."""
+        aviso = tk.Toplevel(self.root) 
+        aviso.title("Atualização Obrigatória")
+        aviso.geometry("500x380")
+        aviso.resizable(False, False)
+        aviso.configure(bg=COLORS['bg_dark'])
+        # Não usar transient enquanto root está oculto pode ser melhor em alguns casos,
+        # mas vamos garantir o lift e focus.
+        aviso.lift()
+        aviso.focus_force()
+        aviso.grab_set()
+        
+        # Centralizar na tela
+        aviso.update_idletasks()
+        x = (aviso.winfo_screenwidth() // 2) - (250)
+        y = (aviso.winfo_screenheight() // 2) - (160)
+        aviso.geometry(f"+{x}+{y}")
+        
+        # Forçar modo escuro na barra de título do aviso
+        set_dark_title_bar(aviso)
+        
+        # Container
+        content = tk.Frame(aviso, bg=COLORS['bg_dark'], padx=30, pady=20)
+        content.pack(fill=tk.BOTH, expand=True)
+        
+        # Ícone de Alerta Grande
+        lbl_icon = tk.Label(
+            content, 
+            text="⚠️", 
+            font=("Segoe UI", 48), 
+            fg=COLORS['error'], 
+            bg=COLORS['bg_dark']
+        )
+        lbl_icon.pack(pady=(0, 10))
+        
+        # Título
+        lbl_titulo = tk.Label(
+            content,
+            text="Versão Desatualizada",
+            font=("Segoe UI", 16, "bold"),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_dark']
+        )
+        lbl_titulo.pack()
+        
+        # Mensagem
+        msg = (
+            f"Sua versão atual ({self.versao_local}) não é mais suportada.\n"
+            f"A versão mínima exigida agora é a {versao_minima}.\n\n"
+            "Para continuar utilizando o Sentinela, por favor\n"
+            "instale a versão mais recente disponível na Rede."
+        )
+        
+        lbl_msg = tk.Label(
+            content,
+            text=msg,
+            font=("Segoe UI", 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_dark'],
+            justify=tk.CENTER,
+            pady=15
+        )
+        lbl_msg.pack()
+
+        # Frame para os botões
+        btns_frame = tk.Frame(content, bg=COLORS['bg_dark'])
+        btns_frame.pack(pady=(10, 0))
+        
+        # Botão Baixar Nova Versão
+        url = "https://cgugovbr.sharepoint.com/:f:/s/oe-se-nep-cgusc-dados/IgBggKQKxBGNToxNlbA3m8I8ASbJqb4wpGVGjxrK6rxNrL8?e=LGYnUT"
+        btn_baixar = tk.Button(
+            btns_frame,
+            text="📥 Baixar Nova Versão",
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS['accent'],
+            fg=COLORS['text_primary'],
+            activebackground=COLORS['accent_hover'],
+            activeforeground=COLORS['text_primary'],
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            command=lambda: webbrowser.open(url)
+        )
+        btn_baixar.pack(side=tk.LEFT, padx=5)
+        
+        # Botão Sair
+        btn_sair = tk.Button(
+            btns_frame,
+            text="Sair",
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS['button_bg'],
+            fg=COLORS['text_primary'],
+            activebackground=COLORS['button_hover'],
+            activeforeground=COLORS['text_primary'],
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            command=lambda: [self.root.destroy(), sys.exit(0)]
+        )
+        btn_sair.pack(side=tk.LEFT, padx=5)
+        
+        # Bloquear o encerramento da janela pelo 'X' sem sair do app
+        aviso.protocol("WM_DELETE_WINDOW", lambda: [self.root.destroy(), sys.exit(0)])
+
     
     def _configurar_icone(self):
         """Configura o ícone da aplicação."""
@@ -221,7 +380,7 @@ class SentinelaApp:
         # Título principal
         titulo = tk.Label(
             text_frame,
-            text="Gerador de Relatórios do Sentinela v3",
+            text=f"Gerador de Relatórios do Sentinela v{self.versao_local}",
             font=("Segoe UI", 22, "bold"),
             fg=COLORS['text_primary'],
             bg=COLORS['bg_dark']
@@ -239,7 +398,7 @@ class SentinelaApp:
         subtitulo.pack(anchor="w", pady=(2, 0))
         
         # Linha separadora
-        separator = tk.Frame(header_frame, bg=COLORS['accent'], height=2)
+        separator = tk.Frame(header_frame, bg=COLORS['accent'], height=3)
         separator.pack(fill=tk.X, pady=(15, 0))
     
     def _criar_area_cnpjs(self, parent):

@@ -82,7 +82,7 @@ def build():
         "--windowed",                         # Sem console
         "--name=SentinelaRelatorios",         # Nome do executável
         f"--add-data={gerador_script};.",     # Inclui o módulo gerador
-        "--clean",                            # Limpa cache
+        # "--clean",                            # Removido para acelerar builds subsequentes usando cache
         "--noconfirm",                        # Não pede confirmação
         "--hidden-import=pyodbc",
         "--hidden-import=pandas",
@@ -90,7 +90,7 @@ def build():
         "--hidden-import=secrets",
         "--hidden-import=aba_crm",
 
-        # Exclusões para reduzir tamanho
+        # Exclusões para reduzir tamanho e acelerar análise
         "--exclude-module=matplotlib",
         "--exclude-module=scipy",
         "--exclude-module=numpy.testing",
@@ -102,6 +102,12 @@ def build():
         "--exclude-module=unittest",
         "--exclude-module=pydoc",
         "--exclude-module=doctest",
+        "--exclude-module=IPython",
+        "--exclude-module=notebook",
+        "--exclude-module=PIL._imagingtk",
+        "--exclude-module=PIL._webp",
+        "--exclude-module=PIL.ImageShow",
+        "--exclude-module=PIL.ImageQt",
 
         main_script
     ]

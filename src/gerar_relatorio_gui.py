@@ -241,7 +241,7 @@ class SentinelaApp:
         btns_frame.pack(pady=(10, 0))
         
         # Botão Baixar Nova Versão
-        url = "https://cgugovbr.sharepoint.com/:f:/s/oe-se-nep-cgusc-dados/IgBggKQKxBGNToxNlbA3m8I8ASbJqb4wpGVGjxrK6rxNrL8?e=LGYnUT"
+        url = "https://cgugovbr.sharepoint.com/sites/intracgu-sc/Documentos%20Compartilhados/Forms/AllItems.aspx?id=%2Fsites%2Fintracgu%2Dsc%2FDocumentos%20Compartilhados%2FSentinela%2FGerador%20de%20Relat%C3%B3rios&viewid=15b467ac%2Ddda9%2D4238%2Db989%2Dcd22a2d9d002&p=true&ct=1772215261067&or=Teams%2DHL&LOF=1"
         btn_baixar = tk.Button(
             btns_frame,
             text="📥 Baixar Nova Versão",
@@ -277,6 +277,85 @@ class SentinelaApp:
         
         # Bloquear o encerramento da janela pelo 'X' sem sair do app
         aviso.protocol("WM_DELETE_WINDOW", lambda: [self.root.destroy(), sys.exit(0)])
+
+    def _exibir_erro_conexao(self):
+        """Exibe uma janela personalizada de erro de conexão com o banco."""
+        erro_win = tk.Toplevel(self.root) 
+        erro_win.title("Erro de Conexão")
+        erro_win.geometry("500x350")
+        erro_win.resizable(False, False)
+        erro_win.configure(bg=COLORS['bg_dark'])
+        erro_win.lift()
+        erro_win.focus_force()
+        erro_win.grab_set()
+        
+        # Centralizar na tela
+        erro_win.update_idletasks()
+        x = (erro_win.winfo_screenwidth() // 2) - (250)
+        y = (erro_win.winfo_screenheight() // 2) - (175)
+        erro_win.geometry(f"+{x}+{y}")
+        
+        # Forçar modo escuro na barra de título
+        set_dark_title_bar(erro_win)
+        
+        # Container
+        content = tk.Frame(erro_win, bg=COLORS['bg_dark'], padx=30, pady=20)
+        content.pack(fill=tk.BOTH, expand=True)
+        
+        # Ícone de Erro
+        lbl_icon = tk.Label(
+            content, 
+            text="❌", 
+            font=("Segoe UI", 48), 
+            fg=COLORS['error'], 
+            bg=COLORS['bg_dark']
+        )
+        lbl_icon.pack(pady=(0, 10))
+        
+        # Título
+        lbl_titulo = tk.Label(
+            content,
+            text="Falha na Conexão",
+            font=("Segoe UI", 16, "bold"),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_dark']
+        )
+        lbl_titulo.pack()
+        
+        # Mensagem
+        msg = (
+            "Não foi possível conectar com o CGUData.\n\n"
+            "Por favor, verifique sua conexão com a Rede (VPN)\n"
+            "ou solicite acesso ao servidor SDH-DIE-BD."
+        )
+        
+        lbl_msg = tk.Label(
+            content,
+            text=msg,
+            font=("Segoe UI", 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_dark'],
+            justify=tk.CENTER,
+            pady=15
+        )
+        lbl_msg.pack()
+
+        # Botão OK
+        btn_ok = tk.Button(
+            content,
+            text="Entendido",
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS['button_bg'],
+            fg=COLORS['text_primary'],
+            activebackground=COLORS['button_hover'],
+            activeforeground=COLORS['text_primary'],
+            relief=tk.FLAT,
+            padx=30,
+            pady=8,
+            cursor="hand2",
+            command=erro_win.destroy
+        )
+        btn_ok.pack(pady=(10, 0))
 
     
     def _configurar_icone(self):
@@ -941,6 +1020,10 @@ class SentinelaApp:
             self._log(f"ERRO: Falha ao conectar ao banco de dados.", "error")
             self._log(f"Detalhes: {str(e)}", "error")
             self._log("\nVerifique se você tem acesso ao servidor SDH-DIE-BD e se a VPN está ativa.", "warning")
+            
+            # Exibir janela de erro na thread principal
+            self.root.after(0, self._exibir_erro_conexao)
+            
             self._finalizar_processamento(False)
             return
 

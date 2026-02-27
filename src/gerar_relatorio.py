@@ -87,8 +87,7 @@ def conectar_bd():
         return conn, cursor
     except pyodbc.Error as ex:
         logging.critical(f"CRÍTICO: Falha ao conectar ao banco de dados. Erro: {ex}")
-        print("ERRO CRÍTICO: Não foi possível conectar ao banco de dados.")
-        sys.exit(1)
+        raise ConnectionError(f"Não foi possível conectar ao banco de dados: {ex}")
 
 
 # =============================================================================
@@ -1136,7 +1135,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 'bold': True, 'font_size': 9, 'font_color': '#1F4E78',
                 'align': 'left', 'valign': 'bottom', 'bottom': 1
             })
-            ws_ind.merge_range('J18:R18', f"TOP 15 MAIORES RISCOS EM {mun_atual.upper()}", fmt_top15_header)
+            ws_ind.merge_range('J18:R18', f"TOP 15 PIORES FARMÁCIAS NO MUNICÍPIO DE {mun_atual.upper()}", fmt_top15_header)
 
             # Cabeçalhos da Tabela
             fmt_th = wb.add_format(
@@ -1424,8 +1423,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             med_br /= 100.0
 
                         # Lógica de Cores e Status (Matriz Específica)
-                        limiar_atencao = 3.0
-                        limiar_critico = 5.0
+                        limiar_atencao = 2.0
+                        limiar_critico = 3.0
                         
                         # Exceção para o Teto Máximo (Devido à alta concenctração da média em 60%)
                         if nome == "Dispensação em Teto Máximo":

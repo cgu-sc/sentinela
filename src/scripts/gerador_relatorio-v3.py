@@ -1,7 +1,7 @@
 """
 SENTINELA - Gerador de Relatórios a partir da Memória de Cálculo
 ================================================================
-Este script lê os dados compactados da tabela memoria_calculo_consolidada
+Este script lê os dados compactados da tabela memoria_calculo_consolidadaFP
 e gera relatórios Excel idênticos aos gerados pelo script original.
 
 Uso: python gerar_relatorio_memoria.py <CNPJ> [tipo_relatorio]
@@ -21,21 +21,6 @@ import pyodbc
 import pandas as pd
 import logging
 
-
-# Adiciona o diretório atual ao sys.path para garantir que os módulos locais sejam encontrados
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from aba_crm import (
-    buscar_dados_prescritores,
-    buscar_top20_prescritores,
-    gerar_aba_prescritores
-)
-from aba_falecidos import (
-    buscar_dados_falecidos,
-    gerar_aba_falecidos
-)
 # =============================================================================
 # CONFIGURAÇÃO DE LOGGING
 # =============================================================================
@@ -47,33 +32,11 @@ logging.basicConfig(
 # =============================================================================
 # CONSTANTES GLOBAIS
 # =============================================================================
-# Versão do Sistema (usada para verificação de atualização obrigatória)
-VERSION = "3.1.0"
-
 DATA_INICIAL_ANALISE = '2015-07-01'
 DATA_FINAL_ANALISE = datetime.strptime('2024-12-10', '%Y-%m-%d').date()
 CRITERIO_ESTOQUE_INICIAL = 'Critério para estimativa do estoque inicial: Soma das duas últimas aquisições, considerando os 6 meses anteriores à primeira venda.'
 
 
-
-
-data_referencia = pd.to_datetime(DATA_FINAL_ANALISE)
-
-
-# 2. Definir a função lógica
-def verificar_status(data_venda):
-    # Verifica se a data é válida (não é NaT/Null)
-    if pd.isnull(data_venda):
-        return 'Inativa'
-
-    # Calcula a diferença de dias
-    dias_sem_comprar = (data_referencia - data_venda).days
-
-    # Se a diferença for maior que 30 dias da data de corte, é Inativa
-    if dias_sem_comprar > 30:
-        return 'Inativa'
-    else:
-        return 'Ativa'
 # =============================================================================
 # FUNÇÃO: CONECTAR AO BANCO DE DADOS
 # =============================================================================
@@ -91,7 +54,8 @@ def conectar_bd():
         return conn, cursor
     except pyodbc.Error as ex:
         logging.critical(f"CRÍTICO: Falha ao conectar ao banco de dados. Erro: {ex}")
-        raise ConnectionError(f"Não foi possível conectar ao banco de dados: {ex}")
+        print("ERRO CRÍTICO: Não foi possível conectar ao banco de dados.")
+        sys.exit(1)
 
 
 # =============================================================================
@@ -103,12 +67,12 @@ def carregar_dados_auxiliares(cursor):
     dados_medicamentos = {}
     
     try:
-        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[fp].dados_farmacia')
+        cursor.execute('select cnpj, razaoSocial, municipio, uf from temp_CGUSC.[dbo].dadosFarmaciasFP')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_farmacias[row[0]] = dict(zip(cols, row))
         
-        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[fp].medicamentos_patologia')
+        cursor.execute('select codigo_barra, principio_ativo from temp_CGUSC.[dbo].medicamentosPatologiaFP')
         cols = [column[0] for column in cursor.description]
         for row in cursor.fetchall():
             dados_medicamentos[row[0]] = dict(zip(cols, row))
@@ -126,13 +90,13 @@ def carregar_dados_auxiliares(cursor):
 # =============================================================================
 def carregar_memoria_calculo(cursor, cnpj):
     """
-    Busca os dados compactados da tabela memoria_calculo_consolidada,
+    Busca os dados compactados da tabela memoria_calculo_consolidadaFP,
     descompacta e retorna como lista de dicionários.
     """
     try:
         cursor.execute('''
             SELECT TOP 1 dados_comprimidos, id_processamento
-            FROM temp_CGUSC.fp.memoria_calculo_consolidada 
+            FROM temp_CGUSC.dbo.memoria_calculo_consolidadaFP 
             WHERE cnpj = ?
             ORDER BY id_processamento DESC
         ''', cnpj)
@@ -184,7 +148,7 @@ def carregar_memoria_calculo(cursor, cnpj):
 def buscar_dados_risco(cursor, cnpj):
     """Busca os indicadores da Matriz de Risco."""
     try:
-        cursor.execute('SELECT * FROM temp_CGUSC.fp.matriz_risco_consolidada WHERE cnpj = ?', cnpj)
+        cursor.execute('SELECT * FROM temp_CGUSC.dbo.Matriz_Risco_Final WHERE cnpj = ?', cnpj)
         row = cursor.fetchone()
         
         if row:
@@ -196,59 +160,12 @@ def buscar_dados_risco(cursor, cnpj):
         logging.error(f"Erro ao buscar matriz de risco para {cnpj}: {e}")
         return None
 
-def buscar_top15_municipio(cursor, uf, municipio):
-
-    """
-    Busca as 15 farmácias com maior Score de Risco no município
-    """
-    try:
-        sql_top = """
-            SELECT TOP 15
-                M.rank_municipio,
-                M.razaoSocial,
-                M.SCORE_RISCO_FINAL,
-                M.CLASSIFICACAO_RISCO,  -- <--- CAMPO NOVO ADICIONADO
-                M.cnpj,
-                ISNULL(S.valor_sem_comprovacao, 0) as valor_sem_comprovacao,
-                ISNULL(S.valor_vendas, 0) as valor_vendas,
-                D.dataFinalDadosMovimentacao as data_ultima_venda
-            FROM temp_CGUSC.fp.matriz_risco_consolidada M
-            LEFT JOIN temp_CGUSC.fp.resultado_sentinela_2015_2024 S 
-                ON S.cnpj = M.cnpj
-            LEFT JOIN temp_CGUSC.fp.dados_farmacia D
-                ON M.cnpj = D.cnpj
-            WHERE M.uf = ? AND M.municipio = ?
-            ORDER BY M.SCORE_RISCO_FINAL DESC
-        """
-        cursor.execute(sql_top, (uf, municipio))
-        colunas = [column[0] for column in cursor.description]
-        top15_lista = [dict(zip(colunas, row)) for row in cursor.fetchall()]
-
-        # Busca o Total Financeiro do Município (Para o Share)
-        sql_total = """
-            SELECT SUM(valor_sem_comprovacao)
-            FROM temp_CGUSC.fp.resultado_sentinela_2015_2024
-            WHERE uf = ? AND municipio = ?
-        """
-        cursor.execute(sql_total, (uf, municipio))
-        row_total = cursor.fetchone()
-        total_financeiro_cidade = row_total[0] if row_total and row_total[0] else 0
-
-        return top15_lista, total_financeiro_cidade
-
-    except Exception as e:
-        print(f"⚠️ Erro ao buscar Top 15 Municipal: {e}")
-        return [], 0
-
-
 
 # =============================================================================
 # FUNÇÃO: GERAR RELATÓRIO DE MOVIMENTAÇÃO (ADAPTADA)
 # =============================================================================
-def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, cursor,
-                                dados_farmacias, dados_medicamentos, dados_risco=None,
-                                dados_prescritores=None, top20_prescritores=None,
-                                id_processamento=None, dados_falecidos=None):
+def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, cursor, 
+                                dados_farmacias, dados_medicamentos, dados_risco=None):
     """
     Gera o Excel processando a lista 'dados_memoria'.
     Versão adaptada para funcionar sem dependência do script original.
@@ -295,28 +212,28 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     # Carrega Dados Auxiliares do Estoque Inicial
     try:
         cursor.execute(
-            'select * from temp_CGUSC.[fp].estoque_inicial_notas where cnpj_estabelecimento = ? order by codigo_barra',
+            'select * from temp_CGUSC.[dbo].notas_estoque_inicialFP where cnpj_estabelecimento = ? order by codigo_barra',
             cnpj_analise)
-        estoque_inicial_notas = {}
+        notas_estoque_inicialFP = {}
         lista_temp = []
         codigo_barra_registro_anterior = -1
         for row in cursor.fetchall():
             codigo_barra_atual = row[2]
             if codigo_barra_atual != codigo_barra_registro_anterior:
-                estoque_inicial_notas[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
+                notas_estoque_inicialFP[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
                 lista_temp.clear()
             dt = row[3].strftime("%d/%m/%Y") if row[3] else ""
             lista_temp.append(f'NF {row[4]} - {dt} - | Qtde: {row[1]}')
             codigo_barra_registro_anterior = codigo_barra_atual
         if codigo_barra_registro_anterior != -1:
-            estoque_inicial_notas[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
+            notas_estoque_inicialFP[codigo_barra_registro_anterior] = copy.deepcopy(lista_temp)
     except:
-        estoque_inicial_notas = {}
+        notas_estoque_inicialFP = {}
 
     tabela_codigo_barra_estoque_inicial = {}
     try:
         cursor.execute(
-            'select codigo_barra, estoque_inicial from temp_CGUSC.[fp].estoque_inicial where cnpj_estabelecimento = ?',
+            'select codigo_barra, estoque_inicial from temp_CGUSC.[dbo].estoque_inicialFP where cnpj_estabelecimento = ?',
             cnpj_analise)
         tabela_codigo_barra_estoque_inicial = {row.codigo_barra: row.estoque_inicial for row in cursor.fetchall()}
     except:
@@ -350,17 +267,17 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             vendas_total_sem_comprovacao_cnpj += j.get('vendas_sem_comprovacao', 0)
             valor_total_cnpj += j.get('valor_movimentado', Decimal(0))
             valor_total_sem_comprovacao_cnpj += j.get('valor_sem_comprovacao', Decimal(0))
-            # dados_para_grafico.append({
-            #     'data': j['periodo_inicial'],
-            #     'valor_total': float(j['valor_movimentado']),
-            #     'valor_sem_comp': float(j['valor_sem_comprovacao'])
-            # })
+            dados_para_grafico.append({
+                'data': j['periodo_inicial'],
+                'valor_total': float(j['valor_movimentado']),
+                'valor_sem_comp': float(j['valor_sem_comprovacao'])
+            })
 
         if j['tipo'] == 'h':
             numero_vendas_gtin = 0
             cod = int(j['codigo_barra'])
             principio = dados_medicamentos.get(float(cod), {}).get('principio_ativo', 'DESCONHECIDO')
-            notas = ', '.join(estoque_inicial_notas.get(cod, []))
+            notas = ', '.join(notas_estoque_inicialFP.get(cod, []))
             est = tabela_codigo_barra_estoque_inicial.get(cod, 0)
             ultimo_estoque_valido = est
             j_copy = copy.deepcopy(j)
@@ -444,46 +361,27 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
         '_tipo_linha': 'total_geral'
     })
 
-
+    # Gráfico de Evolução
     df_analise = None
     try:
-        if id_processamento:
-            query_grafico = '''
-                    SELECT 
-                        periodo as data,
-                        SUM(valor_vendas) as valor_total,
-                        SUM(valor_sem_comprovacao) as valor_sem_comp
-                    FROM temp_CGUSC.fp.movimentacao_mensal_gtin
-                    WHERE id_processamento = ?
-                    GROUP BY periodo
-                    ORDER BY periodo
-                '''
-            df_temp = pd.read_sql(query_grafico, cursor.connection, params=[id_processamento])
+        if dados_para_grafico:
+            df_temp = pd.DataFrame(dados_para_grafico)
+            df_temp['data'] = pd.to_datetime(df_temp['data'])
+            df_temp = df_temp.set_index('data')
+            df_semestral = df_temp.resample('6MS').sum().reset_index()
 
-            if not df_temp.empty:
-                df_temp['data'] = pd.to_datetime(df_temp['data'])
-                df_temp = df_temp.set_index('data')
+            def format_semestre(date):
+                return f'{1 if date.month <= 6 else 2}S/{date.year}'
 
-                # Agrupa por Semestre (6 Meses)
-                df_semestral = df_temp.resample('6MS').sum().reset_index()
-
-                def format_semestre(date):
-                    return f'{1 if date.month <= 6 else 2}S/{date.year}'
-
-                df_semestral['periodo_fmt'] = df_semestral['data'].apply(format_semestre)
-                df_semestral['valor_com_comp'] = df_semestral['valor_total'] - df_semestral['valor_sem_comp']
-
-                df_semestral['pct_sem_comp_valor'] = (
-                        df_semestral['valor_sem_comp'] / df_semestral['valor_total'].replace(0, 1)
-                ).apply(lambda x: round(x, 4))
-
-                df_semestral['valor_sem_comp'] = df_semestral['valor_sem_comp'].round(2)
-                df_semestral['valor_total'] = df_semestral['valor_total'].round(2)
-
-                df_analise = df_semestral[
-                    ['periodo_fmt', 'valor_com_comp', 'valor_sem_comp', 'pct_sem_comp_valor', 'valor_total']]
+            df_semestral['periodo_fmt'] = df_semestral['data'].apply(format_semestre)
+            df_semestral['valor_com_comp'] = df_semestral['valor_total'] - df_semestral['valor_sem_comp']
+            df_semestral['pct_sem_comp_valor'] = (
+                df_semestral['valor_sem_comp'] / df_semestral['valor_total'].replace(0, 1)).apply(lambda x: round(x, 4))
+            df_semestral['valor_sem_comp'] = df_semestral['valor_sem_comp'].round(2)
+            df_semestral['valor_total'] = df_semestral['valor_total'].round(2)
+            df_analise = df_semestral[['periodo_fmt', 'valor_com_comp', 'valor_sem_comp', 'pct_sem_comp_valor', 'valor_total']]
     except Exception as e:
-        logging.error(f"Erro ao calcular dados do gráfico via SQL: {e}")
+        logging.error(f"Erro ao calcular dados do gráfico: {e}")
         df_analise = None
 
     if vendas_total_cnpj == 0:
@@ -493,16 +391,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
     # INÍCIO DA ESCRITA DO EXCEL
     # =================================================================
     output = f"{cnpj_analise} ({'Completo' if tipo_relatorio == 1 else 'Resumido'}).xlsx"
-    
-    try:
-        writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    except PermissionError:
-        print(f"\n❌ ERRO: O arquivo '{output}' parece estar aberto.")
-        print("   ⚠️  Por favor, FECHE O ARQUIVO EXCEL e tente novamente.")
-        return "ARQUIVO_ABERTO"
-    except Exception as e:
-        print(f"Erro ao criar arquivo Excel: {e}")
-        return "ERRO_CRIACAO"
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
 
     try:
         wb = writer.book
@@ -525,7 +414,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             'valign': 'vcenter', 'text_wrap': True, 'border': 1
         })
         fmt_venda_normal = wb.add_format({'bg_color': '#F1F7ED', 'align': 'left', 'valign': 'vcenter', 'border': 1})
-        fmt_venda_irregular = wb.add_format({'bg_color': '#FFEBEE', 'align': 'left', 'valign': 'vcenter', 'border': 1})
+        fmt_venda_irregular = wb.add_format({'bg_color': '#FCE4D6', 'align': 'left', 'valign': 'vcenter', 'border': 1})
         fmt_resumo = wb.add_format({
             'bold': True, 'bg_color': '#F2F2F2', 'font_color': 'black',
             'align': 'left', 'valign': 'vcenter', 'border': 1
@@ -552,17 +441,12 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             'align': 'right', 'valign': 'vcenter', 'num_format': 'R$ #,##0.00',
             'left': 2, 'right': 2, 'top': 2, 'bottom': 2
         })
-        fmt_cell_center = wb.add_format({
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1
-        })
         fmt_int_norm = wb.add_format({'num_format': '#,##0', 'align': 'right', 'bg_color': '#F1F7ED', 'border': 1})
-        fmt_int_irreg = wb.add_format({'num_format': '#,##0', 'align': 'right', 'bg_color': '#FFEBEE', 'border': 1})
+        fmt_int_irreg = wb.add_format({'num_format': '#,##0', 'align': 'right', 'bg_color': '#FCE4D6', 'border': 1})
         fmt_cur_norm = wb.add_format({'num_format': 'R$ #,##0.00', 'align': 'right', 'bg_color': '#F1F7ED', 'border': 1})
-        fmt_cur_irreg = wb.add_format({'num_format': 'R$ #,##0.00', 'align': 'right', 'bg_color': '#FFEBEE', 'border': 1})
+        fmt_cur_irreg = wb.add_format({'num_format': 'R$ #,##0.00', 'align': 'right', 'bg_color': '#FCE4D6', 'border': 1})
         fmt_cur_alert = wb.add_format({
-            'num_format': 'R$ #,##0.00', 'align': 'right', 'bg_color': '#FFEBEE',
+            'num_format': 'R$ #,##0.00', 'align': 'right', 'bg_color': '#FCE4D6',
             'font_color': '#C00000', 'bold': True, 'border': 1
         })
 
@@ -778,26 +662,18 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             chart2 = wb.add_chart({'type': 'area'})
             chart2.add_series({
-                # Mudou de $F$ (Porcentagem) para $E$ (Valor Irregular)
-                'name': f'=Evolucao_Financeira!$E${start_row + 1}',
+                'name': f'=Evolucao_Financeira!$F${start_row + 1}',
                 'categories': f'=Evolucao_Financeira!$B${start_row + 2}:$B${max_row}',
-                'values': f'=Evolucao_Financeira!$E${start_row + 2}:$E${max_row}',
-
-                'fill': {'color': '#B4C6E7'},
-                'border': {'color': '#203764', 'width': 2},
+                'values': f'=Evolucao_Financeira!$F${start_row + 2}:$F${max_row}',
+                'fill': {'color': '#B4C6E7'}, 'border': {'color': '#203764', 'width': 2},
                 'marker': {'type': 'circle', 'size': 5, 'fill': {'color': '#203764'}}
             })
-
-            # Atualiza o título para refletir que agora é R$
-            chart2.set_title({'name': 'Evolução dos Valores Irregulares (R$)'})
+            chart2.set_title({'name': 'Evolução do Percentual de Irregularidade (%)'})
             chart2.set_size({'width': 1000, 'height': 380})
-
-            # Removemos 'min': 0, 'max': 1.0 pois agora são valores monetários
             chart2.set_y_axis({
-                'name': 'Valor Irregular (R$)',
+                'name': '% Irregular', 'min': 0, 'max': 1.0,
                 'major_gridlines': {'visible': True, 'line': {'color': '#E0E0E0'}}
             })
-
             chart2.set_legend({'none': True})
             chart2.set_chartarea({'border': {'none': True}})
             ws_analise.insert_chart('H27', chart2, {'x_offset': 10, 'y_offset': 10})
@@ -875,517 +751,100 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             # Explicações Metodológicas (Profundas)
             explicacoes = {
-                "Vendas p/ Falecidos": "METODOLOGIA: Confronto direto entre a data da dispensação do medicamento e a data oficial de óbito registrada nas bases governamentais (SIM/SIRC/SISOBI).",
+                "Vendas p/ Falecidos": "METODOLOGIA: Confronto direto entre a data da dispensação do medicamento e a data oficial de óbito registrada nas bases governamentais (SIM/SIRC/SISOBI). A precisão é absoluta.\n\nRISCO: Este é um indicador de 'Tolerância Zero'. Um Risco Relativo (RR) acima de 1.0 é inadmissível, indicando falha grave de validação na ponta ou uso doloso e reiterado de base de dados de terceiros para simular vendas.",
 
-                "Incompatibilidade Patológica": "METODOLOGIA: Confronta a indicação terapêutica com os dados do beneficiário (Idade e Sexo). O indicador sinaliza dispensações que violam padrões esperados, aplicando quatro filtros: 1. Osteoporose em pacientes do sexo Masculino; 2. Parkinson em pacientes com menos de 50 anos; 3. Hipertensão em pacientes com menos de 20 anos; 4. Diabetes em pacientes com menos de 20 anos.",
+                "Inconsistência Clínica": "METODOLOGIA: Análise farmacológica que cruza a indicação terapêutica do medicamento dispensado com o perfil demográfico (Idade e Sexo) do paciente no cadastro do CPF. Exemplos: Osteoporose em homens jovens, Parkinson em crianças.\n\nRISCO: Um RR elevado sugere a utilização massiva de CPFs aleatórios apenas para preencher requisitos do sistema, sem a presença real do paciente ou prescrição válida.",
 
-                "Dispensação em Teto Máximo": "METODOLOGIA: Percentual de dispensações onde a quantidade vendida atinge exatamente o limite máximo permitido por medicamento. Em um cenário orgânico, as vendas variam conforme a necessidade.",
+                "Dispensação em Teto Máximo": "METODOLOGIA: Percentual de dispensações onde a quantidade vendida atinge exatamente o limite máximo mensal permitido pela Portaria do Ministério da Saúde. Em um cenário orgânico, as vendas variam conforme a necessidade.\n\nRISCO: Um RR > 5.0 indica comportamento robótico, onde o sistema busca extrair o valor financeiro máximo possível de cada CPF, ignorando a posologia real do tratamento.",
 
-                "4+ Itens por Autorização": "METODOLOGIA: Percentual de autorizações (cupons fiscais) que contêm 4 ou mais medicamentos distintos dispensados no mesmo ato.",
+                "Concentração de Dispensação Simultânea": "METODOLOGIA: Percentual de autorizações (cupons fiscais) que contêm 4 ou mais medicamentos distintos dispensados no mesmo ato.\n\nRISCO: Indica a formação artificial de 'cestas' de medicamentos para aumentar o ticket médio por transação, maximizando o lucro sobre cada CPF capturado indevidamente.",
 
-                "Itens por Autorização": "METODOLOGIA: Cálculo simples da quantidade média de itens dispensados por cupom fiscal (Total de Caixas / Total de Autorizações).",
+                "Média Itens/Autorização": "METODOLOGIA: Cálculo simples da quantidade média de itens dispensados por cupom fiscal (Total de Caixas / Total de Autorizações).\n\nRISCO: Médias muito superiores à do estado indicam prática sistêmica de 'empurroterapia' ou otimização de fraude para escoar estoque.",
 
-                "Valor do Ticket Médio": "METODOLOGIA: Valor monetário médio de cada autorização de venda.",
+                "Ticket Médio": "METODOLOGIA: Valor monetário médio de cada autorização de venda.\n\nRISCO: Valores anormais (RR > 3.0) indicam que a farmácia foca exclusivamente em produtos de alto custo (ex: fraldas geriátricas, medicamentos para asma), desprezando o mix natural de uma farmácia comunitária.",
 
-                "Faturamento Médio Mensal por Cliente": "METODOLOGIA: Faturamento médio mensal da farmácia dividido pelo número de CPFs distintos atendidos (normalizado pelo tempo de atividade).",
+                "Receita por Paciente": "METODOLOGIA: Faturamento total da farmácia dividido pelo número de CPFs distintos atendidos no período.\n\nRISCO: Um RR alto aponta para 'fidelidade artificial' ou 'esgotamento de cota', onde a farmácia extrai o limite financeiro máximo de uma base restrita de CPFs, em vez de atender uma comunidade ampla.",
 
-                "Venda Per Capita Mensal Municipal": "METODOLOGIA: Faturamento médio mensal da farmácia dividido pela população total do município (estimativa IBGE).",
+                "Densidade de Venda Municipal": "METODOLOGIA: Faturamento total da farmácia dividido pela população total do município (estimativa IBGE). Cria um valor 'per capita' de venda.\n\nRISCO: Valores per capita irreais (ex: R$ 500,00 por habitante da cidade) indicam inequivocamente que a farmácia está importando dados de beneficiários de outros municípios ou estados para justificar o volume de vendas.",
 
-                "Vendas Rápidas (<60s)": "METODOLOGIA: Percentual de vendas consecutivas realizadas em intervalo de tempo inferior a 60 segundos entre uma autorização e outra.",
+                "Vendas Rápidas (<60s)": "METODOLOGIA: Percentual de vendas consecutivas realizadas em intervalo de tempo inferior a 60 segundos entre uma autorização e outra.\n\nRISCO: Marcador definitivo de uso de robôs (scripts de automação) para inserção em massa de dados. É humanamente impossível realizar o atendimento, conferência e digitação nesse tempo.",
 
-                "Horário Atípico (Madrugada)": "METODOLOGIA: Volume percentual de vendas processadas entre 00h00 e 06h00.",
+                "Horário Atípico (Madrugada)": "METODOLOGIA: Volume percentual de vendas processadas entre 00h00 e 06h00.\n\nRISCO: Operação concentrada em horários de baixa fiscalização e baixo fluxo natural de clientes, característica comum em fraudes massivas automatizadas.",
 
-                "Dispersão Geográfica Interestadual": "METODOLOGIA: Percentual de vendas realizadas para pacientes cuja Unidade da Federação (UF) de residência difere da UF da farmácia.",
-
-                "Medicamentos de Alto Custo": "METODOLOGIA: Percentual do faturamento total da farmácia que provém exclusivamente de medicamentos classificados no topo da tabela de preços (90º percentil).",
-
-                "Concentração em Dias de Pico": "METODOLOGIA: Mede o percentual do faturamento mensal que ocorre concentrado nos 3 dias de maior movimento do mês. Farmácias normais diluem vendas.",
-
-                "Pacientes Únicos": "METODOLOGIA: Calcula a proporção de CPFs que realizaram apenas uma única compra durante todo o período analisado (2015-2024). Em um cenário legítimo de dispensação para doenças crônicas (diabetes, hipertensão, asma), espera-se recorrência natural dos pacientes ao longo dos anos.",
-
-                "Concentração de CRMs (HHI)": "METODOLOGIA: Utiliza o Índice Herfindahl-Hirschman (HHI) para medir a concentração de prescrições. Calcula a soma dos quadrados das participações de cada médico no faturamento da farmácia. O quadrado penaliza exponencialmente a concentração. Um HHI elevado indica que a farmácia depende excessivamente de poucos CRMs.",
-
-                "Exclusividade de CRMs":"Mede o percentual de médicos que atuam EXCLUSIVAMENTE nesta farmácia em todo o Brasil. Um CRM é considerado 'exclusivo' quando 100% de suas prescrições no programa Farmácia Popular são destinadas a um único estabelecimento.",
-
-                "Irregularidade de CRMs":"Identifica o percentual do faturamento vinculado a CRMs com irregularidades cadastrais. Duas anomalias são detectadas: (1) CRM/UF não localizado na base oficial do Conselho Federal de Medicina (CFM); (2) Prescrições realizadas ANTES da data de inscrição do médico no CFM. Ambas indicam uso de CRMs inexistentes ou fraudulentos."
-
+                "Dispersão Geográfica Interestadual": "METODOLOGIA: Percentual de vendas realizadas para pacientes cuja Unidade da Federação (UF) de residência difere da UF da farmácia.\n\nRISCO: Um RR alto sugere a compra ou vazamento de listas de dados de beneficiários de outros estados ('Turismo de Medicamento Virtual')."
             }
 
-            ws_ind.write('B2', "INDICADORES DE RISCO & FRAUDE", fmt_titulo)
+            ws_ind.write('B2', "MATRIZ DE RISCO & FRAUDE", fmt_titulo)
             ws_ind.write('B3', f"{dados_risco.get('razaoSocial', '')} | CNPJ: {cnpj_analise}", fmt_subtitulo)
-
-
-            # ws_ind.write('B4', f"{dados_risco.get('municipio', '')} - {dados_risco.get('uf', '')}", fmt_subtitulo)
-
-            # =================================================================
-            # NOVO: CABEÇALHO DEMOGRÁFICO ENRIQUECIDO
-            # =================================================================
-            mun = dados_risco.get('municipio', 'DESCONHECIDO')
-            uf = dados_risco.get('uf', '')
-
-            # Pega a população (agora vinda da coluna populacao2019 do SQL)
-            pop = int(dados_risco.get('populacao') or 0)
-
-            # Pega o total de farmácias na cidade
-            total_mun = int(dados_risco.get('total_municipio') or 0)
-
-            # Cálculo de Densidade (Habitantes por Farmácia)
-            # Ex: 50.000 hab / 10 farmácias = 5.000 pessoas para cada farmácia
-            densidade = int(pop / total_mun) if total_mun > 0 else 0
-
-            # Formatação de milhar (Ex: 12500 -> 12.500)
-            pop_fmt = f"{pop:,.0f}".replace(",", ".")
-
-            # Monta a string final com ícones
-            texto_demografico = f"📍 {mun} - {uf}   |   👥 População: {pop_fmt}   |   🏥 Estabelecimentos: {total_mun}   |   📊 Densidade: {densidade} hab/farmácia"
-
-            # Escreve na célula B4
-            ws_ind.write('B4', texto_demografico, fmt_subtitulo)
-            
-            # --- Link para Documentação ---
-            fmt_link_doc = wb.add_format({
-                'font_size': 9, 'font_color': 'blue', 'underline': True, 
-                'align': 'left', 'valign': 'top'
-            })
-            ws_ind.write_url('B5', 'https://cgu-sc.github.io/sentinela/', fmt_link_doc, string='📘 Acesse a Documentação')
-
-            # =================================================================
-
+            ws_ind.write('B4', f"{dados_risco.get('municipio', '')} - {dados_risco.get('uf', '')}", fmt_subtitulo)
 
             # CONCEITO DE RISCO RELATIVO (TEXTO EXPLICATIVO NO TOPO)
             texto_rr = (
                 "NOTA METODOLÓGICA: O Risco Relativo (RR) é um indexador estatístico que mensura a intensidade do desvio de comportamento. "
-                "Ele elimina distorções regionais comparando a farmácia com seus pares. O Score Geral é calculado pela média aritmética de 17 indicadores independentes. "
+                "Ele elimina distorções regionais comparando a farmácia com seus pares. "
                 "INTERPRETAÇÃO: RR < 1.0 (Sub-incidência/Normal); RR ≈ 1.0 (Padrão de Mercado); "
                 "RR 2.0 a 5.0 (Desvio Moderado/Atenção); RR > 5.0 (Anomalia Grave/Indício de Manipulação Sistêmica)."
             )
-            ws_ind.merge_range('B6:H8', texto_rr, wb.add_format({
+            ws_ind.merge_range('B5:H7', texto_rr, wb.add_format({
                 'font_size': 9, 'font_color': '#555555', 'italic': True, 'text_wrap': True,
                 'valign': 'top', 'border': 1, 'bg_color': '#FAFAFA'
             }))
 
-            # Score Geral (com multiplicadores de severidade)
-            score = float(dados_risco.get('SCORE_RISCO_FINAL', 0))
-            classificacao = dados_risco.get('CLASSIFICACAO_RISCO', 'RISCO BAIXO')
-
-            mapeamento_classificacao = {
-                'RISCO CRÍTICO': (COR_VERMELHO, '🔴 RISCO CRÍTICO'),
-                'RISCO CRITICO': (COR_VERMELHO, '🔴 RISCO CRÍTICO'),
-                'RISCO ALTO': (COR_VERMELHO, '🔴 RISCO ALTO'),
-                'RISCO MÉDIO': (COR_AMARELO, '🟡 RISCO MÉDIO'),
-                'RISCO MEDIO': (COR_AMARELO, '🟡 RISCO MÉDIO'),
-                'RISCO BAIXO': (COR_VERDE, '🟢 BAIXO RISCO'),
-                'RISCO MÍNIMO': (COR_VERDE, '🟢 RISCO MÍNIMO'),
-                'RISCO MINIMO': (COR_VERDE, '🟢 RISCO MÍNIMO')
-            }
-
-            classificacao_limpa = str(classificacao).upper().strip()
-            cor_score, txt_score = mapeamento_classificacao.get(classificacao_limpa, (COR_VERMELHO, '⚪ N/A'))
-
+            # Score Geral
+            score = float(dados_risco.get('SCORE_GERAL_RISCO', 0))
+            cor_score = COR_VERDE
+            txt_score = "BAIXO RISCO"
+            if score >= 2:
+                cor_score = COR_AMARELO
+                txt_score = "RISCO MÉDIO"
+            if score >= 5:
+                cor_score = COR_VERMELHO
+                txt_score = "ALTO RISCO"
 
             fmt_score_num = wb.add_format({
                 'bold': True, 'font_size': 48, 'align': 'center', 'valign': 'vcenter',
                 'font_color': cor_score, 'border': 0
             })
             fmt_score_txt = wb.add_format({
-                'bold': True, 'font_size': 12, 'align': 'center', 'valign': 'vcenter',
-                'font_color': cor_score, 'border': 0, 'text_wrap': True
+                'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'top',
+                'font_color': cor_score, 'border': 0
             })
-
-            ws_ind.merge_range('J2:O4', score, fmt_score_num)
-            ws_ind.merge_range('J5:O6', txt_score, fmt_score_txt)
-            ws_ind.merge_range('J7:O7', "SCORE GERAL", fmt_score_label)
-
-            # =================================================================
-            # NOVO: INDICADOR DE CONFIABILIDADE DOS DADOS (DATA QUALITY)
-            # =================================================================
-
-            # 1. Recupera o valor do banco (ALTA, MEDIA, BAIXA ou SEM_DADOS)
-            qualidade_dados = dados_risco.get('flag_qualidade_dados', 'SEM_DADOS')
-
-            # 2. Define a cor baseada na qualidade
-            cor_bg_qualidade = '#E2EFDA'  # Verde Claro (Padrão/Alta)
-            if qualidade_dados == 'MEDIA':
-                cor_bg_qualidade = '#FFF2CC'  # Amarelo Claro
-            elif qualidade_dados in ('BAIXA', 'SEM_DADOS'):
-                cor_bg_qualidade = '#FFC7CE'  # Vermelho Claro
-
-            # 3. Cria o formato do "Selo"
-            fmt_badge_qualidade = wb.add_format({
-                'bold': True,
-                'font_size': 9,
-                'align': 'center',
-                'valign': 'vcenter',
-                'border': 1,
-                'bg_color': cor_bg_qualidade,
-                'font_color': '#333333'
-            })
-
-            # 4. Escreve na planilha (Logo abaixo do rótulo "SCORE GERAL")
-            # Usando merge_range para ocupar as colunas I, J e K na linha 9 (índice 8)
-            ws_ind.merge_range('J9:O9', f"CONFIABILIDADE DOS DADOS: {qualidade_dados}", fmt_badge_qualidade)
-
-            rank_nacional = int(dados_risco.get('rank_nacional') or 0)
-            total_nacional = int(dados_risco.get('total_nacional') or 0)
-            rank_uf = int(dados_risco.get('rank_uf') or 0)
-            total_uf = int(dados_risco.get('total_uf') or 0)
-
-            rank_municipio = int(dados_risco.get('rank_municipio', 0))
-            total_mun = int(dados_risco.get('total_municipio') or 0)
-            media_cidade = float(dados_risco.get('avg_score_municipio', 0))
-
-            uf_atual = dados_risco.get('uf', '')
-            mun_atual = dados_risco.get('municipio', 'MUNICÍPIO')
-
-            # 2. Cálculos de Percentil e Multiplicador
-            pct_top_nacional = (rank_nacional / total_nacional * 100.0) if total_nacional > 0 else 0
-            vezes_pior = (score / media_cidade) if media_cidade > 0 else 1.0
-
-            # 3. Definir Cores (Regra Unificada: Se é crítico no Estado/País, o card todo fica vermelho)
-            eh_critico = (rank_nacional > 0 and rank_nacional <= 100) or (
-                        pct_top_nacional > 0 and pct_top_nacional <= 1.0)
-            eh_alerta = (rank_nacional > 0 and rank_nacional <= 1000) or (
-                        pct_top_nacional > 0 and pct_top_nacional <= 5.0)
-
-            # Se for Líder no Município ou tiver score muito alto vs média, também força o alerta visual
-            if rank_municipio == 1 or vezes_pior >= 2.0:
-                eh_alerta = True
-            if rank_municipio == 1 and eh_alerta:
-                # Se for lider e já estava em alerta, considera critico para destaque
-                eh_critico = True
-
-            bg_rank = '#F2F2F2'  # Cinza Claro (Neutro)
-            font_rank = '#333333'  # Cinza Escuro
-
-            if eh_critico:
-                bg_rank = '#FFC7CE'  # Vermelho Claro
-                font_rank = '#9C0006'
-            elif eh_alerta:
-                bg_rank = '#FFF2CC'  # Amarelo Claro
-                font_rank = '#9C5700'
-
-            # 4. Formatação do Card Unificado
-            # Título
-            fmt_rank_titulo = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'top': 1, 'left': 1, 'right': 1
-            })
-            # Linhas Intermediárias
-            fmt_rank_linha = wb.add_format({
-                'font_size': 9, 'align': 'left', 'valign': 'vcenter', 'indent': 1,
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1
-            })
-            # Linha de Ênfase (Negrito)
-            fmt_rank_bold = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'left', 'valign': 'vcenter', 'indent': 1,
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1
-            })
-            # Rodapé (Fecha borda)
-            fmt_rank_fim = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1, 'bottom': 1
-            })
-
-            # 5. Escrita das Linhas (J11 a J16)
-
-            # Cabeçalho
-            ws_ind.merge_range('J11:O11', "RANKING & COMPARATIVO DE RISCO", fmt_rank_titulo)
-
-            # Linha 1: Nacional
-            txt_nac = f"🇧🇷 Nacional: #{rank_nacional} de {total_nacional} (Top {pct_top_nacional:.2f}%)"
-            ws_ind.merge_range('J12:O12', txt_nac, fmt_rank_linha)
-
-            # Linha 2: Estadual
-            txt_uf = f"🚩 Estadual ({uf_atual}): #{rank_uf} de {total_uf}"
-            ws_ind.merge_range('J13:O13', txt_uf, fmt_rank_linha)
-
-            # Linha 3: Municipal (Nova)
-            txt_mun = f"🏙️ Municipal ({mun_atual}): #{rank_municipio} de {total_mun}"
-            ws_ind.merge_range('J14:O14', txt_mun, fmt_rank_linha)
-
-            # Linha 4: Comparativo Média (Nova)
-            txt_media = f"📊 Score {score} é {vezes_pior:.1f}x a média local ({media_cidade:.1f})"
-            ws_ind.merge_range('J15:O15', txt_media, fmt_rank_linha)
-
-            # Linha 5: Flag Final (Nova - Líder ou Status)
-            if rank_municipio == 1:
-                txt_status = "🥇 ESTABELECIMENTO LÍDER EM RISCO NO MUNICÍPIO"
-            elif vezes_pior >= 1.5:
-                txt_status = "⚠️ ACIMA DA MÉDIA MUNICIPAL"
-            else:
-                txt_status = "✅ DENTRO DA MÉDIA MUNICIPAL"
-
-            ws_ind.merge_range('J16:O16', txt_status, fmt_rank_fim)
-
-            # =================================================================
-            # TABELA TOP 15 (COM COLUNA RISCO - J18)
-            # =================================================================
-
-            # =================================================================
-            # TABELA TOP 15 (ESTENDIDA ATÉ COLUNA R - J18)
-            # =================================================================
-
-            # 1. Buscar os dados no banco
-            top15_lista, total_dinheiro_cidade = buscar_top15_municipio(cursor, uf, mun)
-            total_dinheiro_cidade = float(total_dinheiro_cidade) if total_dinheiro_cidade else 0.0
-
-            # Título (Agora vai até R18)
-            fmt_top15_header = wb.add_format({
-                'bold': True, 'font_size': 9, 'font_color': '#1F4E78',
-                'align': 'left', 'valign': 'bottom', 'bottom': 1
-            })
-            ws_ind.merge_range('J18:R18', f"TOP 15 PIORES FARMÁCIAS NO MUNICÍPIO DE {mun_atual.upper()}", fmt_top15_header)
-
-            # Cabeçalhos da Tabela
-            fmt_th = wb.add_format(
-                {'bold': True, 'font_size': 8, 'align': 'center', 'bg_color': '#F2F2F2', 'border': 1})
-            fmt_th_esq = wb.add_format(
-                {'bold': True, 'font_size': 8, 'align': 'left', 'bg_color': '#F2F2F2', 'border': 1})
-
-            # LAYOUT DE COLUNAS ESTENDIDO (J até R)
-            ws_ind.write('J19', "RANK", fmt_th)  # J
-            ws_ind.merge_range('K19:M19', "FARMÁCIA", fmt_th_esq)  # K-L-M (3 Colunas restauradas)
-            ws_ind.write('N19', "RISCO", fmt_th)  # N
-            ws_ind.write('O19', "CONEXÃO", fmt_th)  # O
-            ws_ind.write('P19', "R$ S/ COMP.", fmt_th)  # P
-            ws_ind.merge_range('Q19:R19', "% S/ COMP.", fmt_th)  # Q-R
-
-            linha_atual = 18
-
-            # Formatos
-            bg_destaque = '#FFF2CC'
-            font_destaque = '#9C0006'
-
-            meu_cnpj_limpo = str(cnpj_analise).strip()
-            meu_share = 0.0
-
-            if top15_lista:
-                for idx, item in enumerate(top15_lista):
-                    linha_atual += 1
-
-                    cnpj_item = str(item.get('cnpj', '')).strip()
-                    eh_eu = (cnpj_item == meu_cnpj_limpo)
-
-                    if eh_eu:
-                        val_meu = float(item.get('valor_sem_comprovacao', 0))
-                        meu_share = (val_meu / total_dinheiro_cidade * 100.0) if total_dinheiro_cidade > 0 else 0
-
-                    # --- LÓGICA DE DESTAQUE ---
-                    # 1. Negrito se for eu
-                    is_bold = True if eh_eu else False
-
-                    # 2. Borda Normal (1) e Preta (Padrão)
-                    # Se quiser borda grossa, mude para 2. Se quiser "normal", é 1.
-                    border_style = 1
-                    border_color = '#000000'
-
-                    # Formatos base da linha
-                    f_base = {
-                        'font_size': 8,
-                        'border': border_style,
-                        'border_color': border_color,
-                        'bold': is_bold,
-                        'bg_color': '#FFFFFF',
-                        'font_color': '#000000'
-                    }
-
-                    f_c = wb.add_format({**f_base, 'align': 'center'})
-                    f_l = wb.add_format({**f_base, 'align': 'left'})
-                    f_m = wb.add_format({**f_base, 'align': 'right', 'num_format': '#,##0'})
-                    f_p = wb.add_format({**f_base, 'align': 'center', 'num_format': '0.00%'})
-
-                    # --- LÓGICA DA SETA NA COLUNA I ---
-                    seta_char = "►" if eh_eu else ""
-
-                    f_seta = wb.add_format({
-                        'font_size': 14,
-                        'bold': True,
-                        'font_color': '#FF0000',  # <--- SETA VERMELHA (COMO ANTES)
-                        'align': 'right',
-                        'valign': 'vcenter',
-                        'bg_color': '#FFFFFF',
-                        'border': 0
-                    })
-
-                    # --- LÓGICA DE RISCO (5 NÍVEIS) ---
-                    # --- LÓGICA DE RISCO (5 NÍVEIS) ---
-                    raw_risco = str(item.get('CLASSIFICACAO_RISCO', '')).upper().strip()
-
-                    txt_risco = "N/A"
-                    bg_risco = '#F2F2F2'
-                    font_risco = '#000000'
-
-                    if raw_risco in ('RISCO CRÍTICO', 'RISCO CRITICO'):
-                        txt_risco = "CRÍTICO"
-                        bg_risco = '#FFC7CE'  # Vermelho "Forte" (Padrão Excel Bad)
-                        font_risco = '#9C0006'
-
-                    elif raw_risco == 'RISCO ALTO':
-                        txt_risco = "ALTO"
-                        bg_risco = '#FFE1E1'  # <--- VERMELHO MAIS CLARO
-                        font_risco = '#9C0006'  # Fonte Vinho (mesma do crítico para leitura)
-
-                    elif raw_risco in ('RISCO MÉDIO', 'RISCO MEDIO'):
-                        txt_risco = "MÉDIO"
-                        bg_risco = '#FFF2CC'  # Amarelo
-                        font_risco = '#9C5700'
-
-                    elif raw_risco in ('RISCO MÍNIMO', 'RISCO MINIMO'):
-                        txt_risco = "MÍNIMO"
-                        bg_risco = '#F6FAF4'
-                        font_risco = '#548235'
-
-                    elif raw_risco == 'RISCO BAIXO':
-                        txt_risco = "BAIXO"
-                        bg_risco = '#E2EFDA'
-                        font_risco = '#006100'
-
-                    f_risco = wb.add_format({
-                        'font_size': 7, 'bold': True, 'align': 'center',
-                        'border': border_style,
-                        'border_color': border_color,
-                        'bg_color': bg_risco, 'font_color': font_risco
-                    })
-
-                    # --- LÓGICA DE STATUS ---
-                    data_bd = item.get('data_ultima_venda')
-                    status_texto = "-"
-                    cor_status_bg = '#F2F2F2'
-                    cor_status_font = '#000000'
-
-                    if data_bd:
-                        if isinstance(data_bd, str):
-                            try:
-                                data_bd = datetime.strptime(data_bd, '%Y-%m-%d').date()
-                            except:
-                                pass
-                        if isinstance(data_bd, datetime): data_bd = data_bd.date()
-                        if isinstance(data_bd, date):
-                            try:
-                                dias_sem_comprar = (DATA_FINAL_ANALISE - data_bd).days
-                                if dias_sem_comprar > 30:
-                                    status_texto = "INATIVA"
-                                    cor_status_bg = '#FFC7CE'
-                                    cor_status_font = '#9C0006'
-                                else:
-                                    status_texto = "ATIVA"
-                                    cor_status_bg = '#E2EFDA'
-                                    cor_status_font = '#006100'
-                            except:
-                                status_texto = "ERRO"
-
-                    f_status = wb.add_format({
-                        'font_size': 7, 'bold': True, 'align': 'center',
-                        'border': border_style,
-                        'border_color': border_color,
-                        'bg_color': cor_status_bg, 'font_color': cor_status_font
-                    })
-
-                    # Dados
-                    nome_raw = item.get('razaoSocial', '')
-                    nome = nome_raw[:28] + '...' if len(nome_raw) > 28 else nome_raw
-
-                    score_item = float(item.get('SCORE_RISCO_FINAL', 0))
-                    val_irreg = float(item.get('valor_sem_comprovacao', 0))
-                    val_mov = float(item.get('valor_vendas', 0))
-                    pct_irregular = (val_irreg / val_mov) if val_mov > 0 else 0.0
-
-                    # --- ESCRITA NAS CÉLULAS ---
-
-                    # 1. SETA (Coluna I / Index 8)
-                    ws_ind.write(linha_atual, 8, seta_char, f_seta)
-
-                    # 2. Tabela (Coluna J / Index 9 em diante)
-                    ws_ind.write(linha_atual, 9, f"#{item.get('rank_municipio')}", f_c)
-                    ws_ind.merge_range(linha_atual, 10, linha_atual, 12, f"{nome} ({score_item:.1f})", f_l)
-                    ws_ind.write(linha_atual, 13, txt_risco, f_risco)
-                    ws_ind.write(linha_atual, 14, status_texto, f_status)
-                    ws_ind.write(linha_atual, 15, val_irreg, f_m)
-                    ws_ind.merge_range(linha_atual, 16, linha_atual, 17, pct_irregular, f_p)
-
-                # Data Bars (Cols 16 e 17 / Q e R)
-                ws_ind.conditional_format(19, 16, linha_atual, 17, {
-                    'type': 'data_bar', 'bar_color': '#63C384', 'bar_solid': True,
-                    'min_type': 'num', 'min_value': 0, 'max_type': 'num', 'max_value': 1, 'bar_no_border': True
-                })
-            else:
-                # Merge até a coluna 17 (R)
-                ws_ind.merge_range(linha_atual + 1, 9, linha_atual + 1, 17, "Sem dados comparativos.", fmt_cell_center)
-                linha_atual += 1
-
-            # Impacto Financeiro (Merge até a coluna 17 / R)
-            linha_atual += 2
-            if meu_share > 1.0:
-                fmt_share_box = wb.add_format(
-                    {'border': 1, 'align': 'left', 'valign': 'top', 'text_wrap': True, 'font_size': 8,
-                     'bg_color': '#FCE4D6'})
-                fmt_share_title = wb.add_format({'bold': True, 'font_color': '#C00000', 'font_size': 9})
-                val_mi = total_dinheiro_cidade / 1_000_000.0
-                txt_valor_total = f"R$ {val_mi:.1f} Milhões" if val_mi >= 1 else f"R$ {total_dinheiro_cidade / 1000:.0f} Mil"
-                msg_share = f"Esta farmácia concentra {meu_share:.1f}% de todo o valor sem comprovação ({txt_valor_total}) detectado no município de {mun}."
-                ws_ind.merge_range(linha_atual, 9, linha_atual + 2, 17, "", fmt_share_box)
-                ws_ind.write_rich_string(linha_atual, 9, fmt_share_title, "⚠️ IMPACTO FINANCEIRO:\n", fmt_share_box,
-                                         msg_share, fmt_share_box)
-
-
-
-
-
-            # =================================================================
-            # FIM DO NOVO BLOCO
-            # =================================================================
+            ws_ind.merge_range('I2:K4', score, fmt_score_num)
+            ws_ind.merge_range('I5:K5', txt_score, fmt_score_txt)
+            ws_ind.write('I6', "SCORE GERAL (0-10+)", fmt_score_label)
 
             # Grupos de Indicadores
             grupos = [
                 ("1. ELEGIBILIDADE & CLÍNICA", [
                     ("Vendas p/ Falecidos", "pct_falecidos", "avg_falecidos_uf", "avg_falecidos_br",
                      "risco_falecidos_uf", "risco_falecidos_br", "pct"),
-                    ("Incompatibilidade Patológica", "pct_clinico", "avg_clinico_uf", "avg_clinico_br",
+                    ("Inconsistência Clínica", "pct_clinico", "avg_clinico_uf", "avg_clinico_br",
                      "risco_clinico_uf", "risco_clinico_br", "pct")
                 ]),
                 ("2. PADRÕES DE QUANTIDADE", [
                     ("Dispensação em Teto Máximo", "pct_teto", "avg_teto_uf", "avg_teto_br",
                      "risco_teto_uf", "risco_teto_br", "pct"),
-                    ("4+ Itens por Autorização", "pct_polimedicamento", "avg_polimedicamento_uf",
+                    ("Concentração de Dispensação Simultânea", "pct_polimedicamento", "avg_polimedicamento_uf",
                      "avg_polimedicamento_br", "risco_polimedicamento_uf", "risco_polimedicamento_br", "pct"),
-                    ("Itens por Autorização", "val_media_itens", "avg_media_itens_uf", "avg_media_itens_br",
+                    ("Média Itens/Autorização", "val_media_itens", "avg_media_itens_uf", "avg_media_itens_br",
                      "risco_media_itens_uf", "risco_media_itens_br", "dec")
                 ]),
                 ("3. PADRÕES FINANCEIROS", [
-                    ("Valor do Ticket Médio", "val_ticket_medio", "avg_ticket_uf", "avg_ticket_br",
+                    ("Ticket Médio", "val_ticket_medio", "avg_ticket_uf", "avg_ticket_br",
                      "risco_ticket_uf", "risco_ticket_br", "val"),
-                    ("Faturamento Médio Mensal por Cliente", "val_receita_paciente", "avg_receita_paciente_uf",
+                    ("Receita por Paciente", "val_receita_paciente", "avg_receita_paciente_uf",
                      "avg_receita_paciente_br", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
-                    ("Venda Per Capita Mensal Municipal", "val_per_capita", "avg_per_capita_uf", "avg_per_capita_br",
-                     "risco_per_capita_uf", "risco_per_capita_br", "val"),
-                    ("Medicamentos de Alto Custo", "pct_alto_custo", "avg_alto_custo_uf", "avg_alto_custo_br",
-                     "risco_alto_custo_uf", "risco_alto_custo_br", "pct")
+                    ("Densidade de Venda Municipal", "val_per_capita", "avg_per_capita_uf", "avg_per_capita_br",
+                     "risco_per_capita_uf", "risco_per_capita_br", "val")
                 ]),
                 ("4. AUTOMAÇÃO & GEOGRAFIA", [
                     ("Vendas Rápidas (<60s)", "pct_vendas_rapidas", "avg_vendas_rapidas_uf", "avg_vendas_rapidas_br",
                      "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
                     ("Horário Atípico (Madrugada)", "pct_madrugada", "avg_madrugada_uf", "avg_madrugada_br",
                      "risco_madrugada_uf", "risco_madrugada_br", "pct"),
-                    ("Concentração em Dias de Pico", "pct_pico", "avg_pico_uf", "avg_pico_br",
-                     "risco_pico_uf", "risco_pico_br", "pct"),
                     ("Dispersão Geográfica Interestadual", "pct_geografico", "avg_geografico_uf", "avg_geografico_br",
-                     "risco_geografico_uf", "risco_geografico_br", "pct"),
-                    ("Pacientes Únicos", "pct_pacientes_unicos", "avg_pacientes_unicos_uf", "avg_pacientes_unicos_br",
-                     "risco_pacientes_unicos_uf", "risco_pacientes_unicos_br", "pct")
-                ]),
-                ("5. INTEGRIDADE MÉDICA", [
-                    ("Concentração de CRMs (HHI)", "val_hhi_crm", "avg_hhi_crm_uf", "avg_hhi_crm_br",
-                     "risco_crm_uf", "risco_crm_br", "dec"),
-                    ("Exclusividade de CRMs", "pct_exclusividade_crm", "avg_exclusividade_crm_uf",
-                     "avg_exclusividade_crm_br",
-                     "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs", "pct_crms_irregulares", "avg_crms_irregulares_uf", "avg_crms_irregulares_br",
-                     "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct")
-                ]),
+                     "risco_geografico_uf", "risco_geografico_br", "pct")
+                ])
             ]
 
             row = 9
@@ -1402,77 +861,28 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 row += 1
 
                 for nome, col_val, col_med_uf, col_med_br, col_r_uf, col_r_br, tipo_fmt in indicadores:
+                    valor = float(dados_risco.get(col_val, 0) or 0)
+                    med_uf = float(dados_risco.get(col_med_uf, 0) or 0)
+                    med_br = float(dados_risco.get(col_med_br, 0) or 0)
+                    r_uf = float(dados_risco.get(col_r_uf, 0) or 0)
+                    r_br = float(dados_risco.get(col_r_br, 0) or 0)
 
-                    # --- NOVA LÓGICA DE DADOS AUSENTES ---
-                    raw_valor = dados_risco.get(col_val)
-                    raw_med_uf = dados_risco.get(col_med_uf)
-                    raw_med_br = dados_risco.get(col_med_br)
-                    raw_r_uf = dados_risco.get(col_r_uf)
-                    raw_r_br = dados_risco.get(col_r_br)
+                    if tipo_fmt == 'pct':
+                        valor /= 100.0
+                        med_uf /= 100.0
+                        med_br /= 100.0
 
-                    # Se o valor principal for None, consideramos SEM DADOS
-                    tem_dados = (raw_valor is not None)
+                    fmt_usado = fmt_pct_ind if tipo_fmt == 'pct' else fmt_val if tipo_fmt == 'val' else fmt_dec
 
-                    if tem_dados:
-                        valor = float(raw_valor)
-                        med_uf = float(raw_med_uf or 0)
-                        med_br = float(raw_med_br or 0)
-                        r_uf = float(raw_r_uf or 0)
-                        r_br = float(raw_r_br or 0)
-
-                        if tipo_fmt == 'pct':
-                            valor /= 100.0
-                            med_uf /= 100.0
-                            med_br /= 100.0
-
-                        # Lógica de Cores e Status (Matriz Específica)
-                        limiar_atencao = 2.0
-                        limiar_critico = 3.0
-                        
-                        # Exceção para o Teto Máximo (Devido à alta concenctração da média em 60%)
-                        if nome == "Dispensação em Teto Máximo":
-                            limiar_atencao = 1.2  # Ex: 60% * 1.2 = 72%
-                            limiar_critico = 1.3  # Ex: 60% * 1.4 = 84%
-                        # Exceção para Medicamentos de Alto Custo (Média em torno de 35%)
-                        elif nome == "Medicamentos de Alto Custo":
-                            limiar_atencao = 1.4  # Ex: 35% * 1.6 = 56%
-                            limiar_critico = 1.7  # Ex: 35% * 2.0 = 70%
-                        # Exceção para Concentração em Dias de Pico (Média em torno de 27%)
-                        elif nome == "Concentração em Dias de Pico":
-                            limiar_atencao = 1.6  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
-                            limiar_critico = 2.0  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
-                        # Exceção para Pacientes Únicos (Média em torno de 41%)
-                        elif nome == "Pacientes Únicos":
-                            limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
-                            limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
-                        
-                        # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
-                        risco_base = round(r_uf, 1) 
-                        
-                        fmt_risco_usado = fmt_risco_verde
-                        texto_status = "NORMAL"
-                        if risco_base >= limiar_atencao:
-                            fmt_risco_usado = fmt_risco_amarelo
-                            texto_status = "ATENÇÃO"
-                        if risco_base >= limiar_critico:
-                            fmt_risco_usado = fmt_risco_vermelho
-                            texto_status = "CRÍTICO"
-
-                        fmt_usado = fmt_pct_ind if tipo_fmt == 'pct' else fmt_val if tipo_fmt == 'val' else fmt_dec
-
-                    else:
-                        # Caso SEM DADOS
-                        valor = "-"
-                        med_uf = "-"
-                        med_br = "-"
-                        r_uf = "-"
-                        r_br = "-"
-                        texto_status = "SEM DADOS"
-
-                        # Formato neutro para texto
-                        fmt_usado = wb.add_format(
-                            {'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_color': '#808080'})
-                        fmt_risco_usado = fmt_usado
+                    risco_base = r_uf
+                    fmt_risco_usado = fmt_risco_verde
+                    texto_status = "NORMAL"
+                    if risco_base >= 2:
+                        fmt_risco_usado = fmt_risco_amarelo
+                        texto_status = "ATENÇÃO"
+                    if risco_base >= 5:
+                        fmt_risco_usado = fmt_risco_vermelho
+                        texto_status = "CRÍTICO"
 
                     # Adiciona ícone se houver explicação
                     nome_display = f"{nome} ℹ️" if nome in explicacoes else nome
@@ -1485,6 +895,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ws_ind.write(row, 6, r_br, fmt_risco_usado)
                     ws_ind.write(row, 7, texto_status, fmt_header_col)
 
+                    # Comentário explicativo
                     if nome in explicacoes:
                         ws_ind.write_comment(row, 1, explicacoes[nome],
                                              {'width': 400, 'height': 120, 'font_name': 'Tahoma', 'font_size': 9})
@@ -1496,28 +907,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             ws_ind.set_column('C:E', 15)
             ws_ind.set_column('F:G', 15)
             ws_ind.set_column('H:H', 12)
-
-
-        if dados_prescritores:
-            try:
-                gerar_aba_prescritores(wb, cnpj_analise, dados_prescritores, top20_prescritores or [])
-                print("   ✅ Aba 'Prescritores' gerada")
-            except Exception as e:
-                logging.error(f"Erro ao gerar aba de prescritores: {e}")
-                print(f"   ⚠️ Erro na aba de prescritores: {e}")
-
-        if dados_falecidos:
-            try:
-                gerar_aba_falecidos(
-                    wb, cnpj_analise, dados_falecidos,
-                    dados_farmacias,
-                    valor_total_auditado=float(valor_total_cnpj)
-                )
-                print("   ✅ Aba 'Falecidos' gerada")
-            except Exception as e:
-                logging.error(f"Erro ao gerar aba de falecidos: {e}")
-                print(f"   ⚠️ Erro na aba de falecidos: {e}")
-
 
     except Exception as e:
         print(f"\n❌ ERRO AO SALVAR EXCEL {output}: {e}")
@@ -1533,27 +922,21 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
     return "SALVO"
 
+
 # =============================================================================
 # FUNÇÃO PRINCIPAL
 # =============================================================================
 def main():
     if len(sys.argv) < 2:
         print("=" * 60)
-        print("SENTINELA v8 - Gerador de Relatórios")
+        print("SENTINELA - Gerador de Relatórios a partir da Memória")
         print("=" * 60)
-        print("\nUso: python gerar_relatorio_memoriav8.py <CNPJ> [tipo_relatorio]")
+        print("\nUso: python gerar_relatorio_memoria.py <CNPJ> [tipo_relatorio]")
         print("\nParâmetros:")
         print("  CNPJ           - CNPJ da farmácia (apenas números)")
         print("  tipo_relatorio - 1 = Completo (padrão), 2 = Resumido")
-        print("\nAbas geradas:")
-        print("  1. Movimentação de Estoque")
-        print("  2. Evolução Financeira")
-        print("  3. Indicadores de Risco")
-        print("  4. Análise de Prescritores")
-        print("  5. Falecidos (condicional — só aparece se houver registros)")
-
         print("\nExemplo:")
-        print("  python gerar_relatorio_memoriav8.py 98669864000103 1")
+        print("  python gerar_relatorio_memoria.py 98669864000103 1")
         print("=" * 60)
         sys.exit(1)
 
@@ -1561,7 +944,7 @@ def main():
     tipo_relatorio = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
     print("=" * 60)
-    print("SENTINELA v8 - Gerador de Relatórios")
+    print("SENTINELA - Gerador de Relatórios a partir da Memória")
     print("=" * 60)
     print(f"\nCNPJ: {cnpj}")
     print(f"Tipo: {'Completo' if tipo_relatorio == 1 else 'Resumido'}")
@@ -1590,38 +973,16 @@ def main():
         print("\n📈 Buscando indicadores de risco...")
         dados_risco = buscar_dados_risco(cursor, cnpj)
         if dados_risco:
-            print(f"   ✅ Score de risco: {dados_risco.get('SCORE_RISCO_FINAL', 'N/A')}")
+            print(f"   ✅ Score de risco: {dados_risco.get('SCORE_GERAL_RISCO', 'N/A')}")
         else:
             print("   ⚠️ Dados de risco não encontrados")
-
-        # Buscar dados de prescritores
-        print("\n👨‍⚕️ Buscando dados de prescritores...")
-        dados_prescritores = buscar_dados_prescritores(cursor, cnpj)
-        top20_prescritores = buscar_top20_prescritores(cursor, cnpj)
-        if dados_prescritores:
-            print(f"   ✅ Score de prescritores: {dados_prescritores.get('score_prescritores', 'N/A')}")
-            print(f"   ✅ Top 20: {len(top20_prescritores)} prescritores encontrados")
-        else:
-            print("   ⚠️ Dados de prescritores não encontrados")
-
-        # Buscar dados de falecidos
-        print("\n☠️  Buscando vendas para falecidos...")
-        dados_falecidos = buscar_dados_falecidos(cursor, cnpj)
-        if dados_falecidos:
-            print(f"   ✅ {len(dados_falecidos)} transação(ões) de falecidos encontradas")
-        else:
-            print("   ℹ️ Nenhuma venda para falecidos (aba não será gerada)")
 
         # Gerar relatório
         print("\n📝 Gerando relatório Excel...")
         resultado = gerarRelatorioMovimentacao(
             cnpj, dados_memoria, tipo_relatorio, cursor,
-            dados_farmacias, dados_medicamentos, dados_risco,
-            dados_prescritores, top20_prescritores,
-            id_processamento=id_proc,
-            dados_falecidos=dados_falecidos
+            dados_farmacias, dados_medicamentos, dados_risco
         )
-
 
         if resultado == "SEM_VENDAS":
             print("\n⚠️ CNPJ sem vendas no período analisado.")
@@ -1644,4 +1005,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

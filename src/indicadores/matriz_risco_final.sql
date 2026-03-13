@@ -1,17 +1,17 @@
-USE [temp_CGUSC]
+ÔªøUSE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
--- SCRIPT: Matriz de Risco Final - Vers„o 5.5 (VISUAL REAL / C¡LCULO CAPADO)
--- OBJETIVO: ConsolidaÁ„o, Score de Risco, Rankings e ClassificaÁ„o
--- MUDAN«AS:
---   1. VisualizaÁ„o: Mostra o Risco Relativo REAL (ex: 34x) na tabela final.
---   2. C·lculo: Aplica TETO DE 10x internamente apenas para calcular o Score e Multiplicadores.
---   3. MantÈm a lÛgica de "Sem Dados" (NULL) nas colunas originais.
+-- SCRIPT: Matriz de Risco Final - Vers√£o 5.5 (VISUAL REAL / C√ÅLCULO CAPADO)
+-- OBJETIVO: Consolida√ß√£o, Score de Risco, Rankings e Classifica√ß√£o
+-- MUDAN√áAS:
+--   1. Visualiza√ß√£o: Mostra o Risco Relativo REAL (ex: 34x) na tabela final.
+--   2. C√°lculo: Aplica TETO DE 10x internamente apenas para calcular o Score e Multiplicadores.
+--   3. Mant√©m a l√≥gica de "Sem Dados" (NULL) nas colunas originais.
 -- ==========================================================================================
 
 SET NOCOUNT ON;
-PRINT '>> INICIANDO GERA«√O DA MATRIZ DE RISCO V5.5...';
+PRINT '>> INICIANDO GERA√á√ÉO DA MATRIZ DE RISCO V5.5...';
 
 -- 1. LIMPEZA DE AMBIENTE
 IF OBJECT_ID('temp_CGUSC.fp.matriz_risco_consolidada', 'U') IS NOT NULL
@@ -20,7 +20,7 @@ BEGIN
     PRINT '   > Tabela anterior removida.';
 END;
 
--- 2. CTE 1: CONSOLIDA«√O DOS DADOS BRUTOS (VALORES REAIS PARA EXIBI«√O)
+-- 2. CTE 1: CONSOLIDA√á√ÉO DOS DADOS BRUTOS (VALORES REAIS PARA EXIBI√á√ÉO)
 ;WITH IndicadoresPresenca AS (
     SELECT 
         F.cnpj,
@@ -30,10 +30,10 @@ END;
         CAST(F.uf AS VARCHAR(2)) AS uf,
         F.situacaoCadastral,
         
-        -- POPULA«√O
+        -- POPULA√á√ÉO
         ISNULL(F.populacao2019, 0) AS populacao,
 
-        -- FLAGS DE PRESEN«A
+        -- FLAGS DE PRESEN√áA
         CASE WHEN I01.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_falecidos,
         CASE WHEN I02.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_clinico,
         CASE WHEN I03.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_teto,
@@ -48,81 +48,81 @@ END;
         CASE WHEN I12.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_alto_custo,
         CASE WHEN I13.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_pico,
         CASE WHEN I14.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_fantasma,
-        CASE WHEN I15.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crm,
+        CASE WHEN I15.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crm,
         CASE WHEN I16.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_exclusividade_crm,
         CASE WHEN I17.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crms_irregulares,
         
         -- ====================================================================================
-        -- DADOS ORIGINAIS REAIS (SEM TETO AQUI - PARA EXIBI«√O NO RELAT”RIO)
+        -- DADOS ORIGINAIS REAIS (SEM TETO AQUI - PARA EXIBI√á√ÉO NO RELAT√ìRIO)
         -- ====================================================================================
         
         I01.percentual_falecidos AS pct_falecidos,
-        I01.media_estado AS avg_falecidos_uf, I01.media_pais AS avg_falecidos_br,
-        I01.risco_relativo_uf AS risco_falecidos_uf, I01.risco_relativo_br AS risco_falecidos_br,
+        I01.estado_media AS avg_falecidos_uf, I01.pais_media AS avg_falecidos_br,
+        I01.risco_relativo_uf_media AS risco_falecidos_uf, I01.risco_relativo_br_media AS risco_falecidos_br,
         
-        I02.percentual_demografico AS pct_clinico,
-        I02.media_estado AS avg_clinico_uf, I02.media_pais AS avg_clinico_br,
-        I02.risco_relativo_uf AS risco_clinico_uf, I02.risco_relativo_br AS risco_clinico_br,
+        I02.percentual_inconsistencia AS pct_clinico,
+        I02.estado_media AS avg_clinico_uf, I02.pais_media AS avg_clinico_br,
+        I02.risco_relativo_uf_media AS risco_clinico_uf, I02.risco_relativo_br_media AS risco_clinico_br,
 
         I03.percentual_teto AS pct_teto,
-        I03.media_estado AS avg_teto_uf, I03.media_pais AS avg_teto_br,
-        I03.risco_relativo_uf AS risco_teto_uf, I03.risco_relativo_br AS risco_teto_br,
+        I03.estado_media AS avg_teto_uf, I03.pais_media AS avg_teto_br,
+        I03.risco_relativo_uf_media AS risco_teto_uf, I03.risco_relativo_br_media AS risco_teto_br,
 
         I04.percentual_polimedicamento AS pct_polimedicamento,
-        I04.media_estado AS avg_polimedicamento_uf, I04.media_pais AS avg_polimedicamento_br,
-        I04.risco_relativo_uf AS risco_polimedicamento_uf, I04.risco_relativo_br AS risco_polimedicamento_br,
+        I04.estado_media AS avg_polimedicamento_uf, I04.pais_media AS avg_polimedicamento_br,
+        I04.risco_relativo_uf_media AS risco_polimedicamento_uf, I04.risco_relativo_br_media AS risco_polimedicamento_br,
 
         I05.media_itens_autorizacao AS val_media_itens,
-        I05.media_estado AS avg_media_itens_uf, I05.media_pais AS avg_media_itens_br,
-        I05.risco_relativo_uf AS risco_media_itens_uf, I05.risco_relativo_br AS risco_media_itens_br,
+        I05.estado_media AS avg_media_itens_uf, I05.pais_media AS avg_media_itens_br,
+        I05.risco_relativo_uf_media AS risco_media_itens_uf, I05.risco_relativo_br_media AS risco_media_itens_br,
 
         I06.valor_ticket_medio AS val_ticket_medio,
-        I06.media_estado AS avg_ticket_uf, I06.media_pais AS avg_ticket_br,
-        I06.risco_relativo_uf AS risco_ticket_uf, I06.risco_relativo_br AS risco_ticket_br,
+        I06.estado_media AS avg_ticket_uf, I06.pais_media AS avg_ticket_br,
+        I06.risco_relativo_uf_media AS risco_ticket_uf, I06.risco_relativo_br_media AS risco_ticket_br,
 
         I07.receita_por_paciente_mensal AS val_receita_paciente,
-        I07.media_mensal_estado AS avg_receita_paciente_uf, I07.media_mensal_pais AS avg_receita_paciente_br,
-        I07.risco_relativo_uf AS risco_receita_paciente_uf, I07.risco_relativo_br AS risco_receita_paciente_br,
+        I07.estado_media AS avg_receita_paciente_uf, I07.pais_media AS avg_receita_paciente_br,
+        I07.risco_relativo_uf_media AS risco_receita_paciente_uf, I07.risco_relativo_br_media AS risco_receita_paciente_br,
 
         I08.valor_per_capita_mensal AS val_per_capita,
-        I08.media_mensal_estado AS avg_per_capita_uf, I08.media_mensal_pais AS avg_per_capita_br,
-        I08.risco_relativo_uf AS risco_per_capita_uf, I08.risco_relativo_br AS risco_per_capita_br,
+        I08.estado_media AS avg_per_capita_uf, I08.pais_media AS avg_per_capita_br,
+        I08.risco_relativo_uf_media AS risco_per_capita_uf, I08.risco_relativo_br_media AS risco_per_capita_br,
 
         I09.percentual_vendas_consecutivas AS pct_vendas_rapidas,
-        I09.media_estado AS avg_vendas_rapidas_uf, I09.media_pais AS avg_vendas_rapidas_br,
-        I09.risco_relativo_uf AS risco_vendas_rapidas_uf, I09.risco_relativo_br AS risco_vendas_rapidas_br,
+        I09.estado_media AS avg_vendas_rapidas_uf, I09.pais_media AS avg_vendas_rapidas_br,
+        I09.risco_relativo_uf_media AS risco_vendas_rapidas_uf, I09.risco_relativo_br_media AS risco_vendas_rapidas_br,
 
         I10.percentual_madrugada AS pct_madrugada,
-        I10.media_estado AS avg_madrugada_uf, I10.media_pais AS avg_madrugada_br,
-        I10.risco_relativo_uf AS risco_madrugada_uf, I10.risco_relativo_br AS risco_madrugada_br,
+        I10.estado_media AS avg_madrugada_uf, I10.pais_media AS avg_madrugada_br,
+        I10.risco_relativo_uf_media AS risco_madrugada_uf, I10.risco_relativo_br_media AS risco_madrugada_br,
 
         I11.percentual_geografico AS pct_geografico,
-        I11.media_estado AS avg_geografico_uf, I11.media_pais AS avg_geografico_br,
-        I11.risco_relativo_uf AS risco_geografico_uf, I11.risco_relativo_br AS risco_geografico_br,
+        I11.estado_media AS avg_geografico_uf, I11.pais_media AS avg_geografico_br,
+        I11.risco_relativo_uf_media AS risco_geografico_uf, I11.risco_relativo_br_media AS risco_geografico_br,
 
         I12.percentual_alto_custo AS pct_alto_custo,
-        I12.media_estado AS avg_alto_custo_uf, I12.media_pais AS avg_alto_custo_br,
-        I12.risco_relativo_uf AS risco_alto_custo_uf, I12.risco_relativo_br AS risco_alto_custo_br,
+        I12.estado_media AS avg_alto_custo_uf, I12.pais_media AS avg_alto_custo_br,
+        I12.risco_relativo_uf_media AS risco_alto_custo_uf, I12.risco_relativo_br_media AS risco_alto_custo_br,
 
-        I13.percentual_concentracao_pico AS pct_pico,
-        I13.media_estado AS avg_pico_uf, I13.media_pais AS avg_pico_br,
-        I13.risco_relativo_uf AS risco_pico_uf, I13.risco_relativo_br AS risco_pico_br,
+        I13.media_concentracao AS pct_pico,
+        I13.estado_media AS avg_pico_uf, I13.pais_media AS avg_pico_br,
+        I13.risco_relativo_uf_media AS risco_pico_uf, I13.risco_relativo_br_media AS risco_pico_br,
 
         I14.percentual_pacientes_unicos AS pct_pacientes_unicos,
-        I14.media_estado AS avg_pacientes_unicos_uf, I14.media_pais AS avg_pacientes_unicos_br,
-        I14.risco_relativo_uf AS risco_pacientes_unicos_uf, I14.risco_relativo_br AS risco_pacientes_unicos_br,
+        I14.estado_media AS avg_pacientes_unicos_uf, I14.pais_media AS avg_pacientes_unicos_br,
+        I14.risco_relativo_uf_media AS risco_pacientes_unicos_uf, I14.risco_relativo_br_media AS risco_pacientes_unicos_br,
 
         CAST(I15.indice_hhi AS DECIMAL(18,2)) AS val_hhi_crm,
         CAST(I15.media_hhi_uf AS DECIMAL(18,2)) AS avg_hhi_crm_uf, CAST(I15.media_hhi_br AS DECIMAL(18,2)) AS avg_hhi_crm_br,
         I15.risco_hhi_uf AS risco_crm_uf, I15.risco_hhi_br AS risco_crm_br,
 
         I16.percentual_exclusividade AS pct_exclusividade_crm,
-        I16.media_estado AS avg_exclusividade_crm_uf, I16.media_pais AS avg_exclusividade_crm_br,
-        I16.risco_relativo_uf AS risco_exclusividade_crm_uf, I16.risco_relativo_br AS risco_exclusividade_crm_br,
+        I16.estado_media AS avg_exclusividade_crm_uf, I16.pais_media AS avg_exclusividade_crm_br,
+        I16.risco_relativo_uf_media AS risco_exclusividade_crm_uf, I16.risco_relativo_br_media AS risco_exclusividade_crm_br,
 
         I17.pct_risco_irregularidade AS pct_crms_irregulares,
-        I17.media_estado AS avg_crms_irregulares_uf, I17.media_pais AS avg_crms_irregulares_br,
-        I17.risco_relativo_uf AS risco_crms_irregulares_uf, I17.risco_relativo_br AS risco_crms_irregulares_br
+        I17.estado_media AS avg_crms_irregulares_uf, I17.pais_media AS avg_crms_irregulares_br,
+        I17.risco_relativo_uf_media AS risco_crms_irregulares_uf, I17.risco_relativo_br_media AS risco_crms_irregulares_br
         
     FROM temp_CGUSC.fp.dados_farmacia F
     LEFT JOIN temp_CGUSC.fp.indicador_falecidos_detalhado I01 ON I01.cnpj = F.cnpj
@@ -139,12 +139,12 @@ END;
     LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_pacientes_unicos_detalhado I14 ON I14.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.nu_cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_detalhado I16 ON I16.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
 ),
 
--- 3. CTE 2: C¡LCULO DE SCORE COM TETO (AQUI … A M¡GICA)
+-- 3. CTE 2: C√ÅLCULO DE SCORE COM TETO (AQUI √â A M√ÅGICA)
 RiscosAjustados AS (
     SELECT 
         *,
@@ -153,7 +153,7 @@ RiscosAjustados AS (
          tem_madrugada + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
          tem_crm + tem_exclusividade_crm + tem_crms_irregulares) AS qtd_indicadores_preenchidos,
         
-        -- L”GICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO C¡LCULO
+        -- L√ìGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO C√ÅLCULO
         
         -- 1. FALECIDOS
         CASE 
@@ -164,7 +164,7 @@ RiscosAjustados AS (
         END AS risco_falecidos_ajustado,
         CASE WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_uf > 10 THEN 10 ELSE ISNULL(risco_falecidos_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_falecidos_critico,
         
-        -- 2. CLÕNICO
+        -- 2. CL√çNICO
         CASE 
             WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) >= 5 THEN (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) * 3
             WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) >= 3 THEN (CASE WHEN risco_clinico_uf > 10 THEN 10 ELSE ISNULL(risco_clinico_uf,0) END) * 2
@@ -311,13 +311,13 @@ RiscosAjustados AS (
     FROM IndicadoresPresenca
 ),
 
--- 4. CTE 3: CONSOLIDA«√O DOS RISCOS (SOMA)
+-- 4. CTE 3: CONSOLIDA√á√ÉO DOS RISCOS (SOMA)
 ScoreCalculado AS (
     SELECT 
         *,
         CAST(qtd_indicadores_preenchidos * 100.0 / 17.0 AS DECIMAL(5,2)) AS pct_completude,
         
-        -- Soma dos riscos ajustados (J¡ COM TETO APLICADO NA ETAPA ANTERIOR)
+        -- Soma dos riscos ajustados (J√Å COM TETO APLICADO NA ETAPA ANTERIOR)
         (risco_falecidos_ajustado + risco_clinico_ajustado + risco_teto_ajustado +
          risco_polimedicamento_ajustado + risco_media_itens_ajustado + risco_ticket_ajustado +
          risco_receita_paciente_ajustado + risco_per_capita_ajustado + risco_vendas_rapidas_ajustado +
@@ -326,7 +326,7 @@ ScoreCalculado AS (
          risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado
         ) AS soma_riscos_ajustados,
         
-        -- Contagem de flags crÌticos
+        -- Contagem de flags cr√≠ticos
         (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
          flag_polimedicamento_critico + flag_media_itens_critico + flag_ticket_critico +
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
@@ -337,7 +337,7 @@ ScoreCalculado AS (
     FROM RiscosAjustados
 ),
 
--- 5. CTE 4: C¡LCULO DOS SCORES FINAIS
+-- 5. CTE 4: C√ÅLCULO DOS SCORES FINAIS
 ScoreCalculadoFim AS (
     SELECT
         *,
@@ -347,7 +347,7 @@ ScoreCalculadoFim AS (
             THEN soma_riscos_ajustados / (qtd_indicadores_preenchidos * 1.0) ELSE 0 END 
         AS DECIMAL(18,4)) AS SCORE_BASE,
 
-        -- Score Final (com bÙnus de reincidÍncia aplicados)
+        -- Score Final (com b√¥nus de reincid√™ncia aplicados)
         CAST(
             CASE WHEN qtd_indicadores_preenchidos > 0 THEN
                 (soma_riscos_ajustados / (qtd_indicadores_preenchidos * 1.0)) *
@@ -371,19 +371,19 @@ ScoreCalculadoFim AS (
         -- Lista textual de problemas
         LTRIM(RTRIM(
             CASE WHEN flag_falecidos_critico = 1 THEN 'Falecidos, ' ELSE '' END +
-            CASE WHEN flag_clinico_critico = 1 THEN 'ClÌnico, ' ELSE '' END +
+            CASE WHEN flag_clinico_critico = 1 THEN 'Cl√≠nico, ' ELSE '' END +
             CASE WHEN flag_teto_critico = 1 THEN 'Teto, ' ELSE '' END +
             CASE WHEN flag_polimedicamento_critico = 1 THEN 'Polimedicamento, ' ELSE '' END +
-            CASE WHEN flag_media_itens_critico = 1 THEN 'MÈdia Itens, ' ELSE '' END +
-            CASE WHEN flag_ticket_critico = 1 THEN 'Ticket MÈdio, ' ELSE '' END +
+            CASE WHEN flag_media_itens_critico = 1 THEN 'M√©dia Itens, ' ELSE '' END +
+            CASE WHEN flag_ticket_critico = 1 THEN 'Ticket M√©dio, ' ELSE '' END +
             CASE WHEN flag_receita_paciente_critico = 1 THEN 'Receita/Paciente, ' ELSE '' END +
             CASE WHEN flag_per_capita_critico = 1 THEN 'Per Capita, ' ELSE '' END +
-            CASE WHEN flag_vendas_rapidas_critico = 1 THEN 'Vendas R·pidas, ' ELSE '' END +
+            CASE WHEN flag_vendas_rapidas_critico = 1 THEN 'Vendas R√°pidas, ' ELSE '' END +
             CASE WHEN flag_madrugada_critico = 1 THEN 'Madrugada, ' ELSE '' END +
-            CASE WHEN flag_geografico_critico = 1 THEN 'Geogr·fico, ' ELSE '' END +
+            CASE WHEN flag_geografico_critico = 1 THEN 'Geogr√°fico, ' ELSE '' END +
             CASE WHEN flag_alto_custo_critico = 1 THEN 'Alto Custo, ' ELSE '' END +
             CASE WHEN flag_pico_critico = 1 THEN 'Pico, ' ELSE '' END +
-            CASE WHEN flag_pacientes_unicos_critico = 1 THEN 'Pacientes ⁄nicos, ' ELSE '' END +
+            CASE WHEN flag_pacientes_unicos_critico = 1 THEN 'Pacientes √önicos, ' ELSE '' END +
             CASE WHEN flag_crm_critico = 1 THEN 'CRM HHI, ' ELSE '' END +
             CASE WHEN flag_exclusividade_crm_critico = 1 THEN 'Exclusividade CRM, ' ELSE '' END +
             CASE WHEN flag_crms_irregulares_critico = 1 THEN 'CRMs Irregulares, ' ELSE '' END + ''
@@ -391,32 +391,32 @@ ScoreCalculadoFim AS (
     FROM ScoreCalculado
 ),
 
--- 6. CTE 5: CLASSIFICA«√O FINAL
+-- 6. CTE 5: CLASSIFICA√á√ÉO FINAL
 ClassificacaoFinal AS (
     SELECT 
         *,
         CASE 
-            -- 1. CRÕTICO (Fraude SistÍmica)
+            -- 1. CR√çTICO (Fraude Sist√™mica)
             WHEN qtd_indicadores_criticos >= 3 THEN 'RISCO CRITICO'
 
             -- 2. ALTO (2 problemas graves OU Score alto)
             WHEN qtd_indicadores_criticos >= 2 THEN 'RISCO ALTO'
             WHEN SCORE_RISCO_FINAL >= 4.0 THEN 'RISCO ALTO' 
 
-            -- 3. M…DIO (1 problema grave OU Score moderado)
+            -- 3. M√âDIO (1 problema grave OU Score moderado)
             WHEN qtd_indicadores_criticos = 1 THEN 'RISCO MEDIO'
             WHEN SCORE_RISCO_FINAL >= 2.0 THEN 'RISCO MEDIO'
 
             -- 4. BAIXO
             WHEN SCORE_RISCO_FINAL >= 1.0 THEN 'RISCO BAIXO'
 
-            -- 5. MÕNIMO
+            -- 5. M√çNIMO
             ELSE 'RISCO MINIMO'
         END AS CLASSIFICACAO_RISCO
     FROM ScoreCalculadoFim
 )
 
--- 7. SELE«√O FINAL E CRIA«√O DA TABELA FÕSICA
+-- 7. SELE√á√ÉO FINAL E CRIA√á√ÉO DA TABELA F√çSICA
 SELECT 
     S.*,
     
@@ -426,11 +426,11 @@ SELECT
     RANK() OVER (PARTITION BY uf ORDER BY SCORE_RISCO_FINAL DESC) AS rank_uf,
     COUNT(*) OVER (PARTITION BY uf) AS total_uf,
     
-    -- INTELIG NCIA MUNICIPAL
+    -- INTELIG√äNCIA MUNICIPAL
     RANK() OVER (PARTITION BY uf, municipio ORDER BY SCORE_RISCO_FINAL DESC) AS rank_municipio,
     COUNT(*) OVER (PARTITION BY uf, municipio) AS total_municipio,
     
-    -- ESTATÕSTICAS LOCAIS
+    -- ESTAT√çSTICAS LOCAIS
     CAST(AVG(SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS avg_score_municipio,
     CAST(MAX(SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS max_score_municipio,
 
@@ -443,9 +443,9 @@ FROM ClassificacaoFinal S;
 PRINT '   > Tabela temp_CGUSC.fp.matriz_risco_consolidada (V5.5) criada com sucesso.';
 
 -- ============================================================================
--- CRIA«√O DE ÕNDICES OTIMIZADOS
+-- CRIA√á√ÉO DE √çNDICES OTIMIZADOS
 -- ============================================================================
-PRINT '   > Recriando Ìndices...';
+PRINT '   > Recriando √≠ndices...';
 
 CREATE CLUSTERED INDEX IDX_MatrizFinal_CNPJ 
     ON temp_CGUSC.fp.matriz_risco_consolidada(cnpj);
@@ -458,11 +458,11 @@ CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Municipio
     ON temp_CGUSC.fp.matriz_risco_consolidada(uf, municipio, SCORE_RISCO_FINAL DESC)
     INCLUDE (rank_municipio, avg_score_municipio);
 
-PRINT '>> PROCESSO CONCLUÕDO COM SUCESSO.';
+PRINT '>> PROCESSO CONCLU√çDO COM SUCESSO.';
 GO
 
 -- ============================================================================
--- VALIDA«√O R¡PIDA
+-- VALIDA√á√ÉO R√ÅPIDA
 -- ============================================================================
 SELECT CLASSIFICACAO_RISCO, COUNT(*) as Qtd, 
        CAST(AVG(SCORE_RISCO_FINAL) as DECIMAL(10,2)) as Media_Score,
@@ -472,7 +472,7 @@ FROM temp_CGUSC.fp.matriz_risco_consolidada
 GROUP BY CLASSIFICACAO_RISCO
 ORDER BY Media_Score DESC;
 
-select top 100 *  FROM temp_CGUSC.fp.matriz_risco_consolidada where municipio = 'FlorianÛpolis' 
+select top 100 *  FROM temp_CGUSC.fp.matriz_risco_consolidada where municipio = 'Florian√≥polis' 
 
 
 select top 10 * from dados_farmacia

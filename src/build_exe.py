@@ -1,5 +1,5 @@
 """
-Script de Build - Gerador de Relatórios do Sentinela v3
+Script de Build - Gerador de Relatórios do Sentinela v3.2.0
 =======================================================
 Este script gera o executável usando PyInstaller.
 
@@ -17,8 +17,14 @@ import os
 def build():
     """Executa o build do executável."""
     
+    if sys.stdout.encoding != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
+    
     print("=" * 60)
-    print("BUILD - Gerador de Relatórios do Sentinela v3")
+    print("BUILD - Gerador de Relatórios do Sentinela v3.2.0")
     print("=" * 60)
     
     # Verifica se PyInstaller está instalado
@@ -43,6 +49,8 @@ def build():
     # Caminhos dos arquivos
     main_script = os.path.join(current_dir, "gerar_relatorio_gui.py")
     gerador_script = os.path.join(current_dir, "gerar_relatorio.py")
+    aba_crm_script = os.path.join(current_dir, "aba_crm.py")
+    aba_falecidos_script = os.path.join(current_dir, "aba_falecidos.py")
     icon_file = os.path.join(current_dir, "Icone.ico")
     logo_file = os.path.join(current_dir, "logo_sentinela.png")
     
@@ -82,6 +90,8 @@ def build():
         "--windowed",                         # Sem console
         "--name=SentinelaRelatorios",         # Nome do executável
         f"--add-data={gerador_script};.",     # Inclui o módulo gerador
+        f"--add-data={aba_crm_script};.",     # Inclui o módulo CRM
+        f"--add-data={aba_falecidos_script};.", # Inclui o módulo Falecidos
         # "--clean",                            # Removido para acelerar builds subsequentes usando cache
         "--noconfirm",                        # Não pede confirmação
         "--hidden-import=pyodbc",
@@ -89,6 +99,7 @@ def build():
         "--hidden-import=xlsxwriter",  # usado pelo ExcelWriter
         "--hidden-import=secrets",
         "--hidden-import=aba_crm",
+        "--hidden-import=aba_falecidos",
 
         # Exclusões para reduzir tamanho e acelerar análise
         "--exclude-module=matplotlib",
@@ -136,15 +147,10 @@ def build():
             print(f"\n📦 Executável gerado: {exe_path}")
             print(f"📏 Tamanho: {size_mb:.1f} MB")
         
-        print("\n📝 Para distribuir, copie:")
-        print(f"   - dist/SentinelaRelatorios.exe")
-        print("\n⚠️  Lembre-se: O executável requer acesso ao servidor SDH-DIE-BD")
-        
         return True
     else:
         print("\n❌ ERRO NO BUILD!")
         return False
-
-
+        
 if __name__ == "__main__":
     build()

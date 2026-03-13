@@ -90,9 +90,10 @@ BEGIN
                 MAX(F.uf) AS uf_farmacia
             INTO #VendasTemp
             FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A WITH(NOLOCK)
-            INNER JOIN temp_CGUSC.fp.medicamentos_patologia Pat ON Pat.codigo_barra = A.codigo_barra
             INNER JOIN temp_CGUSC.fp.dados_farmacia F WITH(NOLOCK) ON F.cnpj = A.cnpj
             INNER JOIN db_CPF.dbo.CPF B WITH(NOLOCK) ON B.CPF = A.cpf
+            INNER JOIN temp_CGUSC.fp.medicamentos_patologia Pat ON Pat.codigo_barra = A.codigo_barra
+
             WHERE A.cnpj = @CNPJAtual AND A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
             GROUP BY A.num_autorizacao;
 
@@ -133,72 +134,135 @@ BEGIN
     WHERE situacao IN (0, 3) AND tentativas < 3;
 END
 
--- ============================================================================
--- PASSO 4: CONSOLIDAÇÃO FINAL (MÉDIAS PONDERADAS E MEDIANAS)
--- EXECUTADO APENAS QUANDO TODOS FOREM PROCESSADOS
--- ============================================================================
-IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_controle_geografico WHERE situacao IN (0, 1))
-BEGIN
-    PRINT 'Todos os lotes concluídos. Iniciando Consolidação Final com Média e Mediana...';
 
-    -- 4.1 Métricas Municipais
+    -- ========================================================================
+    -- PASSO 3: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+    -- ========================================================================
+    PRINT 'PASSO 3: Calculando metricas por municipio...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_mun;
-    SELECT DISTINCT 
-        CAST(F.uf AS VARCHAR(2)) AS uf, 
+
+    SELECT DISTINCT
+        CAST(F.uf        AS VARCHAR(2))   AS uf,
         CAST(F.municipio AS VARCHAR(255)) AS municipio,
-        CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_geografico) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) AS DECIMAL(18,4)) AS mediana_municipio,
-        CAST(CASE WHEN SUM(I.total_vendas_monitoradas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) > 0 
-                  THEN (CAST(SUM(I.qtd_vendas_outra_uf) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) AS DECIMAL(18,2)) / SUM(I.total_vendas_monitoradas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))) * 100.0 
-                  ELSE 0 END AS DECIMAL(18,4)) AS media_municipio
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_geografico)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AS DECIMAL(18,4)) AS mediana_municipio,
+        CAST(
+            AVG(I.percentual_geografico)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AS DECIMAL(18,4)) AS media_municipio
     INTO temp_CGUSC.fp.indicador_geografico_mun
     FROM temp_CGUSC.fp.indicador_geografico I
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
 
-    -- 4.2 Métricas Estaduais
+    CREATE CLUSTERED INDEX IDX_IndGeoMun_mun ON temp_CGUSC.fp.indicador_geografico_mun(uf, municipio);
+
+    -- ========================================================================
+    -- PASSO 4: METRICAS POR ESTADO (MEDIA E MEDIANA)
+    -- ========================================================================
+    PRINT 'PASSO 4: Calculando metricas por estado...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
-    SELECT DISTINCT CAST(F.uf AS VARCHAR(2)) AS uf,
-        CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_geografico) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) AS DECIMAL(18,4)) AS mediana_estado,
-        CAST(CASE WHEN SUM(I.total_vendas_monitoradas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) > 0 
-                  THEN (CAST(SUM(I.qtd_vendas_outra_uf) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) AS DECIMAL(18,2)) / SUM(I.total_vendas_monitoradas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))) * 100.0 
-                  ELSE 0 END AS DECIMAL(18,4)) AS media_estado
+
+    SELECT DISTINCT
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_geografico)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AS DECIMAL(18,4)) AS mediana_estado,
+        CAST(
+            AVG(I.percentual_geografico)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AS DECIMAL(18,4)) AS media_estado
     INTO temp_CGUSC.fp.indicador_geografico_uf
     FROM temp_CGUSC.fp.indicador_geografico I
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
 
-    -- 4.3 Métrica Nacional
+    CREATE CLUSTERED INDEX IDX_IndGeoUF_uf ON temp_CGUSC.fp.indicador_geografico_uf(uf);
+
+    -- ========================================================================
+    -- PASSO 5: METRICAS NACIONAIS (MEDIA E MEDIANA)
+    -- ========================================================================
+    PRINT 'PASSO 5: Calculando metricas nacionais...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
-    SELECT DISTINCT 'BR' AS pais,
-        CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_geografico) OVER () AS DECIMAL(18,4)) AS mediana_pais,
-        CAST(CASE WHEN SUM(total_vendas_monitoradas) OVER () > 0 
-                  THEN (CAST(SUM(qtd_vendas_outra_uf) OVER () AS DECIMAL(18,2)) / SUM(total_vendas_monitoradas) OVER ()) * 100.0 
-                  ELSE 0 END AS DECIMAL(18,4)) AS media_pais
+
+    SELECT DISTINCT
+        'BR' AS pais,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_geografico) OVER ()
+        AS DECIMAL(18,4)) AS mediana_pais,
+        CAST(
+            AVG(percentual_geografico) OVER ()
+        AS DECIMAL(18,4)) AS media_pais
     INTO temp_CGUSC.fp.indicador_geografico_br
     FROM temp_CGUSC.fp.indicador_geografico;
 
-    -- 4.4 Tabela Final consolidada com Duelo de Riscos
+    -- ========================================================================
+    -- PASSO 6: TABELA CONSOLIDADA FINAL
+    -- ========================================================================
+    PRINT 'PASSO 6: Gerando tabela consolidada com riscos relativos e rankings...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
-    SELECT I.cnpj, F.razaoSocial, F.municipio, CAST(F.uf AS VARCHAR(2)) AS uf,
-        I.total_vendas_monitoradas, I.qtd_vendas_outra_uf, I.percentual_geografico,
-        -- Municipais
-        ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana, ISNULL(MUN.media_municipio, 0) AS municipio_media,
+
+    SELECT
+        I.cnpj,
+        F.razaoSocial,
+        F.municipio,
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+
+        -- Indicadores base
+        I.total_vendas_monitoradas,
+        I.qtd_vendas_outra_uf,
+        I.percentual_geografico,
+
+        -- Rankings (pior risco = posicao 1)
+        RANK() OVER (
+            ORDER BY I.percentual_geografico DESC
+        )                                                                   AS ranking_br,
+        RANK() OVER (
+            PARTITION BY CAST(F.uf AS VARCHAR(2))
+            ORDER BY I.percentual_geografico DESC
+        )                                                                   AS ranking_uf,
+        RANK() OVER (
+            PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+            ORDER BY I.percentual_geografico DESC
+        )                                                                   AS ranking_municipio,
+
+        -- Benchmarks municipais
+        ISNULL(MUN.mediana_municipio, 0)                                    AS municipio_mediana,
+        ISNULL(MUN.media_municipio,   0)                                    AS municipio_media,
         CAST((I.percentual_geografico + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-        CAST((I.percentual_geografico + 0.01) / (ISNULL(MUN.media_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
-        -- Estaduais
-        ISNULL(UF.mediana_estado, 0) AS estado_mediana, ISNULL(UF.media_estado, 0) AS estado_media,
+        CAST((I.percentual_geografico + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+
+        -- Benchmarks estaduais
+        ISNULL(UF.mediana_estado, 0)                                        AS estado_mediana,
+        ISNULL(UF.media_estado,   0)                                        AS estado_media,
         CAST((I.percentual_geografico + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-        CAST((I.percentual_geografico + 0.01) / (ISNULL(UF.media_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
-        -- Nacionais
-        BR.mediana_pais AS pais_mediana, BR.media_pais AS pais_media,
+        CAST((I.percentual_geografico + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+        -- Benchmarks nacionais
+        BR.mediana_pais                                                     AS pais_mediana,
+        BR.media_pais                                                       AS pais_media,
         CAST((I.percentual_geografico + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-        CAST((I.percentual_geografico + 0.01) / (BR.media_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+        CAST((I.percentual_geografico + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+
     INTO temp_CGUSC.fp.indicador_geografico_detalhado
     FROM temp_CGUSC.fp.indicador_geografico I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_geografico_mun MUN ON MUN.uf = CAST(F.uf AS VARCHAR(2)) AND MUN.municipio = CAST(F.municipio AS VARCHAR(255))
-    LEFT JOIN temp_CGUSC.fp.indicador_geografico_uf UF ON UF.uf = CAST(F.uf AS VARCHAR(2))
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F
+        ON F.cnpj = I.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_geografico_mun MUN
+        ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
+       AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    LEFT JOIN temp_CGUSC.fp.indicador_geografico_uf UF
+        ON CAST(F.uf AS VARCHAR(2)) = UF.uf
     CROSS JOIN temp_CGUSC.fp.indicador_geografico_br BR;
 
-    CREATE CLUSTERED INDEX IDX_FinalGeo_CNPJ ON temp_CGUSC.fp.indicador_geografico_detalhado(cnpj);
+    CREATE CLUSTERED INDEX IDX_FinalGeo_CNPJ     ON temp_CGUSC.fp.indicador_geografico_detalhado(cnpj);
+    CREATE NONCLUSTERED INDEX IDX_FinalGeo_Risco  ON temp_CGUSC.fp.indicador_geografico_detalhado(percentual_geografico DESC);
+    CREATE NONCLUSTERED INDEX IDX_FinalGeo_RankBR ON temp_CGUSC.fp.indicador_geografico_detalhado(ranking_br);
     PRINT 'CONSOLIDAÇÃO FINAL CONCLUÍDA COM SUCESSO!';
 END
 ELSE

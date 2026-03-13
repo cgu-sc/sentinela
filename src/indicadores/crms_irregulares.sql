@@ -2,36 +2,48 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- INDICADOR DE CRMs IRREGULARES - VERSÃO COMPLETA
+-- INDICADOR DE CRMs IRREGULARES
 -- ============================================================================
--- OBJETIVO: Identificar farmácias com alto volume de prescrições vinculadas a
---           CRMs irregulares (não localizados no CFM ou usados antes do registro)
--- 
--- FONTE: db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
--- 
--- IRREGULARIDADES DETECTADAS:
---   1. CRM não localizado na base do CFM
---   2. Prescrição realizada antes da data de inscrição do CRM
+-- OBJETIVO: Identificar farmacias com alto volume de prescricoes vinculadas a
+--           CRMs irregulares (nao localizados no CFM ou usados antes do registro)
 --
--- INTERPRETAÇÃO DO pct_risco_irregularidade:
---   - >50%: CRÍTICO - Mais da metade do faturamento vem de CRMs irregulares
---   - 30-50%: ALTO - Parcela significativa irregular
---   - 10-30%: MODERADO - Requer investigação
---   - <10%: BAIXO - Pode ser erro cadastral isolado
+-- INTERPRETACAO DO pct_risco_irregularidade:
+--   - >= 50%: CRITICO  - Mais da metade do faturamento vem de CRMs irregulares
+--   - 30-50%: ALTO     - Parcela significativa irregular
+--   - 10-30%: MODERADO - Requer investigacao
+--   - < 10%:  BAIXO    - Pode ser erro cadastral isolado
+--
+-- IRREGULARIDADES DETECTADAS:
+--   1. CRM nao localizado na base do CFM
+--   2. Prescricao realizada antes da data de inscricao do CRM
+--
+-- ALTERACOES APLICADAS:
+--   1. Fonte dupla: UNION ALL de db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+--      e db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024 no
+--      Passo 1, garantindo cobertura completa do periodo
+--   2. Adicionado nivel municipio (Passo 4: mediana e media), alinhado ao padrao
+--      venda_per_capita e exclusividade_crm
+--   3. Passos 5 e 6 (UF e BR) agora calculam mediana alem da media, usando
+--      a tecnica CTE_Medias + CTE_Mediana conforme exclusividade_crm.sql
+--   4. Tabela final nomeada como _detalhado; adicionados rankings explicitos
+--      por Brasil, UF e Municipio (pct_risco_irregularidade DESC)
+--   5. Adicionados riscos relativos em relacao a mediana e a media de cada
+--      nivel geografico, alem do risco relativo original vs media
 -- ============================================================================
 
 -- ============================================================================
--- DEFINIÇÃO DE VARIÁVEIS
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
-DECLARE @DataFim DATE = '2024-12-10';
+DECLARE @DataFim    DATE = '2024-12-10';
+
 
 -- ============================================================================
--- PASSO 0: PREPARAR BASE DO CFM COM DATA DE INSCRIÇÃO CONVERTIDA
+-- PASSO 0: PREPARAR BASE DO CFM COM DATA DE INSCRICAO CONVERTIDA
 -- ============================================================================
 DROP TABLE IF EXISTS #CFM_Base;
 
-SELECT 
+SELECT
     NU_CRM,
     SG_uf,
     TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
@@ -42,74 +54,88 @@ CREATE CLUSTERED INDEX IDX_CFM_CRM_uf ON #CFM_Base(NU_CRM, SG_uf);
 
 
 -- ============================================================================
--- PASSO 1: BASE DE PRESCRITORES POR FARMÁCIA COM FLAGS DE IRREGULARIDADE
+-- PASSO 1: BASE DE PRESCRITORES POR FARMACIA COM FLAGS DE IRREGULARIDADE
+-- UNION ALL entre a base historica e a recente para cobrir todo o periodo.
+-- O JOIN com #CFM_Base e feito FORA do UNION para evitar duplicacao.
 -- ============================================================================
 DROP TABLE IF EXISTS #CRMsPorFarmacia;
 
-SELECT 
-    R.cnpj,
-    CONCAT(R.crm, '/', R.crm_uf) AS id_medico,
-    R.crm AS nu_crm,
-    R.crm_uf AS sg_uf_crm,
-    COUNT(DISTINCT R.num_autorizacao) AS nu_prescricoes,
-    SUM(R.valor_pago) AS vl_total_prescricoes,
-    MIN(R.data_hora) AS dt_primeira_prescricao,
-    
-    -- FLAG: CRM não localizado no CFM
-    CASE 
-        WHEN CFM.NU_CRM IS NULL THEN 1 
-        ELSE 0 
+SELECT
+    U.cnpj,
+    CONCAT(U.crm, '/', U.crm_uf)     AS id_medico,
+    U.crm                             AS nu_crm,
+    U.crm_uf                          AS sg_uf_crm,
+    COUNT(DISTINCT U.num_autorizacao) AS nu_prescricoes,
+    SUM(U.valor_pago)                 AS vl_total_prescricoes,
+    MIN(U.data_hora)                  AS dt_primeira_prescricao,
+
+    -- FLAG: CRM nao localizado no CFM
+    CASE
+        WHEN CFM.NU_CRM IS NULL THEN 1
+        ELSE 0
     END AS flag_nao_localizado,
-    
-    -- FLAG: Prescrição antes do registro do CRM
-    CASE 
-        WHEN CFM.dt_inscricao_convertida IS NOT NULL 
-         AND MIN(R.data_hora) < CFM.dt_inscricao_convertida 
-        THEN 1 
-        ELSE 0 
+
+    -- FLAG: Prescricao antes do registro do CRM
+    CASE
+        WHEN CFM.dt_inscricao_convertida IS NOT NULL
+         AND MIN(U.data_hora) < CFM.dt_inscricao_convertida
+        THEN 1
+        ELSE 0
     END AS flag_antes_registro
 
 INTO #CRMsPorFarmacia
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024 R
-LEFT JOIN #CFM_Base CFM 
-    ON CFM.NU_CRM = CAST(R.crm AS VARCHAR(25)) 
-   AND CFM.SG_uf = R.crm_uf
-WHERE 
-    R.data_hora >= @DataInicio 
-    AND R.data_hora <= @DataFim
-    AND R.crm IS NOT NULL 
-    AND R.crm_uf IS NOT NULL 
-    AND R.crm_uf <> 'BR'
-    AND R.crm > 0
-GROUP BY 
-    R.cnpj, 
-    R.crm, 
-    R.crm_uf,
+FROM (
+    SELECT cnpj, crm, crm_uf, num_autorizacao, valor_pago, data_hora
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    WHERE data_hora >= @DataInicio
+      AND data_hora <= @DataFim
+      AND crm IS NOT NULL
+      AND crm_uf IS NOT NULL
+      AND crm_uf <> 'BR'
+      AND crm > 0
+
+    UNION ALL
+
+    SELECT cnpj, crm, crm_uf, num_autorizacao, valor_pago, data_hora
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
+    WHERE data_hora >= @DataInicio
+      AND data_hora <= @DataFim
+      AND crm IS NOT NULL
+      AND crm_uf IS NOT NULL
+      AND crm_uf <> 'BR'
+      AND crm > 0
+) U
+LEFT JOIN #CFM_Base CFM
+    ON  CFM.NU_CRM = CAST(U.crm AS VARCHAR(25))
+    AND CFM.SG_uf  = U.crm_uf
+GROUP BY
+    U.cnpj,
+    U.crm,
+    U.crm_uf,
     CFM.NU_CRM,
     CFM.dt_inscricao_convertida;
 
 CREATE CLUSTERED INDEX IDX_CRMFarm_CNPJ ON #CRMsPorFarmacia(cnpj);
 
+DROP TABLE IF EXISTS #CFM_Base;
+
 
 -- ============================================================================
--- PASSO 2: AGREGAÇÃO POR FARMÁCIA
+-- PASSO 2: AGREGACAO POR FARMACIA
 -- ============================================================================
 DROP TABLE IF EXISTS #IrregularidadePorFarmacia;
 
-SELECT 
+SELECT
     cnpj,
-    
-    -- Total de prescritores distintos
-    COUNT(DISTINCT id_medico) AS total_prescritores,
-    
-    -- Total de valor da farmácia
-    SUM(vl_total_prescricoes) AS total_valor_farmacia,
-    
-    -- CRMs não localizados no CFM
+
+    COUNT(DISTINCT id_medico)          AS total_prescritores,
+    SUM(vl_total_prescricoes)          AS total_valor_farmacia,
+
+    -- CRMs nao localizados no CFM
     SUM(flag_nao_localizado) AS qtd_crms_nao_localizados,
     SUM(CASE WHEN flag_nao_localizado = 1 THEN vl_total_prescricoes ELSE 0 END) AS valor_crms_nao_localizados,
-    
-    -- CRMs com prescrição antes do registro
+
+    -- CRMs com prescricao antes do registro
     SUM(flag_antes_registro) AS qtd_crms_antes_registro,
     SUM(CASE WHEN flag_antes_registro = 1 THEN vl_total_prescricoes ELSE 0 END) AS valor_crms_antes_registro
 
@@ -119,13 +145,15 @@ GROUP BY cnpj;
 
 CREATE CLUSTERED INDEX IDX_Irreg_CNPJ ON #IrregularidadePorFarmacia(cnpj);
 
+DROP TABLE IF EXISTS #CRMsPorFarmacia;
+
 
 -- ============================================================================
--- PASSO 3: TABELA BASE POR FARMÁCIA
+-- PASSO 3: TABELA BASE POR FARMACIA
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares;
 
-SELECT 
+SELECT
     cnpj,
     total_prescritores,
     total_valor_farmacia,
@@ -133,15 +161,15 @@ SELECT
     valor_crms_nao_localizados,
     qtd_crms_antes_registro,
     valor_crms_antes_registro,
-    
+
     -- PERCENTUAL DE RISCO: % do valor que veio de CRMs irregulares
     CAST(
-        CASE 
-            WHEN total_valor_farmacia > 0 THEN 
-                ((ISNULL(valor_crms_nao_localizados, 0) + ISNULL(valor_crms_antes_registro, 0)) / 
+        CASE
+            WHEN total_valor_farmacia > 0 THEN
+                ((ISNULL(valor_crms_nao_localizados, 0) + ISNULL(valor_crms_antes_registro, 0)) /
                  total_valor_farmacia) * 100.0
-            ELSE 0 
-        END 
+            ELSE 0
+        END
     AS DECIMAL(18,4)) AS pct_risco_irregularidade
 
 INTO temp_CGUSC.fp.indicador_crms_irregulares
@@ -150,117 +178,163 @@ WHERE total_prescritores > 0;
 
 CREATE CLUSTERED INDEX IDX_IndIrreg_CNPJ ON temp_CGUSC.fp.indicador_crms_irregulares(cnpj);
 
+DROP TABLE IF EXISTS #IrregularidadePorFarmacia;
+
 
 -- ============================================================================
--- PASSO 4: CÁLCULO DAS MÉDIAS POR ESTADO (UF)
+-- PASSO 4: METRICAS POR MUNICIPIO (MEDIANA E MEDIA)
+-- Alinhado ao padrao venda_per_capita e exclusividade_crm
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_mun;
+
+SELECT DISTINCT
+    CAST(F.uf        AS VARCHAR(2))   AS uf,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.pct_risco_irregularidade)
+        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+    AS DECIMAL(18,4)) AS mediana_municipio,
+    CAST(
+        AVG(I.pct_risco_irregularidade)
+        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+    AS DECIMAL(18,4)) AS media_municipio
+INTO temp_CGUSC.fp.indicador_crms_irregulares_mun
+FROM temp_CGUSC.fp.indicador_crms_irregulares I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+
+CREATE CLUSTERED INDEX IDX_IndIrregMun ON temp_CGUSC.fp.indicador_crms_irregulares_mun(uf, municipio);
+
+
+-- ============================================================================
+-- PASSO 5: METRICAS POR ESTADO (MEDIANA E MEDIA)
+-- Estrategia: CTE_Medias (AVG via GROUP BY) + CTE_Mediana (PERCENTILE_CONT via OVER)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_uf;
 
-SELECT 
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    
-    SUM(I.total_valor_farmacia) AS total_valor_uf,
-    SUM(I.valor_crms_nao_localizados) AS valor_nao_localizados_uf,
-    SUM(I.valor_crms_antes_registro) AS valor_antes_registro_uf,
-    
-    -- Média do Estado (% do valor irregular)
-    CAST(
-        CASE 
-            WHEN SUM(I.total_valor_farmacia) > 0 THEN 
-                ((SUM(ISNULL(I.valor_crms_nao_localizados, 0)) + SUM(ISNULL(I.valor_crms_antes_registro, 0))) / 
-                 SUM(I.total_valor_farmacia)) * 100.0
-            ELSE 0 
-        END 
-    AS DECIMAL(18,4)) AS pct_risco_irregularidade_uf
-
+WITH CTE_Medias AS (
+    SELECT
+        CAST(F.uf AS VARCHAR(2))            AS uf,
+        AVG(I.pct_risco_irregularidade)     AS media_irregularidade_uf,
+        SUM(I.total_valor_farmacia)         AS total_valor_uf,
+        SUM(I.valor_crms_nao_localizados)   AS valor_nao_localizados_uf,
+        SUM(I.valor_crms_antes_registro)    AS valor_antes_registro_uf
+    FROM temp_CGUSC.fp.indicador_crms_irregulares I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    GROUP BY CAST(F.uf AS VARCHAR(2))
+),
+CTE_Mediana AS (
+    SELECT DISTINCT
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.pct_risco_irregularidade)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AS DECIMAL(18,4)) AS mediana_irregularidade_uf
+    FROM temp_CGUSC.fp.indicador_crms_irregulares I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+)
+SELECT
+    M.uf,
+    M.media_irregularidade_uf,
+    M.total_valor_uf,
+    M.valor_nao_localizados_uf,
+    M.valor_antes_registro_uf,
+    D.mediana_irregularidade_uf
 INTO temp_CGUSC.fp.indicador_crms_irregulares_uf
-FROM temp_CGUSC.fp.indicador_crms_irregulares I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F 
-    ON F.cnpj = I.cnpj
-GROUP BY CAST(F.uf AS VARCHAR(2));
+FROM CTE_Medias M
+INNER JOIN CTE_Mediana D ON D.uf = M.uf;
 
 CREATE CLUSTERED INDEX IDX_IndIrregUF_uf ON temp_CGUSC.fp.indicador_crms_irregulares_uf(uf);
 
 
 -- ============================================================================
--- PASSO 5: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
+-- PASSO 6: METRICAS NACIONAIS (MEDIANA E MEDIA)
+-- Estrategia: CTE_Medias_BR (AVG simples) + CTE_Mediana_BR (PERCENTILE_CONT OVER())
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_br;
 
-SELECT 
-    'BR' AS pais,
-    
-    SUM(total_valor_farmacia) AS total_valor_br,
-    SUM(valor_crms_nao_localizados) AS valor_nao_localizados_br,
-    SUM(valor_crms_antes_registro) AS valor_antes_registro_br,
-    
-    -- Média Nacional (% do valor irregular)
-    CAST(
-        CASE 
-            WHEN SUM(total_valor_farmacia) > 0 THEN 
-                ((SUM(ISNULL(valor_crms_nao_localizados, 0)) + SUM(ISNULL(valor_crms_antes_registro, 0))) / 
-                 SUM(total_valor_farmacia)) * 100.0
-            ELSE 0 
-        END 
-    AS DECIMAL(18,4)) AS pct_risco_irregularidade_br
-
+WITH CTE_Medias_BR AS (
+    SELECT
+        AVG(pct_risco_irregularidade)   AS media_irregularidade_br,
+        SUM(total_valor_farmacia)       AS total_valor_br,
+        SUM(valor_crms_nao_localizados) AS valor_nao_localizados_br,
+        SUM(valor_crms_antes_registro)  AS valor_antes_registro_br
+    FROM temp_CGUSC.fp.indicador_crms_irregulares
+),
+CTE_Mediana_BR AS (
+    SELECT DISTINCT
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY pct_risco_irregularidade) OVER ()
+        AS DECIMAL(18,4)) AS mediana_irregularidade_br
+    FROM temp_CGUSC.fp.indicador_crms_irregulares
+)
+SELECT
+    'BR'                        AS pais,
+    M.media_irregularidade_br,
+    M.total_valor_br,
+    M.valor_nao_localizados_br,
+    M.valor_antes_registro_br,
+    D.mediana_irregularidade_br
 INTO temp_CGUSC.fp.indicador_crms_irregulares_br
-FROM temp_CGUSC.fp.indicador_crms_irregulares;
+FROM CTE_Medias_BR M
+CROSS JOIN CTE_Mediana_BR D;
 
 
 -- ============================================================================
--- PASSO 6: TABELA CONSOLIDADA FINAL (COMPARATIVO DE RISCO)
+-- PASSO 7: TABELA CONSOLIDADA FINAL
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_detalhado;
 
-SELECT 
+SELECT
     I.cnpj,
     F.razaoSocial,
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
-    
-    -- Métricas Absolutas
+
+    -- Metricas Absolutas
     I.total_prescritores,
     I.total_valor_farmacia,
-    
-    -- CRMs não localizados
     I.qtd_crms_nao_localizados,
     I.valor_crms_nao_localizados,
-    
-    -- CRMs antes do registro
     I.qtd_crms_antes_registro,
     I.valor_crms_antes_registro,
-    
-    -- Percentual de risco da farmácia
-    I.pct_risco_irregularidade,
-    
-    -- Comparativos
-    ISNULL(UF.pct_risco_irregularidade_uf, 0) AS media_estado,
-    BR.pct_risco_irregularidade_br AS media_pais,
-    
-    -- RISCO RELATIVO UF
-    CAST(
-        CASE 
-            WHEN UF.pct_risco_irregularidade_uf > 0 THEN 
-                I.pct_risco_irregularidade / UF.pct_risco_irregularidade_uf
-            ELSE 
-                CASE WHEN I.pct_risco_irregularidade > 0 THEN 99.0 ELSE 0 END
-        END 
-    AS DECIMAL(18,4)) AS risco_relativo_uf,
 
-    -- RISCO RELATIVO BR
-    CAST(
-        CASE 
-            WHEN BR.pct_risco_irregularidade_br > 0 THEN 
-                I.pct_risco_irregularidade / BR.pct_risco_irregularidade_br
-            ELSE 
-                CASE WHEN I.pct_risco_irregularidade > 0 THEN 99.0 ELSE 0 END
-        END 
-    AS DECIMAL(18,4)) AS risco_relativo_br,
-    
-    -- CLASSIFICAÇÃO DE RISCO
-    CASE 
-        WHEN I.pct_risco_irregularidade >= 50 THEN 'CRÍTICO'
+    -- Indicador Principal
+    I.pct_risco_irregularidade,
+
+    -- Rankings (pior risco = posicao 1)
+    RANK() OVER (
+        ORDER BY I.pct_risco_irregularidade DESC
+    ) AS ranking_br,
+    RANK() OVER (
+        PARTITION BY CAST(F.uf AS VARCHAR(2))
+        ORDER BY I.pct_risco_irregularidade DESC
+    ) AS ranking_uf,
+    RANK() OVER (
+        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+        ORDER BY I.pct_risco_irregularidade DESC
+    ) AS ranking_municipio,
+
+    -- Benchmarks Municipio
+    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
+    ISNULL(MUN.media_municipio,   0) AS municipio_media,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+
+    -- Benchmarks UF
+    ISNULL(UF.mediana_irregularidade_uf, 0) AS estado_mediana,
+    ISNULL(UF.media_irregularidade_uf,   0) AS estado_media,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(UF.mediana_irregularidade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(UF.media_irregularidade_uf,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks BR
+    BR.mediana_irregularidade_br AS pais_mediana,
+    BR.media_irregularidade_br   AS pais_media,
+    CAST((I.pct_risco_irregularidade + 0.01) / (BR.mediana_irregularidade_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((I.pct_risco_irregularidade + 0.01) / (BR.media_irregularidade_br   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
+
+    -- Classificacao de Risco
+    CASE
+        WHEN I.pct_risco_irregularidade >= 50 THEN 'CRITICO'
         WHEN I.pct_risco_irregularidade >= 30 THEN 'ALTO'
         WHEN I.pct_risco_irregularidade >= 10 THEN 'MODERADO'
         ELSE 'BAIXO'
@@ -268,25 +342,34 @@ SELECT
 
 INTO temp_CGUSC.fp.indicador_crms_irregulares_detalhado
 FROM temp_CGUSC.fp.indicador_crms_irregulares I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F 
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_uf UF 
+LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_mun MUN
+    ON  CAST(F.uf        AS VARCHAR(2))   = MUN.uf
+    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_uf UF
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
 CROSS JOIN temp_CGUSC.fp.indicador_crms_irregulares_br BR;
 
--- Índices Finais
-CREATE CLUSTERED INDEX IDX_FinalIrreg_CNPJ ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Risco ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(risco_relativo_uf DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Pct ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(pct_risco_irregularidade DESC);
+-- Indices Finais
+CREATE CLUSTERED INDEX    IDX_FinalIrreg_CNPJ    ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalIrreg_Pct     ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(pct_risco_irregularidade DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalIrreg_RiscoUF  ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(risco_relativo_uf_media DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalIrreg_RankBR   ON temp_CGUSC.fp.indicador_crms_irregulares_detalhado(ranking_br);
 GO
 
 
 -- ============================================================================
--- LIMPEZA
+-- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
-DROP TABLE IF EXISTS #CFM_Base;
-DROP TABLE IF EXISTS #CRMsPorFarmacia;
-DROP TABLE IF EXISTS #IrregularidadePorFarmacia;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares;
+GO
 
 
-
+-- ============================================================================
+-- VERIFICACAO RAPIDA
+-- ============================================================================
+SELECT TOP 100 *
+FROM temp_CGUSC.fp.indicador_crms_irregulares_detalhado
+ORDER BY ranking_br;
+GO

@@ -19,7 +19,6 @@ SELECT
     SUM(A.valor_pago) AS valor_dia
 INTO #VendasDiarias
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
 GROUP BY A.cnpj, FORMAT(A.data_hora, 'yyyy-MM'), CAST(A.data_hora AS DATE);
 

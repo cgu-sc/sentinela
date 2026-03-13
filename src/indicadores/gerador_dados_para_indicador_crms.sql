@@ -1,14 +1,18 @@
 ﻿-- ============================================================================
--- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃƒO 2
+-- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 2
 -- ============================================================================
--- CORREÃ‡Ã•ES APLICADAS:
---   1. Contagem de prescriÃ§Ãµes agora usa COUNT(DISTINCT num_autorizacao) 
---      em vez de COUNT(*) para nÃ£o inflar os nÃºmeros com mÃºltiplos medicamentos
---   2. Mesma correÃ§Ã£o aplicada na contagem de autorizaÃ§Ãµes por estabelecimento
---   3. NOVO: Adicionado alerta6 (prescriÃ§Ã£o antes do registro do CRM)
+-- CORREÇÕES APLICADAS:
+--   1. Contagem de prescrições agora usa COUNT(DISTINCT num_autorizacao) 
+--      em vez de COUNT(*) para não inflar os números com múltiplos medicamentos
+--   2. Mesma correção aplicada na contagem de autorizações por estabelecimento
+--   3. NOVO: Adicionado alerta6 (prescrição antes do registro do CRM)
+-- ============================================================================
 -- ============================================================================
 
--- NÃºmero de Sociedades que o SÃ³cio de um estabelecimento possui dentro do programa FarmÃ¡cia Popular
+DECLARE @DataInicio     DATE          = '2015-07-01';
+DECLARE @DataFim        DATE          = '2024-12-10';
+
+-- Número de Sociedades que o Sócio de um estabelecimento possui dentro do programa Farmácia Popular
 DROP TABLE IF EXISTS #socios_num_sociedades
 SELECT cpf_cnpj_Socio nu_cpf_socio, COUNT(*) num_sociedades 
 INTO #socios_num_sociedades
@@ -33,6 +37,7 @@ SELECT
 INTO #Medicos_Hist
 FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
 WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+  AND data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY crm, crm_uf, cnpj;
 
 -- B. Agregação Base Recente (2021-2024)
@@ -46,6 +51,7 @@ SELECT
 INTO #Medicos_Recente
 FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
 WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+  AND data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY crm, crm_uf, cnpj;
 
 -- C. União Final dos Médicos
@@ -79,6 +85,7 @@ SELECT
     MAX(data_hora) AS dt_fim
 INTO #Estab_Hist
 FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY cnpj;
 
 DROP TABLE IF EXISTS #Estab_Recente;
@@ -90,6 +97,7 @@ SELECT
     MAX(data_hora) AS dt_fim
 INTO #Estab_Recente
 FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY cnpj;
 
 DROP TABLE IF EXISTS #tb_info_estabelecimento;
@@ -305,32 +313,32 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 
 
 -- ============================================================================
--- ALERTA 3: MÃ‰DIA >30 PRESCRIÃ‡Ã•ES/DIA NESTE ESTABELECIMENTO
+-- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta3 = 'Foram registradas uma mÃ©dia de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
-              ' prescriÃ§Ãµes por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
+SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
+              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
 WHERE nu_prescricoes_dia > 30
 
 
 -- ============================================================================
--- ALERTA 4: MÃ‰DIA >30 PRESCRIÃ‡Ã•ES/DIA EM TODOS OS ESTABELECIMENTOS
+-- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta4 = 'Foram registradas uma mÃ©dia de ' + 
+SET alerta4 = 'Foram registradas uma média de ' + 
               CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
-              ' prescriÃ§Ãµes por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
+              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
               CAST(sg_uf_crm AS VARCHAR(MAX)) + ' em todos os ' + 
               CAST(nu_estabelecimentos_com_registro_mesmo_crm AS VARCHAR(MAX)) + 
-              ' estabelecimentos em que hÃ¡ registros.'
+              ' estabelecimentos em que há registros.'
 WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
 
 
 select * from dados_crm_detalhado
 
 -- ============================================================================
--- ÃNDICE PARA PERFORMANCE
+-- ÍNDICE PARA PERFORMANCE
 -- ============================================================================
 CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
 ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj)
@@ -339,10 +347,10 @@ GO
 
 
 -- ============================================================================
--- ALERTA 5: DISTÃ‚NCIA >400KM ENTRE FARMÃCIAS COM SOBREPOSIÃ‡ÃƒO DE DATAS
+-- ALERTA 5: DISTÂNCIA >400KM ENTRE FARMÁCIAS COM SOBREPOSIÇÃO DE DATAS
 -- ============================================================================
 WITH
--- 1. Calcula a distÃ¢ncia para todos os pares de T1 e T2 para cada mÃ©dico
+-- 1. Calcula a distância para todos os pares de T1 e T2 para cada médico
 PairedWithDistance AS (
     SELECT
         T1.id_medico,
@@ -364,25 +372,25 @@ PairedWithDistance AS (
         ON T1.id_medico = T2.id_medico AND T1.nu_cnpj < T2.nu_cnpj
 ),
 
--- 2. Filtra os pares vÃ¡lidos
+-- 2. Filtra os pares válidos
 AllValidPairsFiltered AS (
     SELECT *
     FROM PairedWithDistance
-    WHERE (DI1 <= DF2 AND DF1 >= DI2)  -- SobreposiÃ§Ã£o de datas
+    WHERE (DI1 <= DF2 AND DF1 >= DI2)  -- Sobreposição de datas
       AND DistanciaKM > 400
       AND DistanciaKM IS NOT NULL
-      AND P1 >= 100  -- MÃ­nimo de prescriÃ§Ãµes no Estabelecimento 1
-      AND P2 >= 100  -- MÃ­nimo de prescriÃ§Ãµes no Estabelecimento 2
+      AND P1 >= 100  -- Mínimo de prescrições no Estabelecimento 1
+      AND P2 >= 100  -- Mínimo de prescrições no Estabelecimento 2
 ),
 
--- 3. Ranqueia os pares por nÃºmero de prescriÃ§Ãµes
+-- 3. Ranqueia os pares por número de prescrições
 RankedValidPairs AS (
     SELECT *,
         ROW_NUMBER() OVER (PARTITION BY id_medico ORDER BY (P1 + P2) DESC, DistanciaKM DESC) AS rn
     FROM AllValidPairsFiltered
 ),
 
--- 4. EstatÃ­sticas por mÃ©dico
+-- 4. Estatísticas por médico
 DoctorOverallStats AS (
     SELECT
         id_medico,
@@ -426,19 +434,19 @@ FinalAlertInfo AS (
 -- Atualiza a tabela com o alerta5
 UPDATE AM
 SET AM.alerta5 = 
-    'A distÃ¢ncia entre a farmÃ¡cia ' + FAI.Fmtd_Top_CNPJ1 +
+    'A distância entre a farmácia ' + FAI.Fmtd_Top_CNPJ1 +
     ' (' + ISNULL(FAI.Top_M1, 'N/I') + '/' + ISNULL(FAI.Top_uf1, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI1, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF1, 103) +
-    ' (' + ISNULL(CAST(FAI.Top_P1 AS VARCHAR(10)), 'N/I') + ' PrescriÃ§Ãµes no perÃ­odo)' +
-    ' e a farmÃ¡cia ' + FAI.Fmtd_Top_CNPJ2 +
+    ' (' + ISNULL(CAST(FAI.Top_P1 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
+    ' e a farmácia ' + FAI.Fmtd_Top_CNPJ2 +
     ' (' + ISNULL(FAI.Top_M2, 'N/I') + '/' + ISNULL(FAI.Top_uf2, 'N/I') + ')' +
     ' - ' + CONVERT(VARCHAR, FAI.Top_DI2, 103) + ' a ' + CONVERT(VARCHAR, FAI.Top_DF2, 103) +
-    ' (' + ISNULL(CAST(FAI.Top_P2 AS VARCHAR(10)), 'N/I') + ' PrescriÃ§Ãµes no perÃ­odo)' +
-    ' Ã© de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
+    ' (' + ISNULL(CAST(FAI.Top_P2 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
+    ' é de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
     CASE
         WHEN FAI.CountOtherActualValidPairs > 0 THEN
-            ' HÃ¡ tambÃ©m outros ' + CAST(FAI.CountOtherActualValidPairs AS VARCHAR(10)) +
-            ' pares de estabelecimentos com distÃ¢ncia maior que 400km que registraram prescriÃ§Ãµes do mÃ©dico com registro CRM ' +
+            ' Há também outros ' + CAST(FAI.CountOtherActualValidPairs AS VARCHAR(10)) +
+            ' pares de estabelecimentos com distância maior que 400km que registraram prescrições do médico com registro CRM ' +
             ISNULL(FAI.id_medico, 'N/I') + '.'
         ELSE ''
     END
@@ -451,13 +459,13 @@ GO
 
 
 -- ============================================================================
--- ALERTA 6: PRESCRIÃ‡ÃƒO ANTES DO REGISTRO DO CRM
+-- ALERTA 6: PRESCRIÇÃO ANTES DO REGISTRO DO CRM
 -- ============================================================================
--- âœ… NOVO: Verifica se a primeira prescriÃ§Ã£o do mÃ©dico neste estabelecimento
---          ocorreu antes da data de inscriÃ§Ã£o do CRM no CFM
+-- ✅ NOVO: Verifica se a primeira prescrição do médico neste estabelecimento
+--          ocorreu antes da data de inscrição do CRM no CFM
 UPDATE AM
 SET AM.alerta6 = 
-    'PrescriÃ§Ã£o anterior ao registro do CRM (1Âª prescriÃ§Ã£o: ' + 
+    'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
     CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
     ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
 FROM temp_CGUSC.fp.dados_crm_detalhado AM
@@ -474,10 +482,10 @@ WHERE CFM.dt_inscricao_convertida IS NOT NULL
 
 PRINT 'Coluna "alerta6" atualizada com sucesso.';
 PRINT '============================================================================';
-PRINT 'SCRIPT EXECUTADO COM CORREÃ‡Ã•ES:';
-PRINT '  - PrescriÃ§Ãµes contadas por COUNT(DISTINCT num_autorizacao)';
+PRINT 'SCRIPT EXECUTADO COM CORREÇÕES:';
+PRINT '  - Prescrições contadas por COUNT(DISTINCT num_autorizacao)';
 PRINT '  - Todos os alertas (1-6) populados corretamente';
-PRINT '  - NOVO: Alerta6 para prescriÃ§Ã£o antes do registro do CRM';
+PRINT '  - NOVO: Alerta6 para prescrição antes do registro do CRM';
 PRINT '============================================================================';
 GO
 

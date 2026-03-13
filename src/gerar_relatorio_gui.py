@@ -1,5 +1,5 @@
 """
-SENTINELA - Gerador de Relatórios v3
+SENTINELA - Gerador de Relatórios v3.2.0
 ====================================
 Interface gráfica para geração de relatórios a partir da memória de cálculo.
 Período de análise: 01/07/2015 a 10/12/2024
@@ -98,7 +98,7 @@ class SentinelaApp:
         self.root = root
         
         # Versão Local do Sistema
-        self.versao_local = "3.1.0"
+        self.versao_local = "3.2.0"
         
         self.root.title(f"Gerador de Relatórios do Sentinela v{self.versao_local}")
         self.root.geometry("900x750")
@@ -1099,7 +1099,15 @@ class SentinelaApp:
                 else:
                     self._log(f"  └─ Sem dados de prescritores para este CNPJ.", "warning")
 
-                # 5.4 Gerar Relatório(s) Excel
+                # 5.4 Buscar Dados de Falecidos (NOVO)
+                self._log("  └─ Buscando vendas para falecidos...", "info")
+                dados_falecidos = gerador_module.buscar_dados_falecidos(cursor, cnpj)
+                if dados_falecidos:
+                    self._log(f"  └─ {len(dados_falecidos)} transação(ões) de falecidos encontradas", "success")
+                else:
+                    self._log("  └─ Nenhuma venda para falecidos encontrada", "info")
+
+                # 5.5 Gerar Relatório(s) Excel
                 for tipo in tipos:
                     tipo_nome = "Completo" if tipo == 1 else "Resumido"
                     self._log(f"  └─ Gerando relatório {tipo_nome}...", "info")
@@ -1118,9 +1126,10 @@ class SentinelaApp:
                             dados_farmacias,
                             dados_medicamentos,
                             dados_risco,
-                            dados_prescritores=dados_prescritores,  # Novo Parâmetro
-                            top20_prescritores=top20_prescritores,  # Novo Parâmetro
-                            id_processamento=id_proc  # Novo Parâmetro
+                            dados_prescritores=dados_prescritores,
+                            top20_prescritores=top20_prescritores,
+                            id_processamento=id_proc,
+                            dados_falecidos=dados_falecidos  # NOVO PARÂMETRO
                         )
 
                         if resultado == "SEM_VENDAS":

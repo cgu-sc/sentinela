@@ -1,61 +1,99 @@
-﻿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- DEFINICAO DE VARIAVEIS
+-- INDICADOR DE HORÁRIO ATÍPICO - VERSÃO 2
+-- ============================================================================
+-- OBJETIVO: Identificar farmácias com alto volume de vendas realizadas em
+--           horário de madrugada (00:00 até 05:59)
+--
+-- FONTE: Todas as vendas do programa Farmácia Popular
+--
+-- INTERPRETAÇÃO DO percentual_madrugada:
+--   - Alta concentração de vendas na madrugada pode indicar registro fraudulento
+--     de dispensações fora do horário de funcionamento real da farmácia
+--
+-- ALTERAÇÕES APLICADAS:
+--   1. Fonte dupla: UNION ALL de db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+--      e db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 no
+--      Passo 1 (todas as vendas, sem filtro por medicamento)
+--   2. Adicionado nível município (Passo 3), seguindo a mesma lógica ponderada
+--      por volume (SUM/SUM) dos passos UF e BR, com mediana via CTE
+--   3. Passos UF e BR acrescidos de mediana via CTE (padrão venda_per_capita)
+--   4. Adicionados rankings explícitos por Brasil, UF e Município
+--      (percentual_madrugada DESC) na tabela final
+--   4. Limpeza de tabelas intermediárias feita ao longo do script
+-- ============================================================================
+
+-- ============================================================================
+-- DEFINIÇÃO DE VARIÁVEIS
+-- (sem GO após o USE para manter @DataInicio/@DataFim acessíveis em todo o batch)
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 1: CALCULO BASE POR FARMACIA (HORARIO ATIPICO)
--- Consideramos madrugada: 00:00 até 05:59
+-- PASSO 1: CÁLCULO BASE POR FARMÁCIA (HORÁRIO ATÍPICO)
+-- Madrugada: 00:00 até 05:59
+-- A CTE VendasPorHorario deduplica por num_autorizacao antes de agregar,
+-- garantindo que cada autorização seja contada uma única vez mesmo com
+-- múltiplos itens por prescrição.
+-- O UNION ALL é feito dentro da CTE, antes do GROUP BY, para que
+-- MAX(flag_madrugada) opere sobre o conjunto completo das duas bases.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico;
 
 WITH VendasPorHorario AS (
-    SELECT 
+    SELECT
         A.cnpj,
         A.num_autorizacao,
         MIN(A.data_hora) AS data_hora_venda,
-        
-        -- Verifica se a venda ocorreu na madrugada
-        MAX(CASE 
-            WHEN DATEPART(HOUR, A.data_hora) BETWEEN 0 AND 5 THEN 1 
-            ELSE 0 
+
+        -- Flag se qualquer registro dessa autorização caiu na madrugada
+        MAX(CASE
+            WHEN DATEPART(HOUR, A.data_hora) BETWEEN 0 AND 5 THEN 1
+            ELSE 0
         END) AS flag_madrugada
 
-    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
-        ON C.codigo_barra = A.codigo_barra
-    INNER JOIN temp_CGUSC.fp.lista_cnpj_processamento L
-        ON L.cnpj = A.cnpj
-    WHERE 
-        A.data_hora >= @DataInicio 
-        AND A.data_hora <= @DataFim
+    FROM (
+        SELECT R.cnpj, R.num_autorizacao, R.data_hora
+        FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP R
+        WHERE R.data_hora >= @DataInicio
+          AND R.data_hora <= @DataFim
 
+        UNION ALL
+
+        SELECT R.cnpj, R.num_autorizacao, R.data_hora
+        FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 R
+        WHERE R.data_hora >= @DataInicio
+          AND R.data_hora <= @DataFim
+    ) A
     GROUP BY A.cnpj, A.num_autorizacao
 ),
 AgregadoPorFarmacia AS (
-    SELECT 
+    SELECT
         cnpj,
-        COUNT(*) AS total_vendas_monitoradas,
-        SUM(flag_madrugada) AS qtd_vendas_madrugada
+        COUNT(*)              AS total_vendas_monitoradas,
+        SUM(flag_madrugada)   AS qtd_vendas_madrugada
     FROM VendasPorHorario
     GROUP BY cnpj
 )
-SELECT 
+
+SELECT
     cnpj,
     total_vendas_monitoradas,
     qtd_vendas_madrugada,
+
     CAST(
-        CASE 
-            WHEN total_vendas_monitoradas > 0 THEN 
-                (CAST(qtd_vendas_madrugada AS DECIMAL(18,2)) / CAST(total_vendas_monitoradas AS DECIMAL(18,2))) * 100.0
-            ELSE 0 
-        END 
+        CASE
+            WHEN total_vendas_monitoradas > 0 THEN
+                (CAST(qtd_vendas_madrugada        AS DECIMAL(18,2)) /
+                 CAST(total_vendas_monitoradas    AS DECIMAL(18,2))) * 100.0
+            ELSE 0
+        END
     AS DECIMAL(18,4)) AS percentual_madrugada
+
 INTO temp_CGUSC.fp.indicador_horario_atipico
 FROM AgregadoPorFarmacia
 WHERE total_vendas_monitoradas > 0;
@@ -64,65 +102,137 @@ CREATE CLUSTERED INDEX IDX_IndHora_CNPJ ON temp_CGUSC.fp.indicador_horario_atipi
 
 
 -- ============================================================================
--- PASSO 2: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+-- PASSO 2: MÉTRICAS POR MUNICÍPIO
+-- Média ponderada por volume (SUM/SUM) + mediana via CTE separada,
+-- evitando conflito entre GROUP BY e PERCENTILE_CONT OVER().
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_mun;
 
-SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2))          AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_madrugada)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(I.percentual_madrugada)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
-    AS DECIMAL(18,4)) AS media_municipio
+WITH CTE_Media_Mun AS (
+    SELECT
+        CAST(F.uf        AS VARCHAR(2))   AS uf,
+        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        SUM(I.total_vendas_monitoradas)   AS total_vendas_municipio,
+        SUM(I.qtd_vendas_madrugada)       AS total_madrugada_municipio,
+        CAST(
+            CASE
+                WHEN SUM(I.total_vendas_monitoradas) > 0 THEN
+                    (CAST(SUM(I.qtd_vendas_madrugada)     AS DECIMAL(18,2)) /
+                     CAST(SUM(I.total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+                ELSE 0
+            END
+        AS DECIMAL(18,4)) AS percentual_madrugada_mun
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    GROUP BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+),
+CTE_Mediana_Mun AS (
+    SELECT DISTINCT
+        CAST(F.uf        AS VARCHAR(2))   AS uf,
+        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_madrugada)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AS DECIMAL(18,4)) AS mediana_madrugada_mun
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+)
+SELECT
+    M.uf,
+    M.municipio,
+    M.total_vendas_municipio,
+    M.total_madrugada_municipio,
+    M.percentual_madrugada_mun,
+    D.mediana_madrugada_mun
 INTO temp_CGUSC.fp.indicador_horario_atipico_mun
-FROM temp_CGUSC.fp.indicador_horario_atipico I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM CTE_Media_Mun M
+INNER JOIN CTE_Mediana_Mun D ON D.uf = M.uf AND D.municipio = M.municipio;
 
 CREATE CLUSTERED INDEX IDX_IndHoraMun ON temp_CGUSC.fp.indicador_horario_atipico_mun(uf, municipio);
 
 
 -- ============================================================================
--- PASSO 3: METRICAS POR ESTADO (MEDIA E MEDIANA)
+-- PASSO 3: MÉTRICAS POR ESTADO (UF)
+-- Média ponderada por volume + mediana via CTE separada.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_uf;
 
-SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_madrugada)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(I.percentual_madrugada)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
-    AS DECIMAL(18,4)) AS media_estado
+WITH CTE_Media_UF AS (
+    SELECT
+        CAST(F.uf AS VARCHAR(2))        AS uf,
+        SUM(I.total_vendas_monitoradas) AS total_vendas_uf,
+        SUM(I.qtd_vendas_madrugada)     AS total_madrugada_uf,
+        CAST(
+            CASE
+                WHEN SUM(I.total_vendas_monitoradas) > 0 THEN
+                    (CAST(SUM(I.qtd_vendas_madrugada)     AS DECIMAL(18,2)) /
+                     CAST(SUM(I.total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+                ELSE 0
+            END
+        AS DECIMAL(18,4)) AS percentual_madrugada_uf
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    GROUP BY CAST(F.uf AS VARCHAR(2))
+),
+CTE_Mediana_UF AS (
+    SELECT DISTINCT
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_madrugada)
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AS DECIMAL(18,4)) AS mediana_madrugada_uf
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+)
+SELECT
+    M.uf,
+    M.total_vendas_uf,
+    M.total_madrugada_uf,
+    M.percentual_madrugada_uf,
+    D.mediana_madrugada_uf
 INTO temp_CGUSC.fp.indicador_horario_atipico_uf
-FROM temp_CGUSC.fp.indicador_horario_atipico I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM CTE_Media_UF M
+INNER JOIN CTE_Mediana_UF D ON D.uf = M.uf;
 
-CREATE CLUSTERED INDEX IDX_IndHoraUF ON temp_CGUSC.fp.indicador_horario_atipico_uf(uf);
+CREATE CLUSTERED INDEX IDX_IndHoraUF_uf ON temp_CGUSC.fp.indicador_horario_atipico_uf(uf);
 
 
 -- ============================================================================
--- PASSO 4: METRICAS NACIONAIS (MEDIA E MEDIANA)
+-- PASSO 4: MÉTRICAS NACIONAIS (BRASIL)
+-- Média ponderada por volume + mediana via CTE separada.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_br;
 
-SELECT DISTINCT
-    'BR' AS pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_madrugada) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(percentual_madrugada) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
+WITH CTE_Media_BR AS (
+    SELECT
+        SUM(total_vendas_monitoradas) AS total_vendas_br,
+        SUM(qtd_vendas_madrugada)     AS total_madrugada_br,
+        CAST(
+            CASE
+                WHEN SUM(total_vendas_monitoradas) > 0 THEN
+                    (CAST(SUM(qtd_vendas_madrugada)     AS DECIMAL(18,2)) /
+                     CAST(SUM(total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+                ELSE 0
+            END
+        AS DECIMAL(18,4)) AS percentual_madrugada_br
+    FROM temp_CGUSC.fp.indicador_horario_atipico
+),
+CTE_Mediana_BR AS (
+    SELECT DISTINCT
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_madrugada) OVER ()
+        AS DECIMAL(18,4)) AS mediana_madrugada_br
+    FROM temp_CGUSC.fp.indicador_horario_atipico
+)
+SELECT
+    'BR'                    AS pais,
+    M.total_vendas_br,
+    M.total_madrugada_br,
+    M.percentual_madrugada_br,
+    D.mediana_madrugada_br
 INTO temp_CGUSC.fp.indicador_horario_atipico_br
-FROM temp_CGUSC.fp.indicador_horario_atipico;
+FROM CTE_Media_BR M
+CROSS JOIN CTE_Mediana_BR D;
 
 
 -- ============================================================================
@@ -130,52 +240,90 @@ FROM temp_CGUSC.fp.indicador_horario_atipico;
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_detalhado;
 
-SELECT 
+SELECT
     I.cnpj,
     F.razaoSocial,
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
-    
+
+    -- Métricas Absolutas
     I.total_vendas_monitoradas,
     I.qtd_vendas_madrugada,
     I.percentual_madrugada,
-    
-    -- Rankings
-    RANK() OVER (ORDER BY I.percentual_madrugada DESC) AS ranking_br,
-    RANK() OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)) ORDER BY I.percentual_madrugada DESC) AS ranking_uf,
 
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.percentual_madrugada + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.percentual_madrugada + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    -- Rankings (pior risco = posição 1)
+    RANK() OVER (
+        ORDER BY I.percentual_madrugada DESC
+    ) AS ranking_br,
+    RANK() OVER (
+        PARTITION BY CAST(F.uf AS VARCHAR(2))
+        ORDER BY I.percentual_madrugada DESC
+    ) AS ranking_uf,
+    RANK() OVER (
+        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+        ORDER BY I.percentual_madrugada DESC
+    ) AS ranking_municipio,
 
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.percentual_madrugada + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.percentual_madrugada + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    -- Comparativos Município
+    ISNULL(MUN.percentual_madrugada_mun, 0) AS municipio_media,
+    ISNULL(MUN.mediana_madrugada_mun,    0) AS municipio_mediana,
 
-    -- Benchmarks nacionais
-    BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
-    CAST((I.percentual_madrugada + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.percentual_madrugada + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    -- Comparativos UF
+    ISNULL(UF.percentual_madrugada_uf, 0) AS media_estado,
+    ISNULL(UF.mediana_madrugada_uf,    0) AS mediana_estado,
+
+    -- Comparativos BR
+    BR.percentual_madrugada_br AS media_pais,
+    BR.mediana_madrugada_br    AS mediana_pais,
+
+    -- RISCO RELATIVO UF
+    CAST(
+        CASE
+            WHEN UF.percentual_madrugada_uf > 0 THEN
+                I.percentual_madrugada / UF.percentual_madrugada_uf
+            ELSE 0
+        END
+    AS DECIMAL(18,4)) AS risco_relativo_uf,
+
+    -- RISCO RELATIVO BR
+    CAST(
+        CASE
+            WHEN BR.percentual_madrugada_br > 0 THEN
+                I.percentual_madrugada / BR.percentual_madrugada_br
+            ELSE 0
+        END
+    AS DECIMAL(18,4)) AS risco_relativo_br
 
 INTO temp_CGUSC.fp.indicador_horario_atipico_detalhado
 FROM temp_CGUSC.fp.indicador_horario_atipico I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F 
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
     ON F.cnpj = I.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_mun MUN 
-    ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-   AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_uf UF 
+LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_mun MUN
+    ON  CAST(F.uf        AS VARCHAR(2))   = MUN.uf
+    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_uf UF
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
 CROSS JOIN temp_CGUSC.fp.indicador_horario_atipico_br BR;
 
-CREATE CLUSTERED INDEX IDX_FinalHora_CNPJ ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf_media DESC);
+-- Índices Finais
+CREATE CLUSTERED INDEX    IDX_FinalHora_CNPJ  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Pct   ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(percentual_madrugada DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Rank  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(ranking_br);
 GO
 
--- Verificacao rapida
-SELECT TOP 100 * FROM temp_CGUSC.fp.indicador_horario_atipico_detalhado ORDER BY ranking_br;
+
+-- ============================================================================
+-- LIMPEZA DAS TABELAS INTERMEDIÁRIAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico;
+GO
+
+
+-- ============================================================================
+-- VERIFICAÇÃO RÁPIDA
+-- ============================================================================
+SELECT TOP 100 *
+FROM temp_CGUSC.fp.indicador_horario_atipico_detalhado
+ORDER BY ranking_br;
+GO

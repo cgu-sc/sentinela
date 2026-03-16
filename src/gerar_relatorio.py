@@ -893,7 +893,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "Vendas Rápidas (<60s)": "METODOLOGIA: Percentual de vendas consecutivas realizadas em intervalo de tempo inferior a 60 segundos entre uma autorização e outra.",
 
-                "Horário Atípico (Madrugada)": "METODOLOGIA: Volume percentual de vendas processadas entre 00h00 e 06h00.",
+                "Volume Atípico": "METODOLOGIA: Mede explosões de crescimento semestral atípicos no faturamento do programa, avaliando a frequência e a magnitude desses saltos artificiais.",
 
                 "Dispersão Geográfica Interestadual": "METODOLOGIA: Percentual de vendas realizadas para pacientes cuja Unidade da Federação (UF) de residência difere da UF da farmácia.",
 
@@ -1368,8 +1368,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 ("4. AUTOMAÇÃO & GEOGRAFIA", [
                     ("Vendas Rápidas (<60s)", "pct_vendas_rapidas", "avg_vendas_rapidas_uf", "avg_vendas_rapidas_br",
                      "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
-                    ("Horário Atípico (Madrugada)", "pct_madrugada", "avg_madrugada_uf", "avg_madrugada_br",
-                     "risco_madrugada_uf", "risco_madrugada_br", "pct"),
+                    ("Volume Atípico", "val_volume_atipico", "avg_volume_atipico_uf", "avg_volume_atipico_br",
+                     "risco_volume_atipico_uf", "risco_volume_atipico_br", "dec"),
                     ("Concentração em Dias de Pico", "pct_pico", "avg_pico_uf", "avg_pico_br",
                      "risco_pico_uf", "risco_pico_br", "pct"),
                     ("Dispersão Geográfica Interestadual", "pct_geografico", "avg_geografico_uf", "avg_geografico_br",

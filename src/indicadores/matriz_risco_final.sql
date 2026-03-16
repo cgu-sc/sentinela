@@ -1,4 +1,4 @@
-﻿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
@@ -43,7 +43,8 @@ END;
         CASE WHEN I07.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_receita_paciente,
         CASE WHEN I08.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_per_capita,
         CASE WHEN I09.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_vendas_rapidas,
-        CASE WHEN I10.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_madrugada,
+        CASE WHEN I10.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_volume_atipico,
+        CASE WHEN I18.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_madrugada,
         CASE WHEN I11.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_geografico,
         CASE WHEN I12.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_alto_custo,
         CASE WHEN I13.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_pico,
@@ -92,9 +93,13 @@ END;
         I09.estado_media AS avg_vendas_rapidas_uf, I09.pais_media AS avg_vendas_rapidas_br,
         I09.risco_relativo_uf_media AS risco_vendas_rapidas_uf, I09.risco_relativo_br_media AS risco_vendas_rapidas_br,
 
-        I10.percentual_madrugada AS pct_madrugada,
-        I10.estado_media AS avg_madrugada_uf, I10.pais_media AS avg_madrugada_br,
-        I10.risco_relativo_uf_media AS risco_madrugada_uf, I10.risco_relativo_br_media AS risco_madrugada_br,
+        I10.risco_final AS val_volume_atipico,
+        I10.estado_media AS avg_volume_atipico_uf, I10.pais_media AS avg_volume_atipico_br,
+        I10.risco_relativo_uf_media AS risco_volume_atipico_uf, I10.risco_relativo_br_media AS risco_volume_atipico_br,
+
+        I18.percentual_madrugada AS pct_madrugada,
+        I18.estado_media AS avg_madrugada_uf, I18.pais_media AS avg_madrugada_br,
+        I18.risco_relativo_uf_media AS risco_madrugada_uf, I18.risco_relativo_br_media AS risco_madrugada_br,
 
         I11.percentual_geografico AS pct_geografico,
         I11.estado_media AS avg_geografico_uf, I11.pais_media AS avg_geografico_br,
@@ -134,7 +139,8 @@ END;
     LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_detalhado I07 ON I07.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_detalhado I08 ON I08.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado I09 ON I09.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_detalhado I10 ON I10.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_detalhado I10 ON I10.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_detalhado I18 ON I18.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_geografico_detalhado I11 ON I11.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
@@ -150,7 +156,7 @@ RiscosAjustados AS (
         *,
         (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + tem_media_itens + 
          tem_ticket + tem_receita_paciente + tem_per_capita + tem_vendas_rapidas + 
-         tem_madrugada + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
+         tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
          tem_crm + tem_exclusividade_crm + tem_crms_irregulares) AS qtd_indicadores_preenchidos,
         
         -- LÓGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO CÁLCULO
@@ -236,14 +242,14 @@ RiscosAjustados AS (
         END AS risco_vendas_rapidas_ajustado,
         CASE WHEN tem_vendas_rapidas=1 AND (CASE WHEN risco_vendas_rapidas_uf > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_vendas_rapidas_critico,
 
-        -- 10. MADRUGADA
+        -- 10. VOLUME ATIPICO
         CASE 
-            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 5 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 3
-            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 3 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 2
-            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 1.5 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 1.5
-            ELSE (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) 
-        END AS risco_madrugada_ajustado,
-        CASE WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_madrugada_critico,
+            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) >= 5 THEN (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) * 3
+            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) >= 3 THEN (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) * 2
+            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) >= 1.5 THEN (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) * 1.5
+            ELSE (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) 
+        END AS risco_volume_atipico_ajustado,
+        CASE WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_uf > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_volume_atipico_critico,
 
         -- 11. GEOGRAFICO
         CASE 
@@ -306,7 +312,16 @@ RiscosAjustados AS (
             WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) >= 1.5 THEN (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) * 1.5
             ELSE (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) 
         END AS risco_crms_irregulares_ajustado,
-        CASE WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico
+        CASE WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
+
+        -- EXTRA: MADRUGADA (Retido apenas para manter compatibilidade de colunas exportadas, no entra na soma de Score)
+        CASE 
+            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 5 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 3
+            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 3 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 2
+            WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 1.5 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 1.5
+            ELSE (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) 
+        END AS risco_madrugada_ajustado,
+        CASE WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_madrugada_critico
 
     FROM IndicadoresPresenca
 ),
@@ -321,7 +336,7 @@ ScoreCalculado AS (
         (risco_falecidos_ajustado + risco_clinico_ajustado + risco_teto_ajustado +
          risco_polimedicamento_ajustado + risco_media_itens_ajustado + risco_ticket_ajustado +
          risco_receita_paciente_ajustado + risco_per_capita_ajustado + risco_vendas_rapidas_ajustado +
-         risco_madrugada_ajustado + risco_geografico_ajustado + risco_alto_custo_ajustado +
+         risco_volume_atipico_ajustado + risco_geografico_ajustado + risco_alto_custo_ajustado +
          risco_pico_ajustado + risco_pacientes_unicos_ajustado + risco_crm_ajustado +
          risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado
         ) AS soma_riscos_ajustados,
@@ -330,7 +345,7 @@ ScoreCalculado AS (
         (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
          flag_polimedicamento_critico + flag_media_itens_critico + flag_ticket_critico +
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
-         flag_madrugada_critico + flag_geografico_critico + flag_alto_custo_critico +
+         flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico +
          flag_pico_critico + flag_pacientes_unicos_critico + flag_crm_critico +
          flag_exclusividade_crm_critico + flag_crms_irregulares_critico
         ) AS qtd_indicadores_criticos
@@ -379,7 +394,7 @@ ScoreCalculadoFim AS (
             CASE WHEN flag_receita_paciente_critico = 1 THEN 'Receita/Paciente, ' ELSE '' END +
             CASE WHEN flag_per_capita_critico = 1 THEN 'Per Capita, ' ELSE '' END +
             CASE WHEN flag_vendas_rapidas_critico = 1 THEN 'Vendas Rápidas, ' ELSE '' END +
-            CASE WHEN flag_madrugada_critico = 1 THEN 'Madrugada, ' ELSE '' END +
+            CASE WHEN flag_volume_atipico_critico = 1 THEN 'Volume Atípico, ' ELSE '' END +
             CASE WHEN flag_geografico_critico = 1 THEN 'Geográfico, ' ELSE '' END +
             CASE WHEN flag_alto_custo_critico = 1 THEN 'Alto Custo, ' ELSE '' END +
             CASE WHEN flag_pico_critico = 1 THEN 'Pico, ' ELSE '' END +

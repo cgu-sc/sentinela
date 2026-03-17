@@ -895,6 +895,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "Volume Atípico": "METODOLOGIA: Mede explosões de crescimento semestral atípicos no faturamento do programa, avaliando a frequência e a magnitude desses saltos artificiais.",
 
+                "Recorrência Sistêmica": "METODOLOGIA: Avalia o percentual de compras sequenciais de medicamentos de uso contínuo realizadas precisamente na linha de corte do sistema (ex: 30 dias cravados). Alta recorrência exata pode indicar a atuação de scripts automatizados de renovação virtual, em contraste com a flutuação natural do comportamento humano de visita à farmácia.",
+
                 "Dispersão Geográfica Interestadual": "METODOLOGIA: Percentual de vendas realizadas para pacientes cuja Unidade da Federação (UF) de residência difere da UF da farmácia.",
 
                 "Medicamentos de Alto Custo": "METODOLOGIA: Percentual do faturamento total da farmácia que provém exclusivamente de medicamentos classificados no topo da tabela de preços (90º percentil).",
@@ -1370,6 +1372,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                      "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
                     ("Volume Atípico", "val_volume_atipico", "avg_volume_atipico_uf", "avg_volume_atipico_br",
                      "risco_volume_atipico_uf", "risco_volume_atipico_br", "dec"),
+                    ("Recorrência Sistêmica", "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_uf", "avg_recorrencia_sistemica_br",
+                     "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br", "pct"),
                     ("Concentração em Dias de Pico", "pct_pico", "avg_pico_uf", "avg_pico_br",
                      "risco_pico_uf", "risco_pico_br", "pct"),
                     ("Dispersão Geográfica Interestadual", "pct_geografico", "avg_geografico_uf", "avg_geografico_br",
@@ -1439,13 +1443,18 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             limiar_critico = 1.7  # Ex: 35% * 2.0 = 70%
                         # Exceção para Concentração em Dias de Pico (Média em torno de 27%)
                         elif nome == "Concentração em Dias de Pico":
-                            limiar_atencao = 1.6  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
-                            limiar_critico = 2.0  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
+                            limiar_atencao = 1.4  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
+                            limiar_critico = 1.7  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
                         # Exceção para Pacientes Únicos (Média em torno de 41%)
                         elif nome == "Pacientes Únicos":
                             limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
                             limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
                         
+                        elif nome == "Recorrência Sistêmica":
+                            limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
+                            limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
+                        
+
                         # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
                         risco_base = round(r_uf, 1) 
                         

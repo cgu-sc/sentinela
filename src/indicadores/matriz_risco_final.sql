@@ -52,6 +52,7 @@ END;
         CASE WHEN I15.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crm,
         CASE WHEN I16.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_exclusividade_crm,
         CASE WHEN I17.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crms_irregulares,
+        CASE WHEN I19.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_recorrencia_sistemica,
         
         -- ====================================================================================
         -- DADOS ORIGINAIS REAIS (SEM TETO AQUI - PARA EXIBIÇÃO NO RELATÓRIO)
@@ -127,7 +128,11 @@ END;
 
         I17.pct_risco_irregularidade AS pct_crms_irregulares,
         I17.estado_media AS avg_crms_irregulares_uf, I17.pais_media AS avg_crms_irregulares_br,
-        I17.risco_relativo_uf_media AS risco_crms_irregulares_uf, I17.risco_relativo_br_media AS risco_crms_irregulares_br
+        I17.risco_relativo_uf_media AS risco_crms_irregulares_uf, I17.risco_relativo_br_media AS risco_crms_irregulares_br,
+
+        I19.percentual_recorrencia_sistemica AS pct_recorrencia_sistemica,
+        I19.estado_media AS avg_recorrencia_sistemica_uf, I19.pais_media AS avg_recorrencia_sistemica_br,
+        I19.risco_relativo_uf_media AS risco_recorrencia_sistemica_uf, I19.risco_relativo_br_media AS risco_recorrencia_sistemica_br
         
     FROM temp_CGUSC.fp.dados_farmacia F
     LEFT JOIN temp_CGUSC.fp.indicador_falecidos_detalhado I01 ON I01.cnpj = F.cnpj
@@ -148,6 +153,7 @@ END;
     LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.nu_cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_detalhado I16 ON I16.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado I19 ON I19.cnpj = F.cnpj
 ),
 
 -- 3. CTE 2: CÁLCULO DE SCORE COM TETO (AQUI É A MÁGICA)
@@ -157,7 +163,7 @@ RiscosAjustados AS (
         (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + tem_media_itens + 
          tem_ticket + tem_receita_paciente + tem_per_capita + tem_vendas_rapidas + 
          tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
-         tem_crm + tem_exclusividade_crm + tem_crms_irregulares) AS qtd_indicadores_preenchidos,
+         tem_crm + tem_exclusividade_crm + tem_crms_irregulares + tem_recorrencia_sistemica) AS qtd_indicadores_preenchidos,
         
         -- LÓGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO CÁLCULO
         
@@ -314,6 +320,15 @@ RiscosAjustados AS (
         END AS risco_crms_irregulares_ajustado,
         CASE WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_uf > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
 
+        -- 18. RECORRÊNCIA SISTÊMICA (RELÓGIO SUÍÇO)
+        CASE 
+            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) >= 5 THEN (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) * 3
+            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) >= 3 THEN (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) * 2
+            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) >= 1.5 THEN (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) * 1.5
+            ELSE (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) 
+        END AS risco_recorrencia_sistemica_ajustado,
+        CASE WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_uf > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_uf,0) END) >= 5 THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_critico,
+
         -- EXTRA: MADRUGADA (Retido apenas para manter compatibilidade de colunas exportadas, no entra na soma de Score)
         CASE 
             WHEN tem_madrugada=1 AND (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) >= 5 THEN (CASE WHEN risco_madrugada_uf > 10 THEN 10 ELSE ISNULL(risco_madrugada_uf,0) END) * 3
@@ -338,7 +353,7 @@ ScoreCalculado AS (
          risco_receita_paciente_ajustado + risco_per_capita_ajustado + risco_vendas_rapidas_ajustado +
          risco_volume_atipico_ajustado + risco_geografico_ajustado + risco_alto_custo_ajustado +
          risco_pico_ajustado + risco_pacientes_unicos_ajustado + risco_crm_ajustado +
-         risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado
+         risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado + risco_recorrencia_sistemica_ajustado
         ) AS soma_riscos_ajustados,
         
         -- Contagem de flags críticos
@@ -347,7 +362,7 @@ ScoreCalculado AS (
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
          flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico +
          flag_pico_critico + flag_pacientes_unicos_critico + flag_crm_critico +
-         flag_exclusividade_crm_critico + flag_crms_irregulares_critico
+         flag_exclusividade_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico
         ) AS qtd_indicadores_criticos
     FROM RiscosAjustados
 ),
@@ -401,7 +416,8 @@ ScoreCalculadoFim AS (
             CASE WHEN flag_pacientes_unicos_critico = 1 THEN 'Pacientes Únicos, ' ELSE '' END +
             CASE WHEN flag_crm_critico = 1 THEN 'CRM HHI, ' ELSE '' END +
             CASE WHEN flag_exclusividade_crm_critico = 1 THEN 'Exclusividade CRM, ' ELSE '' END +
-            CASE WHEN flag_crms_irregulares_critico = 1 THEN 'CRMs Irregulares, ' ELSE '' END + ''
+            CASE WHEN flag_crms_irregulares_critico = 1 THEN 'CRMs Irregulares, ' ELSE '' END +
+            CASE WHEN flag_recorrencia_sistemica_critico = 1 THEN 'Recorrência Sistêmica, ' ELSE '' END + ''
         )) AS indicadores_criticos_lista
     FROM ScoreCalculado
 ),

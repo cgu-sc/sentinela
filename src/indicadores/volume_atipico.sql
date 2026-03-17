@@ -209,15 +209,15 @@ CREATE CLUSTERED INDEX IDX_IndVol_CNPJ ON temp_CGUSC.fp.indicador_volume_atipico
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2))          AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
         AVG(ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_volume_atipico_mun
 FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
@@ -236,14 +236,14 @@ CREATE CLUSTERED INDEX IDX_IndVolMun_mun ON temp_CGUSC.fp.indicador_volume_atipi
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
         AVG(ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS media_estado
 INTO temp_CGUSC.fp.indicador_volume_atipico_uf
 FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
@@ -253,6 +253,33 @@ LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
     ON I.cnpj = SC.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndVolUF_uf ON temp_CGUSC.fp.indicador_volume_atipico_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 6B: BENCHMARKS POR REGIAO DE SAUDE (sobre risco_final)
+-- Base: todas as farmacias com >= 1 semestre valido (inclui risco=0).
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.risco_final, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_volume_atipico_regiao
+FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.cnpj = SC.cnpj
+LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
+    ON I.cnpj = SC.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndVolReg_id ON temp_CGUSC.fp.indicador_volume_atipico_regiao(id_regiao_saude);
 
 
 -- ============================================================================
@@ -288,7 +315,9 @@ SELECT
     SC.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2))                                AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Contagens
     SC.total_semestres_validos                              AS qtd_semestres_validos,
@@ -312,11 +341,15 @@ SELECT
         ORDER BY ISNULL(I.risco_final, 0) DESC
     )                                                      AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
+        PARTITION BY F.uf
         ORDER BY ISNULL(I.risco_final, 0) DESC
     )                                                      AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.risco_final, 0) DESC
+    )                                                      AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
         ORDER BY ISNULL(I.risco_final, 0) DESC
     )                                                      AS ranking_municipio,
 
@@ -332,6 +365,12 @@ SELECT
     CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
     CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0)                         AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0)                         AS regiao_saude_media,
+    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+
     -- Benchmarks nacionais
     BR.mediana_pais                                        AS pais_mediana,
     BR.media_pais                                          AS pais_media,
@@ -345,10 +384,12 @@ INNER JOIN temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
     ON I.cnpj = SC.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_mun MUN
-    ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-   AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON F.uf        = MUN.uf
+   AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_volume_atipico_br BR;
 
 CREATE CLUSTERED INDEX IDX_FinalVol_CNPJ     ON temp_CGUSC.fp.indicador_volume_atipico_detalhado(cnpj);
@@ -363,6 +404,10 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.vol_vendas_mensais;
 DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos;
 DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos_contagem;
 DROP TABLE IF EXISTS temp_CGUSC.fp.vol_crescimento_semestral;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
 GO
 
 -- ============================================================================
@@ -389,7 +434,9 @@ SELECT
     D.risco_frequencia,
     D.risco_final,
     D.municipio_media,
-    D.ranking_municipio
+    D.regiao_saude_media,
+    D.ranking_municipio,
+    D.ranking_regiao_saude
 FROM temp_CGUSC.fp.indicador_volume_atipico_detalhado D
 WHERE D.municipio = 'Dores do Turvo'
   AND D.uf       = 'MG'

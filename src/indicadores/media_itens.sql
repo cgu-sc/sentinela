@@ -1,4 +1,4 @@
-﻿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ============================================================================
@@ -67,20 +67,19 @@ DROP TABLE #ContagemItensAutorizacao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_mun;
 
 SELECT DISTINCT
-    CAST(F.uf       AS VARCHAR(2))   AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.media_itens_autorizacao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(I.media_itens_autorizacao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AVG(ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
-
 INTO temp_CGUSC.fp.indicador_media_itens_mun
-FROM temp_CGUSC.fp.indicador_media_itens I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndMediaMun ON temp_CGUSC.fp.indicador_media_itens_mun(uf, municipio);
 
@@ -91,21 +90,43 @@ CREATE CLUSTERED INDEX IDX_IndMediaMun ON temp_CGUSC.fp.indicador_media_itens_mu
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_uf;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.media_itens_autorizacao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
-        AVG(I.media_itens_autorizacao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AVG(ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS media_estado
-
 INTO temp_CGUSC.fp.indicador_media_itens_uf
-FROM temp_CGUSC.fp.indicador_media_itens I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndMediaUF_uf ON temp_CGUSC.fp.indicador_media_itens_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.media_itens_autorizacao, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_media_itens_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens I ON I.cnpj = F.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndMediaReg ON temp_CGUSC.fp.indicador_media_itens_regiao(id_regiao_saude);
 
 
 -- ============================================================================
@@ -114,17 +135,17 @@ CREATE CLUSTERED INDEX IDX_IndMediaUF_uf ON temp_CGUSC.fp.indicador_media_itens_
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_br;
 
-SELECT TOP 1
+SELECT DISTINCT
     'BR' AS pais,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY media_itens_autorizacao) OVER ()
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(media_itens_autorizacao, 0)) OVER ()
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
-        AVG(media_itens_autorizacao) OVER ()
+        AVG(ISNULL(media_itens_autorizacao, 0)) OVER ()
     AS DECIMAL(18,4)) AS media_pais
-
 INTO temp_CGUSC.fp.indicador_media_itens_br
-FROM temp_CGUSC.fp.indicador_media_itens;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens I ON I.cnpj = F.cnpj;
 
 
 -- ============================================================================
@@ -133,61 +154,85 @@ FROM temp_CGUSC.fp.indicador_media_itens;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_detalhado;
 
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Indicadores base
-    I.total_medicamentos_vendidos,
-    I.total_autorizacoes,
-    I.media_itens_autorizacao,
+    ISNULL(I.total_medicamentos_vendidos, 0) AS total_medicamentos_vendidos,
+    ISNULL(I.total_autorizacoes, 0)           AS total_autorizacoes,
+    ISNULL(I.media_itens_autorizacao, 0)      AS media_itens_autorizacao,
 
     -- Rankings (maior media = maior risco = posicao 1)
     RANK() OVER (
-        ORDER BY I.media_itens_autorizacao DESC
+        ORDER BY ISNULL(I.media_itens_autorizacao, 0) DESC
     ) AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.media_itens_autorizacao DESC
+        PARTITION BY F.uf
+        ORDER BY ISNULL(I.media_itens_autorizacao, 0) DESC
     ) AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.media_itens_autorizacao DESC
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.media_itens_autorizacao, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
+        ORDER BY ISNULL(I.media_itens_autorizacao, 0) DESC
     ) AS ranking_municipio,
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.media_itens_autorizacao + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.media_itens_autorizacao + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.media_itens_autorizacao + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.media_itens_autorizacao + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((I.media_itens_autorizacao + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.media_itens_autorizacao + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.media_itens_autorizacao, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_media_itens_detalhado
-FROM temp_CGUSC.fp.indicador_media_itens I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_media_itens_mun MUN
-    ON  CAST(F.uf       AS VARCHAR(2))   = MUN.uf
-    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON  F.uf        = MUN.uf
+    AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_media_itens_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_media_itens_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_media_itens_br BR;
 
 CREATE CLUSTERED INDEX    IDX_FinalMedia_CNPJ  ON temp_CGUSC.fp.indicador_media_itens_detalhado(cnpj);
 CREATE NONCLUSTERED INDEX IDX_FinalMedia_Risco ON temp_CGUSC.fp.indicador_media_itens_detalhado(risco_relativo_mun_mediana DESC);
 CREATE NONCLUSTERED INDEX IDX_FinalMedia_Rank  ON temp_CGUSC.fp.indicador_media_itens_detalhado(ranking_br);
+GO
+
+-- ============================================================================
+-- PASSO 7: LIMPEZA DAS TABELAS INTERMEDIARIAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_media_itens_br;
 GO
 
 -- Verificacao rapida

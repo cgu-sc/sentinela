@@ -245,59 +245,101 @@ BEGIN
     PRINT '=======================================================================';
 
     -- ========================================================================
-    -- PASSO 4, 5 e 6: MÉTRICAS MUNICIPAIS, ESTADUAIS e NACIONAL
+    -- PASSO 4: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
     -- ========================================================================
-    PRINT 'PASSO 4: Calculando métricas geográficas (Mediana/Média MUM, UF, BR)...';
+    PRINT 'PASSO 4: Calculando metricas por municipio...';
 
-    -- 4.1. MUNICÍPIO (MUM)
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_mun;
+
     SELECT DISTINCT
-        CAST(F.uf AS VARCHAR(2))          AS uf,
-        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        F.uf,
+        F.municipio,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_recorrencia_sistemica)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.uf, F.municipio)
         AS DECIMAL(18,4)) AS mediana_municipio,
         CAST(
-            AVG(I.percentual_recorrencia_sistemica)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+            AVG(ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.uf, F.municipio)
         AS DECIMAL(18,4)) AS media_municipio
     INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_mun
-    FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+    FROM temp_CGUSC.fp.indicador_controle_recorrencia_sistemica C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica I ON I.cnpj = C.cnpj;
     
     CREATE CLUSTERED INDEX IDX_IndRecorrMun ON temp_CGUSC.fp.indicador_recorrencia_sistemica_mun(uf, municipio);
 
-    -- 4.2. ESTADO (UF)
+    -- ========================================================================
+    -- PASSO 5: METRICAS POR ESTADO (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
+    -- ========================================================================
+    PRINT 'PASSO 5: Calculando metricas por estado...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
+
     SELECT DISTINCT
-        CAST(F.uf AS VARCHAR(2)) AS uf,
+        F.uf,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_recorrencia_sistemica)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.uf)
         AS DECIMAL(18,4)) AS mediana_estado,
         CAST(
-            AVG(I.percentual_recorrencia_sistemica)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+            AVG(ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.uf)
         AS DECIMAL(18,4)) AS media_estado
     INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_uf
-    FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+    FROM temp_CGUSC.fp.indicador_controle_recorrencia_sistemica C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica I ON I.cnpj = C.cnpj;
 
     CREATE CLUSTERED INDEX IDX_IndRecorrUF ON temp_CGUSC.fp.indicador_recorrencia_sistemica_uf(uf);
 
-    -- 4.3. BRASIL (BR)
+    -- ========================================================================
+    -- PASSO 5B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
+    -- ========================================================================
+    PRINT 'PASSO 5B: Calculando metricas por regiao de saude...';
+
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
+
+    SELECT DISTINCT
+        F.id_regiao_saude,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.id_regiao_saude)
+        AS DECIMAL(18,4)) AS mediana_regiao,
+        CAST(
+            AVG(ISNULL(I.percentual_recorrencia_sistemica, 0))
+            OVER (PARTITION BY F.id_regiao_saude)
+        AS DECIMAL(18,4)) AS media_regiao
+    INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao
+    FROM temp_CGUSC.fp.indicador_controle_recorrencia_sistemica C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica I ON I.cnpj = C.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL;
+
+    CREATE CLUSTERED INDEX IDX_IndRecorrReg ON temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao(id_regiao_saude);
+
+    -- ========================================================================
+    -- PASSO 6: METRICAS NACIONAIS (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
+    -- ========================================================================
+    PRINT 'PASSO 6: Calculando metricas nacionais...';
+
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
+
     SELECT DISTINCT
         'BR' AS pais,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_recorrencia_sistemica) OVER ()
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_recorrencia_sistemica, 0)) OVER ()
         AS DECIMAL(18,4)) AS mediana_pais,
         CAST(
-            AVG(percentual_recorrencia_sistemica) OVER ()
+            AVG(ISNULL(percentual_recorrencia_sistemica, 0)) OVER ()
         AS DECIMAL(18,4)) AS media_pais
     INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_br
-    FROM temp_CGUSC.fp.indicador_recorrencia_sistemica;
+    FROM temp_CGUSC.fp.indicador_controle_recorrencia_sistemica C
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica I ON I.cnpj = C.cnpj;
 
     -- ========================================================================
     -- PASSO 7: TABELA CONSOLIDADA FINAL DETALHADA COM RISCO E RANKING
@@ -307,61 +349,87 @@ BEGIN
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado;
 
     SELECT
-        I.cnpj,
+        C.cnpj,
         F.razaoSocial,
-        CAST(F.municipio AS VARCHAR(255)) AS municipio,
-        CAST(F.uf AS VARCHAR(2)) AS uf,
+        F.municipio,
+        F.uf,
+        F.no_regiao_saude,
+        F.id_regiao_saude,
 
         -- Indicadores base
-        I.qtd_renovacoes_totais,
-        I.qtd_renovacoes_sistemicas,
-        I.percentual_recorrencia_sistemica,
+        ISNULL(I.qtd_renovacoes_totais, 0)        AS qtd_renovacoes_totais,
+        ISNULL(I.qtd_renovacoes_sistemicas, 0)    AS qtd_renovacoes_sistemicas,
+        ISNULL(I.percentual_recorrencia_sistemica, 0) AS percentual_recorrencia_sistemica,
 
         -- Rankings (pior risco = posicao 1)
         RANK() OVER (
-            ORDER BY I.percentual_recorrencia_sistemica DESC
+            ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0) DESC
         ) AS ranking_br,
         RANK() OVER (
-            PARTITION BY CAST(F.uf AS VARCHAR(2))
-            ORDER BY I.percentual_recorrencia_sistemica DESC
+            PARTITION BY F.uf
+            ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0) DESC
         ) AS ranking_uf,
         RANK() OVER (
-            PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-            ORDER BY I.percentual_recorrencia_sistemica DESC
+            PARTITION BY F.id_regiao_saude
+            ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0) DESC
+        ) AS ranking_regiao_saude,
+        RANK() OVER (
+            PARTITION BY F.uf, F.municipio
+            ORDER BY ISNULL(I.percentual_recorrencia_sistemica, 0) DESC
         ) AS ranking_municipio,
 
         -- Benchmarks Municipais & Risco Relativo
         ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
         ISNULL(MUN.media_municipio,   0) AS municipio_media,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (ISNULL(MUN.media_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(MUN.media_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
         -- Benchmarks Estaduais & Risco Relativo
         ISNULL(UF.mediana_estado, 0) AS estado_mediana,
         ISNULL(UF.media_estado,   0) AS estado_media,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (ISNULL(UF.media_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(UF.media_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+        -- Benchmarks Regionais (Regiao de Saude)
+        ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+        ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
         -- Benchmarks Nacionais & Risco Relativo
         BR.mediana_pais AS pais_mediana,
         BR.media_pais   AS pais_media,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-        CAST((I.percentual_recorrencia_sistemica + 0.01) / (BR.media_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+        CAST((ISNULL(I.percentual_recorrencia_sistemica, 0) + 0.01) / (BR.media_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
     INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado
-    FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
+    FROM temp_CGUSC.fp.indicador_controle_recorrencia_sistemica C
     INNER JOIN temp_CGUSC.fp.dados_farmacia F
-        ON F.cnpj = I.cnpj
+        ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica I
+        ON I.cnpj = C.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_mun MUN
-        ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-       AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+        ON F.uf        = MUN.uf
+       AND F.municipio = MUN.municipio
     LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_uf UF
-        ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+        ON F.uf = UF.uf
+    LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao REG
+        ON F.id_regiao_saude = REG.id_regiao_saude
     CROSS JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_br BR;
 
     CREATE CLUSTERED INDEX IDX_FinalRecorrencia_CNPJ ON temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado(cnpj);
     
     PRINT CONCAT('Tabela detalhada final criada com sucesso: ', @@ROWCOUNT, ' farmácias.');
+    
+    -- ========================================================================
+    -- PASSO 8: LIMPEZA DAS TABELAS INTERMEDIARIAS
+    -- ========================================================================
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_mun;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
+
     PRINT 'O Indicador "Recorrência Sistêmica" agora pode ser incluído no matriz_risco_final.sql!';
 END
 GO

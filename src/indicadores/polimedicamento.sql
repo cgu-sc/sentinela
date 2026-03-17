@@ -65,19 +65,19 @@ DROP TABLE #VendasPorCupom;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_mun;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2))          AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_polimedicamento)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(I.percentual_polimedicamento)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AVG(ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_polimedicamento_mun
-FROM temp_CGUSC.fp.indicador_polimedicamento I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndPoliMun ON temp_CGUSC.fp.indicador_polimedicamento_mun(uf, municipio);
 
@@ -88,20 +88,43 @@ CREATE CLUSTERED INDEX IDX_IndPoliMun ON temp_CGUSC.fp.indicador_polimedicamento
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_uf;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_polimedicamento)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
-        AVG(I.percentual_polimedicamento)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AVG(ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS media_estado
 INTO temp_CGUSC.fp.indicador_polimedicamento_uf
-FROM temp_CGUSC.fp.indicador_polimedicamento I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndPoliUF ON temp_CGUSC.fp.indicador_polimedicamento_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.percentual_polimedicamento, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_polimedicamento_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento I ON I.cnpj = F.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndPoliReg ON temp_CGUSC.fp.indicador_polimedicamento_regiao(id_regiao_saude);
 
 
 -- ============================================================================
@@ -112,13 +135,14 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_br;
 SELECT DISTINCT
     'BR' AS pais,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_polimedicamento) OVER ()
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_polimedicamento, 0)) OVER ()
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
-        AVG(percentual_polimedicamento) OVER ()
+        AVG(ISNULL(percentual_polimedicamento, 0)) OVER ()
     AS DECIMAL(18,4)) AS media_pais
 INTO temp_CGUSC.fp.indicador_polimedicamento_br
-FROM temp_CGUSC.fp.indicador_polimedicamento;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento I ON I.cnpj = F.cnpj;
 
 
 -- ============================================================================
@@ -127,61 +151,80 @@ FROM temp_CGUSC.fp.indicador_polimedicamento;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_detalhado;
 
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Indicadores base
-    I.total_cupons_monitorados,
-    I.qtd_cupons_suspeitos,
-    I.percentual_polimedicamento,
+    ISNULL(I.total_cupons_monitorados, 0) AS total_cupons_monitorados,
+    ISNULL(I.qtd_cupons_suspeitos, 0)     AS qtd_cupons_suspeitos,
+    ISNULL(I.percentual_polimedicamento, 0) AS percentual_polimedicamento,
 
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (
-        ORDER BY I.percentual_polimedicamento DESC
+        ORDER BY ISNULL(I.percentual_polimedicamento, 0) DESC
     ) AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.percentual_polimedicamento DESC
+        PARTITION BY F.uf
+        ORDER BY ISNULL(I.percentual_polimedicamento, 0) DESC
     ) AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.percentual_polimedicamento DESC
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.percentual_polimedicamento, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
+        ORDER BY ISNULL(I.percentual_polimedicamento, 0) DESC
     ) AS ranking_municipio,
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.percentual_polimedicamento + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.percentual_polimedicamento + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.percentual_polimedicamento + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.percentual_polimedicamento + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((I.percentual_polimedicamento + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.percentual_polimedicamento + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.percentual_polimedicamento, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_polimedicamento_detalhado
-FROM temp_CGUSC.fp.indicador_polimedicamento I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento_mun MUN
-    ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-   AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON F.uf        = MUN.uf
+   AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_polimedicamento_br BR;
 
 CREATE CLUSTERED INDEX    IDX_FinalPoli_CNPJ  ON temp_CGUSC.fp.indicador_polimedicamento_detalhado(cnpj);
 CREATE NONCLUSTERED INDEX IDX_FinalPoli_Risco ON temp_CGUSC.fp.indicador_polimedicamento_detalhado(risco_relativo_mun_mediana DESC);
 CREATE NONCLUSTERED INDEX IDX_FinalPoli_Rank  ON temp_CGUSC.fp.indicador_polimedicamento_detalhado(ranking_br);
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_br;
 GO
 
 -- Verificacao rapida

@@ -69,19 +69,19 @@ DROP TABLE #LimiteAltoCusto;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_mun;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2))          AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_alto_custo)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(I.percentual_alto_custo)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AVG(ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_alto_custo_mun
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndAltoCustoMun ON temp_CGUSC.fp.indicador_alto_custo_mun(uf, municipio);
 
@@ -92,22 +92,47 @@ CREATE CLUSTERED INDEX IDX_IndAltoCustoMun ON temp_CGUSC.fp.indicador_alto_custo
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    SUM(I.valor_total_vendido)       OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) AS total_vendido_uf,
-    SUM(I.valor_vendas_alto_custo)   OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) AS total_alto_custo_uf,
+    F.uf,
+    SUM(ISNULL(I.valor_total_vendido, 0))       OVER (PARTITION BY F.uf) AS total_vendido_uf,
+    SUM(ISNULL(I.valor_vendas_alto_custo, 0))   OVER (PARTITION BY F.uf) AS total_alto_custo_uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_alto_custo)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
-        AVG(I.percentual_alto_custo)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AVG(ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS media_estado
 INTO temp_CGUSC.fp.indicador_alto_custo_uf
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndAltoCustoUF ON temp_CGUSC.fp.indicador_alto_custo_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    SUM(ISNULL(I.valor_total_vendido, 0))       OVER (PARTITION BY F.id_regiao_saude) AS total_vendido_regiao,
+    SUM(ISNULL(I.valor_vendas_alto_custo, 0))   OVER (PARTITION BY F.id_regiao_saude) AS total_alto_custo_regiao,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.percentual_alto_custo, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_alto_custo_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo I ON I.cnpj = F.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndAltoCustoReg ON temp_CGUSC.fp.indicador_alto_custo_regiao(id_regiao_saude);
 
 
 -- ============================================================================
@@ -117,16 +142,17 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
 
 SELECT DISTINCT
     'BR' AS pais,
-    SUM(valor_total_vendido)     OVER () AS total_vendido_br,
-    SUM(valor_vendas_alto_custo) OVER () AS total_alto_custo_br,
+    SUM(ISNULL(valor_total_vendido, 0))     OVER () AS total_vendido_br,
+    SUM(ISNULL(valor_vendas_alto_custo, 0)) OVER () AS total_alto_custo_br,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_alto_custo) OVER ()
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_alto_custo, 0)) OVER ()
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
-        AVG(percentual_alto_custo) OVER ()
+        AVG(ISNULL(percentual_alto_custo, 0)) OVER ()
     AS DECIMAL(18,4)) AS media_pais
 INTO temp_CGUSC.fp.indicador_alto_custo_br
-FROM temp_CGUSC.fp.indicador_alto_custo;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo I ON I.cnpj = F.cnpj;
 
 
 -- ============================================================================
@@ -135,61 +161,85 @@ FROM temp_CGUSC.fp.indicador_alto_custo;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_detalhado;
 
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Indicadores base
-    I.valor_total_vendido,
-    I.valor_vendas_alto_custo,
-    I.percentual_alto_custo,
+    ISNULL(I.valor_total_vendido, 0)      AS valor_total_vendido,
+    ISNULL(I.valor_vendas_alto_custo, 0)  AS valor_vendas_alto_custo,
+    ISNULL(I.percentual_alto_custo, 0)    AS percentual_alto_custo,
 
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (
-        ORDER BY I.percentual_alto_custo DESC
+        ORDER BY ISNULL(I.percentual_alto_custo, 0) DESC
     ) AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.percentual_alto_custo DESC
+        PARTITION BY F.uf
+        ORDER BY ISNULL(I.percentual_alto_custo, 0) DESC
     ) AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.percentual_alto_custo DESC
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.percentual_alto_custo, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
+        ORDER BY ISNULL(I.percentual_alto_custo, 0) DESC
     ) AS ranking_municipio,
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.percentual_alto_custo + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.percentual_alto_custo + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((I.percentual_alto_custo + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.percentual_alto_custo, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_alto_custo_detalhado
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_mun MUN
-    ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-   AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON F.uf        = MUN.uf
+   AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_alto_custo_br BR;
 
 CREATE CLUSTERED INDEX    IDX_FinalAltoCusto_CNPJ  ON temp_CGUSC.fp.indicador_alto_custo_detalhado(cnpj);
 CREATE NONCLUSTERED INDEX IDX_FinalAltoCusto_Risco ON temp_CGUSC.fp.indicador_alto_custo_detalhado(risco_relativo_mun_mediana DESC);
 CREATE NONCLUSTERED INDEX IDX_FinalAltoCusto_Rank  ON temp_CGUSC.fp.indicador_alto_custo_detalhado(ranking_br);
+GO
+
+-- ============================================================================
+-- PASSO 6: LIMPEZA DAS TABELAS INTERMEDIARIAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
 GO
 
 -- Verificacao rapida

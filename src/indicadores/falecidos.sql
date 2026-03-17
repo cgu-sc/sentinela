@@ -1,4 +1,4 @@
-﻿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ============================================================================
@@ -168,110 +168,172 @@ CREATE CLUSTERED INDEX IDX_IndFalecidos_CNPJ ON temp_CGUSC.fp.indicador_falecido
 DROP TABLE IF EXISTS #TotaisPorFarmacia;
 
 
+
 -- ============================================================================
 -- PASSO 4: MÉTRICAS GEOGRÁFICAS (MUNICÍPIO, UF, BR)
 -- ============================================================================
-
 -- Municipios
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
-    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_falecidos) 
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(CASE WHEN SUM(I.valor_total_vendas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) > 0 
-        THEN (SUM(I.valor_falecidos) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))) / 
-              SUM(I.valor_total_vendas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))) * 100.0
-        ELSE 0 END AS DECIMAL(18,4)) AS media_municipio
+    F.uf,
+    F.municipio,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
+    AS DECIMAL(18,4)) AS mediana_municipio,
+    CAST(
+        AVG(ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
+    AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_falecidos_mun
-FROM temp_CGUSC.fp.indicador_falecidos I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndFalecidosMun ON temp_CGUSC.fp.indicador_falecidos_mun(uf, municipio);
 
 -- Estados
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_falecidos) 
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(CASE WHEN SUM(I.valor_total_vendas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) > 0 
-        THEN (SUM(I.valor_falecidos) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2))) / 
-              SUM(I.valor_total_vendas) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))) * 100.0
-        ELSE 0 END AS DECIMAL(18,4)) AS media_estado
+    F.uf,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.uf)
+    AS DECIMAL(18,4)) AS mediana_estado,
+    CAST(
+        AVG(ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.uf)
+    AS DECIMAL(18,4)) AS media_estado
 INTO temp_CGUSC.fp.indicador_falecidos_uf
-FROM temp_CGUSC.fp.indicador_falecidos I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndFalecidosUF ON temp_CGUSC.fp.indicador_falecidos_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 4B: MÉTRICAS POR REGIÃO DE SAÚDE (MÉDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.percentual_falecidos, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_falecidos_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndFalecidosReg ON temp_CGUSC.fp.indicador_falecidos_regiao(id_regiao_saude);
 
 -- Brasil
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
 SELECT DISTINCT
     'BR' AS pais,
-    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_falecidos) OVER () AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(CASE WHEN SUM(valor_total_vendas) OVER () > 0 
-        THEN (SUM(valor_falecidos) OVER () / SUM(valor_total_vendas) OVER ()) * 100.0
-        ELSE 0 END AS DECIMAL(18,4)) AS media_pais
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_falecidos, 0)) OVER ()
+    AS DECIMAL(18,4)) AS mediana_pais,
+    CAST(
+        AVG(ISNULL(percentual_falecidos, 0)) OVER ()
+    AS DECIMAL(18,4)) AS media_pais
 INTO temp_CGUSC.fp.indicador_falecidos_br
-FROM temp_CGUSC.fp.indicador_falecidos;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
 
 
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
-
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2))    AS uf,
-    I.valor_total_vendas,
-    I.total_prescricoes,
-    I.valor_falecidos,
-    I.qtd_itens_falecidos,
-    I.qtd_autorizacoes_falecidos,
-    I.qtd_cpfs_falecidos,
-    I.percentual_falecidos,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
+
+    -- Indicadores base
+    ISNULL(I.valor_total_vendas, 0)         AS valor_total_vendas,
+    ISNULL(I.total_prescricoes, 0)          AS total_prescricoes,
+    ISNULL(I.valor_falecidos, 0)            AS valor_falecidos,
+    ISNULL(I.qtd_itens_falecidos, 0)        AS qtd_itens_falecidos,
+    ISNULL(I.qtd_autorizacoes_falecidos, 0) AS qtd_autorizacoes_falecidos,
+    ISNULL(I.qtd_cpfs_falecidos, 0)         AS qtd_cpfs_falecidos,
+    ISNULL(I.percentual_falecidos, 0)       AS percentual_falecidos,
 
     -- Rankings (pior risco = posição 1)
-    RANK() OVER (ORDER BY I.percentual_falecidos DESC)                                                                           AS ranking_br,
-    RANK() OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)) ORDER BY I.percentual_falecidos DESC)                                    AS ranking_uf,
-    RANK() OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)) ORDER BY I.percentual_falecidos DESC)  AS ranking_municipio,
+    RANK() OVER (
+        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
+    ) AS ranking_br,
+    RANK() OVER (
+        PARTITION BY F.uf 
+        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
+    ) AS ranking_uf,
+    RANK() OVER (
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio 
+        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
+    ) AS ranking_municipio,
 
     -- Comparativos Municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.percentual_falecidos + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.percentual_falecidos + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Comparativos Estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.percentual_falecidos + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.percentual_falecidos + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Comparativos Regionais (Região de Saúde)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Comparativos Nacionais
-    BR.mediana_pais,
-    BR.media_pais AS pais_media,
-    CAST((I.percentual_falecidos + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.percentual_falecidos + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    BR.mediana_pais AS pais_mediana,
+    BR.media_pais   AS pais_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_falecidos_detalhado
-FROM temp_CGUSC.fp.indicador_falecidos I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_falecidos_mun MUN
-    ON CAST(F.uf AS VARCHAR(2)) = MUN.uf
-    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON F.uf        = MUN.uf
+   AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_falecidos_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_falecidos_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_falecidos_br BR;
 
 CREATE CLUSTERED INDEX    IDX_Final_CNPJ  ON temp_CGUSC.fp.indicador_falecidos_detalhado(cnpj);
 CREATE NONCLUSTERED INDEX IDX_Final_Risco ON temp_CGUSC.fp.indicador_falecidos_detalhado(risco_relativo_mun_mediana DESC);
 CREATE NONCLUSTERED INDEX IDX_Final_Rank  ON temp_CGUSC.fp.indicador_falecidos_detalhado(ranking_br);
+
+-- ============================================================================
+-- PASSO 6: LIMPEZA DAS TABELAS INTERMEDIÁRIAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
 GO
 
 

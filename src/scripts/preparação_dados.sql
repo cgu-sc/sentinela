@@ -255,8 +255,6 @@ WHERE
    
    
    
--- Geração dos dados básicos das farmácias 
-
 DROP TABLE
 
 IF EXISTS #tempDadosFarmacias
@@ -271,10 +269,12 @@ IF EXISTS #tempDadosFarmacias
 		,temp_CGUSC.dbo.InitCapEachWord([Complemento]) AS complemento
 		,temp_CGUSC.dbo.InitCapEachWord([Bairro]) AS bairro
 		,try_cast(cep as varchar(8)) cep
-		,F.codibge
-		,F.municipio
-		,F.uf
-		,F.populacao2019
+		,CAST(F.id_ibge7 AS VARCHAR(7)) AS codibge
+		,CAST(F.no_municipio AS VARCHAR(255)) as municipio
+		,CAST(F.sg_uf AS CHAR(2)) as uf
+		,F.nu_populacao as populacao2019
+		,CAST(F.no_regiao_saude AS VARCHAR(255)) AS no_regiao_saude
+		,CAST(F.id_regiao_saude AS VARCHAR(255)) AS id_regiao_saude
 		,[IndPossuiSocio]
 		,[SituacaoCadastral]
 		,temp_CGUSC.dbo.InitCapEachWord(C.[ds_situacao_cnpj]) AS descricaoSituacaoCadastral
@@ -292,11 +292,15 @@ IF EXISTS #tempDadosFarmacias
 	LEFT JOIN [db_CNPJ].[dbo].[dime_situacao_cadastral_cnpj] C ON C.cd_situacao_cnpj = A.SituacaoCadastral
 	LEFT JOIN [db_CNPJ].[dbo].qualificacao D ON D.idQualificacao = A.QualificacaoResponsavel
 	LEFT JOIN [db_CNPJ].[dbo].Municipio E ON E.SkMunicipio = A.CodMunicipio
-	LEFT JOIN temp_CGUSC.dbo.municipiosIBGE F ON F.codibge = E.CodIbge
-    INNER JOIN temp_CGUSC.dbo.lista_cnpjs G ON A.cnpj = G.cnpj  
+	LEFT JOIN temp_CGUSC.fp.dados_ibge F ON F.id_ibge7 = E.CodIbge
+    INNER JOIN temp_CGUSC.fp.lista_cnpjs G ON A.cnpj = G.cnpj  
 
 
 
+
+
+
+	
  DROP TABLE
 
 IF EXISTS #tempDadosFarmacias2
@@ -315,6 +319,8 @@ IF EXISTS #tempDadosFarmacias2
 		,[municipio]
 		,uf
 		,populacao2019
+		,no_regiao_saude
+		,id_regiao_saude
 		,[indPossuiSocio]
 		,[situacaoCadastral]
 		,[descricaoSituacaoCadastral] AS situacaoReceita
@@ -339,10 +345,10 @@ IF EXISTS #tempDadosFarmacias2
 				SELECT count(*) AS outros_vinculos
 				FROM (
 					SELECT cnpj
-					FROM temp_CGUSC.dbo.tb_sociosFP sub2
+					FROM temp_CGUSC.fp.socios_farmacia sub2
 					WHERE sub2.cpf_cnpj_Socio IN (
 							SELECT sub.cpf_cnpj_Socio
-							FROM temp_CGUSC.dbo.tb_sociosFP sub
+							FROM temp_CGUSC.fp.socios_farmacia sub
 							WHERE sub.cnpj = A.cnpj
 							)
 						AND sub2.cnpj IN (
@@ -365,6 +371,7 @@ ALTER TABLE #tempDadosFarmacias2 ADD longitude DECIMAL(9, 6);
 ALTER TABLE #tempDadosFarmacias2 ADD CONSTRAINT pkdadosFarmacias PRIMARY KEY (id)
 
 
+
 DROP TABLE
 
 IF EXISTS #tempDatasInicialeFinalMovimentacao
@@ -375,15 +382,20 @@ IF EXISTS #tempDatasInicialeFinalMovimentacao
 	FROM [db_FarmaciaPopular].[dbo].[relatorio_movimentacao_2015_2024] A
 	GROUP BY A.cnpj
 
+
+
 DROP TABLE
 
-IF EXISTS temp_CGUSC.dbo.dadosFarmaciasFP
+IF EXISTS temp_CGUSC.fp.dados_farmacia
 	SELECT A.*
 		,B.dataInicialDadosMovimentacao
 		,B.dataFinalDadosMovimentacao
-	INTO temp_CGUSC.dbo.dadosFarmaciasFP
+	INTO temp_CGUSC.fp.dados_farmacia
 	FROM #tempDadosFarmacias2 A
 	LEFT JOIN #tempDatasInicialeFinalMovimentacao B ON B.cnpj = A.cnpj
+
+
+
 
 
 

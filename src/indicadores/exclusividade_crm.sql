@@ -249,22 +249,24 @@ DROP TABLE IF EXISTS #ExclusividadePorFarmacia;
 -- PASSO 4: MÉTRICAS POR MUNICÍPIO (MEDIANA E MÉDIA)
 -- NOVO: alinhado ao padrão venda_per_capita
 -- ============================================================================
+PRINT 'PASSO 4: Calculando metricas por municipio...';
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_mun;
 
 SELECT DISTINCT
-    CAST(F.uf        AS VARCHAR(2))   AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_exclusividade)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_exclusividade, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(I.percentual_exclusividade)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AVG(ISNULL(I.percentual_exclusividade, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_exclusividade_crm_mun
-FROM temp_CGUSC.fp.indicador_exclusividade_crm I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndExclMun ON temp_CGUSC.fp.indicador_exclusividade_crm_mun(uf, municipio);
 
@@ -275,32 +277,46 @@ CREATE CLUSTERED INDEX IDX_IndExclMun ON temp_CGUSC.fp.indicador_exclusividade_c
 -- Estratégia: AVG via GROUP BY em CTE_Medias; PERCENTILE_CONT via OVER() em
 -- CTE_Mediana (sem GROUP BY); join final pelos dois resultados.
 -- ============================================================================
+PRINT 'PASSO 5: Calculando metricas por estado...';
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_uf;
 
-WITH CTE_Medias AS (
+WITH CTE_Base AS (
+    SELECT 
+        F.uf,
+        ISNULL(I.total_prescritores, 0)          AS total_prescritores,
+        ISNULL(I.qtd_prescritores_exclusivos, 0) AS qtd_prescritores_exclusivos,
+        ISNULL(I.media_estabelecimentos_por_crm, 0) AS media_estabelecimentos_por_crm,
+        ISNULL(I.percentual_exclusividade, 0)    AS percentual_exclusividade,
+        ISNULL(I.percentual_compartilhamento, 0) AS percentual_compartilhamento,
+        ISNULL(I.percentual_multi_rede, 0)       AS percentual_multi_rede,
+        ISNULL(I.percentual_volume_exclusivos, 0) AS percentual_volume_exclusivos,
+        ISNULL(I.percentual_valor_exclusivos, 0)  AS percentual_valor_exclusivos
+    FROM temp_CGUSC.fp.dados_farmacia F
+    LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm I ON I.cnpj = F.cnpj
+),
+CTE_Medias AS (
     SELECT
-        CAST(F.uf AS VARCHAR(2))                               AS uf,
-        AVG(CAST(I.total_prescritores          AS DECIMAL(18,2))) AS media_prescritores_uf,
-        AVG(CAST(I.qtd_prescritores_exclusivos AS DECIMAL(18,2))) AS media_exclusivos_uf,
-        AVG(I.media_estabelecimentos_por_crm)                     AS media_dispersao_crm_uf,
-        AVG(I.percentual_exclusividade)                           AS percentual_exclusividade_uf,
-        AVG(I.percentual_compartilhamento)                        AS percentual_compartilhamento_uf,
-        AVG(I.percentual_multi_rede)                              AS percentual_multi_rede_uf,
-        AVG(I.percentual_volume_exclusivos)                       AS percentual_volume_exclusivos_uf,
-        AVG(I.percentual_valor_exclusivos)                        AS percentual_valor_exclusivos_uf
-    FROM temp_CGUSC.fp.indicador_exclusividade_crm I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
-    GROUP BY CAST(F.uf AS VARCHAR(2))
+        uf,
+        AVG(CAST(total_prescritores AS DECIMAL(18,2)))          AS media_prescritores_uf,
+        AVG(CAST(qtd_prescritores_exclusivos AS DECIMAL(18,2))) AS media_exclusivos_uf,
+        AVG(media_estabelecimentos_por_crm)                     AS media_dispersao_crm_uf,
+        AVG(percentual_exclusividade)                           AS percentual_exclusividade_uf,
+        AVG(percentual_compartilhamento)                        AS percentual_compartilhamento_uf,
+        AVG(percentual_multi_rede)                              AS percentual_multi_rede_uf,
+        AVG(percentual_volume_exclusivos)                       AS percentual_volume_exclusivos_uf,
+        AVG(percentual_valor_exclusivos)                        AS percentual_valor_exclusivos_uf
+    FROM CTE_Base
+    GROUP BY uf
 ),
 CTE_Mediana AS (
     SELECT DISTINCT
-        CAST(F.uf AS VARCHAR(2)) AS uf,
+        uf,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_exclusividade)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_exclusividade)
+            OVER (PARTITION BY uf)
         AS DECIMAL(18,4)) AS mediana_exclusividade_uf
-    FROM temp_CGUSC.fp.indicador_exclusividade_crm I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    FROM CTE_Base
 )
 SELECT
     M.uf,
@@ -321,14 +337,60 @@ CREATE CLUSTERED INDEX IDX_IndExclUF_uf ON temp_CGUSC.fp.indicador_exclusividade
 
 
 -- ============================================================================
+-- PASSO 5B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- ============================================================================
+PRINT 'PASSO 5B: Calculando metricas por regiao de saude...';
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_regiao;
+
+WITH CTE_Base_Reg AS (
+    SELECT 
+        F.id_regiao_saude,
+        ISNULL(I.percentual_exclusividade, 0) AS percentual_exclusividade
+    FROM temp_CGUSC.fp.dados_farmacia F
+    LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm I ON I.cnpj = F.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL
+)
+SELECT DISTINCT
+    id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_exclusividade)
+        OVER (PARTITION BY id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(percentual_exclusividade)
+        OVER (PARTITION BY id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_exclusividade_crm_regiao
+FROM CTE_Base_Reg;
+
+CREATE CLUSTERED INDEX IDX_IndExclReg ON temp_CGUSC.fp.indicador_exclusividade_crm_regiao(id_regiao_saude);
+
+
+-- ============================================================================
 -- PASSO 6: CÁLCULO DA MÉDIA NACIONAL (BRASIL)
 -- Preserva todas as colunas originais + acrescenta mediana (padrão venda_per_capita)
 -- Estratégia: AVG simples (sem OVER) para as médias; PERCENTILE_CONT OVER()
 -- para a mediana; SELECT DISTINCT elimina a duplicação de linhas do OVER().
 -- ============================================================================
+PRINT 'PASSO 6: Calculando metricas nacionais...';
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_br;
 
-WITH CTE_Medias_BR AS (
+WITH CTE_Base_BR AS (
+    SELECT 
+        ISNULL(total_prescritores, 0)          AS total_prescritores,
+        ISNULL(qtd_prescritores_exclusivos, 0) AS qtd_prescritores_exclusivos,
+        ISNULL(media_estabelecimentos_por_crm, 0) AS media_estabelecimentos_por_crm,
+        ISNULL(percentual_exclusividade, 0)    AS percentual_exclusividade,
+        ISNULL(percentual_compartilhamento, 0) AS percentual_compartilhamento,
+        ISNULL(percentual_multi_rede, 0)       AS percentual_multi_rede,
+        ISNULL(percentual_volume_exclusivos, 0) AS percentual_volume_exclusivos,
+        ISNULL(percentual_valor_exclusivos, 0)  AS percentual_valor_exclusivos
+    FROM temp_CGUSC.fp.dados_farmacia F
+    LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm I ON I.cnpj = F.cnpj
+),
+CTE_Medias_BR AS (
     SELECT
         AVG(CAST(total_prescritores          AS DECIMAL(18,2))) AS media_prescritores_br,
         AVG(CAST(qtd_prescritores_exclusivos AS DECIMAL(18,2))) AS media_exclusivos_br,
@@ -338,14 +400,14 @@ WITH CTE_Medias_BR AS (
         AVG(percentual_multi_rede)                              AS percentual_multi_rede_br,
         AVG(percentual_volume_exclusivos)                       AS percentual_volume_exclusivos_br,
         AVG(percentual_valor_exclusivos)                        AS percentual_valor_exclusivos_br
-    FROM temp_CGUSC.fp.indicador_exclusividade_crm
+    FROM CTE_Base_BR
 ),
 CTE_Mediana_BR AS (
     SELECT DISTINCT
         CAST(
             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_exclusividade) OVER ()
         AS DECIMAL(18,4)) AS mediana_exclusividade_br
-    FROM temp_CGUSC.fp.indicador_exclusividade_crm
+    FROM CTE_Base_BR
 )
 SELECT
     'BR'                        AS pais,
@@ -366,73 +428,87 @@ CROSS JOIN CTE_Mediana_BR D;
 -- ============================================================================
 -- PASSO 7: TABELA CONSOLIDADA FINAL
 -- ============================================================================
+PRINT 'PASSO 7: Gerando tabela consolidada com riscos relativos e rankings...';
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_detalhado;
 
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
-    -- Métricas Absolutas
-    I.total_prescritores,
-    I.qtd_prescritores_exclusivos,
-    I.qtd_prescritores_compartilhados,
-    I.qtd_prescritores_multi_rede,
-    I.media_estabelecimentos_por_crm,
-    I.total_prescricoes_farmacia,
-    I.total_valor_farmacia,
-    I.prescricoes_de_exclusivos,
-    I.valor_de_exclusivos,
+    -- Metricas Absolutas
+    ISNULL(I.total_prescritores, 0)          AS total_prescritores,
+    ISNULL(I.qtd_prescritores_exclusivos, 0) AS qtd_prescritores_exclusivos,
+    ISNULL(I.qtd_prescritores_compartilhados, 0) AS qtd_prescritores_compartilhados,
+    ISNULL(I.qtd_prescritores_multi_rede, 0) AS qtd_prescritores_multi_rede,
+    ISNULL(I.media_estabelecimentos_por_crm, 0) AS media_estabelecimentos_por_crm,
+    ISNULL(I.total_prescricoes_farmacia, 0)  AS total_prescricoes_farmacia,
+    ISNULL(I.total_valor_farmacia, 0)       AS total_valor_farmacia,
+    ISNULL(I.prescricoes_de_exclusivos, 0)  AS prescricoes_de_exclusivos,
+    ISNULL(I.valor_de_exclusivos, 0)       AS valor_de_exclusivos,
 
-    -- Índices Principais
-    I.percentual_exclusividade,
-    I.percentual_compartilhamento,
-    I.percentual_multi_rede,
-    I.percentual_volume_exclusivos,
-    I.percentual_valor_exclusivos,
+    -- Indices Principais
+    ISNULL(I.percentual_exclusividade, 0)    AS percentual_exclusividade,
+    ISNULL(I.percentual_compartilhamento, 0) AS percentual_compartilhamento,
+    ISNULL(I.percentual_multi_rede, 0)       AS percentual_multi_rede,
+    ISNULL(I.percentual_volume_exclusivos, 0) AS percentual_volume_exclusivos,
+    ISNULL(I.percentual_valor_exclusivos, 0)  AS percentual_valor_exclusivos,
 
-    -- Rankings (pior risco = posição 1)
+    -- Rankings (pior risco = posicao 1)
     RANK() OVER (
-        ORDER BY I.percentual_exclusividade DESC
+        ORDER BY ISNULL(I.percentual_exclusividade, 0) DESC
     ) AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.percentual_exclusividade DESC
+        PARTITION BY F.uf
+        ORDER BY ISNULL(I.percentual_exclusividade, 0) DESC
     ) AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.percentual_exclusividade DESC
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.percentual_exclusividade, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
+        ORDER BY ISNULL(I.percentual_exclusividade, 0) DESC
     ) AS ranking_municipio,
 
-    -- Benchmarks Município
+    -- Benchmarks Municipio
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.percentual_exclusividade + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.percentual_exclusividade + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks UF
-    ISNULL(UF.mediana_exclusividade_uf, 0) AS estado_mediana,
+    ISNULL(UF.mediana_exclusividade_uf, 0)      AS estado_mediana,
     ISNULL(UF.percentual_exclusividade_uf, 0) AS estado_media,
-    CAST((I.percentual_exclusividade + 0.01) / (ISNULL(UF.mediana_exclusividade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.percentual_exclusividade + 0.01) / (ISNULL(UF.percentual_exclusividade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(UF.mediana_exclusividade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(UF.percentual_exclusividade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regional (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks BR
-    BR.mediana_exclusividade_br AS pais_mediana,
+    BR.mediana_exclusividade_br    AS pais_mediana,
     BR.percentual_exclusividade_br AS pais_media,
-    CAST((I.percentual_exclusividade + 0.01) / (BR.mediana_exclusividade_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.percentual_exclusividade + 0.01) / (BR.percentual_exclusividade_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (BR.mediana_exclusividade_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.percentual_exclusividade, 0) + 0.01) / (BR.percentual_exclusividade_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
 
-    -- RISCOS ADICIONAIS ORIGINAIS (Dispersão e Volume/Valor)
+    -- RISCOS ADICIONAIS ORIGINAIS (Dispersao e Volume/Valor)
     ISNULL(UF.media_dispersao_crm_uf,          0) AS dispersao_estado,
     ISNULL(UF.percentual_volume_exclusivos_uf, 0) AS volume_exclusivos_estado,
     BR.media_dispersao_crm_br          AS dispersao_pais,
     BR.percentual_volume_exclusivos_br AS volume_exclusivos_pais,
 
-    -- RISCO INVERSO DE DISPERSÃO (Quanto MENOR a dispersão, MAIOR o risco)
+    -- RISCO INVERSO DE DISPERSÃO (Quanto MENOR a dispersao, MAIOR o risco)
     CAST(
         CASE
-            WHEN I.media_estabelecimentos_por_crm > 0
+            WHEN ISNULL(I.media_estabelecimentos_por_crm, 0) > 0
              AND UF.media_dispersao_crm_uf IS NOT NULL THEN
                 UF.media_dispersao_crm_uf / I.media_estabelecimentos_por_crm
             ELSE 99.0
@@ -441,31 +517,33 @@ SELECT
 
     CAST(
         CASE
-            WHEN I.media_estabelecimentos_por_crm > 0
+            WHEN ISNULL(I.media_estabelecimentos_por_crm, 0) > 0
              AND BR.media_dispersao_crm_br IS NOT NULL THEN
                 BR.media_dispersao_crm_br / I.media_estabelecimentos_por_crm
             ELSE 99.0
         END
     AS DECIMAL(18,4)) AS risco_baixa_dispersao_br,
 
-    -- Classificação de Risco (original preservado)
+    -- Classificacao de Risco (original preservado)
     CASE
-        WHEN I.percentual_exclusividade >= 80 THEN 'MUITO ALTO'
-        WHEN I.percentual_exclusividade >= 60 THEN 'ALTO'
-        WHEN I.percentual_exclusividade >= 40 THEN 'MODERADO'
-        WHEN I.percentual_exclusividade >= 20 THEN 'BAIXO'
+        WHEN ISNULL(I.percentual_exclusividade, 0) >= 80 THEN 'MUITO ALTO'
+        WHEN ISNULL(I.percentual_exclusividade, 0) >= 60 THEN 'ALTO'
+        WHEN ISNULL(I.percentual_exclusividade, 0) >= 40 THEN 'MODERADO'
+        WHEN ISNULL(I.percentual_exclusividade, 0) >= 20 THEN 'BAIXO'
         ELSE 'MUITO BAIXO'
     END AS classificacao_exclusividade
 
 INTO temp_CGUSC.fp.indicador_exclusividade_crm_detalhado
-FROM temp_CGUSC.fp.indicador_exclusividade_crm I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_mun MUN
-    ON  CAST(F.uf        AS VARCHAR(2))   = MUN.uf
-    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON  F.uf        = MUN.uf
+    AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_exclusividade_crm_br BR;
 
 -- Índices Finais (originais preservados + novo por ranking_br)
@@ -477,9 +555,13 @@ GO
 
 
 -- ============================================================================
--- LIMPEZA DAS TABELAS INTERMEDIÁRIAS
+-- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_exclusividade_crm_br;
 GO
 
 

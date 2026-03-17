@@ -219,53 +219,84 @@ BEGIN
 
     -- ========================================================================
     -- PASSO 4: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
     -- ========================================================================
     PRINT 'PASSO 4: Calculando metricas por municipio...';
 
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_mun;
 
     SELECT DISTINCT
-        CAST(F.uf AS VARCHAR(2))          AS uf,
-        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        F.uf,
+        F.municipio,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_vendas_consecutivas)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.uf, F.municipio)
         AS DECIMAL(18,4)) AS mediana_municipio,
         CAST(
-            AVG(I.percentual_vendas_consecutivas)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+            AVG(ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.uf, F.municipio)
         AS DECIMAL(18,4)) AS media_municipio
     INTO temp_CGUSC.fp.indicador_vendas_consecutivas_mun
-    FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas I ON I.cnpj = C.cnpj;
 
     CREATE CLUSTERED INDEX IDX_IndVendasConsecMun ON temp_CGUSC.fp.indicador_vendas_consecutivas_mun(uf, municipio);
 
     -- ========================================================================
     -- PASSO 5: METRICAS POR ESTADO (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
     -- ========================================================================
     PRINT 'PASSO 5: Calculando metricas por estado...';
 
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_uf;
 
     SELECT DISTINCT
-        CAST(F.uf AS VARCHAR(2)) AS uf,
+        F.uf,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_vendas_consecutivas)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.uf)
         AS DECIMAL(18,4)) AS mediana_estado,
         CAST(
-            AVG(I.percentual_vendas_consecutivas)
-            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+            AVG(ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.uf)
         AS DECIMAL(18,4)) AS media_estado
     INTO temp_CGUSC.fp.indicador_vendas_consecutivas_uf
-    FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas I ON I.cnpj = C.cnpj;
 
     CREATE CLUSTERED INDEX IDX_IndVendasConsecUF ON temp_CGUSC.fp.indicador_vendas_consecutivas_uf(uf);
 
     -- ========================================================================
+    -- PASSO 5B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
+    -- ========================================================================
+    PRINT 'PASSO 5B: Calculando metricas por regiao de saude...';
+
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_regiao;
+
+    SELECT DISTINCT
+        F.id_regiao_saude,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.id_regiao_saude)
+        AS DECIMAL(18,4)) AS mediana_regiao,
+        CAST(
+            AVG(ISNULL(I.percentual_vendas_consecutivas, 0))
+            OVER (PARTITION BY F.id_regiao_saude)
+        AS DECIMAL(18,4)) AS media_regiao
+    INTO temp_CGUSC.fp.indicador_vendas_consecutivas_regiao
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas I ON I.cnpj = C.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL;
+
+    CREATE CLUSTERED INDEX IDX_IndVendasConsecReg ON temp_CGUSC.fp.indicador_vendas_consecutivas_regiao(id_regiao_saude);
+
+    -- ========================================================================
     -- PASSO 6: METRICAS NACIONAIS (MEDIA E MEDIANA)
+    -- Base: todas as farmacias da populacao alvo (inclui risco=0).
     -- ========================================================================
     PRINT 'PASSO 6: Calculando metricas nacionais...';
 
@@ -274,13 +305,14 @@ BEGIN
     SELECT DISTINCT
         'BR' AS pais,
         CAST(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_vendas_consecutivas) OVER ()
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_vendas_consecutivas, 0)) OVER ()
         AS DECIMAL(18,4)) AS mediana_pais,
         CAST(
-            AVG(percentual_vendas_consecutivas) OVER ()
+            AVG(ISNULL(percentual_vendas_consecutivas, 0)) OVER ()
         AS DECIMAL(18,4)) AS media_pais
     INTO temp_CGUSC.fp.indicador_vendas_consecutivas_br
-    FROM temp_CGUSC.fp.indicador_vendas_consecutivas;
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas I ON I.cnpj = C.cnpj;
 
     -- ========================================================================
     -- PASSO 7: TABELA CONSOLIDADA FINAL
@@ -290,56 +322,72 @@ BEGIN
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado;
 
     SELECT
-        I.cnpj,
+        C.cnpj,
         F.razaoSocial,
         F.municipio,
-        CAST(F.uf AS VARCHAR(2)) AS uf,
+        F.uf,
+        F.no_regiao_saude,
+        F.id_regiao_saude,
 
         -- Indicadores base
-        I.total_intervalos_analisados,
-        I.qtd_vendas_rapidas,
-        I.percentual_vendas_consecutivas,
+        ISNULL(I.total_intervalos_analisados, 0)    AS total_intervalos_analisados,
+        ISNULL(I.qtd_vendas_rapidas, 0)             AS qtd_vendas_rapidas,
+        ISNULL(I.percentual_vendas_consecutivas, 0) AS percentual_vendas_consecutivas,
 
         -- Rankings (pior risco = posicao 1)
         RANK() OVER (
-            ORDER BY I.percentual_vendas_consecutivas DESC
+            ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0) DESC
         ) AS ranking_br,
         RANK() OVER (
-            PARTITION BY CAST(F.uf AS VARCHAR(2))
-            ORDER BY I.percentual_vendas_consecutivas DESC
+            PARTITION BY F.uf
+            ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0) DESC
         ) AS ranking_uf,
         RANK() OVER (
-            PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-            ORDER BY I.percentual_vendas_consecutivas DESC
+            PARTITION BY F.id_regiao_saude
+            ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0) DESC
+        ) AS ranking_regiao_saude,
+        RANK() OVER (
+            PARTITION BY F.uf, F.municipio
+            ORDER BY ISNULL(I.percentual_vendas_consecutivas, 0) DESC
         ) AS ranking_municipio,
 
         -- Benchmarks municipais
         ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
         ISNULL(MUN.media_municipio,   0) AS municipio_media,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
         -- Benchmarks estaduais
         ISNULL(UF.mediana_estado, 0) AS estado_mediana,
         ISNULL(UF.media_estado,   0) AS estado_media,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+        -- Benchmarks Regionais (Regiao de Saude)
+        ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+        ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
         -- Benchmarks nacionais
         BR.mediana_pais AS pais_mediana,
         BR.media_pais   AS pais_media,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-        CAST((I.percentual_vendas_consecutivas + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+        CAST((ISNULL(I.percentual_vendas_consecutivas, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
     INTO temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado
-    FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
     INNER JOIN temp_CGUSC.fp.dados_farmacia F
-        ON F.cnpj = I.cnpj
+        ON F.cnpj = C.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas I
+        ON I.cnpj = C.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_mun MUN
-        ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-       AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+        ON F.uf        = MUN.uf
+       AND F.municipio = MUN.municipio
     LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_uf UF
-        ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+        ON F.uf = UF.uf
+    LEFT JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_regiao REG
+        ON F.id_regiao_saude = REG.id_regiao_saude
     CROSS JOIN temp_CGUSC.fp.indicador_vendas_consecutivas_br BR;
 
     CREATE CLUSTERED INDEX IDX_FinalVendasConsec_CNPJ    ON temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado(cnpj);
@@ -354,6 +402,7 @@ BEGIN
     PRINT '  1. indicador_vendas_consecutivas (base)';
     PRINT '  2. indicador_vendas_consecutivas_mun (metricas por municipio)';
     PRINT '  3. indicador_vendas_consecutivas_uf (metricas por estado)';
+    PRINT '  3b. indicador_vendas_consecutivas_regiao (metricas por regiao de saude)';
     PRINT '  4. indicador_vendas_consecutivas_br (metricas nacionais)';
     PRINT '  5. indicador_vendas_consecutivas_detalhado (tabela final com riscos e rankings)';
     PRINT '=======================================================================';

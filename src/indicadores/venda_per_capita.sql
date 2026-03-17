@@ -41,23 +41,19 @@ SELECT
     F.cnpj,
     V.valor_total_periodo,
     V.qtd_meses_ativos,
-    IBGE.nu_populacao AS populacao_municipio,
-
-    -- Per capita mensal normalizado: (total / meses) / populacao
     CAST(
         CASE
-            WHEN IBGE.nu_populacao > 0 AND V.qtd_meses_ativos > 0
-                THEN (V.valor_total_periodo / V.qtd_meses_ativos) / IBGE.nu_populacao
+            WHEN F.populacao2019 > 0 AND V.qtd_meses_ativos > 0
+                THEN (V.valor_total_periodo / V.qtd_meses_ativos) / F.populacao2019
             ELSE 0
         END
-    AS DECIMAL(18,4)) AS valor_per_capita_mensal
+    AS DECIMAL(18,4)) AS valor_per_capita_mensal,
+    F.populacao2019 AS populacao_municipio
 
 INTO temp_CGUSC.fp.indicador_venda_per_capita
 FROM temp_CGUSC.fp.vol_vendas_per_capita V
 INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = V.cnpj
-INNER JOIN temp_CGUSC.sus.tb_ibge IBGE
-    ON CAST(F.codibge AS VARCHAR(7)) = IBGE.id_ibge7;
+    ON F.cnpj = V.cnpj; -- Nota: Populacao agora ja vem em F.populacao2019
 
 CREATE CLUSTERED INDEX IDX_IndCapita_CNPJ ON temp_CGUSC.fp.indicador_venda_per_capita(cnpj);
 
@@ -70,19 +66,19 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.vol_vendas_per_capita;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_mun;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2))          AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    F.uf,
+    F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.valor_per_capita_mensal)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(I.valor_per_capita_mensal)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AVG(ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS media_municipio
 INTO temp_CGUSC.fp.indicador_venda_per_capita_mun
-FROM temp_CGUSC.fp.indicador_venda_per_capita I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndCapitaMun ON temp_CGUSC.fp.indicador_venda_per_capita_mun(uf, municipio);
 
@@ -93,20 +89,43 @@ CREATE CLUSTERED INDEX IDX_IndCapitaMun ON temp_CGUSC.fp.indicador_venda_per_cap
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_uf;
 
 SELECT DISTINCT
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.valor_per_capita_mensal)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
-        AVG(I.valor_per_capita_mensal)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
+        AVG(ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS media_estado
 INTO temp_CGUSC.fp.indicador_venda_per_capita_uf
-FROM temp_CGUSC.fp.indicador_venda_per_capita I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita I ON I.cnpj = F.cnpj;
 
 CREATE CLUSTERED INDEX IDX_IndCapitaUF ON temp_CGUSC.fp.indicador_venda_per_capita_uf(uf);
+
+
+-- ============================================================================
+-- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.valor_per_capita_mensal, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_venda_per_capita_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita I ON I.cnpj = F.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndCapitaReg ON temp_CGUSC.fp.indicador_venda_per_capita_regiao(id_regiao_saude);
 
 
 -- ============================================================================
@@ -117,13 +136,14 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_br;
 SELECT DISTINCT
     'BR' AS pais,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY valor_per_capita_mensal) OVER ()
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(valor_per_capita_mensal, 0)) OVER ()
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
-        AVG(valor_per_capita_mensal) OVER ()
+        AVG(ISNULL(valor_per_capita_mensal, 0)) OVER ()
     AS DECIMAL(18,4)) AS media_pais
 INTO temp_CGUSC.fp.indicador_venda_per_capita_br
-FROM temp_CGUSC.fp.indicador_venda_per_capita;
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita I ON I.cnpj = F.cnpj;
 
 
 -- ============================================================================
@@ -132,57 +152,71 @@ FROM temp_CGUSC.fp.indicador_venda_per_capita;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_detalhado;
 
 SELECT
-    I.cnpj,
+    F.cnpj,
     F.razaoSocial,
     F.municipio,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Indicadores base
-    I.valor_total_periodo,
-    I.populacao_municipio,
-    I.qtd_meses_ativos,
-    I.valor_per_capita_mensal,
+    ISNULL(I.valor_total_periodo, 0)      AS valor_total_periodo,
+    F.populacao2019                       AS populacao_municipio,
+    ISNULL(I.qtd_meses_ativos, 0)         AS qtd_meses_ativos,
+    ISNULL(I.valor_per_capita_mensal, 0)  AS valor_per_capita_mensal,
 
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (
-        ORDER BY I.valor_per_capita_mensal DESC
+        ORDER BY ISNULL(I.valor_per_capita_mensal, 0) DESC
     ) AS ranking_br,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.valor_per_capita_mensal DESC
+        PARTITION BY F.uf
+        ORDER BY ISNULL(I.valor_per_capita_mensal, 0) DESC
     ) AS ranking_uf,
     RANK() OVER (
-        PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.valor_per_capita_mensal DESC
+        PARTITION BY F.id_regiao_saude
+        ORDER BY ISNULL(I.valor_per_capita_mensal, 0) DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
+        PARTITION BY F.uf, F.municipio
+        ORDER BY ISNULL(I.valor_per_capita_mensal, 0) DESC
     ) AS ranking_municipio,
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((I.valor_per_capita_mensal + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.valor_per_capita_mensal + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((I.valor_per_capita_mensal + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.valor_per_capita_mensal + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((I.valor_per_capita_mensal + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.valor_per_capita_mensal + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_venda_per_capita_detalhado
-FROM temp_CGUSC.fp.indicador_venda_per_capita I
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = I.cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita I
+    ON I.cnpj = F.cnpj
 LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_mun MUN
-    ON CAST(F.uf AS VARCHAR(2))          = MUN.uf
-   AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+    ON F.uf        = MUN.uf
+   AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_uf UF
-    ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+    ON F.uf = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_venda_per_capita_br BR;
 
 CREATE CLUSTERED INDEX IDX_FinalCapita_CNPJ      ON temp_CGUSC.fp.indicador_venda_per_capita_detalhado(cnpj);
@@ -194,6 +228,10 @@ GO
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_venda_per_capita_br;
 GO
 
 -- Verificacao rapida

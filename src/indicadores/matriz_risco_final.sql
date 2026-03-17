@@ -59,80 +59,80 @@ END;
         -- ====================================================================================
         
         I01.percentual_falecidos AS pct_falecidos,
-        I01.estado_media AS avg_falecidos_uf, I01.pais_media AS avg_falecidos_br,
-        I01.risco_relativo_uf_media AS risco_falecidos_uf, I01.risco_relativo_br_media AS risco_falecidos_br,
+        I01.municipio_media AS avg_falecidos_mun, I01.estado_media AS avg_falecidos_uf, I01.pais_media AS avg_falecidos_br,
+        I01.risco_relativo_mun_media AS risco_falecidos_mun, I01.risco_relativo_uf_media AS risco_falecidos_uf, I01.risco_relativo_br_media AS risco_falecidos_br,
         
         I02.percentual_inconsistencia AS pct_clinico,
-        I02.estado_media AS avg_clinico_uf, I02.pais_media AS avg_clinico_br,
-        I02.risco_relativo_uf_media AS risco_clinico_uf, I02.risco_relativo_br_media AS risco_clinico_br,
+        I02.municipio_media AS avg_clinico_mun, I02.estado_media AS avg_clinico_uf, I02.pais_media AS avg_clinico_br,
+        I02.risco_relativo_mun_media AS risco_clinico_mun, I02.risco_relativo_uf_media AS risco_clinico_uf, I02.risco_relativo_br_media AS risco_clinico_br,
 
         I03.percentual_teto AS pct_teto,
-        I03.estado_media AS avg_teto_uf, I03.pais_media AS avg_teto_br,
-        I03.risco_relativo_uf_media AS risco_teto_uf, I03.risco_relativo_br_media AS risco_teto_br,
+        I03.municipio_media AS avg_teto_mun, I03.estado_media AS avg_teto_uf, I03.pais_media AS avg_teto_br,
+        I03.risco_relativo_mun_media AS risco_teto_mun, I03.risco_relativo_uf_media AS risco_teto_uf, I03.risco_relativo_br_media AS risco_teto_br,
 
         I04.percentual_polimedicamento AS pct_polimedicamento,
-        I04.estado_media AS avg_polimedicamento_uf, I04.pais_media AS avg_polimedicamento_br,
-        I04.risco_relativo_uf_media AS risco_polimedicamento_uf, I04.risco_relativo_br_media AS risco_polimedicamento_br,
+        I04.municipio_media AS avg_polimedicamento_mun, I04.estado_media AS avg_polimedicamento_uf, I04.pais_media AS avg_polimedicamento_br,
+        I04.risco_relativo_mun_media AS risco_polimedicamento_mun, I04.risco_relativo_uf_media AS risco_polimedicamento_uf, I04.risco_relativo_br_media AS risco_polimedicamento_br,
 
         I05.media_itens_autorizacao AS val_media_itens,
-        I05.estado_media AS avg_media_itens_uf, I05.pais_media AS avg_media_itens_br,
-        I05.risco_relativo_uf_media AS risco_media_itens_uf, I05.risco_relativo_br_media AS risco_media_itens_br,
+        I05.municipio_media AS avg_media_itens_mun, I05.estado_media AS avg_media_itens_uf, I05.pais_media AS avg_media_itens_br,
+        I05.risco_relativo_mun_media AS risco_media_itens_mun, I05.risco_relativo_uf_media AS risco_media_itens_uf, I05.risco_relativo_br_media AS risco_media_itens_br,
 
         I06.valor_ticket_medio AS val_ticket_medio,
-        I06.estado_media AS avg_ticket_uf, I06.pais_media AS avg_ticket_br,
-        I06.risco_relativo_uf_media AS risco_ticket_uf, I06.risco_relativo_br_media AS risco_ticket_br,
+        I06.municipio_media AS avg_ticket_mun, I06.estado_media AS avg_ticket_uf, I06.pais_media AS avg_ticket_br,
+        I06.risco_relativo_mun_media AS risco_ticket_mun, I06.risco_relativo_uf_media AS risco_ticket_uf, I06.risco_relativo_br_media AS risco_ticket_br,
 
         I07.receita_por_paciente_mensal AS val_receita_paciente,
-        I07.estado_media AS avg_receita_paciente_uf, I07.pais_media AS avg_receita_paciente_br,
-        I07.risco_relativo_uf_media AS risco_receita_paciente_uf, I07.risco_relativo_br_media AS risco_receita_paciente_br,
+        I07.municipio_media AS avg_receita_paciente_mun, I07.estado_media AS avg_receita_paciente_uf, I07.pais_media AS avg_receita_paciente_br,
+        I07.risco_relativo_mun_media AS risco_receita_paciente_mun, I07.risco_relativo_uf_media AS risco_receita_paciente_uf, I07.risco_relativo_br_media AS risco_receita_paciente_br,
 
         I08.valor_per_capita_mensal AS val_per_capita,
-        I08.estado_media AS avg_per_capita_uf, I08.pais_media AS avg_per_capita_br,
-        I08.risco_relativo_uf_media AS risco_per_capita_uf, I08.risco_relativo_br_media AS risco_per_capita_br,
+        I08.municipio_media AS avg_per_capita_mun, I08.estado_media AS avg_per_capita_uf, I08.pais_media AS avg_per_capita_br,
+        I08.risco_relativo_mun_media AS risco_per_capita_mun, I08.risco_relativo_uf_media AS risco_per_capita_uf, I08.risco_relativo_br_media AS risco_per_capita_br,
 
         I09.percentual_vendas_consecutivas AS pct_vendas_rapidas,
-        I09.estado_media AS avg_vendas_rapidas_uf, I09.pais_media AS avg_vendas_rapidas_br,
-        I09.risco_relativo_uf_media AS risco_vendas_rapidas_uf, I09.risco_relativo_br_media AS risco_vendas_rapidas_br,
+        I09.municipio_media AS avg_vendas_rapidas_mun, I09.estado_media AS avg_vendas_rapidas_uf, I09.pais_media AS avg_vendas_rapidas_br,
+        I09.risco_relativo_mun_media AS risco_vendas_rapidas_mun, I09.risco_relativo_uf_media AS risco_vendas_rapidas_uf, I09.risco_relativo_br_media AS risco_vendas_rapidas_br,
 
         I10.risco_final AS val_volume_atipico,
-        I10.estado_media AS avg_volume_atipico_uf, I10.pais_media AS avg_volume_atipico_br,
-        I10.risco_relativo_uf_media AS risco_volume_atipico_uf, I10.risco_relativo_br_media AS risco_volume_atipico_br,
+        I10.municipio_media AS avg_volume_atipico_mun, I10.estado_media AS avg_volume_atipico_uf, I10.pais_media AS avg_volume_atipico_br,
+        I10.risco_relativo_mun_media AS risco_volume_atipico_mun, I10.risco_relativo_uf_media AS risco_volume_atipico_uf, I10.risco_relativo_br_media AS risco_volume_atipico_br,
 
         I18.percentual_madrugada AS pct_madrugada,
-        I18.estado_media AS avg_madrugada_uf, I18.pais_media AS avg_madrugada_br,
-        I18.risco_relativo_uf_media AS risco_madrugada_uf, I18.risco_relativo_br_media AS risco_madrugada_br,
+        I18.municipio_media AS avg_madrugada_mun, I18.estado_media AS avg_madrugada_uf, I18.pais_media AS avg_madrugada_br,
+        I18.risco_relativo_mun_media AS risco_madrugada_mun, I18.risco_relativo_uf_media AS risco_madrugada_uf, I18.risco_relativo_br_media AS risco_madrugada_br,
 
         I11.percentual_geografico AS pct_geografico,
-        I11.estado_media AS avg_geografico_uf, I11.pais_media AS avg_geografico_br,
-        I11.risco_relativo_uf_media AS risco_geografico_uf, I11.risco_relativo_br_media AS risco_geografico_br,
+        I11.municipio_media AS avg_geografico_mun, I11.estado_media AS avg_geografico_uf, I11.pais_media AS avg_geografico_br,
+        I11.risco_relativo_mun_media AS risco_geografico_mun, I11.risco_relativo_uf_media AS risco_geografico_uf, I11.risco_relativo_br_media AS risco_geografico_br,
 
         I12.percentual_alto_custo AS pct_alto_custo,
-        I12.estado_media AS avg_alto_custo_uf, I12.pais_media AS avg_alto_custo_br,
-        I12.risco_relativo_uf_media AS risco_alto_custo_uf, I12.risco_relativo_br_media AS risco_alto_custo_br,
+        I12.municipio_media AS avg_alto_custo_mun, I12.estado_media AS avg_alto_custo_uf, I12.pais_media AS avg_alto_custo_br,
+        I12.risco_relativo_mun_media AS risco_alto_custo_mun, I12.risco_relativo_uf_media AS risco_alto_custo_uf, I12.risco_relativo_br_media AS risco_alto_custo_br,
 
         I13.media_concentracao AS pct_pico,
-        I13.estado_media AS avg_pico_uf, I13.pais_media AS avg_pico_br,
-        I13.risco_relativo_uf_media AS risco_pico_uf, I13.risco_relativo_br_media AS risco_pico_br,
+        I13.municipio_media AS avg_pico_mun, I13.estado_media AS avg_pico_uf, I13.pais_media AS avg_pico_br,
+        I13.risco_relativo_mun_media AS risco_pico_mun, I13.risco_relativo_uf_media AS risco_pico_uf, I13.risco_relativo_br_media AS risco_pico_br,
 
         I14.percentual_pacientes_unicos AS pct_pacientes_unicos,
-        I14.estado_media AS avg_pacientes_unicos_uf, I14.pais_media AS avg_pacientes_unicos_br,
-        I14.risco_relativo_uf_media AS risco_pacientes_unicos_uf, I14.risco_relativo_br_media AS risco_pacientes_unicos_br,
+        I14.municipio_media AS avg_pacientes_unicos_mun, I14.estado_media AS avg_pacientes_unicos_uf, I14.pais_media AS avg_pacientes_unicos_br,
+        I14.risco_relativo_mun_media AS risco_pacientes_unicos_mun, I14.risco_relativo_uf_media AS risco_pacientes_unicos_uf, I14.risco_relativo_br_media AS risco_pacientes_unicos_br,
 
         CAST(I15.indice_hhi AS DECIMAL(18,2)) AS val_hhi_crm,
-        CAST(I15.media_hhi_uf AS DECIMAL(18,2)) AS avg_hhi_crm_uf, CAST(I15.media_hhi_br AS DECIMAL(18,2)) AS avg_hhi_crm_br,
-        I15.risco_hhi_uf AS risco_crm_uf, I15.risco_hhi_br AS risco_crm_br,
+        CAST(I15.media_hhi_mun AS DECIMAL(18,2)) AS avg_hhi_crm_mun, CAST(I15.media_hhi_uf AS DECIMAL(18,2)) AS avg_hhi_crm_uf, CAST(I15.media_hhi_br AS DECIMAL(18,2)) AS avg_hhi_crm_br,
+        I15.risco_hhi_mun AS risco_crm_mun, I15.risco_hhi_uf AS risco_crm_uf, I15.risco_hhi_br AS risco_crm_br,
 
         I16.percentual_exclusividade AS pct_exclusividade_crm,
-        I16.estado_media AS avg_exclusividade_crm_uf, I16.pais_media AS avg_exclusividade_crm_br,
-        I16.risco_relativo_uf_media AS risco_exclusividade_crm_uf, I16.risco_relativo_br_media AS risco_exclusividade_crm_br,
+        I16.municipio_media AS avg_exclusividade_crm_mun, I16.estado_media AS avg_exclusividade_crm_uf, I16.pais_media AS avg_exclusividade_crm_br,
+        I16.risco_relativo_mun_media AS risco_exclusividade_crm_mun, I16.risco_relativo_uf_media AS risco_exclusividade_crm_uf, I16.risco_relativo_br_media AS risco_exclusividade_crm_br,
 
         I17.pct_risco_irregularidade AS pct_crms_irregulares,
-        I17.estado_media AS avg_crms_irregulares_uf, I17.pais_media AS avg_crms_irregulares_br,
-        I17.risco_relativo_uf_media AS risco_crms_irregulares_uf, I17.risco_relativo_br_media AS risco_crms_irregulares_br,
+        I17.municipio_media AS avg_crms_irregulares_mun, I17.estado_media AS avg_crms_irregulares_uf, I17.pais_media AS avg_crms_irregulares_br,
+        I17.risco_relativo_mun_media AS risco_crms_irregulares_mun, I17.risco_relativo_uf_media AS risco_crms_irregulares_uf, I17.risco_relativo_br_media AS risco_crms_irregulares_br,
 
         I19.percentual_recorrencia_sistemica AS pct_recorrencia_sistemica,
-        I19.estado_media AS avg_recorrencia_sistemica_uf, I19.pais_media AS avg_recorrencia_sistemica_br,
-        I19.risco_relativo_uf_media AS risco_recorrencia_sistemica_uf, I19.risco_relativo_br_media AS risco_recorrencia_sistemica_br
+        I19.municipio_media AS avg_recorrencia_sistemica_mun, I19.estado_media AS avg_recorrencia_sistemica_uf, I19.pais_media AS avg_recorrencia_sistemica_br,
+        I19.risco_relativo_mun_media AS risco_recorrencia_sistemica_mun, I19.risco_relativo_uf_media AS risco_recorrencia_sistemica_uf, I19.risco_relativo_br_media AS risco_recorrencia_sistemica_br
         
     FROM temp_CGUSC.fp.dados_farmacia F
     LEFT JOIN temp_CGUSC.fp.indicador_falecidos_detalhado I01 ON I01.cnpj = F.cnpj

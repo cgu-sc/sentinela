@@ -269,30 +269,21 @@ SELECT
     ISNULL(MUN.mediana_madrugada_mun,    0) AS municipio_mediana,
 
     -- Comparativos UF
-    ISNULL(UF.percentual_madrugada_uf, 0) AS media_estado,
-    ISNULL(UF.mediana_madrugada_uf,    0) AS mediana_estado,
+    ISNULL(UF.percentual_madrugada_uf, 0) AS estado_media,
+    ISNULL(UF.mediana_madrugada_uf,    0) AS estado_mediana,
 
     -- Comparativos BR
-    BR.percentual_madrugada_br AS media_pais,
-    BR.mediana_madrugada_br    AS mediana_pais,
+    BR.percentual_madrugada_br AS pais_media,
+    BR.mediana_madrugada_br    AS pais_mediana,
+
+    -- RISCO RELATIVO MUN
+    CAST((I.percentual_madrugada + 0.01) / (ISNULL(MUN.percentual_madrugada_mun, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- RISCO RELATIVO UF
-    CAST(
-        CASE
-            WHEN UF.percentual_madrugada_uf > 0 THEN
-                I.percentual_madrugada / UF.percentual_madrugada_uf
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS risco_relativo_uf,
+    CAST((I.percentual_madrugada + 0.01) / (ISNULL(UF.percentual_madrugada_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
     -- RISCO RELATIVO BR
-    CAST(
-        CASE
-            WHEN BR.percentual_madrugada_br > 0 THEN
-                I.percentual_madrugada / BR.percentual_madrugada_br
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS risco_relativo_br
+    CAST((I.percentual_madrugada + 0.01) / (BR.percentual_madrugada_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_horario_atipico_detalhado
 FROM temp_CGUSC.fp.indicador_horario_atipico I
@@ -307,7 +298,8 @@ CROSS JOIN temp_CGUSC.fp.indicador_horario_atipico_br BR;
 
 -- Índices Finais
 CREATE CLUSTERED INDEX    IDX_FinalHora_CNPJ  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf_media DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_RiscoMun ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_mun_media DESC);
 CREATE NONCLUSTERED INDEX IDX_FinalHora_Pct   ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(percentual_madrugada DESC);
 CREATE NONCLUSTERED INDEX IDX_FinalHora_Rank  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(ranking_br);
 GO

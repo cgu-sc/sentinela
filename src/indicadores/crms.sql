@@ -1,4 +1,4 @@
-﻿USE [temp_CGUSC]
+USE [temp_CGUSC]
 GO
 
 -- ============================================================================
@@ -271,6 +271,43 @@ LEFT JOIN #RedePorFarmacia RE ON RE.cnpj = T.cnpj;
 CREATE CLUSTERED INDEX IDX_IndPresc_CNPJ ON temp_CGUSC.fp.indicador_crm(nu_cnpj);
 
 -- ============================================================================
+-- PASSO 3.5: MÉDIAS POR MUNICÍPIO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_mun;
+
+WITH CTE_Mediana_Mun AS (
+    SELECT DISTINCT
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.indice_hhi) 
+            OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
+        AS DECIMAL(18,2)) AS mediana_hhi_mun
+    FROM temp_CGUSC.fp.indicador_crm I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON CAST(F.cnpj AS VARCHAR(20)) = CAST(I.nu_cnpj AS VARCHAR(20))
+),
+CTE_Media_Mun AS (
+    SELECT 
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        CAST(F.municipio AS VARCHAR(255)) AS municipio,
+        AVG(indice_hhi) AS media_hhi_mun
+    FROM temp_CGUSC.fp.indicador_crm I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON CAST(F.cnpj AS VARCHAR(20)) = CAST(I.nu_cnpj AS VARCHAR(20))
+    GROUP BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
+)
+SELECT 
+    A.uf,
+    A.municipio,
+    A.media_hhi_mun,
+    B.mediana_hhi_mun
+INTO temp_CGUSC.fp.indicador_crm_mun
+FROM CTE_Media_Mun A
+INNER JOIN CTE_Mediana_Mun B ON A.uf = B.uf AND A.municipio = B.municipio;
+
+CREATE CLUSTERED INDEX IDX_IndPrescMun_loc ON temp_CGUSC.fp.indicador_crm_mun(uf, municipio);
+
+
+-- ============================================================================
 -- PASSO 4: MÉDIAS POR UF
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_uf;
@@ -367,6 +404,10 @@ SELECT
     -- ? NOVO CAMPO: média_prescricoes_dia_rede
     I.media_prescricoes_dia_rede,
     
+    -- Médias Mun
+    ISNULL(MUN.media_hhi_mun, 0) AS media_hhi_mun,
+    ISNULL(MUN.mediana_hhi_mun, 0) AS mediana_hhi_mun,
+
     -- Médias UF
     ISNULL(UF.media_concentracao_uf, 0) AS media_concentracao_uf,
     ISNULL(UF.media_concentracao_top5_uf, 0) AS media_concentracao_top5_uf,
@@ -396,6 +437,9 @@ SELECT
     CAST(CASE WHEN BR.media_concentracao_top5_br > 0 THEN I.pct_concentracao_top5 / BR.media_concentracao_top5_br ELSE 0 END AS DECIMAL(18,4)) AS risco_concentracao_top5_br,
     CAST(CASE WHEN UF.media_hhi_uf > 0 THEN I.indice_hhi / UF.media_hhi_uf ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_uf,
     CAST(CASE WHEN BR.media_hhi_br > 0 THEN I.indice_hhi / BR.media_hhi_br ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_br,
+    CAST(CASE WHEN MUN.media_hhi_mun > 0 THEN (I.indice_hhi + 0.01) / (MUN.media_hhi_mun + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_mun,
+    CAST(CASE WHEN MUN.mediana_hhi_mun > 0 THEN (I.indice_hhi + 0.01) / (MUN.mediana_hhi_mun + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_mun_mediana,
+    
     
     -- Riscos Robôs e Turistas com suavização
     CAST(CASE WHEN UF.media_robos_uf > 0 THEN (I.qtd_prescritores_robos + 0.001) / (UF.media_robos_uf + 0.001) ELSE CASE WHEN I.qtd_prescritores_robos > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_robos_uf,
@@ -424,6 +468,7 @@ SELECT
 INTO temp_CGUSC.fp.indicador_crm_detalhado
 FROM temp_CGUSC.fp.indicador_crm I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON CAST(F.cnpj AS VARCHAR(20)) = CAST(I.nu_cnpj AS VARCHAR(20))
+LEFT JOIN temp_CGUSC.fp.indicador_crm_mun MUN ON CAST(F.uf AS VARCHAR(2)) = MUN.uf AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_crm_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
 CROSS JOIN temp_CGUSC.fp.indicador_crm_br BR;
 

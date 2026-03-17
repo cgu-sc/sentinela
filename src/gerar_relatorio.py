@@ -994,9 +994,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 'font_color': cor_score, 'border': 0, 'text_wrap': True
             })
 
-            ws_ind.merge_range('J2:O4', score, fmt_score_num)
-            ws_ind.merge_range('J5:O6', txt_score, fmt_score_txt)
-            ws_ind.merge_range('J7:O7', "SCORE GERAL", fmt_score_label)
+            ws_ind.merge_range('L2:Q4', score, fmt_score_num)
+            ws_ind.merge_range('L5:Q6', txt_score, fmt_score_txt)
+            ws_ind.merge_range('L7:Q7', "SCORE GERAL", fmt_score_label)
 
             # =================================================================
             # NOVO: INDICADOR DE CONFIABILIDADE DOS DADOS (DATA QUALITY)
@@ -1025,7 +1025,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             # 4. Escreve na planilha (Logo abaixo do rótulo "SCORE GERAL")
             # Usando merge_range para ocupar as colunas I, J e K na linha 9 (índice 8)
-            ws_ind.merge_range('J9:O9', f"CONFIABILIDADE DOS DADOS: {qualidade_dados}", fmt_badge_qualidade)
+            ws_ind.merge_range('L9:Q9', f"CONFIABILIDADE DOS DADOS: {qualidade_dados}", fmt_badge_qualidade)
 
             rank_nacional = int(dados_risco.get('rank_nacional') or 0)
             total_nacional = int(dados_risco.get('total_nacional') or 0)
@@ -1092,26 +1092,26 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 'left': 1, 'right': 1, 'bottom': 1
             })
 
-            # 5. Escrita das Linhas (J11 a J16)
+            # 5. Escrita das Linhas (L11 a Q11)
 
             # Cabeçalho
-            ws_ind.merge_range('J11:O11', "RANKING & COMPARATIVO DE RISCO", fmt_rank_titulo)
+            ws_ind.merge_range('L11:Q11', "RANKING & COMPARATIVO DE RISCO", fmt_rank_titulo)
 
             # Linha 1: Nacional
             txt_nac = f"🇧🇷 Nacional: #{rank_nacional} de {total_nacional} (Top {pct_top_nacional:.2f}%)"
-            ws_ind.merge_range('J12:O12', txt_nac, fmt_rank_linha)
+            ws_ind.merge_range('L12:Q12', txt_nac, fmt_rank_linha)
 
             # Linha 2: Estadual
             txt_uf = f"🚩 Estadual ({uf_atual}): #{rank_uf} de {total_uf}"
-            ws_ind.merge_range('J13:O13', txt_uf, fmt_rank_linha)
+            ws_ind.merge_range('L13:Q13', txt_uf, fmt_rank_linha)
 
             # Linha 3: Municipal (Nova)
             txt_mun = f"🏙️ Municipal ({mun_atual}): #{rank_municipio} de {total_mun}"
-            ws_ind.merge_range('J14:O14', txt_mun, fmt_rank_linha)
+            ws_ind.merge_range('L14:Q14', txt_mun, fmt_rank_linha)
 
             # Linha 4: Comparativo Média (Nova)
             txt_media = f"📊 Score {score} é {vezes_pior:.1f}x a média local ({media_cidade:.1f})"
-            ws_ind.merge_range('J15:O15', txt_media, fmt_rank_linha)
+            ws_ind.merge_range('L15:Q15', txt_media, fmt_rank_linha)
 
             # Linha 5: Flag Final (Nova - Líder ou Status)
             if rank_municipio == 1:
@@ -1121,7 +1121,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             else:
                 txt_status = "✅ DENTRO DA MÉDIA MUNICIPAL"
 
-            ws_ind.merge_range('J16:O16', txt_status, fmt_rank_fim)
+            ws_ind.merge_range('L16:Q16', txt_status, fmt_rank_fim)
 
             # =================================================================
             # TABELA TOP 15 (COM COLUNA RISCO - J18)
@@ -1135,12 +1135,12 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             top15_lista, total_dinheiro_cidade = buscar_top15_municipio(cursor, uf, mun)
             total_dinheiro_cidade = float(total_dinheiro_cidade) if total_dinheiro_cidade else 0.0
 
-            # Título (Agora vai até R18)
+            # Título (Agora vai até T18)
             fmt_top15_header = wb.add_format({
                 'bold': True, 'font_size': 9, 'font_color': '#1F4E78',
                 'align': 'left', 'valign': 'bottom', 'bottom': 1
             })
-            ws_ind.merge_range('J18:R18', f"TOP 15 PIORES FARMÁCIAS NO MUNICÍPIO DE {mun_atual.upper()}", fmt_top15_header)
+            ws_ind.merge_range('L18:T18', f"TOP 15 PIORES FARMÁCIAS NO MUNICÍPIO DE {mun_atual.upper()}", fmt_top15_header)
 
             # Cabeçalhos da Tabela
             fmt_th = wb.add_format(
@@ -1148,13 +1148,13 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             fmt_th_esq = wb.add_format(
                 {'bold': True, 'font_size': 8, 'align': 'left', 'bg_color': '#F2F2F2', 'border': 1})
 
-            # LAYOUT DE COLUNAS ESTENDIDO (J até R)
-            ws_ind.write('J19', "RANK", fmt_th)  # J
-            ws_ind.merge_range('K19:M19', "FARMÁCIA", fmt_th_esq)  # K-L-M (3 Colunas restauradas)
-            ws_ind.write('N19', "RISCO", fmt_th)  # N
-            ws_ind.write('O19', "CONEXÃO", fmt_th)  # O
-            ws_ind.write('P19', "R$ S/ COMP.", fmt_th)  # P
-            ws_ind.merge_range('Q19:R19', "% S/ COMP.", fmt_th)  # Q-R
+            # LAYOUT DE COLUNAS (L até T)
+            ws_ind.write('L19', "RANK", fmt_th)              # L
+            ws_ind.merge_range('M19:O19', "FARMÁCIA", fmt_th_esq)  # M-N-O
+            ws_ind.write('P19', "RISCO", fmt_th)             # P
+            ws_ind.write('Q19', "CONEXÃO", fmt_th)          # Q
+            ws_ind.write('R19', "R$ S/ COMP.", fmt_th)       # R
+            ws_ind.merge_range('S19:T19', "% S/ COMP.", fmt_th)  # S-T
 
             linha_atual = 18
 
@@ -1298,25 +1298,25 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                     # --- ESCRITA NAS CÉLULAS ---
 
-                    # 1. SETA (Coluna I / Index 8)
-                    ws_ind.write(linha_atual, 8, seta_char, f_seta)
+                    # 1. SETA (Coluna K / Index 10)
+                    ws_ind.write(linha_atual, 10, seta_char, f_seta)
 
-                    # 2. Tabela (Coluna J / Index 9 em diante)
-                    ws_ind.write(linha_atual, 9, f"#{item.get('rank_municipio')}", f_c)
-                    ws_ind.merge_range(linha_atual, 10, linha_atual, 12, f"{nome} ({score_item:.1f})", f_l)
-                    ws_ind.write(linha_atual, 13, txt_risco, f_risco)
-                    ws_ind.write(linha_atual, 14, status_texto, f_status)
-                    ws_ind.write(linha_atual, 15, val_irreg, f_m)
-                    ws_ind.merge_range(linha_atual, 16, linha_atual, 17, pct_irregular, f_p)
+                    # 2. Tabela (Coluna L / Index 11 em diante)
+                    ws_ind.write(linha_atual, 11, f"#{item.get('rank_municipio')}", f_c)
+                    ws_ind.merge_range(linha_atual, 12, linha_atual, 14, f"{nome} ({score_item:.1f})", f_l)
+                    ws_ind.write(linha_atual, 15, txt_risco, f_risco)
+                    ws_ind.write(linha_atual, 16, status_texto, f_status)
+                    ws_ind.write(linha_atual, 17, val_irreg, f_m)
+                    ws_ind.merge_range(linha_atual, 18, linha_atual, 19, pct_irregular, f_p)
 
-                # Data Bars (Cols 16 e 17 / Q e R)
-                ws_ind.conditional_format(19, 16, linha_atual, 17, {
+                # Data Bars (Cols 18 e 19 / S e T)
+                ws_ind.conditional_format(19, 18, linha_atual, 19, {
                     'type': 'data_bar', 'bar_color': '#63C384', 'bar_solid': True,
                     'min_type': 'num', 'min_value': 0, 'max_type': 'num', 'max_value': 1, 'bar_no_border': True
                 })
             else:
                 # Merge até a coluna 17 (R)
-                ws_ind.merge_range(linha_atual + 1, 9, linha_atual + 1, 17, "Sem dados comparativos.", fmt_cell_center)
+                ws_ind.merge_range(linha_atual + 1, 11, linha_atual + 1, 19, "Sem dados comparativos.", fmt_cell_center)
                 linha_atual += 1
 
             # Impacto Financeiro (Merge até a coluna 17 / R)
@@ -1329,8 +1329,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 val_mi = total_dinheiro_cidade / 1_000_000.0
                 txt_valor_total = f"R$ {val_mi:.1f} Milhões" if val_mi >= 1 else f"R$ {total_dinheiro_cidade / 1000:.0f} Mil"
                 msg_share = f"Esta farmácia concentra {meu_share:.1f}% de todo o valor sem comprovação ({txt_valor_total}) detectado no município de {mun}."
-                ws_ind.merge_range(linha_atual, 9, linha_atual + 2, 17, "", fmt_share_box)
-                ws_ind.write_rich_string(linha_atual, 9, fmt_share_title, "⚠️ IMPACTO FINANCEIRO:\n", fmt_share_box,
+                ws_ind.merge_range(linha_atual, 11, linha_atual + 2, 19, "", fmt_share_box)
+                ws_ind.write_rich_string(linha_atual, 11, fmt_share_title, "⚠️ IMPACTO FINANCEIRO:\n", fmt_share_box,
                                          msg_share, fmt_share_box)
 
 
@@ -1342,92 +1342,83 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # =================================================================
 
             # Grupos de Indicadores
+            # Formato das tuplas:
+            # (nome, col_valor, col_med_mun, col_med_uf, col_med_br, col_risco_mun, col_risco_uf, col_risco_br, tipo_fmt)
             grupos = [
                 ("1. ELEGIBILIDADE & CLÍNICA", [
-                    ("Vendas p/ Falecidos", "pct_falecidos", "avg_falecidos_uf", "avg_falecidos_br",
-                     "risco_falecidos_uf", "risco_falecidos_br", "pct"),
-                    ("Incompatibilidade Patológica", "pct_clinico", "avg_clinico_uf", "avg_clinico_br",
-                     "risco_clinico_uf", "risco_clinico_br", "pct")
+                    ("Vendas p/ Falecidos",         "pct_falecidos",           "avg_falecidos_mun",           "avg_falecidos_uf",           "avg_falecidos_br",           "risco_falecidos_mun",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
+                    ("Incompatibilidade Patológica", "pct_clinico",             "avg_clinico_mun",             "avg_clinico_uf",             "avg_clinico_br",             "risco_clinico_mun",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
                 ]),
                 ("2. PADRÕES DE QUANTIDADE", [
-                    ("Dispensação em Teto Máximo", "pct_teto", "avg_teto_uf", "avg_teto_br",
-                     "risco_teto_uf", "risco_teto_br", "pct"),
-                    ("4+ Itens por Autorização", "pct_polimedicamento", "avg_polimedicamento_uf",
-                     "avg_polimedicamento_br", "risco_polimedicamento_uf", "risco_polimedicamento_br", "pct"),
-                    ("Itens por Autorização", "val_media_itens", "avg_media_itens_uf", "avg_media_itens_br",
-                     "risco_media_itens_uf", "risco_media_itens_br", "dec")
+                    ("Dispensação em Teto Máximo",  "pct_teto",               "avg_teto_mun",               "avg_teto_uf",               "avg_teto_br",               "risco_teto_mun",               "risco_teto_uf",               "risco_teto_br",               "pct"),
+                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "avg_polimedicamento_mun",     "avg_polimedicamento_uf",     "avg_polimedicamento_br",     "risco_polimedicamento_mun",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
+                    ("Itens por Autorização",       "val_media_itens",         "avg_media_itens_mun",         "avg_media_itens_uf",         "avg_media_itens_br",         "risco_media_itens_mun",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
                 ]),
                 ("3. PADRÕES FINANCEIROS", [
-                    ("Valor do Ticket Médio", "val_ticket_medio", "avg_ticket_uf", "avg_ticket_br",
-                     "risco_ticket_uf", "risco_ticket_br", "val"),
-                    ("Faturamento Médio Mensal por Cliente", "val_receita_paciente", "avg_receita_paciente_uf",
-                     "avg_receita_paciente_br", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
-                    ("Venda Per Capita Mensal Municipal", "val_per_capita", "avg_per_capita_uf", "avg_per_capita_br",
-                     "risco_per_capita_uf", "risco_per_capita_br", "val"),
-                    ("Medicamentos de Alto Custo", "pct_alto_custo", "avg_alto_custo_uf", "avg_alto_custo_br",
-                     "risco_alto_custo_uf", "risco_alto_custo_br", "pct")
+                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "avg_ticket_mun",             "avg_ticket_uf",             "avg_ticket_br",             "risco_ticket_mun",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
+                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "avg_receita_paciente_mun",   "avg_receita_paciente_uf",   "avg_receita_paciente_br",   "risco_receita_paciente_mun",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
+                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "avg_per_capita_mun",         "avg_per_capita_uf",         "avg_per_capita_br",         "risco_per_capita_mun",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
+                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "avg_alto_custo_mun",         "avg_alto_custo_uf",         "avg_alto_custo_br",         "risco_alto_custo_mun",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
                 ]),
                 ("4. AUTOMAÇÃO & GEOGRAFIA", [
-                    ("Vendas Rápidas (<60s)", "pct_vendas_rapidas", "avg_vendas_rapidas_uf", "avg_vendas_rapidas_br",
-                     "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
-                    ("Volume Atípico", "val_volume_atipico", "avg_volume_atipico_uf", "avg_volume_atipico_br",
-                     "risco_volume_atipico_uf", "risco_volume_atipico_br", "dec"),
-                    ("Recorrência Sistêmica", "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_uf", "avg_recorrencia_sistemica_br",
-                     "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br", "pct"),
-                    ("Concentração em Dias de Pico", "pct_pico", "avg_pico_uf", "avg_pico_br",
-                     "risco_pico_uf", "risco_pico_br", "pct"),
-                    ("Dispersão Geográfica Interestadual", "pct_geografico", "avg_geografico_uf", "avg_geografico_br",
-                     "risco_geografico_uf", "risco_geografico_br", "pct"),
-                    ("Pacientes Únicos", "pct_pacientes_unicos", "avg_pacientes_unicos_uf", "avg_pacientes_unicos_br",
-                     "risco_pacientes_unicos_uf", "risco_pacientes_unicos_br", "pct")
+                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "avg_vendas_rapidas_mun",         "avg_vendas_rapidas_uf",         "avg_vendas_rapidas_br",         "risco_vendas_rapidas_mun",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
+                    ("Volume Atípico",                          "val_volume_atipico",        "avg_volume_atipico_mun",         "avg_volume_atipico_uf",         "avg_volume_atipico_br",         "risco_volume_atipico_mun",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
+                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_mun",  "avg_recorrencia_sistemica_uf",  "avg_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_mun",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
+                    ("Venda na Madrugada",                      "pct_madrugada",             "avg_madrugada_mun",              "avg_madrugada_uf",              "avg_madrugada_br",              "risco_madrugada_mun",              "risco_madrugada_uf",              "risco_madrugada_br",              "pct"),
+                    ("Concentração em Dias de Pico",            "pct_pico",                  "avg_pico_mun",                   "avg_pico_uf",                   "avg_pico_br",                   "risco_pico_mun",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
+                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "avg_geografico_mun",             "avg_geografico_uf",             "avg_geografico_br",             "risco_geografico_mun",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
+                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "avg_pacientes_unicos_mun",       "avg_pacientes_unicos_uf",       "avg_pacientes_unicos_br",       "risco_pacientes_unicos_mun",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
                 ]),
                 ("5. INTEGRIDADE MÉDICA", [
-                    ("Concentração de CRMs (HHI)", "val_hhi_crm", "avg_hhi_crm_uf", "avg_hhi_crm_br",
-                     "risco_crm_uf", "risco_crm_br", "dec"),
-                    ("Exclusividade de CRMs", "pct_exclusividade_crm", "avg_exclusividade_crm_uf",
-                     "avg_exclusividade_crm_br",
-                     "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs", "pct_crms_irregulares", "avg_crms_irregulares_uf", "avg_crms_irregulares_br",
-                     "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct")
+                    ("Concentração de CRMs (HHI)", "val_hhi_crm",            "avg_hhi_crm_mun",            "avg_hhi_crm_uf",            "avg_hhi_crm_br",            "risco_crm_mun",            "risco_crm_uf",            "risco_crm_br",            "dec"),
+                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "avg_exclusividade_crm_mun", "avg_exclusividade_crm_uf", "avg_exclusividade_crm_br", "risco_exclusividade_crm_mun", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
+                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "avg_crms_irregulares_mun",  "avg_crms_irregulares_uf",  "avg_crms_irregulares_br",  "risco_crms_irregulares_mun",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
                 ]),
             ]
 
             row = 9
             for titulo_grupo, indicadores in grupos:
-                ws_ind.merge_range(row, 1, row, 7, titulo_grupo, fmt_header_grupo)
+                ws_ind.merge_range(row, 1, row, 9, titulo_grupo, fmt_header_grupo)
                 row += 1
-                ws_ind.write(row, 1, "INDICADOR", fmt_header_col)
-                ws_ind.write(row, 2, "FARMÁCIA", fmt_header_col)
-                ws_ind.write(row, 3, "MÉDIA UF", fmt_header_col)
-                ws_ind.write(row, 4, "MÉDIA BR", fmt_header_col)
-                ws_ind.write(row, 5, "RISCO (x) UF", fmt_header_col)
-                ws_ind.write(row, 6, "RISCO (x) BR", fmt_header_col)
-                ws_ind.write(row, 7, "STATUS", fmt_header_col)
+                ws_ind.write(row, 1, "INDICADOR",    fmt_header_col)
+                ws_ind.write(row, 2, "FARMÁCIA",     fmt_header_col)
+                ws_ind.write(row, 3, "MÉDIA MUN",    fmt_header_col)
+                ws_ind.write(row, 4, "MÉDIA UF",     fmt_header_col)
+                ws_ind.write(row, 5, "MÉDIA BR",     fmt_header_col)
+                ws_ind.write(row, 6, "RISCO (x) MUN", fmt_header_col)
+                ws_ind.write(row, 7, "RISCO (x) UF", fmt_header_col)
+                ws_ind.write(row, 8, "RISCO (x) BR", fmt_header_col)
+                ws_ind.write(row, 9, "STATUS",       fmt_header_col)
                 row += 1
 
-                for nome, col_val, col_med_uf, col_med_br, col_r_uf, col_r_br, tipo_fmt in indicadores:
+                for nome, col_val, col_med_mun, col_med_uf, col_med_br, col_r_mun, col_r_uf, col_r_br, tipo_fmt in indicadores:
 
                     # --- NOVA LÓGICA DE DADOS AUSENTES ---
-                    raw_valor = dados_risco.get(col_val)
-                    raw_med_uf = dados_risco.get(col_med_uf)
-                    raw_med_br = dados_risco.get(col_med_br)
-                    raw_r_uf = dados_risco.get(col_r_uf)
-                    raw_r_br = dados_risco.get(col_r_br)
+                    raw_valor   = dados_risco.get(col_val)
+                    raw_med_mun = dados_risco.get(col_med_mun)
+                    raw_med_uf  = dados_risco.get(col_med_uf)
+                    raw_med_br  = dados_risco.get(col_med_br)
+                    raw_r_mun   = dados_risco.get(col_r_mun)
+                    raw_r_uf    = dados_risco.get(col_r_uf)
+                    raw_r_br    = dados_risco.get(col_r_br)
 
                     # Se o valor principal for None, consideramos SEM DADOS
                     tem_dados = (raw_valor is not None)
 
                     if tem_dados:
-                        valor = float(raw_valor)
-                        med_uf = float(raw_med_uf or 0)
-                        med_br = float(raw_med_br or 0)
-                        r_uf = float(raw_r_uf or 0)
-                        r_br = float(raw_r_br or 0)
+                        valor   = float(raw_valor)
+                        med_mun = float(raw_med_mun or 0)
+                        med_uf  = float(raw_med_uf  or 0)
+                        med_br  = float(raw_med_br  or 0)
+                        r_mun   = float(raw_r_mun   or 0)
+                        r_uf    = float(raw_r_uf    or 0)
+                        r_br    = float(raw_r_br    or 0)
 
                         if tipo_fmt == 'pct':
-                            valor /= 100.0
-                            med_uf /= 100.0
-                            med_br /= 100.0
+                            valor   /= 100.0
+                            med_mun /= 100.0
+                            med_uf  /= 100.0
+                            med_br  /= 100.0
 
                         # Lógica de Cores e Status (Matriz Específica)
                         limiar_atencao = 2.0
@@ -1471,11 +1462,13 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                     else:
                         # Caso SEM DADOS
-                        valor = "-"
-                        med_uf = "-"
-                        med_br = "-"
-                        r_uf = "-"
-                        r_br = "-"
+                        valor   = "-"
+                        med_mun = "-"
+                        med_uf  = "-"
+                        med_br  = "-"
+                        r_mun   = "-"
+                        r_uf    = "-"
+                        r_br    = "-"
                         texto_status = "SEM DADOS"
 
                         # Formato neutro para texto
@@ -1487,12 +1480,14 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     nome_display = f"{nome} ℹ️" if nome in explicacoes else nome
 
                     ws_ind.write(row, 1, nome_display, fmt_label)
-                    ws_ind.write(row, 2, valor, fmt_usado)
-                    ws_ind.write(row, 3, med_uf, fmt_usado)
-                    ws_ind.write(row, 4, med_br, fmt_usado)
-                    ws_ind.write(row, 5, r_uf, fmt_risco_usado)
-                    ws_ind.write(row, 6, r_br, fmt_risco_usado)
-                    ws_ind.write(row, 7, texto_status, fmt_header_col)
+                    ws_ind.write(row, 2, valor,         fmt_usado)
+                    ws_ind.write(row, 3, med_mun,       fmt_usado)
+                    ws_ind.write(row, 4, med_uf,        fmt_usado)
+                    ws_ind.write(row, 5, med_br,        fmt_usado)
+                    ws_ind.write(row, 6, r_mun,         fmt_risco_usado)
+                    ws_ind.write(row, 7, r_uf,          fmt_risco_usado)
+                    ws_ind.write(row, 8, r_br,          fmt_risco_usado)
+                    ws_ind.write(row, 9, texto_status,  fmt_header_col)
 
                     if nome in explicacoes:
                         ws_ind.write_comment(row, 1, explicacoes[nome],
@@ -1501,10 +1496,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 row += 1
 
             ws_ind.set_column('A:A', 2)
-            ws_ind.set_column('B:B', 38)
-            ws_ind.set_column('C:E', 15)
-            ws_ind.set_column('F:G', 15)
-            ws_ind.set_column('H:H', 12)
+            ws_ind.set_column('B:B', 35)
+            ws_ind.set_column('C:I', 12)
+            ws_ind.set_column('J:J', 10)
 
 
         if dados_prescritores:

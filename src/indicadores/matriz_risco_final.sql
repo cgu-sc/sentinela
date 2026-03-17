@@ -1,4 +1,4 @@
-USE [temp_CGUSC]
+﻿USE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
@@ -502,16 +502,3 @@ SELECT CLASSIFICACAO_RISCO, COUNT(*) as Qtd,
 FROM temp_CGUSC.fp.matriz_risco_consolidada
 GROUP BY CLASSIFICACAO_RISCO
 ORDER BY Media_Score DESC;
-
-select top 100 *  FROM temp_CGUSC.fp.matriz_risco_consolidada where municipio = 'Florianópolis' 
-
-
-select top 10 * from dados_farmacia
-
-
-select top 10 * from resultado_sentinela_2015_2024
-
-
-select CLASSIFICACAO_RISCO  FROM temp_CGUSC.fp.matriz_risco_consolidada group by CLASSIFICACAO_RISCO
-
-

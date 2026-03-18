@@ -334,6 +334,30 @@ CREATE CLUSTERED INDEX IDX_IndPrescUF_uf ON temp_CGUSC.fp.indicador_crm_uf(uf);
 
 
 -- ============================================================================
+-- PASSO 4B: MÉTRICAS POR REGIÃO DE SAÚDE (MÉDIA E MEDIANA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_hhi, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(ISNULL(I.indice_hhi, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_crm_regiao
+FROM temp_CGUSC.fp.dados_farmacia F
+LEFT JOIN temp_CGUSC.fp.indicador_crm I ON CAST(I.nu_cnpj AS VARCHAR(20)) = CAST(F.cnpj AS VARCHAR(20))
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndCrmReg ON temp_CGUSC.fp.indicador_crm_regiao(id_regiao_saude);
+
+
+
+-- ============================================================================
 -- PASSO 5: MÉDIAS NACIONAIS
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_br;
@@ -365,6 +389,8 @@ SELECT
     F.razaoSocial,
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
     
     -- Métricas Absolutas
     I.total_prescricoes_farmacia,
@@ -378,6 +404,12 @@ SELECT
     I.qtd_prescritores_robos,
     I.qtd_crm_invalido,
     
+    -- Rankings (pior risco = posicao 1)
+    RANK() OVER (ORDER BY ISNULL(I.indice_hhi, 0) DESC) AS ranking_br,
+    RANK() OVER (PARTITION BY F.uf ORDER BY ISNULL(I.indice_hhi, 0) DESC) AS ranking_uf,
+    RANK() OVER (PARTITION BY F.id_regiao_saude ORDER BY ISNULL(I.indice_hhi, 0) DESC) AS ranking_regiao_saude,
+    RANK() OVER (PARTITION BY F.uf, F.municipio ORDER BY ISNULL(I.indice_hhi, 0) DESC) AS ranking_municipio,
+
     -- % CRM Inválido
     CAST(CASE 
         WHEN I.total_prescritores_distintos > 0 
@@ -388,11 +420,10 @@ SELECT
     I.qtd_prescritores_turistas,
     I.qtd_prescritores_80pct,
     
-    -- ? CAMPOS DE REDE (agora vêm diretamente de I)
+    -- Campos de Rede
     I.qtd_prescritores_robos_ocultos,
     I.qtd_prescritores_multi_farmacia,
     
-    -- % Multi-Farmácia
     CAST(CASE 
         WHEN I.total_prescritores_distintos > 0 
         THEN (CAST(I.qtd_prescritores_multi_farmacia AS DECIMAL(18,4)) / I.total_prescritores_distintos) * 100.0
@@ -400,13 +431,15 @@ SELECT
     END AS DECIMAL(18,2)) AS pct_prescritores_multi_farmacia,
 
     I.indice_rede_suspeita,
-    
-    -- ? NOVO CAMPO: média_prescricoes_dia_rede
     I.media_prescricoes_dia_rede,
     
     -- Médias Mun
     ISNULL(MUN.media_hhi_mun, 0) AS media_hhi_mun,
     ISNULL(MUN.mediana_hhi_mun, 0) AS mediana_hhi_mun,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
 
     -- Médias UF
     ISNULL(UF.media_concentracao_uf, 0) AS media_concentracao_uf,
@@ -430,7 +463,7 @@ SELECT
     CAST(CASE WHEN UF.media_indice_rede_uf > 0 THEN I.indice_rede_suspeita / UF.media_indice_rede_uf ELSE 0 END AS DECIMAL(18,4)) AS risco_rede_uf,
     CAST(CASE WHEN BR.media_indice_rede_br > 0 THEN I.indice_rede_suspeita / BR.media_indice_rede_br ELSE 0 END AS DECIMAL(18,4)) AS risco_rede_br,
 
-    -- RISCO RELATIVO
+    -- RISCO RELATIVO (CONCENTRAÇÃO)
     CAST(CASE WHEN UF.media_concentracao_uf > 0 THEN I.pct_concentracao_top1 / UF.media_concentracao_uf ELSE 0 END AS DECIMAL(18,4)) AS risco_concentracao_uf,
     CAST(CASE WHEN BR.media_concentracao_br > 0 THEN I.pct_concentracao_top1 / BR.media_concentracao_br ELSE 0 END AS DECIMAL(18,4)) AS risco_concentracao_br,
     CAST(CASE WHEN UF.media_concentracao_top5_uf > 0 THEN I.pct_concentracao_top5 / UF.media_concentracao_top5_uf ELSE 0 END AS DECIMAL(18,4)) AS risco_concentracao_top5_uf,
@@ -439,7 +472,9 @@ SELECT
     CAST(CASE WHEN BR.media_hhi_br > 0 THEN I.indice_hhi / BR.media_hhi_br ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_br,
     CAST(CASE WHEN MUN.media_hhi_mun > 0 THEN (I.indice_hhi + 0.01) / (MUN.media_hhi_mun + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_mun,
     CAST(CASE WHEN MUN.mediana_hhi_mun > 0 THEN (I.indice_hhi + 0.01) / (MUN.mediana_hhi_mun + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_hhi_mun_mediana,
-    
+
+    -- Risco Regional (Regiao de Saude)
+    CAST((ISNULL(I.indice_hhi, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_hhi_reg_mediana,
     
     -- Riscos Robôs e Turistas com suavização
     CAST(CASE WHEN UF.media_robos_uf > 0 THEN (I.qtd_prescritores_robos + 0.001) / (UF.media_robos_uf + 0.001) ELSE CASE WHEN I.qtd_prescritores_robos > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_robos_uf,
@@ -469,6 +504,7 @@ INTO temp_CGUSC.fp.indicador_crm_detalhado
 FROM temp_CGUSC.fp.indicador_crm I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON CAST(F.cnpj AS VARCHAR(20)) = CAST(I.nu_cnpj AS VARCHAR(20))
 LEFT JOIN temp_CGUSC.fp.indicador_crm_mun MUN ON CAST(F.uf AS VARCHAR(2)) = MUN.uf AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+LEFT JOIN temp_CGUSC.fp.indicador_crm_regiao REG ON F.id_regiao_saude = REG.id_regiao_saude
 LEFT JOIN temp_CGUSC.fp.indicador_crm_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
 CROSS JOIN temp_CGUSC.fp.indicador_crm_br BR;
 
@@ -658,6 +694,13 @@ DROP TABLE IF EXISTS #RobosPorFarmacia;
 DROP TABLE IF EXISTS #CRMInvalidoPorFarmacia;
 DROP TABLE IF EXISTS #TuristasPorFarmacia;
 DROP TABLE IF EXISTS #ParetoPorFarmacia;
+DROP TABLE IF EXISTS #DadosRedePorPrescritor;
+DROP TABLE IF EXISTS #RedePorFarmacia;
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_br;
 
 
 -- ============================================================================

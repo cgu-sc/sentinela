@@ -3,7 +3,7 @@ GO
 
 -- ============================================================================
 -- INDICADOR: VOLUME ATIPICO DE FATURAMENTO
--- Versao: 2.0 (Refatorado - Benchmarks sobre risco_final)
+-- Versao: 2.1 (Penalizacao por Nao Comprovacao)
 --
 -- METODOLOGIA:
 --   Detecta explosoes de crescimento semestral atipicas no faturamento.
@@ -105,6 +105,28 @@ CREATE CLUSTERED INDEX IDX_SemCount_CNPJ ON temp_CGUSC.fp.vol_semestres_validos_
 
 
 -- ============================================================================
+-- PASSO 2C: TAXA DE NAO COMPROVACAO POR SEMESTRE (PENALIZADOR)
+-- Busca o valor total e o valor sem comprovacao por farmacia e semestre.
+-- Tabelas Fonte: movimentacaoMensalCodigoBarraFP (via id_processamento)
+-- ============================================================================
+DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
+
+SELECT 
+    CAST(PRO.cnpj AS VARCHAR(14)) AS cnpj,
+    YEAR(MOV.periodo) AS ano,
+    CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS semestre,
+    SUM(MOV.valor_vendas) AS valor_total_vendas,
+    SUM(MOV.valor_sem_comprovacao) AS valor_sem_comprovacao
+INTO #NaoComprovacaoSemestral
+FROM temp_CGUSC.fp.movimentacao_mensal_gtin MOV
+INNER JOIN temp_CGUSC.fp.processamento PRO ON PRO.id = MOV.id_processamento
+GROUP BY PRO.cnpj, YEAR(MOV.periodo), CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END;
+
+CREATE CLUSTERED INDEX IDX_NaoComp_CNPJ ON #NaoComprovacaoSemestral(cnpj, ano, semestre);
+
+
+
+-- ============================================================================
 -- PASSO 3: CRESCIMENTO SEMESTRAL ENTRE SEMESTRES VALIDOS CONSECUTIVOS
 -- Usa LAG para comparar cada semestre valido com o seu anterior.
 -- Apenas farmacias com >= 2 semestres validos geram linhas aqui.
@@ -127,27 +149,47 @@ WITH SemComAnterior AS (
     FROM temp_CGUSC.fp.vol_semestres_validos S
 )
 SELECT
-    cnpj,
-    ano,
-    semestre,
-    chave_semestre,
-    valor_atual,
-    valor_anterior,
-    chave_anterior,
-    CAST(
-        ((valor_atual - valor_anterior) / CAST(valor_anterior AS DECIMAL(18,2))) * 100.0
-    AS DECIMAL(18,4)) AS taxa_crescimento,
+    T.*,
     CAST(
         CASE
-            WHEN ((valor_atual - valor_anterior) / CAST(valor_anterior AS DECIMAL(18,2))) * 100.0 > 50
-                THEN (((valor_atual - valor_anterior) / CAST(valor_anterior AS DECIMAL(18,2))) * 100.0) - 50
+            WHEN T.taxa_crescimento > 50 
+                THEN (T.taxa_crescimento - 50) * T.multiplicador_nao_comprovacao
             ELSE 0
         END
     AS DECIMAL(18,4)) AS risco_semestral
 INTO temp_CGUSC.fp.vol_crescimento_semestral
-FROM SemComAnterior
-WHERE valor_anterior IS NOT NULL
-  AND valor_anterior > 0;
+FROM (
+    SELECT
+        S.cnpj,
+        S.ano,
+        S.semestre,
+        S.chave_semestre,
+        S.valor_atual,
+        S.valor_anterior,
+        S.chave_anterior,
+        CAST(
+            ((S.valor_atual - S.valor_anterior) / CAST(S.valor_anterior AS DECIMAL(18,2))) * 100.0
+        AS DECIMAL(18,4)) AS taxa_crescimento,
+        
+        -- Calculo do Multiplicador de Penalidade (Taxa de Nao Comprovacao do semestre atual)
+        -- Tabela Rigorosa: >5% (2.0x), >20% (4.0x), >50% (6.0x)
+        CAST(
+            CASE 
+                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.5 THEN 6.0
+                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.2 THEN 4.0
+                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.05 THEN 2.0
+                ELSE 1.0
+            END
+        AS DECIMAL(18,2)) AS multiplicador_nao_comprovacao
+        
+    FROM SemComAnterior S
+    LEFT JOIN #NaoComprovacaoSemestral NC 
+        ON NC.cnpj = S.cnpj 
+       AND NC.ano  = S.ano 
+       AND NC.semestre = S.semestre
+    WHERE S.valor_anterior IS NOT NULL
+      AND S.valor_anterior > 0
+) T;
 
 CREATE CLUSTERED INDEX IDX_Cresc_CNPJ ON temp_CGUSC.fp.vol_crescimento_semestral(cnpj, ano, semestre);
 
@@ -408,6 +450,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
+DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
 GO
 
 -- ============================================================================

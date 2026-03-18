@@ -236,6 +236,55 @@ CROSS JOIN CTE_Mediana_BR D;
 
 
 -- ============================================================================
+-- PASSO 4B: MÉTRICAS POR REGIÃO DE SAÚDE
+-- Média ponderada por volume + mediana via PERCENTILE_CONT OVER().
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_regiao;
+
+WITH CTE_Media_Reg AS (
+    SELECT
+        F.id_regiao_saude,
+        SUM(I.total_vendas_monitoradas) AS total_vendas_regiao,
+        SUM(I.qtd_vendas_madrugada)     AS total_madrugada_regiao,
+        CAST(
+            CASE
+                WHEN SUM(I.total_vendas_monitoradas) > 0 THEN
+                    (CAST(SUM(I.qtd_vendas_madrugada)     AS DECIMAL(18,2)) /
+                     CAST(SUM(I.total_vendas_monitoradas) AS DECIMAL(18,2))) * 100.0
+                ELSE 0
+            END
+        AS DECIMAL(18,4)) AS media_regiao
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL
+    GROUP BY F.id_regiao_saude
+),
+CTE_Mediana_Reg AS (
+    SELECT DISTINCT
+        F.id_regiao_saude,
+        CAST(
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_madrugada)
+            OVER (PARTITION BY F.id_regiao_saude)
+        AS DECIMAL(18,4)) AS mediana_regiao
+    FROM temp_CGUSC.fp.indicador_horario_atipico I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL
+)
+SELECT
+    M.id_regiao_saude,
+    M.total_vendas_regiao,
+    M.total_madrugada_regiao,
+    M.media_regiao AS regiao_saude_media,
+    D.mediana_regiao AS regiao_saude_mediana
+INTO temp_CGUSC.fp.indicador_horario_atipico_regiao
+FROM CTE_Media_Reg M
+INNER JOIN CTE_Mediana_Reg D ON D.id_regiao_saude = M.id_regiao_saude;
+
+CREATE CLUSTERED INDEX IDX_IndHoraReg ON temp_CGUSC.fp.indicador_horario_atipico_regiao(id_regiao_saude);
+
+
+
+-- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_detalhado;
@@ -245,6 +294,8 @@ SELECT
     F.razaoSocial,
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Métricas Absolutas
     I.total_vendas_monitoradas,
@@ -260,6 +311,10 @@ SELECT
         ORDER BY I.percentual_madrugada DESC
     ) AS ranking_uf,
     RANK() OVER (
+        PARTITION BY F.id_regiao_saude
+        ORDER BY I.percentual_madrugada DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
         PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
         ORDER BY I.percentual_madrugada DESC
     ) AS ranking_municipio,
@@ -272,6 +327,10 @@ SELECT
     ISNULL(UF.percentual_madrugada_uf, 0) AS estado_media,
     ISNULL(UF.mediana_madrugada_uf,    0) AS estado_mediana,
 
+    -- Comparativos Região de Saúde
+    ISNULL(REG.regiao_saude_media,    0) AS regiao_saude_media,
+    ISNULL(REG.regiao_saude_mediana,  0) AS regiao_saude_mediana,
+
     -- Comparativos BR
     BR.percentual_madrugada_br AS pais_media,
     BR.mediana_madrugada_br    AS pais_mediana,
@@ -281,6 +340,9 @@ SELECT
 
     -- RISCO RELATIVO UF
     CAST((I.percentual_madrugada + 0.01) / (ISNULL(UF.percentual_madrugada_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- RISCO RELATIVO REGIÃO
+    CAST((I.percentual_madrugada + 0.01) / (ISNULL(REG.regiao_saude_media, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- RISCO RELATIVO BR
     CAST((I.percentual_madrugada + 0.01) / (BR.percentual_madrugada_br + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
@@ -294,14 +356,16 @@ LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_mun MUN
     AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_uf UF
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_horario_atipico_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_horario_atipico_br BR;
 
 -- Índices Finais
-CREATE CLUSTERED INDEX    IDX_FinalHora_CNPJ  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf_media DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_RiscoMun ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_mun_media DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Pct   ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(percentual_madrugada DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalHora_Rank  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(ranking_br);
+CREATE CLUSTERED INDEX    IDX_FinalHora_CNPJ   ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(cnpj);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Risco  ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_uf_media DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Reg    ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(risco_relativo_reg_media DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Pct    ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(percentual_madrugada DESC);
+CREATE NONCLUSTERED INDEX IDX_FinalHora_Rank   ON temp_CGUSC.fp.indicador_horario_atipico_detalhado(ranking_br);
 GO
 
 
@@ -309,6 +373,10 @@ GO
 -- LIMPEZA DAS TABELAS INTERMEDIÁRIAS
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_horario_atipico_br;
 GO
 
 

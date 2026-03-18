@@ -280,6 +280,29 @@ CROSS JOIN CTE_Mediana_BR D;
 
 
 -- ============================================================================
+-- PASSO 6B: METRICAS POR REGIAO DE SAUDE (MEDIANA E MEDIA)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_regiao;
+
+SELECT DISTINCT
+    F.id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.pct_risco_irregularidade)
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS mediana_regiao,
+    CAST(
+        AVG(I.pct_risco_irregularidade)
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,4)) AS media_regiao
+INTO temp_CGUSC.fp.indicador_crms_irregulares_regiao
+FROM temp_CGUSC.fp.indicador_crms_irregulares I
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
+WHERE F.id_regiao_saude IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_IndIrregReg ON temp_CGUSC.fp.indicador_crms_irregulares_regiao(id_regiao_saude);
+
+
+-- ============================================================================
 -- PASSO 7: TABELA CONSOLIDADA FINAL
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_detalhado;
@@ -289,6 +312,8 @@ SELECT
     F.razaoSocial,
     F.municipio,
     CAST(F.uf AS VARCHAR(2)) AS uf,
+    F.no_regiao_saude,
+    F.id_regiao_saude,
 
     -- Metricas Absolutas
     I.total_prescritores,
@@ -310,6 +335,10 @@ SELECT
         ORDER BY I.pct_risco_irregularidade DESC
     ) AS ranking_uf,
     RANK() OVER (
+        PARTITION BY F.id_regiao_saude
+        ORDER BY I.pct_risco_irregularidade DESC
+    ) AS ranking_regiao_saude,
+    RANK() OVER (
         PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255))
         ORDER BY I.pct_risco_irregularidade DESC
     ) AS ranking_municipio,
@@ -325,6 +354,12 @@ SELECT
     ISNULL(UF.media_irregularidade_uf,   0) AS estado_media,
     CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(UF.mediana_irregularidade_uf, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
     CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(UF.media_irregularidade_uf,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+
+    -- Benchmarks Regionais (Regiao de Saude)
+    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
+    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((I.pct_risco_irregularidade + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks BR
     BR.mediana_irregularidade_br AS pais_mediana,
@@ -349,6 +384,8 @@ LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_mun MUN
     AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_uf UF
     ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_regiao REG
+    ON F.id_regiao_saude = REG.id_regiao_saude
 CROSS JOIN temp_CGUSC.fp.indicador_crms_irregulares_br BR;
 
 -- Indices Finais
@@ -363,6 +400,10 @@ GO
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_br;
 GO
 
 

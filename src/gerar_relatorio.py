@@ -196,18 +196,18 @@ def buscar_dados_risco(cursor, cnpj):
         logging.error(f"Erro ao buscar matriz de risco para {cnpj}: {e}")
         return None
 
-def buscar_top15_municipio(cursor, uf, municipio):
-
+def buscar_top10_regiao(cursor, id_regiao):
     """
-    Busca as 15 farmácias com maior Score de Risco no município
+    Busca as 10 farmácias com maior Score de Risco na Região de Saúde
     """
     try:
         sql_top = """
-            SELECT TOP 15
-                M.rank_municipio,
+            SELECT TOP 10
+                M.rank_regiao_saude as rank_municipio,
                 M.razaoSocial,
+                M.municipio,
                 M.SCORE_RISCO_FINAL,
-                M.CLASSIFICACAO_RISCO,  -- <--- CAMPO NOVO ADICIONADO
+                M.CLASSIFICACAO_RISCO,
                 M.cnpj,
                 ISNULL(S.valor_sem_comprovacao, 0) as valor_sem_comprovacao,
                 ISNULL(S.valor_vendas, 0) as valor_vendas,
@@ -217,28 +217,18 @@ def buscar_top15_municipio(cursor, uf, municipio):
                 ON S.cnpj = M.cnpj
             LEFT JOIN temp_CGUSC.fp.dados_farmacia D
                 ON M.cnpj = D.cnpj
-            WHERE M.uf = ? AND M.municipio = ?
+            WHERE M.id_regiao_saude = ?
             ORDER BY M.SCORE_RISCO_FINAL DESC
         """
-        cursor.execute(sql_top, (uf, municipio))
+        cursor.execute(sql_top, (id_regiao,))
         colunas = [column[0] for column in cursor.description]
-        top15_lista = [dict(zip(colunas, row)) for row in cursor.fetchall()]
+        top10_lista = [dict(zip(colunas, row)) for row in cursor.fetchall()]
 
-        # Busca o Total Financeiro do Município (Para o Share)
-        sql_total = """
-            SELECT SUM(valor_sem_comprovacao)
-            FROM temp_CGUSC.fp.resultado_sentinela_2015_2024
-            WHERE uf = ? AND municipio = ?
-        """
-        cursor.execute(sql_total, (uf, municipio))
-        row_total = cursor.fetchone()
-        total_financeiro_cidade = row_total[0] if row_total and row_total[0] else 0
-
-        return top15_lista, total_financeiro_cidade
+        return top10_lista
 
     except Exception as e:
-        print(f"⚠️ Erro ao buscar Top 15 Municipal: {e}")
-        return [], 0
+        print(f"⚠️ Erro ao buscar Top 10 Regional: {e}")
+        return []
 
 
 
@@ -924,22 +914,24 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # =================================================================
             mun = dados_risco.get('municipio', 'DESCONHECIDO')
             uf = dados_risco.get('uf', '')
-
-            # Pega a população (agora vinda da coluna populacao2019 do SQL)
-            pop = int(dados_risco.get('populacao') or 0)
-
-            # Pega o total de farmácias na cidade
+            pop_mun = int(dados_risco.get('populacao') or 0)
+            pop_reg = int(dados_risco.get('populacao_total_regiao') or 0)
+            
             total_mun = int(dados_risco.get('total_municipio') or 0)
+            total_reg = int(dados_risco.get('total_regiao_saude') or 0)
+            nome_regiao = dados_risco.get('no_regiao_saude', 'N/A')
 
-            # Cálculo de Densidade (Habitantes por Farmácia)
-            # Ex: 50.000 hab / 10 farmácias = 5.000 pessoas para cada farmácia
-            densidade = int(pop / total_mun) if total_mun > 0 else 0
+            # Cálculos de Densidade
+            dens_mun = int(pop_mun / total_mun) if total_mun > 0 else 0
+            dens_reg = int(pop_reg / total_reg) if total_reg > 0 else 0
+            
+            pop_fmt = f"{pop_mun:,.0f}".replace(",", ".")
 
-            # Formatação de milhar (Ex: 12500 -> 12.500)
-            pop_fmt = f"{pop:,.0f}".replace(",", ".")
-
-            # Monta a string final com ícones
-            texto_demografico = f"📍 {mun} - {uf}   |   👥 População: {pop_fmt}   |   🏥 Estabelecimentos: {total_mun}   |   📊 Densidade: {densidade} hab/farmácia"
+            # Monta a string final (Nova Ordem Solicitada)
+            texto_demografico = (
+                f"📍 {mun}-{uf}  |  👥 Pop. Mun: {pop_fmt}  |  📊 Dens. Mun: {dens_mun}  |  "
+                f"🏥 Região: {nome_regiao}  |  🏥 Estab. Região: {total_reg}  |  📊 Dens. Reg: {dens_reg} hab/farm"
+            )
 
             # Escreve na célula B4
             ws_ind.write('B4', texto_demografico, fmt_subtitulo)
@@ -954,17 +946,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # =================================================================
 
 
-            # CONCEITO DE RISCO RELATIVO (TEXTO EXPLICATIVO NO TOPO)
-            texto_rr = (
-                "NOTA METODOLÓGICA: O Risco Relativo (RR) é um indexador estatístico que mensura a intensidade do desvio de comportamento. "
-                "Ele elimina distorções regionais comparando a farmácia com seus pares. O Score Geral é calculado pela média aritmética de 17 indicadores independentes. "
-                "INTERPRETAÇÃO: RR < 1.0 (Sub-incidência/Normal); RR ≈ 1.0 (Padrão de Mercado); "
-                "RR 2.0 a 5.0 (Desvio Moderado/Atenção); RR > 5.0 (Anomalia Grave/Indício de Manipulação Sistêmica)."
-            )
-            ws_ind.merge_range('B6:H8', texto_rr, wb.add_format({
-                'font_size': 9, 'font_color': '#555555', 'italic': True, 'text_wrap': True,
-                'valign': 'top', 'border': 1, 'bg_color': '#FAFAFA'
-            }))
+
 
             # Score Geral (com multiplicadores de severidade)
             score = float(dados_risco.get('SCORE_RISCO_FINAL', 0))
@@ -987,7 +969,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             fmt_score_num = wb.add_format({
                 'bold': True, 'font_size': 48, 'align': 'center', 'valign': 'vcenter',
-                'font_color': cor_score, 'border': 0
+                'font_color': cor_score, 'border': 0, 'num_format': '0.00'
             })
             fmt_score_txt = wb.add_format({
                 'bold': True, 'font_size': 12, 'align': 'center', 'valign': 'vcenter',
@@ -1032,16 +1014,16 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             rank_uf = int(dados_risco.get('rank_uf') or 0)
             total_uf = int(dados_risco.get('total_uf') or 0)
 
-            rank_municipio = int(dados_risco.get('rank_municipio', 0))
-            total_mun = int(dados_risco.get('total_municipio') or 0)
-            media_cidade = float(dados_risco.get('avg_score_municipio', 0))
+            rank_regiao = int(dados_risco.get('rank_regiao_saude', 0))
+            total_regiao = int(dados_risco.get('total_regiao_saude') or 0)
+            media_regiao = float(dados_risco.get('avg_score_regiao_saude', 0))
 
             uf_atual = dados_risco.get('uf', '')
-            mun_atual = dados_risco.get('municipio', 'MUNICÍPIO')
+            nome_regiao = dados_risco.get('no_regiao_saude', 'REGIÃO')
 
             # 2. Cálculos de Percentil e Multiplicador
             pct_top_nacional = (rank_nacional / total_nacional * 100.0) if total_nacional > 0 else 0
-            vezes_pior = (score / media_cidade) if media_cidade > 0 else 1.0
+            vezes_pior = (score / media_regiao) if media_regiao > 0 else 1.0
 
             # 3. Definir Cores (Regra Unificada: Se é crítico no Estado/País, o card todo fica vermelho)
             eh_critico = (rank_nacional > 0 and rank_nacional <= 100) or (
@@ -1049,10 +1031,10 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             eh_alerta = (rank_nacional > 0 and rank_nacional <= 1000) or (
                         pct_top_nacional > 0 and pct_top_nacional <= 5.0)
 
-            # Se for Líder no Município ou tiver score muito alto vs média, também força o alerta visual
-            if rank_municipio == 1 or vezes_pior >= 2.0:
+            # Se for Líder na Região ou tiver score muito alto vs média, também força o alerta visual
+            if rank_regiao == 1 or vezes_pior >= 2.0:
                 eh_alerta = True
-            if rank_municipio == 1 and eh_alerta:
+            if rank_regiao == 1 and eh_alerta:
                 # Se for lider e já estava em alerta, considera critico para destaque
                 eh_critico = True
 
@@ -1105,21 +1087,21 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             txt_uf = f"🚩 Estadual ({uf_atual}): #{rank_uf} de {total_uf}"
             ws_ind.merge_range('L13:Q13', txt_uf, fmt_rank_linha)
 
-            # Linha 3: Municipal (Nova)
-            txt_mun = f"🏙️ Municipal ({mun_atual}): #{rank_municipio} de {total_mun}"
-            ws_ind.merge_range('L14:Q14', txt_mun, fmt_rank_linha)
+            # Linha 3: Regional (Nova)
+            txt_reg = f"🏥 Regional ({nome_regiao}): #{rank_regiao} de {total_regiao}"
+            ws_ind.merge_range('L14:Q14', txt_reg, fmt_rank_linha)
 
             # Linha 4: Comparativo Média (Nova)
-            txt_media = f"📊 Score {score} é {vezes_pior:.1f}x a média local ({media_cidade:.1f})"
+            txt_media = f"📊 Score {score} é {vezes_pior:.1f}x a média regional ({media_regiao:.1f})"
             ws_ind.merge_range('L15:Q15', txt_media, fmt_rank_linha)
 
             # Linha 5: Flag Final (Nova - Líder ou Status)
-            if rank_municipio == 1:
-                txt_status = "🥇 ESTABELECIMENTO LÍDER EM RISCO NO MUNICÍPIO"
+            if rank_regiao == 1:
+                txt_status = "🥇 ESTABELECIMENTO LÍDER EM RISCO NA REGIÃO"
             elif vezes_pior >= 1.5:
-                txt_status = "⚠️ ACIMA DA MÉDIA MUNICIPAL"
+                txt_status = "⚠️ ACIMA DA MÉDIA REGIONAL"
             else:
-                txt_status = "✅ DENTRO DA MÉDIA MUNICIPAL"
+                txt_status = "✅ DENTRO DA MÉDIA REGIONAL"
 
             ws_ind.merge_range('L16:Q16', txt_status, fmt_rank_fim)
 
@@ -1132,15 +1114,16 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # =================================================================
 
             # 1. Buscar os dados no banco
-            top15_lista, total_dinheiro_cidade = buscar_top15_municipio(cursor, uf, mun)
-            total_dinheiro_cidade = float(total_dinheiro_cidade) if total_dinheiro_cidade else 0.0
+            id_regiao = dados_risco.get('id_regiao_saude')
+            nome_regiao = dados_risco.get('no_regiao_saude', 'REGIÃO DESCONHECIDA')
+            top10_lista = buscar_top10_regiao(cursor, id_regiao)
 
-            # Título (Agora vai até T18)
-            fmt_top15_header = wb.add_format({
+            # Título (Agora focado na Região)
+            fmt_top10_header = wb.add_format({
                 'bold': True, 'font_size': 9, 'font_color': '#1F4E78',
                 'align': 'left', 'valign': 'bottom', 'bottom': 1
             })
-            ws_ind.merge_range('L18:T18', f"TOP 15 PIORES FARMÁCIAS NO MUNICÍPIO DE {mun_atual.upper()}", fmt_top15_header)
+            ws_ind.merge_range('L18:T18', f"TOP 10 PIORES FARMÁCIAS NA REGIÃO: {nome_regiao.upper()}", fmt_top10_header)
 
             # Cabeçalhos da Tabela
             fmt_th = wb.add_format(
@@ -1149,8 +1132,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 {'bold': True, 'font_size': 8, 'align': 'left', 'bg_color': '#F2F2F2', 'border': 1})
 
             # LAYOUT DE COLUNAS (L até T)
-            ws_ind.write('L19', "RANK", fmt_th)              # L
-            ws_ind.merge_range('M19:O19', "FARMÁCIA", fmt_th_esq)  # M-N-O
+            ws_ind.write('L19', "SCORE", fmt_th)              # L
+            ws_ind.merge_range('M19:N19', "FARMÁCIA", fmt_th_esq)  # M-N
+            ws_ind.write('O19', "MUNICÍPIO", fmt_th_esq)     # O
             ws_ind.write('P19', "RISCO", fmt_th)             # P
             ws_ind.write('Q19', "CONEXÃO", fmt_th)          # Q
             ws_ind.write('R19', "R$ S/ COMP.", fmt_th)       # R
@@ -1163,18 +1147,16 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             font_destaque = '#9C0006'
 
             meu_cnpj_limpo = str(cnpj_analise).strip()
-            meu_share = 0.0
 
-            if top15_lista:
-                for idx, item in enumerate(top15_lista):
+            if top10_lista:
+                for idx, item in enumerate(top10_lista):
                     linha_atual += 1
 
                     cnpj_item = str(item.get('cnpj', '')).strip()
                     eh_eu = (cnpj_item == meu_cnpj_limpo)
 
                     if eh_eu:
-                        val_meu = float(item.get('valor_sem_comprovacao', 0))
-                        meu_share = (val_meu / total_dinheiro_cidade * 100.0) if total_dinheiro_cidade > 0 else 0
+                        pass
 
                     # --- LÓGICA DE DESTAQUE ---
                     # 1. Negrito se for eu
@@ -1195,7 +1177,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         'font_color': '#000000'
                     }
 
-                    f_c = wb.add_format({**f_base, 'align': 'center'})
+                    f_c = wb.add_format({**f_base, 'align': 'center', 'num_format': '0.00'})
                     f_l = wb.add_format({**f_base, 'align': 'left'})
                     f_m = wb.add_format({**f_base, 'align': 'right', 'num_format': '#,##0'})
                     f_p = wb.add_format({**f_base, 'align': 'center', 'num_format': '0.00%'})
@@ -1302,8 +1284,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ws_ind.write(linha_atual, 10, seta_char, f_seta)
 
                     # 2. Tabela (Coluna L / Index 11 em diante)
-                    ws_ind.write(linha_atual, 11, f"#{item.get('rank_municipio')}", f_c)
-                    ws_ind.merge_range(linha_atual, 12, linha_atual, 14, f"{nome} ({score_item:.1f})", f_l)
+                    ws_ind.write(linha_atual, 11, score_item, f_c)
+                    ws_ind.merge_range(linha_atual, 12, linha_atual, 13, f"{nome}", f_l)
+                    ws_ind.write(linha_atual, 14, item.get('municipio', ''), f_l)
                     ws_ind.write(linha_atual, 15, txt_risco, f_risco)
                     ws_ind.write(linha_atual, 16, status_texto, f_status)
                     ws_ind.write(linha_atual, 17, val_irreg, f_m)
@@ -1319,19 +1302,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 ws_ind.merge_range(linha_atual + 1, 11, linha_atual + 1, 19, "Sem dados comparativos.", fmt_cell_center)
                 linha_atual += 1
 
-            # Impacto Financeiro (Merge até a coluna 17 / R)
-            linha_atual += 2
-            if meu_share > 1.0:
-                fmt_share_box = wb.add_format(
-                    {'border': 1, 'align': 'left', 'valign': 'top', 'text_wrap': True, 'font_size': 8,
-                     'bg_color': '#FCE4D6'})
-                fmt_share_title = wb.add_format({'bold': True, 'font_color': '#C00000', 'font_size': 9})
-                val_mi = total_dinheiro_cidade / 1_000_000.0
-                txt_valor_total = f"R$ {val_mi:.1f} Milhões" if val_mi >= 1 else f"R$ {total_dinheiro_cidade / 1000:.0f} Mil"
-                msg_share = f"Esta farmácia concentra {meu_share:.1f}% de todo o valor sem comprovação ({txt_valor_total}) detectado no município de {mun}."
-                ws_ind.merge_range(linha_atual, 11, linha_atual + 2, 19, "", fmt_share_box)
-                ws_ind.write_rich_string(linha_atual, 11, fmt_share_title, "⚠️ IMPACTO FINANCEIRO:\n", fmt_share_box,
-                                         msg_share, fmt_share_box)
+
 
 
 
@@ -1346,49 +1317,49 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # (nome, col_valor, col_med_mun, col_med_uf, col_med_br, col_risco_mun, col_risco_uf, col_risco_br, tipo_fmt)
             grupos = [
                 ("1. ELEGIBILIDADE & CLÍNICA", [
-                    ("Vendas p/ Falecidos",         "pct_falecidos",           "avg_falecidos_mun",           "avg_falecidos_uf",           "avg_falecidos_br",           "risco_falecidos_mun",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
-                    ("Incompatibilidade Patológica", "pct_clinico",             "avg_clinico_mun",             "avg_clinico_uf",             "avg_clinico_br",             "risco_clinico_mun",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
+                    ("Vendas p/ Falecidos",         "pct_falecidos",           "avg_falecidos_reg",           "avg_falecidos_uf",           "avg_falecidos_br",           "risco_falecidos_reg",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
+                    ("Incompatibilidade Patológica", "pct_clinico",             "avg_clinico_reg",             "avg_clinico_uf",             "avg_clinico_br",             "risco_clinico_reg",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
                 ]),
                 ("2. PADRÕES DE QUANTIDADE", [
-                    ("Dispensação em Teto Máximo",  "pct_teto",               "avg_teto_mun",               "avg_teto_uf",               "avg_teto_br",               "risco_teto_mun",               "risco_teto_uf",               "risco_teto_br",               "pct"),
-                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "avg_polimedicamento_mun",     "avg_polimedicamento_uf",     "avg_polimedicamento_br",     "risco_polimedicamento_mun",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
-                    ("Itens por Autorização",       "val_media_itens",         "avg_media_itens_mun",         "avg_media_itens_uf",         "avg_media_itens_br",         "risco_media_itens_mun",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
+                    ("Dispensação em Teto Máximo",  "pct_teto",               "avg_teto_reg",               "avg_teto_uf",               "avg_teto_br",               "risco_teto_reg",               "risco_teto_uf",               "risco_teto_br",               "pct"),
+                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "avg_polimedicamento_reg",     "avg_polimedicamento_uf",     "avg_polimedicamento_br",     "risco_polimedicamento_reg",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
+                    ("Itens por Autorização",       "val_media_itens",         "avg_media_itens_reg",         "avg_media_itens_uf",         "avg_media_itens_br",         "risco_media_itens_reg",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
                 ]),
                 ("3. PADRÕES FINANCEIROS", [
-                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "avg_ticket_mun",             "avg_ticket_uf",             "avg_ticket_br",             "risco_ticket_mun",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
-                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "avg_receita_paciente_mun",   "avg_receita_paciente_uf",   "avg_receita_paciente_br",   "risco_receita_paciente_mun",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
-                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "avg_per_capita_mun",         "avg_per_capita_uf",         "avg_per_capita_br",         "risco_per_capita_mun",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
-                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "avg_alto_custo_mun",         "avg_alto_custo_uf",         "avg_alto_custo_br",         "risco_alto_custo_mun",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
+                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "avg_ticket_reg",             "avg_ticket_uf",             "avg_ticket_br",             "risco_ticket_reg",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
+                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "avg_receita_paciente_reg",   "avg_receita_paciente_uf",   "avg_receita_paciente_br",   "risco_receita_paciente_reg",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
+                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "avg_per_capita_reg",         "avg_per_capita_uf",         "avg_per_capita_br",         "risco_per_capita_reg",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
+                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "avg_alto_custo_reg",         "avg_alto_custo_uf",         "avg_alto_custo_br",         "risco_alto_custo_reg",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
                 ]),
                 ("4. AUTOMAÇÃO & GEOGRAFIA", [
-                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "avg_vendas_rapidas_mun",         "avg_vendas_rapidas_uf",         "avg_vendas_rapidas_br",         "risco_vendas_rapidas_mun",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
-                    ("Volume Atípico",                          "val_volume_atipico",        "avg_volume_atipico_mun",         "avg_volume_atipico_uf",         "avg_volume_atipico_br",         "risco_volume_atipico_mun",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
-                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_mun",  "avg_recorrencia_sistemica_uf",  "avg_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_mun",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
-                    ("Venda na Madrugada",                      "pct_madrugada",             "avg_madrugada_mun",              "avg_madrugada_uf",              "avg_madrugada_br",              "risco_madrugada_mun",              "risco_madrugada_uf",              "risco_madrugada_br",              "pct"),
-                    ("Concentração em Dias de Pico",            "pct_pico",                  "avg_pico_mun",                   "avg_pico_uf",                   "avg_pico_br",                   "risco_pico_mun",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
-                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "avg_geografico_mun",             "avg_geografico_uf",             "avg_geografico_br",             "risco_geografico_mun",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
-                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "avg_pacientes_unicos_mun",       "avg_pacientes_unicos_uf",       "avg_pacientes_unicos_br",       "risco_pacientes_unicos_mun",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
+                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "avg_vendas_rapidas_reg",         "avg_vendas_rapidas_uf",         "avg_vendas_rapidas_br",         "risco_vendas_rapidas_reg",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
+                    ("Volume Atípico",                          "val_volume_atipico",        "avg_volume_atipico_reg",         "avg_volume_atipico_uf",         "avg_volume_atipico_br",         "risco_volume_atipico_reg",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
+                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_reg",  "avg_recorrencia_sistemica_uf",  "avg_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_reg",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
+                    ("Venda na Madrugada",                      "pct_madrugada",             "avg_madrugada_reg",              "avg_madrugada_uf",              "avg_madrugada_br",              "risco_madrugada_reg",              "risco_madrugada_uf",              "risco_madrugada_br",              "pct"),
+                    ("Concentração em Dias de Pico",            "pct_pico",                  "avg_pico_reg",                   "avg_pico_uf",                   "avg_pico_br",                   "risco_pico_reg",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
+                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "avg_geografico_reg",             "avg_geografico_uf",             "avg_geografico_br",             "risco_geografico_reg",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
+                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "avg_pacientes_unicos_reg",       "avg_pacientes_unicos_uf",       "avg_pacientes_unicos_br",       "risco_pacientes_unicos_reg",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
                 ]),
                 ("5. INTEGRIDADE MÉDICA", [
-                    ("Concentração de CRMs (HHI)", "val_hhi_crm",            "avg_hhi_crm_mun",            "avg_hhi_crm_uf",            "avg_hhi_crm_br",            "risco_crm_mun",            "risco_crm_uf",            "risco_crm_br",            "dec"),
-                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "avg_exclusividade_crm_mun", "avg_exclusividade_crm_uf", "avg_exclusividade_crm_br", "risco_exclusividade_crm_mun", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "avg_crms_irregulares_mun",  "avg_crms_irregulares_uf",  "avg_crms_irregulares_br",  "risco_crms_irregulares_mun",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
+                    ("Concentração de CRMs (HHI)", "val_hhi_crm",            "avg_hhi_crm_reg",            "avg_hhi_crm_uf",            "avg_hhi_crm_br",            "risco_crm_reg",            "risco_crm_uf",            "risco_crm_br",            "dec"),
+                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "avg_exclusividade_crm_reg", "avg_exclusividade_crm_uf", "avg_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
+                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "avg_crms_irregulares_reg",  "avg_crms_irregulares_uf",  "avg_crms_irregulares_br",  "risco_crms_irregulares_reg",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
                 ]),
             ]
 
-            row = 9
+            row = 6
             for titulo_grupo, indicadores in grupos:
                 ws_ind.merge_range(row, 1, row, 9, titulo_grupo, fmt_header_grupo)
                 row += 1
-                ws_ind.write(row, 1, "INDICADOR",    fmt_header_col)
-                ws_ind.write(row, 2, "FARMÁCIA",     fmt_header_col)
-                ws_ind.write(row, 3, "MÉDIA MUN",    fmt_header_col)
-                ws_ind.write(row, 4, "MÉDIA UF",     fmt_header_col)
-                ws_ind.write(row, 5, "MÉDIA BR",     fmt_header_col)
-                ws_ind.write(row, 6, "RISCO (x) MUN", fmt_header_col)
-                ws_ind.write(row, 7, "RISCO (x) UF", fmt_header_col)
-                ws_ind.write(row, 8, "RISCO (x) BR", fmt_header_col)
-                ws_ind.write(row, 9, "STATUS",       fmt_header_col)
+                ws_ind.write(row, 1, "INDICADOR",  fmt_header_col)
+                ws_ind.write(row, 2, "FARMÁCIA",   fmt_header_col)
+                ws_ind.write(row, 3, "MÉDIA REG",  fmt_header_col)
+                ws_ind.write(row, 4, "MÉDIA UF",   fmt_header_col)
+                ws_ind.write(row, 5, "MÉDIA BR",   fmt_header_col)
+                ws_ind.write(row, 6, "RISCO REG",  fmt_header_col)
+                ws_ind.write(row, 7, "RISCO UF",   fmt_header_col)
+                ws_ind.write(row, 8, "RISCO BR",   fmt_header_col)
+                ws_ind.write(row, 9, "STATUS",     fmt_header_col)
                 row += 1
 
                 for nome, col_val, col_med_mun, col_med_uf, col_med_br, col_r_mun, col_r_uf, col_r_br, tipo_fmt in indicadores:
@@ -1497,8 +1468,13 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             ws_ind.set_column('A:A', 2)
             ws_ind.set_column('B:B', 35)
-            ws_ind.set_column('C:I', 12)
-            ws_ind.set_column('J:J', 10)
+            ws_ind.set_column('C:J', 10)
+            ws_ind.set_column('K:K', 3)
+            ws_ind.set_column('L:L', 6)
+            ws_ind.set_column('M:N', 13)
+            ws_ind.set_column('O:O', 14)
+            ws_ind.set_column('P:Q', 8)
+            ws_ind.set_column('R:T', 10)
 
 
         if dados_prescritores:

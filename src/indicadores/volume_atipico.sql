@@ -398,26 +398,26 @@ SELECT
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0)                       AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0)                       AS municipio_media,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(MUN.mediana_municipio, 0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(MUN.media_municipio,   0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0)                           AS estado_mediana,
     ISNULL(UF.media_estado,   0)                           AS estado_media,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(UF.mediana_estado, 0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(UF.media_estado,   0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
     -- Benchmarks Regionais (Regiao de Saude)
     ISNULL(REG.mediana_regiao, 0)                         AS regiao_saude_mediana,
     ISNULL(REG.media_regiao,   0)                         AS regiao_saude_media,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(REG.mediana_regiao, 0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (ISNULL(REG.media_regiao,   0) + 1.0) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais                                        AS pais_mediana,
     BR.media_pais                                          AS pais_media,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.risco_final, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (BR.mediana_pais + 1.0) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.risco_final, 0) + 1.0) / (BR.media_pais   + 1.0) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_volume_atipico_detalhado
 FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC

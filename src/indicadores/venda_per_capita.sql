@@ -185,26 +185,26 @@ SELECT
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(MUN.mediana_municipio, 0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(MUN.media_municipio,   0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(UF.mediana_estado, 0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(UF.media_estado,   0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
     -- Benchmarks Regionais (Regiao de Saude)
     ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
     ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(REG.mediana_regiao, 0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (ISNULL(REG.media_regiao,   0) + 0.1) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (BR.mediana_pais + 0.1) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.valor_per_capita_mensal, 0) + 0.1) / (BR.media_pais   + 0.1) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_venda_per_capita_detalhado
 FROM temp_CGUSC.fp.dados_farmacia F

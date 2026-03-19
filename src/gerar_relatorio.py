@@ -1317,33 +1317,32 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # (nome, col_valor, col_med_mun, col_med_uf, col_med_br, col_risco_mun, col_risco_uf, col_risco_br, tipo_fmt)
             grupos = [
                 ("1. ELEGIBILIDADE & CLÍNICA", [
-                    ("Vendas p/ Falecidos",         "pct_falecidos",           "avg_falecidos_reg",           "avg_falecidos_uf",           "avg_falecidos_br",           "risco_falecidos_reg",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
-                    ("Incompatibilidade Patológica", "pct_clinico",             "avg_clinico_reg",             "avg_clinico_uf",             "avg_clinico_br",             "risco_clinico_reg",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
+                    ("Vendas p/ Falecidos",         "pct_falecidos",           "med_falecidos_reg",           "med_falecidos_uf",           "med_falecidos_br",           "risco_falecidos_reg",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
+                    ("Incompatibilidade Patológica", "pct_clinico",             "med_clinico_reg",             "med_clinico_uf",             "med_clinico_br",             "risco_clinico_reg",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
                 ]),
                 ("2. PADRÕES DE QUANTIDADE", [
-                    ("Dispensação em Teto Máximo",  "pct_teto",               "avg_teto_reg",               "avg_teto_uf",               "avg_teto_br",               "risco_teto_reg",               "risco_teto_uf",               "risco_teto_br",               "pct"),
-                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "avg_polimedicamento_reg",     "avg_polimedicamento_uf",     "avg_polimedicamento_br",     "risco_polimedicamento_reg",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
-                    ("Itens por Autorização",       "val_media_itens",         "avg_media_itens_reg",         "avg_media_itens_uf",         "avg_media_itens_br",         "risco_media_itens_reg",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
+                    ("Dispensação em Teto Máximo",  "pct_teto",               "med_teto_reg",               "med_teto_uf",               "med_teto_br",               "risco_teto_reg",               "risco_teto_uf",               "risco_teto_br",               "pct"),
+                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "med_polimedicamento_reg",     "med_polimedicamento_uf",     "med_polimedicamento_br",     "risco_polimedicamento_reg",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
+                    ("Itens por Autorização",       "val_media_itens",         "med_media_itens_reg",         "med_media_itens_uf",         "med_media_itens_br",         "risco_media_itens_reg",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
                 ]),
                 ("3. PADRÕES FINANCEIROS", [
-                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "avg_ticket_reg",             "avg_ticket_uf",             "avg_ticket_br",             "risco_ticket_reg",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
-                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "avg_receita_paciente_reg",   "avg_receita_paciente_uf",   "avg_receita_paciente_br",   "risco_receita_paciente_reg",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
-                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "avg_per_capita_reg",         "avg_per_capita_uf",         "avg_per_capita_br",         "risco_per_capita_reg",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
-                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "avg_alto_custo_reg",         "avg_alto_custo_uf",         "avg_alto_custo_br",         "risco_alto_custo_reg",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
+                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "med_ticket_reg",             "med_ticket_uf",             "med_ticket_br",             "risco_ticket_reg",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
+                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "med_receita_paciente_reg",   "med_receita_paciente_uf",   "med_receita_paciente_br",   "risco_receita_paciente_reg",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
+                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "med_per_capita_reg",         "med_per_capita_uf",         "med_per_capita_br",         "risco_per_capita_reg",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
+                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "med_alto_custo_reg",         "med_alto_custo_uf",         "med_alto_custo_br",         "risco_alto_custo_reg",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
                 ]),
                 ("4. AUTOMAÇÃO & GEOGRAFIA", [
-                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "avg_vendas_rapidas_reg",         "avg_vendas_rapidas_uf",         "avg_vendas_rapidas_br",         "risco_vendas_rapidas_reg",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
-                    ("Volume Atípico",                          "val_volume_atipico",        "avg_volume_atipico_reg",         "avg_volume_atipico_uf",         "avg_volume_atipico_br",         "risco_volume_atipico_reg",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
-                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "avg_recorrencia_sistemica_reg",  "avg_recorrencia_sistemica_uf",  "avg_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_reg",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
-                    ("Venda na Madrugada",                      "pct_madrugada",             "avg_madrugada_reg",              "avg_madrugada_uf",              "avg_madrugada_br",              "risco_madrugada_reg",              "risco_madrugada_uf",              "risco_madrugada_br",              "pct"),
-                    ("Concentração em Dias de Pico",            "pct_pico",                  "avg_pico_reg",                   "avg_pico_uf",                   "avg_pico_br",                   "risco_pico_reg",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
-                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "avg_geografico_reg",             "avg_geografico_uf",             "avg_geografico_br",             "risco_geografico_reg",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
-                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "avg_pacientes_unicos_reg",       "avg_pacientes_unicos_uf",       "avg_pacientes_unicos_br",       "risco_pacientes_unicos_reg",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
+                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "med_vendas_rapidas_reg",         "med_vendas_rapidas_uf",         "med_vendas_rapidas_br",         "risco_vendas_rapidas_reg",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
+                    ("Volume Atípico",                          "val_volume_atipico",        "med_volume_atipico_reg",         "med_volume_atipico_uf",         "med_volume_atipico_br",         "risco_volume_atipico_reg",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
+                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg",  "med_recorrencia_sistemica_uf",  "med_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_reg",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
+                    ("Concentra\u00e7\u00e3o em Dias de Pico",            "pct_pico",                  "med_pico_reg",                   "med_pico_uf",                   "med_pico_br",                   "risco_pico_reg",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
+                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "med_geografico_reg",             "med_geografico_uf",             "med_geografico_br",             "risco_geografico_reg",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
+                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "med_pacientes_unicos_reg",       "med_pacientes_unicos_uf",       "med_pacientes_unicos_br",       "risco_pacientes_unicos_reg",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
                 ]),
                 ("5. INTEGRIDADE MÉDICA", [
                     ("Concentração de CRMs (HHI)", "val_hhi_crm",            "avg_hhi_crm_reg",            "avg_hhi_crm_uf",            "avg_hhi_crm_br",            "risco_crm_reg",            "risco_crm_uf",            "risco_crm_br",            "dec"),
-                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "avg_exclusividade_crm_reg", "avg_exclusividade_crm_uf", "avg_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "avg_crms_irregulares_reg",  "avg_crms_irregulares_uf",  "avg_crms_irregulares_br",  "risco_crms_irregulares_reg",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
+                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "med_exclusividade_crm_reg", "med_exclusividade_crm_uf", "med_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
+                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "med_crms_irregulares_reg",  "med_crms_irregulares_uf",  "med_crms_irregulares_br",  "risco_crms_irregulares_reg",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
                 ]),
             ]
 
@@ -1353,9 +1352,9 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 row += 1
                 ws_ind.write(row, 1, "INDICADOR",  fmt_header_col)
                 ws_ind.write(row, 2, "FARMÁCIA",   fmt_header_col)
-                ws_ind.write(row, 3, "MÉDIA REG",  fmt_header_col)
-                ws_ind.write(row, 4, "MÉDIA UF",   fmt_header_col)
-                ws_ind.write(row, 5, "MÉDIA BR",   fmt_header_col)
+                ws_ind.write(row, 3, "MED. REG",   fmt_header_col)
+                ws_ind.write(row, 4, "MED. UF",    fmt_header_col)
+                ws_ind.write(row, 5, "MED. BR",    fmt_header_col)
                 ws_ind.write(row, 6, "RISCO REG",  fmt_header_col)
                 ws_ind.write(row, 7, "RISCO UF",   fmt_header_col)
                 ws_ind.write(row, 8, "RISCO BR",   fmt_header_col)

@@ -288,26 +288,26 @@ SELECT
     -- Comparativos Municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(MUN.mediana_municipio, 0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(MUN.media_municipio,   0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Comparativos Estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
     ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(UF.mediana_estado, 0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(UF.media_estado,   0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
     -- Comparativos Regionais (Região de Saúde)
     ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
     ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(REG.mediana_regiao, 0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (ISNULL(REG.media_regiao,   0) + 0.05) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Comparativos Nacionais
     BR.mediana_pais AS pais_mediana,
     BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (BR.mediana_pais + 0.05) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST((ISNULL(I.percentual_falecidos, 0) + 0.05) / (BR.media_pais   + 0.05) AS DECIMAL(18,4)) AS risco_relativo_br_media
 
 INTO temp_CGUSC.fp.indicador_falecidos_detalhado
 FROM temp_CGUSC.fp.dados_farmacia F

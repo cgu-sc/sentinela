@@ -1,5 +1,5 @@
 """
-Script de Build - Gerador de Relatórios do Sentinela v3.2.0
+Script de Build - Gerador de Relatórios do Sentinela v3.3.1
 =======================================================
 Este script gera o executável usando PyInstaller.
 
@@ -24,7 +24,7 @@ def build():
             pass
     
     print("=" * 60)
-    print("BUILD - Gerador de Relatórios do Sentinela v3.2.0")
+    print("BUILD - Gerador de Relatórios do Sentinela v3.3.1")
     print("=" * 60)
     
     # Verifica se PyInstaller está instalado
@@ -51,6 +51,7 @@ def build():
     gerador_script = os.path.join(current_dir, "gerar_relatorio.py")
     aba_crm_script = os.path.join(current_dir, "aba_crm.py")
     aba_falecidos_script = os.path.join(current_dir, "aba_falecidos.py")
+    aba_regiao_script = os.path.join(current_dir, "aba_regiao.py")
     icon_file = os.path.join(current_dir, "Icone.ico")
     logo_file = os.path.join(current_dir, "logo_sentinela.png")
     
@@ -66,6 +67,11 @@ def build():
         print(f"❌ Arquivo não encontrado: {gerador_script}")
         return False
     print(f"  ✅ {gerador_script}")
+
+    if not os.path.exists(aba_regiao_script):
+        print(f"❌ Arquivo não encontrado: {aba_regiao_script}")
+        return False
+    print(f"  ✅ {aba_regiao_script}")
     
     icon_option = []
     if os.path.exists(icon_file):
@@ -92,6 +98,7 @@ def build():
         f"--add-data={gerador_script};.",     # Inclui o módulo gerador
         f"--add-data={aba_crm_script};.",     # Inclui o módulo CRM
         f"--add-data={aba_falecidos_script};.", # Inclui o módulo Falecidos
+        f"--add-data={aba_regiao_script};.",   # Inclui o módulo Região
         # "--clean",                            # Removido para acelerar builds subsequentes usando cache
         "--noconfirm",                        # Não pede confirmação
         "--hidden-import=pyodbc",
@@ -100,6 +107,7 @@ def build():
         "--hidden-import=secrets",
         "--hidden-import=aba_crm",
         "--hidden-import=aba_falecidos",
+        "--hidden-import=aba_regiao",
 
         # Exclusões para reduzir tamanho e acelerar análise
         "--exclude-module=matplotlib",

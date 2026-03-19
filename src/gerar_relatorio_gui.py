@@ -1,5 +1,5 @@
 """
-SENTINELA - Gerador de Relatórios v3.2.0
+SENTINELA - Gerador de Relatórios v3.3.2
 ====================================
 Interface gráfica para geração de relatórios a partir da memória de cálculo.
 Período de análise: 01/07/2015 a 10/12/2024
@@ -98,7 +98,7 @@ class SentinelaApp:
         self.root = root
         
         # Versão Local do Sistema
-        self.versao_local = "3.2.0"
+        self.versao_local = "3.3.2"
         
         self.root.title(f"Gerador de Relatórios do Sentinela v{self.versao_local}")
         self.root.geometry("900x750")

@@ -808,7 +808,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             })
             fmt_header_col = wb.add_format({
                 'bold': True, 'font_size': 9, 'bg_color': COR_CINZA_CLARO, 'font_color': 'black',
-                'align': 'center', 'valign': 'vcenter', 'border': 1
+                'align': 'center', 'valign': 'vcenter', 'border': 1, 'text_wrap': True
             })
             fmt_label = wb.add_format({
                 'font_size': 10, 'align': 'left', 'valign': 'vcenter',
@@ -889,6 +889,57 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             
             total_mun = int(dados_risco.get('total_municipio') or 0)
             total_reg = int(dados_risco.get('total_regiao_saude') or 0)
+
+            # Centraliza a lógica de limiares para evitar divergência entre checklist e tabela
+            def get_limiares_indicador(nome):
+                # Limiares Padrão
+                at_lim, cr_lim = (2.0, 3.0)
+                
+                # Exceção para o Teto Máximo
+                if nome == "Dispensação em Teto Máximo":
+                    at_lim, cr_lim = (1.2, 1.3)
+                # Exceções para indicadores concentrados (Alto Custo, Pico, etc)
+                elif nome in ["Medicamentos de Alto Custo", "Concentração em Dias de Pico", "Pacientes Únicos", "Recorrência Sistêmica"]:
+                    at_lim, cr_lim = (1.4, 1.7)
+                
+                return at_lim, cr_lim
+            
+            # --- DEFINIÇÃO ÚNICA DOS GRUPOS DE INDICADORES ---
+            # Formato: (Nome amigável, col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br, tipo_fmt)
+            grupos_sentinela = [
+                ("1. RESULTADO DA AUDITORIA FINANCEIRA", [
+                    ("Percentual de Não Comprovação", "pct_auditado", "med_auditado_reg", "med_auditado_uf", "med_auditado_br", "risco_auditado_reg", "risco_auditado_uf", "risco_auditado_br", "pct"),
+                ]),
+                ("2. ELEGIBILIDADE & CLÍNICA", [
+                    ("Vendas p/ Falecidos", "pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br", "pct"),
+                    ("Incompatibilidade Patológica", "pct_clinico", "med_clinico_reg", "med_clinico_uf", "med_clinico_br", "risco_clinico_reg", "risco_clinico_uf", "risco_clinico_br", "pct"),
+                ]),
+                ("3. PADRÕES DE QUANTIDADE", [
+                    ("Dispensação em Teto Máximo", "pct_teto", "med_teto_reg", "med_teto_uf", "med_teto_br", "risco_teto_reg", "risco_teto_uf", "risco_teto_br", "pct"),
+                    ("4+ Itens por Autorização", "pct_polimedicamento", "med_polimedicamento_reg", "med_polimedicamento_uf", "med_polimedicamento_br", "risco_polimedicamento_reg", "risco_polimedicamento_uf", "risco_polimedicamento_br", "pct"),
+                    ("Itens por Autorização", "val_media_itens", "med_media_itens_reg", "med_media_itens_uf", "med_media_itens_br", "risco_media_itens_reg", "risco_media_itens_uf", "risco_media_itens_br", "dec"),
+                ]),
+                ("4. PADRÕES FINANCEIROS", [
+                    ("Valor do Ticket Médio", "val_ticket_medio", "med_ticket_reg", "med_ticket_uf", "med_ticket_br", "risco_ticket_reg", "risco_ticket_uf", "risco_ticket_br", "val"),
+                    ("Faturamento Médio Mensal por Cliente", "val_receita_paciente", "med_receita_paciente_reg", "med_receita_paciente_uf", "med_receita_paciente_br", "risco_receita_paciente_reg", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
+                    ("Venda Per Capita Mensal Municipal", "val_per_capita", "med_per_capita_reg", "med_per_capita_uf", "med_per_capita_br", "risco_per_capita_reg", "risco_per_capita_uf", "risco_per_capita_br", "val"),
+                    ("Medicamentos de Alto Custo", "pct_alto_custo", "med_alto_custo_reg", "med_alto_custo_uf", "med_alto_custo_br", "risco_alto_custo_reg", "risco_alto_custo_uf", "risco_alto_custo_br", "pct"),
+                ]),
+                ("5. AUTOMAÇÃO & GEOGRAFIA", [
+                    ("Vendas Rápidas (<60s)", "pct_vendas_rapidas", "med_vendas_rapidas_reg", "med_vendas_rapidas_uf", "med_vendas_rapidas_br", "risco_vendas_rapidas_reg", "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
+                    ("Volume Atípico", "val_volume_atipico", "med_volume_atipico_reg", "med_volume_atipico_uf", "med_volume_atipico_br", "risco_volume_atipico_reg", "risco_volume_atipico_uf", "risco_volume_atipico_br", "dec"),
+                    ("Recorrência Sistêmica", "pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg", "med_recorrencia_sistemica_uf", "med_recorrencia_sistemica_br", "risco_recorrencia_sistemica_reg", "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br", "pct"),
+                    ("Concentração em Dias de Pico", "pct_pico", "med_pico_reg", "med_pico_uf", "med_pico_br", "risco_pico_reg", "risco_pico_uf", "risco_pico_br", "pct"),
+                    ("Dispersão Geográfica Interestadual", "pct_geografico", "med_geografico_reg", "med_geografico_uf", "med_geografico_br", "risco_geografico_reg", "risco_geografico_uf", "risco_geografico_br", "pct"),
+                    ("Pacientes Únicos", "pct_pacientes_unicos", "med_pacientes_unicos_reg", "med_pacientes_unicos_uf", "med_pacientes_unicos_br", "risco_pacientes_unicos_reg", "risco_pacientes_unicos_uf", "risco_pacientes_unicos_br", "pct"),
+                ]),
+                ("6. INTEGRIDADE MÉDICA", [
+                    ("Concentração de CRMs (HHI)", "val_hhi_crm", "avg_hhi_crm_reg", "avg_hhi_crm_uf", "avg_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br", "dec"),
+                    ("Exclusividade de CRMs", "pct_exclusividade_crm", "med_exclusividade_crm_reg", "med_exclusividade_crm_uf", "med_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
+                    ("Irregularidade de CRMs", "pct_crms_irregulares", "med_crms_irregulares_reg", "med_crms_irregulares_uf", "med_crms_irregulares_br", "risco_crms_irregulares_reg", "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct"),
+                ]),
+            ]
+
             nome_regiao = dados_risco.get('no_regiao_saude', 'N/A')
 
             # Cálculos de Densidade
@@ -897,30 +948,59 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             
             pop_fmt = f"{pop_mun:,.0f}".replace(",", ".")
 
-            # Monta a string final (Nova Ordem Solicitada)
+            # Movemos os dados de Score para o topo para uso no cabeçalho
+            score = float(dados_risco.get('SCORE_RISCO_FINAL', 0))
+            classificacao = dados_risco.get('CLASSIFICACAO_RISCO', 'RISCO BAIXO')
+
+            rank_mun = int(dados_risco.get('rank_municipio') or 0)
+            total_mun_estab = int(dados_risco.get('total_municipio') or 0)
+
+            # Monta a string final (Barra Demográfica - B4)
             texto_demografico = (
-                f"📍 {mun}-{uf}  |  👥 Pop. Mun: {pop_fmt}  |  📊 Dens. Mun: {dens_mun}  |  "
-                f"🏥 Região: {nome_regiao}  |  🏥 Estab. Região: {total_reg}  |  📊 Dens. Reg: {dens_reg} hab/farm"
+                f"📍 {mun}-{uf}  |  👥 Pop: {pop_fmt}  |  "
+                f"🏥 Região: {nome_regiao}  |  🏥 Estab. Reg: {total_reg}  |  📊 Dens: {dens_mun} hab/farm"
             )
 
             # Escreve na célula B4
             ws_ind.write('B4', texto_demografico, fmt_subtitulo)
+
+            # --- NOVO: BARRA DE RANKINGS E PERFORMANCE (B5) ---
+            rank_nacional = int(dados_risco.get('rank_nacional') or 0)
+            total_nacional = int(dados_risco.get('total_nacional') or 0)
+            rank_uf = int(dados_risco.get('rank_uf') or 0)
+            total_uf = int(dados_risco.get('total_uf') or 0)
+            rank_regiao = int(dados_risco.get('rank_regiao_saude', 0))
+            total_regiao = int(dados_risco.get('total_regiao_saude') or 0)
+            mediana_regiao = float(dados_risco.get('avg_score_regiao_saude', 0))
+            vezes_pior = (score / mediana_regiao) if mediana_regiao > 0 else 1.0
+
+            # Prepara a string de status regional (Badge visual)
+            txt_status_reg = ""
+            if rank_regiao == 1: txt_status_reg = " (🥇 LÍDER EM RISCO)"
+
+            texto_ranking = (
+                f"🏆 RANKINGS:  Nacional: #{rank_nacional:,}  |  Estadual: #{rank_uf:,}  |  "
+                f"Regional: #{rank_regiao} de {total_regiao}  |  Municipal: {rank_mun}º de {total_mun_estab}  "
+                f"|  📊 Risco: {vezes_pior:.1f}x a Mediana{txt_status_reg}"
+            ).replace(',', '.')
+
+            ws_ind.write('B5', texto_ranking, fmt_subtitulo)
             
-            # --- Link para Documentação ---
+            # --- Link para Documentação (B6) ---
             fmt_link_doc = wb.add_format({
                 'font_size': 9, 'font_color': 'blue', 'underline': True, 
                 'align': 'left', 'valign': 'top'
             })
-            ws_ind.write_url('B5', 'https://cgu-sc.github.io/sentinela/', fmt_link_doc, string='📘 Acesse a Documentação')
+            ws_ind.write_url('B6', 'https://cgu-sc.github.io/sentinela/', fmt_link_doc, string='📘 Acesse a Documentação')
+
+            # --- LINHA DE ESPAÇAMENTO (Respiro Visual) ---
+            ws_ind.set_row(6, 5) # Linha 7 com altura 5
 
             # =================================================================
 
 
 
 
-            # Score Geral (com multiplicadores de severidade)
-            score = float(dados_risco.get('SCORE_RISCO_FINAL', 0))
-            classificacao = dados_risco.get('CLASSIFICACAO_RISCO', 'RISCO BAIXO')
 
             mapeamento_classificacao = {
                 'RISCO CRÍTICO': (COR_VERMELHO, '🔴 RISCO CRÍTICO'),
@@ -950,130 +1030,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             ws_ind.merge_range('L5:Q6', txt_score, fmt_score_txt)
             ws_ind.merge_range('L7:Q7', "SCORE GERAL", fmt_score_label)
 
-            # =================================================================
-            # NOVO: INDICADOR DE CONFIABILIDADE DOS DADOS (DATA QUALITY)
-            # =================================================================
-
-            # 1. Recupera o valor do banco (ALTA, MEDIA, BAIXA ou SEM_DADOS)
-            qualidade_dados = dados_risco.get('flag_qualidade_dados', 'SEM_DADOS')
-
-            # 2. Define a cor baseada na qualidade
-            cor_bg_qualidade = '#E2EFDA'  # Verde Claro (Padrão/Alta)
-            if qualidade_dados == 'MEDIA':
-                cor_bg_qualidade = '#FFF2CC'  # Amarelo Claro
-            elif qualidade_dados in ('BAIXA', 'SEM_DADOS'):
-                cor_bg_qualidade = '#FFC7CE'  # Vermelho Claro
-
-            # 3. Cria o formato do "Selo"
-            fmt_badge_qualidade = wb.add_format({
-                'bold': True,
-                'font_size': 9,
-                'align': 'center',
-                'valign': 'vcenter',
-                'border': 1,
-                'bg_color': cor_bg_qualidade,
-                'font_color': '#333333'
-            })
-
-            # 4. Escreve na planilha (Logo abaixo do rótulo "SCORE GERAL")
-            # Usando merge_range para ocupar as colunas I, J e K na linha 9 (índice 8)
-            ws_ind.merge_range('L9:Q9', f"CONFIABILIDADE DOS DADOS: {qualidade_dados}", fmt_badge_qualidade)
-
-            rank_nacional = int(dados_risco.get('rank_nacional') or 0)
-            total_nacional = int(dados_risco.get('total_nacional') or 0)
-            rank_uf = int(dados_risco.get('rank_uf') or 0)
-            total_uf = int(dados_risco.get('total_uf') or 0)
-
-            rank_regiao = int(dados_risco.get('rank_regiao_saude', 0))
-            total_regiao = int(dados_risco.get('total_regiao_saude') or 0)
-            mediana_regiao = float(dados_risco.get('avg_score_regiao_saude', 0))
-
-            uf_atual = dados_risco.get('uf', '')
-            nome_regiao = dados_risco.get('no_regiao_saude', 'REGIÃO')
-
-            # 2. Cálculos de Percentil e Multiplicador
-            pct_top_nacional = (rank_nacional / total_nacional * 100.0) if total_nacional > 0 else 0
-            vezes_pior = (score / mediana_regiao) if mediana_regiao > 0 else 1.0
-
-            # 3. Definir Cores (Regra Unificada: Se é crítico no Estado/País, o card todo fica vermelho)
-            eh_critico = (rank_nacional > 0 and rank_nacional <= 100) or (
-                        pct_top_nacional > 0 and pct_top_nacional <= 1.0)
-            eh_alerta = (rank_nacional > 0 and rank_nacional <= 1000) or (
-                        pct_top_nacional > 0 and pct_top_nacional <= 5.0)
-
-            # Se for Líder na Região ou tiver score muito alto vs mediana, também força o alerta visual
-            if rank_regiao == 1 or vezes_pior >= 2.0:
-                eh_alerta = True
-            if rank_regiao == 1 and eh_alerta:
-                # Se for lider e já estava em alerta, considera critico para destaque
-                eh_critico = True
-
-            bg_rank = '#F2F2F2'  # Cinza Claro (Neutro)
-            font_rank = '#333333'  # Cinza Escuro
-
-            if eh_critico:
-                bg_rank = '#FFC7CE'  # Vermelho Claro
-                font_rank = '#9C0006'
-            elif eh_alerta:
-                bg_rank = '#FFF2CC'  # Amarelo Claro
-                font_rank = '#9C5700'
-
-            # 4. Formatação do Card Unificado
-            # Título
-            fmt_rank_titulo = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'top': 1, 'left': 1, 'right': 1
-            })
-            # Linhas Intermediárias
-            fmt_rank_linha = wb.add_format({
-                'font_size': 9, 'align': 'left', 'valign': 'vcenter', 'indent': 1,
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1
-            })
-            # Linha de Ênfase (Negrito)
-            fmt_rank_bold = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'left', 'valign': 'vcenter', 'indent': 1,
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1
-            })
-            # Rodapé (Fecha borda)
-            fmt_rank_fim = wb.add_format({
-                'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
-                'bg_color': bg_rank, 'font_color': font_rank,
-                'left': 1, 'right': 1, 'bottom': 1
-            })
-
-            # 5. Escrita das Linhas (L11 a Q11)
-
-            # Cabeçalho
-            ws_ind.merge_range('L11:Q11', "RANKING & COMPARATIVO DE RISCO", fmt_rank_titulo)
-
-            # Linha 1: Nacional
-            txt_nac = f"🇧🇷 Nacional: #{rank_nacional} de {total_nacional} (Top {pct_top_nacional:.2f}%)"
-            ws_ind.merge_range('L12:Q12', txt_nac, fmt_rank_linha)
-
-            # Linha 2: Estadual
-            txt_uf = f"🚩 Estadual ({uf_atual}): #{rank_uf} de {total_uf}"
-            ws_ind.merge_range('L13:Q13', txt_uf, fmt_rank_linha)
-
-            # Linha 3: Regional (Nova)
-            txt_reg = f"🏥 Regional ({nome_regiao}): #{rank_regiao} de {total_regiao}"
-            ws_ind.merge_range('L14:Q14', txt_reg, fmt_rank_linha)
-
-            # Linha 4: Comparativo Mediana (Nova)
-            txt_media = f"📊 Score {score} é {vezes_pior:.1f}x a mediana regional ({mediana_regiao:.1f})"
-            ws_ind.merge_range('L15:Q15', txt_media, fmt_rank_linha)
-
-            # Linha 5: Flag Final (Nova - Líder ou Status)
-            if rank_regiao == 1:
-                txt_status = "🥇 ESTABELECIMENTO LÍDER EM RISCO NA REGIÃO"
-            elif vezes_pior >= 1.5:
-                txt_status = "⚠️ ACIMA DA MEDIANA REGIONAL"
-            else:
-                txt_status = "✅ DENTRO DA MEDIANA REGIONAL"
-
-            ws_ind.merge_range('L16:Q16', txt_status, fmt_rank_fim)
 
             # =================================================================
             # TABELA TOP 15 (COM COLUNA RISCO - J18)
@@ -1088,12 +1044,13 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             nome_regiao = dados_risco.get('no_regiao_saude', 'REGIÃO DESCONHECIDA')
             top10_lista = buscar_farmacias_regiao(cursor, id_regiao)[:10]
 
-            # Título (Agora focado na Região)
+            # Título (Barra Azul Unificada)
             fmt_top10_header = wb.add_format({
-                'bold': True, 'font_size': 9, 'font_color': '#1F4E78',
-                'align': 'left', 'valign': 'bottom', 'bottom': 1
+                'bold': True, 'font_size': 9, 'bg_color': COR_AZUL_ESCURO, 'font_color': 'white',
+                'align': 'left', 'valign': 'vcenter', 'indent': 1, 'border': 1
             })
-            ws_ind.merge_range('L18:T18', f"TOP 10 PIORES FARMÁCIAS NA REGIÃO: {nome_regiao.upper()}", fmt_top10_header)
+            ws_ind.merge_range('L8:T8', f"TOP 10 PIORES FARMÁCIAS NA REGIÃO: {nome_regiao.upper()}", fmt_top10_header)
+            ws_ind.set_row(7, 20) # Altura da barra de título
 
             # Cabeçalhos da Tabela
             fmt_th = wb.add_format(
@@ -1102,15 +1059,15 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 {'bold': True, 'font_size': 8, 'align': 'left', 'bg_color': '#F2F2F2', 'border': 1})
 
             # LAYOUT DE COLUNAS (L até T)
-            ws_ind.write('L19', "SCORE", fmt_th)              # L
-            ws_ind.merge_range('M19:N19', "FARMÁCIA", fmt_th_esq)  # M-N
-            ws_ind.write('O19', "MUNICÍPIO", fmt_th_esq)     # O
-            ws_ind.write('P19', "RISCO", fmt_th)             # P
-            ws_ind.write('Q19', "CONEXÃO", fmt_th)          # Q
-            ws_ind.write('R19', "R$ S/ COMP.", fmt_th)       # R
-            ws_ind.merge_range('S19:T19', "% S/ COMP.", fmt_th)  # S-T
+            ws_ind.write('L9', "SCORE", fmt_th)              # L
+            ws_ind.merge_range('M9:N9', "FARMÁCIA", fmt_th_esq)  # M-N
+            ws_ind.write('O9', "MUNICÍPIO", fmt_th_esq)     # O
+            ws_ind.write('P9', "RISCO", fmt_th)             # P
+            ws_ind.write('Q9', "CONEXÃO", fmt_th)          # Q
+            ws_ind.write('R9', "R$ S/ COMP.", fmt_th)       # R
+            ws_ind.merge_range('S9:T9', "% S/ COMP.", fmt_th)  # S-T
 
-            linha_atual = 18
+            linha_atual = 8
 
             # Formatos
             bg_destaque = '#FFF2CC'
@@ -1262,8 +1219,12 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ws_ind.write(linha_atual, 17, val_irreg, f_m)
                     ws_ind.merge_range(linha_atual, 18, linha_atual, 19, pct_irregular, f_p)
 
-                # Data Bars (Cols 18 e 19 / S e T)
-                ws_ind.conditional_format(19, 18, linha_atual, 19, {
+                # Captura a primeira e última linha de dados para a formatação condicional
+                primeira_linha_top10 = 9
+                ultima_linha_top10 = linha_atual
+
+                # Data Bars (Cols 18 e 19 / S e T) - Agora dinâmico
+                ws_ind.conditional_format(primeira_linha_top10, 18, ultima_linha_top10, 19, {
                     'type': 'data_bar', 'bar_color': '#63C384', 'bar_solid': True,
                     'min_type': 'num', 'min_value': 0, 'max_type': 'num', 'max_value': 1, 'bar_no_border': True
                 })
@@ -1271,6 +1232,62 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 # Merge até a coluna 17 (R)
                 ws_ind.merge_range(linha_atual + 1, 11, linha_atual + 1, 19, "Sem dados comparativos.", fmt_cell_center)
                 linha_atual += 1
+
+            # --- RESUMO PARA AUDITORIA (CHECKLIST DINÂMICO) ---
+            achados_criticos = []
+            for titulo_g, indicadores_g in grupos_sentinela:
+                for nome, col_v, col_m_r, col_m_u, col_m_b, col_r_r, col_r_u, col_r_b, t_fmt in indicadores_g:
+                    
+                    # Usa a função centralizada
+                    at_lim, cr_lim = get_limiares_indicador(nome)
+                    
+                    # Usamos o arredondamento para bater com o visual da tabela
+                    r_u_raw = float(dados_risco.get(col_r_u) or 0)
+                    r_u_base = round(r_u_raw, 1)
+
+                    if r_u_base >= cr_lim:
+                        v_f = float(dados_risco.get(col_v) or 0)
+                        m_f = float(dados_risco.get(col_m_r) or 0) # Mediana Regional
+                        r_r = float(dados_risco.get(col_r_r) or 0)
+                        
+                        # Formatação inteligente para os dois valores
+                        if t_fmt == 'pct': 
+                            v_str = f"{v_f:.2f}%"
+                            m_str = f"{m_f:.2f}%"
+                        elif t_fmt == 'val': 
+                            # Formatação R$ para o valor
+                            v_str = f"R$ {v_f:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                            m_str = f"R$ {m_f:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                        else: 
+                            v_str = f"{v_f:.2f}"
+                            m_str = f"{m_f:.2f}"
+                        
+                        achados_criticos.append({
+                            'risco': r_r,
+                            'texto': f"{nome}: operação {r_r:.1f}x acima da mediana regional (Farmácia: {v_str} | Mediana: {m_str})"
+                        })
+
+            if achados_criticos:
+                row_check = linha_atual + 2
+                # Estilo Alerta Suave (Monocromático Vermelho/Rosa)
+                fmt_ch_header = wb.add_format({
+                    'bold': True, 'font_size': 11, 'bg_color': '#FFC7CE', 'font_color': '#9C0006',
+                    'align': 'left', 'valign': 'vcenter', 'indent': 1, 'border': 1, 'border_color': '#D99594'
+                })
+                fmt_ch_item = wb.add_format({
+                    'font_size': 9, 'bg_color': '#FFF4F4', 'align': 'left', 'valign': 'vcenter',
+                    'indent': 1, 'border': 1, 'border_color': '#D99594', 'text_wrap': True
+                })
+                
+                ws_ind.merge_range(row_check, 11, row_check, 19, "📝 RESUMO PARA AUDITORIA (PONTOS CRÍTICOS)", fmt_ch_header)
+                ws_ind.set_row(row_check, 20)
+                
+                achados_criticos = sorted(achados_criticos, key=lambda x: x['risco'], reverse=True)
+                for i, achado in enumerate(achados_criticos):
+                    curr_r = row_check + 1 + i
+                    ws_ind.merge_range(curr_r, 11, curr_r, 19, f"• {achado['texto']}", fmt_ch_item)
+                    ws_ind.set_row(curr_r, 20) # Altura suavizada
+                
 
 
 
@@ -1282,56 +1299,21 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # FIM DO NOVO BLOCO
             # =================================================================
 
-            # Grupos de Indicadores
-            # Formato das tuplas:
-            # (nome, col_valor, col_med_mun, col_med_uf, col_med_br, col_risco_mun, col_risco_uf, col_risco_br, tipo_fmt)
-            grupos = [
-                ("1. RESULTADO DA AUDITORIA FINANCEIRA", [
-                    ("Percentual de Não Comprovação", "pct_auditado", "med_auditado_reg", "med_auditado_uf", "med_auditado_br", "risco_auditado_reg", "risco_auditado_uf", "risco_auditado_br", "pct"),
-                ]),
-                ("2. ELEGIBILIDADE & CLÍNICA", [
-                    ("Vendas p/ Falecidos",         "pct_falecidos",           "med_falecidos_reg",           "med_falecidos_uf",           "med_falecidos_br",           "risco_falecidos_reg",           "risco_falecidos_uf",           "risco_falecidos_br",           "pct"),
-                    ("Incompatibilidade Patológica", "pct_clinico",             "med_clinico_reg",             "med_clinico_uf",             "med_clinico_br",             "risco_clinico_reg",             "risco_clinico_uf",             "risco_clinico_br",             "pct"),
-                ]),
-                ("3. PADRÕES DE QUANTIDADE", [
-                    ("Dispensação em Teto Máximo",  "pct_teto",               "med_teto_reg",               "med_teto_uf",               "med_teto_br",               "risco_teto_reg",               "risco_teto_uf",               "risco_teto_br",               "pct"),
-                    ("4+ Itens por Autorização",    "pct_polimedicamento",     "med_polimedicamento_reg",     "med_polimedicamento_uf",     "med_polimedicamento_br",     "risco_polimedicamento_reg",     "risco_polimedicamento_uf",     "risco_polimedicamento_br",     "pct"),
-                    ("Itens por Autorização",       "val_media_itens",         "med_media_itens_reg",         "med_media_itens_uf",         "med_media_itens_br",         "risco_media_itens_reg",         "risco_media_itens_uf",         "risco_media_itens_br",         "dec"),
-                ]),
-                ("4. PADRÕES FINANCEIROS", [
-                    ("Valor do Ticket Médio",                   "val_ticket_medio",      "med_ticket_reg",             "med_ticket_uf",             "med_ticket_br",             "risco_ticket_reg",             "risco_ticket_uf",             "risco_ticket_br",             "val"),
-                    ("Faturamento Médio Mensal por Cliente",    "val_receita_paciente",  "med_receita_paciente_reg",   "med_receita_paciente_uf",   "med_receita_paciente_br",   "risco_receita_paciente_reg",   "risco_receita_paciente_uf",   "risco_receita_paciente_br",   "val"),
-                    ("Venda Per Capita Mensal Municipal",       "val_per_capita",        "med_per_capita_reg",         "med_per_capita_uf",         "med_per_capita_br",         "risco_per_capita_reg",         "risco_per_capita_uf",         "risco_per_capita_br",         "val"),
-                    ("Medicamentos de Alto Custo",              "pct_alto_custo",        "med_alto_custo_reg",         "med_alto_custo_uf",         "med_alto_custo_br",         "risco_alto_custo_reg",         "risco_alto_custo_uf",         "risco_alto_custo_br",         "pct"),
-                ]),
-                ("5. AUTOMAÇÃO & GEOGRAFIA", [
-                    ("Vendas Rápidas (<60s)",                   "pct_vendas_rapidas",        "med_vendas_rapidas_reg",         "med_vendas_rapidas_uf",         "med_vendas_rapidas_br",         "risco_vendas_rapidas_reg",         "risco_vendas_rapidas_uf",         "risco_vendas_rapidas_br",         "pct"),
-                    ("Volume Atípico",                          "val_volume_atipico",        "med_volume_atipico_reg",         "med_volume_atipico_uf",         "med_volume_atipico_br",         "risco_volume_atipico_reg",         "risco_volume_atipico_uf",         "risco_volume_atipico_br",         "dec"),
-                    ("Recorrência Sistêmica",                   "pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg",  "med_recorrencia_sistemica_uf",  "med_recorrencia_sistemica_br",  "risco_recorrencia_sistemica_reg",  "risco_recorrencia_sistemica_uf",  "risco_recorrencia_sistemica_br",  "pct"),
-                    ("Concentra\u00e7\u00e3o em Dias de Pico",            "pct_pico",                  "med_pico_reg",                   "med_pico_uf",                   "med_pico_br",                   "risco_pico_reg",                   "risco_pico_uf",                   "risco_pico_br",                   "pct"),
-                    ("Dispersão Geográfica Interestadual",      "pct_geografico",            "med_geografico_reg",             "med_geografico_uf",             "med_geografico_br",             "risco_geografico_reg",             "risco_geografico_uf",             "risco_geografico_br",             "pct"),
-                    ("Pacientes Únicos",                        "pct_pacientes_unicos",      "med_pacientes_unicos_reg",       "med_pacientes_unicos_uf",       "med_pacientes_unicos_br",       "risco_pacientes_unicos_reg",       "risco_pacientes_unicos_uf",       "risco_pacientes_unicos_br",       "pct"),
-                ]),
-                ("6. INTEGRIDADE MÉDICA", [
-                    ("Concentração de CRMs (HHI)", "val_hhi_crm",            "avg_hhi_crm_reg",            "avg_hhi_crm_uf",            "avg_hhi_crm_br",            "risco_crm_reg",            "risco_crm_uf",            "risco_crm_br",            "dec"),
-                    ("Exclusividade de CRMs",      "pct_exclusividade_crm",  "med_exclusividade_crm_reg", "med_exclusividade_crm_uf", "med_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs",     "pct_crms_irregulares",   "med_crms_irregulares_reg",  "med_crms_irregulares_uf",  "med_crms_irregulares_br",  "risco_crms_irregulares_reg",  "risco_crms_irregulares_uf",  "risco_crms_irregulares_br",  "pct"),
-                ]),
-            ]
-
-            row = 6
-            for titulo_grupo, indicadores in grupos:
+            row = 7
+            for titulo_grupo, indicadores in grupos_sentinela:
                 ws_ind.merge_range(row, 1, row, 9, titulo_grupo, fmt_header_grupo)
+                ws_ind.set_row(row, 20) # Altura padrão para barras de título azul
                 row += 1
                 ws_ind.write(row, 1, "INDICADOR",  fmt_header_col)
                 ws_ind.write(row, 2, "FARMÁCIA",   fmt_header_col)
-                ws_ind.write(row, 3, "MED. REG",   fmt_header_col)
-                ws_ind.write(row, 4, "MED. UF",    fmt_header_col)
-                ws_ind.write(row, 5, "MED. BR",    fmt_header_col)
-                ws_ind.write(row, 6, "RISCO REG",  fmt_header_col)
-                ws_ind.write(row, 7, "RISCO UF",   fmt_header_col)
-                ws_ind.write(row, 8, "RISCO BR",   fmt_header_col)
+                ws_ind.write(row, 3, "MEDIANA\nREGIÃO",   fmt_header_col)
+                ws_ind.write(row, 4, "MEDIANA\nUF",    fmt_header_col)
+                ws_ind.write(row, 5, "MEDIANA\nBR",    fmt_header_col)
+                ws_ind.write(row, 6, "RISCO\nREGIÃO",  fmt_header_col)
+                ws_ind.write(row, 7, "RISCO\nUF",   fmt_header_col)
+                ws_ind.write(row, 8, "RISCO\nBR",   fmt_header_col)
                 ws_ind.write(row, 9, "STATUS",     fmt_header_col)
+                ws_ind.set_row(row, 26)
                 row += 1
 
                 for nome, col_val, col_med_mun, col_med_uf, col_med_br, col_r_mun, col_r_uf, col_r_br, tipo_fmt in indicadores:
@@ -1363,31 +1345,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             med_uf  /= 100.0
                             med_br  /= 100.0
 
-                        # Lógica de Cores e Status (Matriz Específica)
-                        limiar_atencao = 2.0
-                        limiar_critico = 3.0
-                        
-                        # Exceção para o Teto Máximo (Devido à alta concenctração da média em 60%)
-                        if nome == "Dispensação em Teto Máximo":
-                            limiar_atencao = 1.2  # Ex: 60% * 1.2 = 72%
-                            limiar_critico = 1.3  # Ex: 60% * 1.4 = 84%
-                        # Exceção para Medicamentos de Alto Custo (Média em torno de 35%)
-                        elif nome == "Medicamentos de Alto Custo":
-                            limiar_atencao = 1.4  # Ex: 35% * 1.6 = 56%
-                            limiar_critico = 1.7  # Ex: 35% * 2.0 = 70%
-                        # Exceção para Concentração em Dias de Pico (Média em torno de 27%)
-                        elif nome == "Concentração em Dias de Pico":
-                            limiar_atencao = 1.4  # Ex: 27% * 1.8 = ~49% do lucro concentrado em 3 dias
-                            limiar_critico = 1.7  # Ex: 27% * 2.2 = ~59% do lucro concentrado em 3 dias
-                        # Exceção para Pacientes Únicos (Média em torno de 41%)
-                        elif nome == "Pacientes Únicos":
-                            limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
-                            limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
-                        
-                        elif nome == "Recorrência Sistêmica":
-                            limiar_atencao = 1.4  # Ex: 41% * 1.6 = ~65% das pessoas só vão 1 vez na vida
-                            limiar_critico = 1.7  # Ex: 41% * 2.0 = ~82% das pessoas nunca mais voltam
-                        
+                        # Usa a função centralizada de limiares e status
+                        limiar_atencao, limiar_critico = get_limiares_indicador(nome)
 
                         # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
                         risco_base = round(r_uf, 1) 
@@ -1438,6 +1397,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     if nome in explicacoes:
                         ws_ind.write_comment(row, 1, explicacoes[nome],
                                              {'width': 400, 'height': 120, 'font_name': 'Tahoma', 'font_size': 9})
+                    
+                    ws_ind.set_row(row, 20) # Altura padrão para linhas de dados
                     row += 1
                 row += 1
 

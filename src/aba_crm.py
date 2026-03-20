@@ -475,63 +475,79 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
     # INDICADORES DE RISCO (Tabela comparativa)
     # =================================================================
     row_ind = row_cards2 + 6
-    ws.merge_range(row_ind, 1, row_ind, 7, "INDICADORES DE RISCO VS MÉDIAS", fmt_secao_titulo)
+    ws.merge_range(row_ind, 1, row_ind, 9, "INDICADORES DE RISCO VS MEDIANAS", fmt_secao_titulo)
     row_ind += 1
 
     # Headers
     ws.write(row_ind, 1, "INDICADOR", fmt_header_tabela)
     ws.write(row_ind, 2, "FARMÁCIA", fmt_header_tabela)
-    ws.write(row_ind, 3, "MÉDIA UF", fmt_header_tabela)
-    ws.write(row_ind, 4, "MÉDIA BR", fmt_header_tabela)
-    ws.write(row_ind, 5, "RISCO (x) UF", fmt_header_tabela)
-    ws.write(row_ind, 6, "RISCO (x) BR", fmt_header_tabela)
-    ws.write(row_ind, 7, "STATUS", fmt_header_tabela)
+    ws.write(row_ind, 3, "MEDIANA REG", fmt_header_tabela)
+    ws.write(row_ind, 4, "MEDIANA UF", fmt_header_tabela)
+    ws.write(row_ind, 5, "MEDIANA BR", fmt_header_tabela)
+    ws.write(row_ind, 6, "RISCO (x) REG", fmt_header_tabela)
+    ws.write(row_ind, 7, "RISCO (x) UF", fmt_header_tabela)
+    ws.write(row_ind, 8, "RISCO (x) BR", fmt_header_tabela)
+    ws.write(row_ind, 9, "STATUS", fmt_header_tabela)
     row_ind += 1
 
     # Dados dos indicadores
     indicadores = [
         ("Concentração Top 1 (%)", pct_top1,
-         _get_valor(dados_prescritores, 'media_concentracao_uf'),
-         _get_valor(dados_prescritores, 'media_concentracao_br'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_reg'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_uf'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_br'),
+         _get_valor(dados_prescritores, 'risco_concentracao_reg'),
          _get_valor(dados_prescritores, 'risco_concentracao_uf'),
          _get_valor(dados_prescritores, 'risco_concentracao_br')),
         ("Concentração Top 5 (%)", pct_top5,
-         _get_valor(dados_prescritores, 'media_concentracao_top5_uf'),
-         _get_valor(dados_prescritores, 'media_concentracao_top5_br'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_top5_reg'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_top5_uf'),
+         _get_valor(dados_prescritores, 'mediana_concentracao_top5_br'),
+         _get_valor(dados_prescritores, 'risco_concentracao_top5_reg'),
          _get_valor(dados_prescritores, 'risco_concentracao_top5_uf'),
          _get_valor(dados_prescritores, 'risco_concentracao_top5_br')),
         ("Índice HHI", indice_hhi,
-         _get_valor(dados_prescritores, 'media_hhi_uf'),
-         _get_valor(dados_prescritores, 'media_hhi_br'),
-         _get_valor(dados_prescritores, 'risco_hhi_uf'),
-         _get_valor(dados_prescritores, 'risco_hhi_br')),
+         _get_valor(dados_prescritores, 'mediana_hhi_reg'),
+         _get_valor(dados_prescritores, 'mediana_hhi_uf'),
+         _get_valor(dados_prescritores, 'mediana_hhi_br'),
+         _get_valor(dados_prescritores, 'risco_relativo_reg_mediana'),
+         _get_valor(dados_prescritores, 'risco_relativo_uf_mediana'),
+         _get_valor(dados_prescritores, 'risco_relativo_br_mediana')),
         ("CRMs Inválidos (%)", pct_crm_inv,
-         _get_valor(dados_prescritores, 'media_crm_invalido_uf'),
-         _get_valor(dados_prescritores, 'media_crm_invalido_br'),
+         _get_valor(dados_prescritores, 'mediana_crm_invalido_reg'),
+         _get_valor(dados_prescritores, 'mediana_crm_invalido_uf'),
+         _get_valor(dados_prescritores, 'mediana_crm_invalido_br'),
+         _get_valor(dados_prescritores, 'risco_crm_invalido_reg'),
          _get_valor(dados_prescritores, 'risco_crm_invalido_uf'),
          _get_valor(dados_prescritores, 'risco_crm_invalido_br')),
         ("Prescritores Robô (>30/dia)", qtd_robos,
-         _get_valor(dados_prescritores, 'media_robos_uf'),
-         _get_valor(dados_prescritores, 'media_robos_br'),
+         _get_valor(dados_prescritores, 'mediana_robos_reg'),
+         _get_valor(dados_prescritores, 'mediana_robos_uf'),
+         _get_valor(dados_prescritores, 'mediana_robos_br'),
+         _get_valor(dados_prescritores, 'risco_robos_reg'),
          _get_valor(dados_prescritores, 'risco_robos_uf'),
          _get_valor(dados_prescritores, 'risco_robos_br')),
         ("Índice de Rede Suspeita", indice_rede,
-         _get_valor(dados_prescritores, 'media_indice_rede_uf'),
-         _get_valor(dados_prescritores, 'media_indice_rede_br'),
+         _get_valor(dados_prescritores, 'mediana_indice_rede_reg'),
+         _get_valor(dados_prescritores, 'mediana_indice_rede_uf'),
+         _get_valor(dados_prescritores, 'mediana_indice_rede_br'),
+         _get_valor(dados_prescritores, 'risco_rede_reg'),
          _get_valor(dados_prescritores, 'risco_rede_uf'),
          _get_valor(dados_prescritores, 'risco_rede_br')),
     ]
 
-    for nome, valor, media_uf, media_br, risco_uf, risco_br in indicadores:
-        status = "CRÍTICO" if risco_uf >= 5 else ("ATENÇÃO" if risco_uf >= 2 else "NORMAL")
+    for nome, valor, media_reg, media_uf, media_br, risco_reg, risco_uf, risco_br in indicadores:
+        status = "CRÍTICO" if risco_reg >= 5 else ("ATENÇÃO" if risco_reg >= 2 else "NORMAL")
         ws.write(row_ind, 1, nome, fmt_celula)
         ws.write(row_ind, 2, valor, fmt_celula_decimal)
-        ws.write(row_ind, 3, media_uf, fmt_celula_decimal)
-        ws.write(row_ind, 4, media_br, fmt_celula_decimal)
+        ws.write(row_ind, 3, media_reg, fmt_celula_decimal)
+        ws.write(row_ind, 4, media_uf, fmt_celula_decimal)
+        ws.write(row_ind, 5, media_br, fmt_celula_decimal)
 
-        ws.write(row_ind, 5, risco_uf, get_formato_risco(risco_uf))
-        ws.write(row_ind, 6, risco_br, get_formato_risco(risco_br))
-        ws.write(row_ind, 7, status, fmt_header_tabela)
+        ws.write(row_ind, 6, risco_reg, get_formato_risco(risco_reg))
+        ws.write(row_ind, 7, risco_uf, get_formato_risco(risco_uf))
+        ws.write(row_ind, 8, risco_br, get_formato_risco(risco_br))
+        ws.write(row_ind, 9, status, fmt_header_tabela)
         row_ind += 1
 
     # =================================================================

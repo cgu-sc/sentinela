@@ -428,14 +428,6 @@ ScoreCalculadoFim AS (
             ELSE 0 END
         AS DECIMAL(18,4)) AS SCORE_RISCO_FINAL,
 
-        -- Qualidade dos Dados
-        CASE 
-            WHEN qtd_indicadores_preenchidos >= 15 THEN 'ALTA'
-            WHEN qtd_indicadores_preenchidos >= 10 THEN 'MEDIA'
-            WHEN qtd_indicadores_preenchidos >= 1 THEN 'BAIXA'
-            ELSE 'SEM_DADOS'
-        END AS flag_qualidade_dados,
-
         -- Lista textual de problemas
         STUFF(
             CASE WHEN flag_falecidos_critico = 1 THEN ', Falecidos' ELSE '' END +

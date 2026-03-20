@@ -10,3 +10,12 @@ openpyxl>=3.1.0             # Suporte adicional para Excel
 mkdocs>=1.6.0               # Framework de documentação
 mkdocs-material>=9.5.0      # Tema Material para MkDocs
 mkdocs-mermaid2-plugin>=1.2.1 # Suporte a diagramas Mermaid
+
+# =============================================================================
+# WEB & DESKTOP DESENVOLVIMENTO (TAURI + FASTAPI)
+# =============================================================================
+fastapi                       # Framework principal da API
+uvicorn                       # Servidor ASGI para rodar o FastAPI
+sqlalchemy                    # Gerenciamento profissional de banco de dados
+pydantic                      # Validação de dados (usado pelo FastAPI)
+httpx                         # Cliente HTTP para testes de integração

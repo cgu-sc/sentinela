@@ -3,7 +3,6 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useThemeStore } from '../stores/theme';
 import Button from 'primevue/button';
-import ThemeSelector from '../components/ThemeSelector.vue';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Slider from 'primevue/slider';
@@ -92,11 +91,7 @@ const statusOptions = ['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA'];
 const rfaOptions = ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'];
 
 // Controle de Menu
-const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
-
-watch(isCollapsed, (val) => {
-  localStorage.setItem('sentinela_sidebar_collapsed', String(val));
-});
+const isCollapsed = ref(false);
 
 const limparFiltros = () => {
     selectedUF.value = 'Todos';
@@ -225,7 +220,7 @@ const limparFiltros = () => {
 
              <!-- Filtros para DASHBOARD (CONSOLIDADO) -->
              <div v-if="activeModule === 'consolidado'" class="contextual-filters">
-                <p class="text-xs px-2 italic" style="color: var(--text-muted)">Nenhum filtro extra necessário.</p>
+                <p class="text-xs opacity-50 px-2 italic">Nenhum filtro extra necessário.</p>
              </div>
         </div>
 
@@ -271,17 +266,18 @@ const limparFiltros = () => {
           </div>
         </div>
         <div class="nav-actions">
-           <ThemeSelector />
+           <Button 
+             :icon="themeStore.isDark ? 'pi pi-sun' : 'pi pi-moon'" 
+             text rounded severity="secondary" 
+             @click="themeStore.toggleTheme"
+             v-tooltip.bottom="themeStore.isDark ? 'Modo Claro' : 'Modo Escuro'"
+           />
            <Button icon="pi pi-home" text rounded severity="secondary" />
         </div>
       </nav>
 
       <div class="page-content">
-        <router-view v-slot="{ Component }">
-          <Transition name="page-fade" mode="out-in">
-            <component :is="Component" />
-          </Transition>
-        </router-view>
+        <router-view />
       </div>
     </main>
   </div>
@@ -292,17 +288,18 @@ const limparFiltros = () => {
 .admin-layout {
   --sidebar-width: 280px;
   --sidebar-collapsed: 80px;
-
-  display: block;
+  --accent-color: #3b82f6;
+  
+  display: flex;
   min-height: 100vh;
   background-color: var(--bg-color);
   color: var(--text-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
-/* VARIÁVEIS DO MODO CLARO (superfícies) */
+/* VARIÁVEIS DO MODO CLARO */
 :global(.light-mode) .admin-layout {
-  --bg-color: color-mix(in srgb, var(--primary-50) 25%, #ffffff);
+  --bg-color: #f8fafc;
   --sidebar-bg: #ffffff;
   --sidebar-text: #1e293b;
   --sidebar-border: #e2e8f0;
@@ -310,54 +307,41 @@ const limparFiltros = () => {
   --navbar-border: #e2e8f0;
   --text-color: #1e293b;
   --card-bg: #ffffff;
-  --text-muted: #64748b;
-  --table-header-bg: #f8fafc;
-  --table-header-text: #475569; /* Slate 600 - Neutro e elegante */
-  --table-hover: #f1f5f9; /* Slate 100 - Mais visível */
-  --table-stripe: #fcfcfd; /* Quase branco - Super sutil */
+  --accent-color: #3b82f6; /* Blue 500 */
+  --text-muted: #64748b; /* Slate 500 */
+  --table-hover: #f1f5f9; /* Slate 100 */
+  --table-stripe: #f8fafc; /* Slate 50 */
 }
 
-/* VARIÁVEIS DO MODO ESCURO (superfícies) */
+/* VARIÁVEIS DO MODO ESCURO (ARBITRAGE STYLE - CARBON GOLD) */
 :global(.dark-mode) .admin-layout {
-  --bg-color: color-mix(in srgb, var(--primary-color) 2%, #09090b);
-  --sidebar-bg: #09090b;
-  --sidebar-text: #f4f4f5;
-  --sidebar-border: #27272a;
-  --navbar-bg: #09090b;
-  --navbar-border: #27272a;
-  --text-color: #cbd5e1; /* Slate 300 - Muito mais confortável */
-  --card-bg: #18181b; 
-  --text-muted: #71717a; /* Zinc 400 */
-  --table-header-bg: #202023; 
-  --table-header-text: #94a3b8;
-  --table-hover: #2d2d30; /* Mais claro e distinto */
-  --table-stripe: #111113;
-
-  /* PRIME VUE INTERNAL SURFACES - O SEGREDO PARA A TABELA */
-  --surface-0: #18181b;
-  --surface-card: #18181b;
-  --surface-ground: #0c0c0e;
-  --surface-section: #0c0c0e;
-  --surface-border: #27272a;
+  --bg-color: #09090b; /* Zinc 950 */
+  --sidebar-bg: #09090b; /* Zinc 950 */
+  --sidebar-text: #f4f4f5; /* Zinc 100 */
+  --sidebar-border: #27272a; /* Zinc 800 */
+  --navbar-bg: #09090b; /* Zinc 950 */
+  --navbar-border: #27272a; /* Zinc 800 */
+  --text-color: #f4f4f5; /* Zinc 100 */
+  --card-bg: #202023; /* Zinc 850 */
+  --accent-color: #d97706; /* Amber 600 */
+  --text-muted: #d4d4d8; /* Zinc 300 - DEIXA CABEÇALHO CONCISO/BRILHANTE */
+  --table-hover: #27272a; /* Zinc 800 */
+  --table-stripe: #18181b; /* Zinc 900 */
 }
-
 
 /* SIDEBAR */
 .admin-sidebar {
   width: var(--sidebar-width);
   background-color: var(--sidebar-bg);
   color: var(--sidebar-text);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+  transition: width 0.3s ease, background-color 0.3s ease;
   display: flex;
   flex-direction: column;
   box-shadow: 4px 0 10px rgba(0,0,0,0.05);
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
   height: 100vh;
-  z-index: 200;
   border-right: 1px solid var(--sidebar-border);
-  overflow: hidden;
 }
 
 .admin-layout.collapsed .admin-sidebar {
@@ -384,7 +368,7 @@ const limparFiltros = () => {
   filter: var(--logo-filter);
 }
 
-:global(.dark-mode) .logo-img { --logo-filter: none; }
+:global(.dark-mode) .logo-img { --logo-filter: brightness(0) invert(1); }
 :global(.light-mode) .logo-img { --logo-filter: none; }
 
 .brand-name {
@@ -414,11 +398,11 @@ const limparFiltros = () => {
 
 .filter-label {
   display: block;
-  font-size: 0.65rem;
-  font-weight: 700;
+  font-size: 0.65rem; /* Reduzido */
+  font-weight: 800;
   text-transform: uppercase;
-  margin-bottom: 0.25rem;
-  color: var(--text-muted);
+  margin-bottom: 0.25rem; /* Reduzido */
+  color: #3b82f6;
   letter-spacing: 0.5px;
 }
 
@@ -494,12 +478,12 @@ const limparFiltros = () => {
 }
 
 :deep(.custom-listbox .p-listbox-item.p-highlight) {
-    background: var(--primary-color);
+    background: var(--accent-color);
     color: #fff;
 }
 
 :deep(.custom-listbox .p-listbox-item:not(.p-highlight):hover) {
-    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    background: rgba(var(--accent-color), 0.1);
 }
 
 .sidebar-spacer { flex: 1; }
@@ -521,7 +505,7 @@ const limparFiltros = () => {
     margin-bottom: 1rem;
 }
 
-.filter-header i { color: var(--primary-color); font-size: 0.9rem; }
+.filter-header i { color: var(--accent-color); font-size: 0.9rem; }
 .filter-header span { 
     font-size: 0.75rem; 
     font-weight: 800; 
@@ -559,13 +543,6 @@ const limparFiltros = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: var(--sidebar-width);
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 100vh;
-}
-
-.admin-layout.collapsed .main-container {
-  margin-left: var(--sidebar-collapsed);
 }
 
 .top-navbar {
@@ -607,11 +584,9 @@ const limparFiltros = () => {
 }
 
 :deep(.module-select-button .p-button.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
-  color: var(--primary-color) !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
-  font-weight: 700;
+  background: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  color: #fff !important;
 }
 
 .nav-tabs {
@@ -630,16 +605,13 @@ const limparFiltros = () => {
 }
 
 .nav-tab:hover {
-  background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  background-color: rgba(var(--accent-color), 0.1);
   opacity: 1;
 }
 
 .nav-tab.active {
-  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
-  color: var(--primary-color);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
-  font-weight: 700;
+  background-color: var(--accent-color);
+  color: #fff;
   opacity: 1;
 }
 
@@ -664,44 +636,27 @@ const limparFiltros = () => {
 :global(.admin-layout) .p-datatable .p-datatable-tbody > tr > td,
 :global(.admin-layout) .p-datatable .p-datatable-tfoot > tr > td,
 :global(.admin-layout) .p-paginator {
-  background: var(--card-bg) !important;
-  color: var(--text-color) !important;
-  border-color: var(--sidebar-border) !important;
-}
-
-/* Forçar especificamente no dark mode para vencer o tema Lara Light */
-:global(.dark-mode) .p-datatable .p-datatable-tbody > tr > td {
-  background: var(--card-bg) !important;
+  background: var(--card-bg);
+  color: var(--text-color);
+  border-color: var(--sidebar-border);
 }
 
 :global(.admin-layout) .p-datatable .p-datatable-thead > tr > th {
-  color: var(--table-header-text) !important; /* Usar a variável de texto do header */
-  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
   text-transform: uppercase;
-  font-weight: 700;
-  border-bottom: 2px solid var(--sidebar-border) !important;
-}
-
-:global(.dark-mode) .p-datatable .p-datatable-thead > tr > th,
-:global(.dark-mode) .p-datatable .p-datatable-tbody > tr,
-:global(.dark-mode) .p-datatable .p-datatable-tfoot > tr > td {
-  background: var(--card-bg) !important;
-  color: var(--text-color) !important;
-  border-color: var(--sidebar-border) !important;
-}
-
-:global(.dark-mode) .p-datatable.p-datatable-striped .p-datatable-tbody > tr.p-row-odd {
-  background: var(--table-stripe) !important;
+  font-weight: 600;
+  border-bottom: 1px solid var(--sidebar-border);
 }
 
 :global(.admin-layout) .p-datatable .p-datatable-tbody > tr {
-  background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  background: var(--card-bg);
+  color: var(--text-color);
   font-size: 0.85rem;
 }
 
 :global(.admin-layout) .p-datatable.p-datatable-striped .p-datatable-tbody > tr.p-row-odd {
-    background: var(--table-stripe) !important;
+    background: var(--table-stripe);
 }
 
 :global(.admin-layout) .p-datatable .p-datatable-tbody > tr:hover {
@@ -717,64 +672,28 @@ const limparFiltros = () => {
     color: var(--text-color);
 }
 :global(.admin-layout) .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
-    background: var(--primary-color);
+    background: var(--accent-color);
     color: #fff;
-    border-color: var(--primary-color);
+    border-color: var(--accent-color);
 }
 
-:global(.dark-mode .p-dropdown),
-:global(.dark-mode .p-dropdown-panel),
-:global(.dark-mode .p-dropdown-header),
-:global(.dark-mode .p-inputtext),
-:global(.dark-mode .p-calendar .p-inputtext),
-:global(.dark-mode .p-datepicker),
-:global(.dark-mode .p-datepicker-header),
-:global(.dark-mode .p-monthpicker),
-:global(.dark-mode .p-yearpicker) {
-    background: var(--card-bg) !important;
-    color: var(--text-color) !important;
-    border-color: var(--sidebar-border) !important;
-}
-
-:global(.dark-mode) .p-datepicker .p-datepicker-header button,
-:global(.dark-mode) .p-monthpicker .p-monthpicker-month,
-:global(.dark-mode) .p-yearpicker .p-yearpicker-year {
-    color: var(--text-color) !important;
-}
-
-:global(.dark-mode) .p-monthpicker .p-monthpicker-month:not(.p-highlight):not(.p-disabled):hover,
-:global(.dark-mode) .p-yearpicker .p-yearpicker-year:not(.p-highlight):not(.p-disabled):hover {
-    background: var(--table-hover) !important;
-}
-
-:global(.dark-mode) .p-monthpicker .p-monthpicker-month.p-highlight,
-:global(.dark-mode) .p-yearpicker .p-yearpicker-year.p-highlight {
-    background: var(--primary-color) !important;
-    color: #ffffff !important;
+:global(.admin-layout) .p-dropdown .p-dropdown-panel {
+  background: var(--card-bg);
+  border-color: var(--sidebar-border);
 }
 
 :global(.p-dropdown-item) {
-    font-size: 0.75rem !important;
+    font-size: 0.75rem !important; /* Tamanho compacto solicitado */
     padding: 0.5rem 0.75rem !important;
 }
 
-:global(.dark-mode .p-dropdown-item) {
-    color: var(--text-color) !important;
+:global(.p-dropdown-header) {
+    padding: 0.5rem !important;
+    background: var(--card-bg) !important;
 }
 
-:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
-    background: var(--table-hover) !important;
-    color: var(--text-color) !important;
-}
-
-:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
-    background: var(--primary-color) !important;
-    color: #ffffff !important;
-}
-
-:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight:hover) {
-    background: var(--primary-color) !important;
-    opacity: 0.9;
+:global(.p-dropdown-filter-container .p-inputtext) {
+    font-size: 0.75rem !important;
 }
 
 :global(.admin-layout) .p-listbox {
@@ -817,42 +736,13 @@ const limparFiltros = () => {
 :global(.admin-layout) .p-inputtext,
 :global(.admin-layout) .p-dropdown,
 :global(.admin-layout) .p-calendar .p-inputtext {
-  background: var(--card-bg) !important;
-  border-color: var(--sidebar-border) !important;
-  color: var(--text-color) !important;
+  background: var(--card-bg);
+  border-color: var(--sidebar-border);
+  color: var(--text-color); /* Correctly updates input text format across themes */
 }
 
 :global(.admin-layout) .p-inputtext:enabled:hover,
 :global(.admin-layout) .p-dropdown:not(.p-disabled):hover {
-  border-color: var(--primary-color);
-}
-
-/* SCROLLBAR SIDEBAR */
-.sidebar-content::-webkit-scrollbar {
-  width: 4px;
-}
-.sidebar-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.sidebar-content::-webkit-scrollbar-thumb {
-  background: var(--sidebar-border);
-  border-radius: 4px;
-}
-.sidebar-content::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
-
-/* PAGE TRANSITIONS */
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-.page-fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.page-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+  border-color: var(--accent-color);
 }
 </style>

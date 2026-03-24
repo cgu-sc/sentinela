@@ -15,11 +15,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f1f5f9;
-  transition: background-color 0.3s ease;
-}
-
-body.dark-mode {
-  background-color: #09090b;
 }
 
 /* Scrollbar Bonito */

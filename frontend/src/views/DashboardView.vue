@@ -1,7 +1,22 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useThemeStore } from '../stores/theme';
+import { useFilterStore } from '../stores/filters';
+import { useRiskMetrics } from '../composables/useRiskMetrics';
+import { useFormatting } from '../composables/useFormatting';
+import { useChartStyles } from '../composables/useChartStyles';
+import { useDashboardStore } from '../stores/dashboard';
+import { storeToRefs } from 'pinia';
+
 const themeStore = useThemeStore();
+const filterStore = useFilterStore();
+const { getRiskSeverity, getRiskClass } = useRiskMetrics();
+const { formatBRL, formatNumber, formatPercent } = useFormatting();
+const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
+const dashboardStore = useDashboardStore();
+
+// Destruturação reativa para manter os dados sincronizados
+const { kpis, nationalAnalysis, isLoading, error } = storeToRefs(dashboardStore);
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -10,44 +25,13 @@ import Button from 'primevue/button';
 import RadioButton from 'primevue/radiobutton';
 import axios from 'axios';
 
-// Dados de Exemplo (Baseados no seu print)
-const kpis = ref([
-  { id: 'total_cnpjs', label: 'C.NPJs', value: '34.126', color: '#ef4444', icon: 'pi pi-id-card' },       
-  { id: 'valor_vendas', label: 'Valor Total de Vendas', value: 'R$ 23,74 Bi', color: '#3b82f6', icon: 'pi pi-money-bill' }, 
-  { id: 'perc_valor', label: '% sem comprovação', value: '16,05%', color: '#f59e0b', icon: 'pi pi-percentage' },    
-  { id: 'valor_nao_comp', label: 'Valor sem Comprovação', value: 'R$ 3,81 Bi', color: '#10b981', icon: 'pi pi-exclamation-triangle' }, 
-  { id: 'total_meds', label: 'Qtde de Medicamentos', value: '3,57 Bi', color: '#8b5cf6', icon: 'pi pi-box' }, 
-]);
-
-const analyticData = ref([
-  { uf: 'AC', cnpjs: '23', trendCnpjs: 'down', percValSemComp: '36,19%', trendPercVal: 'up', valSemComp: 'R$ 662.008,48', trendValSemComp: 'down', totalMov: 'R$ 1.829.269,01', trendTotalMov: 'down', percQtdeSemComp: '61,11%', trendPercQtde: 'up', qtdeSemComp: '337.508', trendQtdeSemComp: 'down', totalQtde: '552.293', trendTotalQtde: 'down' },
-  { uf: 'AL', cnpjs: '412', trendCnpjs: 'up', percValSemComp: '22,45%', trendPercVal: 'down', valSemComp: 'R$ 12.450.120,00', trendValSemComp: 'up', totalMov: 'R$ 55.450.000,00', trendTotalMov: 'up', percQtdeSemComp: '18,30%', trendPercQtde: 'down', qtdeSemComp: '1.240.500', trendQtdeSemComp: 'down', totalQtde: '6.780.000', trendTotalQtde: 'neutral' },
-  { uf: 'AM', cnpjs: '615', trendCnpjs: 'neutral', percValSemComp: '15,60%', trendPercVal: 'up', valSemComp: 'R$ 8.900.500,75', trendValSemComp: 'down', totalMov: 'R$ 57.060.400,00', trendTotalMov: 'up', percQtdeSemComp: '12,40%', trendPercQtde: 'up', qtdeSemComp: '850.400', trendQtdeSemComp: 'down', totalQtde: '6.860.000', trendTotalQtde: 'up' },
-  { uf: 'AP', cnpjs: '105', trendCnpjs: 'down', percValSemComp: '40,20%', trendPercVal: 'up', valSemComp: 'R$ 2.450.000,00', trendValSemComp: 'neutral', totalMov: 'R$ 6.100.000,00', trendTotalMov: 'down', percQtdeSemComp: '45,00%', trendPercQtde: 'up', qtdeSemComp: '120.000', trendQtdeSemComp: 'down', totalQtde: '266.000', trendTotalQtde: 'down' },
-  { uf: 'BA', cnpjs: '3.120', trendCnpjs: 'up', percValSemComp: '18,30%', trendPercVal: 'down', valSemComp: 'R$ 450.600.000,00', trendValSemComp: 'up', totalMov: 'R$ 2.460.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '14,20%', trendPercQtde: 'down', qtdeSemComp: '45.100.200', trendQtdeSemComp: 'neutral', totalQtde: '317.000.000', trendTotalQtde: 'up' },
-  { uf: 'CE', cnpjs: '1.850', trendCnpjs: 'up', percValSemComp: '12,45%', trendPercVal: 'neutral', valSemComp: 'R$ 115.400.000,00', trendValSemComp: 'down', totalMov: 'R$ 927.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '9,80%', trendPercQtde: 'down', qtdeSemComp: '12.450.000', trendQtdeSemComp: 'down', totalQtde: '127.000.000', trendTotalQtde: 'up' },
-  { uf: 'DF', cnpjs: '510', trendCnpjs: 'down', percValSemComp: '26,31%', trendPercVal: 'neutral', valSemComp: 'R$ 77.475.023,21', trendValSemComp: 'down', totalMov: 'R$ 294.504.490,84', trendTotalMov: 'down', percQtdeSemComp: '25,25%', trendPercQtde: 'neutral', qtdeSemComp: '9.615.002', trendQtdeSemComp: 'down', totalQtde: '38.073.846', trendTotalQtde: 'down' },
-  { uf: 'ES', cnpjs: '940', trendCnpjs: 'up', percValSemComp: '14,20%', trendPercVal: 'up', valSemComp: 'R$ 42.100.000,00', trendValSemComp: 'down', totalMov: 'R$ 296.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '11,50%', trendPercQtde: 'down', qtdeSemComp: '4.200.000', trendQtdeSemComp: 'down', totalQtde: '36.500.000', trendTotalQtde: 'neutral' },
-  { uf: 'GO', cnpjs: '2.114', trendCnpjs: 'neutral', percValSemComp: '32,48%', trendPercVal: 'up', valSemComp: 'R$ 371.480.723,75', trendValSemComp: 'down', totalMov: 'R$ 1.143.574.758,05', trendTotalMov: 'down', percQtdeSemComp: '29,51%', trendPercQtde: 'neutral', qtdeSemComp: '49.771.949', trendQtdeSemComp: 'down', totalQtde: '168.670.578', trendTotalQtde: 'down' },
-  { uf: 'MA', cnpjs: '1.020', trendCnpjs: 'down', percValSemComp: '31,50%', trendPercVal: 'up', valSemComp: 'R$ 89.400.000,00', trendValSemComp: 'up', totalMov: 'R$ 283.000.000,00', trendTotalMov: 'neutral', percQtdeSemComp: '27,30%', trendPercQtde: 'up', qtdeSemComp: '14.200.000', trendQtdeSemComp: 'down', totalQtde: '52.000.000', trendTotalQtde: 'down' },
-  { uf: 'MG', cnpjs: '4.850', trendCnpjs: 'up', percValSemComp: '10,20%', trendPercVal: 'down', valSemComp: 'R$ 480.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 4.700.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '8,40%', trendPercQtde: 'down', qtdeSemComp: '62.000.000', trendQtdeSemComp: 'neutral', totalQtde: '738.000.000', trendTotalQtde: 'up' },
-  { uf: 'MS', cnpjs: '720', trendCnpjs: 'neutral', percValSemComp: '19,40%', trendPercVal: 'up', valSemComp: 'R$ 34.200.000,00', trendValSemComp: 'down', totalMov: 'R$ 176.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '16,20%', trendPercQtde: 'down', qtdeSemComp: '3.100.000', trendQtdeSemComp: 'down', totalQtde: '19.100.000', trendTotalQtde: 'neutral' },
-  { uf: 'MT', cnpjs: '815', trendCnpjs: 'up', percValSemComp: '21,30%', trendPercVal: 'neutral', valSemComp: 'R$ 56.700.000,00', trendValSemComp: 'up', totalMov: 'R$ 266.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '18,50%', trendPercQtde: 'down', qtdeSemComp: '5.200.000', trendQtdeSemComp: 'down', totalQtde: '28.100.000', trendTotalQtde: 'up' },
-  { uf: 'PA', cnpjs: '1.450', trendCnpjs: 'down', percValSemComp: '28,60%', trendPercVal: 'up', valSemComp: 'R$ 145.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 506.000.000,00', trendTotalMov: 'neutral', percQtdeSemComp: '24,30%', trendPercQtde: 'up', qtdeSemComp: '21.000.000', trendQtdeSemComp: 'down', totalQtde: '86.000.000', trendTotalQtde: 'down' },
-  { uf: 'PB', cnpjs: '610', trendCnpjs: 'up', percValSemComp: '15,40%', trendPercVal: 'down', valSemComp: 'R$ 28.100.000,00', trendValSemComp: 'down', totalMov: 'R$ 182.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '12,60%', trendPercQtde: 'down', qtdeSemComp: '2.400.000', trendQtdeSemComp: 'down', totalQtde: '19.000.000', trendTotalQtde: 'up' },
-  { uf: 'PE', cnpjs: '1.680', trendCnpjs: 'up', percValSemComp: '14,80%', trendPercVal: 'up', valSemComp: 'R$ 156.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 1.050.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '11,20%', trendPercQtde: 'down', qtdeSemComp: '16.800.000', trendQtdeSemComp: 'down', totalQtde: '150.000.000', trendTotalQtde: 'up' },
-  { uf: 'PI', cnpjs: '515', trendCnpjs: 'down', percValSemComp: '33,20%', trendPercVal: 'up', valSemComp: 'R$ 42.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 126.000.000,00', trendTotalMov: 'down', percQtdeSemComp: '28,10%', trendPercQtde: 'up', qtdeSemComp: '8.400.000', trendQtdeSemComp: 'down', totalQtde: '29.800.000', trendTotalQtde: 'down' },
-  { uf: 'PR', cnpjs: '2.850', trendCnpjs: 'up', percValSemComp: '8,40%', trendPercVal: 'down', valSemComp: 'R$ 210.000.000,00', trendValSemComp: 'down', totalMov: 'R$ 2.500.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '6,20%', trendPercQtde: 'down', qtdeSemComp: '24.000.000', trendQtdeSemComp: 'down', totalQtde: '387.000.000', trendTotalQtde: 'neutral' },
-  { uf: 'RJ', cnpjs: '3.420', trendCnpjs: 'up', percValSemComp: '11,50%', trendPercVal: 'neutral', valSemComp: 'R$ 480.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 4.170.000.000,00', trendTotalMov: 'neutral', percQtdeSemComp: '9,40%', trendPercQtde: 'neutral', qtdeSemComp: '32.100.000', trendQtdeSemComp: 'up', totalQtde: '341.000.000', trendTotalQtde: 'neutral' },
-  { uf: 'RN', cnpjs: '612', trendCnpjs: 'neutral', percValSemComp: '19,80%', trendPercVal: 'up', valSemComp: 'R$ 38.000.000,00', trendValSemComp: 'neutral', totalMov: 'R$ 192.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '16,50%', trendPercQtde: 'down', qtdeSemComp: '3.400.000', trendQtdeSemComp: 'neutral', totalQtde: '20.600.000', trendTotalQtde: 'neutral' },
-  { uf: 'RO', cnpjs: '415', trendCnpjs: 'up', percValSemComp: '25,60%', trendPercVal: 'up', valSemComp: 'R$ 32.000.000,00', trendValSemComp: 'up', totalMov: 'R$ 125.000.000,00', trendTotalMov: 'neutral', percQtdeSemComp: '21,50%', trendPercQtde: 'up', qtdeSemComp: '2.100.000', trendQtdeSemComp: 'neutral', totalQtde: '9.770.000', trendTotalQtde: 'neutral' },
-  { uf: 'RR', cnpjs: '98', trendCnpjs: 'down', percValSemComp: '38,40%', trendPercVal: 'up', valSemComp: 'R$ 5.400.000,00', trendValSemComp: 'neutral', totalMov: 'R$ 14.100.000,00', trendTotalMov: 'down', percQtdeSemComp: '34,20%', trendPercQtde: 'up', qtdeSemComp: '140.000', trendQtdeSemComp: 'up', totalQtde: '410.000', trendTotalQtde: 'down' },
-  { uf: 'RS', cnpjs: '3.150', trendCnpjs: 'up', percValSemComp: '9,20%', trendPercVal: 'down', valSemComp: 'R$ 310.000.000,00', trendValSemComp: 'down', totalMov: 'R$ 3.370.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '7,40%', trendPercQtde: 'down', qtdeSemComp: '41.000.000', trendQtdeSemComp: 'down', totalQtde: '554.000.000', trendTotalQtde: 'up' },
-  { uf: 'SC', cnpjs: '2.210', trendCnpjs: 'up', percValSemComp: '7,80%', trendPercVal: 'down', valSemComp: 'R$ 180.000.000,00', trendValSemComp: 'neutral', totalMov: 'R$ 2.300.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '5,60%', trendPercQtde: 'down', qtdeSemComp: '18.000.000', trendQtdeSemComp: 'down', totalQtde: '321.000.000', trendTotalQtde: 'neutral' },
-  { uf: 'SE', cnpjs: '415', trendCnpjs: 'neutral', percValSemComp: '21,30%', trendPercVal: 'up', valSemComp: 'R$ 22.100.000,00', trendValSemComp: 'down', totalMov: 'R$ 104.000.000,00', trendTotalMov: 'down', percQtdeSemComp: '19,40%', trendPercQtde: 'neutral', qtdeSemComp: '1.200.000', trendQtdeSemComp: 'neutral', totalQtde: '6.190.000', trendTotalQtde: 'down' },
-  { uf: 'SP', cnpjs: '9.820', trendCnpjs: 'up', percValSemComp: '6,20%', trendPercVal: 'down', valSemComp: 'R$ 1.840.000.000,00', trendValSemComp: 'down', totalMov: 'R$ 29.700.000.000,00', trendTotalMov: 'up', percQtdeSemComp: '4,50%', trendPercQtde: 'down', qtdeSemComp: '248.000.000', trendQtdeSemComp: 'up', totalQtde: '5.510.000.000', trendTotalQtde: 'up' },
-  { uf: 'TO', cnpjs: '412', trendCnpjs: 'up', percValSemComp: '19,30%', trendPercVal: 'up', valSemComp: 'R$ 18.200.000,00', trendValSemComp: 'down', totalMov: 'R$ 94.000.000,00', trendTotalMov: 'neutral', percQtdeSemComp: '17,20%', trendPercQtde: 'neutral', qtdeSemComp: '1.420.000', trendQtdeSemComp: 'neutral', totalQtde: '8.250.000', trendTotalQtde: 'up' }
-]);
+// 4. LOGICA DE FILTRAGEM (O PODER DO PINIA)
+const filteredData = computed(() => {
+  if (filterStore.selectedUF === 'Todos') {
+    return nationalAnalysis.value;
+  }
+  return nationalAnalysis.value.filter(item => item.uf === filterStore.selectedUF);
+});
 
 // CONFIG GRAFICO COMBO (APEXCHARTS - PADRÃO ARBFLOW)
 const chartSeries = ref([
@@ -63,50 +47,55 @@ const chartSeries = ref([
     }
 ]);
 
+// Configuração de Estilo do Gráfico (Mesclando com Base Global)
 const chartOptions = computed(() => ({
-    chart: {
-        height: 350,
-        type: 'line',
-        toolbar: { show: false },
-        zoom: { enabled: false },
-        foreColor: themeStore.isDark ? '#94a3b8' : '#64748b'
-    },
-    colors: [themeStore.isDark ? '#3b82f6' : '#1e293b', '#fbbf24'],
+    ...chartBaseOptions.value, // Herança de Estilo Global
+    colors: [chartColors.primary, chartColors.warning],
     stroke: {
-        width: [0, 2],
-        curve: 'smooth'
+        width: [0, 3],
+        curve: 'smooth',
+        lineCap: 'round'
+    },
+    plotOptions: {
+        bar: {
+            columnWidth: '45%',
+            borderRadius: 6,
+            borderRadiusApplication: 'around',
+        }
     },
     fill: {
-        type: 'solid',
-        opacity: [1, 0.3]
+        type: 'gradient',
+        gradient: {
+            shade: 'dark',
+            type: "vertical",
+            shadeIntensity: 0.5,
+            gradientToColors: [chartColors.secondary, undefined], 
+            inverseColors: false,
+            opacityFrom: [0.9, 0.6],
+            opacityTo: [0.8, 0.1],
+            stops: [0, 100, 100]
+        }
     },
     labels: ['0', '<=10%', '10-20%', '20-30%', '30-40%', '40-50%', '50-60%', '60-70%', '70-80%', '80-100%'],
     xaxis: {
+        ...chartBaseOptions.value.xaxis,
         type: 'category',
-        labels: { style: { fontSize: '10px' } }
     },
     yaxis: [
         {
-            title: { text: 'Qtd Estab (Mil)', style: { color: themeStore.isDark ? '#3b82f6' : '#1e293b' } },
-            labels: { formatter: (val) => val + ' Mil' }
+            ...chartBaseOptions.value.yaxis,
+            title: { text: 'Qtd Estab (Mil)', style: { color: chartColors.primary, fontWeight: 600 } },
         },
         {
+            ...chartBaseOptions.value.yaxis,
             opposite: true,
-            title: { text: 'Valor Sem Comp (Bi)', style: { color: '#fbbf24' } },
-            labels: { formatter: (val) => val + ' Bi' }
+            title: { text: 'Valor Sem Comp (Bi)', style: { color: chartColors.warning, fontWeight: 600 } },
         }
     ],
-    grid: { borderColor: 'rgba(100, 116, 139, 0.1)' },
-    legend: { 
-        position: 'top', 
-        horizontalAlign: 'center',
-        labels: { colors: themeStore.isDark ? '#f4f4f5' : '#1e293b' }
-    },
-    tooltip: { theme: themeStore.isDark ? 'dark' : 'light' }
 }));
 
 onMounted(() => {
-    // ...
+    // Note: A carga inicial agora é feita centralizada no App.vue
 });
 
 // Agrupamento selecionado (para Teleport Sidebar)
@@ -131,8 +120,20 @@ const getTrendColor = (trend) => {
 
 <template>
   <div class="dashboard-container">
+    <!-- FEEDBACK DE CARREGAMENTO E ERRO -->
+    <div v-if="isLoading" class="loading-overlay">
+       <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--primary-color)"></i>
+       <span style="margin-top: 1rem; font-weight: 500;">Carregando dados reais do Sentinela...</span>
+    </div>
+
+    <div v-else-if="error" class="error-banner">
+       <i class="pi pi-exclamation-circle"></i>
+       <span>{{ error }}</span>
+       <Button label="Tentar Novamente" icon="pi pi-refresh" @click="dashboardStore.fetchDashboardSummary" text size="small" />
+    </div>
+
     <!-- CARDS DE KPI -->
-    <div class="kpi-grid">
+    <div v-else class="kpi-grid">
       <div 
         v-for="kpi in kpis" 
         :key="kpi.label" 
@@ -158,7 +159,7 @@ const getTrendColor = (trend) => {
            <i class="pi pi-chart-bar"></i>
            <h3>FATOR RISCO X QTD ESTAB</h3>
            <div class="spacer"></div>
-           <Button icon="pi pi-external-link" text severity="secondary" rounded />
+           <Button icon="pi pi-info-circle" v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação (ex: 0-10%, 10-20%), cruzando a quantidade de farmácias com o respectivo valor financeiro não comprovado em cada faixa para identificar a concentração de irregularidades.'" text severity="secondary" rounded />
         </div>
         <div class="chart-wrapper">
             <apexchart type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
@@ -171,72 +172,50 @@ const getTrendColor = (trend) => {
            <i class="pi pi-table"></i>
            <h3>ANÁLISE NACIONAL</h3>
            <div class="spacer"></div>
-           <Button icon="pi pi-info-circle" text severity="secondary" rounded />
         </div>
         
-        <DataTable :value="analyticData" size="small" stripedRows class="custom-table enterprise-table">
-          <Column field="uf" header="UF" footer="TOTAL" style="width: 5%"></Column>
+        <DataTable :value="filteredData" size="small" stripedRows removableSort sortField="percValSemComp" :sortOrder="-1" class="custom-table enterprise-table">
+          <Column field="uf" header="UF" sortable footer="TOTAL" style="width: 5%"></Column>
           
-          <Column header="Qtde CNPJs" footer="34.126" style="width: 10%">
+          <Column field="cnpjs" header="Qtde CNPJs" sortable footer="34K" style="width: 10%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendCnpjs)" :style="{ color: getTrendColor(slotProps.data.trendCnpjs) }"></i>
-                   <span>{{ slotProps.data.cnpjs }}</span>
-                </div>
+                <span>{{ formatNumber(slotProps.data.cnpjs) }}</span>
              </template>
           </Column>
 
-          <Column header="% Valor Sem Comprovação" footer="16,05%" style="width: 12%">
+          <Column field="percValSemComp" header="% Valor Sem Comprovação" sortable footer="16,05%" style="width: 12%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendPercVal)" :style="{ color: getTrendColor(slotProps.data.trendPercVal) }"></i>
-                  <span>{{ slotProps.data.percValSemComp }}</span>
-                </div>
+                <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
              </template>
           </Column>
 
-          <Column header="Valor sem Comprovação" footer="R$ 3.810.451.144,37" style="width: 15%">
+          <Column field="valSemComp" header="Valor sem Comprovação" sortable footer="R$ 3,8B" style="width: 15%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendValSemComp)" :style="{ color: getTrendColor(slotProps.data.trendValSemComp) }"></i>
-                  <span>{{ slotProps.data.valSemComp }}</span>
-                </div>
+                <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
              </template>
           </Column>
 
-          <Column header="Valor Total Movimentado" footer="R$ 23.737.222.862,64" style="width: 15%">
+          <Column field="totalMov" header="Valor Total Movimentado" sortable footer="R$ 23,7B" style="width: 15%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendTotalMov)" :style="{ color: getTrendColor(slotProps.data.trendTotalMov) }"></i>
-                  <span>{{ slotProps.data.totalMov }}</span>
-                </div>
+                <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
           </Column>
 
-          <Column header="% Qtde Medicamentos Vendidos sem Comprovação" footer="15,34%" style="width: 15%">
+          <Column field="percQtdeSemComp" header="% Qtde Meds s/ Comp" sortable footer="15,34%" style="width: 15%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendPercQtde)" :style="{ color: getTrendColor(slotProps.data.trendPercQtde) }"></i>
-                  <span>{{ slotProps.data.percQtdeSemComp }}</span>
-                </div>
+                <Tag :value="formatPercent(slotProps.data.percQtdeSemComp)" :class="getRiskClass(slotProps.data.percQtdeSemComp)" />
              </template>
           </Column>
 
-          <Column header="Qtde de Medicamentos Vendidos sem Comprovação" footer="548.306.548" style="width: 12%">
+          <Column field="qtdeSemComp" header="Qtde Meds s/ Comp" sortable footer="548M" style="width: 12%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendQtdeSemComp)" :style="{ color: getTrendColor(slotProps.data.trendQtdeSemComp) }"></i>
-                  <span>{{ slotProps.data.qtdeSemComp }}</span>
-                </div>
+                <span>{{ formatNumber(slotProps.data.qtdeSemComp) }}</span>
              </template>
           </Column>
 
-          <Column header="Qtde Total de Medicamentos Vendidos" footer="3.574.208.598" style="width: 15%">
+          <Column field="totalQtde" header="Qtde Total Meds" sortable footer="3,5B" style="width: 15%">
              <template #body="slotProps">
-                <div class="flex-cell">
-                  <i :class="getTrendIcon(slotProps.data.trendTotalQtde)" :style="{ color: getTrendColor(slotProps.data.trendTotalQtde) }"></i>
-                  <span>{{ slotProps.data.totalQtde }}</span>
-                </div>
+                <span>{{ formatNumber(slotProps.data.totalQtde) }}</span>
              </template>
           </Column>
         </DataTable>
@@ -407,8 +386,62 @@ const getTrendColor = (trend) => {
   white-space: nowrap;
 }
 
+/* 🎨 BADGES ELEGANTES (PADRÃO ADMIN EVENTS) - USO DE CLASSES CUSTOMIZADAS PARA EVITAR AZUL DO TEMA */
+:deep(.p-tag) {
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    min-width: 60px;
+    text-align: center;
+    border: 1px solid transparent;
+}
+
+:deep(.risk-low) {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #4ade80 !important;
+    border: 1px solid rgba(34, 197, 94, 0.25) !important;
+}
+
+:deep(.risk-medium) {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #fbbf24 !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+:deep(.risk-high) {
+    background: rgba(239, 68, 68, 0.12) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+}
+
 .flex-cell i {
   font-size: 0.8rem;
+}
+
+/* 🔄 FEEDBACK VISUAL (LOADING & ERROR) */
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #f87171;
+  margin-bottom: 2rem;
 }
 
 :global(.view-local-filters) {

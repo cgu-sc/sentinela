@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useThemeStore } from '../stores/theme';
+import { useFilterStore } from '../stores/filters';
 import Button from 'primevue/button';
 import ThemeSelector from '../components/ThemeSelector.vue';
 import Dropdown from 'primevue/dropdown';
@@ -11,6 +12,7 @@ import SelectButton from 'primevue/selectbutton'; // Substituindo Listbox
 import InputText from 'primevue/inputtext';
 
 const themeStore = useThemeStore();
+const filterStore = useFilterStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -59,21 +61,14 @@ watch(activeModule, (newVal) => {
     }
 });
 
-// Estado dos Filtros Globais
-const ufOptions = ref(['Todos', 'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO']);
-const selectedUF = ref('Todos');
-const selectedMunicipio = ref('Todos');
-const municipioOptions = ref(['Todos', 'Brasília', 'Goiânia', 'São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador']);
-const selectedSituacao = ref('Todos');
+// Opções dos Selects (Estáticos para Mock)
+const ufOptions = ['Todos', 'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
+const municipioOptions = ['Todos', 'Brasília', 'Goiânia', 'São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador'];
 const situacaoOptions = ['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA'];
-const selectedMS = ref('Todos');
 const msOptions = ['Todos', 'SIM', 'NÃO'];
-const selectedPorte = ref('Todos');
 const porteOptions = ['Todos', 'ME', 'EPP', 'DEMAIS'];
-
-const naoComprovacaoRange = ref([0, 100]);
-const valorSemCompRange = ref([0, 5000000]); // Mock 0 a 5 Mi
-const periodo = ref([new Date(2016, 0, 1), new Date(2024, 11, 1)]);
+const clusterOptions = ['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo'];
+const rfaOptions = ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'];
 
 // Formatador de Moeda para o Slider
 const formatCurrency = (val) => {
@@ -81,15 +76,6 @@ const formatCurrency = (val) => {
     if (val >= 1000) return `R$ ${(val/1000).toFixed(0)}k`;
     return `R$ ${val}`;
 };
-
-// Filtros Específicos (Contextuais) que agora moram aqui para estabilidade
-const clusterSelection = ref('Todos');
-const statusSelection = ref('Todos');
-const rfaSelection = ref('Todos');
-const searchTarget = ref('');
-const clusterOptions = ['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo'];
-const statusOptions = ['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA'];
-const rfaOptions = ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'];
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -99,18 +85,7 @@ watch(isCollapsed, (val) => {
 });
 
 const limparFiltros = () => {
-    selectedUF.value = 'Todos';
-    selectedMunicipio.value = 'Todos';
-    selectedSituacao.value = 'Todos';
-    selectedMS.value = 'Todos';
-    selectedPorte.value = 'Todos';
-    naoComprovacaoRange.value = [0, 100];
-    valorSemCompRange.value = [0, 5000000];
-    periodo.value = [new Date(2016, 0, 1), new Date(2024, 11, 1)];
-    clusterSelection.value = 'Todos';
-    statusSelection.value = 'Todos';
-    rfaSelection.value = 'Todos';
-    searchTarget.value = '';
+    filterStore.resetFilters();
 };
 </script>
 
@@ -123,7 +98,7 @@ const limparFiltros = () => {
           <img src="/logo_sentinela.png" alt="Sentinela V3" class="logo-img" />
           <div class="brand-text" v-show="!isCollapsed">
             <span class="brand-name">SENTINELA</span>
-            <span class="brand-version">AUDITORIA E RISCOS</span>
+            <span class="brand-version">AUDITORIA NO FARMÁCIA POPULAR</span>
           </div>
         </div>
         <Button 
@@ -139,38 +114,38 @@ const limparFiltros = () => {
         <!-- 1. FILTROS GLOBAIS (SEMPRE PRESENTES) -->
         <div class="filter-section">
           <label class="filter-label">UF</label>
-          <Dropdown v-model="selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" />
+          <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" />
         </div>
 
         <div class="filter-section">
           <label class="filter-label">Município</label>
-          <Dropdown v-model="selectedMunicipio" :options="municipioOptions" placeholder="Município" filter class="w-full filter-input" />
+          <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter class="w-full filter-input" />
         </div>
 
         <div class="grid-filters">
             <div class="filter-section">
                 <label class="filter-label">Situação</label>
-                <Dropdown v-model="selectedSituacao" :options="situacaoOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" />
             </div>
             <div class="filter-section">
                 <label class="filter-label">Conexão MS</label>
-                <Dropdown v-model="selectedMS" :options="msOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" />
             </div>
         </div>
 
         <div class="filter-section">
             <label class="filter-label">Porte CNPJ</label>
-            <Dropdown v-model="selectedPorte" :options="porteOptions" class="w-full filter-input" />
+            <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" />
         </div>
 
         <div class="filter-section">
           <label class="filter-label">% de não comprovação</label>
           <div class="slider-container">
             <div class="slider-values">
-              <span>{{ naoComprovacaoRange[0] }}%</span>
-              <span>{{ naoComprovacaoRange[1] }}%</span>
+              <span>{{ filterStore.naoComprovacaoRange[0] }}%</span>
+              <span>{{ filterStore.naoComprovacaoRange[1] }}%</span>
             </div>
-            <Slider v-model="naoComprovacaoRange" range class="w-full" />
+            <Slider v-model="filterStore.naoComprovacaoRange" range class="w-full" />
           </div>
         </div>
 
@@ -178,16 +153,16 @@ const limparFiltros = () => {
           <label class="filter-label">Valor sem comprovação</label>
           <div class="slider-container">
             <div class="slider-values">
-              <span>{{ formatCurrency(valorSemCompRange[0]) }}</span>
-              <span>{{ formatCurrency(valorSemCompRange[1]) }}</span>
+              <span>{{ formatCurrency(filterStore.valorSemCompRange[0]) }}</span>
+              <span>{{ formatCurrency(filterStore.valorSemCompRange[1]) }}</span>
             </div>
-            <Slider v-model="valorSemCompRange" range :min="0" :max="5000000" :step="1000" class="w-full" />
+            <Slider v-model="filterStore.valorSemCompRange" range :min="0" :max="5000000" :step="1000" class="w-full" />
           </div>
         </div>
 
         <div class="filter-section">
           <label class="filter-label">Período de Análise</label>
-          <Calendar v-model="periodo" view="month" dateFormat="mm/yy" selectionMode="range" :manualInput="false" showIcon iconDisplay="input" class="w-full filter-input" />
+          <Calendar v-model="filterStore.periodo" view="month" dateFormat="mm/yy" selectionMode="range" :manualInput="false" showIcon iconDisplay="input" class="w-full filter-input" />
         </div>
 
         <hr class="sidebar-divider my-4" />
@@ -203,15 +178,15 @@ const limparFiltros = () => {
              <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
                 <div class="filter-section mini">
                     <label class="filter-label sm">Busca Alvo</label>
-                    <InputText v-model="searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" />
+                    <InputText v-model="filterStore.searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" />
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Target Cluster</label>
-                    <Dropdown v-model="clusterSelection" :options="clusterOptions" class="w-full filter-input sm" />
+                    <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" />
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Risco (RFA)</label>
-                    <Dropdown v-model="rfaSelection" :options="rfaOptions" class="w-full filter-input sm" />
+                    <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" />
                 </div>
              </div>
 
@@ -219,7 +194,7 @@ const limparFiltros = () => {
              <div v-if="route.path === '/alvos/rede'" class="contextual-filters">
                 <div class="filter-section mini">
                     <label class="filter-label sm">CPF/CNPJ Alvo</label>
-                    <InputText v-model="searchTarget" placeholder="Pesquisar rede..." class="w-full filter-input sm" />
+                    <InputText v-model="filterStore.searchTarget" placeholder="Pesquisar rede..." class="w-full filter-input sm" />
                 </div>
              </div>
 

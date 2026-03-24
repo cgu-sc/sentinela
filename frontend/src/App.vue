@@ -1,3 +1,20 @@
+<script setup>
+import { onMounted } from 'vue';
+import { useResultadoStore } from './stores/resultados';
+import { useDashboardStore } from './stores/dashboard';
+
+const resultadoStore = useResultadoStore();
+const dashboardStore = useDashboardStore();
+
+onMounted(() => {
+  // Dispara a carga simultânea (Paralelo) de toda a inteligência do sistema
+  // 1. Base Granular (Milhares de linhas para filtros/detalhes)
+  // 2. Resumo Estratégico (KPIs e Rankings já calculados pelo Backend)
+  resultadoStore.fetchResultados();
+  dashboardStore.fetchDashboardSummary();
+});
+</script>
+
 <template>
   <!-- O RouterView injeta a página atual dentro do AdminLayout -->
   <router-view />

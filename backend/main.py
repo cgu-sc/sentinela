@@ -8,6 +8,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
+from api.router import api_router
+from fastapi.middleware.cors import CORSMiddleware
 
 # =============================================================================
 # INICIALIZAÇÃO DO APP FASTAPI
@@ -18,9 +20,24 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# =============================================================================
-# ENDPOINTS BÁSICOS
-# =============================================================================
+# Configuração de CORS para permitir que o Frontend (Vue) em modo DEV
+# acesse a API rodando no FastAPI sem erros de segurança.
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Registro do Roteador Modular (Onde todas as rotas estão organizadas)
+app.include_router(api_router, prefix="/api/v1")
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -69,39 +86,15 @@ else:
 #     }
 
 @app.get("/saude")
-def testar_conexão(db: Session = Depends(get_db)):
+def testar_conexao(db: Session = Depends(get_db)):
     """
     Endpoint simples para validar se a conexão com o banco está ok.
-    Executa uma query simples de teste no SQL Server.
     """
     try:
-        # Testa a conexão executando um SELECT 1
         result = db.execute(text("SELECT 1")).fetchone()
-        if result:
-            return {"status": "Database OK", "timestamp": "Conexão estabelecida com sucesso"}
-        else:
-            raise HTTPException(status_code=500, detail="Banco retornou vazio no teste")
+        return {"status": "Database OK", "timestamp": "Conexão está ativa"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro de conexão com o banco: {str(e)}")
-
-# =============================================================================
-# EXEMPLO DE ENDPOINT PARA INDICADORES (Esboço)
-# =============================================================================
-
-@app.get("/indicadores/crm/{cnpj}")
-def buscar_indicadores_crm(cnpj: str, db: Session = Depends(get_db)):
-    """
-    Exemplo de como buscaremos os dados da tabela indicador_crm_detalhado
-    que acabamos de organizar!
-    """
-    query = text("SELECT * FROM temp_CGUSC.fp.indicador_crm_detalhado WHERE nu_cnpj = :cnpj")
-    result = db.execute(query, {"cnpj": cnpj}).fetchone()
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="CNPJ não encontrado na tabela de indicadores CRM")
-    
-    # Converte o resultado para dicionário (usando as chaves que definimos no SQL)
-    return dict(result._mapping)
+        raise HTTPException(status_code=500, detail=f"Erro de conexão: {str(e)}")
 
 # =============================================================================
 # INFORMAÇÕES DE EXECUÇÃO COMO EXECUTÁVEL (ENTRY POINT)

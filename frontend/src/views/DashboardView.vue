@@ -17,6 +17,12 @@ const dashboardStore = useDashboardStore();
 
 // Destruturação reativa para manter os dados sincronizados
 const { kpis, nationalAnalysis, fatorRisco, isLoading, error } = storeToRefs(dashboardStore);
+
+// Chave reativa para forçar re-render completo do gráfico quando os dados mudam.
+// Necessário porque o ApexCharts serializa as options via JSON (perde funções/formatters) no updateOptions.
+const chartRenderKey = ref(0);
+watch(fatorRisco, () => { chartRenderKey.value++; }, { deep: true });
+const chartKey = computed(() => `${themeStore.isDark ? 'dark' : 'light'}-${chartRenderKey.value}`);
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -205,7 +211,7 @@ const getTrendColor = (trend) => {
            <Button icon="pi pi-info-circle" v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação (ex: 0-10%, 10-20%), cruzando a quantidade de farmácias com o respectivo valor financeiro não comprovado em cada faixa para identificar a concentração de irregularidades.'" text severity="secondary" rounded />
         </div>
         <div class="chart-wrapper">
-            <apexchart :key="themeStore.isDark ? 'dark-chart' : 'light-chart'" type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
+            <apexchart :key="chartKey" type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
         </div>
       </div>
 

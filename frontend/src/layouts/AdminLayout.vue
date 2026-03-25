@@ -50,6 +50,7 @@ onMounted(() => {
   if (route.path.startsWith('/alvos')) {
       activeModule.value = 'alvos';
   }
+  applySliderPeriod(timeSliderValue.value);
 });
 
 // Watch para mudar a rota padrão ao trocar de módulo
@@ -106,13 +107,25 @@ const displayPeriod = computed(() => {
     return `${start} a ${end}`;
 });
 
+const applySliderPeriod = (indices) => {
+    const startDate = availableMonths[indices[0]].date;
+    const rawEndDate = availableMonths[indices[1]].date;
+    const endDate = new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0);
+    if (filterStore.periodo[0]?.getTime() !== startDate.getTime() ||
+        filterStore.periodo[1]?.getTime() !== endDate.getTime()) {
+        filterStore.periodo = [startDate, endDate];
+    }
+};
+
 const quickSelectYear = (year) => {
     const startIdx = (year - 2015) * 12;
     timeSliderValue.value = [startIdx, startIdx + 11];
+    applySliderPeriod(timeSliderValue.value);
 };
 
 const selectAll = () => {
     timeSliderValue.value = [0, availableMonths.length - 1];
+    applySliderPeriod(timeSliderValue.value);
 };
 
 // Tooltips flutuantes para o Slider
@@ -120,23 +133,9 @@ const startMonthLabel = computed(() => availableMonths[timeSliderValue.value[0]]
 const endMonthLabel = computed(() => availableMonths[timeSliderValue.value[1]]?.label);
 const startPos = computed(() => (timeSliderValue.value[0] / (availableMonths.length - 1)) * 100);
 const endPos = computed(() => (timeSliderValue.value[1] / (availableMonths.length - 1)) * 100);
+const startTransform = computed(() => startPos.value < 8 ? 'translateX(0%)' : 'translateX(-50%)');
+const endTransform = computed(() => endPos.value > 92 ? 'translateX(-100%)' : 'translateX(-50%)');
 
-// Sincronizar com Debounce (Poder de processamento amigável - SÓ CHAMA API QUANDO PARAR)
-let timer = null;
-watch(timeSliderValue, (newIndices) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-        const startDate = availableMonths[newIndices[0]].date;
-        const rawEndDate = availableMonths[newIndices[1]].date;
-        const endDate = new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0); 
-        
-        // Evitar disparar o filtro se as datas já forem as mesmas
-        if (filterStore.periodo[0]?.getTime() !== startDate.getTime() || 
-            filterStore.periodo[1]?.getTime() !== endDate.getTime()) {
-            filterStore.periodo = [startDate, endDate];
-        }
-    }, 450); // 450ms de calma
-}, { immediate: true });
 
 // Sincronizar de VOLTA: Se o usuário mudar no CALENDÁRIO, o SLIDER precisa PULAR para o lugar certo
 watch(() => filterStore.periodo, (newVal) => {
@@ -232,14 +231,14 @@ watch(() => filterStore.periodo, (newVal) => {
           <label class="filter-label">Período de Análise</label>
           <div class="slider-container">
             <!-- 1. Atalhos Rápidos de Ano (Botões Maiores) -->
-            <div class="flex gap-2 mb-3">
+            <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
                 <Button label="2023" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2023)" />
                 <Button label="2024" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2024)" />
                 <Button label="TUDO" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="selectAll()" />
             </div>
 
             <!-- 2. Calendário Manual (Híbrido - Sempre visível e sincronizado) -->
-            <Calendar 
+            <Calendar style="margin-top: 0.4rem;"
                 v-model="filterStore.periodo" 
                 view="month" 
                 dateFormat="mm/yy" 
@@ -252,15 +251,16 @@ watch(() => filterStore.periodo, (newVal) => {
 
             <!-- 3. Time Slider (Para varredura rápida) com Tooltips Flutuantes -->
             <div class="slider-wrapper relative pt-6 mt-3">
-                <div class="slider-tip" :style="{ left: startPos + '%' }">{{ startMonthLabel }}</div>
-                <div class="slider-tip" :style="{ left: endPos + '%' }">{{ endMonthLabel }}</div>
+                <div class="slider-tip" :style="{ left: startPos + '%', transform: startTransform }">{{ startMonthLabel }}</div>
+                <div class="slider-tip" :style="{ left: endPos + '%', transform: endTransform }">{{ endMonthLabel }}</div>
                 
-                <Slider 
-                    v-model="timeSliderValue" 
-                    range 
-                    :min="0" 
-                    :max="availableMonths.length - 1" 
-                    class="w-full time-slider" 
+                <Slider
+                    v-model="timeSliderValue"
+                    range
+                    :min="0"
+                    :max="availableMonths.length - 1"
+                    class="w-full time-slider"
+                    @slideend="applySliderPeriod(timeSliderValue)"
                 />
             </div>
           </div>
@@ -307,7 +307,7 @@ watch(() => filterStore.periodo, (newVal) => {
 
         <div class="sidebar-spacer"></div>
 
-        <Button label="Limpar Filtros" icon="pi pi-undo" outlined severity="secondary" @click="limparFiltros" class="w-full mb-4" />
+        <Button label="Limpar Filtros" icon="pi pi-undo" outlined severity="secondary" @click="limparFiltros" class="w-full mb-4 clear-filters-btn" />
       </div>
 
       <div class="sidebar-footer" v-show="!isCollapsed">
@@ -454,7 +454,7 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .filter-section {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
 }
 
 .filter-label {
@@ -476,12 +476,18 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 :deep(.p-dropdown), :deep(.p-calendar) {
-    height: 32px; /* Altura fixa reduzida */
+    height: 32px;
     align-items: center;
+}
+
+:deep(.p-calendar .p-inputtext) {
+    height: 100%;
+    box-sizing: border-box;
 }
 
 :deep(.p-calendar-trigger) {
     width: 32px;
+    height: 100%;
 }
 
 .grid-filters {
@@ -518,23 +524,53 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .year-btn {
-  font-size: 0.65rem !important;
-  padding: 0px 8px !important;
-  height: 24px !important;
-  font-weight: 800 !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.75rem !important;
+  font-weight: 700 !important;
   border: 1px solid var(--sidebar-border) !important;
-  border-radius: 4px !important;
+  border-radius: 8px !important;
   color: var(--text-muted) !important;
   background: var(--card-bg) !important;
   text-transform: uppercase;
   transition: all 0.2s ease;
-  line-height: normal !important;
 }
 
 .year-btn:hover {
   border-color: var(--primary-color) !important;
   color: var(--primary-color) !important;
   background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.year-btn:focus,
+.year-btn:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.year-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--primary-color) !important;
+}
+
+:deep(.clear-filters-btn.p-button) {
+  background: transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+:deep(.clear-filters-btn.p-button:hover) {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  color: var(--primary-color) !important;
+}
+
+:deep(.clear-filters-btn.p-button:focus),
+:deep(.clear-filters-btn.p-button:active) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+:deep(.clear-filters-btn.p-button:focus-visible) {
+  box-shadow: 0 0 0 2px var(--primary-color) !important;
 }
 
 /* Removido estilo do dropdown antigo */
@@ -546,34 +582,35 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .filter-input {
-    margin-bottom: 8px !important; /* Aproxima um pouco mais do slider */
+    margin-bottom: 4px !important;
 }
 
 .slider-tip {
   position: absolute;
-  top: 24px; /* Ajuste fino para colar a setinha no controle */
+  top: 24px;
   transform: translateX(-50%);
-  background: var(--primary-color);
-  color: white;
-  padding: 2px 5px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  border: 1px solid var(--primary-color);
+  padding: 3px 7px;
   border-radius: 4px;
-  font-size: 0.55rem;
-  font-weight: 900;
+  font-size: 0.7rem;
+  font-weight: 700;
   pointer-events: none;
   z-index: 10;
   white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
 .slider-tip::after {
   content: '';
   position: absolute;
-  top: -3px; /* Setinha agora no topo do tooltip pescando a bolinha */
+  top: -4px;
   left: 50%;
   transform: translateX(-50%);
   border-left: 3px solid transparent;
   border-right: 3px solid transparent;
-  border-bottom: 3px solid var(--primary-color);
+  border-bottom: 4px solid var(--primary-color);
 }
 
 :deep(.p-slider-handle) {
@@ -724,6 +761,12 @@ watch(() => filterStore.periodo, (newVal) => {
   padding: 0.4rem 0.75rem;
 }
 
+:deep(.module-select-button .p-button:not(.p-highlight):hover) {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  color: var(--primary-color) !important;
+}
+
 :deep(.module-select-button .p-button.p-highlight) {
   background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
   border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
@@ -745,13 +788,14 @@ watch(() => filterStore.periodo, (newVal) => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
   transition: all 0.2s;
   border-radius: 8px;
 }
 
 .nav-tab:hover {
-  background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
+  color: var(--primary-color);
   opacity: 1;
 }
 

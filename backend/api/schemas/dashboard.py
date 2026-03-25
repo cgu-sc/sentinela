@@ -38,3 +38,12 @@ class ResultadoSentinelaSchema(BaseModel):
 class DashboardResponse(BaseModel):
     kpis: List[DashboardKPISchema]
     national_analysis: List[NationalAnalysisRowSchema]
+class FatorRiscoBucketSchema(BaseModel):
+    faixa: str
+    qtd: int
+    valor: str
+    valor_raw: float
+
+class FatorRiscoResponseSchema(BaseModel):
+    periodo_formatado: str
+    buckets: List[FatorRiscoBucketSchema]

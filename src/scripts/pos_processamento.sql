@@ -1,3 +1,45 @@
+
+
+USE temp_CGUSC;
+GO
+
+-- 1. LIMPEZA TOTAL (Apaga a tabela se ela existir)
+IF OBJECT_ID('fp.movimentacao_mensal_cnpj', 'U') IS NOT NULL 
+    DROP TABLE fp.movimentacao_mensal_cnpj;
+GO
+
+-- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO
+CREATE TABLE fp.movimentacao_mensal_cnpj (
+    id_processamento INT NOT NULL,
+    periodo DATE NOT NULL,
+    total_vendas DECIMAL(18, 2),
+    total_sem_comprovacao DECIMAL(18, 2)
+);
+GO
+
+-- 3. CARGA INICIAL DOS DADOS (Migrando da GTIN para Resumo por CNPJ/Mês)
+INSERT INTO fp.movimentacao_mensal_cnpj (id_processamento, periodo, total_vendas, total_sem_comprovacao)
+SELECT 
+    id_processamento, 
+    periodo, 
+    SUM(valor_vendas), 
+    SUM(valor_sem_comprovacao)
+FROM fp.movimentacao_mensal_gtin
+GROUP BY id_processamento, periodo;
+GO
+
+-- 4. O ÍNDICE ULTRA OTIMIZADO (Clusterizado Composto)
+-- Filtro por data e Link com farmácia no mesmo passo físico do disco.
+CREATE CLUSTERED INDEX IX_mov_cnpj_ULTRA 
+ON fp.movimentacao_mensal_cnpj (periodo, id_processamento);
+GO
+
+-- 5. TESTE DE PERFORMANCE (Deve ser instantâneo!)
+SELECT TOP 20 * FROM fp.movimentacao_mensal_cnpj ORDER BY periodo DESC;
+GO
+
+
+
 ---------------------------------------------------------------------------------
 -- Vendas para Falecidos
 ---------------------------------------------------------------------------------

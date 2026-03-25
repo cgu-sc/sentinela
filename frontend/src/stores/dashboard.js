@@ -5,7 +5,9 @@ export const useDashboardStore = defineStore('dashboard', {
   state: () => ({
     kpis: [],
     nationalAnalysis: [],
+    fatorRisco: [],
     isLoading: false,
+    fatorRiscoLoading: false,
     error: null,
     lastSync: null
   }),
@@ -19,7 +21,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.isLoading = true;
       this.error = null;
       try {
-        const response = await axios.get('http://localhost:8000/api/v1/dashboard/');
+        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/');
         this.kpis = response.data.kpis;
         this.nationalAnalysis = response.data.national_analysis;
         this.lastSync = new Date();
@@ -28,6 +30,23 @@ export const useDashboardStore = defineStore('dashboard', {
         this.error = 'Não foi possível carregar os KPIs estratégicos.';
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    /**
+     * Busca os dados do gráfico de Fator de Risco baseado num período customizado.
+     */
+    async fetchFatorRisco(inicio = '2016-01-01', fim = '2024-12-01') {
+      this.fatorRiscoLoading = true;
+      try {
+        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/fator-risco', {
+          params: { data_inicio: inicio, data_fim: fim }
+        });
+        this.fatorRisco = response.data.buckets;
+      } catch (err) {
+        console.error('Erro ao buscar fator de risco:', err);
+      } finally {
+        this.fatorRiscoLoading = false;
       }
     }
   },

@@ -18,7 +18,7 @@ export const useResultadoStore = defineStore('resultados', {
       this.isLoading = true;
       this.error = null;
       try {
-        const response = await axios.get('http://localhost:8000/api/v1/dashboard/resultados');
+        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/resultados');
         this.resultados = response.data;
         this.lastUpdated = new Date();
       } catch (err) {

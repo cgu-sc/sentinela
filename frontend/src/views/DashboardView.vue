@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useThemeStore } from '../stores/theme';
 import { useFilterStore } from '../stores/filters';
 import { useRiskMetrics } from '../composables/useRiskMetrics';
@@ -16,7 +16,7 @@ const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
 const dashboardStore = useDashboardStore();
 
 // Destruturação reativa para manter os dados sincronizados
-const { kpis, nationalAnalysis, isLoading, error } = storeToRefs(dashboardStore);
+const { kpis, nationalAnalysis, fatorRisco, isLoading, error } = storeToRefs(dashboardStore);
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -33,17 +33,17 @@ const filteredData = computed(() => {
   return nationalAnalysis.value.filter(item => item.uf === filterStore.selectedUF);
 });
 
-// CONFIG GRAFICO COMBO (APEXCHARTS - PADRÃO ARBFLOW)
-const chartSeries = ref([
+// CONFIG GRAFICO COMBO (DADOS REAIS DA API)
+const chartSeries = computed(() => [
     {
         name: 'Qtd Estab por Faixa',
         type: 'column',
-        data: [0.43, 18.49, 5.16, 2.37, 1.49, 1.15, 0.8, 1.0, 1.24, 0.9]
+        data: fatorRisco.value.map(b => b.qtd)
     },
     {
-        name: 'Valor Sem Comprovação por Faixa',
+        name: 'Valor Sem Comprovação',
         type: 'area',
-        data: [0.05, 0.45, 0.61, 0.36, 0.3, 0.35, 0.5, 0.34, 0.23, 0.18]
+        data: fatorRisco.value.map(b => b.valor_raw)
     }
 ]);
 
@@ -76,7 +76,7 @@ const chartOptions = computed(() => ({
             stops: [0, 100, 100]
         }
     },
-    labels: ['0', '<=10%', '10-20%', '20-30%', '30-40%', '40-50%', '50-60%', '60-70%', '70-80%', '80-100%'],
+    labels: fatorRisco.value.map(b => b.faixa),
     xaxis: {
         ...chartBaseOptions.value.xaxis,
         type: 'category',
@@ -93,9 +93,24 @@ const chartOptions = computed(() => ({
         }
     ],
 }));
+// 5. REATIVIDADE AO PERÍODO DE ANÁLISE
+// Sempre que o usuário mudar o intervalo no filtro global, o gráfico se autopreenche
+watch(
+  () => filterStore.periodo,
+  (newVal) => {
+    if (newVal && Array.isArray(newVal) && newVal.length === 2 && newVal[0] && newVal[1]) {
+      // Formatação para YYYY-MM-DD aceito pelo FastAPI
+      const inicio = newVal[0].toISOString().split('T')[0];
+      const fim = newVal[1].toISOString().split('T')[0];
+      dashboardStore.fetchFatorRisco(inicio, fim);
+    }
+  },
+  { deep: true, immediate: true } // immediate: true garante a carga inicial automática
+);
 
 onMounted(() => {
-    // Note: A carga inicial agora é feita centralizada no App.vue
+    // Note: Cargas gerais são feitas no App.vue
+    // O fetchFatorRisco agora é controlado pelo Watcher do Filtro
 });
 
 // Agrupamento selecionado (para Teleport Sidebar)

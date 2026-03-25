@@ -5,7 +5,9 @@ from ..schemas.dashboard import (
     DashboardKPISchema, 
     NationalAnalysisRowSchema, 
     DashboardResponse,
-    ResultadoSentinelaSchema
+    ResultadoSentinelaSchema,
+    FatorRiscoResponseSchema,
+    FatorRiscoBucketSchema
 )
 
 class DashboardService:
@@ -97,3 +99,73 @@ class DashboardService:
             print("❌ ERRO AO BUSCAR RESULTADOS DETALHADOS:")
             print(traceback.format_exc())
             return []
+    @staticmethod
+    def get_fator_risco_data(db: Session, data_inicio: str, data_fim: str) -> FatorRiscoResponseSchema:
+        """
+        Calcula dinamicamente as faixas de risco (Buckets de 10%) baseadas no período de movimentação mensal.
+        """
+        try:
+            sql = text("""
+                WITH TotaisPorCNPJ AS (
+                    SELECT 
+                        p.cnpj,
+                        SUM(CAST(m.total_vendas AS FLOAT)) as total_vendas,
+                        SUM(CAST(m.total_sem_comprovacao AS FLOAT)) as total_sem_comprovacao
+                    FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] m
+                    INNER JOIN [temp_CGUSC].[fp].[processamento] p ON m.id_processamento = p.id
+                    WHERE m.periodo BETWEEN :inicio AND :fim
+                    GROUP BY p.cnpj
+                ),
+                CalculoPercentual AS (
+                    SELECT 
+                        total_sem_comprovacao,
+                        CASE 
+                            WHEN total_vendas > 0 THEN (total_sem_comprovacao / total_vendas) * 100 
+                            ELSE 0 
+                        END as pct
+                    FROM TotaisPorCNPJ
+                ),
+                DefinicaoFaixas AS (
+                    SELECT 
+                        total_sem_comprovacao,
+                        CASE 
+                            WHEN pct <= 10  THEN '00% - 10%'
+                            WHEN pct <= 20  THEN '10% - 20%'
+                            WHEN pct <= 30  THEN '20% - 30%'
+                            WHEN pct <= 40  THEN '30% - 40%'
+                            WHEN pct <= 50  THEN '40% - 50%'
+                            WHEN pct <= 60  THEN '50% - 60%'
+                            WHEN pct <= 70  THEN '60% - 70%'
+                            WHEN pct <= 80  THEN '70% - 80%'
+                            WHEN pct <= 90  THEN '80% - 90%'
+                            ELSE '90% - 100%'
+                        END as faixa_percentual,
+                        CASE 
+                            WHEN pct <= 10 THEN 1 WHEN pct <= 20 THEN 2 WHEN pct <= 30 THEN 3
+                            WHEN pct <= 40 THEN 4 WHEN pct <= 50 THEN 5 WHEN pct <= 60 THEN 6
+                            WHEN pct <= 70 THEN 7 WHEN pct <= 80 THEN 8 WHEN pct <= 90 THEN 9
+                            ELSE 10
+                        END as ordem 
+                    FROM CalculoPercentual
+                )
+                SELECT 
+                    faixa_percentual AS faixa,
+                    COUNT(*) AS qtd,
+                    FORMAT(SUM(total_sem_comprovacao), 'C', 'pt-BR') AS valor,
+                    SUM(total_sem_comprovacao) AS valor_raw
+                FROM DefinicaoFaixas
+                GROUP BY faixa_percentual, ordem
+                ORDER BY ordem;
+            """)
+            
+            results = db.execute(sql, {"inicio": data_inicio, "fim": data_fim}).fetchall()
+            
+            return FatorRiscoResponseSchema(
+                periodo_formatado=f"{data_inicio} a {data_fim}",
+                buckets=[FatorRiscoBucketSchema(**row._mapping) for row in results]
+            )
+        except Exception as e:
+            import traceback
+            print("❌ ERRO NO CALCULO DO FATOR DE RISCO:")
+            print(traceback.format_exc())
+            return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])

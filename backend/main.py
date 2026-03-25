@@ -101,6 +101,6 @@ def testar_conexao(db: Session = Depends(get_db)):
 # =============================================================================
 if __name__ == "__main__":
     import uvicorn
-    # Iniciamos o servidor na porta 8000
-    print("🚀 Sentinela API iniciando na porta 8000...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Iniciamos o servidor na porta 8002
+    print("🚀 Sentinela API iniciando na porta 8002...")
+    uvicorn.run(app, host="127.0.0.1", port=8002)

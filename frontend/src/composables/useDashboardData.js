@@ -16,7 +16,7 @@ export function useDashboardData() {
     error.value = null;
     try {
       // URL da API modularizada em backend/api/v1/dashboard
-      const response = await axios.get('http://localhost:8000/api/v1/dashboard/');
+      const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/');
       
       // Atualiza os estados reativos com dados reais do banco (via FastAPI)
       kpis.value = response.data.kpis;

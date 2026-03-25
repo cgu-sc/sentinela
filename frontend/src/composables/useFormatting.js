@@ -37,9 +37,18 @@ export function useFormatting() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  /**
+   * Formatação numérica completa para quantidades sem abreviações (ex: 18.522)
+   * @param {number} val - Quantidade bruta
+   */
+  const formatNumberFull = (val) => {
+    return new Intl.NumberFormat('pt-BR').format(val);
+  };
+
   return {
     formatBRL,
     formatNumber,
+    formatNumberFull,
     formatPercent,
     formatCurrencyFull
   };

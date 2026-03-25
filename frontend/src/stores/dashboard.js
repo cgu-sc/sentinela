@@ -35,12 +35,17 @@ export const useDashboardStore = defineStore('dashboard', {
 
     /**
      * Busca os dados do gráfico de Fator de Risco baseado num período customizado.
+     * Se inicio/fim forem nulos, o backend retorna o acumulado histórico.
      */
-    async fetchFatorRisco(inicio = '2016-01-01', fim = '2024-12-01') {
+    async fetchFatorRisco(inicio = null, fim = null) {
       this.fatorRiscoLoading = true;
       try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+
         const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/fator-risco', {
-          params: { data_inicio: inicio, data_fim: fim }
+          params
         });
         this.fatorRisco = response.data.buckets;
       } catch (err) {

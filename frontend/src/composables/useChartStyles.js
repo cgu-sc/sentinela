@@ -67,16 +67,31 @@ export function useChartStyles(themeStore) {
 
   /**
    * Paleta de cores oficial do Sentinela para séries de dados.
+   * Dinamizada para garantir ótimo contraste tanto no claro quanto no escuro.
    */
-  const chartColors = {
-    primary: '#6366f1',
-    secondary: '#3b82f6',
-    warning: '#f59e0b',
-    danger: '#ef4444',
-    success: '#10b981',
-    info: '#0ea5e9',
-    muted: '#94a3b8'
-  };
+  const chartColors = computed(() => {
+    if (themeStore.isDark) {
+      return {
+        primary: '#6366f1',  // Indigo 500 (Brilha no claro escuro)
+        secondary: '#3b82f6', // Blue 500
+        warning: '#f59e0b',  // Amber 500
+        danger: '#ef4444',   // Red 500
+        success: '#10b981',  // Emerald 500
+        info: '#0ea5e9',
+        muted: '#94a3b8'
+      };
+    } else {
+      return {
+        primary: '#4f46e5',  // Indigo 600 (Melhor contraste no branco)
+        secondary: '#2563eb', // Blue 600
+        warning: '#d97706',  // Amber 600
+        danger: '#dc2626',   // Red 600
+        success: '#059669',  // Emerald 600
+        info: '#0284c7',
+        muted: '#64748b'
+      };
+    }
+  });
 
   return {
     chartBaseOptions,

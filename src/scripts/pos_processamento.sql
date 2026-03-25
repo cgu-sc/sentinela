@@ -8,35 +8,34 @@ IF OBJECT_ID('fp.movimentacao_mensal_cnpj', 'U') IS NOT NULL
     DROP TABLE fp.movimentacao_mensal_cnpj;
 GO
 
--- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO
+-- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO (Denormalizada com CNPJ)
 CREATE TABLE fp.movimentacao_mensal_cnpj (
     id_processamento INT NOT NULL,
+    cnpj VARCHAR(14) NOT NULL, -- Incluído para evitar JOINs pesados no Gráfico
     periodo DATE NOT NULL,
     total_vendas DECIMAL(18, 2),
     total_sem_comprovacao DECIMAL(18, 2)
 );
 GO
 
--- 3. CARGA INICIAL DOS DADOS (Migrando da GTIN para Resumo por CNPJ/Mês)
-INSERT INTO fp.movimentacao_mensal_cnpj (id_processamento, periodo, total_vendas, total_sem_comprovacao)
+-- 3. CARGA INICIAL DOS DADOS (Enriquecendo com CNPJ da tabela de processamento)
+INSERT INTO fp.movimentacao_mensal_cnpj (id_processamento, cnpj, periodo, total_vendas, total_sem_comprovacao)
 SELECT 
-    id_processamento, 
-    periodo, 
-    SUM(valor_vendas), 
-    SUM(valor_sem_comprovacao)
-FROM fp.movimentacao_mensal_gtin
-GROUP BY id_processamento, periodo;
+    m.id_processamento, 
+    p.cnpj,
+    m.periodo, 
+    SUM(m.valor_vendas), 
+    SUM(m.valor_sem_comprovacao)
+FROM fp.movimentacao_mensal_gtin m
+INNER JOIN fp.processamento p ON p.id = m.id_processamento
+GROUP BY m.id_processamento, p.cnpj, m.periodo;
 GO
 
--- 4. O ÍNDICE ULTRA OTIMIZADO (Clusterizado Composto)
--- Filtro por data e Link com farmácia no mesmo passo físico do disco.
+-- 4. O ÍNDICE ULTRA OTIMIZADO (Clusterizado Composto Período + CNPJ)
 CREATE CLUSTERED INDEX IX_mov_cnpj_ULTRA 
-ON fp.movimentacao_mensal_cnpj (periodo, id_processamento);
+ON fp.movimentacao_mensal_cnpj (periodo, cnpj);
 GO
 
--- 5. TESTE DE PERFORMANCE (Deve ser instantâneo!)
-SELECT TOP 20 * FROM fp.movimentacao_mensal_cnpj ORDER BY periodo DESC;
-GO
 
 
 

@@ -169,51 +169,6 @@ const targetList = ref([
     gap: 1rem;
 }
 
-.kpi-mini-card {
-    background: var(--card-bg);
-    padding: 1rem 1.25rem;
-    border-radius: 12px;
-    border: 1px solid var(--sidebar-border);
-    transition: transform 0.2s, background-color 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.kpi-mini-card:hover { 
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.kpi-mini-card.danger { box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.2); }
-
-.kpi-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.kpi-mini-card .label { font-size: 0.75rem; display: block; text-transform: uppercase; font-weight: 600; color: var(--text-color); }
-.kpi-mini-card .value { font-size: 1.5rem; font-weight: 800; color: var(--text-color); }
-
-.kpi-icon {
-  width: 2.75rem;
-  height: 2.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.5rem;
-  font-size: 1.25rem;
-}
-.kpi-icon.total { background: rgba(99, 102, 241, 0.15); color: #6366f1; } /* Indigo */
-.kpi-icon.danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; } /* Red */
-
-
-.main-grid {
-    display: grid;
-    grid-template-columns: 1fr 1.5fr;
-    gap: 1.5rem;
-}
-
 .map-placeholder {
     height: 400px;
     background: color-mix(in srgb, var(--primary-color) 5%, transparent);
@@ -224,21 +179,4 @@ const targetList = ref([
     justify-content: center;
     border: 2px dashed var(--sidebar-border);
 }
-
-.shadow-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid var(--navbar-border);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.section-header h3 { font-size: 1rem; font-weight: 700; margin: 0; }
 </style>

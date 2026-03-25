@@ -91,26 +91,9 @@ const searchCNPJ = ref('');
     color: var(--text-color);
 }
 
-.shadow-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid var(--navbar-border);
-}
-
 .panel.highlight {
     border-top: 4px solid var(--primary-color);
 }
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.section-header h3 { font-size: 0.8rem; font-weight: 700; margin: 0; text-transform: uppercase; color: var(--text-color); }
 
 .placeholder-text {
     padding: 2rem;

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -24,11 +24,11 @@ def get_resultados_sentinela(db: Session = Depends(get_db)):
 
 @router.get("/fator-risco", response_model=FatorRiscoResponseSchema)
 def get_fator_risco_data(
-    data_inicio: date = Query("2016-01-01"), 
-    data_fim: date = Query("2024-12-01"), 
+    data_inicio: Optional[date] = Query(None), 
+    data_fim: Optional[date] = Query(None), 
     db: Session = Depends(get_db)
 ):
     """
     Retorna os dados do gráfico Fator de Risco x Qtd Estab para um período específico.
     """
-    return DashboardService.get_fator_risco_data(db, str(data_inicio), str(data_fim))
+    return DashboardService.get_fator_risco_data(db, data_inicio, data_fim)

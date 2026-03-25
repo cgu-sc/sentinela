@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true);
@@ -108,5 +108,24 @@ export const useThemeStore = defineStore('theme', () => {
     applyTheme();
   };
 
-  return { isDark, currentPalette, toggleTheme, setMode, setPalette, initTheme };
+  /**
+   * DESIGN TOKENS REATIVOS (Acesso via JavaScript/Script Setup)
+   * Permite que você peça a cor de um card ou texto no JS sem hardcodar o HEX.
+   */
+  const tokens = computed(() => {
+    const palette = palettes[currentPalette.value] ?? palettes.azul;
+    const isDarkMode = isDark.value;
+
+    return {
+      primary: palette.primary.color,
+      bgColor: isDarkMode ? '#09090b' : '#f7fafc',
+      textColor: isDarkMode ? '#cbd5e1' : '#2d3748',
+      cardBg: isDarkMode ? '#18181b' : '#ffffff',
+      sidebarBg: isDarkMode ? '#09090b' : '#ffffff',
+      borderColor: isDarkMode ? '#27272a' : '#e2e8f0',
+      // Você pode adicionar mais tokens conforme a necessidade
+    };
+  });
+
+  return { isDark, currentPalette, tokens, toggleTheme, setMode, setPalette, initTheme };
 });

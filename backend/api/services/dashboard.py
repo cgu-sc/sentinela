@@ -1,4 +1,5 @@
 from typing import List
+from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..schemas.dashboard import (
@@ -40,10 +41,10 @@ class DashboardService:
                 return f"R$ {num:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
             kpis = [
-                DashboardKPISchema(id='total_cnpjs', label='CNPJs', value=f"{(kpi_row.cnpjs or 0):,}".replace(',', '.'), color='#ef4444', icon='pi pi-id-card'),
-                DashboardKPISchema(id='valor_vendas', label='Valor Total de Vendas', value=human_format(kpi_row.total_vendas), color='#3b82f6', icon='pi pi-money-bill'),
+                DashboardKPISchema(id='total_cnpjs', label='CNPJs', value=f"{(kpi_row.cnpjs or 0):,}".replace(',', '.'), color='#3b82f6', icon='pi pi-id-card'),
+                DashboardKPISchema(id='valor_vendas', label='Valor Total de Vendas', value=human_format(kpi_row.total_vendas), color='#10b981', icon='pi pi-dollar'),
                 DashboardKPISchema(id='perc_valor', label='% sem comprovação', value=f"{(kpi_row.perc_sem_comp or 0):.2f}%".replace('.', ','), color='#f59e0b', icon='pi pi-percentage'),
-                DashboardKPISchema(id='valor_nao_comp', label='Valor sem Comprovação', value=human_format(kpi_row.val_sem_comp), color='#10b981', icon='pi pi-exclamation-triangle'),
+                DashboardKPISchema(id='valor_nao_comp', label='Valor sem Comprovação', value=human_format(kpi_row.val_sem_comp), color='#ef4444', icon='pi pi-dollar'),
                 DashboardKPISchema(id='total_meds', label='Qtde de Medicamentos', value=f"{(float(kpi_row.total_meds or 0)/1_000_000_000):.2f} Bi".replace('.', ','), color='#8b5cf6', icon='pi pi-box'),
             ]
             
@@ -100,21 +101,32 @@ class DashboardService:
             print(traceback.format_exc())
             return []
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio: str, data_fim: str) -> FatorRiscoResponseSchema:
+    def get_fator_risco_data(db: Session, data_inicio = None, data_fim = None) -> FatorRiscoResponseSchema:
         """
         Calcula dinamicamente as faixas de risco (Buckets de 10%) baseadas no período de movimentação mensal.
         """
         try:
+            # 🛡️ GUARDA DE SEGURANÇA: Data inicial mínima suportada pela base
+            # Previne que o SQL varra milhões de linhas em períodos que sabemos estar vazios
+            MIN_DATA = date(2015, 7, 1)
+            
+            # Garantir que temos objetos date válidos
+            inicio = data_inicio if data_inicio else date(1900, 1, 1)
+            fim = data_fim if data_fim else date(2199, 12, 31)
+            
+            if inicio < MIN_DATA:
+                inicio = MIN_DATA
+
+            # 🚀 QUERY SUPER OTIMIZADA (SEM JOIN - BUSCA DIRETA PELA DENORMALIZAÇÃO)
             sql = text("""
                 WITH TotaisPorCNPJ AS (
                     SELECT 
-                        p.cnpj,
-                        SUM(CAST(m.total_vendas AS FLOAT)) as total_vendas,
-                        SUM(CAST(m.total_sem_comprovacao AS FLOAT)) as total_sem_comprovacao
-                    FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] m
-                    INNER JOIN [temp_CGUSC].[fp].[processamento] p ON m.id_processamento = p.id
-                    WHERE m.periodo BETWEEN :inicio AND :fim
-                    GROUP BY p.cnpj
+                        cnpj,
+                        SUM(ISNULL(CAST(total_vendas AS FLOAT), 0)) as total_vendas,
+                        SUM(ISNULL(CAST(total_sem_comprovacao AS FLOAT), 0)) as total_sem_comprovacao
+                    FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] WITH (NOLOCK)
+                    WHERE periodo BETWEEN :inicio AND :fim
+                    GROUP BY cnpj
                 ),
                 CalculoPercentual AS (
                     SELECT 
@@ -151,17 +163,17 @@ class DashboardService:
                 SELECT 
                     faixa_percentual AS faixa,
                     COUNT(*) AS qtd,
-                    FORMAT(SUM(total_sem_comprovacao), 'C', 'pt-BR') AS valor,
-                    SUM(total_sem_comprovacao) AS valor_raw
+                    FORMAT(ISNULL(SUM(total_sem_comprovacao), 0), 'C', 'pt-BR') AS valor,
+                    ISNULL(SUM(total_sem_comprovacao), 0) AS valor_raw
                 FROM DefinicaoFaixas
                 GROUP BY faixa_percentual, ordem
                 ORDER BY ordem;
             """)
             
-            results = db.execute(sql, {"inicio": data_inicio, "fim": data_fim}).fetchall()
+            results = db.execute(sql, {"inicio": inicio, "fim": fim}).fetchall()
             
             return FatorRiscoResponseSchema(
-                periodo_formatado=f"{data_inicio} a {data_fim}",
+                periodo_formatado=f"{inicio} a {fim}" if data_inicio and data_fim else "Acumulado Histórico",
                 buckets=[FatorRiscoBucketSchema(**row._mapping) for row in results]
             )
         except Exception as e:
@@ -169,3 +181,4 @@ class DashboardService:
             print("❌ ERRO NO CALCULO DO FATOR DE RISCO:")
             print(traceback.format_exc())
             return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
+

@@ -11,7 +11,7 @@ import { storeToRefs } from 'pinia';
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const { getRiskSeverity, getRiskClass } = useRiskMetrics();
-const { formatBRL, formatNumber, formatPercent } = useFormatting();
+const { formatBRL, formatNumber, formatPercent, formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
 const dashboardStore = useDashboardStore();
 
@@ -50,7 +50,7 @@ const chartSeries = computed(() => [
 // Configuração de Estilo do Gráfico (Mesclando com Base Global)
 const chartOptions = computed(() => ({
     ...chartBaseOptions.value, // Herança de Estilo Global
-    colors: [chartColors.primary, chartColors.warning],
+    colors: [chartColors.value.primary, chartColors.value.danger], // Azul = Estabelecimento | Vermelho (Danger) = Valor R$
     stroke: {
         width: [0, 3],
         curve: 'smooth',
@@ -69,7 +69,7 @@ const chartOptions = computed(() => ({
             shade: 'dark',
             type: "vertical",
             shadeIntensity: 0.5,
-            gradientToColors: [chartColors.secondary, undefined], 
+            gradientToColors: [chartColors.value.secondary, undefined], 
             inverseColors: false,
             opacityFrom: [0.9, 0.6],
             opacityTo: [0.8, 0.1],
@@ -84,28 +84,56 @@ const chartOptions = computed(() => ({
     yaxis: [
         {
             ...chartBaseOptions.value.yaxis,
-            title: { text: 'Qtd Estab (Mil)', style: { color: chartColors.primary, fontWeight: 600 } },
+            title: { text: 'Qtd Estab', style: { color: chartColors.value.primary, fontWeight: 700 } },
+            labels: {
+                ...chartBaseOptions.value.yaxis?.labels,
+                formatter: (val) => formatNumber(val)
+            }
         },
         {
             ...chartBaseOptions.value.yaxis,
             opposite: true,
-            title: { text: 'Valor Sem Comp (Bi)', style: { color: chartColors.warning, fontWeight: 600 } },
+            title: { text: 'Valor Sem Comp', style: { color: chartColors.value.danger, fontWeight: 700 } },
+            labels: {
+                ...chartBaseOptions.value.yaxis?.labels,
+                formatter: (val) => formatBRL(val)
+            }
         }
     ],
+    tooltip: {
+        shared: true,
+        intersect: false,
+        theme: themeStore.isDark ? 'dark' : 'light',
+        y: [
+            {
+                formatter: (val) => formatNumberFull(val)
+            },
+            {
+                formatter: (val) => formatCurrencyFull(val)
+            }
+        ]
+    }
 }));
 // 5. REATIVIDADE AO PERÍODO DE ANÁLISE
-// Sempre que o usuário mudar o intervalo no filtro global, o gráfico se autopreenche
+// Helper para pegar a data ISO local YYYY-MM-DD sem shift de timezone
+const toLocalISO = (date) => {
+  if (!date || !(date instanceof Date)) return null;
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 watch(
   () => filterStore.periodo,
   (newVal) => {
     if (newVal && Array.isArray(newVal) && newVal.length === 2 && newVal[0] && newVal[1]) {
-      // Formatação para YYYY-MM-DD aceito pelo FastAPI
-      const inicio = newVal[0].toISOString().split('T')[0];
-      const fim = newVal[1].toISOString().split('T')[0];
+      const inicio = toLocalISO(newVal[0]);
+      const fim = toLocalISO(newVal[1]);
+      
+      console.log(`[SENTINELA] Período alterado: ${inicio} até ${fim}. Buscando dados...`);
       dashboardStore.fetchFatorRisco(inicio, fim);
     }
   },
-  { deep: true, immediate: true } // immediate: true garante a carga inicial automática
+  { deep: true, immediate: false }
 );
 
 onMounted(() => {
@@ -177,7 +205,7 @@ const getTrendColor = (trend) => {
            <Button icon="pi pi-info-circle" v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação (ex: 0-10%, 10-20%), cruzando a quantidade de farmácias com o respectivo valor financeiro não comprovado em cada faixa para identificar a concentração de irregularidades.'" text severity="secondary" rounded />
         </div>
         <div class="chart-wrapper">
-            <apexchart type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
+            <apexchart :key="themeStore.isDark ? 'dark-chart' : 'light-chart'" type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
         </div>
       </div>
 
@@ -311,29 +339,6 @@ const getTrendColor = (trend) => {
   gap: 1.5rem;
 }
 
-.shadow-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid var(--navbar-border);
-  transition: background-color 0.3s ease;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.section-header h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-color);
-  margin: 0;
-}
-
 .spacer { flex: 1; }
 
 .chart-placeholder {
@@ -399,36 +404,6 @@ const getTrendColor = (trend) => {
   align-items: center;
   gap: 0.5rem;
   white-space: nowrap;
-}
-
-/* 🎨 BADGES ELEGANTES (PADRÃO ADMIN EVENTS) - USO DE CLASSES CUSTOMIZADAS PARA EVITAR AZUL DO TEMA */
-:deep(.p-tag) {
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-weight: 700;
-    font-size: 0.75rem;
-    letter-spacing: 0.02em;
-    min-width: 60px;
-    text-align: center;
-    border: 1px solid transparent;
-}
-
-:deep(.risk-low) {
-    background: rgba(34, 197, 94, 0.12) !important;
-    color: #4ade80 !important;
-    border: 1px solid rgba(34, 197, 94, 0.25) !important;
-}
-
-:deep(.risk-medium) {
-    background: rgba(245, 158, 11, 0.15) !important;
-    color: #fbbf24 !important;
-    border: 1px solid rgba(245, 158, 11, 0.25) !important;
-}
-
-:deep(.risk-high) {
-    background: rgba(239, 68, 68, 0.12) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(239, 68, 68, 0.25) !important;
 }
 
 .flex-cell i {

@@ -87,6 +87,74 @@ watch(isCollapsed, (val) => {
 const limparFiltros = () => {
     filterStore.resetFilters();
 };
+
+// ⏳ OPÇÃO 3: RANGE SLIDER TEMPORAL (DYNAMIC TIMELINE 2015-2024)
+const availableMonths = [];
+const monthsLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+for (let y = 2015; y <= 2024; y++) {
+  monthsLabels.forEach((m, idx) => {
+    availableMonths.push({ label: `${m}/${y.toString().slice(-2)}`, date: new Date(y, idx, 1) });
+  });
+}
+
+// Inicializar com Abril/24 a Setembro/24 (Índices 111 e 116 na timeline 2015-2024)
+const timeSliderValue = ref([111, 116]);
+
+const displayPeriod = computed(() => {
+    const start = availableMonths[timeSliderValue.value[0]].label;
+    const end = availableMonths[timeSliderValue.value[1]].label;
+    return `${start} a ${end}`;
+});
+
+const quickSelectYear = (year) => {
+    const startIdx = (year - 2015) * 12;
+    timeSliderValue.value = [startIdx, startIdx + 11];
+};
+
+const selectAll = () => {
+    timeSliderValue.value = [0, availableMonths.length - 1];
+};
+
+// Tooltips flutuantes para o Slider
+const startMonthLabel = computed(() => availableMonths[timeSliderValue.value[0]]?.label);
+const endMonthLabel = computed(() => availableMonths[timeSliderValue.value[1]]?.label);
+const startPos = computed(() => (timeSliderValue.value[0] / (availableMonths.length - 1)) * 100);
+const endPos = computed(() => (timeSliderValue.value[1] / (availableMonths.length - 1)) * 100);
+
+// Sincronizar com Debounce (Poder de processamento amigável - SÓ CHAMA API QUANDO PARAR)
+let timer = null;
+watch(timeSliderValue, (newIndices) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+        const startDate = availableMonths[newIndices[0]].date;
+        const rawEndDate = availableMonths[newIndices[1]].date;
+        const endDate = new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0); 
+        
+        // Evitar disparar o filtro se as datas já forem as mesmas
+        if (filterStore.periodo[0]?.getTime() !== startDate.getTime() || 
+            filterStore.periodo[1]?.getTime() !== endDate.getTime()) {
+            filterStore.periodo = [startDate, endDate];
+        }
+    }, 450); // 450ms de calma
+}, { immediate: true });
+
+// Sincronizar de VOLTA: Se o usuário mudar no CALENDÁRIO, o SLIDER precisa PULAR para o lugar certo
+watch(() => filterStore.periodo, (newVal) => {
+    if (!newVal || newVal.length < 2 || !newVal[0] || !newVal[1]) return;
+    
+    const startIdx = availableMonths.findIndex(m => 
+        m.date.getFullYear() === newVal[0].getFullYear() && m.date.getMonth() === newVal[0].getMonth()
+    );
+    const endIdx = availableMonths.findIndex(m => 
+        m.date.getFullYear() === newVal[1].getFullYear() && m.date.getMonth() === newVal[1].getMonth()
+    );
+
+    if (startIdx !== -1 && endIdx !== -1) {
+        if (startIdx !== timeSliderValue.value[0] || endIdx !== timeSliderValue.value[1]) {
+            timeSliderValue.value = [startIdx, endIdx];
+        }
+    }
+}, { deep: true });
 </script>
 
 <template>
@@ -162,7 +230,40 @@ const limparFiltros = () => {
 
         <div class="filter-section">
           <label class="filter-label">Período de Análise</label>
-          <Calendar v-model="filterStore.periodo" view="month" dateFormat="mm/yy" selectionMode="range" :manualInput="false" showIcon iconDisplay="input" class="w-full filter-input" />
+          <div class="slider-container">
+            <!-- 1. Atalhos Rápidos de Ano (Botões Maiores) -->
+            <div class="flex gap-2 mb-3">
+                <Button label="2023" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2023)" />
+                <Button label="2024" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2024)" />
+                <Button label="TUDO" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="selectAll()" />
+            </div>
+
+            <!-- 2. Calendário Manual (Híbrido - Sempre visível e sincronizado) -->
+            <Calendar 
+                v-model="filterStore.periodo" 
+                view="month" 
+                dateFormat="mm/yy" 
+                selectionMode="range" 
+                :manualInput="false" 
+                showIcon 
+                iconDisplay="input" 
+                class="w-full filter-input mb-5" 
+            />
+
+            <!-- 3. Time Slider (Para varredura rápida) com Tooltips Flutuantes -->
+            <div class="slider-wrapper relative pt-6 mt-3">
+                <div class="slider-tip" :style="{ left: startPos + '%' }">{{ startMonthLabel }}</div>
+                <div class="slider-tip" :style="{ left: endPos + '%' }">{{ endMonthLabel }}</div>
+                
+                <Slider 
+                    v-model="timeSliderValue" 
+                    range 
+                    :min="0" 
+                    :max="availableMonths.length - 1" 
+                    class="w-full time-slider" 
+                />
+            </div>
+          </div>
         </div>
 
         <hr class="sidebar-divider my-4" />
@@ -226,8 +327,8 @@ const limparFiltros = () => {
             class="module-select-button" 
           >
             <template #option="slotProps">
-                <i :class="slotProps.option.icon" style="margin-right: 0.5rem"></i>
-                <span class="font-bold text-sm">{{ slotProps.option.name }}</span>
+                <i :class="slotProps.option.icon" style="margin-right: 0.5rem; font-size: 0.9rem"></i>
+                <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px">{{ slotProps.option.name }}</span>
             </template>
           </SelectButton>
           
@@ -275,47 +376,14 @@ const limparFiltros = () => {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* VARIÁVEIS DO MODO CLARO (superfícies) */
-:global(.light-mode) .admin-layout {
-  --bg-color: color-mix(in srgb, var(--primary-50) 25%, #ffffff);
-  --sidebar-bg: #ffffff;
-  --sidebar-text: #1e293b;
-  --sidebar-border: #e2e8f0;
-  --navbar-bg: #ffffff;
-  --navbar-border: #e2e8f0;
-  --text-color: #1e293b;
-  --card-bg: #ffffff;
-  --text-muted: #64748b;
-  --table-header-bg: #f8fafc;
-  --table-header-text: #475569; /* Slate 600 - Neutro e elegante */
-  --table-hover: #f1f5f9; /* Slate 100 - Mais visível */
-  --table-stripe: #fcfcfd; /* Quase branco - Super sutil */
+:global(.admin-layout) {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
-
-/* VARIÁVEIS DO MODO ESCURO (superfícies) */
-:global(.dark-mode) .admin-layout {
-  --bg-color: color-mix(in srgb, var(--primary-color) 2%, #09090b);
-  --sidebar-bg: #09090b;
-  --sidebar-text: #f4f4f5;
-  --sidebar-border: #27272a;
-  --navbar-bg: #09090b;
-  --navbar-border: #27272a;
-  --text-color: #cbd5e1; /* Slate 300 - Muito mais confortável */
-  --card-bg: #18181b; 
-  --text-muted: #71717a; /* Zinc 400 */
-  --table-header-bg: #202023; 
-  --table-header-text: #94a3b8;
-  --table-hover: #2d2d30; /* Mais claro e distinto */
-  --table-stripe: #111113;
-
-  /* PRIME VUE INTERNAL SURFACES - O SEGREDO PARA A TABELA */
-  --surface-0: #18181b;
-  --surface-card: #18181b;
-  --surface-ground: #0c0c0e;
-  --surface-section: #0c0c0e;
-  --surface-border: #27272a;
-}
-
 
 /* SIDEBAR */
 .admin-sidebar {
@@ -366,11 +434,13 @@ const limparFiltros = () => {
   font-weight: 700;
   font-size: 1.2rem;
   display: block;
+  color: var(--text-color);
 }
 
 .brand-version {
   font-size: 0.7rem;
-  opacity: 0.8;
+  opacity: 0.7;
+  color: var(--text-color);
 }
 
 .sidebar-content {
@@ -431,6 +501,79 @@ const limparFiltros = () => {
   font-weight: 700;
   margin-bottom: 0.4rem;
   color: var(--text-color);
+}
+
+.slider-values.period {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.year-btn {
+  font-size: 0.65rem !important;
+  padding: 0px 8px !important;
+  height: 24px !important;
+  font-weight: 800 !important;
+  border: 1px solid var(--sidebar-border) !important;
+  border-radius: 4px !important;
+  color: var(--text-muted) !important;
+  background: var(--card-bg) !important;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+  line-height: normal !important;
+}
+
+.year-btn:hover {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Removido estilo do dropdown antigo */
+
+/* TOOLTIPS DO SLIDER */
+.slider-wrapper {
+    position: relative;
+    margin-top: 12px !important; /* Espaço equilibrado */
+}
+
+.filter-input {
+    margin-bottom: 8px !important; /* Aproxima um pouco mais do slider */
+}
+
+.slider-tip {
+  position: absolute;
+  top: 24px; /* Ajuste fino para colar a setinha no controle */
+  transform: translateX(-50%);
+  background: var(--primary-color);
+  color: white;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.55rem;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.slider-tip::after {
+  content: '';
+  position: absolute;
+  top: -3px; /* Setinha agora no topo do tooltip pescando a bolinha */
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 3px solid var(--primary-color);
 }
 
 :deep(.p-slider-handle) {
@@ -578,7 +721,7 @@ const limparFiltros = () => {
   background: var(--card-bg);
   border-color: var(--sidebar-border);
   color: var(--text-color);
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
 }
 
 :deep(.module-select-button .p-button.p-highlight) {
@@ -595,10 +738,13 @@ const limparFiltros = () => {
 }
 
 .nav-tab {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
   text-decoration: none;
   color: var(--text-color);
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
   border-radius: 8px;

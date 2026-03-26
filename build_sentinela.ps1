@@ -61,13 +61,12 @@ $FINAL_DIR = "$ROOT/Sentinela_Portatil"
 if (Test-Path $FINAL_DIR) { Remove-Item -Recurse -Force $FINAL_DIR }
 New-Item -ItemType Directory -Force -Path "$FINAL_DIR/_engine"
 
-# Copia o App Principal
+# Copia o App Principal (Sentinela.exe)
 Copy-Item "src-tauri/target/release/sentinela.exe" "$FINAL_DIR/sentinela.exe" -Force
 
-# Copia o Motor (renomeando para o nome simples _engine.exe que você pediu)
-# No Windows, o sidecar compilado tem o sufixo da arquitetura, vamos buscá-lo
-$SIDECAR_EXE = Get-ChildItem "src-tauri/target/release/_engine-*.exe" | Select-Object -First 1
-Copy-Item $SIDECAR_EXE.FullName "$FINAL_DIR/_engine/_engine.exe" -Force
+# Copia o Motor (renomeando para _engine.exe a partir da pasta dist)
+# Isso evita o erro de "argumento nulo" que aconteceu antes
+Copy-Item "dist/sentinela-api.exe" "$FINAL_DIR/_engine/_engine.exe" -Force
 
 Write-Host "`n✅ BUILD E ORGANIZAÇÃO CONCLUÍDOS!" -ForegroundColor Green
 Write-Host "Sua pasta pronta para distribuição está em: $FINAL_DIR" -ForegroundColor Yellow

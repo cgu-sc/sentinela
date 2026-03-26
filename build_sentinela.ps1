@@ -45,9 +45,9 @@ if (!(Test-Path $PY)) {
     --hidden-import "uvicorn" `
     backend/main.py
 
-# Organizando para o Tauri (Sidecar precisa do sufixo do sistema)
+# Organizando para o Tauri (Sidecar precisa do sufixo do sistema e agora usamos .bin)
 New-Item -ItemType Directory -Force -Path "src-tauri/bin"
-Copy-Item "dist/sentinela-api.exe" "src-tauri/bin/sentinela-api-x86_64-pc-windows-msvc.exe" -Force
+Copy-Item "dist/sentinela-api.exe" "src-tauri/bin/sentinela-engine-x86_64-pc-windows-msvc.bin" -Force
 
 # 3. BUILD DO TAURI (INSTALADOR FINAL)
 Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow
@@ -55,4 +55,4 @@ Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow
 cargo tauri build
 
 Write-Host "`n✅ Build concluído com sucesso!" -ForegroundColor Green
-Write-Host "O seu EXE final estará na pasta: src-tauri/target/release/bundle/msi/" -ForegroundColor Gray
+Write-Host "O seu EXE final (sentinela.exe) estará na pasta: src-tauri/target/release/" -ForegroundColor Gray

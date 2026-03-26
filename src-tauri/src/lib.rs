@@ -5,7 +5,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .setup(|app| {
-      // Configuramos o Log (opcional, só para desenvolvimento)
+      // 1. Configuração de Logs (apenas em Debug)
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -14,14 +14,14 @@ pub fn run() {
         )?;
       }
 
-      // --- INICIAR SIDECAR PYTHON (SENTINELA-API) ---
-      // 'sentinela-api' é o identificador definido no tauri.conf.json
-      let sidecar_command = app.shell().sidecar("sentinela-api").unwrap();
+      // 2. INICIAR SIDECAR PYTHON (SENTINELA-ENGINE)
+      // O identificador "sentinela-engine" deve coincidir com o bundle.externalBin no tauri.conf.json
+      let sidecar_command = app.shell().sidecar("sentinela-engine").unwrap();
       let (mut _rx, _child) = sidecar_command
         .spawn()
-        .expect("Falha ao iniciar o backend do Sentinela (Python/FastAPI)");
+        .expect("Falha ao iniciar o motor do Sentinela (.bin)");
       
-      println!("🚀 Backend Sidecar iniciado pelo Tauri.");
+      println!("🚀 Motor Sidecar (.bin) iniciado pelo Tauri com sucesso!");
       
       Ok(())
     })

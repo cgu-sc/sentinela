@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Sentinela",
+  "productName": "sentinela",
   "version": "0.1.0",
   "identifier": "br.gov.cgu.sentinela",
   "build": {
@@ -34,7 +34,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "bin/sentinela-api"
+      "bin/sentinela-engine"
     ]
   }
 }

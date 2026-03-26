@@ -12,15 +12,15 @@ export function useFilterParameters() {
   function getApiParams() {
     const p = filterStore.periodo;
     const inicio = p?.[0] ? toLocalISO(p[0]) : null;
-    const fim    = p?.[1] ? toLocalISO(p[1]) : null;
+    const fim = p?.[1] ? toLocalISO(p[1]) : null;
 
-    const percMin = filterStore.percentualNaoComprovacaoFilter[0] !== 0   ? filterStore.percentualNaoComprovacaoFilter[0] : null;
+    const percMin = filterStore.percentualNaoComprovacaoFilter[0] !== 0 ? filterStore.percentualNaoComprovacaoFilter[0] : null;
     const percMax = filterStore.percentualNaoComprovacaoFilter[1] !== 100 ? filterStore.percentualNaoComprovacaoFilter[1] : null;
-    const valMin  = filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
+    const valMin = filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
 
-    const uf          = filterStore.selectedUF !== 'Todos'          ? filterStore.selectedUF          : null;
+    const uf = filterStore.selectedUF !== 'Todos' ? filterStore.selectedUF : null;
     const regiaoSaude = filterStore.selectedRegiaoSaude !== 'Todos' ? filterStore.selectedRegiaoSaude : null;
-    const municipio   = filterStore.selectedMunicipio !== 'Todos'   ? filterStore.selectedMunicipio   : null;
+    const municipio = filterStore.selectedMunicipio !== 'Todos' ? filterStore.selectedMunicipio : null;
 
     return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio };
   }

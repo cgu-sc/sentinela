@@ -102,135 +102,44 @@ GO
 
 
 
--- =============================================================================
--- TABELAS PRÉ-COMPUTADAS (Lookup instantâneo por período)
--- =============================================================================
-
--- 8. LIMPEZA
-IF OBJECT_ID('fp.resultado_mensal_brasil', 'U') IS NOT NULL DROP TABLE fp.resultado_mensal_brasil;
-IF OBJECT_ID('fp.resultado_mensal_uf', 'U') IS NOT NULL DROP TABLE fp.resultado_mensal_uf;
+USE temp_CGUSC;
 GO
 
--- 9. resultado_mensal_brasil — totais nacionais por mês (~113 linhas)
--- Cobre: KPIs de valor e quantidade sem filtro de %
-CREATE TABLE fp.resultado_mensal_brasil (
-    periodo DATE NOT NULL,
-    total_vendas DECIMAL(18, 2),
-    total_sem_comprovacao DECIMAL(18, 2),
-    total_qnt_vendas BIGINT,
-    total_qnt_sem_comprovacao BIGINT
-);
+-- 10. PERFIL CONSOLIDADO (Dicionário Master do Estabelecimento)
+-- Tabela para enriquecimento de filtros e flags por CNPJ no Dashboard.
+
+-- Identifica dinamicamente qual é o último mês disponível nos dados de vendas
+DECLARE @MaxPeriodo DATE = (SELECT MAX(periodo) FROM fp.movimentacao_mensal_cnpj);
+
+DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento;
+
+SELECT 
+    DF.cnpj,
+    DF.razaoSocial               AS razao_social,
+    DF.uf,
+    DF.municipio,
+    DF.ds_porte_empresa           AS porte_empresa,
+    DF.outrasSociedades           AS flag_outras_sociedades,
+    DF.situacaoReceita            AS situacao_rf,
+    DF.dataSituacaoCadastral      AS data_situacao_rf,
+    DF.data_processamento         AS data_ultimo_processamento,
+    
+    -- LÓGICA CONEXÃO MS (Ativa se vendeu nos últimos 30 dias em relação ao limite da base)
+    CASE 
+        WHEN DF.dataFinalDadosMovimentacao >= DATEADD(DAY, -30, @MaxPeriodo) 
+        THEN 'Ativa' ELSE 'Inativa' 
+    END AS conexao_ms
+
+INTO fp.perfil_consolidado_estabelecimento
+FROM fp.dados_farmacia DF
+INNER JOIN (SELECT DISTINCT cnpj FROM fp.movimentacao_mensal_cnpj) M ON M.cnpj = DF.cnpj;
+
+-- Criar índice para performance de JOIN instantâneo no Polars
+CREATE UNIQUE CLUSTERED INDEX IX_perfil_cnpj ON fp.perfil_consolidado_estabelecimento (cnpj);
 GO
 
-INSERT INTO fp.resultado_mensal_brasil (
-    periodo, total_vendas, total_sem_comprovacao,
-    total_qnt_vendas, total_qnt_sem_comprovacao
-)
-SELECT
-    periodo,
-    SUM(total_vendas),
-    SUM(total_sem_comprovacao),
-    SUM(CAST(total_qnt_vendas AS BIGINT)),
-    SUM(CAST(total_qnt_sem_comprovacao AS BIGINT))
-FROM fp.movimentacao_mensal_cnpj
-GROUP BY periodo;
-GO
 
-CREATE CLUSTERED INDEX IX_resultado_mensal_brasil_periodo
-ON fp.resultado_mensal_brasil (periodo);
-GO
 
--- 10. resultado_mensal_uf — totais por mês + UF (~3.051 linhas)
--- Cobre: ranking UF por período sem filtro de %
-CREATE TABLE fp.resultado_mensal_uf (
-    periodo DATE NOT NULL,
-    uf VARCHAR(2) NULL,
-    total_vendas DECIMAL(18, 2),
-    total_sem_comprovacao DECIMAL(18, 2),
-    total_qnt_vendas BIGINT,
-    total_qnt_sem_comprovacao BIGINT
-);
-GO
-
-INSERT INTO fp.resultado_mensal_uf (
-    periodo, uf, total_vendas, total_sem_comprovacao,
-    total_qnt_vendas, total_qnt_sem_comprovacao
-)
-SELECT
-    periodo,
-    uf,
-    SUM(total_vendas),
-    SUM(total_sem_comprovacao),
-    SUM(CAST(total_qnt_vendas AS BIGINT)),
-    SUM(CAST(total_qnt_sem_comprovacao AS BIGINT))
-FROM fp.movimentacao_mensal_cnpj
-GROUP BY periodo, uf;
-GO
-
-CREATE CLUSTERED INDEX IX_resultado_mensal_uf_periodo_uf
-ON fp.resultado_mensal_uf (periodo, uf);
-GO
-
----------------------------------------------------------------------------------
--- Vendas para Falecidos
----------------------------------------------------------------------------------
-DROP TABLE
-
-IF EXISTS #vendas_falecidos
-	SELECT num_autorizacao
-		,a.cpf
-		,a.cnpj
-		,data_hora
-		,a.codigo_barra
-		,qnt_autorizada
-		,valor_pago
-		,B.dt_obito
-	INTO #vendas_falecidos
-	FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-	LEFT JOIN temp_CGUSC.dbo.obitos_unificada B
-		ON B.cpf = A.CPF
-	INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C
-		ON C.codigo_barra = A.codigo_barra
-	WHERE a.data_hora >= '2015-07-01'
-		AND a.data_hora <= '2024-12-10'
-		AND A.data_hora > B.dt_obito
-		AND A.cnpj IN (
-			SELECT cnpj
-			FROM temp_CGUSC.dbo.processamentosFP
-			)
-	ORDER BY cnpj
-		,cpf
-		,codigo_barra
-
-DROP TABLE
-
-IF EXISTS #vendas_total
-	SELECT a.cnpj
-		,sum(valor_pago) valor_total_vendas
-	INTO #vendas_total
-	FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-	INNER JOIN temp_CGUSC.dbo.medicamentosPatologiaFP C
-		ON C.codigo_barra = A.codigo_barra
-	WHERE a.data_hora >= '2015-07-01'
-		AND a.data_hora <= '2024-12-10'
-		AND A.cnpj IN (
-			SELECT cnpj
-			FROM #vendas_falecidos
-			)
-	GROUP BY A.cnpj
-
-DROP TABLE
-
-IF EXISTS #vendas_falecidos_gerencial
-	SELECT A.cnpj
-		,sum(valor_pago) AS vendas_falecidos
-		,sum(valor_pago) / B.valor_total_vendas AS percentual_falecidos
-	INTO #vendas_falecidos_gerencial
-	FROM #vendas_falecidos A
-	INNER JOIN #vendas_total B
-		ON B.cnpj = A.cnpj
-	GROUP BY A.cnpj
-		,B.valor_total_vendas
 
 			   
 --**********************************************************************************************************
@@ -270,7 +179,7 @@ IF EXISTS #movimentacao_gerencial_temp
 		,sum(A.valor_vendas) AS valor_vendas
 		,sum(valor_sem_comprovacao) AS valor_sem_comprovacao
 	INTO #movimentacao_gerencial_temp
-	FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP A
+	FROM temp_CGUSC.fp.movimentacao_mensal_gtin A
 	INNER JOIN temp_CGUSC.dbo.processamentosFP B
 		ON B.id = A.id_processamento
 	GROUP BY B.cnpj
@@ -291,7 +200,7 @@ IF EXISTS #movimentacao_gerencial_temp2
 		,B.CodPorteEmpresa
 	INTO #movimentacao_gerencial_temp2
 	FROM #movimentacao_gerencial_temp A
-	LEFT JOIN temp_CGUSC.dbo.dadosFarmaciasFP B
+	LEFT JOIN temp_CGUSC.fp.dados_farmacia B
 		ON B.cnpj = A.cnpj
 
 
@@ -321,7 +230,7 @@ IF EXISTS #movimentacao_gerencial_temp3
 			SELECT count(*)
 			FROM (
 				SELECT periodo
-				FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP
+				FROM temp_CGUSC.fp.movimentacao_mensal_gtin
 				WHERE id_processamento = A.id
 				GROUP BY periodo
 				) AS t
@@ -389,7 +298,7 @@ IF EXISTS #tres_ultimos_meses
 	FROM (
 		SELECT max(periodo) AS periodo_final
 			,id_processamento
-		FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP
+		FROM temp_CGUSC.fp.movimentacao_mensal_gtin
 		GROUP BY id_processamento
 		) t
 
@@ -400,7 +309,7 @@ IF EXISTS #valor_multa
 		,sum(valor_vendas) AS valor_vendas_ultimos_tres_meses
 		,sum(valor_vendas) * 0.1 AS valor_multa
 	INTO #valor_multa
-	FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP A
+	FROM temp_CGUSC.fp.movimentacao_mensal_gtin A
 	LEFT JOIN #tres_ultimos_meses B
 		ON B.id_processamento = A.id_processamento
 	LEFT JOIN temp_CGUSC.dbo.processamentosFP C
@@ -715,7 +624,7 @@ SELECT
     SUM(A.valor_vendas) AS valor_vendas,
     SUM(A.valor_sem_comprovacao) AS valor_sem_comprovacao
 INTO #movimentacao_gerencial_temp
-FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP A
+FROM temp_CGUSC.fp.movimentacao_mensal_gtin A
 INNER JOIN temp_CGUSC.dbo.processamentosFP B ON B.id = A.id_processamento
 GROUP BY B.cnpj, B.razao_social, B.id;
 
@@ -757,7 +666,7 @@ SELECT
     id_processamento,
     COUNT(DISTINCT periodo) AS num_meses
 INTO #meses_movimentacao
-FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP
+FROM temp_CGUSC.fp.movimentacao_mensal_gtin
 GROUP BY id_processamento;
 
 -- 5.5 - Adiciona contadores de estabelecimentos e meses
@@ -816,7 +725,7 @@ SELECT
     id_processamento,
     MAX(periodo) AS periodo_final
 INTO #periodo_final_processamento
-FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP
+FROM temp_CGUSC.fp.movimentacao_mensal_gtin
 GROUP BY id_processamento;
 
 -- 6.2 - Calcula período inicial (3 meses antes)
@@ -836,7 +745,7 @@ SELECT
     C.cnpj,
     A.valor_vendas
 INTO #vendas_ultimos_meses
-FROM temp_CGUSC.dbo.movimentacaoMensalCodigoBarraFP A
+FROM temp_CGUSC.fp.movimentacao_mensal_gtin A
 INNER JOIN #tres_ultimos_meses B ON B.id_processamento = A.id_processamento
 INNER JOIN temp_CGUSC.dbo.processamentosFP C ON C.id = A.id_processamento
 WHERE A.periodo >= B.periodo_inicial

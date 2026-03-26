@@ -5,5 +5,6 @@ export const API_ENDPOINTS = {
   dashboardFatorRisco:  `${BASE_URL}/api/v1/dashboard/resultado-faixas-risco`,
   dashboardResultados:  `${BASE_URL}/api/v1/dashboard/resultados`,
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
-  cacheRefresh:         `${BASE_URL}/api/v1/cache/refresh`,
+  cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
+  cacheStatus: `${BASE_URL}/api/v1/cache/status`,
 };

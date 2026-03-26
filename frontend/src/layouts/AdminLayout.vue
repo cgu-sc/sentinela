@@ -25,6 +25,10 @@ import Calendar from 'primevue/calendar';
 import Slider from 'primevue/slider';
 import SelectButton from 'primevue/selectbutton'; // Substituindo Listbox
 import InputText from 'primevue/inputtext';
+import Dialog from 'primevue/dialog';
+import ProgressBar from 'primevue/progressbar';
+import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
@@ -98,6 +102,54 @@ const clusterOptions  = FILTER_OPTIONS.cluster;
 const rfaOptions      = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
+
+// Controle de Sincronização
+const isSyncing = ref(false);
+const showConfirmSync = ref(false);
+const syncProgress = ref(0);
+let _pollTimer = null;
+
+const pollSyncStatus = async () => {
+    try {
+        const response = await axios.get(API_ENDPOINTS.cacheStatus);
+        const { progress, status, is_ready } = response.data;
+        
+        syncProgress.value = progress;
+        
+        if (status === 'ready' && progress === 100) {
+            clearInterval(_pollTimer);
+            setTimeout(() => {
+                window.location.reload();
+            }, 800);
+        } else if (status === 'error') {
+            clearInterval(_pollTimer);
+            alert('Ocorreu um erro durante a sincronização no servidor.');
+            isSyncing.value = false;
+        }
+    } catch (err) {
+        console.error('Erro ao consultar status:', err);
+    }
+};
+
+const handleSync = async () => {
+    showConfirmSync.value = false;
+    isSyncing.value = true;
+    syncProgress.value = 0;
+    
+    // Reseta todos os filtros para garantir uma visão limpa pós-carga
+    if (filterStore.resetFilters) {
+        filterStore.resetFilters();
+    }
+    
+    try {
+        await axios.post(API_ENDPOINTS.cacheRefresh);
+        _pollTimer = setInterval(pollSyncStatus, 1000);
+    } catch (err) {
+        console.error('Erro ao iniciar sincronização:', err);
+        alert('Falha ao conectar com o servidor para sincronização.');
+        isSyncing.value = false;
+    }
+};
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -224,7 +276,7 @@ watch(() => filterStore.periodo, (newVal) => {
 
         <div class="grid-filters">
             <div class="filter-section">
-                <label class="filter-label">Situação</label>
+                <label class="filter-label">Situação RF</label>
                 <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" />
             </div>
             <div class="filter-section">
@@ -380,9 +432,47 @@ watch(() => filterStore.periodo, (newVal) => {
         </div>
         <div class="nav-actions">
            <ThemeSelector />
-           <Button icon="pi pi-home" text rounded severity="secondary" />
+           <Button 
+              icon="pi pi-refresh" 
+              text rounded 
+              severity="secondary" 
+              v-tooltip.bottom="'Sincronizar com CGUData'"
+              @click="showConfirmSync = true" 
+           />
         </div>
       </nav>
+
+      <!-- DIALOG DE CONFIRMAÇÃO -->
+      <Dialog v-model:visible="showConfirmSync" header="Sincronizar Dados" :style="{ width: '400px' }" modal :closable="!isSyncing">
+          <div class="flex flex-col items-center gap-4 text-center p-2">
+              <i class="pi pi-exclamation-triangle text-amber-500" style="font-size: 3rem"></i>
+              <p class="mt-2">Deseja realmente iniciar a sincronização com os dados do <strong>CGUData</strong>?</p>
+              <p class="text-sm text-gray-500">Este processo irá atualizar todos os caches do sistema com as informações mais recentes do banco de dados.</p>
+          </div>
+          <template #footer>
+              <Button label="Cancelar" icon="pi pi-times" text severity="secondary" @click="showConfirmSync = false" />
+              <Button label="Sincronizar Agora" icon="pi pi-sync" severity="primary" @click="handleSync" />
+          </template>
+      </Dialog>
+
+      <!-- MODAL DE PROCESSAMENTO (SYNCING) -->
+      <Dialog v-model:visible="isSyncing" modal :closable="false" :draggable="false" :show-header="false" :style="{ width: '450px' }">
+          <div class="sync-modal-content">
+              <div class="sync-icon-container">
+                  <i class="pi pi-sync pi-spin"></i>
+              </div>
+              <h3>Sincronizando com CGUData</h3>
+              <p>O sistema está reconstruindo os arquivos de cache para garantir máxima performance. Por favor, aguarde.</p>
+              <div class="progress-wrapper">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.7rem; font-weight: 800; color: var(--primary-color); letter-spacing: 0.5px;">
+                      <span>PROCESSANDO REGISTROS</span>
+                      <span>{{ syncProgress }}%</span>
+                  </div>
+                  <ProgressBar :value="syncProgress" :show-value="false" style="height: 10px"></ProgressBar>
+              </div>
+              <span class="status-minor">Não feche esta janela...</span>
+          </div>
+      </Dialog>
 
       <div class="page-content">
         <router-view v-slot="{ Component }">
@@ -1117,4 +1207,83 @@ watch(() => filterStore.periodo, (newVal) => {
   opacity: 0;
   transform: translateY(-8px);
 }
+
+/* MODAL DE SINCRONIZAÇÃO */
+.sync-modal-content {
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+}
+
+/* AJUSTE PARA MODO ESCURO NOS DIÁLOGOS DO PRIMEVUE */
+:deep(.p-dialog) {
+    background: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--sidebar-border);
+}
+
+:deep(.p-dialog-header), 
+:deep(.p-dialog-content), 
+:deep(.p-dialog-footer) {
+    background: var(--card-bg);
+    color: var(--text-color);
+}
+
+:deep(.p-dialog .p-dialog-header .p-dialog-title) {
+    color: var(--text-color);
+}
+
+:deep(.p-dialog .p-dialog-header .p-dialog-header-icon) {
+    color: var(--text-color);
+}
+
+:deep(.p-dialog-content) {
+    color: var(--text-color);
+}
+
+.sync-icon-container {
+    width: 64px;
+    height: 64px;
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+.sync-icon-container i {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.sync-modal-content h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-color);
+}
+
+.sync-modal-content p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.progress-wrapper {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.status-minor {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
 </style>

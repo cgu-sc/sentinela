@@ -1,24 +1,20 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from database import get_db, engine
-from data_cache import refresh_cache, get_df
+from data_cache import refresh_cache, get_cache_status
 
 router = APIRouter()
 
+@router.get("/status")
+def status():
+    """Retorna o progresso atual da sincronização."""
+    return get_cache_status()
 
 @router.post("/refresh")
-def refresh(db: Session = Depends(get_db)):
+def refresh(background_tasks: BackgroundTasks):
     """
-    Força a re-leitura do SQL Server e regera o cache Parquet.
-    Chamar após executar o pos_processamento.sql.
+    Inicia a re-leitura do SQL Server em segundo plano.
     """
-    try:
-        refresh_cache(engine)
-        df = get_df()
-        return {
-            "status": "ok",
-            "linhas": len(df),
-            "tamanho_mb": round(df.estimated_size("mb"), 1),
-        }
-    except Exception as e:
-        return {"status": "erro", "detalhe": str(e)}
+    # Dispara o processamento em background para não travar a requisição HTTP
+    background_tasks.add_task(refresh_cache, engine)
+    return {"status": "started", "message": "Sincronização iniciada em segundo plano."}

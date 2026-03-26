@@ -126,25 +126,21 @@ WHERE A.rn = 1 OR A.rn IS NULL; -- Seleciona apenas o primeiro registro por CNPJ
 
 
 
--- Verifica e remove a tabela temporária dadosProcessamentosFP, se existir
-IF OBJECT_ID('temp_cgusc.dbo.dadosProcessamentosFP', 'U') IS NOT NULL
-    DROP TABLE temp_cgusc.dbo.dadosProcessamentosFP;
-
 -- Verifica e remove a tabela temporária movimentacaoMensalCodigoBarraFP, se existir
-IF OBJECT_ID('temp_cgusc.dbo.movimentacaoMensalCodigoBarraFP', 'U') IS NOT NULL
-    DROP TABLE temp_cgusc.dbo.movimentacaoMensalCodigoBarraFP;
+IF OBJECT_ID('temp_cgusc.fp.movimentacao_mensal_gtin', 'U') IS NOT NULL
+    DROP TABLE temp_cgusc.fp.movimentacao_mensal_gtin;
 
 -- Verifica e remove a tabela temporária processamentosFP, se existir
-IF OBJECT_ID('temp_cgusc.dbo.processamentosFP', 'U') IS NOT NULL
-    DROP TABLE temp_cgusc.dbo.processamentosFP;
+IF OBJECT_ID('temp_cgusc.fp.processamentosFP', 'U') IS NOT NULL
+    DROP TABLE temp_cgusc.fp.processamentosFP;
     
-IF OBJECT_ID('dbo.memoria_calculo_consolidadaFP', 'U') IS NOT NULL
-    DROP TABLE dbo.memoria_calculo_consolidadaFP;
+IF OBJECT_ID('fp.memoria_calculo_consolidada', 'U') IS NOT NULL
+    DROP TABLE fp.memoria_calculo_consolidada;
 
 
 
 
-CREATE TABLE dbo.memoria_calculo_consolidadaFP (
+CREATE TABLE fp.memoria_calculo_consolidada (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     id_processamento BIGINT NOT NULL, -- Link com a tabela processamentosFP
     cnpj VARCHAR(14) NOT NULL,
@@ -156,12 +152,12 @@ CREATE TABLE dbo.memoria_calculo_consolidadaFP (
 );
 
 -- Índice para recuperação rápida por CNPJ (ex: para refazer um Excel específico)
-CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON dbo.memoria_calculo_consolidadaFP(cnpj);
+CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnpj);
 
 
 
 -- Cria a tabela temporária processamentosFP para armazenar dados de processamento de farmácias      
-CREATE TABLE temp_cgusc.[dbo].[processamentosFP](
+CREATE TABLE temp_cgusc.[fp].[processamento(
 	[id] [int] PRIMARY KEY IDENTITY(1,1) NOT NULL,
 	[cnpj] [varchar](max) NOT NULL,
 	razao_social [varchar](max)  NULL,
@@ -196,7 +192,7 @@ CREATE TABLE temp_cgusc.[dbo].dadosProcessamentosFP(
 	[data_aquis_dev_estoq] [date] NULL,
 	[qnt_aquis_dev] [int] NULL,
 	[numero_nfe] [varchar](max) NULL,
-	constraint fk2_id_processamento_movimentacao foreign key (id_processamento) references temp_cgusc.[dbo].[processamentosFP] (id)
+	constraint fk2_id_processamento_movimentacao foreign key (id_processamento) references temp_cgusc.[fp].[processamento (id)
 	);
 
 -- Cria a tabela temporária movimentacaoMensalCodigoBarraFP para movimentações mensais por código de barra
@@ -210,191 +206,237 @@ CREATE TABLE temp_cgusc.[dbo].dadosProcessamentosFP(
 	[qnt_vendas_sem_comprovacao] [int] NULL,
 	[valor_vendas] [decimal](11, 2) NULL,
 	[valor_sem_comprovacao] [decimal](11, 2) NULL,
-	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[dbo].[processamentosFP] (id))
+	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento (id))
 
 
-	
+	--------------------------------------------------------------
+-- MÓDULO: Farmácia Popular
+-- OBJETIVO: Criação das tabelas de dados de farmácias e sócios
+-- BASE: db_CNPJ / db_FarmaciaPopular
 --------------------------------------------------------------
--- Criação da Tabela dos Socios das Farmácias
---------------------------------------------------------------
-   
-   
--- Cria a tabela temporária tb_sociosFP com informações dos sócios
-drop table if exists temp_CGUSC.dbo.tb_sociosFP
 
-SELECT 
-    A.cpfcnpjSocio AS cpf_cnpj_socio,
-    A.cnpj,
-    A.indSocio AS indicador_socio,
-    temp_CGUSC.dbo.InitCapEachWord(A.nomeSocio) AS nome_socio,
-    temp_CGUSC.dbo.InitCapEachWord(A.descricaoLogradouro) AS descricao_logradouro,
-    A.numero,
-    temp_CGUSC.dbo.InitCapEachWord(A.complemento) AS complemento,
-    temp_CGUSC.dbo.InitCapEachWord(A.bairro) AS bairro,
-    A.cep,
-    temp_CGUSC.dbo.InitCapEachWord(C.municipio) AS municipio,
-    A.dataEntradaSociedade AS data_entrada_sociedade,
-    A.dataExclusaoSociedade AS data_exclusao_sociedade,
-    A.percentualQualificacao AS percentual_qualificacao,
-    temp_CGUSC.dbo.InitCapEachWord(A.descQualificacaoSocio) AS descricao_qualificacao,
-    GETDATE() AS data_processamento
+
+--------------------------------------------------------------
+-- ETAPA 1: Sócios das farmácias credenciadas
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS temp_CGUSC.dbo.tb_sociosFP;
+
+SELECT
+    soc.cpfcnpjSocio                                          AS cpf_cnpj_socio,
+    soc.cnpj,
+    soc.indSocio                                              AS indicador_socio,
+    temp_CGUSC.dbo.InitCapEachWord(soc.nomeSocio)             AS nome_socio,
+    temp_CGUSC.dbo.InitCapEachWord(soc.descricaoLogradouro)   AS descricao_logradouro,
+    soc.numero,
+    temp_CGUSC.dbo.InitCapEachWord(soc.complemento)           AS complemento,
+    temp_CGUSC.dbo.InitCapEachWord(soc.bairro)                AS bairro,
+    soc.cep,
+    temp_CGUSC.dbo.InitCapEachWord(mun_ibge.municipio)        AS municipio,
+    soc.dataEntradaSociedade                                  AS data_entrada_sociedade,
+    soc.dataExclusaoSociedade                                 AS data_exclusao_sociedade,
+    soc.percentualQualificacao                                AS percentual_qualificacao,
+    temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS descricao_qualificacao,
+    GETDATE()                                                 AS data_processamento
 INTO temp_CGUSC.dbo.tb_sociosFP
-FROM db_CNPJ.dbo.socios A
-LEFT JOIN db_CNPJ.dbo.Municipio B 
-    ON B.SkMunicipio = A.CodMunicipio
-LEFT JOIN temp_CGUSC.dbo.municipiosIBGE C 
-    ON C.codibge = B.CodIbge
-INNER JOIN db_CNPJ.dbo.CNPJ D 
-    ON D.cnpj = A.cnpj
-INNER JOIN temp_CGUSC.dbo.lista_cnpjs E
-    ON A.cnpj = E.cnpj    
-WHERE 
-    A.dataExclusaoSociedade IS NULL
-    AND A.percentualQualificacao > 0
-    AND D.SituacaoCadastral = 2;
-   
-   
-   
-DROP TABLE
+FROM db_CNPJ.dbo.socios                  AS soc
+INNER JOIN temp_CGUSC.dbo.lista_cnpjs    AS lst       ON lst.cnpj           = soc.cnpj
+INNER JOIN db_CNPJ.dbo.CNPJ              AS cnpj      ON cnpj.cnpj          = soc.cnpj
+LEFT JOIN  db_CNPJ.dbo.Municipio         AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
+LEFT JOIN  temp_CGUSC.dbo.municipiosIBGE AS mun_ibge  ON mun_ibge.codibge   = mun.CodIbge
+WHERE
+    soc.dataExclusaoSociedade   IS NULL
+    AND soc.percentualQualificacao > 0
+    AND cnpj.SituacaoCadastral  = 2;
 
-IF EXISTS #tempDadosFarmacias
-	SELECT A.[cnpj]
-		,[indMatriz]
-		,temp_CGUSC.dbo.InitCapEachWord([RazaoSocial]) AS razaoSocial
-		,temp_CGUSC.dbo.InitCapEachWord([NomeFantasia]) AS nomeFantasia
-		,A.CodPorteEmpresa
-		,temp_CGUSC.dbo.InitCapEachWord([TipoLogradouro]) AS tipoLogradouro
-		,temp_CGUSC.dbo.InitCapEachWord([Logradouro]) AS logradouro
-		,[Numero]
-		,temp_CGUSC.dbo.InitCapEachWord([Complemento]) AS complemento
-		,temp_CGUSC.dbo.InitCapEachWord([Bairro]) AS bairro
-		,try_cast(cep as varchar(8)) cep
-		,CAST(F.id_ibge7 AS VARCHAR(7)) AS codibge
-		,CAST(F.no_municipio AS VARCHAR(255)) as municipio
-		,CAST(F.sg_uf AS CHAR(2)) as uf
-		,F.nu_populacao as populacao2019
-		,CAST(F.no_regiao_saude AS VARCHAR(255)) AS no_regiao_saude
-		,CAST(F.id_regiao_saude AS VARCHAR(255)) AS id_regiao_saude
-		,[IndPossuiSocio]
-		,[SituacaoCadastral]
-		,temp_CGUSC.dbo.InitCapEachWord(C.[ds_situacao_cnpj]) AS descricaoSituacaoCadastral
-		,[DataSituacaoCadastral]
-		,[CodNaturezaJuridica]
-		,temp_CGUSC.dbo.InitCapEachWord(B.DescNaturezaJuridica) AS natuezaJuridica
-		,[CpfResponsavel]
-		,temp_CGUSC.dbo.InitCapEachWord([NomeResponsavel]) AS nomeResponsavel
-		,[QualificacaoResponsavel]
-		,temp_CGUSC.dbo.InitCapEachWord(D.DescricaoQualificacao) AS descricaoQualificacaoResponsavel
-		,GETDATE() AS data_processamento
-	INTO #tempDadosFarmacias
-	FROM [db_CNPJ].[dbo].[cnpj] A
-	LEFT JOIN [db_CNPJ].[dbo].naturezaJuridica B ON B.idNaturezaJuridica = A.CodNaturezaJuridica
-	LEFT JOIN [db_CNPJ].[dbo].[dime_situacao_cadastral_cnpj] C ON C.cd_situacao_cnpj = A.SituacaoCadastral
-	LEFT JOIN [db_CNPJ].[dbo].qualificacao D ON D.idQualificacao = A.QualificacaoResponsavel
-	LEFT JOIN [db_CNPJ].[dbo].Municipio E ON E.SkMunicipio = A.CodMunicipio
-	LEFT JOIN temp_CGUSC.fp.dados_ibge F ON F.id_ibge7 = E.CodIbge
-    INNER JOIN temp_CGUSC.fp.lista_cnpjs G ON A.cnpj = G.cnpj  
+-- Índices em tb_sociosFP
+-- Busca por CNPJ da empresa (JOIN principal com dados_farmacia)
+CREATE INDEX ix_sociosFP_cnpj
+    ON temp_CGUSC.dbo.tb_sociosFP (cnpj);
+
+-- Busca por CPF/CNPJ do sócio (subquery de outras sociedades)
+CREATE INDEX ix_sociosFP_cpf_cnpj_socio
+    ON temp_CGUSC.dbo.tb_sociosFP (cpf_cnpj_socio);
+
+-- Índice composto para o padrão de consulta mais frequente:
+-- "sócios ativos de um determinado CNPJ"
+CREATE INDEX ix_sociosFP_cnpj_cpf
+    ON temp_CGUSC.dbo.tb_sociosFP (cnpj, cpf_cnpj_socio);
 
 
+--------------------------------------------------------------
+-- ETAPA 2: Dados cadastrais das farmácias (1ª passagem)
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS #tempDadosFarmacias;
+
+SELECT
+    c.cnpj,
+    c.indMatriz,
+    temp_CGUSC.dbo.InitCapEachWord(c.RazaoSocial)              AS razaoSocial,
+    temp_CGUSC.dbo.InitCapEachWord(c.NomeFantasia)             AS nomeFantasia,
+    c.CodPorteEmpresa,
+    temp_CGUSC.dbo.InitCapEachWord(c.TipoLogradouro)           AS tipoLogradouro,
+    temp_CGUSC.dbo.InitCapEachWord(c.Logradouro)               AS logradouro,
+    c.Numero                                                   AS numero,
+    temp_CGUSC.dbo.InitCapEachWord(c.Complemento)              AS complemento,
+    temp_CGUSC.dbo.InitCapEachWord(c.Bairro)                   AS bairro,
+    TRY_CAST(c.cep AS VARCHAR(8))                              AS cep,
+    CAST(ibge.id_ibge7        AS VARCHAR(7))                   AS codibge,
+    CAST(ibge.no_municipio    AS VARCHAR(255))                 AS municipio,
+    CAST(ibge.sg_uf           AS CHAR(2))                      AS uf,
+    ibge.nu_populacao                                          AS populacao2019,
+    CAST(ibge.no_regiao_saude AS VARCHAR(255))                 AS no_regiao_saude,
+    CAST(ibge.id_regiao_saude AS VARCHAR(255))                 AS id_regiao_saude,
+    c.IndPossuiSocio                                           AS indPossuiSocio,
+    c.SituacaoCadastral                                        AS situacaoCadastral,
+    temp_CGUSC.dbo.InitCapEachWord(sit.ds_situacao_cnpj)       AS descricaoSituacaoCadastral,
+    c.DataSituacaoCadastral,
+    c.CodNaturezaJuridica,
+    temp_CGUSC.dbo.InitCapEachWord(nat.DescNaturezaJuridica)   AS natuezaJuridica,
+    c.CpfResponsavel,
+    temp_CGUSC.dbo.InitCapEachWord(c.NomeResponsavel)          AS nomeResponsavel,
+    c.QualificacaoResponsavel,
+    temp_CGUSC.dbo.InitCapEachWord(qua.DescricaoQualificacao)  AS descricaoQualificacaoResponsavel,
+    GETDATE()                                                  AS data_processamento
+INTO #tempDadosFarmacias
+FROM db_CNPJ.dbo.cnpj                                    AS c
+INNER JOIN temp_CGUSC.fp.lista_cnpjs                     AS lst  ON lst.cnpj               = c.cnpj
+LEFT JOIN  db_CNPJ.dbo.naturezaJuridica                  AS nat  ON nat.idNaturezaJuridica  = c.CodNaturezaJuridica
+LEFT JOIN  db_CNPJ.dbo.dime_situacao_cadastral_cnpj      AS sit  ON sit.cd_situacao_cnpj   = c.SituacaoCadastral
+LEFT JOIN  db_CNPJ.dbo.qualificacao                      AS qua  ON qua.idQualificacao      = c.QualificacaoResponsavel
+LEFT JOIN  db_CNPJ.dbo.Municipio                         AS mun  ON mun.SkMunicipio         = c.CodMunicipio
+LEFT JOIN  temp_CGUSC.fp.dados_ibge                      AS ibge ON ibge.id_ibge7           = mun.CodIbge;
+
+-- Índice em #tempDadosFarmacias
+-- Chave principal de acesso: CNPJ
+CREATE INDEX ix_tempFarmacias_cnpj
+    ON #tempDadosFarmacias (cnpj);
 
 
+--------------------------------------------------------------
+-- ETAPA 3: Enriquecimento — flag de outras sociedades
+--------------------------------------------------------------
 
+DROP TABLE IF EXISTS #tempDadosFarmacias2;
 
-	
- DROP TABLE
+SELECT
+    f.cnpj,
+    f.indMatriz,
+    f.razaoSocial,
+    f.nomeFantasia,
+    f.CodPorteEmpresa,
+    f.tipoLogradouro,
+    f.logradouro,
+    f.numero,
+    f.complemento,
+    f.bairro,
+    RIGHT('00000000' + CONVERT(VARCHAR(8), LTRIM(RTRIM(f.cep))), 8) AS cep,
+    f.codibge,
+    f.municipio,
+    f.uf,
+    f.populacao2019,
+    f.no_regiao_saude,
+    f.id_regiao_saude,
+    f.indPossuiSocio,
+    f.situacaoCadastral,
+    f.descricaoSituacaoCadastral                                     AS situacaoReceita,
+    f.DataSituacaoCadastral                                          AS dataSituacaoCadastral,
+    f.CodNaturezaJuridica                                            AS codNaturezaJuridica,
+    f.natuezaJuridica,
+    f.CpfResponsavel                                                 AS cpfResponsavel,
+    f.nomeResponsavel,
+    f.QualificacaoResponsavel                                        AS qualificacaoResponsavel,
+    f.descricaoQualificacaoResponsavel,
+    f.data_processamento,
+    CASE f.CodPorteEmpresa
+        WHEN '01' THEN 'Microempresa (ME)'
+        WHEN '03' THEN 'Empresa de Pequeno Porte (EPP)'
+        WHEN '05' THEN 'Demais'
+        ELSE 'Não Informado'
+    END AS ds_porte_empresa,
+    CASE
+        WHEN outras.outrasSociedades > 0 THEN 'Sim'
+        ELSE 'Não'
+    END AS outrasSociedades
+INTO #tempDadosFarmacias2
+FROM #tempDadosFarmacias AS f
+CROSS APPLY (
+    SELECT COUNT(*) AS outrasSociedades
+    FROM (
+        SELECT DISTINCT soc2.cnpj
+        FROM temp_CGUSC.fp.socios_farmacia AS soc2
+        INNER JOIN #tempDadosFarmacias     AS farm ON farm.cnpj = soc2.cnpj
+        WHERE soc2.cnpj <> f.cnpj
+          AND soc2.cpf_cnpj_Socio IN (
+              SELECT soc1.cpf_cnpj_Socio
+              FROM temp_CGUSC.fp.socios_farmacia AS soc1
+              WHERE soc1.cnpj = f.cnpj
+          )
+    ) AS t
+) AS outras;
 
-IF EXISTS #tempDadosFarmacias2
-	SELECT [cnpj]
-		,[indMatriz]
-		,[razaoSocial]
-		,[nomeFantasia]
-		,CodPorteEmpresa
-		,[tipoLogradouro]
-		,[logradouro]
-		,[numero]
-		,[complemento]
-		,[bairro]
-		,RIGHT('00000000' + CONVERT(VARCHAR(8), LTRIM(RTRIM(cep))), 8) cep
-		,[codibge]
-		,[municipio]
-		,uf
-		,populacao2019
-		,no_regiao_saude
-		,id_regiao_saude
-		,[indPossuiSocio]
-		,[situacaoCadastral]
-		,[descricaoSituacaoCadastral] AS situacaoReceita
-		,[dataSituacaoCadastral]
-		,[codNaturezaJuridica]
-		,[natuezaJuridica]
-		,[cpfResponsavel]
-		,[nomeResponsavel]
-		,[qualificacaoResponsavel]
-		,[descricaoQualificacaoResponsavel]
-		,[data_processamento]
-		,CASE 
-			WHEN outrasSociedades > 0
-				THEN 'Sim'
-			WHEN outrasSociedades = 0
-				THEN 'Não'
-			END AS outrasSociedades
-	INTO #tempDadosFarmacias2
-	FROM (
-		SELECT A.*
-			,(
-				SELECT count(*) AS outros_vinculos
-				FROM (
-					SELECT cnpj
-					FROM temp_CGUSC.fp.socios_farmacia sub2
-					WHERE sub2.cpf_cnpj_Socio IN (
-							SELECT sub.cpf_cnpj_Socio
-							FROM temp_CGUSC.fp.socios_farmacia sub
-							WHERE sub.cnpj = A.cnpj
-							)
-						AND sub2.cnpj IN (
-							SELECT cnpj
-							FROM #tempDadosFarmacias
-							GROUP BY cnpj
-							)
-					) AS t1
-				WHERE t1.cnpj <> A.cnpj
-				) AS outrasSociedades
-		FROM #tempDadosFarmacias A
-		) AS t1
-
-ALTER TABLE #tempDadosFarmacias2 ADD id BIGINT IDENTITY;
-
-ALTER TABLE #tempDadosFarmacias2 ADD latitude DECIMAL(9, 6);
-
+-- Colunas de controle e georreferenciamento
+ALTER TABLE #tempDadosFarmacias2 ADD id        BIGINT IDENTITY;
+ALTER TABLE #tempDadosFarmacias2 ADD latitude  DECIMAL(9, 6);
 ALTER TABLE #tempDadosFarmacias2 ADD longitude DECIMAL(9, 6);
 
-ALTER TABLE #tempDadosFarmacias2 ADD CONSTRAINT pkdadosFarmacias PRIMARY KEY (id)
+ALTER TABLE #tempDadosFarmacias2
+    ADD CONSTRAINT pkDadosFarmacias PRIMARY KEY (id);
+
+-- Índice em #tempDadosFarmacias2
+-- CNPJ é a chave de negócio usada em todos os JOINs posteriores
+CREATE INDEX ix_tempFarmacias2_cnpj
+    ON #tempDadosFarmacias2 (cnpj);
 
 
+--------------------------------------------------------------
+-- ETAPA 4: Datas de movimentação por farmácia
+--------------------------------------------------------------
 
-DROP TABLE
+DROP TABLE IF EXISTS #tempDatasMovimentacao;
 
-IF EXISTS #tempDatasInicialeFinalMovimentacao
-	SELECT A.cnpj
-		,min(A.data_hora) dataInicialDadosMovimentacao
-		,max(A.data_hora) dataFinalDadosMovimentacao
-	INTO #tempDatasInicialeFinalMovimentacao
-	FROM [db_FarmaciaPopular].[dbo].[relatorio_movimentacao_2015_2024] A
-	GROUP BY A.cnpj
+SELECT
+    mov.cnpj,
+    MIN(mov.data_hora) AS dataInicialDadosMovimentacao,
+    MAX(mov.data_hora) AS dataFinalDadosMovimentacao
+INTO #tempDatasMovimentacao
+FROM db_FarmaciaPopular.dbo.relatorio_movimentacao_2015_2024 AS mov
+GROUP BY mov.cnpj;
 
-
-
-DROP TABLE
-
-IF EXISTS temp_CGUSC.fp.dados_farmacia
-	SELECT A.*
-		,B.dataInicialDadosMovimentacao
-		,B.dataFinalDadosMovimentacao
-	INTO temp_CGUSC.fp.dados_farmacia
-	FROM #tempDadosFarmacias2 A
-	LEFT JOIN #tempDatasInicialeFinalMovimentacao B ON B.cnpj = A.cnpj
+-- Índice em #tempDatasMovimentacao
+-- CNPJ é a única chave de JOIN desta tabela
+CREATE INDEX ix_tempDatasMovimentacao_cnpj
+    ON #tempDatasMovimentacao (cnpj);
 
 
+--------------------------------------------------------------
+-- ETAPA 5: Tabela final consolidada
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_farmacia;
+
+SELECT
+    f.*,
+    mov.dataInicialDadosMovimentacao,
+    mov.dataFinalDadosMovimentacao
+INTO temp_CGUSC.fp.dados_farmacia
+FROM #tempDadosFarmacias2          AS f
+LEFT JOIN #tempDatasMovimentacao   AS mov ON mov.cnpj = f.cnpj;
+
+-- Índices na tabela final
+-- PK de negócio: CNPJ
+CREATE INDEX ix_dadosFarmacia_cnpj
+    ON temp_CGUSC.fp.dados_farmacia (cnpj);
+
+-- Filtros geográficos frequentes: UF e município
+CREATE INDEX ix_dadosFarmacia_uf_municipio
+    ON temp_CGUSC.fp.dados_farmacia (uf, municipio);
+
+-- Georreferenciamento: suporte a queries espaciais aproximadas
+CREATE INDEX ix_dadosFarmacia_geo
+    ON temp_CGUSC.fp.dados_farmacia (latitude, longitude)
+    WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 
 

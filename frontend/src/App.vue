@@ -4,33 +4,80 @@ import { useResultadoStore } from './stores/resultados';
 import { useDashboardStore } from './stores/dashboard';
 import { useGeoStore } from './stores/geo';
 import { useFilterParameters } from './composables/useFilterParameters';
+import axios from 'axios';
+import { API_ENDPOINTS } from './config/api';
 
 const resultadoStore = useResultadoStore();
 const dashboardStore = useDashboardStore();
 const geoStore = useGeoStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
+const syncProgress = ref(0);
+const statusMessage = ref("Iniciando Sistema...");
 let _bootTimer = null;
+let _pollTimer = null;
+
+const pollSyncStatus = async () => {
+  try {
+    const response = await axios.get(API_ENDPOINTS.cacheStatus);
+    const { progress, status } = response.data;
+    
+    syncProgress.value = progress;
+    
+    if (status === 'ready' && progress === 100) {
+      clearInterval(_pollTimer);
+      statusMessage.value = "Finalizando Carga...";
+      return true; // Finalizado
+    } else if (status === 'fetching') {
+      statusMessage.value = `Baixando dados do CGUData... (${progress}%)`;
+    } else if (status === 'processing') {
+      statusMessage.value = "Otimizando Banco de Dados...";
+    }
+    return false;
+  } catch (err) {
+    console.warn("Erro ao checar status:", err);
+    return false;
+  }
+};
 
 onMounted(async () => {
   try {
+    // 1. Verifica status do cache
+    const statusResp = await axios.get(API_ENDPOINTS.cacheStatus);
+    const { is_ready, status } = statusResp.data;
+
+    // Se NÃO estiver pronto, precisamos esperar (e talvez disparar a carga)
+    if (!is_ready) {
+      if (status === 'idle') {
+        statusMessage.value = "Iniciando carga via CGUData...";
+        await axios.post(API_ENDPOINTS.cacheRefresh);
+      } else {
+        statusMessage.value = "Sincronização em andamento no servidor...";
+      }
+      
+      // Trava o boot até que o status seja 'ready'
+      await new Promise((resolve) => {
+        _pollTimer = setInterval(async () => {
+          const finished = await pollSyncStatus();
+          if (finished) resolve();
+        }, 1000);
+      });
+    }
+
+    // 2. Carga padrão dos dados do dashboard (só ocorre após cache pronto)
+    statusMessage.value = "Sincronizando Dashboard...";
     const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio } = getApiParams();
 
-    const results = await Promise.allSettled([
+    await Promise.allSettled([
       resultadoStore.fetchResultados(),
       dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       geoStore.fetchLocalidades()
     ]);
 
-    results.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        const names = ['resultados', 'dashboardSummary', 'fatorRisco', 'localidades'];
-        console.error(`Erro na carga inicial [${names[i]}]:`, result.reason);
-      }
-    });
   } catch (error) {
     console.error("Erro crítico na carga inicial:", error);
+    statusMessage.value = "Erro na conexão com o servidor.";
   } finally {
     _bootTimer = setTimeout(() => {
       isAppLoading.value = false;
@@ -40,6 +87,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearTimeout(_bootTimer);
+  clearInterval(_pollTimer);
 });
 </script>
 
@@ -56,10 +104,13 @@ onBeforeUnmount(() => {
            <div class="electron one"></div>
            <div class="electron two"></div>
         </div>
-        <p class="status-message">Sincronizando Dados...</p>
-        <div class="progress-bar-mini">
-           <div class="progress-fill"></div>
-        </div>
+         <p class="status-message">{{ statusMessage }}</p>
+         <div class="progress-bar-mini" v-if="syncProgress > 0">
+            <div class="progress-fill" :style="{ width: syncProgress + '%', animation: 'none' }"></div>
+         </div>
+         <div class="progress-bar-mini" v-else>
+            <div class="progress-fill"></div>
+         </div>
      </div>
   </div>
 
@@ -441,6 +492,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color) !important;
+  color: var(--text-color) !important;
   transition: background-color 0.3s ease;
   /* Suporte moderno para Firefox e Chrome 121+ */
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
@@ -476,5 +528,29 @@ html.dark-mode {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover) !important;
+}
+
+/* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS (CORREÇÃO DARK MODE) */
+.p-dialog {
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--sidebar-border) !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+}
+
+.p-dialog-header, 
+.p-dialog-content, 
+.p-dialog-footer {
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+.p-dialog .p-dialog-header .p-dialog-title,
+.p-dialog .p-dialog-header .p-dialog-header-icon {
+    color: var(--text-color) !important;
+}
+
+.p-dialog .p-button-label {
+    font-weight: 700;
 }
 </style>

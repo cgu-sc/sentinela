@@ -34,7 +34,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "bin/_engine/_engine"
+      "bin/sentinela-api"
     ]
   }
 }

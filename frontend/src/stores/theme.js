@@ -98,7 +98,8 @@ export const useThemeStore = defineStore('theme', () => {
     if (savedMode) {
       isDark.value = savedMode === 'dark';
     } else {
-      isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // Se for a primeira vez, o padrão agora é sempre Dark
+      isDark.value = true;
     }
 
     if (savedPalette) {

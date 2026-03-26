@@ -15,119 +15,155 @@ else:
 
 _CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
 _PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
+_LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet")
 
-# Garantir que a pasta de cache exista
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
-# ------------------------------------
 
-_df: pl.DataFrame | None = None
+# Estados Globais
+_df_movimentacao: pl.DataFrame | None = None
+_df_localidades: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 
+# --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
+
+def _sync_localidades(engine):
+    """Tarefa 1: Sincroniza dados geográficos (IBGE)."""
+    global _df_localidades
+    print("Sincronizando Localidades (IBGE)...")
+    sql = "SELECT sg_uf, no_regiao_saude, id_regiao_saude, no_municipio, id_ibge7 FROM [temp_CGUSC].[fp].[dados_ibge] ORDER BY sg_uf, no_regiao_saude, no_municipio"
+    pdf = pd.read_sql(sql, engine)
+    _df_localidades = pl.from_pandas(pdf).with_columns([
+        pl.col("sg_uf").cast(pl.Categorical),
+        pl.col("no_regiao_saude").cast(pl.Categorical),
+        pl.col("no_municipio").cast(pl.Categorical),
+    ])
+    _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="lz4")
+
+def _sync_movimentacao(engine, progress_callback):
+    """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
+    global _df_movimentacao
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]")).scalar()
+    
+    sql = """
+        SELECT cnpj, uf, no_regiao_saude, no_municipio, periodo,
+               CAST(total_vendas AS FLOAT) AS total_vendas,
+               CAST(total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
+               CAST(total_qnt_vendas AS FLOAT) AS total_qnt_vendas,
+               CAST(total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao
+        FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
+    """
+    
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 250_000
+    
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_list.append(chunk)
+        rows_processed += len(chunk)
+        # Callback para o motor principal calcular a fatia do progresso
+        progress_callback(int((rows_processed / total_rows) * 100))
+
+    pdf = pd.concat(chunk_list, ignore_index=True)
+    _df_movimentacao = pl.from_pandas(pdf).with_columns([
+        pl.col("periodo").cast(pl.Date),
+        pl.col("uf").cast(pl.Categorical),
+        pl.col("no_regiao_saude").cast(pl.Categorical),
+        pl.col("no_municipio").cast(pl.Categorical),
+        pl.col("total_vendas").cast(pl.Float64),
+        pl.col("total_sem_comprovacao").cast(pl.Float64),
+        pl.col("total_qnt_vendas").cast(pl.Float64),
+        pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
+    ])
+    _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
+
+# --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    """
-    Carrega movimentacao_mensal_cnpj em memória com rastreamento de progresso real.
-    """
-    global _df, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _cache_progress, _cache_status
     import time
 
-    if not force_refresh and os.path.exists(_PARQUET_PATH):
-        _cache_status = "loading_parquet"
-        print("Carregando cache do Parquet...")
-        _df = pl.read_parquet(_PARQUET_PATH)
-        _cache_progress = 100
-        _cache_status = "ready"
-        print("🚀 Cache pronto via Parquet.")
-        return
-    
-    # Se não tem Parquet e não foi forçado o refresh (primeiro boot da vida)
+    # 1. Boot Rápido (Se os arquivos já existem)
     if not force_refresh:
-        print("⚠️ Cache vazio e Parquet não detectado. Aguardando sincronização do frontend...")
+        try:
+            if os.path.exists(_PARQUET_PATH) and os.path.exists(_LOCALIDADES_PARQUET_PATH):
+                _cache_status = "loading_parquet"
+                _df_movimentacao = pl.read_parquet(_PARQUET_PATH)
+                _df_localidades = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
+                _cache_progress = 100
+                _cache_status = "ready"
+                print("🚀 Caches carregados via Parquet.")
+                return
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar Parquets: {e}")
+
+    if not force_refresh:
         _cache_status = "idle"
         _cache_progress = 0
         return
 
-    _cache_status = "counting"
-    _cache_progress = 0
-    print("Iniciando sincronização real com SQL Server...")
+    # 2. Sincronização Inteligente (Task-Based)
+    # Para adicionar mais parquets, basta incluir na lista abaixo!
+    TASKS = [
+        {"name": "Localidades", "status": "fetching_geo", "func": lambda: _sync_localidades(engine)},
+        {"name": "Movimentação", "status": "fetching_data", "func": lambda cb: _sync_movimentacao(engine, cb)},
+    ]
+
     t0 = time.perf_counter()
+    total_tasks = len(TASKS)
 
     try:
-        with engine.connect() as conn:
-            total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]")).scalar()
-        
-        print(f"Total de registros para carregar: {total_rows:,}")
-        
-        sql = """
-            SELECT
-                cnpj, uf, no_regiao_saude, no_municipio, periodo,
-                CAST(total_vendas AS FLOAT)              AS total_vendas,
-                CAST(total_sem_comprovacao AS FLOAT)     AS total_sem_comprovacao,
-                CAST(total_qnt_vendas AS FLOAT)          AS total_qnt_vendas,
-                CAST(total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao
-            FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
-        """
-        
-        _cache_status = "fetching"
-        chunk_list = []
-        rows_processed = 0
-        CHUNK_SIZE = 250_000 # Bloco razoável para feedback rápido
-        
-        # Lendo em chunks para calcular o progresso
-        for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-            chunk_list.append(chunk)
-            rows_processed += len(chunk)
-            _cache_progress = int((rows_processed / total_rows) * 90) # 90% para leitura, 10% para casting/parquet
-            print(f"Progresso: {_cache_progress}% ({rows_processed:,}/{total_rows:,})")
+        for index, task in enumerate(TASKS):
+            _cache_status = task["status"]
+            print(f"[{index+1}/{total_tasks}] {task['name']}...")
 
-        _cache_status = "processing"
-        pdf = pd.concat(chunk_list, ignore_index=True)
-        
-        _df = (
-            pl.from_pandas(pdf)
-            .with_columns([
-                pl.col("periodo").cast(pl.Date),
-                pl.col("uf").cast(pl.Categorical),
-                pl.col("no_regiao_saude").cast(pl.Categorical),
-                pl.col("no_municipio").cast(pl.Categorical),
-                pl.col("total_vendas").cast(pl.Float64),
-                pl.col("total_sem_comprovacao").cast(pl.Float64),
-                pl.col("total_qnt_vendas").cast(pl.Float64),
-                pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
-            ])
-        )
+            # Função auxiliar para atualizar o progresso global baseado na tarefa atual
+            def update_global_progress(task_internal_p):
+                global _cache_progress
+                # Lógica: (Tarefas Completas + % da Tarefa Atual) / Total de Tarefas
+                base_p = (index / total_tasks) * 100
+                contribution = (task_internal_p / 100) * (100 / total_tasks)
+                _cache_progress = int(base_p + contribution)
 
-        _cache_progress = 95
-        print(f"Salvando Parquet em: {_PARQUET_PATH}")
-        _df.write_parquet(_PARQUET_PATH, compression="lz4")
+            # Executa a tarefa (checa se ela suporta callback de progresso)
+            if task["func"].__code__.co_argcount > 0:
+                task["func"](update_global_progress)
+            else:
+                task["func"]()
+                update_global_progress(100)
 
-        elapsed = time.perf_counter() - t0
         _cache_progress = 100
         _cache_status = "ready"
-        print(f"🚀 Cache Sincronizado: {len(_df):,} linhas em {elapsed:.1f}s")
+        print(f"🚀 Sincronização concluída em {time.perf_counter() - t0:.1f}s")
 
     except Exception as e:
         _cache_status = "error"
-        print(f"❌ Erro na sincronização: {e}")
+        _cache_progress = 0
+        import traceback
+        print(f"❌ Erro Crítico na Sincronização: {e}")
+        print(traceback.format_exc())
         raise e
 
-
 def refresh_cache(engine) -> None:
-    """Força re-leitura do SQL e regera o Parquet. Chamar após pos_processamento.sql."""
+    """Força re-leitura do SQL e regera os Parquets."""
     load_cache(engine, force_refresh=True)
 
-
 def get_df() -> pl.DataFrame:
-    if _df is None:
-        raise RuntimeError("Cache Polars nao foi carregado. Verifique o startup.")
-    return _df
+    if _df_movimentacao is None: 
+        raise RuntimeError("Cache de Movimentação não carregado. Verifique a sincronização.")
+    return _df_movimentacao
+
+def get_localidades_df() -> pl.DataFrame:
+    if _df_localidades is None: 
+        raise RuntimeError("Cache de Localidades não carregado. Verifique a sincronização.")
+    return _df_localidades
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     return {
         "progress": _cache_progress,
         "status": _cache_status,
-        "is_ready": _df is not None
+        "is_ready": _df_movimentacao is not None and _df_localidades is not None
     }

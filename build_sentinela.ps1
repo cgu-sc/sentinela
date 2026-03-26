@@ -37,7 +37,7 @@ Copy-Item "dist/sentinela-api.exe" "src-tauri/bin/sentinela-api-x86_64-pc-window
 # 3. BUILD DO TAURI (INSTALADOR FINAL)
 Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow
 # Certifique-se de ter o Rust instalado e as dependências do Tauri
-# cargo tauri build
+cargo tauri build
 
 Write-Host "`n✅ Build concluído com sucesso!" -ForegroundColor Green
 Write-Host "O seu EXE final estará na pasta: src-tauri/target/release/bundle/msi/" -ForegroundColor Gray

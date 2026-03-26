@@ -107,46 +107,10 @@ def testar_conexao(db: Session = Depends(get_db)):
 # =============================================================================
 # INFORMAÇÕES DE EXECUÇÃO COMO EXECUTÁVEL (ENTRY POINT)
 # =============================================================================
-def open_app_mode():
-    """Tenta abrir no modo App (Tela Cheia) do Firefox ou Chrome/Edge."""
-    import time
-    import subprocess
-    import webbrowser
-
-    url = "http://127.0.0.1:8002"
-    # Aguarda o servidor estar pronto
-    time.sleep(3.0)
-    
-    # Ordem: Firefox Kiosk -> Chrome/Edge Kiosk -> Fullscreen
-    browsers_to_try = [
-        ["firefox", "--kiosk", url],                         # Kiosk do Firefox
-        ["chrome", f"--app={url}", "--start-fullscreen"],    # Modo App + Fullscreen do Chrome
-        ["msedge", f"--app={url}", "--start-fullscreen"],    # Modo App + Fullscreen do Edge
-        ["chrome", "--kiosk", url],                          # Kiosk alternativo do Chrome
-        ["msedge", "--kiosk", url]                           # Kiosk alternativo do Edge
-    ]
-    
-    success = False
-    for cmd in browsers_to_try:
-        try:
-            # shell=False é mais seguro aqui para evitar problemas de escape no Windows
-            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            success = True
-            break
-        except Exception:
-            continue
-            
-    if not success:
-        print("🌐 Abrindo no navegador padrão...")
-        webbrowser.open(url)
-
 if __name__ == "__main__":
     import uvicorn
-    import threading
-
-    # Dispara a thread para abrir a janela do app sem travar o servidor
-    threading.Thread(target=open_app_mode, daemon=True).start()
 
     # Iniciamos o servidor na porta 8002
-    print("🚀 Sentinela API iniciando na porta 8002...")
+    # Quando rodando via Tauri, este executável é iniciado automaticamente.
+    print("🚀 Sentinela Sidecar Backend rodando na porta 8002...")
     uvicorn.run(app, host="127.0.0.1", port=8002)

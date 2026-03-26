@@ -35,6 +35,12 @@ relatorios/
 site/
 site2/
 
+dist/
+build/
+src-tauri/bin/
+sentinela_cache/
+*.exe
+
 # === EXTERNAL MODELS ===
 # Incluído conforme solicitado
 arbflow-frontend-models/

@@ -19,9 +19,16 @@ Copy-Item -Recurse -Force "frontend/dist" "dist/frontend"
 
 # 2. BUILD DO BACKEND (PYTHON SIDECAR)
 Write-Host "`n2/3: Compilando o Backend FastAPI (Sidecar)..." -ForegroundColor Yellow
-pip install pyinstaller fastapi uvicorn sqlalchemy pyodbc
+pip install pyinstaller fastapi uvicorn sqlalchemy pyodbc pandas polars
 # Criamos o binário do backend de forma que o Tauri consiga consumir como sidecar
-python -m PyInstaller --noconfirm --onefile --console --name "sentinela-api" --paths "backend" --hidden-import "pyodbc" --hidden-import "uvicorn" backend/main.py
+# IMPORTANTE: Usamos --add-data para embutir o frontend dentro do binário do Python
+python -m PyInstaller --noconfirm --onefile --console `
+    --name "sentinela-api" `
+    --paths "backend" `
+    --add-data "frontend/dist;frontend/dist" `
+    --hidden-import "pyodbc" `
+    --hidden-import "uvicorn" `
+    backend/main.py
 
 # Organizando para o Tauri (Sidecar precisa do sufixo do sistema)
 New-Item -ItemType Directory -Force -Path "src-tauri/bin"

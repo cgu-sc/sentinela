@@ -56,13 +56,13 @@ import sys
 # SERVIR FRONTEND (BUILD)
 # =============================================================================
 if getattr(sys, 'frozen', False):
-    # Se rodando como EXE, a base é a pasta do próprio executável
-    BASE_DIR = os.path.dirname(sys.executable)
-    # No seu script de build, o frontend vai para dist/frontend/dist
+    # Se rodando como EXE (PyInstaller), a base é a pasta temporária de extração (sys._MEIPASS)
+    # ou a pasta do executável se não for modo onefile (sys.executable)
+    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
     FRONTEND_PATH = os.path.join(BASE_DIR, "frontend", "dist")
 else:
     # Se rodando como script, a base é a raiz do projeto
-    BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     FRONTEND_PATH = os.path.join(BASE_DIR, "frontend", "dist")
 
 # Debug para o console do usuário ver onde o sistema está procurando
@@ -107,8 +107,46 @@ def testar_conexao(db: Session = Depends(get_db)):
 # =============================================================================
 # INFORMAÇÕES DE EXECUÇÃO COMO EXECUTÁVEL (ENTRY POINT)
 # =============================================================================
+def open_app_mode():
+    """Tenta abrir no modo App (Tela Cheia) do Firefox ou Chrome/Edge."""
+    import time
+    import subprocess
+    import webbrowser
+
+    url = "http://127.0.0.1:8002"
+    # Aguarda o servidor estar pronto
+    time.sleep(3.0)
+    
+    # Ordem: Firefox Kiosk -> Chrome/Edge Kiosk -> Fullscreen
+    browsers_to_try = [
+        ["firefox", "--kiosk", url],                         # Kiosk do Firefox
+        ["chrome", f"--app={url}", "--start-fullscreen"],    # Modo App + Fullscreen do Chrome
+        ["msedge", f"--app={url}", "--start-fullscreen"],    # Modo App + Fullscreen do Edge
+        ["chrome", "--kiosk", url],                          # Kiosk alternativo do Chrome
+        ["msedge", "--kiosk", url]                           # Kiosk alternativo do Edge
+    ]
+    
+    success = False
+    for cmd in browsers_to_try:
+        try:
+            # shell=False é mais seguro aqui para evitar problemas de escape no Windows
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            success = True
+            break
+        except Exception:
+            continue
+            
+    if not success:
+        print("🌐 Abrindo no navegador padrão...")
+        webbrowser.open(url)
+
 if __name__ == "__main__":
     import uvicorn
+    import threading
+
+    # Dispara a thread para abrir a janela do app sem travar o servidor
+    threading.Thread(target=open_app_mode, daemon=True).start()
+
     # Iniciamos o servidor na porta 8002
     print("🚀 Sentinela API iniciando na porta 8002...")
     uvicorn.run(app, host="127.0.0.1", port=8002)

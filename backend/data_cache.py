@@ -1,13 +1,29 @@
+import sys
+import os
 import pandas as pd
 import polars as pl
 from sqlalchemy import text
-import os
+
+# --- LÓGICA DE CAMINHO PARA CACHE ---
+# Se rodando via EXE (PyInstaller), sys.frozen é True
+if getattr(sys, 'frozen', False):
+    # Pasta onde o executável foi disparado
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Pasta raiz do projeto em desenvolvimento (um nível acima de /backend)
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
+_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
+
+# Garantir que a pasta de cache exista
+if not os.path.exists(_CACHE_DIR):
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+# ------------------------------------
 
 _df: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
-
-_PARQUET_PATH = os.path.join(os.path.dirname(__file__), "cache_movimentacao.parquet")
 
 
 def load_cache(engine, force_refresh: bool = False) -> None:

@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import { FILTER_OPTIONS } from '../config/filterOptions';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -12,11 +13,11 @@ const searchTarget = ref('');
 
 // Filtros Secundários
 const clusterSelection = ref('Todos');
-const clusterOptions = ref(['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo']);
+const clusterOptions = FILTER_OPTIONS.cluster;
 const statusSelection = ref('Todos');
-const statusOptions = ref(['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA']);
+const statusOptions = FILTER_OPTIONS.situacao;
 const rfaSelection = ref('Todos');
-const rfaOptions = ref(['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k']);
+const rfaOptions = FILTER_OPTIONS.rfa;
 
 // Mockup Data - Mapa de Clusters
 const clusterStats = ref([
@@ -118,40 +119,7 @@ const targetList = ref([
     gap: 1.5rem;
 }
 
-/* TELEPORT FILTERS STYLES */
-:global(.view-local-filters) {
-  display: flex;
-  flex-direction: column;
-}
 
-:global(.local-filter-header) {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  margin-bottom: 1rem;
-  font-weight: 800;
-  color: var(--text-color);
-  letter-spacing: 1px;
-}
-
-:global(.local-filter-header i) {
-  color: var(--primary-color);
-}
-
-:global(.local-filter-section) {
-  margin-bottom: 1.5rem;
-}
-
-:global(.local-filter-label) {
-  display: block;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-  color: var(--primary-color);
-}
 
 :global(.input-search-icon i) {
   margin-top: -0.5rem;

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 export const useResultadoStore = defineStore('resultados', {
   state: () => ({
@@ -18,7 +19,7 @@ export const useResultadoStore = defineStore('resultados', {
       this.isLoading = true;
       this.error = null;
       try {
-        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/resultados');
+        const response = await axios.get(API_ENDPOINTS.dashboardResultados);
         this.resultados = response.data;
         this.lastUpdated = new Date();
       } catch (err) {

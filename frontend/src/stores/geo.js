@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 export const useGeoStore = defineStore('geo', () => {
   const localidades = ref([]);
@@ -9,7 +10,7 @@ export const useGeoStore = defineStore('geo', () => {
   async function fetchLocalidades() {
     isLoading.value = true;
     try {
-      const response = await axios.get('http://127.0.0.1:8002/api/v1/geo/localidades');
+      const response = await axios.get(API_ENDPOINTS.geoLocalidades);
       localidades.value = response.data.localidades;
     } catch (err) {
       console.error('Erro ao buscar localidades:', err);

@@ -1,45 +1,45 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useResultadoStore } from './stores/resultados';
 import { useDashboardStore } from './stores/dashboard';
 import { useGeoStore } from './stores/geo';
-import { useFilterStore } from './stores/filters';
+import { useFilterParameters } from './composables/useFilterParameters';
 
 const resultadoStore = useResultadoStore();
 const dashboardStore = useDashboardStore();
 const geoStore = useGeoStore();
-const filterStore = useFilterStore();
+const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
+let _bootTimer = null;
 
 onMounted(async () => {
   try {
-    // Lê os filtros persistidos no localStorage (já restaurados sincronamente pelo store)
-    const f = filterStore;
-    const p = f.periodo;
-    const toISO = (d) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : null;
-    const inicio = p?.[0] ? toISO(p[0]) : null;
-    const fim    = p?.[1] ? toISO(p[1]) : null;
-    const percMin = f.percentualNaoComprovacaoFilter[0] !== 0   ? f.percentualNaoComprovacaoFilter[0] : null;
-    const percMax = f.percentualNaoComprovacaoFilter[1] !== 100 ? f.percentualNaoComprovacaoFilter[1] : null;
-    const valMin  = f.valorMinSemCompFilter > 0 ? f.valorMinSemCompFilter : null;
-    const uf      = f.selectedUF !== 'Todos'          ? f.selectedUF          : null;
-    const regiao  = f.selectedRegiaoSaude !== 'Todos' ? f.selectedRegiaoSaude : null;
-    const mun     = f.selectedMunicipio !== 'Todos'   ? f.selectedMunicipio   : null;
+    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio } = getApiParams();
 
-    await Promise.all([
+    const results = await Promise.allSettled([
       resultadoStore.fetchResultados(),
-      dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiao, mun),
-      dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax),
+      dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
+      dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       geoStore.fetchLocalidades()
     ]);
+
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const names = ['resultados', 'dashboardSummary', 'fatorRisco', 'localidades'];
+        console.error(`Erro na carga inicial [${names[i]}]:`, result.reason);
+      }
+    });
   } catch (error) {
     console.error("Erro crítico na carga inicial:", error);
   } finally {
-    // Pequeno delay para suavidade na transição visual
-    setTimeout(() => {
+    _bootTimer = setTimeout(() => {
       isAppLoading.value = false;
     }, 800);
   }
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(_bootTimer);
 });
 </script>
 
@@ -70,10 +70,9 @@ onMounted(async () => {
 <style>
 /* Estilos Globais Modernos (DNA Arbflow) */
 :root {
-  --p-primary-color: #3b82f6;
-
   /* DESIGN TOKENS GLOBAIS (Arbflow DNA) */
   --sidebar-width: 280px;
+  --sidebar-collapsed: 80px;
   --bg-color: #f8fafc;
   --text-color: #1e293b;
   --text-muted: #64748b;
@@ -93,9 +92,17 @@ onMounted(async () => {
   --table-header-text: #475569;
   --table-hover: #f1f5f9;
   --table-stripe: #f8fafc;
+
+  /* Scrollbar */
+  --scrollbar-track: #f8fafc;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
+  /* Cor Primária Sentinela */
+  --primary-color: #3b82f6; 
 }
 
-body.dark-mode {
+:root.dark-mode {
   --bg-color: #0d1117;
   --text-color: #cbd5e1;
   --text-muted: #8b949e;
@@ -118,7 +125,52 @@ body.dark-mode {
   --surface-ground: #0d1117;
   --surface-section: #0d1117;
   --surface-border: #30363d;
+
+  /* Scrollbar Dark */
+  --scrollbar-track: #0d1117;
+  --scrollbar-thumb: #30363d;
+  --scrollbar-thumb-hover: #484f58;
+
+  /* Cor Primária Sentinela (Indigo Vibrante para Dark) */
+  --primary-color: #6366f1;
 }
+
+/* FILTROS LOCAIS DE VIEW (TELEPORT) — disponível em todas as páginas */
+.view-local-filters {
+  display: flex;
+  flex-direction: column;
+}
+
+.local-filter-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  font-weight: 800;
+  color: var(--text-color);
+  letter-spacing: 1px;
+}
+
+.local-filter-header i {
+  color: var(--primary-color);
+}
+
+.local-filter-section {
+  margin-bottom: 1.5rem;
+}
+
+.local-filter-label {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.flex-col { display: flex; flex-direction: column; }
 
 /* COMPONENTES DE UI GLOBAIS (DESIGN SYSTEM SENTINELA) */
 .shadow-card {
@@ -390,25 +442,39 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color) !important;
   transition: background-color 0.3s ease;
+  /* Suporte moderno para Firefox e Chrome 121+ */
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
 }
 
-body.dark-mode {
-  background-color: var(--bg-color) !important;
+/* Garante que o modo escuro seja aplicado ao root para o scrollbar da janela */
+:root.dark-mode {
+  color-scheme: dark !important;
 }
 
-/* Scrollbar Bonito */
+html.dark-mode {
+  scrollbar-color: #30363d #0d1117 !important;
+}
+
+/* Scrollbar Bonito Adaptável - AGRESSIVO */
+* {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track) !important;
+  scrollbar-width: thin !important;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px !important;
+  height: 10px !important;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--scrollbar-track) !important;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: var(--scrollbar-thumb) !important;
+  border-radius: 10px !important;
+  border: 2px solid var(--scrollbar-track) !important;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-thumb-hover) !important;
 }
 </style>

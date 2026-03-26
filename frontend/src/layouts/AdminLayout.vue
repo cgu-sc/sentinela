@@ -1,12 +1,25 @@
+<script>
+// Constante de módulo: calculada uma única vez no import, compartilhada por todas as instâncias
+const _monthsLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+const availableMonths = [];
+for (let y = 2015; y <= 2024; y++) {
+  const startMonth = y === 2015 ? 6 : 0;
+  for (let m = startMonth; m <= 11; m++) {
+    availableMonths.push({ label: `${_monthsLabels[m]}/${y.toString().slice(-2)}`, date: new Date(y, m, 1) });
+  }
+}
+</script>
+
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { storeToRefs } from 'pinia';
 import { useThemeStore } from '../stores/theme';
 import { useFilterStore } from '../stores/filters';
 import { useGeoStore } from '../stores/geo';
+import { useFormatting } from '../composables/useFormatting';
 import Button from 'primevue/button';
 import ThemeSelector from '../components/ThemeSelector.vue';
+import { FILTER_OPTIONS } from '../config/filterOptions';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Slider from 'primevue/slider';
@@ -16,7 +29,6 @@ import InputText from 'primevue/inputtext';
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const geoStore = useGeoStore();
-const { localidades } = storeToRefs(geoStore);
 const route = useRoute();
 const router = useRouter();
 
@@ -67,29 +79,9 @@ watch(activeModule, (newVal) => {
 });
 
 // Opções dos Selects (Estáticos para Mock)
-const ufOptions = computed(() => {
-  const set = new Set(localidades.value.map(l => l.sg_uf));
-  return ['Todos', ...Array.from(set).sort()];
-});
-
-const regiaoSaudeOptions = computed(() => {
-  const uf = filterStore.selectedUF;
-  const filtradas = uf === 'Todos'
-    ? localidades.value
-    : localidades.value.filter(l => l.sg_uf === uf);
-  const set = new Set(filtradas.map(l => l.no_regiao_saude));
-  return ['Todos', ...Array.from(set).sort()];
-});
-
-const municipioOptions = computed(() => {
-  const uf = filterStore.selectedUF;
-  const regiao = filterStore.selectedRegiaoSaude;
-  let filtradas = localidades.value;
-  if (uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
-  if (regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
-  const set = new Set(filtradas.map(l => l.no_municipio));
-  return ['Todos', ...Array.from(set).sort()];
-});
+const ufOptions = computed(() => geoStore.ufs);
+const regiaoSaudeOptions = computed(() => geoStore.regioesPorUF(filterStore.selectedUF));
+const municipioOptions = computed(() => geoStore.municipiosPorFiltro(filterStore.selectedUF, filterStore.selectedRegiaoSaude));
 
 // Reseta filtros dependentes ao mudar UF ou Região de Saúde
 watch(() => filterStore.selectedUF, () => {
@@ -99,18 +91,13 @@ watch(() => filterStore.selectedUF, () => {
 watch(() => filterStore.selectedRegiaoSaude, () => {
   filterStore.selectedMunicipio = 'Todos';
 });
-const situacaoOptions = ['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA'];
-const msOptions = ['Todos', 'SIM', 'NÃO'];
-const porteOptions = ['Todos', 'ME', 'EPP', 'DEMAIS'];
-const clusterOptions = ['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo'];
-const rfaOptions = ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'];
+const situacaoOptions = FILTER_OPTIONS.situacao;
+const msOptions       = FILTER_OPTIONS.ms;
+const porteOptions    = FILTER_OPTIONS.porte;
+const clusterOptions  = FILTER_OPTIONS.cluster;
+const rfaOptions      = FILTER_OPTIONS.rfa;
 
-// Formatador de Moeda para o Slider
-const formatCurrency = (val) => {
-    if (val >= 1000000) return `R$ ${(val/1000000).toFixed(1)} Mi`;
-    if (val >= 1000) return `R$ ${(val/1000).toFixed(0)}k`;
-    return `R$ ${val}`;
-};
+const { formatBRL: formatCurrency } = useFormatting();
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -131,27 +118,12 @@ const applyValorMinSemComp = () => {
     filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
 
-// ⏳ RANGE SLIDER TEMPORAL: Jul/2015 - Dez/2024
-const availableMonths = [];
-const monthsLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-for (let y = 2015; y <= 2024; y++) {
-  const startMonth = y === 2015 ? 6 : 0; // começa em Jul/2015
-  for (let m = startMonth; m <= 11; m++) {
-    availableMonths.push({ label: `${monthsLabels[m]}/${y.toString().slice(-2)}`, date: new Date(y, m, 1) });
-  }
-}
-
 // Índice 0 = Jul/2015 | último índice = Dez/2024
 const timeSliderValue = computed({
   get: () => filterStore.sliderValue,
   set: (val) => { filterStore.sliderValue = val; }
 });
 
-const displayPeriod = computed(() => {
-    const start = availableMonths[timeSliderValue.value[0]].label;
-    const end = availableMonths[timeSliderValue.value[1]].label;
-    return `${start} a ${end}`;
-});
 
 const applySliderPeriod = (indices) => {
     const startDate = availableMonths[indices[0]].date;
@@ -208,20 +180,26 @@ watch(() => filterStore.periodo, (newVal) => {
 
 <template>
   <div class="admin-layout" :class="{ 'collapsed': isCollapsed }">
+
+    <!-- BOTÃO FLUTUANTE — só aparece quando sidebar está fechada -->
+    <button v-if="isCollapsed" class="sidebar-float-btn" @click="isCollapsed = false" title="Abrir painel">
+      <i class="pi pi-angle-right"></i>
+    </button>
+
     <!-- BARRA LATERAL DE FILTROS & MÓDULOS -->
     <aside class="admin-sidebar">
       <div class="sidebar-header" title="Projeto Sentinela">
         <div class="brand">
           <img src="/logo_sentinela.png" alt="Sentinela V3" class="logo-img" />
-          <div class="brand-text" v-show="!isCollapsed">
+          <div class="brand-text">
             <span class="brand-name">SENTINELA</span>
             <span class="brand-version">AUDITORIA NO FARMÁCIA POPULAR</span>
           </div>
         </div>
-        <Button 
-          :icon="isCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'" 
-          text rounded size="small" 
-          @click="isCollapsed = !isCollapsed" 
+        <Button
+          icon="pi pi-angle-left"
+          text rounded size="small"
+          @click="isCollapsed = true"
           class="collapse-btn"
         />
       </div>
@@ -420,9 +398,6 @@ watch(() => filterStore.periodo, (newVal) => {
 <style scoped>
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
-  --sidebar-width: 280px;
-  --sidebar-collapsed: 80px;
-
   display: block;
   min-height: 100vh;
   background-color: var(--bg-color);
@@ -458,7 +433,40 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .admin-layout.collapsed .admin-sidebar {
-  width: var(--sidebar-collapsed);
+  width: 0;
+  border-right: none;
+}
+
+/* BOTÃO FLUTUANTE DE REABERTURA */
+.sidebar-float-btn {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  z-index: 300;
+  width: 24px;
+  height: 56px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: background 0.2s, color 0.2s, width 0.2s;
+  box-shadow: 3px 0 8px rgba(0,0,0,0.12);
+}
+
+.sidebar-float-btn:hover {
+  width: 32px;
+  background: var(--card-bg);
+  color: var(--text-color);
+}
+
+.sidebar-float-btn i {
+  font-size: 0.75rem;
 }
 
 .sidebar-header {
@@ -476,7 +484,7 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .logo-img {
-  width: 40px;
+  width: 52px;
   /* Logo mudando de cor conforme o tema */
   filter: var(--logo-filter);
 }
@@ -785,7 +793,7 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .admin-layout.collapsed .main-container {
-  margin-left: var(--sidebar-collapsed);
+  margin-left: 0;
 }
 
 .top-navbar {

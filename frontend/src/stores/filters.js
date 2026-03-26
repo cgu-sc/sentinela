@@ -45,13 +45,12 @@ export const useFilterStore = defineStore('filters', () => {
   const rfaSelection = ref(saved?.rfaSelection ?? 'Todos');
   const searchTarget = ref(saved?.searchTarget ?? '');
 
-  // Persiste automaticamente no localStorage sempre que qualquer filtro mudar
-  watch(
-    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte,
-     percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
-     valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
-     clusterSelection, statusSelection, rfaSelection, searchTarget],
-    () => {
+  // Persiste automaticamente no localStorage com debounce de 200ms
+  // (evita escrita contínua durante drag de sliders)
+  let _saveTimer = null;
+  const saveToStorage = () => {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         selectedUF: selectedUF.value,
         selectedRegiaoSaude: selectedRegiaoSaude.value,
@@ -70,7 +69,15 @@ export const useFilterStore = defineStore('filters', () => {
         rfaSelection: rfaSelection.value,
         searchTarget: searchTarget.value,
       }));
-    },
+    }, 200);
+  };
+
+  watch(
+    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte,
+     percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
+     valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
+     clusterSelection, statusSelection, rfaSelection, searchTarget],
+    saveToStorage,
     { deep: true }
   );
 

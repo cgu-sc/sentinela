@@ -5,15 +5,18 @@ import { useFilterStore } from '../stores/filters';
 import { useRiskMetrics } from '../composables/useRiskMetrics';
 import { useFormatting } from '../composables/useFormatting';
 import { useChartStyles } from '../composables/useChartStyles';
+import { useFilterParameters } from '../composables/useFilterParameters';
+import { useTableAggregation } from '../composables/useTableAggregation';
 import { useDashboardStore } from '../stores/dashboard';
 import { storeToRefs } from 'pinia';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
-const { getRiskSeverity, getRiskClass } = useRiskMetrics();
+const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent, formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
 const dashboardStore = useDashboardStore();
+const { getApiParams, isPeriodoValido } = useFilterParameters();
 
 // Destruturação reativa para manter os dados sincronizados
 const { kpis, resultadoSentinelaUF, fatorRisco, isLoading, fatorRiscoLoading, error } = storeToRefs(dashboardStore);
@@ -21,15 +24,12 @@ const { kpis, resultadoSentinelaUF, fatorRisco, isLoading, fatorRiscoLoading, er
 // Chave reativa para forçar re-render completo do gráfico quando os dados mudam.
 // Necessário porque o ApexCharts serializa as options via JSON (perde funções/formatters) no updateOptions.
 const chartRenderKey = ref(0);
-watch(fatorRisco, () => { chartRenderKey.value++; }, { deep: true });
+watch(fatorRisco, () => { chartRenderKey.value++; });
 const chartKey = computed(() => `${themeStore.isDark ? 'dark' : 'light'}-${chartRenderKey.value}`);
-import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 import Button from 'primevue/button';
-import RadioButton from 'primevue/radiobutton';
-import axios from 'axios';
 
 // 4. LOGICA DE FILTRAGEM (O PODER DO PINIA)
 const filteredData = computed(() => {
@@ -56,6 +56,16 @@ const chartSeries = computed(() => [
 // Configuração de Estilo do Gráfico (Mesclando com Base Global)
 const chartOptions = computed(() => ({
     ...chartBaseOptions.value, // Herança de Estilo Global
+    chart: {
+        ...chartBaseOptions.value.chart,
+        zoom: { enabled: false }
+    },
+    legend: {
+        ...chartBaseOptions.value.legend,
+        labels: { colors: chartColors.value.muted },
+        fontSize: '12px',
+        fontWeight: 600,
+    },
     colors: [chartColors.value.primary, chartColors.value.danger], // Azul = Estabelecimento | Vermelho (Danger) = Valor R$
     stroke: {
         width: [0, 3],
@@ -86,11 +96,15 @@ const chartOptions = computed(() => ({
     xaxis: {
         ...chartBaseOptions.value.xaxis,
         type: 'category',
+        title: {
+            text: 'Faixa de Percentual de Não Comprovação',
+            style: { fontSize: '12px', fontWeight: 600, color: chartColors.value.muted }
+        }
     },
     yaxis: [
         {
             ...chartBaseOptions.value.yaxis,
-            title: { text: 'Qtd Estab', style: { color: chartColors.value.primary, fontWeight: 700 } },
+            title: { text: 'Qtd Estab', style: { color: chartColors.value.primary, fontWeight: 700, fontSize: '13px' } },
             labels: {
                 ...chartBaseOptions.value.yaxis?.labels,
                 formatter: (val) => formatNumber(val)
@@ -99,7 +113,7 @@ const chartOptions = computed(() => ({
         {
             ...chartBaseOptions.value.yaxis,
             opposite: true,
-            title: { text: 'Valor Sem Comp', style: { color: chartColors.value.danger, fontWeight: 700 } },
+            title: { text: 'Valor Sem Comp', style: { color: chartColors.value.danger, fontWeight: 700, fontSize: '13px' } },
             labels: {
                 ...chartBaseOptions.value.yaxis?.labels,
                 formatter: (val) => formatBRL(val)
@@ -120,72 +134,24 @@ const chartOptions = computed(() => ({
         ]
     }
 }));
-// 5. REATIVIDADE AO PERÍODO DE ANÁLISE
-// Helper para pegar a data ISO local YYYY-MM-DD sem shift de timezone
-const toLocalISO = (date) => {
-  if (!date || !(date instanceof Date)) return null;
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const getPercFiltro = () => {
-  const f = filterStore.percentualNaoComprovacaoFilter;
-  return { percMin: f[0], percMax: f[1] };
-};
-
-const getPeriodoFiltro = () => {
-  const p = filterStore.periodo;
-  if (!p || p.length < 2 || !p[0] || !p[1]) return null;
-  return { inicio: toLocalISO(p[0]), fim: toLocalISO(p[1]) };
-};
-
-const getValorFiltro = () => {
-  return filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
-};
-
-const getGeoFiltro = () => ({
-  uf: filterStore.selectedUF !== 'Todos' ? filterStore.selectedUF : null,
-  regiaoSaude: filterStore.selectedRegiaoSaude !== 'Todos' ? filterStore.selectedRegiaoSaude : null,
-  municipio: filterStore.selectedMunicipio !== 'Todos' ? filterStore.selectedMunicipio : null,
-});
-
+// 5. REATIVIDADE AOS FILTROS
 const fetchTodos = () => {
-  const periodo = getPeriodoFiltro();
-  const { percMin, percMax } = getPercFiltro();
-  const valMin = getValorFiltro();
-  const { uf, regiaoSaude, municipio } = getGeoFiltro();
-  const inicio = periodo?.inicio ?? null;
-  const fim = periodo?.fim ?? null;
+  const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio } = getApiParams();
   dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
   dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
 };
 
 watch(
-  () => filterStore.periodo,
-  (newVal) => {
-    if (newVal && Array.isArray(newVal) && newVal.length === 2 && newVal[0] && newVal[1]) {
-      fetchTodos();
-    }
-  },
+  () => [
+    filterStore.periodo,
+    filterStore.percentualNaoComprovacaoFilter,
+    filterStore.valorMinSemCompFilter,
+    filterStore.selectedUF,
+    filterStore.selectedRegiaoSaude,
+    filterStore.selectedMunicipio,
+  ],
+  () => { if (isPeriodoValido()) fetchTodos(); },
   { deep: true, immediate: false }
-);
-
-watch(
-  () => filterStore.percentualNaoComprovacaoFilter,
-  () => { fetchTodos(); },
-  { deep: true, immediate: false }
-);
-
-watch(
-  () => filterStore.valorMinSemCompFilter,
-  () => { fetchTodos(); },
-  { immediate: false }
-);
-
-watch(
-  () => [filterStore.selectedUF, filterStore.selectedRegiaoSaude, filterStore.selectedMunicipio],
-  () => { fetchTodos(); },
-  { immediate: false }
 );
 
 onMounted(() => {
@@ -194,47 +160,27 @@ onMounted(() => {
 });
 
 // Totais dinâmicos para o footer da tabela
+const { totals } = useTableAggregation(filteredData, {
+  sums: ['cnpjs', 'valSemComp', 'totalMov', 'qtdeSemComp', 'totalQtde'],
+  percents: [
+    { field: 'percValSemComp',  numerator: 'valSemComp',  denominator: 'totalMov'   },
+    { field: 'percQtdeSemComp', numerator: 'qtdeSemComp', denominator: 'totalQtde'  },
+  ],
+});
 const tableFooter = computed(() => {
-  const rows = filteredData.value;
-  if (!rows || rows.length === 0) return {};
-
-  const totalCnpjs = rows.reduce((s, r) => s + (r.cnpjs || 0), 0);
-  const totalValSemComp = rows.reduce((s, r) => s + (r.valSemComp || 0), 0);
-  const totalMov = rows.reduce((s, r) => s + (r.totalMov || 0), 0);
-  const totalQtdeSemComp = rows.reduce((s, r) => s + (r.qtdeSemComp || 0), 0);
-  const totalQtde = rows.reduce((s, r) => s + (r.totalQtde || 0), 0);
-  const percVal = totalMov > 0 ? (totalValSemComp / totalMov) * 100 : 0;
-  const percQtde = totalQtde > 0 ? (totalQtdeSemComp / totalQtde) * 100 : 0;
-
+  const t = totals.value;
+  if (!Object.keys(t).length) return {};
   return {
-    cnpjs: formatNumber(totalCnpjs),
-    percValSemComp: formatPercent(percVal),
-    valSemComp: formatBRL(totalValSemComp),
-    totalMov: formatBRL(totalMov),
-    percQtdeSemComp: formatPercent(percQtde),
-    qtdeSemComp: formatNumber(totalQtdeSemComp),
-    totalQtde: formatNumber(totalQtde),
+    cnpjs:          formatNumber(t.cnpjs),
+    percValSemComp: formatPercent(t.percValSemComp),
+    valSemComp:     formatBRL(t.valSemComp),
+    totalMov:       formatBRL(t.totalMov),
+    percQtdeSemComp:formatPercent(t.percQtdeSemComp),
+    qtdeSemComp:    formatNumber(t.qtdeSemComp),
+    totalQtde:      formatNumber(t.totalQtde),
   };
 });
 
-// Agrupamento selecionado (para Teleport Sidebar)
-const groupBy = ref('uf');
-const groupOptions = ref(['UF', 'Município', 'Região de Saúde']);
-
-// Funções de Estilo com ícones baseados no print
-const getTrendIcon = (trend) => {
-  if (trend === 'up') return 'pi pi-arrow-up';
-  if (trend === 'down') return 'pi pi-arrow-down';
-  if (trend === 'neutral') return 'pi pi-arrow-up-right'; // Estilo do print para diagonal
-  return 'pi pi-minus';
-};
-
-const getTrendColor = (trend) => {
-  if (trend === 'up') return '#ef4444'; // Vermelho
-  if (trend === 'down') return '#22c55e'; // Verde
-  if (trend === 'neutral') return '#f59e0b'; // Laranja para diagonal
-  return '#94a3b8';
-};
 </script>
 
 <template>
@@ -276,7 +222,7 @@ const getTrendColor = (trend) => {
            <Button icon="pi pi-info-circle" v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação (ex: 0-10%, 10-20%), cruzando a quantidade de farmácias com o respectivo valor financeiro não comprovado em cada faixa para identificar a concentração de irregularidades.'" text severity="secondary" rounded />
         </div>
         <div class="chart-wrapper">
-            <apexchart :key="chartKey" type="line" height="350" :options="chartOptions" :series="chartSeries"></apexchart>
+            <apexchart :key="chartKey" type="line" height="420" :options="chartOptions" :series="chartSeries"></apexchart>
         </div>
       </div>
 
@@ -287,7 +233,7 @@ const getTrendColor = (trend) => {
            <h3>ANÁLISE NACIONAL</h3>
            <div class="spacer"></div>
         </div>
-        
+
         <DataTable :value="filteredData" size="small" stripedRows removableSort sortField="percValSemComp" :sortOrder="-1" class="custom-table enterprise-table">
           <Column field="uf" header="UF" sortable style="width: 5%">
             <template #footer>TOTAL</template>
@@ -352,8 +298,6 @@ const getTrendColor = (trend) => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 1600px;
-  margin: 0 auto;
 }
 
 /* KPI CARDS */
@@ -417,6 +361,16 @@ const getTrendColor = (trend) => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.chart-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-wrapper {
+  height: 420px;
+  margin: 0 -1rem -1rem -1rem;
 }
 
 .spacer { flex: 1; }
@@ -515,39 +469,4 @@ const getTrendColor = (trend) => {
   margin-bottom: 2rem;
 }
 
-:global(.view-local-filters) {
-  display: flex;
-  flex-direction: column;
-}
-
-:global(.local-filter-header) {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  margin-bottom: 1rem;
-  font-weight: 800;
-  color: var(--text-color);
-  letter-spacing: 1px;
-}
-
-:global(.local-filter-header i) {
-  color: var(--primary-color);
-}
-
-:global(.local-filter-section) {
-  margin-bottom: 1.5rem;
-}
-
-:global(.local-filter-label) {
-  display: block;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-  color: var(--primary-color);
-}
-
-:global(.flex-col) { display: flex; flex-direction: column; }
 </style>

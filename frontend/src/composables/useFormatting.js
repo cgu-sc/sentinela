@@ -45,11 +45,22 @@ export function useFormatting() {
     return new Intl.NumberFormat('pt-BR').format(val);
   };
 
+  /**
+   * Converte uma Date para string YYYY-MM-DD sem shift de timezone.
+   * @param {Date} date
+   * @returns {string|null}
+   */
+  const toLocalISO = (date) => {
+    if (!date || !(date instanceof Date)) return null;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
   return {
     formatBRL,
     formatNumber,
     formatNumberFull,
     formatPercent,
-    formatCurrencyFull
+    formatCurrencyFull,
+    toLocalISO,
   };
 }

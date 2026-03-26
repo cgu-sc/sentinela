@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 export const useDashboardStore = defineStore('dashboard', {
   state: () => ({
@@ -31,7 +32,7 @@ export const useDashboardStore = defineStore('dashboard', {
         if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
         if (municipio && municipio !== 'Todos') params.municipio = municipio;
 
-        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/resumo', { params });
+        const response = await axios.get(API_ENDPOINTS.dashboardResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
         this.lastSync = new Date();
@@ -60,12 +61,11 @@ export const useDashboardStore = defineStore('dashboard', {
         if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
         if (municipio && municipio !== 'Todos') params.municipio = municipio;
 
-        const response = await axios.get('http://127.0.0.1:8002/api/v1/dashboard/resultado-faixas-risco', {
-          params
-        });
+        const response = await axios.get(API_ENDPOINTS.dashboardFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {
         console.error('Erro ao buscar fator de risco:', err);
+        this.error = 'Não foi possível carregar o gráfico de fator de risco.';
       } finally {
         this.fatorRiscoLoading = false;
       }

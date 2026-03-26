@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//mnt/c/**)",
+      "Read(///sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/$HOME/**)"
+    ]
+  }
+}

@@ -52,8 +52,25 @@ Copy-Item "dist/sentinela-api.exe" "$BIN_DIR/_engine-x86_64-pc-windows-msvc.exe"
 
 # 3. BUILD DO TAURI (INSTALADOR FINAL)
 Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow
-# Certifique-se de ter o Rust instalado e as dependências do Tauri
 cargo tauri build
 
-Write-Host "`n✅ Build concluído com sucesso!" -ForegroundColor Green
-Write-Host "O seu EXE final (sentinela.exe) estará na pasta: src-tauri/target/release/" -ForegroundColor Gray
+# 4. ORGANIZAÇÃO FINAL (PORTABLE)
+Write-Host "`n4/4: Organizando a pasta portátil final..." -ForegroundColor Cyan
+
+$FINAL_DIR = "$ROOT/Sentinela_Portatil"
+if (Test-Path $FINAL_DIR) { Remove-Item -Recurse -Force $FINAL_DIR }
+New-Item -ItemType Directory -Force -Path "$FINAL_DIR/_engine"
+
+# Copia o App Principal
+Copy-Item "src-tauri/target/release/sentinela.exe" "$FINAL_DIR/sentinela.exe" -Force
+
+# Copia o Motor (renomeando para o nome simples _engine.exe que você pediu)
+# No Windows, o sidecar compilado tem o sufixo da arquitetura, vamos buscá-lo
+$SIDECAR_EXE = Get-ChildItem "src-tauri/target/release/_engine-*.exe" | Select-Object -First 1
+Copy-Item $SIDECAR_EXE.FullName "$FINAL_DIR/_engine/_engine.exe" -Force
+
+Write-Host "`n✅ BUILD E ORGANIZAÇÃO CONCLUÍDOS!" -ForegroundColor Green
+Write-Host "Sua pasta pronta para distribuição está em: $FINAL_DIR" -ForegroundColor Yellow
+Write-Host "Estrutura:" -ForegroundColor Gray
+Write-Host " - $FINAL_DIR/sentinela.exe" -ForegroundColor Gray
+Write-Host " - $FINAL_DIR/_engine/_engine.exe" -ForegroundColor Gray

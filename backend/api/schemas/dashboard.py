@@ -8,7 +8,7 @@ class DashboardKPISchema(BaseModel):
     color: str
     icon: str
 
-class NationalAnalysisRowSchema(BaseModel):
+class ResultadoSentinelaUFSchema(BaseModel):
     uf: Optional[str] = "ND"
     cnpjs: Optional[int] = 0
     percValSemComp: Optional[float] = 0.0
@@ -37,7 +37,7 @@ class ResultadoSentinelaSchema(BaseModel):
 
 class DashboardResponse(BaseModel):
     kpis: List[DashboardKPISchema]
-    national_analysis: List[NationalAnalysisRowSchema]
+    resultado_sentinela_uf: List[ResultadoSentinelaUFSchema]
 class FatorRiscoBucketSchema(BaseModel):
     faixa: str
     qtd: int

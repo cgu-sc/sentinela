@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from .endpoints import dashboard
+from .endpoints import dashboard, geo, cache
 
 api_router = APIRouter()
 
-# Unificação de todos os domínios da API sob um único router principal.
-# Aqui poderemos adicionar no futuro routers para /usuarios, /filtros, etc.
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+api_router.include_router(geo.router, prefix="/geo", tags=["Geo"])
+api_router.include_router(cache.router, prefix="/cache", tags=["Cache"])

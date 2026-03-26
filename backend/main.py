@@ -4,12 +4,19 @@ import mimetypes
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db
+from database import get_db, engine
 from api.router import api_router
 from fastapi.middleware.cors import CORSMiddleware
+from data_cache import load_cache
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_cache(engine)
+    yield
 
 # =============================================================================
 # INICIALIZAÇÃO DO APP FASTAPI
@@ -17,7 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(
     title="Sentinela API",
     description="Backend oficial para o Projeto Sentinela (Web/Desktop)",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Configuração de CORS para permitir que o Frontend (Vue) em modo DEV

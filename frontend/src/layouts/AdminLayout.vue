@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import { useThemeStore } from '../stores/theme';
 import { useFilterStore } from '../stores/filters';
+import { useGeoStore } from '../stores/geo';
 import Button from 'primevue/button';
 import ThemeSelector from '../components/ThemeSelector.vue';
 import Dropdown from 'primevue/dropdown';
@@ -13,6 +15,8 @@ import InputText from 'primevue/inputtext';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
+const geoStore = useGeoStore();
+const { localidades } = storeToRefs(geoStore);
 const route = useRoute();
 const router = useRouter();
 
@@ -63,8 +67,38 @@ watch(activeModule, (newVal) => {
 });
 
 // Opções dos Selects (Estáticos para Mock)
-const ufOptions = ['Todos', 'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
-const municipioOptions = ['Todos', 'Brasília', 'Goiânia', 'São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador'];
+const ufOptions = computed(() => {
+  const set = new Set(localidades.value.map(l => l.sg_uf));
+  return ['Todos', ...Array.from(set).sort()];
+});
+
+const regiaoSaudeOptions = computed(() => {
+  const uf = filterStore.selectedUF;
+  const filtradas = uf === 'Todos'
+    ? localidades.value
+    : localidades.value.filter(l => l.sg_uf === uf);
+  const set = new Set(filtradas.map(l => l.no_regiao_saude));
+  return ['Todos', ...Array.from(set).sort()];
+});
+
+const municipioOptions = computed(() => {
+  const uf = filterStore.selectedUF;
+  const regiao = filterStore.selectedRegiaoSaude;
+  let filtradas = localidades.value;
+  if (uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
+  if (regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+  const set = new Set(filtradas.map(l => l.no_municipio));
+  return ['Todos', ...Array.from(set).sort()];
+});
+
+// Reseta filtros dependentes ao mudar UF ou Região de Saúde
+watch(() => filterStore.selectedUF, () => {
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedMunicipio = 'Todos';
+});
+watch(() => filterStore.selectedRegiaoSaude, () => {
+  filterStore.selectedMunicipio = 'Todos';
+});
 const situacaoOptions = ['Todos', 'ATIVA', 'BAIXADA', 'SUSPENSA', 'INAPTA'];
 const msOptions = ['Todos', 'SIM', 'NÃO'];
 const porteOptions = ['Todos', 'ME', 'EPP', 'DEMAIS'];
@@ -89,17 +123,29 @@ const limparFiltros = () => {
     filterStore.resetFilters();
 };
 
-// ⏳ OPÇÃO 3: RANGE SLIDER TEMPORAL (DYNAMIC TIMELINE 2015-2024)
+const applyPercentualNaoComprovacao = () => {
+    filterStore.percentualNaoComprovacaoFilter = [...filterStore.percentualNaoComprovacaoRange];
+};
+
+const applyValorMinSemComp = () => {
+    filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
+};
+
+// ⏳ RANGE SLIDER TEMPORAL: Jul/2015 - Dez/2024
 const availableMonths = [];
 const monthsLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 for (let y = 2015; y <= 2024; y++) {
-  monthsLabels.forEach((m, idx) => {
-    availableMonths.push({ label: `${m}/${y.toString().slice(-2)}`, date: new Date(y, idx, 1) });
-  });
+  const startMonth = y === 2015 ? 6 : 0; // começa em Jul/2015
+  for (let m = startMonth; m <= 11; m++) {
+    availableMonths.push({ label: `${monthsLabels[m]}/${y.toString().slice(-2)}`, date: new Date(y, m, 1) });
+  }
 }
 
-// Inicializar com Abril/24 a Setembro/24 (Índices 111 e 116 na timeline 2015-2024)
-const timeSliderValue = ref([111, 116]);
+// Índice 0 = Jul/2015 | último índice = Dez/2024
+const timeSliderValue = computed({
+  get: () => filterStore.sliderValue,
+  set: (val) => { filterStore.sliderValue = val; }
+});
 
 const displayPeriod = computed(() => {
     const start = availableMonths[timeSliderValue.value[0]].label;
@@ -118,8 +164,12 @@ const applySliderPeriod = (indices) => {
 };
 
 const quickSelectYear = (year) => {
-    const startIdx = (year - 2015) * 12;
-    timeSliderValue.value = [startIdx, startIdx + 11];
+    const startIdx = availableMonths.findIndex(m => m.date.getFullYear() === year && m.date.getMonth() === 0);
+    const endIdx = availableMonths.findIndex(m => m.date.getFullYear() === year && m.date.getMonth() === 11);
+    timeSliderValue.value = [
+        startIdx === -1 ? 0 : startIdx,
+        endIdx === -1 ? availableMonths.length - 1 : endIdx
+    ];
     applySliderPeriod(timeSliderValue.value);
 };
 
@@ -185,8 +235,13 @@ watch(() => filterStore.periodo, (newVal) => {
         </div>
 
         <div class="filter-section">
+          <label class="filter-label">Região de Saúde</label>
+          <Dropdown v-model="filterStore.selectedRegiaoSaude" :options="regiaoSaudeOptions" placeholder="Região" filter :virtualScrollerOptions="{ itemSize: 32 }" class="w-full filter-input" />
+        </div>
+
+        <div class="filter-section">
           <label class="filter-label">Município</label>
-          <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter class="w-full filter-input" />
+          <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter :virtualScrollerOptions="{ itemSize: 32 }" class="w-full filter-input" />
         </div>
 
         <div class="grid-filters">
@@ -209,21 +264,20 @@ watch(() => filterStore.periodo, (newVal) => {
           <label class="filter-label">% de não comprovação</label>
           <div class="slider-container">
             <div class="slider-values">
-              <span>{{ filterStore.naoComprovacaoRange[0] }}%</span>
-              <span>{{ filterStore.naoComprovacaoRange[1] }}%</span>
+              <span>{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
+              <span>{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
             </div>
-            <Slider v-model="filterStore.naoComprovacaoRange" range class="w-full" />
+            <Slider v-model="filterStore.percentualNaoComprovacaoRange" range class="w-full" @slideend="applyPercentualNaoComprovacao" />
           </div>
         </div>
 
         <div class="filter-section">
-          <label class="filter-label">Valor sem comprovação</label>
+          <label class="filter-label">Valor Mínimo sem comprovação</label>
           <div class="slider-container">
             <div class="slider-values">
-              <span>{{ formatCurrency(filterStore.valorSemCompRange[0]) }}</span>
-              <span>{{ formatCurrency(filterStore.valorSemCompRange[1]) }}</span>
+              <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
             </div>
-            <Slider v-model="filterStore.valorSemCompRange" range :min="0" :max="5000000" :step="1000" class="w-full" />
+            <Slider v-model="filterStore.valorMinSemComp" :min="0" :max="1000000" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
           </div>
         </div>
 
@@ -496,6 +550,16 @@ watch(() => filterStore.periodo, (newVal) => {
     gap: 0.5rem;
 }
 
+.grid-filters .filter-section {
+    min-width: 0;
+}
+
+.grid-filters :deep(.p-dropdown-label) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .slider-container {
   padding: 0.5rem 0.2rem;
 }
@@ -717,6 +781,7 @@ watch(() => filterStore.periodo, (newVal) => {
   margin-left: var(--sidebar-width);
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 100vh;
+  background-color: var(--bg-color);
 }
 
 .admin-layout.collapsed .main-container {
@@ -813,7 +878,7 @@ watch(() => filterStore.periodo, (newVal) => {
   flex: 1;
 }
 
-/* Tratamento dos inputs do PrimeVue no Tema Escuro da Sidebar */
+/* Tratamento dos inputs do PrimeVue na Sidebar */
 :deep(.filter-input .p-inputtext) {
   background: var(--card-bg);
   border-color: var(--sidebar-border);
@@ -901,6 +966,27 @@ watch(() => filterStore.periodo, (newVal) => {
     border-color: var(--sidebar-border) !important;
 }
 
+:global(.dark-mode .p-dropdown:not(.p-disabled):hover),
+:global(.p-dropdown:not(.p-disabled):hover) {
+    border-color: var(--primary-color) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: none !important;
+}
+
+:global(.dark-mode .p-dropdown:not(.p-disabled).p-focus),
+:global(.p-dropdown:not(.p-disabled).p-focus) {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
+    outline: none !important;
+}
+
+:global(.dark-mode .p-inputtext:enabled:focus),
+:global(.p-inputtext:enabled:focus) {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
+    outline: none !important;
+}
+
 :global(.dark-mode) .p-datepicker .p-datepicker-header button,
 :global(.dark-mode) .p-monthpicker .p-monthpicker-month,
 :global(.dark-mode) .p-yearpicker .p-yearpicker-year {
@@ -927,7 +1013,8 @@ watch(() => filterStore.periodo, (newVal) => {
     color: var(--text-color) !important;
 }
 
-:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
+:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover),
+:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-focus:not(.p-highlight)) {
     background: var(--table-hover) !important;
     color: var(--text-color) !important;
 }
@@ -937,8 +1024,10 @@ watch(() => filterStore.periodo, (newVal) => {
     color: #ffffff !important;
 }
 
-:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight:hover) {
+:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight:hover),
+:global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight.p-focus) {
     background: var(--primary-color) !important;
+    color: #ffffff !important;
     opacity: 0.9;
 }
 
@@ -989,7 +1078,7 @@ watch(() => filterStore.periodo, (newVal) => {
 
 :global(.admin-layout) .p-inputtext:enabled:hover,
 :global(.admin-layout) .p-dropdown:not(.p-disabled):hover {
-  border-color: var(--primary-color);
+  border-color: var(--primary-color) !important;
 }
 
 /* SCROLLBAR SIDEBAR */

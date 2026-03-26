@@ -8,12 +8,23 @@ from ..services.dashboard import DashboardService
 
 router = APIRouter()
 
-@router.get("/", response_model=DashboardResponse)
-def get_dashboard_summary(db: Session = Depends(get_db)):
+@router.get("/resumo", response_model=DashboardResponse)
+def get_dashboard_resumo(
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     """
-    Retorna o resumo consolidado do dashboard (KPIs e Análise Nacional).
+    Retorna o resumo consolidado do dashboard (KPIs e Análise por UF).
+    Aceita filtros de período, faixa de %, valor mínimo e filtros geográficos.
     """
-    return DashboardService.get_dashboard_data(db)
+    return DashboardService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio)
 
 @router.get("/resultados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_sentinela(db: Session = Depends(get_db)):
@@ -22,13 +33,19 @@ def get_resultados_sentinela(db: Session = Depends(get_db)):
     """
     return DashboardService.get_resultado_sentinela(db)
 
-@router.get("/fator-risco", response_model=FatorRiscoResponseSchema)
-def get_fator_risco_data(
-    data_inicio: Optional[date] = Query(None), 
-    data_fim: Optional[date] = Query(None), 
+@router.get("/resultado-faixas-risco", response_model=FatorRiscoResponseSchema)
+def get_resultado_faixas_risco(
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Retorna os dados do gráfico Fator de Risco x Qtd Estab para um período específico.
     """
-    return DashboardService.get_fator_risco_data(db, data_inicio, data_fim)
+    return DashboardService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio)

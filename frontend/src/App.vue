@@ -2,19 +2,35 @@
 import { onMounted, ref } from 'vue';
 import { useResultadoStore } from './stores/resultados';
 import { useDashboardStore } from './stores/dashboard';
+import { useGeoStore } from './stores/geo';
+import { useFilterStore } from './stores/filters';
 
 const resultadoStore = useResultadoStore();
 const dashboardStore = useDashboardStore();
+const geoStore = useGeoStore();
+const filterStore = useFilterStore();
 const isAppLoading = ref(true);
 
 onMounted(async () => {
   try {
-    // Dispara a carga simultânea (Paralelo) de toda a inteligência do sistema
-    // Aguardamos todas terminarem antes de liberar a UI
+    // Lê os filtros persistidos no localStorage (já restaurados sincronamente pelo store)
+    const f = filterStore;
+    const p = f.periodo;
+    const toISO = (d) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : null;
+    const inicio = p?.[0] ? toISO(p[0]) : null;
+    const fim    = p?.[1] ? toISO(p[1]) : null;
+    const percMin = f.percentualNaoComprovacaoFilter[0] !== 0   ? f.percentualNaoComprovacaoFilter[0] : null;
+    const percMax = f.percentualNaoComprovacaoFilter[1] !== 100 ? f.percentualNaoComprovacaoFilter[1] : null;
+    const valMin  = f.valorMinSemCompFilter > 0 ? f.valorMinSemCompFilter : null;
+    const uf      = f.selectedUF !== 'Todos'          ? f.selectedUF          : null;
+    const regiao  = f.selectedRegiaoSaude !== 'Todos' ? f.selectedRegiaoSaude : null;
+    const mun     = f.selectedMunicipio !== 'Todos'   ? f.selectedMunicipio   : null;
+
     await Promise.all([
       resultadoStore.fetchResultados(),
-      dashboardStore.fetchDashboardSummary(),
-      dashboardStore.fetchFatorRisco()
+      dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiao, mun),
+      dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax),
+      geoStore.fetchLocalidades()
     ]);
   } catch (error) {
     console.error("Erro crítico na carga inicial:", error);
@@ -54,50 +70,54 @@ onMounted(async () => {
 <style>
 /* Estilos Globais Modernos (DNA Arbflow) */
 :root {
-  --p-primary-color: #3b82f6; 
-  
+  --p-primary-color: #3b82f6;
+
   /* DESIGN TOKENS GLOBAIS (Arbflow DNA) */
   --sidebar-width: 280px;
-  --bg-color: color-mix(in srgb, var(--p-primary-color) 4%, #f8fafc);
+  --bg-color: #f8fafc;
   --text-color: #1e293b;
   --text-muted: #64748b;
   --card-bg: #ffffff;
   --sidebar-bg: #ffffff;
   --sidebar-text: #1e293b;
   --sidebar-border: #e2e8f0;
-  --navbar-bg: #ffffff;
+  --navbar-bg: #f8fafc;
   --navbar-border: #e2e8f0;
+
+  /* Sobrescreve o surface-ground do PrimeVue Lara Light para o fundo correto */
+  --surface-ground: #f8fafc;
+  --surface-section: #f8fafc;
 
   /* Tabelas */
   --table-header-bg: #f8fafc;
   --table-header-text: #475569;
   --table-hover: #f1f5f9;
-  --table-stripe: #fcfcfd;
+  --table-stripe: #f8fafc;
 }
 
 body.dark-mode {
-  --bg-color: color-mix(in srgb, var(--p-primary-color) 2%, #09090b);
-  --text-color: #cbd5e1; /* Slate 300 - Muito mais confortável */
-  --text-muted: #71717a; /* Zinc 400 */
-  --card-bg: #18181b; 
-  --sidebar-bg: #09090b;
-  --sidebar-text: #f4f4f5;
-  --sidebar-border: #27272a;
-  --navbar-bg: #09090b;
-  --navbar-border: #27272a;
+  --bg-color: #0d1117;
+  --text-color: #cbd5e1;
+  --text-muted: #8b949e;
+  --card-bg: #161b22;
+  --sidebar-bg: #0d1117;
+  --sidebar-text: #e6edf3;
+  --sidebar-border: #30363d;
+  --navbar-bg: #0d1117;
+  --navbar-border: #30363d;
 
   /* Tabelas Dark */
-  --table-header-bg: #202023; 
-  --table-header-text: #94a3b8;
-  --table-hover: #212124;
-  --table-stripe: #121214;
+  --table-header-bg: #1c2128;
+  --table-header-text: #8b949e;
+  --table-hover: #1f2937;
+  --table-stripe: #131920;
 
-  /* PRIME VUE INTERNAL SURFACES - O SEGREDO PARA A TABELA */
-  --surface-0: #18181b;
-  --surface-card: #18181b;
-  --surface-ground: #0c0c0e;
-  --surface-section: #0c0c0e;
-  --surface-border: #27272a;
+  /* PRIME VUE INTERNAL SURFACES */
+  --surface-0: #161b22;
+  --surface-card: #161b22;
+  --surface-ground: #0d1117;
+  --surface-section: #0d1117;
+  --surface-border: #30363d;
 }
 
 /* COMPONENTES DE UI GLOBAIS (DESIGN SYSTEM SENTINELA) */
@@ -105,7 +125,7 @@ body.dark-mode {
   background: var(--card-bg);
   border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.06);
   border: 1px solid var(--navbar-border);
   transition: background-color 0.3s ease, transform 0.2s ease;
 }
@@ -363,17 +383,17 @@ body.dark-mode .risk-high {
   100% { transform: scaleX(0); transform-origin: right; }
 }
 
-body {
+html, body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f1f5f9;
+  background-color: var(--bg-color) !important;
   transition: background-color 0.3s ease;
 }
 
 body.dark-mode {
-  background-color: #09090b;
+  background-color: var(--bg-color) !important;
 }
 
 /* Scrollbar Bonito */

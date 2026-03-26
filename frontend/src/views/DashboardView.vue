@@ -16,7 +16,7 @@ const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
 const dashboardStore = useDashboardStore();
 
 // Destruturação reativa para manter os dados sincronizados
-const { kpis, nationalAnalysis, fatorRisco, isLoading, error } = storeToRefs(dashboardStore);
+const { kpis, resultadoSentinelaUF, fatorRisco, isLoading, fatorRiscoLoading, error } = storeToRefs(dashboardStore);
 
 // Chave reativa para forçar re-render completo do gráfico quando os dados mudam.
 // Necessário porque o ApexCharts serializa as options via JSON (perde funções/formatters) no updateOptions.
@@ -34,9 +34,9 @@ import axios from 'axios';
 // 4. LOGICA DE FILTRAGEM (O PODER DO PINIA)
 const filteredData = computed(() => {
   if (filterStore.selectedUF === 'Todos') {
-    return nationalAnalysis.value;
+    return resultadoSentinelaUF.value;
   }
-  return nationalAnalysis.value.filter(item => item.uf === filterStore.selectedUF);
+  return resultadoSentinelaUF.value.filter(item => item.uf === filterStore.selectedUF);
 });
 
 // CONFIG GRAFICO COMBO (DADOS REAIS DA API)
@@ -128,23 +128,93 @@ const toLocalISO = (date) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const getPercFiltro = () => {
+  const f = filterStore.percentualNaoComprovacaoFilter;
+  return { percMin: f[0], percMax: f[1] };
+};
+
+const getPeriodoFiltro = () => {
+  const p = filterStore.periodo;
+  if (!p || p.length < 2 || !p[0] || !p[1]) return null;
+  return { inicio: toLocalISO(p[0]), fim: toLocalISO(p[1]) };
+};
+
+const getValorFiltro = () => {
+  return filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
+};
+
+const getGeoFiltro = () => ({
+  uf: filterStore.selectedUF !== 'Todos' ? filterStore.selectedUF : null,
+  regiaoSaude: filterStore.selectedRegiaoSaude !== 'Todos' ? filterStore.selectedRegiaoSaude : null,
+  municipio: filterStore.selectedMunicipio !== 'Todos' ? filterStore.selectedMunicipio : null,
+});
+
+const fetchTodos = () => {
+  const periodo = getPeriodoFiltro();
+  const { percMin, percMax } = getPercFiltro();
+  const valMin = getValorFiltro();
+  const { uf, regiaoSaude, municipio } = getGeoFiltro();
+  const inicio = periodo?.inicio ?? null;
+  const fim = periodo?.fim ?? null;
+  dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
+  dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
+};
+
 watch(
   () => filterStore.periodo,
   (newVal) => {
     if (newVal && Array.isArray(newVal) && newVal.length === 2 && newVal[0] && newVal[1]) {
-      const inicio = toLocalISO(newVal[0]);
-      const fim = toLocalISO(newVal[1]);
-      
-      console.log(`[SENTINELA] Período alterado: ${inicio} até ${fim}. Buscando dados...`);
-      dashboardStore.fetchFatorRisco(inicio, fim);
+      fetchTodos();
     }
   },
   { deep: true, immediate: false }
 );
 
+watch(
+  () => filterStore.percentualNaoComprovacaoFilter,
+  () => { fetchTodos(); },
+  { deep: true, immediate: false }
+);
+
+watch(
+  () => filterStore.valorMinSemCompFilter,
+  () => { fetchTodos(); },
+  { immediate: false }
+);
+
+watch(
+  () => [filterStore.selectedUF, filterStore.selectedRegiaoSaude, filterStore.selectedMunicipio],
+  () => { fetchTodos(); },
+  { immediate: false }
+);
+
 onMounted(() => {
     // Note: Cargas gerais são feitas no App.vue
     // O fetchFatorRisco agora é controlado pelo Watcher do Filtro
+});
+
+// Totais dinâmicos para o footer da tabela
+const tableFooter = computed(() => {
+  const rows = filteredData.value;
+  if (!rows || rows.length === 0) return {};
+
+  const totalCnpjs = rows.reduce((s, r) => s + (r.cnpjs || 0), 0);
+  const totalValSemComp = rows.reduce((s, r) => s + (r.valSemComp || 0), 0);
+  const totalMov = rows.reduce((s, r) => s + (r.totalMov || 0), 0);
+  const totalQtdeSemComp = rows.reduce((s, r) => s + (r.qtdeSemComp || 0), 0);
+  const totalQtde = rows.reduce((s, r) => s + (r.totalQtde || 0), 0);
+  const percVal = totalMov > 0 ? (totalValSemComp / totalMov) * 100 : 0;
+  const percQtde = totalQtde > 0 ? (totalQtdeSemComp / totalQtde) * 100 : 0;
+
+  return {
+    cnpjs: formatNumber(totalCnpjs),
+    percValSemComp: formatPercent(percVal),
+    valSemComp: formatBRL(totalValSemComp),
+    totalMov: formatBRL(totalMov),
+    percQtdeSemComp: formatPercent(percQtde),
+    qtdeSemComp: formatNumber(totalQtdeSemComp),
+    totalQtde: formatNumber(totalQtde),
+  };
 });
 
 // Agrupamento selecionado (para Teleport Sidebar)
@@ -169,20 +239,15 @@ const getTrendColor = (trend) => {
 
 <template>
   <div class="dashboard-container">
-    <!-- FEEDBACK DE CARREGAMENTO E ERRO -->
-    <div v-if="isLoading" class="loading-overlay">
-       <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--primary-color)"></i>
-       <span style="margin-top: 1rem; font-weight: 500;">Carregando dados reais do Sentinela...</span>
-    </div>
-
-    <div v-else-if="error" class="error-banner">
+    <!-- FEEDBACK DE ERRO -->
+    <div v-if="error" class="error-banner">
        <i class="pi pi-exclamation-circle"></i>
        <span>{{ error }}</span>
-       <Button label="Tentar Novamente" icon="pi pi-refresh" @click="dashboardStore.fetchDashboardSummary" text size="small" />
+       <Button label="Tentar Novamente" icon="pi pi-refresh" @click="dashboardStore.fetchDashboardSummary()" text size="small" />
     </div>
 
     <!-- CARDS DE KPI -->
-    <div v-else class="kpi-grid">
+    <div class="kpi-grid" :class="{ 'is-refreshing': isLoading }">
       <div 
         v-for="kpi in kpis" 
         :key="kpi.label" 
@@ -203,7 +268,7 @@ const getTrendColor = (trend) => {
     <!-- MAIN GRID (GRÁFICO E DEPOIS TABELA) -->
     <div class="charts-table-grid">
       <!-- GRÁFICO -->
-      <div class="chart-section shadow-card">
+      <div class="chart-section shadow-card" :class="{ 'is-refreshing': fatorRiscoLoading }">
          <div class="section-header">
            <i class="pi pi-chart-bar"></i>
            <h3>FATOR RISCO X QTD ESTAB</h3>
@@ -216,7 +281,7 @@ const getTrendColor = (trend) => {
       </div>
 
       <!-- TABELA ANALISE NACIONAL -->
-      <div class="table-section shadow-card">
+      <div class="table-section shadow-card" :class="{ 'is-refreshing': isLoading }">
         <div class="section-header">
            <i class="pi pi-table"></i>
            <h3>ANÁLISE NACIONAL</h3>
@@ -224,48 +289,57 @@ const getTrendColor = (trend) => {
         </div>
         
         <DataTable :value="filteredData" size="small" stripedRows removableSort sortField="percValSemComp" :sortOrder="-1" class="custom-table enterprise-table">
-          <Column field="uf" header="UF" sortable footer="TOTAL" style="width: 5%"></Column>
-          
-          <Column field="cnpjs" header="Qtde CNPJs" sortable footer="34K" style="width: 10%">
+          <Column field="uf" header="UF" sortable style="width: 5%">
+            <template #footer>TOTAL</template>
+          </Column>
+
+          <Column field="cnpjs" header="Qtde CNPJs" sortable style="width: 10%">
              <template #body="slotProps">
                 <span>{{ formatNumber(slotProps.data.cnpjs) }}</span>
              </template>
+             <template #footer>{{ tableFooter.cnpjs }}</template>
           </Column>
 
-          <Column field="percValSemComp" header="% Valor Sem Comprovação" sortable footer="16,05%" style="width: 12%">
+          <Column field="percValSemComp" header="% Valor Sem Comprovação" sortable style="width: 12%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
              </template>
+             <template #footer>{{ tableFooter.percValSemComp }}</template>
           </Column>
 
-          <Column field="valSemComp" header="Valor sem Comprovação" sortable footer="R$ 3,8B" style="width: 15%">
+          <Column field="valSemComp" header="Valor sem Comprovação" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
              </template>
+             <template #footer>{{ tableFooter.valSemComp }}</template>
           </Column>
 
-          <Column field="totalMov" header="Valor Total Movimentado" sortable footer="R$ 23,7B" style="width: 15%">
+          <Column field="totalMov" header="Valor Total Movimentado" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
+             <template #footer>{{ tableFooter.totalMov }}</template>
           </Column>
 
-          <Column field="percQtdeSemComp" header="% Qtde Meds s/ Comp" sortable footer="15,34%" style="width: 15%">
+          <Column field="percQtdeSemComp" header="% Qtde Meds s/ Comp" sortable style="width: 15%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percQtdeSemComp)" :class="getRiskClass(slotProps.data.percQtdeSemComp)" />
              </template>
+             <template #footer>{{ tableFooter.percQtdeSemComp }}</template>
           </Column>
 
-          <Column field="qtdeSemComp" header="Qtde Meds s/ Comp" sortable footer="548M" style="width: 12%">
+          <Column field="qtdeSemComp" header="Qtde Meds s/ Comp" sortable style="width: 12%">
              <template #body="slotProps">
                 <span>{{ formatNumber(slotProps.data.qtdeSemComp) }}</span>
              </template>
+             <template #footer>{{ tableFooter.qtdeSemComp }}</template>
           </Column>
 
-          <Column field="totalQtde" header="Qtde Total Meds" sortable footer="3,5B" style="width: 15%">
+          <Column field="totalQtde" header="Qtde Total Meds" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatNumber(slotProps.data.totalQtde) }}</span>
              </template>
+             <template #footer>{{ tableFooter.totalQtde }}</template>
           </Column>
         </DataTable>
       </div>
@@ -417,15 +491,16 @@ const getTrendColor = (trend) => {
 }
 
 /* 🔄 FEEDBACK VISUAL (LOADING & ERROR) */
-.loading-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 12px;
-  margin-bottom: 2rem;
+.is-refreshing {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.kpi-grid:not(.is-refreshing),
+.table-section:not(.is-refreshing) {
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
 
 .error-banner {

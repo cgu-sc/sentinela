@@ -8,36 +8,168 @@ IF OBJECT_ID('fp.movimentacao_mensal_cnpj', 'U') IS NOT NULL
     DROP TABLE fp.movimentacao_mensal_cnpj;
 GO
 
--- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO (Denormalizada com CNPJ)
+-- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO (Denormalizada com CNPJ + UF + Geo + Quantidades)
 CREATE TABLE fp.movimentacao_mensal_cnpj (
     id_processamento INT NOT NULL,
-    cnpj VARCHAR(14) NOT NULL, -- Incluído para evitar JOINs pesados no Gráfico
+    cnpj VARCHAR(14) NOT NULL,          -- Incluído para evitar JOINs pesados no Gráfico
+    uf VARCHAR(2) NULL,                  -- Denormalizado para filtros por UF sem JOIN
+    no_regiao_saude VARCHAR(100) NULL,   -- Denormalizado para filtros por Região de Saúde sem JOIN
+    no_municipio VARCHAR(100) NULL,      -- Denormalizado para filtros por Município sem JOIN
     periodo DATE NOT NULL,
     total_vendas DECIMAL(18, 2),
-    total_sem_comprovacao DECIMAL(18, 2)
+    total_sem_comprovacao DECIMAL(18, 2),
+    total_qnt_vendas INT,               -- Qtde total de medicamentos vendidos no mês
+    total_qnt_sem_comprovacao INT       -- Qtde de medicamentos sem comprovação no mês
 );
 GO
 
--- 3. CARGA INICIAL DOS DADOS (Enriquecendo com CNPJ da tabela de processamento)
-INSERT INTO fp.movimentacao_mensal_cnpj (id_processamento, cnpj, periodo, total_vendas, total_sem_comprovacao)
-SELECT 
-    m.id_processamento, 
+-- 3. CARGA INICIAL DOS DADOS (Enriquecendo com CNPJ, UF, Região de Saúde, Município e Quantidades)
+INSERT INTO fp.movimentacao_mensal_cnpj (
+    id_processamento, cnpj, uf, no_regiao_saude, no_municipio, periodo,
+    total_vendas, total_sem_comprovacao,
+    total_qnt_vendas, total_qnt_sem_comprovacao
+)
+SELECT
+    m.id_processamento,
     p.cnpj,
-    m.periodo, 
-    SUM(m.valor_vendas), 
-    SUM(m.valor_sem_comprovacao)
+    r.uf,
+    g.no_regiao_saude,
+    g.no_municipio,
+    m.periodo,
+    SUM(m.valor_vendas),
+    SUM(m.valor_sem_comprovacao),
+    SUM(m.qnt_vendas),
+    SUM(m.qnt_vendas_sem_comprovacao)
 FROM fp.movimentacao_mensal_gtin m
 INNER JOIN fp.processamento p ON p.id = m.id_processamento
-GROUP BY m.id_processamento, p.cnpj, m.periodo;
+LEFT JOIN fp.resultado_sentinela r ON r.cnpj = p.cnpj
+LEFT JOIN fp.dados_ibge g ON g.id_ibge7 = r.id_ibge7
+GROUP BY m.id_processamento, p.cnpj, r.uf, g.no_regiao_saude, g.no_municipio, m.periodo;
 GO
 
--- 4. O ÍNDICE ULTRA OTIMIZADO (Clusterizado Composto Período + CNPJ)
-CREATE CLUSTERED INDEX IX_mov_cnpj_ULTRA 
+-- 4. ÍNDICE CLUSTERIZADO (Acesso principal por Período + CNPJ)
+-- Cobre: fator-risco, KPIs globais por período — range scan eficiente
+CREATE CLUSTERED INDEX IX_mov_cnpj_periodo_cnpj
 ON fp.movimentacao_mensal_cnpj (periodo, cnpj);
 GO
 
+-- 5. ÍNDICE NÃO-CLUSTERIZADO (Período + UF com colunas cobertas)
+-- Cobre: ranking UF por período (WHERE periodo BETWEEN ... GROUP BY uf)
+CREATE NONCLUSTERED INDEX IX_mov_cnpj_periodo_uf
+ON fp.movimentacao_mensal_cnpj (periodo, uf)
+INCLUDE (cnpj, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
+GO
+
+-- 6. ÍNDICE NÃO-CLUSTERIZADO (UF + Período)
+-- Cobre: filtros por UF específica + período
+CREATE NONCLUSTERED INDEX IX_mov_cnpj_uf_periodo
+ON fp.movimentacao_mensal_cnpj (uf, periodo)
+INCLUDE (cnpj, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
+GO
+
+-- 7. ÍNDICE NÃO-CLUSTERIZADO (Região de Saúde + Período)
+-- Cobre: filtros por Região de Saúde específica + período
+CREATE NONCLUSTERED INDEX IX_mov_cnpj_regiao_periodo
+ON fp.movimentacao_mensal_cnpj (no_regiao_saude, periodo)
+INCLUDE (cnpj, uf, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
+GO
+
+-- 8. ÍNDICE NÃO-CLUSTERIZADO (Município + Período)
+-- Cobre: filtros por Município específico + período
+CREATE NONCLUSTERED INDEX IX_mov_cnpj_municipio_periodo
+ON fp.movimentacao_mensal_cnpj (no_municipio, periodo)
+INCLUDE (cnpj, uf, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
+GO
+
+-- 9. COLUMNSTORE INDEX (O maior ganho de performance para queries analíticas)
+-- Para SUMs, COUNTs e GROUP BYs em grandes volumes, pode ser 10x mais rápido
+-- que índices B-tree tradicionais. O SQL Server usa compressão por coluna e
+-- processamento em batch — ideal para o padrão OLAP do Sentinela.
+CREATE NONCLUSTERED COLUMNSTORE INDEX IX_mov_cnpj_columnstore
+ON fp.movimentacao_mensal_cnpj (
+    periodo,
+    uf,
+    no_regiao_saude,
+    no_municipio,
+    cnpj,
+    total_vendas,
+    total_sem_comprovacao,
+    total_qnt_vendas,
+    total_qnt_sem_comprovacao
+);
+GO
 
 
+
+
+-- =============================================================================
+-- TABELAS PRÉ-COMPUTADAS (Lookup instantâneo por período)
+-- =============================================================================
+
+-- 8. LIMPEZA
+IF OBJECT_ID('fp.resultado_mensal_brasil', 'U') IS NOT NULL DROP TABLE fp.resultado_mensal_brasil;
+IF OBJECT_ID('fp.resultado_mensal_uf', 'U') IS NOT NULL DROP TABLE fp.resultado_mensal_uf;
+GO
+
+-- 9. resultado_mensal_brasil — totais nacionais por mês (~113 linhas)
+-- Cobre: KPIs de valor e quantidade sem filtro de %
+CREATE TABLE fp.resultado_mensal_brasil (
+    periodo DATE NOT NULL,
+    total_vendas DECIMAL(18, 2),
+    total_sem_comprovacao DECIMAL(18, 2),
+    total_qnt_vendas BIGINT,
+    total_qnt_sem_comprovacao BIGINT
+);
+GO
+
+INSERT INTO fp.resultado_mensal_brasil (
+    periodo, total_vendas, total_sem_comprovacao,
+    total_qnt_vendas, total_qnt_sem_comprovacao
+)
+SELECT
+    periodo,
+    SUM(total_vendas),
+    SUM(total_sem_comprovacao),
+    SUM(CAST(total_qnt_vendas AS BIGINT)),
+    SUM(CAST(total_qnt_sem_comprovacao AS BIGINT))
+FROM fp.movimentacao_mensal_cnpj
+GROUP BY periodo;
+GO
+
+CREATE CLUSTERED INDEX IX_resultado_mensal_brasil_periodo
+ON fp.resultado_mensal_brasil (periodo);
+GO
+
+-- 10. resultado_mensal_uf — totais por mês + UF (~3.051 linhas)
+-- Cobre: ranking UF por período sem filtro de %
+CREATE TABLE fp.resultado_mensal_uf (
+    periodo DATE NOT NULL,
+    uf VARCHAR(2) NULL,
+    total_vendas DECIMAL(18, 2),
+    total_sem_comprovacao DECIMAL(18, 2),
+    total_qnt_vendas BIGINT,
+    total_qnt_sem_comprovacao BIGINT
+);
+GO
+
+INSERT INTO fp.resultado_mensal_uf (
+    periodo, uf, total_vendas, total_sem_comprovacao,
+    total_qnt_vendas, total_qnt_sem_comprovacao
+)
+SELECT
+    periodo,
+    uf,
+    SUM(total_vendas),
+    SUM(total_sem_comprovacao),
+    SUM(CAST(total_qnt_vendas AS BIGINT)),
+    SUM(CAST(total_qnt_sem_comprovacao AS BIGINT))
+FROM fp.movimentacao_mensal_cnpj
+GROUP BY periodo, uf;
+GO
+
+CREATE CLUSTERED INDEX IX_resultado_mensal_uf_periodo_uf
+ON fp.resultado_mensal_uf (periodo, uf);
+GO
 
 ---------------------------------------------------------------------------------
 -- Vendas para Falecidos

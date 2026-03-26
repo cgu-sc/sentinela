@@ -28,8 +28,16 @@ Copy-Item -Recurse -Force "frontend/dist" "dist/frontend"
 
 # 2. BUILD DO BACKEND (PYTHON SIDECAR)
 Write-Host "`n2/3: Compilando o Backend FastAPI (Sidecar)..." -ForegroundColor Yellow
+
+# Define o caminho do Python local para evitar conflitos com pastas antigas
+$PY = "$ROOT\.venv\Scripts\python.exe"
+if (!(Test-Path $PY)) {
+    Write-Host "❌ Erro: Ambiente virtual não encontrado em .venv! Rode 'python -m venv .venv' primeiro." -ForegroundColor Red
+    exit
+}
+
 # Criamos o binário do backend de forma que o Tauri consiga consumir como sidecar
-python -m PyInstaller --noconfirm --onefile --console `
+& $PY -m PyInstaller --noconfirm --onefile --console `
     --name "sentinela-api" `
     --paths "backend" `
     --add-data "frontend/dist;frontend/dist" `

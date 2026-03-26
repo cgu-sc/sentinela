@@ -1,12 +1,21 @@
 # SENTINELA - Script de Build Automatizado para EXE (Tauri + FastAPI)
 # ==============================================================================
 
+# Garantir que o script use a pasta onde ele está localizado
+$ROOT = $PSScriptRoot
+Set-Location $ROOT
+
 Write-Host "🚀 Iniciando Build do Sentinela Web/Desktop..." -ForegroundColor Cyan
 
 # 1. BUILD DO FRONTEND (VUE + PRIMEVUE)
 Write-Host "`n1/3: Construindo o Frontend Vue..." -ForegroundColor Yellow
 if (!(Test-Path "frontend/public")) { New-Item -ItemType Directory -Path "frontend/public" -Force }
-Copy-Item "src/logo_sentinela.png" "frontend/public/logo_sentinela.png" -Force
+
+# Copia o logo para a pasta public do frontend (se existir na src do projeto)
+if (Test-Path "src/logo_sentinela.png") {
+    Copy-Item "src/logo_sentinela.png" "frontend/public/logo_sentinela.png" -Force
+}
+
 cd frontend
 npm install
 npm run build
@@ -19,9 +28,7 @@ Copy-Item -Recurse -Force "frontend/dist" "dist/frontend"
 
 # 2. BUILD DO BACKEND (PYTHON SIDECAR)
 Write-Host "`n2/3: Compilando o Backend FastAPI (Sidecar)..." -ForegroundColor Yellow
-pip install pyinstaller fastapi uvicorn sqlalchemy pyodbc pandas polars
 # Criamos o binário do backend de forma que o Tauri consiga consumir como sidecar
-# IMPORTANTE: Usamos --add-data para embutir o frontend dentro do binário do Python
 python -m PyInstaller --noconfirm --onefile --console `
     --name "sentinela-api" `
     --paths "backend" `

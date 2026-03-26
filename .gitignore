@@ -40,6 +40,12 @@ build/
 src-tauri/bin/
 sentinela_cache/
 *.exe
+*.parquet
+*.db
+*.csv
+*.json
+!frontend/package.json
+!package.json
 
 # === EXTERNAL MODELS ===
 # Incluído conforme solicitado

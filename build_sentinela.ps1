@@ -50,9 +50,9 @@ $BIN_DIR = "src-tauri/bin/_engine"
 if (!(Test-Path $BIN_DIR)) { New-Item -ItemType Directory -Force -Path $BIN_DIR }
 Copy-Item "dist/sentinela-api.exe" "$BIN_DIR/_engine-x86_64-pc-windows-msvc.exe" -Force
 
-# 3. BUILD DO TAURI (INSTALADOR FINAL)
-Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow
-cargo tauri build
+# 3. BUILD DO TAURI (APENAS EXECUTÁVEL, SEM INSTALADOR)
+Write-Host "`n3/3: Gerando o EXE Final (Tauri - Modo Turbo)..." -ForegroundColor Yellow
+cargo tauri build --no-bundle
 
 # 4. ORGANIZAÇÃO FINAL (PORTABLE)
 Write-Host "`n4/4: Organizando a pasta portátil final..." -ForegroundColor Cyan

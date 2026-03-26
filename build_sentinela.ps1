@@ -45,9 +45,10 @@ if (!(Test-Path $PY)) {
     --hidden-import "uvicorn" `
     backend/main.py
 
-# Organizando para o Tauri (Sidecar precisa do sufixo do sistema e agora usamos .bin)
-New-Item -ItemType Directory -Force -Path "src-tauri/bin"
-Copy-Item "dist/sentinela-api.exe" "src-tauri/bin/sentinela-engine-x86_64-pc-windows-msvc.bin" -Force
+# Organizando para o Tauri (Motor camuflado como _engine em subpasta)
+$BIN_DIR = "src-tauri/bin/_engine"
+if (!(Test-Path $BIN_DIR)) { New-Item -ItemType Directory -Force -Path $BIN_DIR }
+Copy-Item "dist/sentinela-api.exe" "$BIN_DIR/_engine-x86_64-pc-windows-msvc.exe" -Force
 
 # 3. BUILD DO TAURI (INSTALADOR FINAL)
 Write-Host "`n3/3: Gerando o EXE Final (Tauri)..." -ForegroundColor Yellow

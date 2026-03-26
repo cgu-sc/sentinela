@@ -14,14 +14,14 @@ pub fn run() {
         )?;
       }
 
-      // 2. INICIAR SIDECAR PYTHON (SENTINELA-ENGINE)
-      // O identificador "sentinela-engine" deve coincidir com o bundle.externalBin no tauri.conf.json
-      let sidecar_command = app.shell().sidecar("sentinela-engine").unwrap();
+      // 2. INICIAR SIDECAR PYTHON (O MOTOR _ENGINE)
+      // O identificador deve coincidir com o caminho em tauri.conf.json
+      let sidecar_command = app.shell().sidecar("bin/_engine/_engine").unwrap();
       let (mut _rx, _child) = sidecar_command
         .spawn()
-        .expect("Falha ao iniciar o motor do Sentinela (.bin)");
+        .expect("Falha ao iniciar o motor do Sentinela (Core)");
       
-      println!("🚀 Motor Sidecar (.bin) iniciado pelo Tauri com sucesso!");
+      println!("🚀 Motor Sidecar (.exe) iniciado pelo Tauri com sucesso!");
       
       Ok(())
     })

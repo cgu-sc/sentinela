@@ -21,8 +21,12 @@ export function useFilterParameters() {
     const uf = filterStore.selectedUF !== 'Todos' ? filterStore.selectedUF : null;
     const regiaoSaude = filterStore.selectedRegiaoSaude !== 'Todos' ? filterStore.selectedRegiaoSaude : null;
     const municipio = filterStore.selectedMunicipio !== 'Todos' ? filterStore.selectedMunicipio : null;
+    const situacaoRf = filterStore.selectedSituacao !== 'Todos' ? filterStore.selectedSituacao : null;
+    const conexaoMs = filterStore.selectedMS !== 'Todos' ? filterStore.selectedMS : null;
+    const porteEmpresa = filterStore.selectedPorte !== 'Todos' ? filterStore.selectedPorte : null;
+    const grandeRede   = filterStore.selectedGrandeRede !== 'Todos' ? filterStore.selectedGrandeRede : null;
 
-    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio };
+    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede };
   }
 
   function isPeriodoValido() {

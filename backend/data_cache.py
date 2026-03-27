@@ -48,12 +48,17 @@ def _sync_movimentacao(engine, progress_callback):
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]")).scalar()
     
     sql = """
-        SELECT cnpj, uf, no_regiao_saude, no_municipio, periodo,
-               CAST(total_vendas AS FLOAT) AS total_vendas,
-               CAST(total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
-               CAST(total_qnt_vendas AS FLOAT) AS total_qnt_vendas,
-               CAST(total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao
-        FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
+        SELECT M.cnpj, M.uf, M.no_regiao_saude, M.no_municipio, M.periodo,
+               CAST(M.total_vendas AS FLOAT) AS total_vendas,
+               CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
+               CAST(M.total_qnt_vendas AS FLOAT) AS total_qnt_vendas,
+               CAST(M.total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao,
+               P.situacao_rf,
+               P.conexao_ms,
+               P.porte_empresa,
+               P.flag_grandes_redes
+        FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
+        LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
     """
     
     chunk_list = []
@@ -76,6 +81,10 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_sem_comprovacao").cast(pl.Float64),
         pl.col("total_qnt_vendas").cast(pl.Float64),
         pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
+        pl.col("situacao_rf").cast(pl.Categorical),
+        pl.col("conexao_ms").cast(pl.Categorical),
+        pl.col("porte_empresa").cast(pl.Categorical),
+        pl.col("flag_grandes_redes").cast(pl.Categorical),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 

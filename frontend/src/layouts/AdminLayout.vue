@@ -97,7 +97,8 @@ watch(() => filterStore.selectedRegiaoSaude, () => {
 });
 const situacaoOptions = FILTER_OPTIONS.situacao;
 const msOptions       = FILTER_OPTIONS.ms;
-const porteOptions    = FILTER_OPTIONS.porte;
+const porteOptions      = FILTER_OPTIONS.porte;
+const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
 const clusterOptions  = FILTER_OPTIONS.cluster;
 const rfaOptions      = FILTER_OPTIONS.rfa;
 
@@ -285,9 +286,15 @@ watch(() => filterStore.periodo, (newVal) => {
             </div>
         </div>
 
-        <div class="filter-section">
-            <label class="filter-label">Porte CNPJ</label>
-            <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" />
+        <div class="grid-filters">
+            <div class="filter-section">
+                <label class="filter-label">Porte CNPJ</label>
+                <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" />
+            </div>
+            <div class="filter-section">
+                <label class="filter-label">Grande Rede</label>
+                <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" />
+            </div>
         </div>
 
         <div class="filter-section">
@@ -623,8 +630,9 @@ watch(() => filterStore.periodo, (newVal) => {
 :deep(.filter-input .p-inputtext),
 :deep(.filter-input .p-dropdown-label),
 :deep(.filter-input .p-calendar .p-inputtext) {
-    padding: 0.4rem 0.6rem; /* Reduzido de ~0.75rem */
-    font-size: 0.75rem; /* Font-size compacto */
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    text-transform: none;
 }
 
 :deep(.p-dropdown), :deep(.p-calendar) {

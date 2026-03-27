@@ -136,9 +136,9 @@ const chartOptions = computed(() => ({
 }));
 // 5. REATIVIDADE AOS FILTROS
 const fetchTodos = () => {
-  const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio } = getApiParams();
-  dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
-  dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio);
+  const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede } = getApiParams();
+  dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
+  dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
 };
 
 watch(
@@ -149,6 +149,10 @@ watch(
     filterStore.selectedUF,
     filterStore.selectedRegiaoSaude,
     filterStore.selectedMunicipio,
+    filterStore.selectedSituacao,
+    filterStore.selectedMS,
+    filterStore.selectedPorte,
+    filterStore.selectedGrandeRede,
   ],
   () => { if (isPeriodoValido()) fetchTodos(); },
   { deep: true, immediate: false }

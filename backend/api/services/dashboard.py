@@ -15,7 +15,7 @@ from ..schemas.dashboard import (
 
 class DashboardService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None) -> DashboardResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> DashboardResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -69,7 +69,11 @@ class DashboardService:
             if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
             if regiao_saude and regiao_saude != 'Todos':  mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
             if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
-            
+            if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            if conexao_ms and conexao_ms != 'Todos':      mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+
             period_df = df.filter(mask)
 
             # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
@@ -153,7 +157,7 @@ class DashboardService:
             print(traceback.format_exc())
             return []
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None) -> FatorRiscoResponseSchema:
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> FatorRiscoResponseSchema:
         """
         Calcula as faixas de risco (Buckets de 10%) via Polars in-memory.
         """
@@ -169,9 +173,13 @@ class DashboardService:
 
             # Filtro de período + geo
             mask = pl.col("periodo").is_between(inicio, fim)
-            if uf:           mask = mask & (pl.col("uf") == uf)
-            if regiao_saude: mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if municipio:    mask = mask & (pl.col("no_municipio") == municipio)
+            if uf:                                        mask = mask & (pl.col("uf") == uf)
+            if regiao_saude:                              mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+            if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
+            if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            if conexao_ms and conexao_ms != 'Todos':       mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
 
             # Agrega por CNPJ no período e calcula %
             cnpj_agg = (

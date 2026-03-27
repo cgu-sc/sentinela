@@ -18,7 +18,7 @@ export const useDashboardStore = defineStore('dashboard', {
      * Busca os dados estratégicos (KPIs e Agrupamento por UF) no Backend.
      * Esta API traz os dados já calculados (agregados) pelo SQL Server.
      */
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null) {
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null) {
       this.isLoading = true;
       this.error = null;
       try {
@@ -31,6 +31,10 @@ export const useDashboardStore = defineStore('dashboard', {
         if (uf && uf !== 'Todos') params.uf = uf;
         if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
         if (municipio && municipio !== 'Todos') params.municipio = municipio;
+        if (situacaoRf) params.situacao_rf = situacaoRf;
+        if (conexaoMs) params.conexao_ms = conexaoMs;
+        if (porteEmpresa) params.porte_empresa = porteEmpresa;
+        if (grandeRede) params.grande_rede = grandeRede;
 
         const response = await axios.get(API_ENDPOINTS.dashboardResumo, { params });
         this.kpis = response.data.kpis;
@@ -48,7 +52,7 @@ export const useDashboardStore = defineStore('dashboard', {
      * Busca os dados do gráfico de Fator de Risco baseado num período customizado.
      * Se inicio/fim forem nulos, o backend retorna o acumulado histórico.
      */
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null) {
       this.fatorRiscoLoading = true;
       try {
         const params = {};
@@ -60,6 +64,10 @@ export const useDashboardStore = defineStore('dashboard', {
         if (uf && uf !== 'Todos') params.uf = uf;
         if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
         if (municipio && municipio !== 'Todos') params.municipio = municipio;
+        if (situacaoRf) params.situacao_rf = situacaoRf;
+        if (conexaoMs) params.conexao_ms = conexaoMs;
+        if (porteEmpresa) params.porte_empresa = porteEmpresa;
+        if (grandeRede) params.grande_rede = grandeRede;
 
         const response = await axios.get(API_ENDPOINTS.dashboardFatorRisco, { params });
         this.fatorRisco = response.data.buckets;

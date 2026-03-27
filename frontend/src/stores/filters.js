@@ -28,6 +28,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedSituacao = ref(saved?.selectedSituacao ?? 'Todos');
   const selectedMS = ref(saved?.selectedMS ?? 'Todos');
   const selectedPorte = ref(saved?.selectedPorte ?? 'Todos');
+  const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? 'Todos');
 
   // 2. FILTROS DE FAIXA (RANGES)
   // *Range: atualiza durante o drag (display)
@@ -58,6 +59,7 @@ export const useFilterStore = defineStore('filters', () => {
         selectedSituacao: selectedSituacao.value,
         selectedMS: selectedMS.value,
         selectedPorte: selectedPorte.value,
+        selectedGrandeRede: selectedGrandeRede.value,
         percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
         percentualNaoComprovacaoFilter: percentualNaoComprovacaoFilter.value,
         valorMinSemComp: valorMinSemComp.value,
@@ -73,7 +75,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte,
+    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -89,6 +91,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedSituacao.value = 'Todos';
     selectedMS.value = 'Todos';
     selectedPorte.value = 'Todos';
+    selectedGrandeRede.value = 'Todos';
     percentualNaoComprovacaoRange.value = [0, 100];
     percentualNaoComprovacaoFilter.value = [0, 100];
     valorMinSemComp.value = 0;
@@ -109,6 +112,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedSituacao,
     selectedMS,
     selectedPorte,
+    selectedGrandeRede,
     percentualNaoComprovacaoRange,
     percentualNaoComprovacaoFilter,
     valorMinSemComp,

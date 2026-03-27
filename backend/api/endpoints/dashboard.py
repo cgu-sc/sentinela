@@ -18,13 +18,17 @@ def get_dashboard_resumo(
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Retorna o resumo consolidado do dashboard (KPIs e Análise por UF).
     Aceita filtros de período, faixa de %, valor mínimo e filtros geográficos.
     """
-    return DashboardService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio)
+    return DashboardService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede)
 
 @router.get("/resultados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_sentinela(db: Session = Depends(get_db)):
@@ -43,9 +47,13 @@ def get_resultado_faixas_risco(
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Retorna os dados do gráfico Fator de Risco x Qtd Estab para um período específico.
     """
-    return DashboardService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio)
+    return DashboardService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede)

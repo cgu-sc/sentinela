@@ -34,13 +34,26 @@ export const useGeoStore = defineStore('geo', () => {
     return ['Todos', ...Array.from(set).sort()];
   }
 
-  // Municípios filtrados por UF e/ou Região de Saúde
+  // Municípios filtrados por UF e/ou Região de Saúde (Com tratamento de homônimos)
   function municipiosPorFiltro(uf, regiao) {
     let filtradas = localidades.value;
     if (uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
     if (regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
-    const set = new Set(filtradas.map(l => l.no_municipio));
-    return ['Todos', ...Array.from(set).sort()];
+    
+    // Gera lista de objetos únicos { label, value }
+    // O valor é sempre 'Nome|UF' para garantir unicidade total
+    const list = filtradas.map(l => ({
+        label: uf === 'Todos' ? `${l.no_municipio} - ${l.sg_uf}` : l.no_municipio,
+        value: `${l.no_municipio}|${l.sg_uf}`,
+        nome: l.no_municipio,
+        uf: l.sg_uf
+    }));
+
+    // Remove duplicatas e ordena
+    const unique = Array.from(new Map(list.map(item => [item.value, item])).values());
+    unique.sort((a, b) => a.label.localeCompare(b.label));
+
+    return [{ label: 'Todos', value: 'Todos' }, ...unique];
   }
 
   return {

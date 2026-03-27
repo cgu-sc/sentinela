@@ -71,13 +71,25 @@ const ufOptions = computed(() => geoStore.ufs);
 const regiaoSaudeOptions = computed(() => geoStore.regioesPorUF(filterStore.selectedUF));
 const municipioOptions = computed(() => geoStore.municipiosPorFiltro(filterStore.selectedUF, filterStore.selectedRegiaoSaude));
 
-// Reseta filtros dependentes ao mudar UF ou Região de Saúde
-watch(() => filterStore.selectedUF, () => {
-  filterStore.selectedRegiaoSaude = 'Todos';
-  filterStore.selectedMunicipio = 'Todos';
+// Reseta filtros dependentes de forma inteligente (Só se a seleção atual se tornar inválida)
+watch(() => filterStore.selectedUF, (newUF) => {
+  const regioesDisponiveis = geoStore.regioesPorUF(newUF);
+  if (!regioesDisponiveis.includes(filterStore.selectedRegiaoSaude)) {
+    filterStore.selectedRegiaoSaude = 'Todos';
+  }
+  
+  const municipiosDisponiveis = geoStore.municipiosPorFiltro(newUF, filterStore.selectedRegiaoSaude);
+  // Muda de .includes() para .some() ou .find() pois agora é uma lista de objetos { label, value }
+  if (!municipiosDisponiveis.some(m => m.value === filterStore.selectedMunicipio)) {
+    filterStore.selectedMunicipio = 'Todos';
+  }
 });
-watch(() => filterStore.selectedRegiaoSaude, () => {
-  filterStore.selectedMunicipio = 'Todos';
+
+watch(() => filterStore.selectedRegiaoSaude, (newRegiao) => {
+  const municipiosDisponiveis = geoStore.municipiosPorFiltro(filterStore.selectedUF, newRegiao);
+  if (!municipiosDisponiveis.some(m => m.value === filterStore.selectedMunicipio)) {
+    filterStore.selectedMunicipio = 'Todos';
+  }
 });
 const situacaoOptions = FILTER_OPTIONS.situacao;
 const msOptions       = FILTER_OPTIONS.ms;
@@ -319,6 +331,8 @@ const isAllSelected = computed(() => {
             :options="municipioOptions" 
             placeholder="Município" 
             filter 
+            optionLabel="label"
+            optionValue="value"
             reset-filter-on-hide
             auto-option-focus
             filter-match-mode="contains"
@@ -955,6 +969,7 @@ const isAllSelected = computed(() => {
   flex-direction: column;
   height: 100vh; /* Altura cravada para o scroll interno funcionar */
   overflow-y: auto; /* Aqui acontece a magica do scroll */
+  scrollbar-gutter: stable; /* MÁGICA: Fixa o espaço da barra de rolagem para evitar o 'salto' lateral */
   min-width: 0; 
   background: transparent;
 }
@@ -992,6 +1007,10 @@ const isAllSelected = computed(() => {
 
 .top-navbar {
   height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  flex-shrink: 0; /* IMPEDE QUE A NAVBAR ESTIQUE OU ENCOLHA */
+  
   /* MÁGICA: Navbar integrada com efeito vidro fosco */
   background: color-mix(in srgb, var(--navbar-bg) 35%, transparent) !important;
   backdrop-filter: blur(12px);
@@ -1005,6 +1024,7 @@ const isAllSelected = computed(() => {
   top: 0;
   z-index: 100;
   transition: background-color 0.3s ease;
+  overflow: hidden; /* PROTEÇÃO EXTRA CONTRA VAZAMENTO DE ALTURA */
 }
 
 .nav-left {

@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import { FILTER_DEFAULTS } from '@/config/constants';
+import { useGeoStore } from './geo';
 
 const STORAGE_KEY = 'sentinela_filters';
 
@@ -20,6 +22,7 @@ function loadFromStorage() {
 
 export const useFilterStore = defineStore('filters', () => {
   const saved = loadFromStorage();
+  const geoStore = useGeoStore();
 
   // 1. FILTROS GLOBAIS
   const selectedUF = ref(saved?.selectedUF ?? FILTER_DEFAULTS.UF);
@@ -31,8 +34,6 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
 
   // 2. FILTROS DE FAIXA (RANGES)
-  // *Range: atualiza durante o drag (display)
-  // *Filter: atualiza só no slideend (dispara API)
   const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
   const percentualNaoComprovacaoFilter = ref(saved?.percentualNaoComprovacaoFilter ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
   const valorMinSemComp = ref(Array.isArray(saved?.valorMinSemComp) ? saved.valorMinSemComp : FILTER_DEFAULTS.VALOR_RANGE);
@@ -42,9 +43,38 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 3. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
   const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
-  const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS); // Assuming FILTER_DEFAULTS.STATUS exists or should be added
+  const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS);
   const rfaSelection = ref(saved?.rfaSelection ?? FILTER_DEFAULTS.RFA);
   const searchTarget = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
+
+  // 4. INTELIGÊNCIA DE DADOS (CASCATA REVERSA)
+  watch(selectedRegiaoSaude, (newRegiao) => {
+    if (newRegiao !== 'Todos' && geoStore.localidades.length > 0) {
+      // Tenta encontrar a região dentro do UF já selecionado (se houver um)
+      const found = geoStore.localidades.find(l => 
+        l.no_regiao_saude === newRegiao && 
+        (selectedUF.value === 'Todos' || l.sg_uf === selectedUF.value)
+      );
+      if (found && selectedUF.value !== found.sg_uf) {
+        selectedUF.value = found.sg_uf;
+      }
+    }
+  });
+
+  watch(selectedMunicipio, (newMunVal) => {
+    if (newMunVal !== 'Todos' && geoStore.localidades.length > 0) {
+      // O valor vem formatado como "Nome|UF" (Garante unicidade)
+      const [nome, uf] = newMunVal.split('|');
+      const found = geoStore.localidades.find(l => 
+        l.no_municipio === nome && l.sg_uf === uf
+      );
+      
+      if (found) {
+        if (selectedUF.value !== found.sg_uf) selectedUF.value = found.sg_uf;
+        if (selectedRegiaoSaude.value !== found.no_regiao_saude) selectedRegiaoSaude.value = found.no_regiao_saude;
+      }
+    }
+  });
 
   // Persiste automaticamente no localStorage com debounce de 200ms
   // (evita escrita contínua durante drag de sliders)

@@ -44,17 +44,21 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
+  gap: 1.25rem;
+  width: 100%;
 }
 
 .kpi-card {
   /* MÁGICA BALANCEADA: Gradiente interno e borda com visibilidade ideal */
   background: linear-gradient(135deg, var(--card-bg) 75%, color-mix(in srgb, var(--primary-color) 3%, var(--card-bg)) 100%);
   border-radius: 12px;
-  padding: 1rem 1.25rem;
+  padding: 1.15rem 1.4rem;
   border: 1px solid color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-border));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 86px; /* TRAVA VERTICAL */
+  display: flex;
+  align-items: center;
 }
 
 .kpi-card:hover { 
@@ -79,24 +83,29 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 .kpi-label {
   font-size: 0.75rem;
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+  margin-bottom: 0.35rem;
 }
 
 .kpi-value {
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--text-color);
-  opacity: 0.85;
+  opacity: 0.95;
+  line-height: 1;
 }
 
 .kpi-icon-bg {
   width: 2.75rem;
   height: 2.75rem;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   font-size: 1.25rem;
 }
 

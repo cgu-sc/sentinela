@@ -66,7 +66,7 @@ else:
     FRONTEND_PATH = os.path.join(BASE_DIR, "frontend", "dist")
 
 # Debug para o console do usuário ver onde o sistema está procurando
-print(f"📂 Procurando frontend em: {FRONTEND_PATH}")
+print(f"[INFO] Procurando frontend em: {FRONTEND_PATH}")
 
 if os.path.exists(FRONTEND_PATH):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_PATH, "assets")), name="static")
@@ -78,11 +78,14 @@ if os.path.exists(FRONTEND_PATH):
     # Rota de captura para todas as outras URLs (necessário para Vue Router History Mode)
     @app.get("/{full_path:path}")
     async def catch_all(full_path: str):
-        # Se o arquivo existir na pasta assets, o mount acima já pegou.
-        # Se não existir, mandamos o index.html pro Vue Router se achar.
+        # Primeiro verifica se o arquivo existe na raiz do frontend (ex: logo_sentinela.png)
+        file_path = os.path.join(FRONTEND_PATH, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        # Se nao existir, manda o index.html para o Vue Router tratar
         return FileResponse(os.path.join(FRONTEND_PATH, "index.html"))
 else:
-    print("⚠️ Pasta frontend/dist não encontrada! Verifique se rodou o build_sentinela.ps1.")
+    print("[AVISO] Pasta frontend/dist nao encontrada! Verifique se rodou o build.")
 
 # @app.get("/")
 # def read_root():
@@ -112,5 +115,5 @@ if __name__ == "__main__":
 
     # Iniciamos o servidor na porta 8002
     # Quando rodando via Tauri, este executável é iniciado automaticamente.
-    print("🚀 Sentinela Sidecar Backend rodando na porta 8002...")
+    print("[INFO] Sentinela Backend rodando na porta 8002...")
     uvicorn.run(app, host="127.0.0.1", port=8002)

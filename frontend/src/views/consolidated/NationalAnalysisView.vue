@@ -7,29 +7,29 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useChartStyles } from '@/composables/useChartStyles';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import { useTableAggregation } from '@/composables/useTableAggregation';
-import { useDashboardStore } from '@/stores/dashboard';
+import { useAnalyticsStore } from '@/stores/analytics';
 import { storeToRefs } from 'pinia';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Tag from 'primevue/tag';
+import Button from 'primevue/button';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent, formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
-const dashboardStore = useDashboardStore();
+const analyticsStore = useAnalyticsStore();
 const { getApiParams, isPeriodoValido } = useFilterParameters();
 
 // Destruturação reativa para manter os dados sincronizados
-const { kpis, resultadoSentinelaUF, fatorRisco, isLoading, fatorRiscoLoading, error } = storeToRefs(dashboardStore);
+const { enrichedKpis, resultadoSentinelaUF, fatorRisco, isLoading, fatorRiscoLoading, error } = storeToRefs(analyticsStore);
 
 // Chave reativa para forçar re-render completo do gráfico quando os dados mudam.
 // Necessário porque o ApexCharts serializa as options via JSON (perde funções/formatters) no updateOptions.
 const chartRenderKey = ref(0);
 watch(fatorRisco, () => { chartRenderKey.value++; });
 const chartKey = computed(() => `${themeStore.isDark ? 'dark' : 'light'}-${chartRenderKey.value}`);
-import DataTable from 'primevue/datatable';
-import Column from 'primevue/column';
-import Tag from 'primevue/tag';
-import Button from 'primevue/button';
 
 // 4. LOGICA DE FILTRAGEM (O PODER DO PINIA)
 const filteredData = computed(() => {
@@ -137,8 +137,8 @@ const chartOptions = computed(() => ({
 // 5. REATIVIDADE AOS FILTROS
 const fetchTodos = () => {
   const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede } = getApiParams();
-  dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
-  dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
+  analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
+  analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede);
 };
 
 watch(
@@ -193,13 +193,13 @@ const tableFooter = computed(() => {
     <div v-if="error" class="error-banner">
        <i class="pi pi-exclamation-circle"></i>
        <span>{{ error }}</span>
-       <Button label="Tentar Novamente" icon="pi pi-refresh" @click="dashboardStore.fetchDashboardSummary()" text size="small" />
+       <Button label="Tentar Novamente" icon="pi pi-refresh" @click="analyticsStore.fetchDashboardSummary()" text size="small" />
     </div>
 
     <!-- CARDS DE KPI -->
     <div class="kpi-grid" :class="{ 'is-refreshing': isLoading }">
       <div 
-        v-for="kpi in kpis" 
+        v-for="kpi in enrichedKpis" 
         :key="kpi.label" 
         class="kpi-card" 
       >

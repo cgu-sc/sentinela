@@ -1,18 +1,7 @@
-<script>
-// Constante de módulo: calculada uma única vez no import, compartilhada por todas as instâncias
-const _monthsLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-const availableMonths = [];
-for (let y = 2015; y <= 2024; y++) {
-  const startMonth = y === 2015 ? 6 : 0;
-  for (let m = startMonth; m <= 11; m++) {
-    availableMonths.push({ label: `${_monthsLabels[m]}/${y.toString().slice(-2)}`, date: new Date(y, m, 1) });
-  }
-}
-</script>
-
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
@@ -35,12 +24,6 @@ const filterStore = useFilterStore();
 const geoStore = useGeoStore();
 const route = useRoute();
 const router = useRouter();
-
-// Configuração de Módulos (DNA Sentinela)
-const modules = ref([
-    { name: 'Sentinela', value: 'consolidado', icon: 'pi pi-chart-bar' },
-    { name: 'Alvos', value: 'alvos', icon: 'pi pi-compass' } // pi-bullseye pode nao existir
-]);
 
 const activeModule = ref('consolidado');
 

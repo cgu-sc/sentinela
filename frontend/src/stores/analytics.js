@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS } from '@/config/api';
+import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
 
-export const useDashboardStore = defineStore('dashboard', {
+export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
     kpis: [],
     resultadoSentinelaUF: [],
@@ -42,7 +43,7 @@ export const useDashboardStore = defineStore('dashboard', {
         this.lastSync = new Date();
       } catch (err) {
         console.error('Erro ao buscar resumo do dashboard:', err);
-        this.error = 'Não foi possível carregar os KPIs estratégicos.';
+        this.error = 'Não foi possível carregar as métricas estratégicas.';
       } finally {
         this.isLoading = false;
       }
@@ -81,7 +82,20 @@ export const useDashboardStore = defineStore('dashboard', {
   },
 
   getters: {
-    // Podemos formatar valores ou criar sub-filtros aqui
+    /**
+     * Retorna os KPIs enriquecidos com metadados de UI (ícones e cores).
+     * O Pinia cacheia o resultado deste getter, garantindo performance máxima.
+     */
+    enrichedKpis: (state) => {
+      return state.kpis.map(kpi => {
+        const config = KPI_CONFIGS[kpi.label] || DEFAULT_KPI_STYLE;
+        return {
+          ...kpi,
+          icon: kpi.icon || config.icon,
+          color: kpi.color || config.color
+        };
+      });
+    },
     getKpiById: (state) => (id) => state.kpis.find(k => k.id === id)
   }
 });

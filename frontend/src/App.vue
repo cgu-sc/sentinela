@@ -1,14 +1,14 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useResultadoStore } from '@/stores/resultados';
-import { useDashboardStore } from '@/stores/dashboard';
+import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
 const resultadoStore = useResultadoStore();
-const dashboardStore = useDashboardStore();
+const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
@@ -70,8 +70,8 @@ onMounted(async () => {
 
     await Promise.allSettled([
       resultadoStore.fetchResultados(),
-      dashboardStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
-      dashboardStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
+      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
+      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       geoStore.fetchLocalidades()
     ]);
 

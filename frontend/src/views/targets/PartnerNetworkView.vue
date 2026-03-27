@@ -4,17 +4,11 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 
-// Mockup Data - Rede de Sócios
-const sociosData = ref([
-    { nome: 'JOAO SILVA', cpf: '***.123.456-**', cadunico: 'Não', mandado: 'Não', numSociedades: 3 },
-    { nome: 'MARIA SANTOS', cpf: '***.789.012-**', cadunico: 'Sim', mandado: 'Não', numSociedades: 1 },
-    { nome: 'JOSE OLIVEIRA', cpf: '***.345.678-**', cadunico: 'Não', mandado: 'Sim', numSociedades: 12 }
-]);
+import { SOCIOS_DATA_DEMO, EMPRESAS_SOCIO_DEMO } from '@/mocks/demoData';
 
-const empresasSocio = ref([
-    { cnpj: '10000180000156', uf: 'RJ', municipio: 'Cordeiro', situacao: 'ATIVADA' },
-    { cnpj: '10135250000115', uf: 'SC', municipio: 'Ipumirim', situacao: 'BAIXADA' }
-]);
+// Data (Mocks centralizados)
+const sociosData = ref(SOCIOS_DATA_DEMO);
+const empresasSocio = ref(EMPRESAS_SOCIO_DEMO);
 
 const searchCNPJ = ref('');
 </script>

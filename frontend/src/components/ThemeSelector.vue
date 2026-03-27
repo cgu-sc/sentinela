@@ -3,22 +3,10 @@ import { ref, computed } from 'vue';
 import { useThemeStore } from '../stores/theme';
 import Button from 'primevue/button';
 import OverlayPanel from 'primevue/overlaypanel';
+import { PALETTE_OPTIONS as palettes } from '@/config/themeConfig';
 
 const themeStore = useThemeStore();
 const panel = ref();
-
-const palettes = [
-  {
-    id: 'azul',
-    name: 'Azul',
-    gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-  },
-  {
-    id: 'carbon',
-    name: 'Carbon Gold',
-    gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
-  },
-];
 
 const isDarkMode = computed(() => themeStore.isDark);
 const currentPalette = computed(() => themeStore.currentPalette);

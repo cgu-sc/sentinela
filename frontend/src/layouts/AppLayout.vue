@@ -866,7 +866,11 @@ watch(() => filterStore.periodo, (newVal) => {
   margin-left: var(--sidebar-width);
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 100vh;
-  background-color: var(--bg-color);
+  background: radial-gradient(
+    circle at 0% 0%, 
+    color-mix(in srgb, var(--primary-color) 6%, var(--bg-color)) 0%, 
+    var(--bg-color) 100%
+  );
 }
 
 .admin-layout.collapsed .main-container {

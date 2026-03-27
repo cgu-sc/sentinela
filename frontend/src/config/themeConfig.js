@@ -5,6 +5,7 @@
 export const SURFACE_COLORS = {
   light: {
     'bg-color': '#f8fafc',
+    'bg-gradient': 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
     'text-color': '#1e293b',
     'text-muted': '#64748b',
     'card-bg': '#ffffff',
@@ -16,6 +17,7 @@ export const SURFACE_COLORS = {
   },
   dark: {
     'bg-color': '#0d1117',
+    'bg-gradient': 'radial-gradient(circle at 20% 0%, #1c2533 0%, #0d1117 100%)',
     'text-color': '#cbd5e1',
     'text-muted': '#8b949e',
     'card-bg': '#161b22',

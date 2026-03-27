@@ -36,8 +36,8 @@ export const useFilterStore = defineStore('filters', () => {
   // 2. FILTROS DE FAIXA (RANGES)
   const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
   const percentualNaoComprovacaoFilter = ref(saved?.percentualNaoComprovacaoFilter ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
-  const valorMinSemComp = ref(Array.isArray(saved?.valorMinSemComp) ? saved.valorMinSemComp : FILTER_DEFAULTS.VALOR_RANGE);
-  const valorMinSemCompFilter = ref(Array.isArray(saved?.valorMinSemCompFilter) ? saved.valorMinSemCompFilter : FILTER_DEFAULTS.VALOR_RANGE);
+  const valorMinSemComp = ref(typeof saved?.valorMinSemComp === 'number' ? saved.valorMinSemComp : FILTER_DEFAULTS.VALOR_MIN);
+  const valorMinSemCompFilter = ref(typeof saved?.valorMinSemCompFilter === 'number' ? saved.valorMinSemCompFilter : FILTER_DEFAULTS.VALOR_MIN);
   const periodo = ref(saved?.periodo ?? FILTER_DEFAULTS.DATE_RANGE);
   const sliderValue = ref(saved?.sliderValue ?? FILTER_DEFAULTS.SLIDER_INDEX_RANGE);
 
@@ -124,8 +124,8 @@ export const useFilterStore = defineStore('filters', () => {
     selectedGrandeRede.value = 'Todos';
     percentualNaoComprovacaoRange.value = [0, 100];
     percentualNaoComprovacaoFilter.value = [0, 100];
-    valorMinSemComp.value = [0, 1000000];
-    valorMinSemCompFilter.value = [0, 1000000];
+    valorMinSemComp.value = FILTER_DEFAULTS.VALOR_MIN;
+    valorMinSemCompFilter.value = FILTER_DEFAULTS.VALOR_MIN;
     periodo.value = [new Date(2015, 6, 1), new Date(2024, 11, 31)];
     sliderValue.value = [0, 113];
     clusterSelection.value = 'Todos';

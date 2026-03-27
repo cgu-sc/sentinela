@@ -1,112 +1,179 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
-import { useChartStyles } from '@/composables/useChartStyles';
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
+// ── ECharts ───────────────────────────────────────────────────────────────
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { BarChart, LineChart } from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  AxisPointerComponent,
+} from 'echarts/components';
+import VChart from 'vue-echarts';
+
+use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
+
+// ── Stores ────────────────────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
-const themeStore = useThemeStore();
+const themeStore     = useThemeStore();
 const { fatorRisco, fatorRiscoLoading } = storeToRefs(analyticsStore);
-const { formatBRL, formatNumber, formatCurrencyFull, formatNumberFull } = useFormatting();
-const { chartBaseOptions, chartColors } = useChartStyles(themeStore);
+const { formatBRL, formatCurrencyFull, formatNumberFull } = useFormatting();
 
-// Re-render key para o ApexCharts (necessário para o tema Dark/Light)
-const chartRenderKey = ref(0);
-watch(fatorRisco, () => { chartRenderKey.value++; });
-const chartKey = computed(() => `${themeStore.isDark ? 'dark' : 'light'}-${chartRenderKey.value}`);
-
-const chartSeries = computed(() => [
-    {
-        name: 'Qtd Estab por Faixa',
-        type: 'column',
-        data: fatorRisco.value.map(b => b.qtd)
-    },
-    {
-        name: 'Valor Sem Comprovação',
-        type: 'area',
-        data: fatorRisco.value.map(b => b.valor_raw)
+// ── Tema ──────────────────────────────────────────────────────────────────
+const C = computed(() => themeStore.isDark
+  ? {
+      text: '#e2e8f0', muted: '#94a3b8', grid: '#ffffff0f',
+      bg: 'transparent', tooltip: '#1e293b', border: '#334155',
+      bar:     '#8b5cf6',
+      barGrad: '#a78bfa',
+      area:    '#ef4444',
     }
-]);
+  : {
+      text: '#1e293b', muted: '#64748b', grid: '#0000000d',
+      bg: 'transparent', tooltip: '#ffffff', border: '#e2e8f0',
+      bar:     '#7c3aed',
+      barGrad: '#8b5cf6',
+      area:    '#dc2626',
+    }
+);
 
-const chartOptions = computed(() => ({
-    ...chartBaseOptions.value,
-    chart: {
-        ...chartBaseOptions.value.chart,
-        zoom: { enabled: false }
-    },
+// ── Opção ECharts ─────────────────────────────────────────────────────────
+const chartOption = computed(() => {
+  const c      = C.value;
+  const faixas = fatorRisco.value.map(b => b.faixa);
+
+  return {
+    backgroundColor: c.bg,
+    animation: true,
+    animationDuration: 900,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+
     legend: {
-        ...chartBaseOptions.value.legend,
-        labels: { colors: chartColors.value.muted },
-        fontSize: '12px',
-        fontWeight: 600,
+      top: 6,
+      left: 'center',
+      textStyle: { color: c.muted, fontSize: 12, fontWeight: 600 },
+      itemGap: 24,
+      itemWidth: 14,
+      itemHeight: 8,
     },
-    colors: [chartColors.value.primary, chartColors.value.danger],
-    stroke: {
-        width: [0, 3],
-        curve: 'smooth',
-        lineCap: 'round'
+
+    grid: { top: 44, left: 80, right: 80, bottom: 64 },
+
+    xAxis: {
+      type: 'category',
+      data: faixas,
+      axisLine:  { lineStyle: { color: c.grid } },
+      axisTick:  { show: false },
+      axisLabel: { color: c.muted, fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif', interval: 0, rotate: 15 },
+      name: 'Faixa de Percentual de Não Comprovação',
+      nameLocation: 'middle',
+      nameGap: 50,
+      nameTextStyle: { color: c.muted, fontSize: 10, fontWeight: 500 },
     },
-    plotOptions: {
-        bar: {
-            columnWidth: '45%',
-            borderRadius: 6,
-            borderRadiusApplication: 'around',
-        }
-    },
-    fill: {
-        type: 'gradient',
-        gradient: {
-            shade: 'dark',
-            type: "vertical",
-            shadeIntensity: 0.5,
-            gradientToColors: [chartColors.value.secondary, undefined], 
-            inverseColors: false,
-            opacityFrom: [0.9, 0.6],
-            opacityTo: [0.8, 0.1],
-            stops: [0, 100, 100]
-        }
-    },
-    labels: fatorRisco.value.map(b => b.faixa),
-    xaxis: {
-        ...chartBaseOptions.value.xaxis,
-        type: 'category',
-        title: {
-            text: 'Faixa de Percentual de Não Comprovação',
-            style: { fontSize: '12px', fontWeight: 600, color: chartColors.value.muted }
-        }
-    },
-    yaxis: [
-        {
-            ...chartBaseOptions.value.yaxis,
-            title: { text: 'Qtd Estab', style: { color: chartColors.value.primary, fontWeight: 700, fontSize: '13px' } },
-            labels: {
-                ...chartBaseOptions.value.yaxis?.labels,
-                formatter: (val) => formatNumber(val)
-            }
-        },
-        {
-            ...chartBaseOptions.value.yaxis,
-            opposite: true,
-            title: { text: 'Valor Sem Comp', style: { color: chartColors.value.danger, fontWeight: 700, fontSize: '13px' } },
-            labels: {
-                ...chartBaseOptions.value.yaxis?.labels,
-                formatter: (val) => formatBRL(val)
-            }
-        }
+
+    yAxis: [
+      {
+        type: 'value',
+        name: 'Qtd Estab',
+        nameLocation: 'end',
+        nameTextStyle: { color: c.bar, fontSize: 11, fontWeight: 700 },
+        axisLine:  { show: false },
+        axisTick:  { show: false },
+        splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
+        axisLabel: { color: c.muted, fontSize: 10, formatter: (v) => v.toLocaleString('pt-BR') },
+      },
+      {
+        type: 'value',
+        name: 'Valor S/ Comp',
+        nameLocation: 'end',
+        nameTextStyle: { color: c.area, fontSize: 11, fontWeight: 700 },
+        axisLine:  { show: false },
+        axisTick:  { show: false },
+        splitLine: { show: false },
+        axisLabel: { color: c.muted, fontSize: 10, formatter: (v) => formatBRL(v) },
+      },
     ],
+
     tooltip: {
-        shared: true,
-        intersect: false,
-        theme: themeStore.isDark ? 'dark' : 'light',
-        y: [
-            { formatter: (val) => formatNumberFull(val) },
-            { formatter: (val) => formatCurrencyFull(val) }
-        ]
-    }
-}));
+      trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.04)' } },
+      backgroundColor: c.tooltip,
+      borderColor: c.border,
+      borderWidth: 1,
+      padding: [12, 16],
+      textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      formatter: (params) => {
+        const bar  = params.find(p => p.seriesIndex === 0);
+        const area = params.find(p => p.seriesIndex === 1);
+        const faixa = bar?.axisValue ?? '';
+        return `
+          <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${faixa}</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:10px;height:10px;border-radius:2px;background:${c.bar};display:inline-block;"></span>
+              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Qtd Estabelecimentos</span>
+            </div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${formatNumberFull(bar?.value ?? 0)}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:10px;height:10px;border-radius:2px;background:${c.area};display:inline-block;"></span>
+              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Valor Sem Comprovação</span>
+            </div>
+            <div style="font-weight:700;font-size:14px;color:${c.area};">${formatCurrencyFull(area?.value ?? 0)}</div>
+          </div>`;
+      },
+    },
+
+    series: [
+      // Barras — Qtd Estab (eixo Y esquerdo)
+      {
+        name: 'Qtd Estab',
+        type: 'bar',
+        yAxisIndex: 0,
+        barMaxWidth: 40,
+        data: fatorRisco.value.map(b => b.qtd),
+        itemStyle: {
+          borderRadius: [6, 6, 0, 0],
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: c.barGrad },
+              { offset: 1, color: c.bar + '55' },
+            ],
+          },
+        },
+        emphasis: { itemStyle: { opacity: 1 } },
+      },
+
+      // Área — Valor Sem Comprovação (eixo Y direito)
+      {
+        name: 'Valor S/ Comp',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbol: 'none',
+        data: fatorRisco.value.map(b => b.valor_raw),
+        lineStyle: { color: c.area, width: 2.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: c.area + 'aa' },
+              { offset: 1, color: c.area + '08' },
+            ],
+          },
+        },
+      },
+    ],
+  };
+});
 </script>
 
 <template>
@@ -115,16 +182,14 @@ const chartOptions = computed(() => ({
       <i class="pi pi-chart-bar"></i>
       <h3>FATOR RISCO X QTD ESTAB</h3>
       <div class="spacer"></div>
-      <Button 
-        icon="pi pi-info-circle" 
-        v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação...'" 
-        text 
-        severity="secondary" 
-        rounded 
+      <Button
+        icon="pi pi-info-circle"
+        v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação...'"
+        text severity="secondary" rounded
       />
     </div>
     <div class="chart-wrapper">
-      <apexchart :key="chartKey" type="line" height="420" :options="chartOptions" :series="chartSeries"></apexchart>
+      <v-chart class="echart" :option="chartOption" autoresize />
     </div>
   </div>
 </template>
@@ -138,6 +203,11 @@ const chartOptions = computed(() => ({
 .chart-wrapper {
   height: 420px;
   margin: 0 -1rem -1rem -1rem;
+}
+
+.echart {
+  width: 100%;
+  height: 100%;
 }
 
 .spacer { flex: 1; }

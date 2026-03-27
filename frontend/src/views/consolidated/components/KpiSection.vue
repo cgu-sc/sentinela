@@ -40,6 +40,7 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 <style scoped>
 .kpi-section {
   width: 100%;
+  overflow: visible;
 }
 
 .kpi-grid {
@@ -47,6 +48,7 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
   grid-template-columns: repeat(5, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
   gap: 1.25rem;
   width: 100%;
+  padding-top: 4px; /* espaço para o lift do hover não ser cortado */
 }
 
 .kpi-card {

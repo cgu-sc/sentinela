@@ -34,6 +34,9 @@ export const AVAILABLE_MONTHS = generateAvailableMonths();
  * Padrões de Filtros Globais para o Dashboard.
  * Centralizar aqui garante consistência entre a Store e a Interface.
  */
+/** Anos disponíveis para atalho rápido no filtro de período. */
+export const ANALYSIS_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+
 export const FILTER_DEFAULTS = {
     UF: 'Todos',
     REGIAO: 'Todos',
@@ -43,7 +46,8 @@ export const FILTER_DEFAULTS = {
     PORTE: 'Todos',
     GRANDE_REDE: 'Todos',
     PERCENTUAL_RANGE: [0, 100],
-    VALOR_RANGE: [0, 1000000], // Teto padrão para o Slider de Moeda
+    VALOR_MIN: 0,
+    VALOR_MAX: 1000000,
     CLUSTER: 'Todos',
     STATUS: 'Todos',
     RFA: 'Todos',

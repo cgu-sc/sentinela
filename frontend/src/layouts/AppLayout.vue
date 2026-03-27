@@ -2,7 +2,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules, FILTER_DEFAULTS } from '@/config/constants';
+import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
@@ -11,7 +11,6 @@ import Button from 'primevue/button';
 import ThemeSelector from '@/components/ThemeSelector.vue';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import Dropdown from 'primevue/dropdown';
-import Calendar from 'primevue/calendar';
 import Slider from 'primevue/slider';
 import SelectButton from 'primevue/selectbutton'; // Substituindo Listbox
 import InputText from 'primevue/inputtext';
@@ -33,6 +32,7 @@ const tabs = computed(() => {
     if (activeModule.value === 'consolidado') {
         return [
             { label: 'Análise Nacional', path: '/' },
+            { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
             { label: 'Análise Município', path: '/municipio' },
             { label: 'Análise Empresa', path: '/empresa' },
             { label: 'Análise CNPJ', path: '/cnpj' }
@@ -59,7 +59,7 @@ onMounted(() => {
 
 // Watch para mudar a rota padrão ao trocar de módulo
 watch(activeModule, (newVal) => {
-    if (newVal === 'consolidado' && !route.path.match(/^\/(?:dispersao|municipio|empresa|cnpj|$)/)) {
+    if (newVal === 'consolidado' && !route.path.match(/^\/(?:dispersao-beneficio|dispersao|municipio|empresa|cnpj|$)/)) {
         router.push('/');
     } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {
         router.push('/alvos/cluster');
@@ -157,6 +157,7 @@ watch(isCollapsed, (val) => {
 
 const limparFiltros = () => {
     filterStore.resetFilters();
+    selectedYears.value = new Set();
 };
 
 const applyPercentualNaoComprovacao = () => {
@@ -185,7 +186,7 @@ const isFilterActive = (field) => {
         selectedPorte: FILTER_DEFAULTS.PORTE,
         selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
         percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
-        valorMinSemComp: FILTER_DEFAULTS.VALOR_RANGE,
+        valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
         clusterSelection: FILTER_DEFAULTS.CLUSTER,
         rfaSelection: FILTER_DEFAULTS.RFA,
         searchTarget: FILTER_DEFAULTS.SEARCH,
@@ -221,19 +222,48 @@ const applySliderPeriod = (indices) => {
     }
 };
 
-const quickSelectYear = (year) => {
-    const startIdx = availableMonths.findIndex(m => m.date.getFullYear() === year && m.date.getMonth() === 0);
-    const endIdx = availableMonths.findIndex(m => m.date.getFullYear() === year && m.date.getMonth() === 11);
+// Multi-seleção de anos (intervalo contíguo)
+const selectedYears = ref(new Set());
+
+const applyYearSelection = (s) => {
+    const minYear = Math.min(...s);
+    const maxYear = Math.max(...s);
+    const startIdx = availableMonths.findIndex(m => m.date.getFullYear() === minYear && m.date.getMonth() === (minYear === 2015 ? 6 : 0));
+    const endIdx   = availableMonths.findLastIndex(m => m.date.getFullYear() === maxYear);
     timeSliderValue.value = [
         startIdx === -1 ? 0 : startIdx,
-        endIdx === -1 ? availableMonths.length - 1 : endIdx
+        endIdx   === -1 ? availableMonths.length - 1 : endIdx,
     ];
     applySliderPeriod(timeSliderValue.value);
 };
 
-const selectAll = () => {
-    timeSliderValue.value = [0, availableMonths.length - 1];
-    applySliderPeriod(timeSliderValue.value);
+const toggleYear = (year) => {
+    const s = new Set(selectedYears.value);
+    if (s.size === 0) {
+        s.add(year);
+    } else {
+        const minY = Math.min(...s);
+        const maxY = Math.max(...s);
+        if (year === minY || year === maxY) {
+            s.delete(year);
+            if (s.size === 0) { selectedYears.value = s; return; }
+        } else if (year === minY - 1 || year === maxY + 1) {
+            s.add(year);
+        } else {
+            return; // desabilitado — ignora clique
+        }
+    }
+    selectedYears.value = s;
+    applyYearSelection(s);
+};
+
+const isYearActive   = (year) => selectedYears.value.has(year);
+const isYearDisabled = (year) => {
+    const s = selectedYears.value;
+    if (s.size === 0) return false;
+    const minY = Math.min(...s);
+    const maxY = Math.max(...s);
+    return !(year === minY || year === maxY || year === minY - 1 || year === maxY + 1);
 };
 
 // Tooltips flutuantes para o Slider
@@ -262,15 +292,6 @@ watch(() => filterStore.periodo, (newVal) => {
         }
     }
 }, { deep: true });
-
-// Função para destacar o botão do ano se o período selecionado for EXATAMENTE aquele ano
-const isYearActive = (year) => {
-    if (!filterStore.periodo || filterStore.periodo.length < 2 || !filterStore.periodo[0] || !filterStore.periodo[1]) return false;
-    const start = filterStore.periodo[0];
-    const end = filterStore.periodo[1];
-    return start.getFullYear() === year && start.getMonth() === 0 && 
-           end.getFullYear() === year && end.getMonth() === 11;
-};
 
 // Verifica se TUDO (todo o período disponível) está selecionado
 const isAllSelected = computed(() => {
@@ -368,6 +389,15 @@ const isAllSelected = computed(() => {
         <div class="filter-section">
           <label class="filter-label">% de não comprovação</label>
           <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('percentualNaoComprovacaoRange') }">
+            <div class="perc-chips">
+              <button
+                v-for="v in [10,20,30,40,50,60,70,80,90,100]"
+                :key="v"
+                class="perc-chip"
+                :class="{ 'perc-chip-active': filterStore.percentualNaoComprovacaoRange[0] === v }"
+                @click="() => { filterStore.percentualNaoComprovacaoRange = [v, 100]; applyPercentualNaoComprovacao(); }"
+              >{{ v }}%</button>
+            </div>
             <div class="slider-values">
               <span>{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
               <span>{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
@@ -377,40 +407,22 @@ const isAllSelected = computed(() => {
         </div>
 
         <div class="filter-section">
-          <label class="filter-label">Faixa de Valor sem comprovação</label>
-          <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
-            <div class="slider-values">
-              <span>{{ formatCurrency(filterStore.valorMinSemComp[0]) }}</span>
-              <span>{{ formatCurrency(filterStore.valorMinSemComp[1]) }}</span>
-            </div>
-            <Slider v-model="filterStore.valorMinSemComp" range :min="0" :max="FILTER_DEFAULTS.VALOR_RANGE[1]" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
-          </div>
-        </div>
-
-        <div class="filter-section">
           <label class="filter-label">Período de Análise</label>
           <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('sliderValue') }">
-            <!-- 1. Atalhos Rápidos de Ano (Botões Maiores) -->
-            <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-                <Button label="2023" class="year-btn flex-1 p-button-secondary p-button-outlined" :class="{ 'year-active': isYearActive(2023) }" @click="quickSelectYear(2023)" />
-                <Button label="2024" class="year-btn flex-1 p-button-secondary p-button-outlined" :class="{ 'year-active': isYearActive(2024) }" @click="quickSelectYear(2024)" />
-                <Button label="TUDO" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="selectAll()" />
+            <!-- 1. Atalhos Rápidos de Ano -->
+            <div class="perc-chips" style="margin-bottom: 0.5rem;">
+              <button
+                v-for="year in ANALYSIS_YEARS"
+                :key="year"
+                class="perc-chip"
+                :class="{ 'perc-chip-active': isYearActive(year), 'perc-chip-disabled': isYearDisabled(year) }"
+                :disabled="isYearDisabled(year)"
+                @click="toggleYear(year)"
+              >{{ year }}</button>
             </div>
 
-            <!-- 2. Calendário Manual (Híbrido - Sempre visível e sincronizado) -->
-            <Calendar style="margin-top: 0.4rem;"
-                v-model="filterStore.periodo" 
-                view="month" 
-                dateFormat="mm/yy" 
-                selectionMode="range" 
-                :manualInput="false" 
-                showIcon 
-                iconDisplay="input" 
-                class="w-full filter-input mb-5" 
-            />
-
-            <!-- 3. Time Slider (Para varredura rápida) com Tooltips Flutuantes -->
-            <div class="slider-wrapper relative pt-6 mt-3">
+            <!-- 2. Time Slider (Para varredura rápida) com Tooltips Flutuantes -->
+            <div class="slider-wrapper relative pt-3 mt-0">
                 <div class="slider-tip" :style="{ left: startPos + '%', transform: startTransform }">{{ startMonthLabel }}</div>
                 <div class="slider-tip" :style="{ left: endPos + '%', transform: endTransform }">{{ endMonthLabel }}</div>
                 
@@ -420,9 +432,19 @@ const isAllSelected = computed(() => {
                     :min="0"
                     :max="availableMonths.length - 1"
                     class="w-full time-slider"
-                    @slideend="applySliderPeriod(timeSliderValue)"
+                    @slideend="() => { selectedYears.value = new Set(); applySliderPeriod(timeSliderValue.value); }"
                 />
             </div>
+          </div>
+        </div>
+
+        <div class="filter-section" style="margin-top: 1.8rem;">
+          <label class="filter-label">Valor mínimo sem comprovação</label>
+          <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
+            <div class="slider-values">
+              <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
+            </div>
+            <Slider v-model="filterStore.valorMinSemComp" :min="0" :max="FILTER_DEFAULTS.VALOR_MAX" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
           </div>
         </div>
 
@@ -500,7 +522,7 @@ const isAllSelected = computed(() => {
               :key="tab.path" 
               :to="tab.path" 
               class="nav-tab"
-              active-class="active"
+              exact-active-class="active"
             >
               {{ tab.label }}
             </router-link>
@@ -765,6 +787,47 @@ const isAllSelected = computed(() => {
   border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
+.perc-chips {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.perc-chip {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.28rem 0;
+  border-radius: 6px;
+  border: 1px solid var(--sidebar-border);
+  color: var(--text-muted);
+  background: var(--card-bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.perc-chip:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+
+.perc-chip-active {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.perc-chip-disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.perc-chip:focus { outline: none; }
+
 .year-btn {
   font-size: 0.75rem !important;
   padding: 0.4rem 0.75rem !important;
@@ -840,7 +903,7 @@ const isAllSelected = computed(() => {
 
 .slider-tip {
   position: absolute;
-  top: 42px;
+  top: 16px;
   transform: translateX(-50%);
   background: var(--card-bg);
   color: var(--text-color);
@@ -1004,9 +1067,7 @@ const isAllSelected = computed(() => {
 
 /* DESTAQUE PARA CONTAINERS (Sliders) */
 .filter-active-box {
-  border-left: 3px solid var(--primary-color) !important;
-  padding-left: 10px !important;
-  background: color-mix(in srgb, var(--primary-color) 4%, transparent) !important;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
   border-radius: 4px;
 }
 

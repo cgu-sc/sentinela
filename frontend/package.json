@@ -11,10 +11,12 @@
   "dependencies": {
     "apexcharts": "^5.10.4",
     "axios": "^1.6.0",
+    "echarts": "^6.0.0",
     "pinia": "^2.1.0",
     "primeicons": "^6.0.0",
     "primevue": "^3.45.0",
     "vue": "^3.4.0",
+    "vue-echarts": "^8.0.1",
     "vue-router": "^4.3.0",
     "vue3-apexcharts": "^1.11.1"
   },

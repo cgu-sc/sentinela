@@ -16,6 +16,7 @@ const routes = [
       },
       // Rotas do Módulo Consolidado
       { path: 'dispersao', component: NationalAnalysisView }, // Mockup reusando a mesma view por enquanto
+      { path: 'dispersao-beneficio', component: () => import('@/views/consolidated/BeneficioDispersaoView.vue') },
       { path: 'municipio', component: NationalAnalysisView },
       { path: 'empresa', component: NationalAnalysisView },
       { path: 'cnpj', component: NationalAnalysisView },

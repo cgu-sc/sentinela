@@ -53,7 +53,7 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
   /* MÁGICA BALANCEADA: Gradiente interno e borda com visibilidade ideal */
   background: linear-gradient(135deg, var(--card-bg) 75%, color-mix(in srgb, var(--primary-color) 3%, var(--card-bg)) 100%);
   border-radius: 12px;
-  padding: 1.15rem 1.4rem;
+  padding: 1.10rem 1.2rem; /* MEDIDA DO USUÁRIO */
   border: 1px solid color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-border));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 86px; /* TRAVA VERTICAL */
@@ -72,30 +72,36 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  gap: 1rem;
+  gap: 0.9rem; /* MEDIDA DO USUÁRIO */
+  width: 100%;
 }
 
 .kpi-content {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .kpi-label {
-  font-size: 0.75rem;
+  font-size: 0.75rem; /* MEDIDA DO USUÁRIO */
   color: var(--text-muted);
   font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
   line-height: 1;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
 }
 
 .kpi-value {
-  font-size: 1.5rem;
+  font-size: 1.4rem; /* MEDIDA DO USUÁRIO */
+  white-space: nowrap;
+  letter-spacing: -0.6px;
   font-weight: 800;
   color: var(--text-color);
   opacity: 0.95;
   line-height: 1;
+  white-space: nowrap; /* IMPEDE QUEBRA */
+  letter-spacing: -0.6px; /* COMPACTO */
 }
 
 .kpi-icon-bg {

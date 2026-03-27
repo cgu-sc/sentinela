@@ -478,33 +478,33 @@ watch(() => filterStore.periodo, (newVal) => {
 <style scoped>
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
-  display: block;
+  display: flex !important;
   min-height: 100vh;
+  width: 100vw;
+  overflow: hidden;
   color: var(--text-color);
-}
-
-:global(.admin-layout) {
-  display: flex;
-  min-height: 100vh;
-  width: 100%;
-  color: var(--text-color);
+  /* 🛡️ GRADIENTE INVERTIDO: Origem no canto inferior direito para um look dinâmico */
+  background: radial-gradient(
+    circle at 100% 100%, 
+    color-mix(in srgb, var(--primary-color) 7%, var(--bg-color)) 0%, 
+    var(--bg-color) 100%
+  ) !important;
 }
 
 /* SIDEBAR */
 .admin-sidebar {
   width: var(--sidebar-width);
-  background-color: var(--sidebar-bg);
+  /* MÁGICA: Sidebar integrada com efeito vidro fosco */
+  background: color-mix(in srgb, var(--navbar-bg) 35%, transparent) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: var(--sidebar-text);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  box-shadow: 4px 0 10px rgba(0,0,0,0.05);
-  position: fixed;
-  top: 0;
-  left: 0;
   height: 100vh;
-  z-index: 200;
   border-right: 1px solid var(--sidebar-border);
+  flex-shrink: 0; /* Impede que a sidebar seja espremida */
   overflow: hidden;
 }
 
@@ -863,23 +863,22 @@ watch(() => filterStore.periodo, (newVal) => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: var(--sidebar-width);
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 100vh;
-  background: radial-gradient(
-    circle at 0% 0%, 
-    color-mix(in srgb, var(--primary-color) 6%, var(--bg-color)) 0%, 
-    var(--bg-color) 100%
-  );
+  height: 100vh; /* Altura cravada para o scroll interno funcionar */
+  overflow-y: auto; /* Aqui acontece a magica do scroll */
+  min-width: 0; 
+  background: transparent;
 }
 
 .admin-layout.collapsed .main-container {
-  margin-left: 0;
+  /* Sem padding necessário ao colapsar */
 }
 
 .top-navbar {
   height: 64px;
-  background: var(--navbar-bg);
+  /* MÁGICA: Navbar integrada com efeito vidro fosco */
+  background: color-mix(in srgb, var(--navbar-bg) 35%, transparent) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--navbar-border);
   display: flex;
   justify-content: space-between;

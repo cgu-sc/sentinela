@@ -736,11 +736,11 @@ watch(() => filterStore.periodo, (newVal) => {
 
 .slider-tip {
   position: absolute;
-  top: 24px;
+  top: 42px;
   transform: translateX(-50%);
   background: var(--card-bg);
   color: var(--text-color);
-  border: 1px solid var(--primary-color);
+  border: 1px solid var(--sidebar-border);
   padding: 3px 7px;
   border-radius: 4px;
   font-size: 0.7rem;
@@ -759,7 +759,7 @@ watch(() => filterStore.periodo, (newVal) => {
   transform: translateX(-50%);
   border-left: 3px solid transparent;
   border-right: 3px solid transparent;
-  border-bottom: 4px solid var(--primary-color);
+  border-bottom: 4px solid var(--sidebar-border);
 }
 
 :deep(.p-slider-handle) {

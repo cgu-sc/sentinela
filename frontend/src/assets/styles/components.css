@@ -111,15 +111,21 @@
   body.dark-mode .risk-medium { color: #fbbf24 !important; }
   body.dark-mode .risk-high { color: #f87171 !important; }
   
-  /* SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS (CORREÇÃO DARK MODE) */
-  .p-dialog {
+  /* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */
+  .p-dialog, 
+  .p-overlaypanel,
+  .p-popover {
       background: var(--card-bg) !important;
       color: var(--text-color) !important;
       border: 1px solid var(--sidebar-border) !important;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
   }
   
-  .p-dialog-header, .p-dialog-content, .p-dialog-footer {
+  .p-dialog-header, 
+  .p-dialog-content, 
+  .p-dialog-footer,
+  .p-overlaypanel-content,
+  .p-popover-content {
       background: var(--card-bg) !important;
       color: var(--text-color) !important;
   }

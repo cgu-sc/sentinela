@@ -1,13 +1,13 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { useThemeStore } from '../stores/theme';
-import { useFilterStore } from '../stores/filters';
-import { useRiskMetrics } from '../composables/useRiskMetrics';
-import { useFormatting } from '../composables/useFormatting';
-import { useChartStyles } from '../composables/useChartStyles';
-import { useFilterParameters } from '../composables/useFilterParameters';
-import { useTableAggregation } from '../composables/useTableAggregation';
-import { useDashboardStore } from '../stores/dashboard';
+import { useThemeStore } from '@/stores/theme';
+import { useFilterStore } from '@/stores/filters';
+import { useRiskMetrics } from '@/composables/useRiskMetrics';
+import { useFormatting } from '@/composables/useFormatting';
+import { useChartStyles } from '@/composables/useChartStyles';
+import { useFilterParameters } from '@/composables/useFilterParameters';
+import { useTableAggregation } from '@/composables/useTableAggregation';
+import { useDashboardStore } from '@/stores/dashboard';
 import { storeToRefs } from 'pinia';
 
 const themeStore = useThemeStore();

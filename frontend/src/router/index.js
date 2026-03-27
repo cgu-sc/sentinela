@@ -1,30 +1,30 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import AdminLayout from '../layouts/AdminLayout.vue'
-import DashboardView from '../views/DashboardView.vue'
-import AlvosClusterView from '../views/AlvosClusterView.vue'
-import AlvosSociosView from '../views/AlvosSociosView.vue'
+import AppLayout from '@/layouts/AppLayout.vue'
+import NationalAnalysisView from '@/views/consolidated/NationalAnalysisView.vue'
+import TargetClusterView from '@/views/targets/TargetClusterView.vue'
+import PartnerNetworkView from '@/views/targets/PartnerNetworkView.vue'
 
 const routes = [
   {
     path: '/',
-    component: AdminLayout,
+    component: AppLayout,
     children: [
       {
         path: '',
         name: 'Dashboard',
-        component: DashboardView
+        component: NationalAnalysisView
       },
       // Rotas do Módulo Consolidado
-      { path: 'dispersao', component: DashboardView }, // Mockup reusando a mesma view por enquanto
-      { path: 'municipio', component: DashboardView },
-      { path: 'empresa', component: DashboardView },
-      { path: 'cnpj', component: DashboardView },
+      { path: 'dispersao', component: NationalAnalysisView }, // Mockup reusando a mesma view por enquanto
+      { path: 'municipio', component: NationalAnalysisView },
+      { path: 'empresa', component: NationalAnalysisView },
+      { path: 'cnpj', component: NationalAnalysisView },
 
       // Rotas do Módulo de Alvos
-      { path: 'alvos/cluster', component: AlvosClusterView },
-      { path: 'alvos/situacao', component: AlvosClusterView }, // Mockup
-      { path: 'alvos/variacao', component: AlvosClusterView }, // Mockup
-      { path: 'alvos/rede', component: AlvosSociosView },
+      { path: 'alvos/cluster', component: TargetClusterView },
+      { path: 'alvos/situacao', component: TargetClusterView }, // Mockup
+      { path: 'alvos/variacao', component: TargetClusterView }, // Mockup
+      { path: 'alvos/rede', component: PartnerNetworkView },
     ]
   }
 ]

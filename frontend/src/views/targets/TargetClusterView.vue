@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { FILTER_OPTIONS } from '../config/filterOptions';
+import { FILTER_OPTIONS } from '@/config/filterOptions';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';

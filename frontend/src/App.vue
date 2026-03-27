@@ -1,11 +1,11 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useResultadoStore } from './stores/resultados';
-import { useDashboardStore } from './stores/dashboard';
-import { useGeoStore } from './stores/geo';
-import { useFilterParameters } from './composables/useFilterParameters';
+import { useResultadoStore } from '@/stores/resultados';
+import { useDashboardStore } from '@/stores/dashboard';
+import { useGeoStore } from '@/stores/geo';
+import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
-import { API_ENDPOINTS } from './config/api';
+import { API_ENDPOINTS } from '@/config/api';
 
 const resultadoStore = useResultadoStore();
 const dashboardStore = useDashboardStore();

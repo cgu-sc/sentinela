@@ -13,13 +13,13 @@ for (let y = 2015; y <= 2024; y++) {
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useThemeStore } from '../stores/theme';
-import { useFilterStore } from '../stores/filters';
-import { useGeoStore } from '../stores/geo';
-import { useFormatting } from '../composables/useFormatting';
+import { useThemeStore } from '@/stores/theme';
+import { useFilterStore } from '@/stores/filters';
+import { useGeoStore } from '@/stores/geo';
+import { useFormatting } from '@/composables/useFormatting';
 import Button from 'primevue/button';
-import ThemeSelector from '../components/ThemeSelector.vue';
-import { FILTER_OPTIONS } from '../config/filterOptions';
+import ThemeSelector from '@/components/ThemeSelector.vue';
+import { FILTER_OPTIONS } from '@/config/filterOptions';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Slider from 'primevue/slider';
@@ -28,7 +28,7 @@ import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import ProgressBar from 'primevue/progressbar';
 import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS } from '@/config/api';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();

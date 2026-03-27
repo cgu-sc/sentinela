@@ -471,7 +471,7 @@ const isAllSelected = computed(() => {
       </div>
 
       <div class="sidebar-footer" v-show="!isCollapsed">
-        <p>© 2024 CGU - Projeto Sentinela</p>
+        <p>© 2026 CGU/SC</p>
       </div>
     </aside>
 

@@ -37,7 +37,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         if (porteEmpresa) params.porte_empresa = porteEmpresa;
         if (grandeRede) params.grande_rede = grandeRede;
 
-        const response = await axios.get(API_ENDPOINTS.dashboardResumo, { params });
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
         this.lastSync = new Date();
@@ -70,7 +70,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         if (porteEmpresa) params.porte_empresa = porteEmpresa;
         if (grandeRede) params.grande_rede = grandeRede;
 
-        const response = await axios.get(API_ENDPOINTS.dashboardFatorRisco, { params });
+        const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {
         console.error('Erro ao buscar fator de risco:', err);

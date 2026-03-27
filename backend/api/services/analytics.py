@@ -1,0 +1,238 @@
+from typing import List
+from datetime import date
+import polars as pl
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from data_cache import get_df
+from ..schemas.analytics import (
+    AnalyticsKPISchema,
+    ResultadoSentinelaUFSchema,
+    AnalyticsResponse,
+    ResultadoSentinelaSchema,
+    FatorRiscoResponseSchema,
+    FatorRiscoBucketSchema
+)
+
+class AnalyticsService:
+    @staticmethod
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> AnalyticsResponse:
+        """
+        Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
+        Garante consistência total entre as telas e alta performance via processamento em memória.
+        """
+        try:
+            def human_format(num):
+                if num is None: return "0"
+                num = float(num)
+                if num >= 1_000_000_000:
+                    return f"R$ {num/1_000_000_000:.2f} Bi".replace('.', ',')
+                if num >= 1_000_000:
+                    return f"R$ {num/1_000_000:.2f} Mi".replace('.', ',')
+                if num >= 1_000:
+                    return f"R$ {num/1_000:.0f} K"
+                return f"R$ {num:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+            def human_format_qty(num):
+                if num is None: return "0"
+                num = float(num)
+                if num >= 1_000_000_000:
+                    return f"{num/1_000_000_000:.2f} Bi".replace('.', ',')
+                if num >= 1_000_000:
+                    return f"{num/1_000_000:.2f} Mi".replace('.', ',')
+                if num >= 1_000:
+                    return f"{num/1_000:.0f} K"
+                return f"{num:.0f}"
+
+            def build_kpis(cnpjs, total_vendas, val_sem_comp, perc_sem_comp, total_meds):
+                return [
+                    AnalyticsKPISchema(id='total_cnpjs', label='CNPJs', value=f"{(cnpjs or 0):,}".replace(',', '.'), color='#3b82f6', icon='pi pi-id-card'),
+                    AnalyticsKPISchema(id='valor_vendas', label='Valor Total de Vendas', value=human_format(total_vendas), color='#10b981', icon='pi pi-dollar'),
+                    AnalyticsKPISchema(id='perc_valor', label='% sem comprovação', value=f"{(perc_sem_comp or 0):.2f}%".replace('.', ','), color='#f59e0b', icon='pi pi-percentage'),
+                    AnalyticsKPISchema(id='valor_nao_comp', label='Valor sem Comprovação', value=human_format(val_sem_comp), color='#ef4444', icon='pi pi-dollar'),
+                    AnalyticsKPISchema(id='total_meds', label='Qtde de Medicamentos', value=human_format_qty(total_meds), color='#8b5cf6', icon='pi pi-box'),
+                ]
+
+            # 1. Parâmetros e DataFrame Base
+            MIN_DATA = date(2015, 7, 1)
+            MAX_DATA = date(2024, 12, 31)
+            p_min = perc_min if perc_min is not None else 0.0
+            p_max = perc_max if perc_max is not None else 100.0
+            v_min = float(val_min) if val_min is not None and val_min > 0 else None
+            
+            inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
+            fim = data_fim if data_fim else MAX_DATA
+
+            df = get_df()
+
+            # 2. Pipeline Polars - Filtros de Período e Geografia (Pré-agregação por CNPJ)
+            mask = pl.col("periodo").is_between(inicio, fim)
+            if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
+            if regiao_saude and regiao_saude != 'Todos':  mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+            if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
+            if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            if conexao_ms and conexao_ms != 'Todos':      mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+
+            period_df = df.filter(mask)
+
+            # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
+            cnpj_agg = period_df.group_by("cnpj").agg([
+                pl.sum("total_vendas").alias("tv"),
+                pl.sum("total_sem_comprovacao").alias("tsc"),
+                pl.sum("total_qnt_vendas").alias("tqv"),
+                pl.sum("total_qnt_sem_comprovacao").alias("tqsc"),
+            ]).with_columns([
+                (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(None) * 100).fill_null(0).alias("pct")
+            ])
+
+            # Aplicação dos filtros de corte
+            cnpj_ok = cnpj_agg.filter((pl.col("pct") >= p_min) & (pl.col("pct") <= p_max))
+            if v_min is not None:
+                cnpj_ok = cnpj_ok.filter(pl.col("tsc") >= v_min)
+
+            # 4. Cálculo dos KPIs Globais
+            tv  = float(cnpj_ok["tv"].sum() or 0)
+            tsc = float(cnpj_ok["tsc"].sum() or 0)
+            tqv = float(cnpj_ok["tqv"].sum() or 0)
+            pct = (tsc / tv * 100) if tv else 0.0
+            kpis = build_kpis(cnpj_ok.height, tv, tsc, pct, tqv)
+
+            # 5. Detalhamento por UF (Breakdown)
+            uf_df = (
+                period_df
+                .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                .group_by("uf")
+                .agg([
+                    pl.n_unique("cnpj").alias("cnpjs"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                    pl.sum("total_qnt_vendas").alias("totalQtde"),
+                    pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                ])
+                .with_columns([
+                    (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
+                    (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
+                ])
+                .sort("percValSemComp", descending=True, nulls_last=True)
+            )
+
+            resultado_sentinela_uf = [
+                ResultadoSentinelaUFSchema(**r)
+                for r in uf_df.iter_rows(named=True)
+            ]
+
+            return AnalyticsResponse(kpis=kpis, resultado_sentinela_uf=resultado_sentinela_uf)
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO NO MOTOR POLARS (Analytics): {e}")
+            print(traceback.format_exc())
+            return AnalyticsResponse(kpis=[], resultado_sentinela_uf=[])
+
+    @staticmethod
+    def get_resultado_sentinela(db: Session) -> List[ResultadoSentinelaSchema]:
+        """
+        Busca TODOS os registros da tabela de resultados detalhados (CNPJs).
+        """
+        try:
+            sql = text("""
+                SELECT 
+                    uf, id_ibge7, municipio, nu_populacao, cnpj, razao_social, 
+                    qnt_medicamentos_vendidos, qnt_medicamentos_vendidos_sem_comprovacao, 
+                    nu_autorizacoes, valor_vendas, valor_sem_comprovacao, 
+                    percentual_sem_comprovacao, num_estabelecimentos_mesmo_municipio, 
+                    num_meses_movimentacao, CodPorteEmpresa
+                FROM [temp_CGUSC].[fp].[resultado_sentinela]
+            """)
+            result = db.execute(sql).fetchall()
+            return [ResultadoSentinelaSchema(**row._mapping) for row in result]
+        except Exception as e:
+            import traceback
+            print("❌ ERRO AO BUSCAR RESULTADOS DETALHADOS:")
+            print(traceback.format_exc())
+            return []
+
+    @staticmethod
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> FatorRiscoResponseSchema:
+        """
+        Calcula as faixas de risco (Buckets de 10%) via Polars.
+        """
+        try:
+            MIN_DATA = date(2015, 7, 1)
+            inicio = max(data_inicio, MIN_DATA) if data_inicio else MIN_DATA
+            fim = data_fim if data_fim else date(2199, 12, 31)
+            p_min = perc_min if perc_min is not None else 0.0
+            p_max = perc_max if perc_max is not None else 100.0
+            v_min = float(val_min) if val_min is not None and val_min > 0 else None
+
+            df = get_df()
+            mask = pl.col("periodo").is_between(inicio, fim)
+            if uf:                                        mask = mask & (pl.col("uf") == uf)
+            if regiao_saude:                              mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+            if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
+            if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            if conexao_ms and conexao_ms != 'Todos':       mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+
+            cnpj_agg = (
+                df.filter(mask)
+                .group_by("cnpj")
+                .agg([
+                    pl.sum("total_vendas").alias("tv"),
+                    pl.sum("total_sem_comprovacao").alias("tsc"),
+                ])
+                .with_columns([
+                    (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(None) * 100).fill_null(0).alias("pct")
+                ])
+                .filter((pl.col("pct") >= p_min) & (pl.col("pct") <= p_max))
+            )
+
+            if v_min is not None:
+                cnpj_agg = cnpj_agg.filter(pl.col("tsc") >= v_min)
+
+            faixa_expr = (
+                pl.when(pl.col("pct") <= 10).then(pl.lit("00% - 10%"))
+                .when(pl.col("pct") <= 20).then(pl.lit("10% - 20%"))
+                .when(pl.col("pct") <= 30).then(pl.lit("20% - 30%"))
+                .when(pl.col("pct") <= 40).then(pl.lit("30% - 40%"))
+                .when(pl.col("pct") <= 50).then(pl.lit("40% - 50%"))
+                .when(pl.col("pct") <= 60).then(pl.lit("50% - 60%"))
+                .when(pl.col("pct") <= 70).then(pl.lit("60% - 70%"))
+                .when(pl.col("pct") <= 80).then(pl.lit("70% - 80%"))
+                .when(pl.col("pct") <= 90).then(pl.lit("80% - 90%"))
+                .otherwise(pl.lit("90% - 100%"))
+            )
+            ordem_expr = (
+                pl.when(pl.col("pct") <= 10).then(1).when(pl.col("pct") <= 20).then(2)
+                .when(pl.col("pct") <= 30).then(3).when(pl.col("pct") <= 40).then(4)
+                .when(pl.col("pct") <= 50).then(5).when(pl.col("pct") <= 60).then(6)
+                .when(pl.col("pct") <= 70).then(7).when(pl.col("pct") <= 80).then(8)
+                .when(pl.col("pct") <= 90).then(9).otherwise(10)
+            )
+
+            buckets_df = (
+                cnpj_agg
+                .with_columns([faixa_expr.alias("faixa"), ordem_expr.alias("ordem")])
+                .group_by(["faixa", "ordem"])
+                .agg([pl.len().alias("qtd"), pl.sum("tsc").alias("valor_raw")])
+                .sort("ordem")
+            )
+
+            buckets = [
+                FatorRiscoBucketSchema(
+                    faixa=r["faixa"],
+                    qtd=r["qtd"],
+                    valor=f"R$ {r['valor_raw']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    valor_raw=r["valor_raw"]
+                )
+                for r in buckets_df.iter_rows(named=True)
+            ]
+
+            return FatorRiscoResponseSchema(
+                periodo_formatado=f"{inicio} a {fim}" if data_inicio and data_fim else "Acumulado Histórico",
+                buckets=buckets
+            )
+        except Exception as e:
+            return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])

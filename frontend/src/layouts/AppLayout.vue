@@ -479,16 +479,16 @@ watch(() => filterStore.periodo, (newVal) => {
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
   display: flex !important;
-  height: 100vh !important; /* 🛡️ CRAVADO: Impede crescimento indesejado */
+  height: 100vh !important;
   width: 100vw;
   overflow: hidden;
   color: var(--text-color);
-  scrollbar-gutter: stable; /* ⚓ ESTÁVEL: Mantém os componentes parados se o scroll aparecer */
-  /* 🛡️ GRADIENTE INVERTIDO: Origem no canto inferior direito para um look dinâmico */
-  background: radial-gradient(
-    circle at 100% 100%, 
-    color-mix(in srgb, var(--primary-color) 7%, var(--bg-color)) 0%, 
-    var(--bg-color) 100%
+  scrollbar-gutter: stable;
+  /* 🌫️ LINEAR HORIZON: Um horizonte suave que clareia de cima para baixo */
+  background: linear-gradient(
+    to bottom, 
+    var(--bg-color) 0%, 
+    color-mix(in srgb, var(--primary-color) 4%, var(--bg-color)) 100%
   ) !important;
 }
 

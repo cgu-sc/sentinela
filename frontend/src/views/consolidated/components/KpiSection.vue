@@ -49,16 +49,19 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 }
 
 .kpi-card {
-  background: var(--card-bg);
+  /* MÁGICA BALANCEADA: Gradiente interno e borda com visibilidade ideal */
+  background: linear-gradient(135deg, var(--card-bg) 75%, color-mix(in srgb, var(--primary-color) 3%, var(--card-bg)) 100%);
   border-radius: 12px;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--sidebar-border);
-  transition: transform 0.2s, background-color 0.3s ease;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-border));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .kpi-card:hover { 
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  /* Sombra elegante e visível acompanhando o tema */
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, var(--sidebar-border));
 }
 
 .kpi-body {

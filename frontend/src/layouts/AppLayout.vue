@@ -1,7 +1,8 @@
+```
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules } from '@/config/constants';
+import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules, FILTER_DEFAULTS } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
@@ -150,6 +151,43 @@ const applyPercentualNaoComprovacao = () => {
     filterStore.percentualNaoComprovacaoFilter = [...filterStore.percentualNaoComprovacaoRange];
 };
 
+// MÁGICA: Função para forçar o foco no campo de busca do Dropdown ao abrir
+const onDropdownShow = () => {
+  setTimeout(() => {
+    const input = document.querySelector('.p-dropdown-filter');
+    if (input) input.focus();
+  }, 50);
+};
+
+// 🎯 LÓGICA DE FILTRO ATIVO: Detecta se o valor mudou em relação ao padrão (Busca no constants.js)
+const isFilterActive = (field) => {
+    const value = filterStore[field];
+    
+    // Mapeamento das chaves do store para as chaves do constants.js
+    const mapStoreToConstants = {
+        selectedUF: FILTER_DEFAULTS.UF,
+        selectedRegiaoSaude: FILTER_DEFAULTS.REGIAO,
+        selectedMunicipio: FILTER_DEFAULTS.MUNICIPIO,
+        selectedSituacao: FILTER_DEFAULTS.SITUACAO,
+        selectedMS: FILTER_DEFAULTS.MS,
+        selectedPorte: FILTER_DEFAULTS.PORTE,
+        selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
+        percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
+        valorMinSemComp: FILTER_DEFAULTS.VALOR_RANGE,
+        clusterSelection: FILTER_DEFAULTS.CLUSTER,
+        rfaSelection: FILTER_DEFAULTS.RFA,
+        searchTarget: FILTER_DEFAULTS.SEARCH,
+        sliderValue: FILTER_DEFAULTS.SLIDER_INDEX_RANGE
+    };
+
+    const defaultValue = mapStoreToConstants[field];
+
+    if (Array.isArray(value)) {
+        return JSON.stringify(value) !== JSON.stringify(defaultValue);
+    }
+    return value !== defaultValue;
+};
+
 const applyValorMinSemComp = () => {
     filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
@@ -212,16 +250,30 @@ watch(() => filterStore.periodo, (newVal) => {
         }
     }
 }, { deep: true });
+
+// Função para destacar o botão do ano se o período selecionado for EXATAMENTE aquele ano
+const isYearActive = (year) => {
+    if (!filterStore.periodo || filterStore.periodo.length < 2 || !filterStore.periodo[0] || !filterStore.periodo[1]) return false;
+    const start = filterStore.periodo[0];
+    const end = filterStore.periodo[1];
+    return start.getFullYear() === year && start.getMonth() === 0 && 
+           end.getFullYear() === year && end.getMonth() === 11;
+};
+
+// Verifica se TUDO (todo o período disponível) está selecionado
+const isAllSelected = computed(() => {
+    return timeSliderValue.value[0] === 0 && 
+           timeSliderValue.value[1] === availableMonths.length - 1;
+});
 </script>
 
 <template>
   <div class="admin-layout" :class="{ 'collapsed': isCollapsed }">
-
-    <!-- BOTÃO FLUTUANTE — só aparece quando sidebar está fechada -->
-    <button v-if="isCollapsed" class="sidebar-float-btn" @click="isCollapsed = false" title="Abrir painel">
-      <i class="pi pi-angle-right"></i>
+    <!-- BOTÃO FLUTUANTE ÚNICO (ALÇA) — Segue a borda da sidebar -->
+    <button class="sidebar-float-btn" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? 'Abrir painel' : 'Fechar painel'">
+      <i :class="isCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
     </button>
-
+  
     <!-- BARRA LATERAL DE FILTROS & MÓDULOS -->
     <aside class="admin-sidebar">
       <div class="sidebar-header" title="Projeto Sentinela">
@@ -232,12 +284,7 @@ watch(() => filterStore.periodo, (newVal) => {
             <span class="brand-version">AUDITORIA NO FARMÁCIA POPULAR</span>
           </div>
         </div>
-        <Button
-          icon="pi pi-angle-left"
-          text rounded size="small"
-          @click="isCollapsed = true"
-          class="collapse-btn"
-        />
+        <!-- Botão interno removido em favor da alça unificada -->
       </div>
 
       <div class="sidebar-content" v-show="!isCollapsed">
@@ -245,44 +292,68 @@ watch(() => filterStore.periodo, (newVal) => {
         <!-- 1. FILTROS GLOBAIS (SEMPRE PRESENTES) -->
         <div class="filter-section">
           <label class="filter-label">UF</label>
-          <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" />
+          <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
         </div>
 
         <div class="filter-section">
           <label class="filter-label">Região de Saúde</label>
-          <Dropdown v-model="filterStore.selectedRegiaoSaude" :options="regiaoSaudeOptions" placeholder="Região" filter :virtualScrollerOptions="{ itemSize: 32 }" class="w-full filter-input" />
+          <Dropdown 
+            v-model="filterStore.selectedRegiaoSaude" 
+            :options="regiaoSaudeOptions" 
+            placeholder="Região" 
+            filter 
+            reset-filter-on-hide
+            auto-option-focus
+            filter-match-mode="contains"
+            @show="onDropdownShow"
+            :virtualScrollerOptions="{ itemSize: 32 }" 
+            class="w-full filter-input" 
+            :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }"
+          />
         </div>
 
         <div class="filter-section">
           <label class="filter-label">Município</label>
-          <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter :virtualScrollerOptions="{ itemSize: 32 }" class="w-full filter-input" />
+          <Dropdown 
+            v-model="filterStore.selectedMunicipio" 
+            :options="municipioOptions" 
+            placeholder="Município" 
+            filter 
+            reset-filter-on-hide
+            auto-option-focus
+            filter-match-mode="contains"
+            @show="onDropdownShow"
+            :virtualScrollerOptions="{ itemSize: 32 }" 
+            class="w-full filter-input" 
+            :class="{ 'filter-active': isFilterActive('selectedMunicipio') }"
+          />
         </div>
 
         <div class="grid-filters">
             <div class="filter-section">
                 <label class="filter-label">Situação RF</label>
-                <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
             </div>
             <div class="filter-section">
                 <label class="filter-label">Conexão MS</label>
-                <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedMS') }" />
             </div>
         </div>
 
         <div class="grid-filters">
             <div class="filter-section">
                 <label class="filter-label">Porte CNPJ</label>
-                <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
             </div>
             <div class="filter-section">
                 <label class="filter-label">Grande Rede</label>
-                <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" />
+                <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
             </div>
         </div>
 
         <div class="filter-section">
           <label class="filter-label">% de não comprovação</label>
-          <div class="slider-container">
+          <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('percentualNaoComprovacaoRange') }">
             <div class="slider-values">
               <span>{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
               <span>{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
@@ -292,22 +363,23 @@ watch(() => filterStore.periodo, (newVal) => {
         </div>
 
         <div class="filter-section">
-          <label class="filter-label">Valor Mínimo sem comprovação</label>
-          <div class="slider-container">
+          <label class="filter-label">Faixa de Valor sem comprovação</label>
+          <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
             <div class="slider-values">
-              <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
+              <span>{{ formatCurrency(filterStore.valorMinSemComp[0]) }}</span>
+              <span>{{ formatCurrency(filterStore.valorMinSemComp[1]) }}</span>
             </div>
-            <Slider v-model="filterStore.valorMinSemComp" :min="0" :max="1000000" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
+            <Slider v-model="filterStore.valorMinSemComp" range :min="0" :max="FILTER_DEFAULTS.VALOR_RANGE[1]" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
           </div>
         </div>
 
         <div class="filter-section">
           <label class="filter-label">Período de Análise</label>
-          <div class="slider-container">
+          <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('sliderValue') }">
             <!-- 1. Atalhos Rápidos de Ano (Botões Maiores) -->
             <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-                <Button label="2023" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2023)" />
-                <Button label="2024" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="quickSelectYear(2024)" />
+                <Button label="2023" class="year-btn flex-1 p-button-secondary p-button-outlined" :class="{ 'year-active': isYearActive(2023) }" @click="quickSelectYear(2023)" />
+                <Button label="2024" class="year-btn flex-1 p-button-secondary p-button-outlined" :class="{ 'year-active': isYearActive(2024) }" @click="quickSelectYear(2024)" />
                 <Button label="TUDO" class="year-btn flex-1 p-button-secondary p-button-outlined" @click="selectAll()" />
             </div>
 
@@ -353,15 +425,15 @@ watch(() => filterStore.periodo, (newVal) => {
              <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
                 <div class="filter-section mini">
                     <label class="filter-label sm">Busca Alvo</label>
-                    <InputText v-model="filterStore.searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" />
+                    <InputText v-model="filterStore.searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('searchTarget') }" />
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Target Cluster</label>
-                    <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" />
+                    <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('clusterSelection') }" />
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Risco (RFA)</label>
-                    <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" />
+                    <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('rfaSelection') }" />
                 </div>
              </div>
 
@@ -478,18 +550,23 @@ watch(() => filterStore.periodo, (newVal) => {
 <style scoped>
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
+  --sidebar-width: 280px; /* Variável Mestra */
   display: flex !important;
   height: 100vh !important;
   width: 100vw;
   overflow: hidden;
   color: var(--text-color);
   scrollbar-gutter: stable;
-  /* 🌫️ LINEAR HORIZON: Um horizonte suave que clareia de cima para baixo */
+  /* 🌫️ LINEAR HORIZON */
   background: linear-gradient(
     to bottom, 
     var(--bg-color) 0%, 
     color-mix(in srgb, var(--primary-color) 4%, var(--bg-color)) 100%
   ) !important;
+}
+
+.admin-layout.collapsed {
+  --sidebar-width: 0px; /* Zera a largura na variável */
 }
 
 /* SIDEBAR */
@@ -510,7 +587,7 @@ watch(() => filterStore.periodo, (newVal) => {
 }
 
 .admin-layout.collapsed .admin-sidebar {
-  width: 0;
+  width: var(--sidebar-width);
   border-right: none;
 }
 
@@ -518,12 +595,12 @@ watch(() => filterStore.periodo, (newVal) => {
 .sidebar-float-btn {
   position: fixed;
   top: 50%;
-  left: 0;
+  left: var(--sidebar-width); /* MÁGICA: O botão persegue a borda da sidebar */
   transform: translateY(-50%);
   z-index: 300;
-  width: 24px;
-  height: 56px;
-  background: var(--sidebar-bg);
+  width: 20px;
+  height: 48px;
+  background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
   border: 1px solid var(--sidebar-border);
   border-left: none;
   border-radius: 0 8px 8px 0;
@@ -532,18 +609,19 @@ watch(() => filterStore.periodo, (newVal) => {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  transition: background 0.2s, color 0.2s, width 0.2s;
-  box-shadow: 3px 0 8px rgba(0,0,0,0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 10px rgba(0,0,0,0.1);
 }
 
 .sidebar-float-btn:hover {
-  width: 32px;
+  width: 28px;
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--primary-color);
+  box-shadow: 6px 0 15px rgba(0,0,0,0.15);
 }
 
 .sidebar-float-btn i {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .sidebar-header {
@@ -691,15 +769,26 @@ watch(() => filterStore.periodo, (newVal) => {
   background: rgba(255, 255, 255, 0.05) !important;
 }
 
-.year-btn:focus,
-.year-btn:active {
-  outline: none !important;
-  box-shadow: none !important;
+.year-btn.year-active {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
 }
 
+/* REMOVER BORDA BRANCA DE FOCO (RIDÍCULO) */
+.year-btn:focus,
+.year-btn:active,
 .year-btn:focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 2px var(--primary-color) !important;
+  box-shadow: none !important;
+  border-color: var(--sidebar-border) !important;
+}
+
+/* Se estiver ativo e focado, mantém a cor do tema, não branco */
+.year-btn.year-active:focus {
+  border-color: var(--primary-color) !important;
 }
 
 :deep(.clear-filters-btn.p-button) {
@@ -868,6 +957,33 @@ watch(() => filterStore.periodo, (newVal) => {
   overflow-y: auto; /* Aqui acontece a magica do scroll */
   min-width: 0; 
   background: transparent;
+}
+
+/* DESTAQUE DE FILTRO ATIVO (IDENTIDADE FORÇADA - HOVER PERMANENTE) */
+:global(.admin-sidebar .filter-active.p-dropdown),
+:global(.admin-sidebar .filter-active.p-calendar),
+:global(.admin-sidebar .filter-active.p-inputtext) {
+  border: 1px solid var(--primary-color) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  box-shadow: none !important;
+}
+
+/* DESTAQUE PARA CONTAINERS (Sliders) */
+.filter-active-box {
+  border-left: 3px solid var(--primary-color) !important;
+  padding-left: 10px !important;
+  background: color-mix(in srgb, var(--primary-color) 4%, transparent) !important;
+  border-radius: 4px;
+}
+
+:global(.filter-active .p-dropdown-label),
+:global(.filter-active .p-inputtext) {
+  color: var(--primary-color) !important;
+  font-weight: 800 !important;
+}
+
+:global(.filter-active .p-dropdown-trigger) {
+  color: var(--primary-color) !important;
 }
 
 .admin-layout.collapsed .main-container {

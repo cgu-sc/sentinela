@@ -22,29 +22,29 @@ export const useFilterStore = defineStore('filters', () => {
   const saved = loadFromStorage();
 
   // 1. FILTROS GLOBAIS
-  const selectedUF = ref(saved?.selectedUF ?? 'Todos');
-  const selectedRegiaoSaude = ref(saved?.selectedRegiaoSaude ?? 'Todos');
-  const selectedMunicipio = ref(saved?.selectedMunicipio ?? 'Todos');
-  const selectedSituacao = ref(saved?.selectedSituacao ?? 'Todos');
-  const selectedMS = ref(saved?.selectedMS ?? 'Todos');
-  const selectedPorte = ref(saved?.selectedPorte ?? 'Todos');
-  const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? 'Todos');
+  const selectedUF = ref(saved?.selectedUF ?? FILTER_DEFAULTS.UF);
+  const selectedRegiaoSaude = ref(saved?.selectedRegiaoSaude ?? FILTER_DEFAULTS.REGIAO);
+  const selectedMunicipio = ref(saved?.selectedMunicipio ?? FILTER_DEFAULTS.MUNICIPIO);
+  const selectedSituacao = ref(saved?.selectedSituacao ?? FILTER_DEFAULTS.SITUACAO);
+  const selectedMS = ref(saved?.selectedMS ?? FILTER_DEFAULTS.MS);
+  const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
+  const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
 
   // 2. FILTROS DE FAIXA (RANGES)
   // *Range: atualiza durante o drag (display)
   // *Filter: atualiza só no slideend (dispara API)
-  const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? [0, 100]);
-  const percentualNaoComprovacaoFilter = ref(saved?.percentualNaoComprovacaoFilter ?? [0, 100]);
-  const valorMinSemComp = ref(saved?.valorMinSemComp ?? 0);
-  const valorMinSemCompFilter = ref(saved?.valorMinSemCompFilter ?? 0);
-  const periodo = ref(saved?.periodo ?? [new Date(2015, 6, 1), new Date(2024, 11, 31)]);
-  const sliderValue = ref(saved?.sliderValue ?? [0, 113]);
+  const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
+  const percentualNaoComprovacaoFilter = ref(saved?.percentualNaoComprovacaoFilter ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
+  const valorMinSemComp = ref(Array.isArray(saved?.valorMinSemComp) ? saved.valorMinSemComp : FILTER_DEFAULTS.VALOR_RANGE);
+  const valorMinSemCompFilter = ref(Array.isArray(saved?.valorMinSemCompFilter) ? saved.valorMinSemCompFilter : FILTER_DEFAULTS.VALOR_RANGE);
+  const periodo = ref(saved?.periodo ?? FILTER_DEFAULTS.DATE_RANGE);
+  const sliderValue = ref(saved?.sliderValue ?? FILTER_DEFAULTS.SLIDER_INDEX_RANGE);
 
   // 3. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
-  const clusterSelection = ref(saved?.clusterSelection ?? 'Todos');
-  const statusSelection = ref(saved?.statusSelection ?? 'Todos');
-  const rfaSelection = ref(saved?.rfaSelection ?? 'Todos');
-  const searchTarget = ref(saved?.searchTarget ?? '');
+  const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
+  const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS); // Assuming FILTER_DEFAULTS.STATUS exists or should be added
+  const rfaSelection = ref(saved?.rfaSelection ?? FILTER_DEFAULTS.RFA);
+  const searchTarget = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
 
   // Persiste automaticamente no localStorage com debounce de 200ms
   // (evita escrita contínua durante drag de sliders)
@@ -94,8 +94,8 @@ export const useFilterStore = defineStore('filters', () => {
     selectedGrandeRede.value = 'Todos';
     percentualNaoComprovacaoRange.value = [0, 100];
     percentualNaoComprovacaoFilter.value = [0, 100];
-    valorMinSemComp.value = 0;
-    valorMinSemCompFilter.value = 0;
+    valorMinSemComp.value = [0, 1000000];
+    valorMinSemCompFilter.value = [0, 1000000];
     periodo.value = [new Date(2015, 6, 1), new Date(2024, 11, 31)];
     sliderValue.value = [0, 113];
     clusterSelection.value = 'Todos';

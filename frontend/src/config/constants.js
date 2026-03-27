@@ -29,3 +29,26 @@ const generateAvailableMonths = () => {
 };
 
 export const AVAILABLE_MONTHS = generateAvailableMonths();
+
+/**
+ * Padrões de Filtros Globais para o Dashboard.
+ * Centralizar aqui garante consistência entre a Store e a Interface.
+ */
+export const FILTER_DEFAULTS = {
+    UF: 'Todos',
+    REGIAO: 'Todos',
+    MUNICIPIO: 'Todos',
+    SITUACAO: 'Todos',
+    MS: 'Todos',
+    PORTE: 'Todos',
+    GRANDE_REDE: 'Todos',
+    PERCENTUAL_RANGE: [0, 100],
+    VALOR_RANGE: [0, 1000000], // Teto padrão para o Slider de Moeda
+    CLUSTER: 'Todos',
+    STATUS: 'Todos',
+    RFA: 'Todos',
+    SEARCH: '',
+    // Auditoria inicia em Julho de 2015 (Índices e Datas)
+    DATE_RANGE: [new Date(2015, 6, 1), new Date(2024, 11, 31)],
+    SLIDER_INDEX_RANGE: [0, 113] // Corresponde aos 114 meses de index 0 a 113
+};

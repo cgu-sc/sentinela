@@ -9,20 +9,20 @@ export const KPI_CONFIGS = {
     icon: 'pi pi-id-card',
     color: '#3b82f6' // Blue
   },
-  'Valor Total Movimentado': {
+  'VALOR TOTAL DE VENDAS': {
     icon: 'pi pi-money-bill',
     color: '#10b981' // Green
   },
-  'Quantidade de Medicamentos': {
+  'TOTAL DE MEDICAMENTOS': {
     icon: 'pi pi-box',
     color: '#8b5cf6' // Purple
   },
-  'Valor sem Comprovação': {
+  'VALOR SEM COMPROVAÇÃO': {
     icon: 'pi pi-exclamation-triangle',
     color: '#ef4444' // Red
   },
-  'Quantidade sem Comprovação': {
-    icon: 'pi pi-info-circle',
+  '% SEM COMPROVAÇÃO': {
+    icon: 'pi pi-percentage',
     color: '#f59e0b' // Amber
   }
 };

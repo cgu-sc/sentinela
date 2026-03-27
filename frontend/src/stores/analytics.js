@@ -87,13 +87,43 @@ export const useAnalyticsStore = defineStore('analytics', {
      * O Pinia cacheia o resultado deste getter, garantindo performance máxima.
      */
     enrichedKpis: (state) => {
-      return state.kpis.map(kpi => {
-        const config = KPI_CONFIGS[kpi.label] || DEFAULT_KPI_STYLE;
+      // Ordem desejada exata conforme as Labels do Banco de Dados (Refletindo o print)
+      const priorityOrder = [
+        'CNPJS',
+        'VALOR TOTAL DE VENDAS',
+        'TOTAL DE MEDICAMENTOS',
+        'VALOR SEM COMPROVAÇÃO',
+        '% SEM COMPROVAÇÃO'
+      ];
+
+      const enriched = state.kpis.map(kpi => {
+        // Renomeia o KPI de Medicamentos para TOTAL DE MEDICAMENTOS
+        let label = kpi.label.toUpperCase();
+        if (label === 'QTDE DE MEDICAMENTOS') label = 'TOTAL DE MEDICAMENTOS';
+
+        // Encontra a configuração ignorando se é MAIÚSCULO ou minúsculo
+        const labelKey = Object.keys(KPI_CONFIGS).find(
+            key => key.toUpperCase() === label
+        );
+        const config = KPI_CONFIGS[labelKey] || DEFAULT_KPI_STYLE;
+        
         return {
           ...kpi,
+          label: label, // Aplica o novo nome visual
           icon: kpi.icon || config.icon,
           color: kpi.color || config.color
         };
+      });
+
+      // Ordena baseado na nossa lista de prioridade (Sempre respeitando as maiúsculas do banco)
+      return enriched.sort((a, b) => {
+        const indexA = priorityOrder.indexOf(a.label.toUpperCase());
+        const indexB = priorityOrder.indexOf(b.label.toUpperCase());
+        
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return 0;
       });
     },
     getKpiById: (state) => (id) => state.kpis.find(k => k.id === id)

@@ -3,7 +3,11 @@
     "allow": [
       "Read(//mnt/c/**)",
       "Read(///sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/$HOME/**)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/layouts/**)",
+      "Bash(grep -n \"html, body\\\\|^body {\" frontend/src/App.vue)"
     ]
   }
 }

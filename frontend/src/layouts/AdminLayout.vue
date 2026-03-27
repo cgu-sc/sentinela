@@ -497,18 +497,14 @@ watch(() => filterStore.periodo, (newVal) => {
 .admin-layout {
   display: block;
   min-height: 100vh;
-  background-color: var(--bg-color);
   color: var(--text-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 :global(.admin-layout) {
   display: flex;
   min-height: 100vh;
   width: 100%;
-  background-color: var(--bg-color);
   color: var(--text-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* SIDEBAR */

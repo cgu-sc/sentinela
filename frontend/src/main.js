@@ -12,6 +12,7 @@ import VueApexCharts from 'vue3-apexcharts';
 import 'primevue/resources/themes/lara-light-blue/theme.css';
 import 'primevue/resources/primevue.min.css';
 import 'primeicons/primeicons.css';
+import '@/assets/styles/main.css';
 
 const app = createApp(App);
 

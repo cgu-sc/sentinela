@@ -1,8 +1,36 @@
 /**
- * Configuração de Temas e Paletas do Projeto Sentinela.
- * Define as cores primárias, contrastes e metadados para o seletor de temas.
+ * CORES DE SUPERFÍCIE (Backgrounds, Cards, Borders e Textos)
+ * Centralizadas para garantir consistência entre CSS e JavaScript (Gráficos).
  */
+export const SURFACE_COLORS = {
+  light: {
+    'bg-color': '#f8fafc',
+    'text-color': '#1e293b',
+    'text-muted': '#64748b',
+    'card-bg': '#ffffff',
+    'sidebar-bg': '#ffffff',
+    'sidebar-text': '#1e293b',
+    'sidebar-border': '#e2e8f0',
+    'table-hover': '#f1f5f9',
+    'table-stripe': '#f8fafc'
+  },
+  dark: {
+    'bg-color': '#0d1117',
+    'text-color': '#cbd5e1',
+    'text-muted': '#8b949e',
+    'card-bg': '#161b22',
+    'sidebar-bg': '#0d1117',
+    'sidebar-text': '#e6edf3',
+    'sidebar-border': '#30363d',
+    'table-hover': '#1f2937',
+    'table-stripe': '#131920'
+  }
+};
 
+/**
+ * DEFINIÇÃO DAS PALETAS DE CORES DO SISTEMA
+ * Centraliza as cores de destaque e suas variações.
+ */
 export const THEME_PALETTES = {
   azul: {
     id: 'azul',

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { THEME_PALETTES as palettes } from '@/config/themeConfig';
+import { THEME_PALETTES as palettes, SURFACE_COLORS } from '@/config/themeConfig';
 
 export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true);
@@ -37,6 +37,12 @@ export const useThemeStore = defineStore('theme', () => {
     html.style.setProperty('--primary-900',        p[900]);
     html.style.setProperty('--primary-color',      p.color);
     html.style.setProperty('--primary-color-text', p.text);
+
+    // 3. Aplicar Cores de Superfície (Backgrounds/Cards/Textos) para consistência absoluta
+    const surface = SURFACE_COLORS[isDark.value ? 'dark' : 'light'];
+    Object.keys(surface).forEach(key => {
+      html.style.setProperty(`--${key}`, surface[key]);
+    });
   };
 
   const setMode = (mode) => {
@@ -81,15 +87,16 @@ export const useThemeStore = defineStore('theme', () => {
   const tokens = computed(() => {
     const palette = palettes[currentPalette.value] ?? palettes.azul;
     const isDarkMode = isDark.value;
+    const surface = SURFACE_COLORS[isDarkMode ? 'dark' : 'light'];
 
     return {
       primary: palette.primary.color,
-      bgColor: isDarkMode ? '#09090b' : '#f7fafc',
-      textColor: isDarkMode ? '#cbd5e1' : '#2d3748',
-      cardBg: isDarkMode ? '#18181b' : '#ffffff',
-      sidebarBg: isDarkMode ? '#09090b' : '#ffffff',
-      borderColor: isDarkMode ? '#27272a' : '#e2e8f0',
-      // Você pode adicionar mais tokens conforme a necessidade
+      bgColor: surface['bg-color'],
+      textColor: surface['text-color'],
+      cardBg: surface['card-bg'],
+      sidebarBg: surface['sidebar-bg'],
+      borderColor: surface['sidebar-border'],
+      mutedColor: surface['text-muted']
     };
   });
 

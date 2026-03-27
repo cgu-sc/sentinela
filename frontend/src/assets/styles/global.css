@@ -1,0 +1,49 @@
+/**
+ * ESTILOS GLOBAIS E RESETS
+ * Definições que afetam todo o corpo do app.
+ */
+
+ html, body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    transition: background-color 0.3s ease;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
+  
+  :root.dark-mode {
+    color-scheme: dark !important;
+  }
+  
+  html.dark-mode {
+    scrollbar-color: #30363d #0d1117 !important;
+  }
+  
+  /* Utilitários globais */
+  .flex-col { display: flex; flex-direction: column; }
+  
+  /* Scrollbars adaptáveis */
+  * {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track) !important;
+    scrollbar-width: thin !important;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track) !important;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb) !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--scrollbar-track) !important;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover) !important;
+  }

@@ -1,0 +1,9 @@
+/**
+ * SENTINELA DESIGN SYSTEM - ENTRY POINT
+ * Importa todos os módulos de estilo do sistema.
+ */
+
+@import './variables.css';
+@import './global.css';
+@import './components.css';
+@import './animations.css';

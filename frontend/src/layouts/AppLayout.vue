@@ -33,11 +33,11 @@ const tabs = computed(() => {
     if (activeModule.value === 'consolidado') {
         return [
             { label: 'Análise Nacional', path: '/' },
-            { label: 'Dispersão Benefício', path: '/dispersao' },
             { label: 'Análise Município', path: '/municipio' },
             { label: 'Análise Empresa', path: '/empresa' },
             { label: 'Análise CNPJ', path: '/cnpj' }
         ];
+
     } else {
         return [
             { label: 'Mapa-Cluster', path: '/alvos/cluster' },
@@ -866,11 +866,30 @@ const isAllSelected = computed(() => {
   border-bottom: 4px solid var(--sidebar-border);
 }
 
-:deep(.p-slider-handle) {
-    width: 14px;
-    height: 14px;
-    margin-top: -7px;
+/* CUSTOMIZAÇÃO DOS SLIDERS (Tema Adaptativo) */
+:deep(.p-slider) {
+    background: var(--sidebar-border);
+    height: 4px !important;
 }
+
+:deep(.p-slider .p-slider-range) {
+    background: var(--primary-color) !important;
+}
+
+:deep(.p-slider-handle) {
+    border: 2px solid var(--primary-color) !important;
+    background: var(--card-bg) !important;
+    width: 14px !important;
+    height: 14px !important;
+    margin-top: -6px !important;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+:deep(.p-slider:not(.p-disabled) .p-slider-handle:hover) {
+    background: var(--primary-color) !important;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+}
+
 
 .sidebar-divider {
   border: 0;

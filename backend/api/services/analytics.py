@@ -10,6 +10,7 @@ from ..schemas.analytics import (
     AnalyticsResponse,
     ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
+    ResultadoSentinelaCnpjSchema,
     FatorRiscoResponseSchema,
     FatorRiscoBucketSchema
 )
@@ -148,10 +149,43 @@ class AnalyticsService:
                     for r in muni_df.iter_rows(named=True)
                 ]
 
+            # 7. Detalhamento por CNPJ (Se Município estiver selecionado)
+            resultado_cnpjs = None
+            if municipio and municipio != 'Todos':
+                cnpj_df = (
+                    period_df
+                    .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                    .group_by("cnpj")
+                    .agg([
+                        pl.col("no_municipio").first().alias("municipio"),
+                        pl.col("uf").first().alias("uf"),
+                        pl.col("razao_social").first().alias("razao_social"),
+                        pl.sum("total_vendas").alias("totalMov"),
+                        pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                        pl.sum("total_qnt_vendas").alias("totalQtde"),
+                        pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                        pl.col("flag_grandes_redes").first().alias("flag_grandes_redes"),
+                        pl.col("qtd_filiais_rede").first().alias("qtd_filiais_rede"),
+                        pl.col("situacao_rf").first().alias("situacao_rf"),
+                        pl.col("conexao_ms").first().alias("conexao_ms"),
+                    ])
+                    .with_columns([
+                        (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
+                        (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
+                        (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf")
+                    ])
+                    .sort("percValSemComp", descending=True, nulls_last=True)
+                )
+                resultado_cnpjs = [
+                    ResultadoSentinelaCnpjSchema(**r)
+                    for r in cnpj_df.iter_rows(named=True)
+                ]
+
             return AnalyticsResponse(
                 kpis=kpis, 
                 resultado_sentinela_uf=resultado_sentinela_uf,
-                resultado_municipios=resultado_municipios
+                resultado_municipios=resultado_municipios,
+                resultado_cnpjs=resultado_cnpjs
             )
 
         except Exception as e:

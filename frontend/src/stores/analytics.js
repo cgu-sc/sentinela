@@ -9,6 +9,7 @@ export const useAnalyticsStore = defineStore('analytics', {
     kpis: [],
     resultadoSentinelaUF: [],
     resultadoMunicipios: [],
+    resultadoCnpjs: [],
     fatorRisco: [],
     isLoading: false,
     fatorRiscoLoading: false,
@@ -43,6 +44,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
         this.resultadoMunicipios = response.data.resultado_municipios || [];
+        this.resultadoCnpjs = response.data.resultado_cnpjs || [];
         this.lastSync = new Date();
       } catch (err) {
         console.error('Erro ao buscar resumo do dashboard:', err);

@@ -12,16 +12,15 @@ import Tag from 'primevue/tag';
 
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
-const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
+const { resultadoCnpjs, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent } = useFormatting();
 
 // Agregação de rodapé
-const { totals } = useTableAggregation(resultadoMunicipios, {
-  sums: ['cnpjs', 'valSemComp', 'totalMov', 'qtdeSemComp', 'totalQtde'],
+const { totals } = useTableAggregation(resultadoCnpjs, {
+  sums: ['valSemComp', 'totalMov'],
   percents: [
     { field: 'percValSemComp',  numerator: 'valSemComp',  denominator: 'totalMov'   },
-    { field: 'percQtdeSemComp', numerator: 'qtdeSemComp', denominator: 'totalQtde'  },
   ],
 });
 
@@ -29,87 +28,103 @@ const tableFooter = computed(() => {
   const t = totals.value;
   if (!Object.keys(t).length) return {};
   return {
-    cnpjs:          formatNumber(t.cnpjs),
     percValSemComp: formatPercent(t.percValSemComp),
     valSemComp:     formatBRL(t.valSemComp),
     totalMov:       formatBRL(t.totalMov),
-    percQtdeSemComp:formatPercent(t.percQtdeSemComp),
-    qtdeSemComp:    formatNumber(t.qtdeSemComp),
-    totalQtde:      formatNumber(t.totalQtde),
   };
 });
 
-const onRowSelect = (event) => {
-  const { municipio, uf } = event.data;
-  filterStore.selectedMunicipio = `${municipio}|${uf}`;
-};
+// Helper para exibir o município formatado adequadamente
+const filteredLocation = computed(() => {
+  if (filterStore.selectedMunicipio && filterStore.selectedMunicipio !== 'Todos') {
+    return filterStore.selectedMunicipio.split('|')[0];
+  }
+  return '';
+});
+
 </script>
 
 <template>
   <div class="table-section shadow-card modern-scroll-card" :class="{ 'is-refreshing': isLoading }">
     <div class="section-header">
        <div class="header-icon-box">
-         <i class="pi pi-map-marker"></i>
+         <i class="pi pi-briefcase"></i>
        </div>
        <div class="header-text-box">
-         <h3>ANÁLISE POR MUNICÍPIO</h3>
-         <span class="subtitle">{{ filterStore.selectedUF }} — {{ resultadoMunicipios.length }} Cidades</span>
+         <h3>ANÁLISE POR CNPJ</h3>
+         <span class="subtitle">{{ filteredLocation }} — {{ resultadoCnpjs.length }} Estabelecimentos</span>
        </div>
        <div class="spacer"></div>
     </div>
 
     <DataTable 
-      :value="resultadoMunicipios" 
+      :value="resultadoCnpjs" 
       size="small" 
       stripedRows 
       removableSort 
       paginator 
       :rows="20"
-      selectionMode="single"
-      @row-click="onRowSelect"
       sortField="percValSemComp" 
       :sortOrder="-1" 
-      class="custom-table enterprise-table clickable-rows"
+      class="custom-table enterprise-table"
     >
-          <Column field="uf" header="UF" sortable style="width: 5%">
+          <Column field="municipio_uf" header="Município/UF" sortable style="width: 12%">
             <template #footer>TOTAL</template>
           </Column>
 
-          <Column field="municipio" header="MUNICÍPIO" sortable style="width: 15%"></Column>
+          <Column field="cnpj" header="CNPJ" sortable style="width: 10%"></Column>
+          
+          <Column field="razao_social" header="Razão Social" sortable style="width: 18%"></Column>
 
-          <Column field="cnpjs" header="Qtde CNPJs" sortable style="width: 10%">
-             <template #body="slotProps">
-                <span>{{ formatNumber(slotProps.data.cnpjs) }}</span>
-             </template>
-             <template #footer>{{ tableFooter.cnpjs }}</template>
-          </Column>
-
-          <Column field="percValSemComp" header="% Valor s/ Comp" sortable style="width: 12%">
-             <template #body="slotProps">
-                <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
-             </template>
-             <template #footer>{{ tableFooter.percValSemComp }}</template>
-          </Column>
-
-          <Column field="valSemComp" header="Valor s/ Comprovação" sortable style="width: 15%">
-             <template #body="slotProps">
-                <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
-             </template>
-             <template #footer>{{ tableFooter.valSemComp }}</template>
-          </Column>
-
-          <Column field="totalMov" header="Valor Total Movimentado" sortable style="width: 15%">
+          <Column field="totalMov" header="Total Vendas" sortable style="width: 10%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
              <template #footer>{{ tableFooter.totalMov }}</template>
           </Column>
 
-          <Column field="percQtdeSemComp" header="% Qtde s/ Comp" sortable style="width: 12%">
+          <Column field="valSemComp" header="Total Sem Comprovação" sortable style="width: 10%">
+             <template #body="slotProps">
+                <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
+             </template>
+             <template #footer>{{ tableFooter.valSemComp }}</template>
+          </Column>
+
+          <Column field="percValSemComp" header="% Valor s/ Comp" sortable style="width: 8%">
+             <template #body="slotProps">
+                <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
+             </template>
+             <template #footer>{{ tableFooter.percValSemComp }}</template>
+          </Column>
+
+          <Column field="percQtdeSemComp" header="% Qtde s/ Comp" sortable style="width: 8%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percQtdeSemComp)" :class="getRiskClass(slotProps.data.percQtdeSemComp)" />
              </template>
-             <template #footer>{{ tableFooter.percQtdeSemComp }}</template>
+          </Column>
+
+          <Column field="flag_grandes_redes" header="Grande Rede" sortable style="width: 7%">
+            <template #body="slotProps">
+                <Tag :value="slotProps.data.flag_grandes_redes" :severity="slotProps.data.flag_grandes_redes === 'Sim' ? 'info' : 'secondary'" />
+            </template>
+          </Column>
+
+          <Column field="qtd_filiais_rede" header="Estab. Rede" sortable style="width: 7%">
+            <template #body="slotProps">
+                <span>{{ slotProps.data.qtd_filiais_rede }}</span>
+            </template>
+          </Column>
+
+          <Column field="situacao_rf" header="Situação RF" sortable style="width: 7%">
+            <template #body="slotProps">
+                <Tag :value="slotProps.data.situacao_rf" :severity="slotProps.data.situacao_rf === 'ATIVA' ? 'success' : 'danger'" />
+            </template>
+          </Column>
+
+          <Column field="conexao_ms" header="Conexão MS" sortable style="width: 7%">
+            <template #body="slotProps">
+                <Tag :value="slotProps.data.conexao_ms" :severity="slotProps.data.conexao_ms === 'Ativa' ? 'success' : 'warn'" />
+            </template>
           </Column>
     </DataTable>
   </div>
@@ -166,11 +181,6 @@ const onRowSelect = (event) => {
   pointer-events: none;
 }
 
-:deep(.clickable-rows .p-datatable-tbody > tr) {
-  cursor: pointer;
-}
-
-/* Garante que o cabeçalho da tabela fique fixo ao rolar */
 :deep(.p-datatable-thead) {
   position: sticky;
   top: 0;
@@ -181,7 +191,6 @@ const onRowSelect = (event) => {
   border-radius: 0 0 12px 12px;
 }
 
-/* Estilização moderna da scrollbar */
 :deep(.p-datatable-wrapper::-webkit-scrollbar) {
   width: 8px;
 }
@@ -196,7 +205,6 @@ const onRowSelect = (event) => {
   background: #cbd5e1;
 }
 
-/* Modo escuro - Ajustes finos */
 body.dark-mode .header-icon-box {
   background: rgba(99, 102, 241, 0.2);
   color: #818cf8;

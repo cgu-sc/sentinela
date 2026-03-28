@@ -53,10 +53,12 @@ def _sync_movimentacao(engine, progress_callback):
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
                CAST(M.total_qnt_vendas AS FLOAT) AS total_qnt_vendas,
                CAST(M.total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao,
+               P.razao_social,
                P.situacao_rf,
                P.conexao_ms,
                P.porte_empresa,
-               P.flag_grandes_redes
+               P.flag_grandes_redes,
+               P.qtd_filiais_rede
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
     """
@@ -81,10 +83,12 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_sem_comprovacao").cast(pl.Float64),
         pl.col("total_qnt_vendas").cast(pl.Float64),
         pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
+        pl.col("razao_social").cast(pl.String),
         pl.col("situacao_rf").cast(pl.Categorical),
         pl.col("conexao_ms").cast(pl.Categorical),
         pl.col("porte_empresa").cast(pl.Categorical),
         pl.col("flag_grandes_redes").cast(pl.Categorical),
+        pl.col("qtd_filiais_rede").cast(pl.Int64),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 

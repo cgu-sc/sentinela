@@ -46,10 +46,24 @@ class ResultadoSentinelaSchema(BaseModel):
     num_meses_movimentacao: Optional[int] = 0
     CodPorteEmpresa: Optional[int] = None
 
+class ResultadoSentinelaCnpjSchema(BaseModel):
+    municipio_uf: str
+    cnpj: str
+    razao_social: Optional[str] = None
+    totalMov: float = 0.0
+    valSemComp: float = 0.0
+    percValSemComp: Optional[float] = 0.0
+    percQtdeSemComp: Optional[float] = 0.0
+    flag_grandes_redes: Optional[str] = "Não"
+    qtd_filiais_rede: Optional[int] = 0
+    situacao_rf: Optional[str] = "ND"
+    conexao_ms: Optional[str] = "Inativa"
+
 class AnalyticsResponse(BaseModel):
     kpis: List[AnalyticsKPISchema]
     resultado_sentinela_uf: List[ResultadoSentinelaUFSchema]
     resultado_municipios: Optional[List[ResultadoSentinelaMunicipioSchema]] = None
+    resultado_cnpjs: Optional[List[ResultadoSentinelaCnpjSchema]] = None
 
 class FatorRiscoBucketSchema(BaseModel):
     faixa: str

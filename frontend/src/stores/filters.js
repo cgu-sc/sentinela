@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import { FILTER_DEFAULTS } from '@/config/constants';
+import { FILTER_DEFAULTS, FILTER_ALL_VALUE } from '@/config/constants';
 import { useGeoStore } from './geo';
 
 const STORAGE_KEY = 'sentinela_filters';
@@ -49,11 +49,11 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 4. INTELIGÊNCIA DE DADOS (CASCATA REVERSA)
   watch(selectedRegiaoSaude, (newRegiao) => {
-    if (newRegiao !== 'Todos' && geoStore.localidades.length > 0) {
+    if (newRegiao !== FILTER_ALL_VALUE && geoStore.localidades.length > 0) {
       // Tenta encontrar a região dentro do UF já selecionado (se houver um)
       const found = geoStore.localidades.find(l => 
         l.no_regiao_saude === newRegiao && 
-        (selectedUF.value === 'Todos' || l.sg_uf === selectedUF.value)
+        (selectedUF.value === FILTER_ALL_VALUE || l.sg_uf === selectedUF.value)
       );
       if (found && selectedUF.value !== found.sg_uf) {
         selectedUF.value = found.sg_uf;
@@ -62,7 +62,7 @@ export const useFilterStore = defineStore('filters', () => {
   });
 
   watch(selectedMunicipio, (newMunVal) => {
-    if (newMunVal !== 'Todos' && geoStore.localidades.length > 0) {
+    if (newMunVal !== FILTER_ALL_VALUE && geoStore.localidades.length > 0) {
       // O valor vem formatado como "Nome|UF" (Garante unicidade)
       const [nome, uf] = newMunVal.split('|');
       const found = geoStore.localidades.find(l => 
@@ -115,22 +115,22 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 4. ACTION - RESET GLOBAL
   function resetFilters() {
-    selectedUF.value = 'Todos';
-    selectedRegiaoSaude.value = 'Todos';
-    selectedMunicipio.value = 'Todos';
-    selectedSituacao.value = 'Todos';
-    selectedMS.value = 'Todos';
-    selectedPorte.value = 'Todos';
-    selectedGrandeRede.value = 'Todos';
+    selectedUF.value = FILTER_ALL_VALUE;
+    selectedRegiaoSaude.value = FILTER_ALL_VALUE;
+    selectedMunicipio.value = FILTER_ALL_VALUE;
+    selectedSituacao.value = FILTER_ALL_VALUE;
+    selectedMS.value = FILTER_ALL_VALUE;
+    selectedPorte.value = FILTER_ALL_VALUE;
+    selectedGrandeRede.value = FILTER_ALL_VALUE;
     percentualNaoComprovacaoRange.value = [0, 100];
     percentualNaoComprovacaoFilter.value = [0, 100];
     valorMinSemComp.value = FILTER_DEFAULTS.VALOR_MIN;
     valorMinSemCompFilter.value = FILTER_DEFAULTS.VALOR_MIN;
     periodo.value = [new Date(2015, 6, 1), new Date(2024, 11, 31)];
     sliderValue.value = [0, 113];
-    clusterSelection.value = 'Todos';
-    statusSelection.value = 'Todos';
-    rfaSelection.value = 'Todos';
+    clusterSelection.value = FILTER_ALL_VALUE;
+    statusSelection.value = FILTER_ALL_VALUE;
+    rfaSelection.value = FILTER_ALL_VALUE;
     searchTarget.value = '';
     localStorage.removeItem(STORAGE_KEY);
   }

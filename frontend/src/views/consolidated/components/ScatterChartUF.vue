@@ -3,6 +3,8 @@ import { computed } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
+import { useRiskMetrics } from '@/composables/useRiskMetrics';
+import { useChartTheme } from '@/config/chartTheme'; // eslint-disable-line
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
@@ -31,35 +33,24 @@ const analyticsStore = useAnalyticsStore();
 const themeStore     = useThemeStore();
 const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull } = useFormatting();
+const { getRiskColor, getRiskLabel } = useRiskMetrics();
+const { chartTheme } = useChartTheme();
 
 // ── Dados ordenados por % Valor decrescente ───────────────────────────────
 const sortedData = computed(() =>
   [...resultadoSentinelaUF.value].sort((a, b) => (b.percValSemComp ?? 0) - (a.percValSemComp ?? 0))
 );
 
-// ── Tema ──────────────────────────────────────────────────────────────────
-const C = computed(() => themeStore.isDark
-  ? {
-      text: '#e2e8f0', muted: '#94a3b8', grid: '#ffffff0f',
-      bg: 'transparent', tooltip: '#1e293b', border: '#334155',
-      bar1:     '#6366f1',
-      bar1Grad: '#6366f144',
-      bar2:     '#10b981',
-      bar2Grad: '#10b98144',
-      area:     '#3b82f6',
-      areaGrad: '#3b82f608',
-    }
-  : {
-      text: '#1e293b', muted: '#64748b', grid: '#0000000d',
-      bg: 'transparent', tooltip: '#ffffff', border: '#e2e8f0',
-      bar1:     '#4f46e5',
-      bar1Grad: '#4f46e522',
-      bar2:     '#059669',
-      bar2Grad: '#05966922',
-      area:     '#2563eb',
-      areaGrad: '#2563eb08',
-    }
-);
+// ── Tema (cores específicas do gráfico + base do chartTheme) ──────────────
+const C = computed(() => ({
+  ...chartTheme.value,
+  bar1:     themeStore.isDark ? '#6366f1' : '#4f46e5',
+  bar1Grad: themeStore.isDark ? '#6366f144' : '#4f46e522',
+  bar2:     themeStore.isDark ? '#10b981' : '#059669',
+  bar2Grad: themeStore.isDark ? '#10b98144' : '#05966922',
+  area:     themeStore.isDark ? '#3b82f6' : '#2563eb',
+  areaGrad: themeStore.isDark ? '#3b82f608' : '#2563eb08',
+}));
 
 // ── Opção ECharts ─────────────────────────────────────────────────────────
 const chartOption = computed(() => {
@@ -160,8 +151,8 @@ axisPointer: {
         const item = sortedData.value[idx];
         if (!item) return '';
         const perc = item.percValSemComp ?? 0;
-        const riskColor = perc > 20 ? '#ef4444' : perc > 10 ? '#f97316' : perc > 5 ? '#f59e0b' : '#10b981';
-        const riskLabel = perc > 20 ? 'Alto' : perc > 10 ? 'Moderado' : perc > 5 ? 'Médio' : 'Baixo';
+        const riskColor = getRiskColor(perc);
+        const riskLabel = getRiskLabel(perc);
         return `
           <div style="font-weight:700;font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
             ${item.uf}

@@ -2,22 +2,21 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AVAILABLE_MONTHS as availableMonths, SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS } from '@/config/constants';
+import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
 import { useFormatting } from '@/composables/useFormatting';
+import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
+import { useSyncManager } from '@/composables/useSyncManager';
 import Button from 'primevue/button';
 import ThemeSelector from '@/components/ThemeSelector.vue';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import Dropdown from 'primevue/dropdown';
 import Slider from 'primevue/slider';
-import SelectButton from 'primevue/selectbutton'; // Substituindo Listbox
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import ProgressBar from 'primevue/progressbar';
-import axios from 'axios';
-import { API_ENDPOINTS } from '@/config/api';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
@@ -99,54 +98,7 @@ const clusterOptions  = FILTER_OPTIONS.cluster;
 const rfaOptions      = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
-
-// Controle de Sincronização
-const isSyncing = ref(false);
-const showConfirmSync = ref(false);
-const syncProgress = ref(0);
-let _pollTimer = null;
-
-const pollSyncStatus = async () => {
-    try {
-        const response = await axios.get(API_ENDPOINTS.cacheStatus);
-        const { progress, status, is_ready } = response.data;
-        
-        syncProgress.value = progress;
-        
-        if (status === 'ready' && progress === 100) {
-            clearInterval(_pollTimer);
-            setTimeout(() => {
-                window.location.reload();
-            }, 800);
-        } else if (status === 'error') {
-            clearInterval(_pollTimer);
-            alert('Ocorreu um erro durante a sincronização no servidor.');
-            isSyncing.value = false;
-        }
-    } catch (err) {
-        console.error('Erro ao consultar status:', err);
-    }
-};
-
-const handleSync = async () => {
-    showConfirmSync.value = false;
-    isSyncing.value = true;
-    syncProgress.value = 0;
-    
-    // Reseta todos os filtros para garantir uma visão limpa pós-carga
-    if (filterStore.resetFilters) {
-        filterStore.resetFilters();
-    }
-    
-    try {
-        await axios.post(API_ENDPOINTS.cacheRefresh);
-        _pollTimer = setInterval(pollSyncStatus, 1000);
-    } catch (err) {
-        console.error('Erro ao iniciar sincronização:', err);
-        alert('Falha ao conectar com o servidor para sincronização.');
-        isSyncing.value = false;
-    }
-};
+const { isSyncing, showConfirmSync, syncProgress, handleSync } = useSyncManager();
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -157,7 +109,7 @@ watch(isCollapsed, (val) => {
 
 const limparFiltros = () => {
     filterStore.resetFilters();
-    selectedYears.value = new Set();
+    resetYears();
 };
 
 const applyPercentualNaoComprovacao = () => {
@@ -205,99 +157,21 @@ const applyValorMinSemComp = () => {
     filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
 
-// Índice 0 = Jul/2015 | último índice = Dez/2024
-const timeSliderValue = computed({
-  get: () => filterStore.sliderValue,
-  set: (val) => { filterStore.sliderValue = val; }
-});
-
-
-const applySliderPeriod = (indices) => {
-    const startDate = availableMonths[indices[0]].date;
-    const rawEndDate = availableMonths[indices[1]].date;
-    const endDate = new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0);
-    if (filterStore.periodo[0]?.getTime() !== startDate.getTime() ||
-        filterStore.periodo[1]?.getTime() !== endDate.getTime()) {
-        filterStore.periodo = [startDate, endDate];
-    }
-};
-
-// Multi-seleção de anos (intervalo contíguo)
-const selectedYears = ref(new Set());
-
-const applyYearSelection = (s) => {
-    const minYear = Math.min(...s);
-    const maxYear = Math.max(...s);
-    const startIdx = availableMonths.findIndex(m => m.date.getFullYear() === minYear && m.date.getMonth() === (minYear === 2015 ? 6 : 0));
-    const endIdx   = availableMonths.findLastIndex(m => m.date.getFullYear() === maxYear);
-    timeSliderValue.value = [
-        startIdx === -1 ? 0 : startIdx,
-        endIdx   === -1 ? availableMonths.length - 1 : endIdx,
-    ];
-    applySliderPeriod(timeSliderValue.value);
-};
-
-const toggleYear = (year) => {
-    const s = new Set(selectedYears.value);
-    if (s.size === 0) {
-        s.add(year);
-    } else {
-        const minY = Math.min(...s);
-        const maxY = Math.max(...s);
-        if (year === minY || year === maxY) {
-            s.delete(year);
-            if (s.size === 0) { selectedYears.value = s; return; }
-        } else if (year === minY - 1 || year === maxY + 1) {
-            s.add(year);
-        } else {
-            return; // desabilitado — ignora clique
-        }
-    }
-    selectedYears.value = s;
-    applyYearSelection(s);
-};
-
-const isYearActive   = (year) => selectedYears.value.has(year);
-const isYearDisabled = (year) => {
-    const s = selectedYears.value;
-    if (s.size === 0) return false;
-    const minY = Math.min(...s);
-    const maxY = Math.max(...s);
-    return !(year === minY || year === maxY || year === minY - 1 || year === maxY + 1);
-};
-
-// Tooltips flutuantes para o Slider
-const startMonthLabel = computed(() => availableMonths[timeSliderValue.value[0]]?.label);
-const endMonthLabel = computed(() => availableMonths[timeSliderValue.value[1]]?.label);
-const startPos = computed(() => (timeSliderValue.value[0] / (availableMonths.length - 1)) * 100);
-const endPos = computed(() => (timeSliderValue.value[1] / (availableMonths.length - 1)) * 100);
-const startTransform = computed(() => startPos.value < 8 ? 'translateX(0%)' : 'translateX(-50%)');
-const endTransform = computed(() => endPos.value > 92 ? 'translateX(-100%)' : 'translateX(-50%)');
-
-
-// Sincronizar de VOLTA: Se o usuário mudar no CALENDÁRIO, o SLIDER precisa PULAR para o lugar certo
-watch(() => filterStore.periodo, (newVal) => {
-    if (!newVal || newVal.length < 2 || !newVal[0] || !newVal[1]) return;
-    
-    const startIdx = availableMonths.findIndex(m => 
-        m.date.getFullYear() === newVal[0].getFullYear() && m.date.getMonth() === newVal[0].getMonth()
-    );
-    const endIdx = availableMonths.findIndex(m => 
-        m.date.getFullYear() === newVal[1].getFullYear() && m.date.getMonth() === newVal[1].getMonth()
-    );
-
-    if (startIdx !== -1 && endIdx !== -1) {
-        if (startIdx !== timeSliderValue.value[0] || endIdx !== timeSliderValue.value[1]) {
-            timeSliderValue.value = [startIdx, endIdx];
-        }
-    }
-}, { deep: true });
-
-// Verifica se TUDO (todo o período disponível) está selecionado
-const isAllSelected = computed(() => {
-    return timeSliderValue.value[0] === 0 && 
-           timeSliderValue.value[1] === availableMonths.length - 1;
-});
+const {
+  availableMonths,
+  timeSliderValue,
+  applySliderPeriod,
+  toggleYear,
+  isYearActive,
+  isYearDisabled,
+  resetYears,
+  startMonthLabel,
+  endMonthLabel,
+  startPos,
+  endPos,
+  startTransform,
+  endTransform,
+} = useSliderPeriodLogic();
 </script>
 
 <template>

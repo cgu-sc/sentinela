@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
+import { FILTER_ALL_VALUE } from '@/config/constants';
 
 export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
@@ -29,9 +30,9 @@ export const useAnalyticsStore = defineStore('analytics', {
         if (percMin !== null && percMin !== 0) params.perc_min = percMin;
         if (percMax !== null && percMax !== 100) params.perc_max = percMax;
         if (valMin !== null && valMin > 0) params.val_min = valMin;
-        if (uf && uf !== 'Todos') params.uf = uf;
-        if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
-        if (municipio && municipio !== 'Todos') params.municipio = municipio;
+        if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
+        if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
+        if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
         if (situacaoRf) params.situacao_rf = situacaoRf;
         if (conexaoMs) params.conexao_ms = conexaoMs;
         if (porteEmpresa) params.porte_empresa = porteEmpresa;
@@ -62,9 +63,9 @@ export const useAnalyticsStore = defineStore('analytics', {
         if (percMin !== null && percMin !== 0) params.perc_min = percMin;
         if (percMax !== null && percMax !== 100) params.perc_max = percMax;
         if (valMin !== null && valMin > 0) params.val_min = valMin;
-        if (uf && uf !== 'Todos') params.uf = uf;
-        if (regiaoSaude && regiaoSaude !== 'Todos') params.regiao_saude = regiaoSaude;
-        if (municipio && municipio !== 'Todos') params.municipio = municipio;
+        if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
+        if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
+        if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
         if (situacaoRf) params.situacao_rf = situacaoRf;
         if (conexaoMs) params.conexao_ms = conexaoMs;
         if (porteEmpresa) params.porte_empresa = porteEmpresa;

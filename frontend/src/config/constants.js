@@ -37,20 +37,23 @@ export const AVAILABLE_MONTHS = generateAvailableMonths();
 /** Anos disponíveis para atalho rápido no filtro de período. */
 export const ANALYSIS_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
 
+/** Valor padrão para filtros de seleção — fonte única para evitar string 'Todos' hardcoded. */
+export const FILTER_ALL_VALUE = 'Todos';
+
 export const FILTER_DEFAULTS = {
-    UF: 'Todos',
-    REGIAO: 'Todos',
-    MUNICIPIO: 'Todos',
-    SITUACAO: 'Todos',
-    MS: 'Todos',
-    PORTE: 'Todos',
-    GRANDE_REDE: 'Todos',
+    UF: FILTER_ALL_VALUE,
+    REGIAO: FILTER_ALL_VALUE,
+    MUNICIPIO: FILTER_ALL_VALUE,
+    SITUACAO: FILTER_ALL_VALUE,
+    MS: FILTER_ALL_VALUE,
+    PORTE: FILTER_ALL_VALUE,
+    GRANDE_REDE: FILTER_ALL_VALUE,
     PERCENTUAL_RANGE: [0, 100],
     VALOR_MIN: 0,
     VALOR_MAX: 1000000,
-    CLUSTER: 'Todos',
-    STATUS: 'Todos',
-    RFA: 'Todos',
+    CLUSTER: FILTER_ALL_VALUE,
+    STATUS: FILTER_ALL_VALUE,
+    RFA: FILTER_ALL_VALUE,
     SEARCH: '',
     // Auditoria inicia em Julho de 2015 (Índices e Datas)
     DATE_RANGE: [new Date(2015, 6, 1), new Date(2024, 11, 31)],

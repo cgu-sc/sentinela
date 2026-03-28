@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
+import { useChartTheme } from '@/config/chartTheme'; // eslint-disable-line
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
@@ -25,24 +26,15 @@ const analyticsStore = useAnalyticsStore();
 const themeStore     = useThemeStore();
 const { fatorRisco, fatorRiscoLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull, formatNumberFull } = useFormatting();
+const { chartTheme } = useChartTheme();
 
-// ── Tema ──────────────────────────────────────────────────────────────────
-const C = computed(() => themeStore.isDark
-  ? {
-      text: '#e2e8f0', muted: '#94a3b8', grid: '#ffffff0f',
-      bg: 'transparent', tooltip: '#1e293b', border: '#334155',
-      bar:     '#8b5cf6',
-      barGrad: '#a78bfa',
-      area:    '#ef4444',
-    }
-  : {
-      text: '#1e293b', muted: '#64748b', grid: '#0000000d',
-      bg: 'transparent', tooltip: '#ffffff', border: '#e2e8f0',
-      bar:     '#7c3aed',
-      barGrad: '#8b5cf6',
-      area:    '#dc2626',
-    }
-);
+// ── Tema (cores específicas do gráfico + base do chartTheme) ──────────────
+const C = computed(() => ({
+  ...chartTheme.value,
+  bar:     themeStore.isDark ? '#8b5cf6' : '#7c3aed',
+  barGrad: themeStore.isDark ? '#a78bfa' : '#8b5cf6',
+  area:    themeStore.isDark ? '#ef4444' : '#dc2626',
+}));
 
 // ── Opção ECharts ─────────────────────────────────────────────────────────
 const chartOption = computed(() => {

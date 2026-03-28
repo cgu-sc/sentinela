@@ -30,53 +30,36 @@ export function useSliderPeriodLogic() {
     }
   };
 
-  // ── Multi-seleção de anos (intervalo contíguo) ────────────────────────────
-  const selectedYears = ref(new Set());
-
-  const applyYearSelection = (s) => {
-    const minYear  = Math.min(...s);
-    const maxYear  = Math.max(...s);
-    const startIdx = availableMonths.findIndex(
-      m => m.date.getFullYear() === minYear && m.date.getMonth() === (minYear === 2015 ? 6 : 0)
-    );
-    const endIdx = availableMonths.findLastIndex(m => m.date.getFullYear() === maxYear);
-    timeSliderValue.value = [
-      startIdx === -1 ? 0 : startIdx,
-      endIdx   === -1 ? availableMonths.length - 1 : endIdx,
-    ];
-    applySliderPeriod(timeSliderValue.value);
-  };
-
+  // ── Atalhos de Ano (Seleção Única) ───────────────────────────────────────
   const toggleYear = (year) => {
-    const s = new Set(selectedYears.value);
-    if (s.size === 0) {
-      s.add(year);
-    } else {
-      const minY = Math.min(...s);
-      const maxY = Math.max(...s);
-      if (year === minY || year === maxY) {
-        s.delete(year);
-        if (s.size === 0) { selectedYears.value = s; return; }
-      } else if (year === minY - 1 || year === maxY + 1) {
-        s.add(year);
-      } else {
-        return;
-      }
+    const startIdx = availableMonths.findIndex(m => m.date.getFullYear() === year);
+    const endIdx   = availableMonths.findLastIndex(m => m.date.getFullYear() === year);
+    
+    if (startIdx !== -1 && endIdx !== -1) {
+      timeSliderValue.value = [startIdx, endIdx];
+      applySliderPeriod(timeSliderValue.value);
     }
-    selectedYears.value = s;
-    applyYearSelection(s);
   };
 
-  const isYearActive   = (year) => selectedYears.value.has(year);
-  const isYearDisabled = (year) => {
-    const s = selectedYears.value;
-    if (s.size === 0) return false;
-    const minY = Math.min(...s);
-    const maxY = Math.max(...s);
-    return !(year === minY || year === maxY || year === minY - 1 || year === maxY + 1);
+  const isYearActive = (year) => {
+    const [start, end] = timeSliderValue.value;
+    const s = availableMonths[start].date;
+    const e = availableMonths[end].date;
+    
+    // Um ano é considerado "ativo" se o range selecionado for EXATAMENTE o ano inteiro
+    const isSameYear = s.getFullYear() === year && e.getFullYear() === year;
+    const isFullYear = s.getMonth() === (year === 2015 ? 6 : 0) && e.getMonth() === 11;
+    
+    return isSameYear && isFullYear;
   };
 
-  const resetYears = () => { selectedYears.value = new Set(); };
+  const isYearDisabled = () => false; 
+
+  const resetYears = () => {
+     // Reseta para o período total (Início 2015 até Fim 2024)
+     timeSliderValue.value = [0, availableMonths.length - 1];
+     applySliderPeriod(timeSliderValue.value);
+  };
 
   // ── Tooltips flutuantes ───────────────────────────────────────────────────
   const startMonthLabel = computed(() => availableMonths[timeSliderValue.value[0]]?.label);
@@ -111,7 +94,6 @@ export function useSliderPeriodLogic() {
     ANALYSIS_YEARS,
     timeSliderValue,
     applySliderPeriod,
-    selectedYears,
     toggleYear,
     isYearActive,
     isYearDisabled,

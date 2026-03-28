@@ -306,7 +306,7 @@ const {
                     :min="0"
                     :max="availableMonths.length - 1"
                     class="w-full time-slider"
-                    @slideend="() => { selectedYears.value = new Set(); applySliderPeriod(timeSliderValue.value); }"
+                    @slideend="() => { applySliderPeriod(timeSliderValue); }"
                 />
             </div>
           </div>
@@ -945,15 +945,7 @@ const {
   border-radius: 4px;
 }
 
-:global(.filter-active .p-dropdown-label),
-:global(.filter-active .p-inputtext) {
-  color: var(--primary-color) !important;
-  font-weight: 800 !important;
-}
-
-:global(.filter-active .p-dropdown-trigger) {
-  color: var(--primary-color) !important;
-}
+/* Estilos de cor/negrito de texto removidos conforme pedido (UI sutil) */
 
 .admin-layout.collapsed .main-container {
   /* Sem padding necessário ao colapsar */

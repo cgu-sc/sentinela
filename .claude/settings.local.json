@@ -7,7 +7,13 @@
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/**)",
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/**)",
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/layouts/**)",
-      "Bash(grep -n \"html, body\\\\|^body {\" frontend/src/App.vue)"
+      "Bash(grep -n \"html, body\\\\|^body {\" frontend/src/App.vue)",
+      "Read(///sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/backend/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/backend/api/**)",
+      "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/views/targets/**)"
     ]
   }
 }

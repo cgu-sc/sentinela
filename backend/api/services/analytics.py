@@ -9,6 +9,7 @@ from ..schemas.analytics import (
     ResultadoSentinelaUFSchema,
     AnalyticsResponse,
     ResultadoSentinelaSchema,
+    ResultadoSentinelaMunicipioSchema,
     FatorRiscoResponseSchema,
     FatorRiscoBucketSchema
 )
@@ -122,13 +123,42 @@ class AnalyticsService:
                 for r in uf_df.iter_rows(named=True)
             ]
 
-            return AnalyticsResponse(kpis=kpis, resultado_sentinela_uf=resultado_sentinela_uf)
+            # 6. Detalhamento por Município (Se UF estiver selecionada)
+            resultado_municipios = None
+            if uf and uf != 'Todos':
+                muni_df = (
+                    period_df
+                    .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                    .group_by(["uf", "no_municipio"])
+                    .agg([
+                        pl.n_unique("cnpj").alias("cnpjs"),
+                        pl.sum("total_vendas").alias("totalMov"),
+                        pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                        pl.sum("total_qnt_vendas").alias("totalQtde"),
+                        pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                    ])
+                    .with_columns([
+                        (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
+                        (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
+                    ])
+                    .sort("percValSemComp", descending=True, nulls_last=True)
+                )
+                resultado_municipios = [
+                    ResultadoSentinelaMunicipioSchema(municipio=r["no_municipio"], **r)
+                    for r in muni_df.iter_rows(named=True)
+                ]
+
+            return AnalyticsResponse(
+                kpis=kpis, 
+                resultado_sentinela_uf=resultado_sentinela_uf,
+                resultado_municipios=resultado_municipios
+            )
 
         except Exception as e:
             import traceback
             print(f"❌ ERRO NO MOTOR POLARS (Analytics): {e}")
             print(traceback.format_exc())
-            return AnalyticsResponse(kpis=[], resultado_sentinela_uf=[])
+            return AnalyticsResponse(kpis=[], resultado_sentinela_uf=[], resultado_municipios=None)
 
     @staticmethod
     def get_resultado_sentinela(db: Session) -> List[ResultadoSentinelaSchema]:

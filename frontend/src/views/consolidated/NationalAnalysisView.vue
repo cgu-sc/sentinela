@@ -3,7 +3,10 @@ import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
 import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
 import UfAnalysisTable from './components/UfAnalysisTable.vue';
+import MunicipalityAnalysisTable from './components/MunicipalityAnalysisTable.vue';
+import { useFilterStore } from '@/stores/filters';
 
+const filterStore = useFilterStore();
 useFetchAnalytics({ includeFatorRisco: true });
 </script>
 
@@ -12,7 +15,8 @@ useFetchAnalytics({ includeFatorRisco: true });
     <KpiSection />
     <div class="charts-table-grid">
       <RiskAnalysisChart />
-      <UfAnalysisTable />
+      <UfAnalysisTable v-if="filterStore.selectedUF === 'Todos'" />
+      <MunicipalityAnalysisTable v-else />
     </div>
   </div>
 </template>

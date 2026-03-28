@@ -8,6 +8,7 @@ export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
     kpis: [],
     resultadoSentinelaUF: [],
+    resultadoMunicipios: [],
     fatorRisco: [],
     isLoading: false,
     fatorRiscoLoading: false,
@@ -41,6 +42,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
+        this.resultadoMunicipios = response.data.resultado_municipios || [];
         this.lastSync = new Date();
       } catch (err) {
         console.error('Erro ao buscar resumo do dashboard:', err);

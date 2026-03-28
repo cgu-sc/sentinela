@@ -193,7 +193,8 @@ const chartOption = computed(() => {
 }
 
 .chart-wrapper {
-  height: 420px;
+  height: 35vh;
+  min-height: 400px;
   margin: 0 -1rem -1rem -1rem;
 }
 

@@ -183,3 +183,32 @@
   font-size: 0.85rem;
   color: var(--text-color);
 }
+
+/** 
+ * PAGINATOR DARK MODE 
+ */
+.enterprise-table .p-paginator {
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+  border-top: 1px solid var(--sidebar-border) !important;
+  border-radius: 0 0 12px 12px;
+}
+
+.enterprise-table .p-paginator .p-paginator-page,
+.enterprise-table .p-paginator .p-paginator-next,
+.enterprise-table .p-paginator .p-paginator-last,
+.enterprise-table .p-paginator .p-paginator-first,
+.enterprise-table .p-paginator .p-paginator-prev {
+  background: transparent !important;
+  color: var(--text-color) !important;
+}
+
+.enterprise-table .p-paginator .p-paginator-page.p-highlight {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
+}
+
+body.dark-mode .enterprise-table .p-paginator .p-paginator-page.p-highlight {
+  background: rgba(99, 102, 241, 0.2) !important;
+  color: #818cf8 !important;
+}

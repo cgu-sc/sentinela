@@ -18,6 +18,17 @@ class ResultadoSentinelaUFSchema(BaseModel):
     qtdeSemComp: Optional[int] = 0
     totalQtde: Optional[int] = 0
 
+class ResultadoSentinelaMunicipioSchema(BaseModel):
+    uf: Optional[str] = "ND"
+    municipio: Optional[str] = "ND"
+    cnpjs: Optional[int] = 0
+    percValSemComp: Optional[float] = 0.0
+    valSemComp: Optional[float] = 0.0
+    totalMov: Optional[float] = 0.0
+    percQtdeSemComp: Optional[float] = 0.0
+    qtdeSemComp: Optional[int] = 0
+    totalQtde: Optional[int] = 0
+
 class ResultadoSentinelaSchema(BaseModel):
     uf: Optional[str] = None
     id_ibge7: Optional[int] = None
@@ -38,6 +49,7 @@ class ResultadoSentinelaSchema(BaseModel):
 class AnalyticsResponse(BaseModel):
     kpis: List[AnalyticsKPISchema]
     resultado_sentinela_uf: List[ResultadoSentinelaUFSchema]
+    resultado_municipios: Optional[List[ResultadoSentinelaMunicipioSchema]] = None
 
 class FatorRiscoBucketSchema(BaseModel):
     faixa: str

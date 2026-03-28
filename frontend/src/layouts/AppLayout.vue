@@ -30,7 +30,7 @@ const activeModule = ref('consolidado');
 const tabs = computed(() => {
     if (activeModule.value === 'consolidado') {
         return [
-            { label: 'Análise Nacional', path: '/' },
+            { label: 'Análise UF', path: '/' },
             { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
             { label: 'Análise Município', path: '/municipio' },
             { label: 'Análise Empresa', path: '/empresa' },

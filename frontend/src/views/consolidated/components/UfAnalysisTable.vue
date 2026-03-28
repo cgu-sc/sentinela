@@ -50,11 +50,20 @@ const tableFooter = computed(() => {
   <div class="table-section shadow-card" :class="{ 'is-refreshing': isLoading }">
     <div class="section-header">
        <i class="pi pi-table"></i>
-       <h3>ANÁLISE NACIONAL</h3>
+       <h3>ANÁLISE UF</h3>
        <div class="spacer"></div>
     </div>
 
-    <DataTable :value="filteredData" size="small" stripedRows removableSort sortField="percValSemComp" :sortOrder="-1" class="custom-table enterprise-table">
+    <DataTable 
+      :value="filteredData" 
+      size="small" 
+      stripedRows 
+      removableSort 
+      sortField="percValSemComp" 
+      :sortOrder="-1" 
+      class="custom-table enterprise-table clickable-rows"
+      @row-click="(e) => filterStore.selectedUF = e.data.uf"
+    >
           <Column field="uf" header="UF" sortable style="width: 5%">
             <template #footer>TOTAL</template>
           </Column>
@@ -122,5 +131,14 @@ const tableFooter = computed(() => {
 .is-refreshing {
   opacity: 0.5;
   pointer-events: none;
+}
+
+:deep(.clickable-rows .p-datatable-tbody > tr) {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+:deep(.clickable-rows .p-datatable-tbody > tr:hover) {
+  background-color: var(--primary-color-lighter, rgba(0, 0, 0, 0.04)) !important;
 }
 </style>

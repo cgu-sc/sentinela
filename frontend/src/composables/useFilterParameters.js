@@ -1,6 +1,6 @@
 import { useFilterStore } from '../stores/filters';
 import { useFormatting } from './useFormatting';
-import { parseMunicipio, extractCnpjRaiz } from './useParsing';
+import { parseMunicipio, extractCnpjFilter } from './useParsing';
 import { FILTER_ALL_VALUE } from '@/config/constants';
 
 /**
@@ -28,7 +28,7 @@ export function useFilterParameters() {
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;
     const grandeRede   = filterStore.selectedGrandeRede !== FILTER_ALL_VALUE ? filterStore.selectedGrandeRede : null;
-    const cnpjRaiz     = extractCnpjRaiz(filterStore.selectedCnpjRaiz);
+    const cnpjRaiz     = extractCnpjFilter(filterStore.selectedCnpjRaiz);
 
     return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz };
   }

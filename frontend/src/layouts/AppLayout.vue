@@ -263,7 +263,14 @@ const {
         </div>
 
         <div class="filter-section">
-            <label class="filter-label">CNPJ Raiz (Rede)</label>
+            <label class="filter-label">
+              CNPJ
+              <i
+                class="pi pi-info-circle"
+                style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;"
+                v-tooltip.right="'Aceita CNPJ completo (14 dígitos) ou apenas a raiz (8 dígitos), com ou sem máscara. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede.'"
+              />
+            </label>
             <InputText
               v-model="filterStore.selectedCnpjRaiz"
               placeholder="Digite o CNPJ..."

@@ -76,7 +76,11 @@ class AnalyticsService:
             if conexao_ms and conexao_ms != 'Todos':      mask = mask & (pl.col("conexao_ms") == conexao_ms)
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
-            if cnpj_raiz:                                  mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
+            if cnpj_raiz:
+                if len(cnpj_raiz) == 14:
+                    mask = mask & (pl.col("cnpj") == cnpj_raiz)
+                else:
+                    mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
 
             period_df = df.filter(mask)
 
@@ -255,7 +259,11 @@ class AnalyticsService:
             if conexao_ms and conexao_ms != 'Todos':       mask = mask & (pl.col("conexao_ms") == conexao_ms)
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
-            if cnpj_raiz:                                  mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
+            if cnpj_raiz:
+                if len(cnpj_raiz) == 14:
+                    mask = mask & (pl.col("cnpj") == cnpj_raiz)
+                else:
+                    mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
 
             cnpj_agg = (
                 df.filter(mask)

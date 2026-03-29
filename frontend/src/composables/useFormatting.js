@@ -7,7 +7,7 @@ export function useFormatting() {
   const formatBRL = (val) => {
     if (val >= 1000000000) return `R$ ${(val / 1000000000).toFixed(1).replace('.', ',')}B`;
     if (val >= 1000000) return `R$ ${(val / 1000000).toFixed(1).replace('.', ',')}M`;
-    if (val >= 1000) return `${Math.floor(val / 1000)}K`;
+    if (val >= 1000) return `R$ ${Math.floor(val / 1000)}K`;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 

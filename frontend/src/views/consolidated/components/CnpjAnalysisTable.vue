@@ -6,6 +6,8 @@ import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useTableAggregation } from '@/composables/useTableAggregation';
 import { storeToRefs } from 'pinia';
+import { FILTER_OPTIONS } from '@/config/filterOptions';
+import { extractCnpjRaiz } from '@/composables/useParsing';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -14,7 +16,7 @@ const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const { resultadoCnpjs, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
-const { formatBRL, formatNumber, formatPercent } = useFormatting();
+const { formatBRL, formatPercent } = useFormatting();
 
 // Agregação de rodapé
 const { totals } = useTableAggregation(resultadoCnpjs, {
@@ -33,6 +35,18 @@ const tableFooter = computed(() => {
     totalMov:       formatBRL(t.totalMov),
   };
 });
+
+// Normaliza o valor bruto da API para o valor aceito pelo filtro (case-insensitive)
+function normalizeToOption(options, raw) {
+  return options.find(o => o.toLowerCase() === raw?.toLowerCase()) ?? raw;
+}
+
+// Filtros clicáveis nos badges
+function applyFilter(field, value) {
+  if (field === 'grandeRede')  filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, value);
+  if (field === 'situacaoRF') filterStore.selectedSituacao   = normalizeToOption(FILTER_OPTIONS.situacao,   value);
+  if (field === 'conexaoMS')  filterStore.selectedMS         = normalizeToOption(FILTER_OPTIONS.ms,         value);
+}
 
 // Helper para exibir o município formatado adequadamente
 const filteredLocation = computed(() => {
@@ -68,13 +82,29 @@ const filteredLocation = computed(() => {
       :sortOrder="-1" 
       class="custom-table enterprise-table"
     >
-          <Column field="municipio_uf" header="Município/UF" sortable style="width: 12%">
+          <Column field="cnpj" header="CNPJ" sortable style="width: 10%">
+            <template #body="slotProps">
+              <div class="cnpj-cell">
+                <span
+                  v-tooltip.top="slotProps.data.is_matriz ? 'Matriz' : 'Filial'"
+                  :class="slotProps.data.is_matriz ? 'tipo-badge matriz' : 'tipo-badge filial'"
+                >
+                  <i :class="slotProps.data.is_matriz ? 'pi pi-home' : 'pi pi-building'"></i>
+                </span>
+                {{ slotProps.data.cnpj }}
+              </div>
+            </template>
             <template #footer>TOTAL</template>
           </Column>
-
-          <Column field="cnpj" header="CNPJ" sortable style="width: 10%"></Column>
           
-          <Column field="razao_social" header="Razão Social" sortable style="width: 18%"></Column>
+          <Column field="razao_social" header="Razão Social" sortable style="width: 18%">
+             <template #body="slotProps">
+                <span
+                  v-tooltip.top="slotProps.data.razao_social?.length > 20 ? slotProps.data.razao_social : undefined"
+                  class="razao-social-cell"
+                >{{ slotProps.data.razao_social?.length > 20 ? slotProps.data.razao_social.slice(0, 20) + '…' : slotProps.data.razao_social }}</span>
+             </template>
+          </Column>
 
           <Column field="totalMov" header="Total Vendas" sortable style="width: 10%">
              <template #body="slotProps">
@@ -97,33 +127,53 @@ const filteredLocation = computed(() => {
              <template #footer>{{ tableFooter.percValSemComp }}</template>
           </Column>
 
-          <Column field="percQtdeSemComp" header="% Qtde s/ Comp" sortable style="width: 8%">
-             <template #body="slotProps">
-                <Tag :value="formatPercent(slotProps.data.percQtdeSemComp)" :class="getRiskClass(slotProps.data.percQtdeSemComp)" />
-             </template>
-          </Column>
-
           <Column field="flag_grandes_redes" header="Grande Rede" sortable style="width: 7%">
             <template #body="slotProps">
-                <Tag :value="slotProps.data.flag_grandes_redes" :severity="slotProps.data.flag_grandes_redes === 'Sim' ? 'info' : 'secondary'" />
+                <Tag
+                  :value="slotProps.data.flag_grandes_redes"
+                  :class="[slotProps.data.flag_grandes_redes === 'Sim' ? 'status-info' : 'status-secondary', 'clickable-badge']"
+                  v-tooltip.top="'Filtrar por Grande Rede: ' + slotProps.data.flag_grandes_redes"
+                  @click="applyFilter('grandeRede', slotProps.data.flag_grandes_redes)"
+                />
             </template>
           </Column>
 
-          <Column field="qtd_filiais_rede" header="Estab. Rede" sortable style="width: 7%">
+          <Column field="qtd_estabelecimentos_rede" header="Estab. Rede" sortable style="width: 7%">
             <template #body="slotProps">
-                <span>{{ slotProps.data.qtd_filiais_rede }}</span>
+                <Tag
+                  v-if="slotProps.data.qtd_estabelecimentos_rede > 1"
+                  :value="String(slotProps.data.qtd_estabelecimentos_rede)"
+                  class="status-info clickable-badge"
+                  v-tooltip.top="'Ver todos os estabelecimentos desta rede'"
+                  @click="filterStore.selectedCnpjRaiz = extractCnpjRaiz(slotProps.data.cnpj)"
+                />
+                <Tag
+                  v-else
+                  :value="String(slotProps.data.qtd_estabelecimentos_rede)"
+                  class="status-secondary"
+                />
             </template>
           </Column>
 
           <Column field="situacao_rf" header="Situação RF" sortable style="width: 7%">
             <template #body="slotProps">
-                <Tag :value="slotProps.data.situacao_rf" :severity="slotProps.data.situacao_rf === 'ATIVA' ? 'success' : 'danger'" />
+                <Tag
+                  :value="slotProps.data.situacao_rf"
+                  :class="[slotProps.data.situacao_rf?.toUpperCase() === 'ATIVA' ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  v-tooltip.top="'Filtrar por Situação RF: ' + slotProps.data.situacao_rf"
+                  @click="applyFilter('situacaoRF', slotProps.data.situacao_rf)"
+                />
             </template>
           </Column>
 
           <Column field="conexao_ms" header="Conexão MS" sortable style="width: 7%">
             <template #body="slotProps">
-                <Tag :value="slotProps.data.conexao_ms" :severity="slotProps.data.conexao_ms === 'Ativa' ? 'success' : 'warn'" />
+                <Tag
+                  :value="slotProps.data.conexao_ms"
+                  :class="[slotProps.data.conexao_ms?.toUpperCase() === 'ATIVA' ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  v-tooltip.top="'Filtrar por Conexão MS: ' + slotProps.data.conexao_ms"
+                  @click="applyFilter('conexaoMS', slotProps.data.conexao_ms)"
+                />
             </template>
           </Column>
     </DataTable>
@@ -203,6 +253,51 @@ const filteredLocation = computed(() => {
 }
 :deep(.p-datatable-wrapper::-webkit-scrollbar-thumb:hover) {
   background: #cbd5e1;
+}
+
+.razao-social-cell {
+  cursor: default;
+  white-space: nowrap;
+}
+
+.cnpj-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.tipo-badge.matriz {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #818cf8;
+}
+
+.tipo-badge.filial {
+  background: rgba(100, 116, 139, 0.12);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+}
+
+:deep(.clickable-badge) {
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+:deep(.clickable-badge:hover) {
+  opacity: 0.8;
+  transform: scale(1.08);
 }
 
 body.dark-mode .header-icon-box {

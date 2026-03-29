@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df
+from data_cache import get_df, get_rede_df
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -11,13 +11,14 @@ from ..schemas.analytics import (
     ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
+    RedeEstabelecimentoSchema,
     FatorRiscoResponseSchema,
     FatorRiscoBucketSchema
 )
 
 class AnalyticsService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> AnalyticsResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None) -> AnalyticsResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -75,6 +76,7 @@ class AnalyticsService:
             if conexao_ms and conexao_ms != 'Todos':      mask = mask & (pl.col("conexao_ms") == conexao_ms)
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+            if cnpj_raiz:                                  mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
 
             period_df = df.filter(mask)
 
@@ -165,14 +167,15 @@ class AnalyticsService:
                         pl.sum("total_qnt_vendas").alias("totalQtde"),
                         pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
                         pl.col("flag_grandes_redes").first().alias("flag_grandes_redes"),
-                        pl.col("qtd_filiais_rede").first().alias("qtd_filiais_rede"),
+                        pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
                         pl.col("situacao_rf").first().alias("situacao_rf"),
                         pl.col("conexao_ms").first().alias("conexao_ms"),
                     ])
                     .with_columns([
                         (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
                         (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
-                        (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf")
+                        (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf"),
+                        (pl.col("cnpj").str.slice(8, 4) == "0001").alias("is_matriz"),
                     ])
                     .sort("percValSemComp", descending=True, nulls_last=True)
                 )
@@ -218,7 +221,20 @@ class AnalyticsService:
             return []
 
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> FatorRiscoResponseSchema:
+    def get_rede_por_cnpj_raiz(cnpj_raiz: str) -> List[RedeEstabelecimentoSchema]:
+        """Retorna todos os estabelecimentos de uma rede dado o CNPJ raiz (8 dígitos)."""
+        try:
+            df = get_rede_df()
+            result = df.filter(pl.col("cnpj_raiz") == cnpj_raiz).sort("is_matriz", descending=True)
+            return [RedeEstabelecimentoSchema(**r) for r in result.iter_rows(named=True)]
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO BUSCAR REDE: {e}")
+            print(traceback.format_exc())
+            return []
+
+    @staticmethod
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None) -> FatorRiscoResponseSchema:
         """
         Calcula as faixas de risco (Buckets de 10%) via Polars.
         """
@@ -239,6 +255,7 @@ class AnalyticsService:
             if conexao_ms and conexao_ms != 'Todos':       mask = mask & (pl.col("conexao_ms") == conexao_ms)
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+            if cnpj_raiz:                                  mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
 
             cnpj_agg = (
                 df.filter(mask)

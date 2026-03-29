@@ -55,9 +55,20 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     percValSemComp: Optional[float] = 0.0
     percQtdeSemComp: Optional[float] = 0.0
     flag_grandes_redes: Optional[str] = "Não"
-    qtd_filiais_rede: Optional[int] = 0
+    qtd_estabelecimentos_rede: Optional[int] = 0
     situacao_rf: Optional[str] = "ND"
     conexao_ms: Optional[str] = "Inativa"
+    is_matriz: Optional[bool] = False
+
+class RedeEstabelecimentoSchema(BaseModel):
+    cnpj_raiz: str
+    cnpj: str
+    razao_social: Optional[str] = None
+    uf: Optional[str] = None
+    municipio: Optional[str] = None
+    is_matriz: bool = False
+    qtd_estabelecimentos_rede: Optional[int] = 0
+    flag_grandes_redes: Optional[str] = "Não"
 
 class AnalyticsResponse(BaseModel):
     kpis: List[AnalyticsKPISchema]

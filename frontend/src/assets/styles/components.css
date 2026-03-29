@@ -112,10 +112,43 @@
       color: #7f1d1d !important;
       border: 1px solid rgba(153, 27, 27, 0.35) !important;
   }
+
+  /* STATUS BADGES (MODERN GLASS STYLE) */
+  .status-success {
+      background: rgba(34, 197, 94, 0.12) !important;
+      color: #166534 !important;
+      border: 1px solid rgba(34, 197, 94, 0.25) !important;
+  }
+
+  .status-danger {
+      background: rgba(239, 68, 68, 0.12) !important;
+      color: #991b1b !important;
+      border: 1px solid rgba(239, 68, 68, 0.25) !important;
+  }
+
+  .status-warn {
+      background: rgba(245, 158, 11, 0.15) !important;
+      color: #92400e !important;
+      border: 1px solid rgba(245, 158, 11, 0.25) !important;
+  }
+
+  .status-info {
+      background: rgba(59, 130, 246, 0.12) !important;
+      color: #1e40af !important;
+      border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  }
+
+  .status-secondary {
+      background: rgba(100, 116, 139, 0.12) !important;
+      color: #475569 !important;
+      border: 1px solid rgba(100, 116, 139, 0.25) !important;
+  }
   
-  body.dark-mode .risk-low { color: #4ade80 !important; }
-  body.dark-mode .risk-medium { color: #fbbf24 !important; }
-  body.dark-mode .risk-high { color: #f87171 !important; }
+  body.dark-mode .risk-low, body.dark-mode .status-success { color: #4ade80 !important; }
+  body.dark-mode .risk-medium, body.dark-mode .status-warn { color: #fbbf24 !important; }
+  body.dark-mode .risk-high, body.dark-mode .status-danger { color: #f87171 !important; }
+  body.dark-mode .status-info { color: #60a5fa !important; }
+  body.dark-mode .status-secondary { color: #94a3b8 !important; }
   body.dark-mode .risk-critical { color: #ff8a8a !important; font-weight: 800; }
   
   /* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */

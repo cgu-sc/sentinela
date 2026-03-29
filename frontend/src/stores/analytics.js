@@ -2,7 +2,29 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
-import { FILTER_ALL_VALUE } from '@/config/constants';
+import { FILTER_ALL_VALUE, KPI_LABEL_MAP, KPI_PRIORITY_ORDER } from '@/config/constants';
+
+/**
+ * Constrói o objeto de parâmetros para as APIs de analytics.
+ * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
+ */
+function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz) {
+  const params = {};
+  if (inicio)                               params.data_inicio  = inicio;
+  if (fim)                                  params.data_fim     = fim;
+  if (percMin !== null && percMin !== 0)    params.perc_min     = percMin;
+  if (percMax !== null && percMax !== 100)  params.perc_max     = percMax;
+  if (valMin !== null && valMin > 0)        params.val_min      = valMin;
+  if (uf && uf !== FILTER_ALL_VALUE)        params.uf           = uf;
+  if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude  = regiaoSaude;
+  if (municipio && municipio !== FILTER_ALL_VALUE)     params.municipio     = municipio;
+  if (situacaoRf)  params.situacao_rf  = situacaoRf;
+  if (conexaoMs)   params.conexao_ms   = conexaoMs;
+  if (porteEmpresa) params.porte_empresa = porteEmpresa;
+  if (grandeRede)  params.grande_rede  = grandeRede;
+  if (cnpjRaiz)    params.cnpj_raiz    = cnpjRaiz;
+  return params;
+}
 
 export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
@@ -18,28 +40,11 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    /**
-     * Busca os dados estratégicos (KPIs e Agrupamento por UF) no Backend.
-     * Esta API traz os dados já calculados (agregados) pelo SQL Server.
-     */
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null) {
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null) {
       this.isLoading = true;
       this.error = null;
       try {
-        const params = {};
-        if (inicio) params.data_inicio = inicio;
-        if (fim) params.data_fim = fim;
-        if (percMin !== null && percMin !== 0) params.perc_min = percMin;
-        if (percMax !== null && percMax !== 100) params.perc_max = percMax;
-        if (valMin !== null && valMin > 0) params.val_min = valMin;
-        if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
-        if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
-        if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
-        if (situacaoRf) params.situacao_rf = situacaoRf;
-        if (conexaoMs) params.conexao_ms = conexaoMs;
-        if (porteEmpresa) params.porte_empresa = porteEmpresa;
-        if (grandeRede) params.grande_rede = grandeRede;
-
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz);
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
@@ -54,27 +59,10 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    /**
-     * Busca os dados do gráfico de Fator de Risco baseado num período customizado.
-     * Se inicio/fim forem nulos, o backend retorna o acumulado histórico.
-     */
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null) {
       this.fatorRiscoLoading = true;
       try {
-        const params = {};
-        if (inicio) params.data_inicio = inicio;
-        if (fim) params.data_fim = fim;
-        if (percMin !== null && percMin !== 0) params.perc_min = percMin;
-        if (percMax !== null && percMax !== 100) params.perc_max = percMax;
-        if (valMin !== null && valMin > 0) params.val_min = valMin;
-        if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
-        if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
-        if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
-        if (situacaoRf) params.situacao_rf = situacaoRf;
-        if (conexaoMs) params.conexao_ms = conexaoMs;
-        if (porteEmpresa) params.porte_empresa = porteEmpresa;
-        if (grandeRede) params.grande_rede = grandeRede;
-
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz);
         const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {
@@ -87,44 +75,26 @@ export const useAnalyticsStore = defineStore('analytics', {
   },
 
   getters: {
-    /**
-     * Retorna os KPIs enriquecidos com metadados de UI (ícones e cores).
-     * O Pinia cacheia o resultado deste getter, garantindo performance máxima.
-     */
     enrichedKpis: (state) => {
-      // Ordem desejada exata conforme as Labels do Banco de Dados (Refletindo o print)
-      const priorityOrder = [
-        'CNPJS',
-        'VALOR TOTAL DE VENDAS',
-        'TOTAL DE MEDICAMENTOS',
-        'VALOR SEM COMPROVAÇÃO',
-        '% SEM COMPROVAÇÃO'
-      ];
-
       const enriched = state.kpis.map(kpi => {
-        // Renomeia o KPI de Medicamentos para TOTAL DE MEDICAMENTOS
         let label = kpi.label.toUpperCase();
-        if (label === 'QTDE DE MEDICAMENTOS') label = 'TOTAL DE MEDICAMENTOS';
+        // Aplica mapeamento de labels do backend → UI
+        label = KPI_LABEL_MAP[label] ?? label;
 
-        // Encontra a configuração ignorando se é MAIÚSCULO ou minúsculo
-        const labelKey = Object.keys(KPI_CONFIGS).find(
-            key => key.toUpperCase() === label
-        );
+        const labelKey = Object.keys(KPI_CONFIGS).find(key => key.toUpperCase() === label);
         const config = KPI_CONFIGS[labelKey] || DEFAULT_KPI_STYLE;
-        
+
         return {
           ...kpi,
-          label: label, // Aplica o novo nome visual
-          icon: kpi.icon || config.icon,
+          label,
+          icon:  kpi.icon  || config.icon,
           color: kpi.color || config.color
         };
       });
 
-      // Ordena baseado na nossa lista de prioridade (Sempre respeitando as maiúsculas do banco)
       return enriched.sort((a, b) => {
-        const indexA = priorityOrder.indexOf(a.label.toUpperCase());
-        const indexB = priorityOrder.indexOf(b.label.toUpperCase());
-        
+        const indexA = KPI_PRIORITY_ORDER.indexOf(a.label.toUpperCase());
+        const indexB = KPI_PRIORITY_ORDER.indexOf(b.label.toUpperCase());
         if (indexA !== -1 && indexB !== -1) return indexA - indexB;
         if (indexA !== -1) return -1;
         if (indexB !== -1) return 1;

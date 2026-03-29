@@ -1,27 +1,49 @@
 /**
- * Constantes de Tempo e Períodos para o Projeto Sentinela.
- * Centralizar aqui facilita a manutenção de datas, módulos e rótulos do sistema.
+ * Constantes globais do Projeto Sentinela.
+ * Fonte única de verdade para datas, módulos, filtros, timing e configurações de UI.
  */
 
+// ─────────────────────────────────────────────────────────────
+// MÓDULOS DO SISTEMA
+// ─────────────────────────────────────────────────────────────
 export const SYSTEM_MODULES = [
     { name: 'Sentinela', value: 'consolidado', icon: 'pi pi-chart-bar' },
-    { name: 'Alvos', value: 'alvos', icon: 'pi pi-compass' }
+    { name: 'Alvos',     value: 'alvos',       icon: 'pi pi-compass'   }
 ];
+
+// ─────────────────────────────────────────────────────────────
+// PERÍODO DE AUDITORIA
+// Alterar aqui reflete em: slider, filtros, geração de meses e defaults.
+// ─────────────────────────────────────────────────────────────
+export const AUDIT_PERIOD = {
+    START_YEAR:       2015,
+    START_MONTH:      6,    // Julho (0-indexed) — início do programa
+    END_YEAR:         2024,
+    END_MONTH:        11,   // Dezembro (0-indexed)
+    TOTAL_MONTHS:     114,  // Jul/2015 a Dez/2024
+    SLIDER_MAX_INDEX: 113,  // 0-indexed → TOTAL_MONTHS - 1
+};
 
 export const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
+/** Anos disponíveis para atalho rápido no filtro de período. */
+export const ANALYSIS_YEARS = Array.from(
+    { length: AUDIT_PERIOD.END_YEAR - AUDIT_PERIOD.START_YEAR + 1 },
+    (_, i) => AUDIT_PERIOD.START_YEAR + i
+);
+
 /**
- * Gera a lista de meses disponíveis para o filtro temporal (2015 a 2024).
- * A auditoria do Farmácia Popular no sistema inicia em Julho de 2015 (índice 6).
+ * Gera a lista de meses disponíveis para o filtro temporal.
+ * Usa AUDIT_PERIOD como fonte única — sem magic numbers.
  */
 const generateAvailableMonths = () => {
     const months = [];
-    for (let y = 2015; y <= 2024; y++) {
-        const startMonth = (y === 2015) ? 6 : 0;
-        for (let m = startMonth; m <= 11; m++) {
-            months.push({ 
-                label: `${MONTH_LABELS[m]}/${y.toString().slice(-2)}`, 
-                date: new Date(y, m, 1) 
+    for (let y = AUDIT_PERIOD.START_YEAR; y <= AUDIT_PERIOD.END_YEAR; y++) {
+        const startMonth = (y === AUDIT_PERIOD.START_YEAR) ? AUDIT_PERIOD.START_MONTH : 0;
+        for (let m = startMonth; m <= AUDIT_PERIOD.END_MONTH; m++) {
+            months.push({
+                label: `${MONTH_LABELS[m]}/${y.toString().slice(-2)}`,
+                date:  new Date(y, m, 1)
             });
         }
     }
@@ -30,32 +52,66 @@ const generateAvailableMonths = () => {
 
 export const AVAILABLE_MONTHS = generateAvailableMonths();
 
-/**
- * Padrões de Filtros Globais para o Dashboard.
- * Centralizar aqui garante consistência entre a Store e a Interface.
- */
-/** Anos disponíveis para atalho rápido no filtro de período. */
-export const ANALYSIS_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+// ─────────────────────────────────────────────────────────────
+// FILTROS
+// ─────────────────────────────────────────────────────────────
 
-/** Valor padrão para filtros de seleção — fonte única para evitar string 'Todos' hardcoded. */
+/** Valor padrão para filtros de seleção — evita a string 'Todos' hardcoded. */
 export const FILTER_ALL_VALUE = 'Todos';
 
 export const FILTER_DEFAULTS = {
-    UF: FILTER_ALL_VALUE,
-    REGIAO: FILTER_ALL_VALUE,
-    MUNICIPIO: FILTER_ALL_VALUE,
-    SITUACAO: FILTER_ALL_VALUE,
-    MS: FILTER_ALL_VALUE,
-    PORTE: FILTER_ALL_VALUE,
-    GRANDE_REDE: FILTER_ALL_VALUE,
+    UF:               FILTER_ALL_VALUE,
+    REGIAO:           FILTER_ALL_VALUE,
+    MUNICIPIO:        FILTER_ALL_VALUE,
+    SITUACAO:         FILTER_ALL_VALUE,
+    MS:               FILTER_ALL_VALUE,
+    PORTE:            FILTER_ALL_VALUE,
+    GRANDE_REDE:      FILTER_ALL_VALUE,
     PERCENTUAL_RANGE: [0, 100],
-    VALOR_MIN: 0,
-    VALOR_MAX: 1000000,
-    CLUSTER: FILTER_ALL_VALUE,
-    STATUS: FILTER_ALL_VALUE,
-    RFA: FILTER_ALL_VALUE,
-    SEARCH: '',
-    // Auditoria inicia em Julho de 2015 (Índices e Datas)
-    DATE_RANGE: [new Date(2015, 6, 1), new Date(2024, 11, 31)],
-    SLIDER_INDEX_RANGE: [0, 113] // Corresponde aos 114 meses de index 0 a 113
+    VALOR_MIN:        0,
+    VALOR_MAX:        1000000,
+    CLUSTER:          FILTER_ALL_VALUE,
+    STATUS:           FILTER_ALL_VALUE,
+    RFA:              FILTER_ALL_VALUE,
+    SEARCH:           '',
+    DATE_RANGE:       [
+        new Date(AUDIT_PERIOD.START_YEAR, AUDIT_PERIOD.START_MONTH, 1),
+        new Date(AUDIT_PERIOD.END_YEAR,   AUDIT_PERIOD.END_MONTH,   31)
+    ],
+    SLIDER_INDEX_RANGE: [0, AUDIT_PERIOD.SLIDER_MAX_INDEX],
 };
+
+/** Atalhos rápidos do slider de % de não-comprovação. */
+export const PERCENTUAL_QUICK_SELECT = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+/** Comprimento do CNPJ raiz (primeiros 8 dígitos). */
+export const CNPJ_RAIZ_LENGTH = 8;
+
+// ─────────────────────────────────────────────────────────────
+// TIMING (ms)
+// Centraliza todos os delays/debounces/intervalos do sistema.
+// ─────────────────────────────────────────────────────────────
+export const TIMING = {
+    RELOAD_DELAY:          800,  // Aguarda antes de recarregar a página pós-sync
+    POLL_INTERVAL:        1000,  // Intervalo de polling do status de cache
+    DROPDOWN_FOCUS_DELAY:   50,  // Delay para focar o input do dropdown
+    FILTER_DEBOUNCE:       200,  // Debounce da persistência de filtros no localStorage
+};
+
+// ─────────────────────────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────────────────────────
+
+/** Mapeamento de labels vindos do backend para labels exibidos na UI. */
+export const KPI_LABEL_MAP = {
+    'QTDE DE MEDICAMENTOS': 'TOTAL DE MEDICAMENTOS',
+};
+
+/** Ordem de exibição dos KPIs no dashboard. */
+export const KPI_PRIORITY_ORDER = [
+    'CNPJS',
+    'VALOR TOTAL DE VENDAS',
+    'TOTAL DE MEDICAMENTOS',
+    'VALOR SEM COMPROVAÇÃO',
+    '% SEM COMPROVAÇÃO',
+];

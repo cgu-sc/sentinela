@@ -105,34 +105,63 @@ GO
 USE temp_CGUSC;
 GO
 
--- 10. PERFIL CONSOLIDADO (Dicionário Master do Estabelecimento)
--- Tabela para enriquecimento de filtros e flags por CNPJ no Dashboard.
+-- 10a. REDE DE ESTABELECIMENTOS (Fonte da verdade para vínculos de rede por CNPJ raiz)
+-- Apenas CNPJs com movimentação são incluídos.
+-- is_matriz = 1 quando os dígitos de ordem do CNPJ são '0001'.
 
--- Identifica dinamicamente qual é o último mês disponível nos dados de vendas
+DECLARE @MinFiliais INT = 15; -- Threshold para classificar como grande rede
+
+DROP TABLE IF EXISTS fp.rede_estabelecimentos;
+
+WITH cnpjs_ativos AS (
+    SELECT DISTINCT cnpj FROM fp.movimentacao_mensal_cnpj
+),
+contagem_rede AS (
+    SELECT
+        LEFT(cnpj, 8)            AS cnpj_raiz,
+        COUNT(DISTINCT cnpj)     AS qtd_estabelecimentos_rede
+    FROM fp.movimentacao_mensal_cnpj
+    GROUP BY LEFT(cnpj, 8)
+)
+SELECT
+    LEFT(DF.cnpj, 8)                                              AS cnpj_raiz,
+    DF.cnpj,
+    DF.razaoSocial                                                AS razao_social,
+    DF.uf,
+    DF.municipio,
+    CASE WHEN SUBSTRING(DF.cnpj, 9, 4) = '0001' THEN 1 ELSE 0 END AS is_matriz,
+    R.qtd_estabelecimentos_rede,
+    CASE WHEN R.qtd_estabelecimentos_rede >= @MinFiliais THEN 'Sim' ELSE 'Não' END AS flag_grandes_redes
+INTO fp.rede_estabelecimentos
+FROM fp.dados_farmacia DF
+INNER JOIN cnpjs_ativos M ON M.cnpj = DF.cnpj
+INNER JOIN contagem_rede R ON LEFT(DF.cnpj, 8) = R.cnpj_raiz;
+
+CREATE CLUSTERED INDEX IX_rede_cnpj_raiz ON fp.rede_estabelecimentos (cnpj_raiz);
+CREATE UNIQUE INDEX IX_rede_cnpj      ON fp.rede_estabelecimentos (cnpj);
+GO
+
+
+-- 10b. PERFIL CONSOLIDADO (Dicionário Master do Estabelecimento)
+-- Depende de fp.rede_estabelecimentos — rodar após o bloco 10a.
+
+USE temp_CGUSC;
+GO
+
 DECLARE @MaxPeriodo DATE = (SELECT MAX(periodo) FROM fp.movimentacao_mensal_cnpj);
-DECLARE @MinFiliais  INT  = 15; -- Threshold para classificar como grande rede
 
 DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento;
 
--- CTE: conta quantas filiais de cada rede estão presentes no programa
-WITH redes AS (
-    SELECT
-        LEFT(DF.cnpj, 8)  AS cnpj_raiz,
-        COUNT(*)          AS qtd_filiais_rede
-    FROM fp.dados_farmacia DF
-    INNER JOIN (SELECT DISTINCT cnpj FROM fp.movimentacao_mensal_cnpj) M ON M.cnpj = DF.cnpj
-    GROUP BY LEFT(DF.cnpj, 8)
-)
 SELECT
     DF.cnpj,
     DF.razaoSocial               AS razao_social,
     DF.uf,
     DF.municipio,
-    DF.ds_porte_empresa           AS porte_empresa,
-    DF.outrasSociedades           AS flag_outras_sociedades,
-    DF.situacaoReceita            AS situacao_rf,
-    DF.dataSituacaoCadastral      AS data_situacao_rf,
-    DF.data_processamento         AS data_ultimo_processamento,
+    DF.ds_porte_empresa          AS porte_empresa,
+    DF.outrasSociedades          AS flag_outras_sociedades,
+    DF.situacaoReceita           AS situacao_rf,
+    DF.dataSituacaoCadastral     AS data_situacao_rf,
+    DF.data_processamento        AS data_ultimo_processamento,
 
     -- LÓGICA CONEXÃO MS (Ativa se vendeu nos últimos 30 dias em relação ao limite da base)
     CASE
@@ -140,16 +169,14 @@ SELECT
         THEN 'Ativa' ELSE 'Inativa'
     END AS conexao_ms,
 
-    -- LÓGICA GRANDES REDES
-    R.qtd_filiais_rede,
-    CASE WHEN R.qtd_filiais_rede >= @MinFiliais THEN 'Sim' ELSE 'Não' END AS flag_grandes_redes
+    -- GRANDES REDES: vem direto da rede_estabelecimentos (fonte da verdade)
+    R.qtd_estabelecimentos_rede,
+    R.flag_grandes_redes
 
 INTO fp.perfil_consolidado_estabelecimento
 FROM fp.dados_farmacia DF
-INNER JOIN (SELECT DISTINCT cnpj FROM fp.movimentacao_mensal_cnpj) M ON M.cnpj = DF.cnpj
-LEFT JOIN redes R ON LEFT(DF.cnpj, 8) = R.cnpj_raiz;
+INNER JOIN fp.rede_estabelecimentos R ON R.cnpj = DF.cnpj;
 
--- Criar índice para performance de JOIN instantâneo no Polars
 CREATE UNIQUE CLUSTERED INDEX IX_perfil_cnpj ON fp.perfil_consolidado_estabelecimento (cnpj);
 GO
 

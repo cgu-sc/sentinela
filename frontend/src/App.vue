@@ -6,6 +6,7 @@ import { useGeoStore } from '@/stores/geo';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
+import { TIMING } from '@/config/constants';
 
 const resultadoStore = useResultadoStore();
 const analyticsStore = useAnalyticsStore();
@@ -60,7 +61,7 @@ onMounted(async () => {
         _pollTimer = setInterval(async () => {
           const finished = await pollSyncStatus();
           if (finished) resolve();
-        }, 1000);
+        }, TIMING.POLL_INTERVAL);
       });
     }
 
@@ -81,7 +82,7 @@ onMounted(async () => {
   } finally {
     _bootTimer = setTimeout(() => {
       isAppLoading.value = false;
-    }, 800);
+    }, TIMING.RELOAD_DELAY);
   }
 });
 

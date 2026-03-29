@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from database import get_db
-from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema
+from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema
 from ..services.analytics import AnalyticsService
 
 router = APIRouter()
@@ -22,18 +22,13 @@ def get_analytics_summary(
     conexao_ms: Optional[str] = Query(None),
     porte_empresa: Optional[str] = Query(None),
     grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Retorna o resumo consolidado de analytics (KPIs e Análise por UF).
-    """
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
-    """
-    Retorna a lista completa de resultados detalhados por establishment.
-    """
     return AnalyticsService.get_resultado_sentinela(db)
 
 @router.get("/faixas-risco", response_model=FatorRiscoResponseSchema)
@@ -50,9 +45,13 @@ def get_resultado_faixas_risco(
     conexao_ms: Optional[str] = Query(None),
     porte_empresa: Optional[str] = Query(None),
     grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Retorna os dados do gráfico Fator de Risco x Qtd Estab.
-    """
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz)
+
+@router.get("/rede/{cnpj_raiz}", response_model=List[RedeEstabelecimentoSchema])
+def get_rede_estabelecimentos(cnpj_raiz: str):
+    """Retorna todos os estabelecimentos de uma rede dado o CNPJ raiz (8 dígitos)."""
+    raiz = cnpj_raiz.replace(".", "").replace("/", "").replace("-", "")[:8]
+    return AnalyticsService.get_rede_por_cnpj_raiz(raiz)

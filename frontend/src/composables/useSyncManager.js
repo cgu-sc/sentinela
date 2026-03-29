@@ -6,6 +6,7 @@ import { ref, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import { useFilterStore } from '@/stores/filters';
 import { API_ENDPOINTS } from '@/config/api';
+import { TIMING } from '@/config/constants';
 
 export function useSyncManager() {
   const filterStore = useFilterStore();
@@ -30,7 +31,7 @@ export function useSyncManager() {
 
       if (status === 'ready' && progress === 100) {
         _stopPolling();
-        setTimeout(() => window.location.reload(), 800);
+        setTimeout(() => window.location.reload(), TIMING.RELOAD_DELAY);
       } else if (status === 'error') {
         _stopPolling();
         alert('Ocorreu um erro durante a sincronização no servidor.');
@@ -49,7 +50,7 @@ export function useSyncManager() {
 
     try {
       await axios.post(API_ENDPOINTS.cacheRefresh);
-      _pollTimer = setInterval(pollSyncStatus, 1000);
+      _pollTimer = setInterval(pollSyncStatus, TIMING.POLL_INTERVAL);
     } catch (err) {
       console.error('Erro ao iniciar sincronização:', err);
       alert('Falha ao conectar com o servidor para sincronização.');

@@ -2,7 +2,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS } from '@/config/constants';
+import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS, TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
@@ -109,6 +109,7 @@ watch(isCollapsed, (val) => {
 
 const limparFiltros = () => {
     filterStore.resetFilters();
+    filterStore.selectedCnpjRaiz = '';
     resetYears();
 };
 
@@ -121,7 +122,7 @@ const onDropdownShow = () => {
   setTimeout(() => {
     const input = document.querySelector('.p-dropdown-filter');
     if (input) input.focus();
-  }, 50);
+  }, TIMING.DROPDOWN_FOCUS_DELAY);
 };
 
 // 🎯 LÓGICA DE FILTRO ATIVO: Detecta se o valor mudou em relação ao padrão (Busca no constants.js)
@@ -137,6 +138,7 @@ const isFilterActive = (field) => {
         selectedMS: FILTER_DEFAULTS.MS,
         selectedPorte: FILTER_DEFAULTS.PORTE,
         selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
+        selectedCnpjRaiz: '',
         percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
         valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
         clusterSelection: FILTER_DEFAULTS.CLUSTER,
@@ -258,6 +260,17 @@ const {
                 <label class="filter-label">Grande Rede</label>
                 <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
             </div>
+        </div>
+
+        <div class="filter-section">
+            <label class="filter-label">CNPJ Raiz (Rede)</label>
+            <InputText
+              v-model="filterStore.selectedCnpjRaiz"
+              placeholder="Digite o CNPJ..."
+              class="w-full filter-input"
+              :class="{ 'filter-active': isFilterActive('selectedCnpjRaiz') }"
+              :maxlength="18"
+            />
         </div>
 
         <div class="filter-section">
@@ -597,7 +610,8 @@ const {
 /* COMPONENTES COMPACTOS DO PRIMEVUE */
 :deep(.filter-input .p-inputtext),
 :deep(.filter-input .p-dropdown-label),
-:deep(.filter-input .p-calendar .p-inputtext) {
+:deep(.filter-input .p-calendar .p-inputtext),
+:deep(.filter-input.p-inputtext) {
     padding: 0.4rem 0.6rem;
     font-size: 0.75rem;
     text-transform: none;
@@ -810,7 +824,7 @@ const {
 }
 
 :deep(.p-slider .p-slider-range) {
-    background: var(--primary-color) !important;
+    background: var(--sidebar-border) !important;
 }
 
 :deep(.p-slider-handle) {

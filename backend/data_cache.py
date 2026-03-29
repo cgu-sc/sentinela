@@ -16,6 +16,7 @@ else:
 _CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
 _PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
 _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet")
+_REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_rede_estabelecimentos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -23,6 +24,7 @@ if not os.path.exists(_CACHE_DIR):
 # Estados Globais
 _df_movimentacao: pl.DataFrame | None = None
 _df_localidades: pl.DataFrame | None = None
+_df_rede: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 
@@ -41,6 +43,28 @@ def _sync_localidades(engine):
     ])
     _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="lz4")
 
+def _sync_rede(engine):
+    """Tarefa 2: Sincroniza a tabela de rede de estabelecimentos."""
+    global _df_rede
+    print("Sincronizando Rede de Estabelecimentos...")
+    sql = """
+        SELECT cnpj_raiz, cnpj, razao_social, uf, municipio,
+               is_matriz, qtd_estabelecimentos_rede, flag_grandes_redes
+        FROM [temp_CGUSC].[fp].[rede_estabelecimentos]
+    """
+    pdf = pd.read_sql(sql, engine)
+    _df_rede = pl.from_pandas(pdf).with_columns([
+        pl.col("cnpj_raiz").cast(pl.String),
+        pl.col("cnpj").cast(pl.String),
+        pl.col("razao_social").cast(pl.String),
+        pl.col("uf").cast(pl.Categorical),
+        pl.col("municipio").cast(pl.String),
+        pl.col("is_matriz").cast(pl.Boolean),
+        pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
+        pl.col("flag_grandes_redes").cast(pl.Categorical),
+    ])
+    _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="lz4")
+
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
     global _df_movimentacao
@@ -58,7 +82,7 @@ def _sync_movimentacao(engine, progress_callback):
                P.conexao_ms,
                P.porte_empresa,
                P.flag_grandes_redes,
-               P.qtd_filiais_rede
+               P.qtd_estabelecimentos_rede
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
     """
@@ -88,23 +112,29 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("conexao_ms").cast(pl.Categorical),
         pl.col("porte_empresa").cast(pl.Categorical),
         pl.col("flag_grandes_redes").cast(pl.Categorical),
-        pl.col("qtd_filiais_rede").cast(pl.Int64),
+        pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _df_rede, _cache_progress, _cache_status
     import time
 
     # 1. Boot Rápido (Se os arquivos já existem)
     if not force_refresh:
         try:
-            if os.path.exists(_PARQUET_PATH) and os.path.exists(_LOCALIDADES_PARQUET_PATH):
+            all_exist = (
+                os.path.exists(_PARQUET_PATH) and
+                os.path.exists(_LOCALIDADES_PARQUET_PATH) and
+                os.path.exists(_REDE_PARQUET_PATH)
+            )
+            if all_exist:
                 _cache_status = "loading_parquet"
                 _df_movimentacao = pl.read_parquet(_PARQUET_PATH)
-                _df_localidades = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
+                _df_localidades  = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
+                _df_rede         = pl.read_parquet(_REDE_PARQUET_PATH)
                 _cache_progress = 100
                 _cache_status = "ready"
                 print("🚀 Caches carregados via Parquet.")
@@ -120,8 +150,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
     # 2. Sincronização Inteligente (Task-Based)
     # Para adicionar mais parquets, basta incluir na lista abaixo!
     TASKS = [
-        {"name": "Localidades", "status": "fetching_geo", "func": lambda: _sync_localidades(engine)},
-        {"name": "Movimentação", "status": "fetching_data", "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Localidades",           "status": "fetching_geo",  "func": lambda: _sync_localidades(engine)},
+        {"name": "Rede Estabelecimentos", "status": "fetching_rede", "func": lambda: _sync_rede(engine)},
+        {"name": "Movimentação",          "status": "fetching_data", "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -168,8 +199,13 @@ def get_df() -> pl.DataFrame:
         raise RuntimeError("Cache de Movimentação não carregado. Verifique a sincronização.")
     return _df_movimentacao
 
+def get_rede_df() -> pl.DataFrame:
+    if _df_rede is None:
+        raise RuntimeError("Cache de Rede de Estabelecimentos não carregado. Verifique a sincronização.")
+    return _df_rede
+
 def get_localidades_df() -> pl.DataFrame:
-    if _df_localidades is None: 
+    if _df_localidades is None:
         raise RuntimeError("Cache de Localidades não carregado. Verifique a sincronização.")
     return _df_localidades
 

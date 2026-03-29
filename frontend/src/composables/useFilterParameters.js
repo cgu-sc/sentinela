@@ -1,5 +1,6 @@
 import { useFilterStore } from '../stores/filters';
 import { useFormatting } from './useFormatting';
+import { parseMunicipio, extractCnpjRaiz } from './useParsing';
 import { FILTER_ALL_VALUE } from '@/config/constants';
 
 /**
@@ -21,16 +22,15 @@ export function useFilterParameters() {
 
     const uf = filterStore.selectedUF !== FILTER_ALL_VALUE ? filterStore.selectedUF : null;
     const regiaoSaude = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
-    let municipio = filterStore.selectedMunicipio !== FILTER_ALL_VALUE ? filterStore.selectedMunicipio : null;
-    if (municipio && municipio.includes('|')) {
-      municipio = municipio.split('|')[0];
-    }
+    const rawMunicipio = filterStore.selectedMunicipio !== FILTER_ALL_VALUE ? filterStore.selectedMunicipio : null;
+    const municipio = parseMunicipio(rawMunicipio);
     const situacaoRf = filterStore.selectedSituacao !== FILTER_ALL_VALUE ? filterStore.selectedSituacao : null;
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;
     const grandeRede   = filterStore.selectedGrandeRede !== FILTER_ALL_VALUE ? filterStore.selectedGrandeRede : null;
+    const cnpjRaiz     = extractCnpjRaiz(filterStore.selectedCnpjRaiz);
 
-    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede };
+    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz };
   }
 
   function isPeriodoValido() {

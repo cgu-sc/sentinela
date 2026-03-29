@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import { FILTER_DEFAULTS, FILTER_ALL_VALUE } from '@/config/constants';
+import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
 import { useGeoStore } from './geo';
 
 const STORAGE_KEY = 'sentinela_filters';
@@ -32,6 +32,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedMS = ref(saved?.selectedMS ?? FILTER_DEFAULTS.MS);
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
+  const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
 
   // 2. FILTROS DE FAIXA (RANGES)
   const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
@@ -90,6 +91,7 @@ export const useFilterStore = defineStore('filters', () => {
         selectedMS: selectedMS.value,
         selectedPorte: selectedPorte.value,
         selectedGrandeRede: selectedGrandeRede.value,
+        selectedCnpjRaiz: selectedCnpjRaiz.value,
         percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
         percentualNaoComprovacaoFilter: percentualNaoComprovacaoFilter.value,
         valorMinSemComp: valorMinSemComp.value,
@@ -101,11 +103,11 @@ export const useFilterStore = defineStore('filters', () => {
         rfaSelection: rfaSelection.value,
         searchTarget: searchTarget.value,
       }));
-    }, 200);
+    }, TIMING.FILTER_DEBOUNCE);
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede,
+    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -122,12 +124,13 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS.value = FILTER_ALL_VALUE;
     selectedPorte.value = FILTER_ALL_VALUE;
     selectedGrandeRede.value = FILTER_ALL_VALUE;
-    percentualNaoComprovacaoRange.value = [0, 100];
-    percentualNaoComprovacaoFilter.value = [0, 100];
+    selectedCnpjRaiz.value = '';
+    percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
+    percentualNaoComprovacaoFilter.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
     valorMinSemComp.value = FILTER_DEFAULTS.VALOR_MIN;
     valorMinSemCompFilter.value = FILTER_DEFAULTS.VALOR_MIN;
-    periodo.value = [new Date(2015, 6, 1), new Date(2024, 11, 31)];
-    sliderValue.value = [0, 113];
+    periodo.value = [...FILTER_DEFAULTS.DATE_RANGE];
+    sliderValue.value = [...FILTER_DEFAULTS.SLIDER_INDEX_RANGE];
     clusterSelection.value = FILTER_ALL_VALUE;
     statusSelection.value = FILTER_ALL_VALUE;
     rfaSelection.value = FILTER_ALL_VALUE;
@@ -143,6 +146,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS,
     selectedPorte,
     selectedGrandeRede,
+    selectedCnpjRaiz,
     percentualNaoComprovacaoRange,
     percentualNaoComprovacaoFilter,
     valorMinSemComp,

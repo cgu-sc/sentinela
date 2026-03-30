@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from database import get_db
-from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema
+from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse
 from ..services.analytics import AnalyticsService
 
 router = APIRouter()
@@ -49,6 +49,11 @@ def get_resultado_faixas_risco(
     db: Session = Depends(get_db)
 ):
     return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz)
+
+@router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
+def get_evolucao_financeira(cnpj: str):
+    """Retorna a série semestral de valores financeiros para um CNPJ."""
+    return AnalyticsService.get_evolucao_financeira(cnpj)
 
 @router.get("/rede/{cnpj_raiz}", response_model=List[RedeEstabelecimentoSchema])
 def get_rede_estabelecimentos(cnpj_raiz: str):

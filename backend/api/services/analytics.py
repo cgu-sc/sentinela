@@ -13,7 +13,9 @@ from ..schemas.analytics import (
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,
     FatorRiscoResponseSchema,
-    FatorRiscoBucketSchema
+    FatorRiscoBucketSchema,
+    EvolucaoSemestreSchema,
+    EvolucaoFinanceiraResponse,
 )
 
 class AnalyticsService:
@@ -248,6 +250,67 @@ class AnalyticsService:
             print(f"❌ ERRO AO BUSCAR REDE: {e}")
             print(traceback.format_exc())
             return []
+
+    @staticmethod
+    def get_evolucao_financeira(cnpj: str) -> EvolucaoFinanceiraResponse:
+        """
+        Retorna a série semestral de valores (total, regular, irregular) para um CNPJ.
+        Fonte: DataFrame Polars em memória (movimentacao_mensal_cnpj).
+        """
+        try:
+            df = get_df()
+            cnpj_df = df.filter(pl.col("cnpj") == cnpj).select(["periodo", "total_vendas", "total_sem_comprovacao"])
+
+            if cnpj_df.is_empty():
+                return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
+
+            # Extrai ano e número do semestre (1 ou 2) para agrupar e ordenar
+            cnpj_df = cnpj_df.with_columns([
+                pl.col("periodo").dt.year().alias("ano"),
+                pl.when(pl.col("periodo").dt.month() <= 6)
+                  .then(pl.lit(1))
+                  .otherwise(pl.lit(2))
+                  .alias("sem_num"),
+            ])
+
+            # Agrega por (ano, sem_num) e formata o rótulo depois
+            agg = (
+                cnpj_df
+                .group_by(["ano", "sem_num"])
+                .agg([
+                    pl.sum("total_vendas").alias("total"),
+                    pl.sum("total_sem_comprovacao").alias("irregular"),
+                ])
+                .sort(["ano", "sem_num"])
+                .with_columns([
+                    (pl.col("total") - pl.col("irregular")).alias("regular"),
+                    (pl.col("irregular") / pl.when(pl.col("total") > 0).then(pl.col("total")).otherwise(pl.lit(1.0)) * 100)
+                      .round(2).alias("pct_irregular"),
+                    pl.concat_str([
+                        pl.col("sem_num").cast(pl.Utf8),
+                        pl.lit("S/"),
+                        pl.col("ano").cast(pl.Utf8),
+                    ]).alias("semestre"),
+                ])
+            )
+
+            semestres = [
+                EvolucaoSemestreSchema(
+                    semestre=r["semestre"],
+                    total=round(r["total"], 2),
+                    regular=round(r["regular"], 2),
+                    irregular=round(r["irregular"], 2),
+                    pct_irregular=r["pct_irregular"],
+                )
+                for r in agg.iter_rows(named=True)
+            ]
+            return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=semestres)
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR EVOLUÇÃO FINANCEIRA: {e}")
+            print(traceback.format_exc())
+            return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
 
     @staticmethod
     def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None) -> FatorRiscoResponseSchema:

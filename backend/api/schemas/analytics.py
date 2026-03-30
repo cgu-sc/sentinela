@@ -77,6 +77,17 @@ class AnalyticsResponse(BaseModel):
     resultado_municipios: Optional[List[ResultadoSentinelaMunicipioSchema]] = None
     resultado_cnpjs: Optional[List[ResultadoSentinelaCnpjSchema]] = None
 
+class EvolucaoSemestreSchema(BaseModel):
+    semestre: str
+    total: float
+    regular: float
+    irregular: float
+    pct_irregular: float
+
+class EvolucaoFinanceiraResponse(BaseModel):
+    cnpj: str
+    semestres: List[EvolucaoSemestreSchema]
+
 class FatorRiscoBucketSchema(BaseModel):
     faixa: str
     qtd: int

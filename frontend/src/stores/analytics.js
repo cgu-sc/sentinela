@@ -10,19 +10,19 @@ import { FILTER_ALL_VALUE, KPI_LABEL_MAP, KPI_PRIORITY_ORDER } from '@/config/co
  */
 function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz) {
   const params = {};
-  if (inicio)                               params.data_inicio  = inicio;
-  if (fim)                                  params.data_fim     = fim;
-  if (percMin !== null && percMin !== 0)    params.perc_min     = percMin;
-  if (percMax !== null && percMax !== 100)  params.perc_max     = percMax;
-  if (valMin !== null && valMin > 0)        params.val_min      = valMin;
-  if (uf && uf !== FILTER_ALL_VALUE)        params.uf           = uf;
-  if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude  = regiaoSaude;
-  if (municipio && municipio !== FILTER_ALL_VALUE)     params.municipio     = municipio;
-  if (situacaoRf)  params.situacao_rf  = situacaoRf;
-  if (conexaoMs)   params.conexao_ms   = conexaoMs;
+  if (inicio) params.data_inicio = inicio;
+  if (fim) params.data_fim = fim;
+  if (percMin !== null && percMin !== 0) params.perc_min = percMin;
+  if (percMax !== null && percMax !== 100) params.perc_max = percMax;
+  if (valMin !== null && valMin > 0) params.val_min = valMin;
+  if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
+  if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
+  if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
+  if (situacaoRf) params.situacao_rf = situacaoRf;
+  if (conexaoMs) params.conexao_ms = conexaoMs;
   if (porteEmpresa) params.porte_empresa = porteEmpresa;
-  if (grandeRede)  params.grande_rede  = grandeRede;
-  if (cnpjRaiz)    params.cnpj_raiz    = cnpjRaiz;
+  if (grandeRede) params.grande_rede = grandeRede;
+  if (cnpjRaiz) params.cnpj_raiz = cnpjRaiz;
   return params;
 }
 
@@ -87,7 +87,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         return {
           ...kpi,
           label,
-          icon:  kpi.icon  || config.icon,
+          icon: kpi.icon || config.icon,
           color: kpi.color || config.color
         };
       });

@@ -28,5 +28,30 @@ export function useChartTheme() {
       }
   );
 
-  return { chartTheme };
+  /** Cores de dados para séries de gráficos (verde=regular, vermelho=irregular). */
+  const chartDataColors = computed(() => themeStore.isDark
+    ? {
+        green:     '#4ade80',
+        greenGrad: '#86efac',
+        red:       '#f87171',
+        redGrad:   '#fca5a5',
+      }
+    : {
+        green:     '#22c55e',
+        greenGrad: '#4ade80',
+        red:       '#ef4444',
+        redGrad:   '#f87171',
+      }
+  );
+
+  /** Configuração base compartilhada por todos os gráficos ECharts do projeto. */
+  const baseChartConfig = computed(() => ({
+    backgroundColor: chartTheme.value.bg,
+    animation: true,
+    animationDuration: 900,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+  }));
+
+  return { chartTheme, chartDataColors, baseChartConfig };
 }

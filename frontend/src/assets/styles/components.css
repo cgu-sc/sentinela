@@ -249,7 +249,7 @@ body.dark-mode .enterprise-table .p-paginator .p-paginator-page.p-highlight {
 /* ── TABVIEW - DETALHAMENTO CNPJ ─────────────────────── */
 body.dark-mode .p-tabview .p-tabview-panels,
 body.dark-mode .p-tabview .p-tabview-panel {
-  background: var(--bg-color) !important;
+  background: transparent !important;
   color: var(--text-color) !important;
 }
 

@@ -87,6 +87,37 @@ function formatIndicadorValue(valor, formato) {
   return valor.toFixed(2);
 }
 
+// ── Pontos críticos (resumo de auditoria) ────────────────
+const pontosCriticos = computed(() => {
+  if (!indicadoresData.value?.indicadores) return [];
+  const result = [];
+  for (const grupo of INDICATOR_GROUPS) {
+    for (const ind of grupo.indicators) {
+      const d = indicadoresData.value.indicadores[ind.key];
+      if (!d || d.valor == null) continue;
+      const t = INDICATOR_THRESHOLDS[ind.thresholdKey] ?? INDICATOR_THRESHOLDS.default;
+      const riscoUf  = d.risco_uf  != null ? Math.round(d.risco_uf  * 10) / 10 : null;
+      const riscoReg = d.risco_reg != null ? Math.round(d.risco_reg * 10) / 10 : null;
+      if (riscoUf != null && riscoUf >= t.critico) {
+        result.push({
+          key:     ind.key,
+          label:   ind.label,
+          formato: ind.formato,
+          riscoUf,
+          riscoReg,
+          valor:   d.valor,
+          medReg:  d.med_reg,
+        });
+      }
+    }
+  }
+  return result.sort((a, b) => {
+    if (a.key === 'auditado') return -1;
+    if (b.key === 'auditado') return 1;
+    return (b.riscoReg ?? 0) - (a.riscoReg ?? 0);
+  });
+});
+
 function riscoPillStyle(risco, thresholdKey = 'default') {
   const s = getIndicadorStatus(risco, thresholdKey);
   // CRITICAL usa a cor HIGH (vermelho vivo) para garantir leitura no dark mode
@@ -532,6 +563,27 @@ const areaOption = computed(() => {
           </div>
 
           <template v-else-if="indicadoresLoaded">
+
+            <!-- RESUMO DE AUDITORIA -->
+            <div v-if="pontosCriticos.length" class="audit-summary">
+              <div class="audit-summary-header">
+                <i class="pi pi-file-edit" />
+                <span>Resumo para Auditoria — Pontos Críticos</span>
+                <span class="audit-badge">{{ pontosCriticos.length }}</span>
+              </div>
+              <ul class="audit-list">
+                <li v-for="p in pontosCriticos" :key="p.label" class="audit-item">
+                  <i class="pi pi-exclamation-circle audit-item-icon" />
+                  <span>
+                    <strong>{{ p.label }}</strong>: operação
+                    <span class="audit-risco">{{ p.riscoReg?.toFixed(1) ?? p.riscoUf.toFixed(1) }}x</span>
+                    acima da mediana regional
+                    <span class="audit-detail">(Farmácia: {{ formatIndicadorValue(p.valor, p.formato) }} | Mediana Região: {{ formatIndicadorValue(p.medReg, p.formato) }})</span>
+                  </span>
+                </li>
+              </ul>
+            </div>
+
             <div class="ind-table-wrap">
               <table class="ind-table">
                 <colgroup>
@@ -947,6 +999,81 @@ const areaOption = computed(() => {
 /* ── INDICADORES ─────────────────────────────────────── */
 .indicadores-tab {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Resumo de auditoria */
+.audit-summary {
+  border-top: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 25%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 25%, transparent);
+  background: color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 6%, var(--card-bg));
+  margin: 1rem 0;
+}
+
+.audit-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 20%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: v-bind('RISK_COLORS.HIGH');
+}
+
+.audit-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 99px;
+  background: v-bind('RISK_COLORS.HIGH');
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.audit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 1.25rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-transform: none;
+}
+
+.audit-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.audit-item-icon {
+  font-size: 0.7rem;
+  color: v-bind('RISK_COLORS.HIGH');
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.audit-risco {
+  font-weight: 700;
+  color: v-bind('RISK_COLORS.HIGH');
+}
+
+.audit-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
 }
 
 .ind-table-wrap {

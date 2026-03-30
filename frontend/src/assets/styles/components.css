@@ -245,3 +245,33 @@ body.dark-mode .enterprise-table .p-paginator .p-paginator-page.p-highlight {
   background: rgba(99, 102, 241, 0.2) !important;
   color: #818cf8 !important;
 }
+
+/* ── TABVIEW - DETALHAMENTO CNPJ ─────────────────────── */
+body.dark-mode .p-tabview .p-tabview-panels,
+body.dark-mode .p-tabview .p-tabview-panel {
+  background: var(--bg-color) !important;
+  color: var(--text-color) !important;
+}
+
+body.dark-mode .p-tabview .p-tabview-nav,
+body.dark-mode .p-tabview .p-tabview-nav-content {
+  background: var(--card-bg) !important;
+  border-color: var(--sidebar-border) !important;
+}
+
+body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  background: var(--card-bg) !important;
+  color: var(--text-muted) !important;
+  border-color: transparent !important;
+}
+
+body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  background: var(--card-bg) !important;
+  color: var(--primary-color) !important;
+  border-bottom-color: var(--primary-color) !important;
+}
+
+body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link:hover {
+  background: var(--sidebar-border) !important;
+  color: var(--text-color) !important;
+}

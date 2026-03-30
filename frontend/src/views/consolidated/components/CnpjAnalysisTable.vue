@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
@@ -12,8 +13,15 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 
+const router = useRouter();
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
+
+const goToDetail = (event) => {
+  // Ignora cliques em badges para não conflitar com os filtros
+  if (event.originalEvent?.target?.closest('.clickable-badge')) return;
+  router.push({ name: 'CnpjDetail', params: { cnpj: event.data.cnpj } });
+};
 const { resultadoCnpjs, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatPercent } = useFormatting();
@@ -71,16 +79,17 @@ const filteredLocation = computed(() => {
        <div class="spacer"></div>
     </div>
 
-    <DataTable 
-      :value="resultadoCnpjs" 
-      size="small" 
-      stripedRows 
-      removableSort 
-      paginator 
+    <DataTable
+      :value="resultadoCnpjs"
+      size="small"
+      stripedRows
+      removableSort
+      paginator
       :rows="20"
-      sortField="percValSemComp" 
-      :sortOrder="-1" 
-      class="custom-table enterprise-table"
+      sortField="percValSemComp"
+      :sortOrder="-1"
+      class="custom-table enterprise-table clickable-rows"
+      @row-click="goToDetail"
     >
           <Column field="cnpj" header="CNPJ" sortable style="width: 10%">
             <template #body="slotProps">
@@ -181,6 +190,11 @@ const filteredLocation = computed(() => {
 </template>
 
 <style scoped>
+:deep(.clickable-rows .p-datatable-tbody > tr) {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
 .table-section {
   display: flex;
   flex-direction: column;

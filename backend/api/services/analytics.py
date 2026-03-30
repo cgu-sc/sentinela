@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df, get_rede_df
+from data_cache import get_df, get_rede_df, get_localidades_df
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -183,6 +183,18 @@ class AnalyticsService:
                     ])
                     .sort("percValSemComp", descending=True, nulls_last=True)
                 )
+                # Enrich with id_ibge7 from localidades
+                try:
+                    loc_df = get_localidades_df().select(["no_municipio", "sg_uf", "id_ibge7"])
+                    cnpj_df = cnpj_df.join(
+                        loc_df,
+                        left_on=["municipio", "uf"],
+                        right_on=["no_municipio", "sg_uf"],
+                        how="left"
+                    )
+                except Exception:
+                    cnpj_df = cnpj_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
+
                 resultado_cnpjs = [
                     ResultadoSentinelaCnpjSchema(**r)
                     for r in cnpj_df.iter_rows(named=True)

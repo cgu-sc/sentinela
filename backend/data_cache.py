@@ -34,7 +34,7 @@ def _sync_localidades(engine):
     """Tarefa 1: Sincroniza dados geográficos (IBGE)."""
     global _df_localidades
     print("Sincronizando Localidades (IBGE)...")
-    sql = "SELECT sg_uf, no_regiao_saude, id_regiao_saude, no_municipio, id_ibge7 FROM [temp_CGUSC].[fp].[dados_ibge] ORDER BY sg_uf, no_regiao_saude, no_municipio"
+    sql = "SELECT sg_uf, no_regiao_saude, id_regiao_saude, no_municipio, id_ibge7, nu_populacao FROM [temp_CGUSC].[fp].[dados_ibge] ORDER BY sg_uf, no_regiao_saude, no_municipio"
     pdf = pd.read_sql(sql, engine)
     _df_localidades = pl.from_pandas(pdf).with_columns([
         pl.col("sg_uf").cast(pl.Categorical),

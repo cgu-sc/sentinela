@@ -59,6 +59,7 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     situacao_rf: Optional[str] = "ND"
     conexao_ms: Optional[str] = "Inativa"
     is_matriz: Optional[bool] = False
+    id_ibge7: Optional[int] = None
 
 class RedeEstabelecimentoSchema(BaseModel):
     cnpj_raiz: str

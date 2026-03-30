@@ -21,6 +21,9 @@ const routes = [
       { path: 'empresa', component: NationalAnalysisView },
       { path: 'cnpj', component: NationalAnalysisView },
 
+      // Detalhamento de CNPJ
+      { path: 'estabelecimento/:cnpj', name: 'CnpjDetail', component: () => import('@/views/consolidated/CnpjDetailView.vue') },
+
       // Rotas do Módulo de Alvos
       { path: 'alvos/cluster', component: TargetClusterView },
       { path: 'alvos/situacao', component: TargetClusterView }, // Mockup

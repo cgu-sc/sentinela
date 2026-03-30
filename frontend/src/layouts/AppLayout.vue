@@ -155,6 +155,16 @@ const isFilterActive = (field) => {
     return value !== defaultValue;
 };
 
+const activeFilterCount = computed(() => {
+    const fields = [
+        'selectedUF', 'selectedRegiaoSaude', 'selectedMunicipio', 'selectedSituacao',
+        'selectedMS', 'selectedPorte', 'selectedGrandeRede', 'selectedCnpjRaiz',
+        'percentualNaoComprovacaoRange', 'valorMinSemComp', 'sliderValue',
+        'clusterSelection', 'rfaSelection', 'searchTarget'
+    ];
+    return fields.filter(f => isFilterActive(f)).length;
+});
+
 const applyValorMinSemComp = () => {
     filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
@@ -382,12 +392,18 @@ const {
         </div>
 
         <div class="sidebar-spacer"></div>
-
-        <Button label="Limpar Filtros" icon="pi pi-undo" outlined severity="secondary" @click="limparFiltros" class="w-full mb-4 clear-filters-btn" />
       </div>
 
       <div class="sidebar-footer" v-show="!isCollapsed">
-        <p>© 2026 CGU/SC</p>
+        <Button
+          :label="activeFilterCount > 0 ? `Limpar Filtros (${activeFilterCount})` : 'Limpar Filtros'"
+          icon="pi pi-undo"
+          outlined
+          :severity="activeFilterCount > 0 ? 'warn' : 'secondary'"
+          @click="limparFiltros"
+          class="w-full clear-filters-btn"
+          :class="{ 'filters-active': activeFilterCount > 0 }"
+        />
       </div>
     </aside>
 
@@ -784,6 +800,25 @@ const {
   box-shadow: 0 0 0 2px var(--primary-color) !important;
 }
 
+/* Estado: filtros ativos */
+:deep(.filters-active.p-button) {
+  background: transparent !important;
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  animation: pulse-filter 1.5s ease-in-out infinite !important;
+}
+
+:deep(.filters-active.p-button:hover) {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+}
+
+@keyframes pulse-filter {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-color) 25%, transparent); }
+  50%       { box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 0%, transparent); }
+}
+
 /* Removido estilo do dropdown antigo */
 
 /* TOOLTIPS DO SLIDER */
@@ -934,9 +969,6 @@ const {
 
 .sidebar-footer {
   padding: 1rem;
-  text-align: center;
-  font-size: 0.7rem;
-  opacity: 0.4;
 }
 
 /* MAIN CONTENT */

@@ -151,6 +151,17 @@
   body.dark-mode .status-secondary { color: #94a3b8 !important; }
   body.dark-mode .risk-critical { color: #ff8a8a !important; font-weight: 800; }
   
+  /* TEXT COLOR UTILITIES PARA KPIs e dados brutos */
+  .text-risk-low { color: #166534 !important; }
+  .text-risk-medium { color: #92400e !important; }
+  .text-risk-high { color: #991b1b !important; }
+  .text-risk-critical { color: #7f1d1d !important; font-weight: 800; }
+  
+  body.dark-mode .text-risk-low { color: #4ade80 !important; }
+  body.dark-mode .text-risk-medium { color: #fbbf24 !important; }
+  body.dark-mode .text-risk-high { color: #f87171 !important; }
+  body.dark-mode .text-risk-critical { color: #ff8a8a !important; font-weight: 800; }
+  
   /* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */
   .p-dialog, 
   .p-overlaypanel,
@@ -266,9 +277,10 @@ body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
 }
 
 body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
-  background: var(--card-bg) !important;
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
   color: var(--primary-color) !important;
   border-bottom-color: var(--primary-color) !important;
+  border-radius: 8px 8px 0 0 !important;
 }
 
 body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link:hover {

@@ -66,7 +66,7 @@ function navigateWithFilter(type) {
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
-const { getRiskSeverity, getRiskLabel, getRiskColor } = useRiskMetrics();
+const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
@@ -132,7 +132,10 @@ const pontosCriticos = computed(() => {
       const t = INDICATOR_THRESHOLDS[ind.thresholdKey] ?? INDICATOR_THRESHOLDS.default;
       const riscoUf  = d.risco_uf  != null ? Math.round(d.risco_uf  * 10) / 10 : null;
       const riscoReg = d.risco_reg != null ? Math.round(d.risco_reg * 10) / 10 : null;
-      if (riscoUf != null && riscoUf >= t.critico) {
+      const isCritico = riscoUf != null && riscoUf >= t.critico;
+      const isAuditadoComValor = ind.key === 'auditado' && d.valor > 0;
+
+      if (isCritico || isAuditadoComValor) {
         result.push({
           key:     ind.key,
           label:   ind.label,
@@ -444,7 +447,7 @@ const areaOption = computed(() => {
       <div class="header-kpis" v-if="cnpjData">
         <div class="mini-kpi">
           <span class="mini-kpi-label">% Sem Comp.</span>
-          <span class="mini-kpi-value" :style="{ color: getRiskColor(risco) }">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
+          <span class="mini-kpi-value" :class="getRiskClass(risco)">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
         </div>
         <div class="mini-kpi">
           <span class="mini-kpi-label">Valor Sem Comp.</span>
@@ -1075,7 +1078,10 @@ const areaOption = computed(() => {
   font-size: 0.8rem;
   padding: 0.75rem 1rem;
   gap: 0.4rem;
+  transition: all 0.2s;
 }
+
+
 
 .tab-icon { font-size: 0.8rem; }
 
@@ -1430,7 +1436,7 @@ const areaOption = computed(() => {
 
 /* ── FALECIDOS ────────────────────────────────────────── */
 .falecidos-tab {
-  padding: 1rem;
+  padding: 1rem 0 0;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -1560,9 +1566,9 @@ const areaOption = computed(() => {
 
 /* ── Linha de cabeçalho do grupo (por falecido) ── */
 .f-group-header td {
-  background: color-mix(in srgb, #f59e0b 10%, var(--card-bg));
-  border-top: 2px solid color-mix(in srgb, #f59e0b 40%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  border-top: 2px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
   padding: 0.55rem 1rem;
   font-size: 0.78rem;
 }
@@ -1683,5 +1689,22 @@ const areaOption = computed(() => {
   height: 100%;
   background: linear-gradient(90deg, var(--primary-color), v-bind('RISK_COLORS.HIGH'));
   border-radius: 99px;
+}
+.highlight-red {
+  border-left: 3px solid #ef4444 !important;
+  background: color-mix(in srgb, #ef4444 8%, var(--card-bg)) !important;
+}
+
+body.dark-mode .highlight-red {
+  background: color-mix(in srgb, #f87171 12%, var(--card-bg)) !important;
+}
+
+.highlight-red .f-kpi-val {
+  color: #ef4444 !important;
+  font-weight: 800;
+}
+
+body.dark-mode .highlight-red .f-kpi-val {
+  color: #f87171 !important;
 }
 </style>

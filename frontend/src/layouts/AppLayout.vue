@@ -1012,25 +1012,23 @@ const {
   background: transparent;
 }
 
-/* DESTAQUE DE FILTRO ATIVO (IDENTIDADE FORÇADA - HOVER PERMANENTE) */
+/* DESTAQUE DE FILTRO ATIVO E FOCO (IMPEDE O HALO SÓLIDO DO PRIMEVUE E BORDA DUPLA) */
+:global(.admin-sidebar .p-dropdown.p-focus),
+:global(.admin-sidebar .p-calendar.p-focus),
+:global(.admin-sidebar .p-inputtext:not(.p-dropdown-label):focus),
 :global(.admin-sidebar .filter-active.p-dropdown),
 :global(.admin-sidebar .filter-active.p-calendar),
-:global(.admin-sidebar .filter-active.p-inputtext) {
-  border: 1px solid var(--primary-color) !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-  box-shadow: none !important;
+:global(.admin-sidebar .filter-active.p-inputtext:not(.p-dropdown-label)) {
+  border: 1px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
+  outline: none !important;
 }
 
 /* DESTAQUE PARA CONTAINERS (Sliders) */
 .filter-active-box {
   background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
   border-radius: 4px;
-}
-
-/* Estilos de cor/negrito de texto removidos conforme pedido (UI sutil) */
-
-.admin-layout.collapsed .main-container {
-  /* Sem padding necessário ao colapsar */
 }
 
 .top-navbar {

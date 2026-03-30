@@ -8,6 +8,7 @@ import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useEvolucaoFinanceira } from '@/composables/useEvolucaoFinanceira';
 import { useIndicadores } from '@/composables/useIndicadores';
+import { useFalecidos } from '@/composables/useFalecidos';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_COLORS, RISK_THRESHOLDS, INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 import { storeToRefs } from 'pinia';
@@ -68,6 +69,7 @@ const { formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
+const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
 
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
@@ -409,6 +411,7 @@ const areaOption = computed(() => {
       @tab-change="(e) => {
         if (e.index === TAB_INDEX.EVOLUCAO)    fetchEvolucao(cnpj);
         if (e.index === TAB_INDEX.INDICADORES) fetchIndicadores(cnpj);
+        if (e.index === TAB_INDEX.FALECIDOS)   fetchFalecidos(cnpj);
       }"
     >
 
@@ -688,9 +691,127 @@ const areaOption = computed(() => {
 
       <TabPanel>
         <template #header><i class="pi pi-exclamation-triangle tab-icon" /><span>Falecidos</span></template>
-        <div class="tab-content tab-placeholder">
-          <i class="pi pi-ban placeholder-icon" />
-          <p>Transações realizadas após óbito do beneficiário serão exibidas aqui.</p>
+        <div class="tab-content falecidos-tab">
+
+          <div v-if="falecidosLoading" class="tab-placeholder">
+            <i class="pi pi-spin pi-spinner placeholder-icon" />
+            <p>Analisando base de óbitos...</p>
+          </div>
+
+          <div v-else-if="falecidosLoaded && !falecidosData?.transacoes?.length" class="tab-placeholder">
+            <i class="pi pi-check-circle placeholder-icon" style="color: var(--green-500)" />
+            <p>Nenhuma venda para falecidos encontrada neste estabelecimento.</p>
+          </div>
+
+          <template v-else-if="falecidosLoaded">
+            <!-- 7 CARDS DE KPI -->
+            <div class="falecidos-kpi-grid">
+              <div class="f-kpi-card">
+                <span class="f-kpi-label">CPFs Distintos</span>
+                <span class="f-kpi-val">{{ falecidosData.summary.cpfs_distintos }}</span>
+              </div>
+              <div class="f-kpi-card">
+                <span class="f-kpi-label">Vendas Afetadas</span>
+                <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
+              </div>
+              <div class="f-kpi-card highlight-red">
+                <span class="f-kpi-label">Prejuízo Estimado</span>
+                <span class="f-kpi-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
+              </div>
+              <div class="f-kpi-card">
+                <span class="f-kpi-label">Média Dias Pós-Óbito</span>
+                <span class="f-kpi-val">{{ falecidosData.summary.media_dias.toFixed(1) }} <small>dias</small></span>
+              </div>
+              <div class="f-kpi-card">
+                <span class="f-kpi-label">Máximo Dias Pós-Óbito</span>
+                <span class="f-kpi-val">{{ falecidosData.summary.max_dias }} <small>dias</small></span>
+              </div>
+              <div class="f-kpi-card">
+                <span class="f-kpi-label">% do Faturamento</span>
+                <span class="f-kpi-val">{{ (falecidosData.summary.pct_faturamento * 100).toFixed(3) }}%</span>
+              </div>
+              <div class="f-kpi-card warning">
+                <span class="f-kpi-label">CPFs Multi-CNPJ</span>
+                <span class="f-kpi-val">{{ falecidosData.summary.cpfs_multi_cnpj }} <small>({{ (falecidosData.summary.pct_multi_cnpj * 100).toFixed(1) }}%)</small></span>
+              </div>
+            </div>
+
+            <div class="falecidos-main-layout">
+              <!-- TABELA DE TRANSAÇÕES -->
+              <div class="falecidos-list-container">
+                <div class="section-title">
+                  <i class="pi pi-list" />
+                  <span>Detalhamento de Transações (Agrupado por CPF)</span>
+                </div>
+                
+                <div class="f-table-wrap">
+                  <table class="f-table">
+                    <thead>
+                      <tr>
+                        <th>Beneficiário / CPF</th>
+                        <th>Dt. Óbito</th>
+                        <th>Autorização</th>
+                        <th>Dt. Venda</th>
+                        <th>Itens</th>
+                        <th>Valor</th>
+                        <th class="txt-center">Dias após Óbito</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="t in falecidosData.transacoes" :key="t.num_autorizacao" class="f-row">
+                        <td>
+                          <div class="f-beneficiario">
+                            <span class="f-nome">{{ t.nome_falecido || 'NÃO IDENTIFICADO' }}</span>
+                            <span class="f-cpf">{{ t.cpf }}</span>
+                            <Tag v-if="t.outros_estabelecimentos" icon="pi pi-share-alt" value="MULTI-CNPJ" severity="warning" class="f-multi-tag" v-tooltip.top="t.outros_estabelecimentos" />
+                          </div>
+                        </td>
+                        <td class="f-date">{{ t.dt_obito }}</td>
+                        <td class="f-aut">{{ t.num_autorizacao }}</td>
+                        <td class="f-date">{{ t.data_autorizacao }}</td>
+                        <td class="f-num">{{ t.qtd_itens_na_autorizacao }}</td>
+                        <td class="f-val">{{ formatCurrencyFull(t.valor_total_autorizacao) }}</td>
+                        <td class="txt-center">
+                          <span class="f-days-badge" :class="{
+                            'd-critical': t.dias_apos_obito > 365,
+                            'd-high': t.dias_apos_obito > 30 && t.dias_apos_obito <= 365,
+                            'd-medium': t.dias_apos_obito <= 30
+                          }">
+                            {{ t.dias_apos_obito }} d
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- PAINEL MULTI-CNPJ -->
+              <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
+                <div class="section-title">
+                  <i class="pi pi-share-alt" />
+                  <span>Cross-Pharmacy: Outros Estabelecimentos Relacionados</span>
+                </div>
+                <div class="ranking-list">
+                  <div v-for="r in falecidosData.ranking" :key="r.estabelecimento" class="ranking-item">
+                    <div class="ranking-item-top">
+                      <span class="ranking-name" :title="r.estabelecimento">{{ r.estabelecimento }}</span>
+                      <span class="ranking-qty">{{ r.qtd_cpfs }} CPFs</span>
+                    </div>
+                    <div class="ranking-bar-bg">
+                      <div class="ranking-bar-fill" :style="{ width: (r.pct_total * 100) + '%' }"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="tab-placeholder">
+            <i class="pi pi-exclamation-triangle placeholder-icon" />
+            <p>Clique na aba para processar a análise de óbitos.</p>
+          </div>
+
         </div>
       </TabPanel>
 
@@ -1203,5 +1324,187 @@ const areaOption = computed(() => {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.5rem;
+}
+
+/* ── FALECIDOS ────────────────────────────────────────── */
+.falecidos-tab {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.falecidos-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.75rem;
+}
+
+.f-kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--sidebar-border);
+  padding: 0.75rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.f-kpi-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.f-kpi-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.f-kpi-val small {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.highlight-red .f-kpi-val { color: v-bind('RISK_COLORS.CRITICAL'); }
+.warning .f-kpi-val { color: v-bind('RISK_COLORS.MEDIUM'); }
+
+.falecidos-main-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+}
+
+/* Tabela de Falecidos */
+.f-table-wrap {
+  background: var(--card-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.f-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.f-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--sidebar-border) 40%, var(--card-bg));
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--sidebar-border);
+}
+
+.f-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--sidebar-border);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.f-row:hover td { background: rgba(255,255,255,0.02); }
+
+.f-beneficiario {
+  display: flex;
+  flex-direction: column;
+}
+
+.f-nome { font-weight: 600; font-size: 0.82rem; }
+.f-cpf { font-size: 0.72rem; color: var(--text-muted); font-family: monospace; }
+
+.f-multi-tag {
+  align-self: flex-start;
+  font-size: 0.6rem !important;
+  margin-top: 0.3rem;
+  height: 1.2rem;
+}
+
+.f-date, .f-aut, .f-num, .f-val { font-size: 0.78rem; }
+.f-num, .f-val { font-weight: 500; }
+
+.txt-center { text-align: center !important; }
+
+.f-days-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.d-medium { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
+.d-high { background: rgba(255, 87, 34, 0.15); color: #ff5722; }
+.d-critical { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+
+/* Ranking Panel */
+.falecidos-ranking-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 10px;
+  padding: 1rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.ranking-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ranking-item-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+}
+
+.ranking-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.ranking-qty { color: var(--text-muted); font-weight: 700; }
+
+.ranking-bar-bg {
+  height: 6px;
+  background: var(--sidebar-border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.ranking-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), v-bind('RISK_COLORS.HIGH'));
+  border-radius: 99px;
 }
 </style>

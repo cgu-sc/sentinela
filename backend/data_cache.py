@@ -18,6 +18,7 @@ _PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
 _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet")
 _REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_rede_estabelecimentos.parquet")
 _MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_matriz_risco.parquet")
+_FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_falecidos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -27,6 +28,7 @@ _df_movimentacao: pl.DataFrame | None = None
 _df_localidades: pl.DataFrame | None = None
 _df_rede: pl.DataFrame | None = None
 _df_matriz_risco: pl.DataFrame | None = None
+_df_falecidos: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 
@@ -45,16 +47,17 @@ def _sync_localidades(engine):
     ])
     _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="lz4")
 
-def _sync_rede(engine):
+def _sync_rede(engine, progress_callback=None):
     """Tarefa 2: Sincroniza a tabela de rede de estabelecimentos."""
     global _df_rede
     print("Sincronizando Rede de Estabelecimentos...")
-    sql = """
-        SELECT cnpj_raiz, cnpj, razao_social, uf, municipio,
-               is_matriz, qtd_estabelecimentos_rede, flag_grandes_redes
-        FROM [temp_CGUSC].[fp].[rede_estabelecimentos]
-    """
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[rede_estabelecimentos]"
+    
+    # Se for pequena, carregamos em um chunk só, mas reportamos progresso
     pdf = pd.read_sql(sql, engine)
+    print("   -> Rede carregada com sucesso.")
+    if progress_callback: progress_callback(100)
+    
     _df_rede = pl.from_pandas(pdf).with_columns([
         pl.col("cnpj_raiz").cast(pl.String),
         pl.col("cnpj").cast(pl.String),
@@ -67,14 +70,61 @@ def _sync_rede(engine):
     ])
     _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="lz4")
 
-def _sync_matriz_risco(engine):
-    """Tarefa 4: Sincroniza a matriz de risco consolidada por CNPJ."""
+def _sync_matriz_risco(engine, progress_callback=None):
+    """Tarefa 4: Sincroniza a matriz de risco consolidada por CNPJ em chunks."""
     global _df_matriz_risco
-    print("Sincronizando Matriz de Risco Consolidada...")
+    print("Sincronizando Matriz de Risco Consolidada (Matriz Resultados)...")
     sql = "SELECT * FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]"
-    pdf = pd.read_sql(sql, engine)
+    
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]")).scalar()
+    
+    print(f"   -> Registros na Matriz: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 2_000
+    
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_list.append(chunk)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        print(f"   -> Progresso Matriz: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+            
+    pdf = pd.concat(chunk_list, ignore_index=True)
     _df_matriz_risco = pl.from_pandas(pdf)
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="lz4")
+
+def _sync_falecidos(engine, progress_callback=None):
+    """Tarefa 5: Sincroniza a tabela de falecidos por farmácia em chunks."""
+    global _df_falecidos
+    print("Sincronizando Dados de Falecidos...")
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]"
+    
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]")).scalar()
+    
+    print(f"   -> Registros Falecidos: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 2_000
+    
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_list.append(chunk)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        print(f"   -> Progresso Falecidos: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+            
+    pdf = pd.concat(chunk_list, ignore_index=True)
+    _df_falecidos = pl.from_pandas(pdf).with_columns([
+        pl.col("dt_nascimento").cast(pl.Date, strict=False),
+        pl.col("dt_obito").cast(pl.Date, strict=False),
+        pl.col("data_autorizacao").cast(pl.Date, strict=False),
+    ])
+    _df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="lz4")
 
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
@@ -102,12 +152,18 @@ def _sync_movimentacao(engine, progress_callback):
     rows_processed = 0
     CHUNK_SIZE = 250_000
     
+    print(f"Total de registros a baixar: {total_rows:,}")
+    
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_list.append(chunk)
         rows_processed += len(chunk)
-        # Callback para o motor principal calcular a fatia do progresso
-        progress_callback(int((rows_processed / total_rows) * 100))
+        p = int((rows_processed / total_rows) * 100)
+        print(f"   -> Progresso Movimentação: {p}% ({rows_processed:,} / {total_rows:,})")
+        progress_callback(p)
 
+    global _cache_status
+    _cache_status = "processing"
+    print("   -> Organizando e otimizando dados (Polars)...")
     pdf = pd.concat(chunk_list, ignore_index=True)
     _df_movimentacao = pl.from_pandas(pdf).with_columns([
         pl.col("periodo").cast(pl.Date),
@@ -148,6 +204,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 _df_rede         = pl.read_parquet(_REDE_PARQUET_PATH)
                 if os.path.exists(_MATRIZ_PARQUET_PATH):
                     _df_matriz_risco = pl.read_parquet(_MATRIZ_PARQUET_PATH)
+                if os.path.exists(_FALECIDOS_PARQUET_PATH):
+                    _df_falecidos = pl.read_parquet(_FALECIDOS_PARQUET_PATH)
                 _cache_progress = 100
                 _cache_status = "ready"
                 print("🚀 Caches carregados via Parquet.")
@@ -160,30 +218,32 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _cache_progress = 0
         return
 
-    # 2. Sincronização Inteligente (Task-Based)
-    # Para adicionar mais parquets, basta incluir na lista abaixo!
+    # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
+    # Definimos pesos baseados no tempo estimado de execução (total = 100)
     TASKS = [
-        {"name": "Localidades",           "status": "fetching_geo",    "func": lambda: _sync_localidades(engine)},
-        {"name": "Rede Estabelecimentos", "status": "fetching_rede",   "func": lambda: _sync_rede(engine)},
-        {"name": "Matriz de Risco",       "status": "fetching_matriz", "func": lambda: _sync_matriz_risco(engine)},
-        {"name": "Movimentação",          "status": "fetching_data",   "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Localidades",           "status": "fetching", "weight": 2,  "func": lambda: _sync_localidades(engine)},
+        {"name": "Rede Estabelecimentos", "status": "fetching", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
+        {"name": "Matriz de Risco",       "status": "fetching", "weight": 25, "func": lambda cb: _sync_matriz_risco(engine, cb)},
+        {"name": "Falecidos",             "status": "fetching", "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
+        {"name": "Movimentação",          "status": "fetching", "weight": 65, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
     total_tasks = len(TASKS)
+    acumulado_weight = 0
 
     try:
         for index, task in enumerate(TASKS):
             _cache_status = task["status"]
+            current_weight = task["weight"]
             print(f"[{index+1}/{total_tasks}] {task['name']}...")
 
-            # Função auxiliar para atualizar o progresso global baseado na tarefa atual
+            # Função auxiliar para atualizar o progresso global baseado no peso da tarefa
             def update_global_progress(task_internal_p):
                 global _cache_progress
-                # Lógica: (Tarefas Completas + % da Tarefa Atual) / Total de Tarefas
-                base_p = (index / total_tasks) * 100
-                contribution = (task_internal_p / 100) * (100 / total_tasks)
-                _cache_progress = int(base_p + contribution)
+                # Lógica Ponderada: Peso Acumulado + (% da Tarefa Atual * Peso da Tarefa)
+                p = acumulado_weight + (task_internal_p / 100 * current_weight)
+                _cache_progress = int(p)
 
             # Executa a tarefa (checa se ela suporta callback de progresso)
             if task["func"].__code__.co_argcount > 0:
@@ -191,6 +251,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             else:
                 task["func"]()
                 update_global_progress(100)
+            
+            acumulado_weight += current_weight
 
         _cache_progress = 100
         _cache_status = "ready"
@@ -227,6 +289,11 @@ def get_df_matriz_risco() -> pl.DataFrame:
     if _df_matriz_risco is None:
         raise RuntimeError("Cache de Matriz de Risco não carregado. Execute uma sincronização.")
     return _df_matriz_risco
+
+def get_df_falecidos() -> pl.DataFrame:
+    if _df_falecidos is None:
+        raise RuntimeError("Cache de Falecidos não carregado. Execute uma sincronização.")
+    return _df_falecidos
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""

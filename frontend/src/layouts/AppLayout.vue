@@ -98,7 +98,7 @@ const clusterOptions  = FILTER_OPTIONS.cluster;
 const rfaOptions      = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
-const { isSyncing, showConfirmSync, syncProgress, handleSync } = useSyncManager();
+const { isSyncing, showConfirmSync, syncProgress, syncError, syncErrorMessage, handleSync, retrySync, dismissError } = useSyncManager();
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -464,8 +464,11 @@ const {
       </Dialog>
 
       <!-- MODAL DE PROCESSAMENTO (SYNCING) -->
-      <Dialog v-model:visible="isSyncing" modal :closable="false" :draggable="false" :show-header="false" :style="{ width: '450px' }">
+      <Dialog v-model:visible="isSyncing" modal :closable="false" :draggable="false" :show-header="false" :style="{ width: '460px' }">
           <div class="sync-modal-content">
+
+            <!-- ── ESTADO: PROGRESSO ── -->
+            <template v-if="!syncError">
               <div class="sync-icon-container">
                   <i class="pi pi-sync pi-spin"></i>
               </div>
@@ -479,6 +482,32 @@ const {
                   <ProgressBar :value="syncProgress" :show-value="false" style="height: 10px"></ProgressBar>
               </div>
               <span class="status-minor">Não feche esta janela...</span>
+            </template>
+
+            <!-- ── ESTADO: ERRO ── -->
+            <template v-else>
+              <div class="sync-icon-container sync-error-icon">
+                  <i class="pi pi-times-circle"></i>
+              </div>
+              <h3 class="sync-error-title">Falha na Sincronização</h3>
+              <p class="sync-error-msg">{{ syncErrorMessage }}</p>
+              <div class="sync-error-actions">
+                  <Button
+                    label="Tentar Novamente"
+                    icon="pi pi-refresh"
+                    severity="primary"
+                    @click="retrySync"
+                  />
+                  <Button
+                    label="Fechar"
+                    icon="pi pi-times"
+                    severity="secondary"
+                    outlined
+                    @click="dismissError"
+                  />
+              </div>
+            </template>
+
           </div>
       </Dialog>
 
@@ -1411,5 +1440,43 @@ const {
     color: var(--text-muted);
     opacity: 0.7;
 }
+
+/* ── ESTADO DE ERRO NO MODAL DE SYNC ── */
+.sync-error-icon {
+    background: color-mix(in srgb, #ef4444 12%, transparent) !important;
+    animation: shake 0.4s ease;
+}
+
+.sync-error-icon i {
+    color: #ef4444 !important;
+}
+
+.sync-error-title {
+    color: #ef4444 !important;
+}
+
+.sync-error-msg {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 360px;
+}
+
+.sync-error-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-6px); }
+    40%       { transform: translateX(6px); }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px); }
+}
+
 
 </style>

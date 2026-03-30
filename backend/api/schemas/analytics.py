@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict, List, Optional
+from datetime import date
 
 class AnalyticsKPISchema(BaseModel):
     id: str
@@ -97,6 +98,42 @@ class FatorRiscoBucketSchema(BaseModel):
 class FatorRiscoResponseSchema(BaseModel):
     periodo_formatado: str
     buckets: List[FatorRiscoBucketSchema]
+
+class FalecidoTransactionSchema(BaseModel):
+    cpf: str
+    nome_falecido: Optional[str] = None
+    municipio_falecido: Optional[str] = None
+    uf_falecido: Optional[str] = None
+    dt_nascimento: Optional[date] = None
+    dt_obito: Optional[date] = None
+    fonte_obito: Optional[str] = None
+    num_autorizacao: Optional[str] = None
+    data_autorizacao: Optional[date] = None
+    qtd_itens_na_autorizacao: int = 0
+    valor_total_autorizacao: float = 0.0
+    dias_apos_obito: int = 0
+    outros_estabelecimentos: Optional[str] = None
+
+class FalecidosRankingSchema(BaseModel):
+    estabelecimento: str
+    qtd_cpfs: int
+    pct_total: float
+
+class FalecidosSummarySchema(BaseModel):
+    cpfs_distintos: int
+    total_autorizacoes: int
+    valor_total: float
+    media_dias: float
+    max_dias: int
+    pct_faturamento: float
+    cpfs_multi_cnpj: int
+    pct_multi_cnpj: float
+
+class FalecidosResponse(BaseModel):
+    cnpj: str
+    summary: FalecidosSummarySchema
+    ranking: List[FalecidosRankingSchema]
+    transacoes: List[FalecidoTransactionSchema]
 
 class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None

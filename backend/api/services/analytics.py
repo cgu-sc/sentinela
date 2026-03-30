@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -18,6 +18,10 @@ from ..schemas.analytics import (
     EvolucaoFinanceiraResponse,
     IndicadorDataSchema,
     IndicadoresResponse,
+    FalecidoTransactionSchema,
+    FalecidosRankingSchema,
+    FalecidosSummarySchema,
+    FalecidosResponse,
 )
 
 class AnalyticsService:
@@ -366,6 +370,151 @@ class AnalyticsService:
             print(f"❌ ERRO AO BUSCAR INDICADORES: {e}")
             print(traceback.format_exc())
             return IndicadoresResponse(cnpj=cnpj, indicadores={})
+
+    @staticmethod
+    def get_falecidos_data(cnpj: str) -> FalecidosResponse:
+        """
+        Retorna os dados detalhados de vendas para falecidos para um CNPJ.
+        Utiliza motor Polars para calcular KPIs e ranking Multi-CNPJ em tempo real.
+        """
+        try:
+            df_all = get_df_falecidos()
+            df_target = df_all.filter(pl.col("cnpj") == cnpj)
+
+            if df_target.is_empty():
+                return FalecidosResponse(
+                    cnpj=cnpj,
+                    summary=FalecidosSummarySchema(
+                        cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
+                        media_dias=0.0, max_dias=0, pct_faturamento=0.0,
+                        cpfs_multi_cnpj=0, pct_multi_cnpj=0.0
+                    ),
+                    ranking=[],
+                    transacoes=[]
+                )
+
+            # 1. KPIs Básicos
+            cpfs_distintos = df_target["cpf"].n_unique()
+            total_autorizacoes = df_target.height
+            valor_total = float(df_target["valor_total_autorizacao"].sum() or 0.0)
+            media_dias = float(df_target["dias_apos_obito"].mean() or 0.0)
+            max_dias = int(df_target["dias_apos_obito"].max() or 0)
+
+            # 2. Lógica Multi-CNPJ (Inteligência Cross-Pharmacy)
+            # Encontra outros estabelecimentos onde ESSES CPFs compraram
+            cpfs_alvo = df_target["cpf"].unique()
+            df_outros = df_all.filter((pl.col("cpf").is_in(cpfs_alvo)) & (pl.col("cnpj") != cnpj))
+            
+            # Mapeia quais CPFs são Multi-CNPJ
+            cpfs_multi = df_outros["cpf"].unique().to_list()
+            cpfs_multi_cnpj = len(cpfs_multi)
+            pct_multi_cnpj = cpfs_multi_cnpj / cpfs_distintos if cpfs_distintos > 0 else 0.0
+
+            # 3. Ranking de Outros Estabelecimentos
+            # Precisamos dos nomes das farmácias. Vamos usar a rede_df se possível.
+            try:
+                rede_df = get_rede_df().select(["cnpj", "razao_social", "municipio", "uf"])
+                df_outros_nomes = df_outros.join(rede_df, on="cnpj", how="left")
+                
+                ranking_df = (
+                    df_outros_nomes
+                    .with_columns([
+                        pl.concat_str([
+                            pl.col("cnpj"), pl.lit(" - "), 
+                            pl.col("razao_social").fill_null("DESCONHECIDO"),
+                            pl.lit(" | "), 
+                            pl.col("municipio").fill_null(""),
+                            pl.lit("/"),
+                            pl.col("uf").fill_null("")
+                        ]).alias("estab")
+                    ])
+                    .group_by("estab")
+                    .agg([pl.col("cpf").n_unique().alias("qtd")])
+                    .with_columns([(pl.col("qtd") / cpfs_multi_cnpj if cpfs_multi_cnpj > 0 else 0).alias("pct")])
+                    .sort("qtd", descending=True)
+                    .head(20)
+                )
+                ranking = [
+                    FalecidosRankingSchema(estabelecimento=r["estab"], qtd_cpfs=r["qtd"], pct_total=r["pct"])
+                    for r in ranking_df.iter_rows(named=True)
+                ]
+            except:
+                ranking = []
+
+            # 4. Cálculo do % de faturamento (usando o faturamento total cacheado)
+            pct_faturamento = 0.0
+            try:
+                mov_df = get_df().filter(pl.col("cnpj") == cnpj)
+                total_faturamento = float(mov_df["total_vendas"].sum() or 1.0)
+                pct_faturamento = valor_total / total_faturamento if total_faturamento > 0 else 0.0
+            except: pass
+
+            # 5. Lista de Transações (com flag de multi-cnpj)
+            # Vamos gerar a string de 'outros_estabelecimentos' para cada CPF
+            try:
+                outros_info = (
+                    df_outros_nomes
+                    .with_columns([
+                        pl.concat_str([
+                            pl.col("cnpj"), pl.lit(" | "), pl.col("municipio"), pl.lit("/"), pl.col("uf")
+                        ]).alias("info")
+                    ])
+                    .group_by("cpf")
+                    .agg([pl.col("info").unique().str.join("; ").alias("outros")])
+                )
+                df_final = df_target.join(outros_info, on="cpf", how="left")
+            except:
+                df_final = df_target.with_columns(pl.lit(None).alias("outros"))
+
+            transacoes = [
+                FalecidoTransactionSchema(
+                    cpf=str(r["cpf"]).zfill(11),
+                    nome_falecido=r["nome_falecido"],
+                    municipio_falecido=r["municipio_falecido"],
+                    uf_falecido=r["uf_falecido"],
+                    dt_nascimento=r["dt_nascimento"],
+                    dt_obito=r["dt_obito"],
+                    fonte_obito=r["fonte_obito"],
+                    num_autorizacao=str(r["num_autorizacao"]),
+                    data_autorizacao=r["data_autorizacao"],
+                    qtd_itens_na_autorizacao=int(r["qtd_itens_na_autorizacao"] or 0),
+                    valor_total_autorizacao=float(r["valor_total_autorizacao"] or 0.0),
+                    dias_apos_obito=int(r["dias_apos_obito"] or 0),
+                    outros_estabelecimentos=r["outros"]
+                )
+                for r in df_final.sort(["cpf", "data_autorizacao"]).iter_rows(named=True)
+            ]
+
+            return FalecidosResponse(
+                cnpj=cnpj,
+                summary=FalecidosSummarySchema(
+                    cpfs_distintos=cpfs_distintos,
+                    total_autorizacoes=total_autorizacoes,
+                    valor_total=valor_total,
+                    media_dias=media_dias,
+                    max_dias=max_dias,
+                    pct_faturamento=pct_faturamento,
+                    cpfs_multi_cnpj=cpfs_multi_cnpj,
+                    pct_multi_cnpj=pct_multi_cnpj
+                ),
+                ranking=ranking,
+                transacoes=transacoes
+            )
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR DADOS DE FALECIDOS: {e}")
+            print(traceback.format_exc())
+            return FalecidosResponse(
+                cnpj=cnpj,
+                summary=FalecidosSummarySchema(
+                    cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
+                    media_dias=0.0, max_dias=0, pct_faturamento=0.0,
+                    cpfs_multi_cnpj=0, pct_multi_cnpj=0.0
+                ),
+                ranking=[],
+                transacoes=[]
+            )
 
     @staticmethod
     def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None) -> FatorRiscoResponseSchema:

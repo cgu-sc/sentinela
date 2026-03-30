@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from database import get_db
-from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse
+from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse, FalecidosResponse
 from ..services.analytics import AnalyticsService
 
 router = APIRouter()
@@ -57,8 +57,13 @@ def get_evolucao_financeira(cnpj: str):
 
 @router.get("/cnpj/{cnpj}/indicadores", response_model=IndicadoresResponse)
 def get_indicadores(cnpj: str):
-    """Retorna os 18 indicadores de risco da matriz_risco_consolidada para um CNPJ."""
+    """Retorna os indicadores detalhados para um CNPJ."""
     return AnalyticsService.get_indicadores(cnpj)
+
+@router.get("/cnpj/{cnpj}/falecidos", response_model=FalecidosResponse)
+def get_falecidos(cnpj: str):
+    """Retorna os dados detalhados de vendas para falecidos para um CNPJ."""
+    return AnalyticsService.get_falecidos_data(cnpj)
 
 @router.get("/rede/{cnpj_raiz}", response_model=List[RedeEstabelecimentoSchema])
 def get_rede_estabelecimentos(cnpj_raiz: str):

@@ -165,7 +165,7 @@ class AnalyticsService:
 
             # 7. Detalhamento por CNPJ (Se Município estiver selecionado)
             resultado_cnpjs = None
-            if municipio and municipio != 'Todos':
+            if (municipio and municipio != 'Todos') or cnpj_raiz:
                 cnpj_df = (
                     period_df
                     .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
@@ -430,7 +430,9 @@ class AnalyticsService:
                     ])
                     .group_by("estab")
                     .agg([pl.col("cpf").n_unique().alias("qtd")])
-                    .with_columns([(pl.col("qtd") / cpfs_multi_cnpj if cpfs_multi_cnpj > 0 else 0).alias("pct")])
+                    .with_columns([
+                        (pl.col("qtd") / pl.when(pl.col("qtd").sum() > 0).then(pl.col("qtd").sum()).otherwise(1)).alias("pct")
+                    ])
                     .sort("qtd", descending=True)
                     .head(20)
                 )

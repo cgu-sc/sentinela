@@ -186,7 +186,7 @@ def _sync_movimentacao(engine, progress_callback):
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _cache_progress, _cache_status
     import time
 
     # 1. Boot Rápido (Se os arquivos já existem)

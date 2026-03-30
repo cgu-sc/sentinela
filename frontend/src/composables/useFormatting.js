@@ -55,6 +55,18 @@ export function useFormatting() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  /**
+   * Formatar data do formato YYYY-MM-DD para DD/MM/YYYY
+   * @param {string} dataStr 
+   * @returns {string}
+   */
+  const formatarData = (dataStr) => {
+    if (!dataStr) return '—';
+    const partes = dataStr.toString().split('-');
+    if (partes.length !== 3) return dataStr; // Retorna original se não for o formato esperado
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  };
+
   return {
     formatBRL,
     formatNumber,
@@ -62,5 +74,6 @@ export function useFormatting() {
     formatPercent,
     formatCurrencyFull,
     toLocalISO,
+    formatarData
   };
 }

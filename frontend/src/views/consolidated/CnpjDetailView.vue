@@ -1,6 +1,6 @@
 <script setup>
 import { useRoute, useRouter } from 'vue-router';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
@@ -9,6 +9,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useEvolucaoFinanceira } from '@/composables/useEvolucaoFinanceira';
 import { useIndicadores } from '@/composables/useIndicadores';
 import { useFalecidos } from '@/composables/useFalecidos';
+import { useFilterParameters } from '@/composables/useFilterParameters';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_COLORS, RISK_THRESHOLDS, INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 import { storeToRefs } from 'pinia';
@@ -64,12 +65,43 @@ function navigateWithFilter(type) {
 }
 
 // ── Composables ───────────────────────────────────────────
+const { getApiParams } = useFilterParameters();
 const { getRiskSeverity, getRiskLabel, getRiskColor } = useRiskMetrics();
-const { formatCurrencyFull, formatNumberFull } = useFormatting();
+const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
+
+// ── Composables (Fim) ─────────────────────────────────────
+
+
+// ── Agrupamento de falecidos por CPF (igual ao print) ─────
+const falecidosAgrupados = computed(() => {
+  const transacoes = falecidosData.value?.transacoes ?? [];
+  const grupos = new Map();
+  for (const t of transacoes) {
+    if (!grupos.has(t.cpf)) {
+      grupos.set(t.cpf, {
+        cpf:           t.cpf,
+        nome:          t.nome_falecido || 'NÃO IDENTIFICADO',
+        municipio:     t.municipio_falecido,
+        uf:            t.uf_falecido,
+        dt_obito:      formatarData(t.dt_obito),
+        dt_nascimento: formatarData(t.dt_nascimento),
+        outros_cnpj:   t.outros_estabelecimentos,
+        transacoes:    [],
+        total_valor:   0,
+        max_dias:      0,
+      });
+    }
+    const g = grupos.get(t.cpf);
+    g.transacoes.push(t);
+    g.total_valor += t.valor_total_autorizacao ?? 0;
+    g.max_dias = Math.max(g.max_dias, t.dias_apos_obito ?? 0);
+  }
+  return [...grupos.values()];
+});
 
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
@@ -130,6 +162,26 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 // ── Dados do CNPJ ─────────────────────────────────────────
 const cnpjData = computed(() =>
   resultadoCnpjs.value?.find(c => c.cnpj === cnpj.value) ?? null
+);
+
+import { watch } from 'vue';
+watch(
+  () => cnpj.value,
+  async (newCnpj) => {
+    if (newCnpj && !cnpjData.value) {
+      const p = getApiParams();
+      try {
+        await analyticsStore.fetchDashboardSummary(
+          p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
+          'Todos', 'Todos', 'Todos', 'Todos',
+          'Todos', 'Todos', 'Todos', newCnpj
+        );
+      } catch (e) {
+        console.error('Erro ao hidratar CNPJ direto:', e);
+      }
+    }
+  },
+  { immediate: true }
 );
 
 const geoData = computed(() => {
@@ -736,57 +788,7 @@ const areaOption = computed(() => {
               </div>
             </div>
 
-            <div class="falecidos-main-layout">
-              <!-- TABELA DE TRANSAÇÕES -->
-              <div class="falecidos-list-container">
-                <div class="section-title">
-                  <i class="pi pi-list" />
-                  <span>Detalhamento de Transações (Agrupado por CPF)</span>
-                </div>
-                
-                <div class="f-table-wrap">
-                  <table class="f-table">
-                    <thead>
-                      <tr>
-                        <th>Beneficiário / CPF</th>
-                        <th>Dt. Óbito</th>
-                        <th>Autorização</th>
-                        <th>Dt. Venda</th>
-                        <th>Itens</th>
-                        <th>Valor</th>
-                        <th class="txt-center">Dias após Óbito</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="t in falecidosData.transacoes" :key="t.num_autorizacao" class="f-row">
-                        <td>
-                          <div class="f-beneficiario">
-                            <span class="f-nome">{{ t.nome_falecido || 'NÃO IDENTIFICADO' }}</span>
-                            <span class="f-cpf">{{ t.cpf }}</span>
-                            <Tag v-if="t.outros_estabelecimentos" icon="pi pi-share-alt" value="MULTI-CNPJ" severity="warning" class="f-multi-tag" v-tooltip.top="t.outros_estabelecimentos" />
-                          </div>
-                        </td>
-                        <td class="f-date">{{ t.dt_obito }}</td>
-                        <td class="f-aut">{{ t.num_autorizacao }}</td>
-                        <td class="f-date">{{ t.data_autorizacao }}</td>
-                        <td class="f-num">{{ t.qtd_itens_na_autorizacao }}</td>
-                        <td class="f-val">{{ formatCurrencyFull(t.valor_total_autorizacao) }}</td>
-                        <td class="txt-center">
-                          <span class="f-days-badge" :class="{
-                            'd-critical': t.dias_apos_obito > 365,
-                            'd-high': t.dias_apos_obito > 30 && t.dias_apos_obito <= 365,
-                            'd-medium': t.dias_apos_obito <= 30
-                          }">
-                            {{ t.dias_apos_obito }} d
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- PAINEL MULTI-CNPJ -->
+              <!-- PAINEL MULTI-CNPJ (MOVIDO PARA CIMA) -->
               <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
                 <div class="section-title">
                   <i class="pi pi-share-alt" />
@@ -804,7 +806,107 @@ const areaOption = computed(() => {
                   </div>
                 </div>
               </div>
-            </div>
+
+              <!-- TABELA DE TRANSAÇÕES -->
+              <div class="falecidos-list-container">
+                <div class="section-title">
+                  <i class="pi pi-list" />
+                  <span>Detalhamento de Transações (Agrupado por CPF)</span>
+                </div>
+                
+                <div class="f-table-wrap">
+                  <table class="f-table">
+                    <colgroup>
+                      <col style="width: 10%" /> <!-- CPF -->
+                      <col style="width: 18%" /> <!-- Nome do Falecido -->
+                      <col style="width: 12%" /> <!-- Município / UF -->
+                      <col style="width: 6%" />  <!-- Fonte Óbito -->
+                      <col style="width: 13%" /> <!-- Nº Autorização -->
+                      <col style="width: 8%" />  <!-- Dt. Óbito -->
+                      <col style="width: 10%" /> <!-- Data da Venda -->
+                      <col style="width: 6%" />  <!-- Itens -->
+                      <col style="width: 9%" />  <!-- Valor -->
+                      <col style="width: 8%" />  <!-- Dias -->
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>CPF</th>
+                        <th>Nome do Falecido</th>
+                        <th>Município / UF</th>
+                        <th>Fonte Óbito</th>
+                        <th>Nº Autorização</th>
+                        <th>Dt. Óbito</th>
+                        <th>Data da Venda</th>
+                        <th>Itens</th>
+                        <th>Valor (R$)</th>
+                        <th class="txt-center">Dias após Óbito</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template v-for="grupo in falecidosAgrupados" :key="grupo.cpf">
+                        <!-- ── LINHA DE CABEÇALHO DO FALECIDO ── -->
+                        <tr class="f-group-header">
+                          <td colspan="10">
+                            <span class="f-group-cpf">{{ grupo.cpf }}</span>
+                            <span class="f-group-nome">{{ grupo.nome }}</span>
+                            <span class="f-group-sep">—</span>
+                            <span class="f-group-meta">{{ grupo.transacoes.length }} autorização(ões)</span>
+                            <span class="f-group-sep">|</span>
+                            <span class="f-group-meta">{{ formatCurrencyFull(grupo.total_valor) }}</span>
+                            <span class="f-group-sep">|</span>
+                            <span class="f-group-meta">Óbito: {{ grupo.dt_obito }}</span>
+                            <Tag v-if="grupo.outros_cnpj" icon="pi pi-share-alt" value="MULTI-CNPJ" severity="warning" class="f-multi-tag" v-tooltip.top="grupo.outros_cnpj" style="margin-left: 0.75rem;" />
+                          </td>
+                        </tr>
+                        <!-- ── LINHAS DE TRANSAÇÃO ── -->
+                        <tr v-for="t in grupo.transacoes" :key="t.num_autorizacao" class="f-row">
+                          <td class="f-cpf-cell">{{ t.cpf }}</td>
+                          <td>
+                            <span class="f-nome">{{ t.nome_falecido || 'NÃO IDENTIFICADO' }}</span>
+                          </td>
+                          <td class="f-date">{{ grupo.municipio }}/{{ grupo.uf }}</td>
+                          <td class="f-fonte">
+                            <span v-if="t.fonte_obito && t.fonte_obito.length > 10" v-tooltip.top="t.fonte_obito" style="cursor: default">
+                              {{ t.fonte_obito.substring(0, 10) }}...
+                            </span>
+                            <span v-else>{{ t.fonte_obito }}</span>
+                          </td>
+                          <td class="f-aut">{{ t.num_autorizacao }}</td>
+                          <td class="f-date">{{ formatarData(t.dt_obito) }}</td>
+                          <td class="f-date">{{ formatarData(t.data_autorizacao) }}</td>
+                          <td class="f-num">{{ t.qtd_itens_na_autorizacao }}</td>
+                          <td class="f-val">{{ formatCurrencyFull(t.valor_total_autorizacao) }}</td>
+                          <td class="txt-center">
+                            <span class="f-days-badge" :class="{
+                              'd-critical': t.dias_apos_obito > 365,
+                              'd-high': t.dias_apos_obito > 30 && t.dias_apos_obito <= 365,
+                              'd-medium': t.dias_apos_obito <= 30
+                            }">
+                              {{ t.dias_apos_obito }} d
+                            </span>
+                          </td>
+                        </tr>
+                        <!-- ── LINHA DE SUBTOTAL ── -->
+                        <tr class="f-subtotal-row">
+                          <td colspan="8" class="f-subtotal-label">Subtotal — {{ grupo.transacoes.length }} autorização(ões)</td>
+                          <td class="f-val f-subtotal-val">{{ formatCurrencyFull(grupo.total_valor) }}</td>
+                          <td></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                    <!-- ── TOTAL GERAL ── -->
+                    <tfoot>
+                      <tr class="f-grand-total">
+                        <td colspan="8">
+                          TOTAL GERAL — {{ falecidosAgrupados.length }} CPF(s) distintos — {{ falecidosData.transacoes.length }} autorização(ões)
+                        </td>
+                        <td class="f-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
           </template>
 
           <div v-else class="tab-placeholder">
@@ -1372,11 +1474,8 @@ const areaOption = computed(() => {
 .highlight-red .f-kpi-val { color: v-bind('RISK_COLORS.CRITICAL'); }
 .warning .f-kpi-val { color: v-bind('RISK_COLORS.MEDIUM'); }
 
-.falecidos-main-layout {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 1.5rem;
-  align-items: start;
+.falecidos-list-container {
+  margin-top: 1.5rem;
 }
 
 .section-title {
@@ -1456,20 +1555,98 @@ const areaOption = computed(() => {
 .d-high { background: rgba(255, 87, 34, 0.15); color: #ff5722; }
 .d-critical { background: rgba(244, 67, 54, 0.15); color: #f44336; }
 
+.f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); }
+.f-fonte { font-size: 0.72rem; color: var(--text-muted); }
+
+/* ── Linha de cabeçalho do grupo (por falecido) ── */
+.f-group-header td {
+  background: color-mix(in srgb, #f59e0b 10%, var(--card-bg));
+  border-top: 2px solid color-mix(in srgb, #f59e0b 40%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+  padding: 0.55rem 1rem;
+  font-size: 0.78rem;
+}
+
+.f-group-cpf {
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-right: 0.6rem;
+}
+
+.f-group-nome {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 0.4rem;
+}
+
+.f-group-sep {
+  color: var(--text-muted);
+  margin: 0 0.4rem;
+  opacity: 0.6;
+}
+
+.f-group-meta {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ── Linha de subtotal por falecido ── */
+.f-subtotal-row td {
+  background: color-mix(in srgb, var(--sidebar-border) 30%, var(--card-bg));
+  border-top: 1px solid var(--sidebar-border);
+  border-bottom: 2px solid var(--sidebar-border);
+  padding: 0.4rem 1rem;
+}
+
+.f-subtotal-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.f-subtotal-val {
+  font-weight: 800 !important;
+  color: var(--text-color) !important;
+}
+
+/* ── Total geral (tfoot) ── */
+.f-grand-total td {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  border-top: 2px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  padding: 0.65rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+}
+
+.f-grand-total .f-val {
+  color: var(--primary-color) !important;
+  font-size: 0.88rem;
+}
+
 /* Ranking Panel */
 .falecidos-ranking-panel {
   background: var(--card-bg);
   border: 1px solid var(--sidebar-border);
   border-radius: 10px;
   padding: 1rem;
-  position: sticky;
-  top: 1rem;
+  margin-top: 1.5rem;
 }
 
 .ranking-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
 }
 
 .ranking-item {

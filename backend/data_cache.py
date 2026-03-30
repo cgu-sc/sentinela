@@ -17,6 +17,7 @@ _CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
 _PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
 _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet")
 _REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_rede_estabelecimentos.parquet")
+_MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_matriz_risco.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -25,6 +26,7 @@ if not os.path.exists(_CACHE_DIR):
 _df_movimentacao: pl.DataFrame | None = None
 _df_localidades: pl.DataFrame | None = None
 _df_rede: pl.DataFrame | None = None
+_df_matriz_risco: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 
@@ -64,6 +66,15 @@ def _sync_rede(engine):
         pl.col("flag_grandes_redes").cast(pl.Categorical),
     ])
     _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="lz4")
+
+def _sync_matriz_risco(engine):
+    """Tarefa 4: Sincroniza a matriz de risco consolidada por CNPJ."""
+    global _df_matriz_risco
+    print("Sincronizando Matriz de Risco Consolidada...")
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]"
+    pdf = pd.read_sql(sql, engine)
+    _df_matriz_risco = pl.from_pandas(pdf)
+    _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="lz4")
 
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
@@ -119,7 +130,7 @@ def _sync_movimentacao(engine, progress_callback):
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _cache_progress, _cache_status
     import time
 
     # 1. Boot Rápido (Se os arquivos já existem)
@@ -135,6 +146,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 _df_movimentacao = pl.read_parquet(_PARQUET_PATH)
                 _df_localidades  = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
                 _df_rede         = pl.read_parquet(_REDE_PARQUET_PATH)
+                if os.path.exists(_MATRIZ_PARQUET_PATH):
+                    _df_matriz_risco = pl.read_parquet(_MATRIZ_PARQUET_PATH)
                 _cache_progress = 100
                 _cache_status = "ready"
                 print("🚀 Caches carregados via Parquet.")
@@ -150,9 +163,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
     # 2. Sincronização Inteligente (Task-Based)
     # Para adicionar mais parquets, basta incluir na lista abaixo!
     TASKS = [
-        {"name": "Localidades",           "status": "fetching_geo",  "func": lambda: _sync_localidades(engine)},
-        {"name": "Rede Estabelecimentos", "status": "fetching_rede", "func": lambda: _sync_rede(engine)},
-        {"name": "Movimentação",          "status": "fetching_data", "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Localidades",           "status": "fetching_geo",    "func": lambda: _sync_localidades(engine)},
+        {"name": "Rede Estabelecimentos", "status": "fetching_rede",   "func": lambda: _sync_rede(engine)},
+        {"name": "Matriz de Risco",       "status": "fetching_matriz", "func": lambda: _sync_matriz_risco(engine)},
+        {"name": "Movimentação",          "status": "fetching_data",   "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -208,6 +222,11 @@ def get_localidades_df() -> pl.DataFrame:
     if _df_localidades is None:
         raise RuntimeError("Cache de Localidades não carregado. Verifique a sincronização.")
     return _df_localidades
+
+def get_df_matriz_risco() -> pl.DataFrame:
+    if _df_matriz_risco is None:
+        raise RuntimeError("Cache de Matriz de Risco não carregado. Execute uma sincronização.")
+    return _df_matriz_risco
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 class AnalyticsKPISchema(BaseModel):
     id: str
@@ -97,3 +97,16 @@ class FatorRiscoBucketSchema(BaseModel):
 class FatorRiscoResponseSchema(BaseModel):
     periodo_formatado: str
     buckets: List[FatorRiscoBucketSchema]
+
+class IndicadorDataSchema(BaseModel):
+    valor: Optional[float] = None
+    med_reg: Optional[float] = None
+    med_uf: Optional[float] = None
+    med_br: Optional[float] = None
+    risco_reg: Optional[float] = None
+    risco_uf: Optional[float] = None
+    risco_br: Optional[float] = None
+
+class IndicadoresResponse(BaseModel):
+    cnpj: str
+    indicadores: Dict[str, IndicadorDataSchema]

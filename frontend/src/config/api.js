@@ -6,7 +6,8 @@ export const API_ENDPOINTS = {
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
   targetsSummary:       `${BASE_URL}/api/v1/targets/summary`,
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
-  analyticsEvolucao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,
+  analyticsEvolucao:    (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,
+  analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,
 };

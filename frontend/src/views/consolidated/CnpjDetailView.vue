@@ -7,8 +7,9 @@ import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useEvolucaoFinanceira } from '@/composables/useEvolucaoFinanceira';
+import { useIndicadores } from '@/composables/useIndicadores';
 import { useChartTheme } from '@/config/chartTheme';
-import { RISK_COLORS, RISK_THRESHOLDS } from '@/config/riskConfig';
+import { RISK_COLORS, RISK_THRESHOLDS, INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
@@ -66,6 +67,32 @@ const { getRiskSeverity, getRiskLabel, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
+const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
+
+// ── Helpers de indicadores ────────────────────────────────
+function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
+  const t = INDICATOR_THRESHOLDS[thresholdKey] ?? INDICATOR_THRESHOLDS.default;
+  const r = riscoUf != null ? Math.round(riscoUf * 10) / 10 : null;
+  if (r == null) return { label: 'SEM DADOS', color: 'var(--text-muted)', severity: 'secondary' };
+  if (r >= t.critico) return { label: 'CRÍTICO',  color: RISK_COLORS.CRITICAL, severity: 'danger'  };
+  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: RISK_COLORS.MEDIUM,   severity: 'warning' };
+  return                      { label: 'NORMAL',   color: RISK_COLORS.LOW,      severity: 'success' };
+}
+
+function formatIndicadorValue(valor, formato) {
+  if (valor == null) return '—';
+  if (formato === 'pct')  return valor.toFixed(2) + '%';
+  if (formato === 'pct3') return valor.toFixed(3) + '%';
+  if (formato === 'val')  return formatCurrencyFull(valor);
+  return valor.toFixed(2);
+}
+
+function riscoPillStyle(risco, thresholdKey = 'default') {
+  const s = getIndicadorStatus(risco, thresholdKey);
+  // CRITICAL usa a cor HIGH (vermelho vivo) para garantir leitura no dark mode
+  const c = s.color === RISK_COLORS.CRITICAL ? RISK_COLORS.HIGH : s.color;
+  return { background: c + '28', color: c };
+}
 
 // ── Dados do CNPJ ─────────────────────────────────────────
 const cnpjData = computed(() =>
@@ -317,7 +344,7 @@ const areaOption = computed(() => {
             class="localidade-link"
             @click="navigateWithFilter('regiao')"
             v-tooltip.bottom="'Filtrar por esta Região de Saúde'"
-          >{{ geoData.no_regiao_saude }}</span>
+          >Região de Saúde: {{ geoData.no_regiao_saude }}</span>
           <span v-if="geoData?.nu_populacao" class="localidade-sep">|</span>
           <i v-if="geoData?.nu_populacao" class="pi pi-users" />
           <span v-if="geoData?.nu_populacao">{{ formatPopulacao(geoData.nu_populacao) }}</span>
@@ -348,7 +375,10 @@ const areaOption = computed(() => {
     <!-- TABS -->
     <TabView
       class="detail-tabs"
-      @tab-change="(e) => { if (e.index === TAB_INDEX.EVOLUCAO) fetchEvolucao(cnpj); }"
+      @tab-change="(e) => {
+        if (e.index === TAB_INDEX.EVOLUCAO)    fetchEvolucao(cnpj);
+        if (e.index === TAB_INDEX.INDICADORES) fetchIndicadores(cnpj);
+      }"
     >
 
       <TabPanel>
@@ -489,9 +519,110 @@ const areaOption = computed(() => {
 
       <TabPanel>
         <template #header><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template>
-        <div class="tab-content tab-placeholder">
-          <i class="pi pi-gauge placeholder-icon" />
-          <p>Tabela de indicadores de risco comparados com medianas será exibida aqui.</p>
+        <div class="tab-content indicadores-tab">
+
+          <div v-if="indicadoresLoading" class="tab-placeholder">
+            <i class="pi pi-spin pi-spinner placeholder-icon" />
+            <p>Carregando indicadores...</p>
+          </div>
+
+          <div v-else-if="indicadoresLoaded && !Object.keys(indicadoresData?.indicadores ?? {}).length" class="tab-placeholder">
+            <i class="pi pi-inbox placeholder-icon" />
+            <p>Nenhum indicador encontrado para este CNPJ.</p>
+          </div>
+
+          <template v-else-if="indicadoresLoaded">
+            <div class="ind-table-wrap">
+              <table class="ind-table">
+                <colgroup>
+                  <col style="width:28%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                  <col style="width:9%" />
+                </colgroup>
+                <thead class="ind-thead">
+                  <tr>
+                    <th>Indicador</th>
+                    <th>Farmácia</th>
+                    <th>Mediana Região</th>
+                    <th>Mediana UF</th>
+                    <th>Mediana BR</th>
+                    <th>Risco Região</th>
+                    <th>Risco UF</th>
+                    <th>Risco BR</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-for="grupo in INDICATOR_GROUPS" :key="grupo.id">
+                    <tr class="ind-group-row">
+                      <td colspan="9">{{ grupo.label }}</td>
+                    </tr>
+                    <tr
+                      v-for="ind in grupo.indicators"
+                      :key="ind.key"
+                      class="ind-data-row"
+                    >
+                      <td class="ind-nome-cell">
+                        <div class="ind-nome-inner">
+                          <span>{{ ind.label }}</span>
+                          <i
+                            class="pi pi-info-circle ind-info-icon"
+                            v-tooltip.right="{ value: ind.metodologia, class: 'ind-tooltip' }"
+                          />
+                        </div>
+                      </td>
+
+                      <template v-if="indicadoresData.indicadores[ind.key]?.valor != null">
+                        <td class="ind-val-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
+                        <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
+                        <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</td>
+                        <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</td>
+                        <td class="ind-risco-cell">
+                          <span
+                            class="ind-risco-pill"
+                            :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
+                          >{{ indicadoresData.indicadores[ind.key].risco_reg != null ? indicadoresData.indicadores[ind.key].risco_reg.toFixed(1) + 'x' : '—' }}</span>
+                        </td>
+                        <td class="ind-risco-cell">
+                          <span
+                            class="ind-risco-pill"
+                            :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)"
+                          >{{ indicadoresData.indicadores[ind.key].risco_uf != null ? indicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
+                        </td>
+                        <td class="ind-risco-cell">
+                          <span
+                            class="ind-risco-pill"
+                            :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)"
+                          >{{ indicadoresData.indicadores[ind.key].risco_br != null ? indicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
+                        </td>
+                        <td class="ind-status-cell">
+                          <span
+                            class="ind-status-pill"
+                            :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)"
+                          >{{ getIndicadorStatus(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey).label }}</span>
+                        </td>
+                      </template>
+                      <template v-else>
+                        <td colspan="8" class="ind-sem-dados">SEM DADOS</td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <div v-else class="tab-placeholder">
+            <i class="pi pi-shield placeholder-icon" />
+            <p>Clique na aba para carregar os indicadores.</p>
+          </div>
+
         </div>
       </TabPanel>
 
@@ -812,4 +943,134 @@ const areaOption = computed(() => {
 .trend-up      { color: v-bind('RISK_COLORS.HIGH'); }
 .trend-down    { color: v-bind('RISK_COLORS.LOW'); }
 .trend-neutral { color: var(--text-muted); font-weight: 400; }
+
+/* ── INDICADORES ─────────────────────────────────────── */
+.indicadores-tab {
+  padding: 0;
+}
+
+.ind-table-wrap {
+  overflow-x: auto;
+}
+
+.ind-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+/* Cabeçalho fixo */
+.ind-thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: center;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--primary-color, #3b82f6) 14%, var(--card-bg));
+  color: var(--text-primary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 2px solid var(--primary-color, #3b82f6);
+  white-space: nowrap;
+}
+
+.ind-thead th:first-child { text-align: left; }
+
+/* Linha de grupo */
+.ind-group-row td {
+  padding: 0.4rem 1rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--sidebar-border) 60%, var(--card-bg));
+  border-top: 1px solid var(--sidebar-border);
+  border-left: 3px solid color-mix(in srgb, var(--primary-color, #3b82f6) 50%, transparent);
+}
+
+/* Linha de dados */
+.ind-data-row td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--sidebar-border);
+  vertical-align: middle;
+  text-transform: none;
+}
+
+.ind-data-row:hover td {
+  background: color-mix(in srgb, var(--card-bg) 70%, var(--sidebar-border));
+}
+
+/* Célula do nome */
+.ind-nome-cell {
+  font-weight: 500;
+}
+
+.ind-nome-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+/* Células de valor e mediana */
+.ind-val-cell {
+  text-align: center;
+  font-weight: 700;
+}
+
+.ind-med-cell {
+  text-align: center;
+}
+
+/* Células de risco */
+.ind-risco-cell {
+  text-align: center;
+}
+
+.ind-risco-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 3.2rem;
+  text-align: center;
+}
+
+/* Célula de status */
+.ind-status-cell { text-align: center; }
+
+.ind-status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Info icon */
+.ind-info-icon {
+  font-size: 0.7rem;
+  opacity: 0.4;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.ind-info-icon:hover { opacity: 1; }
+
+/* Sem dados */
+.ind-sem-dados {
+  text-align: center;
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.5rem;
+}
 </style>

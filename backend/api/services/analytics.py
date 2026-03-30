@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df, get_rede_df, get_localidades_df
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -16,6 +16,8 @@ from ..schemas.analytics import (
     FatorRiscoBucketSchema,
     EvolucaoSemestreSchema,
     EvolucaoFinanceiraResponse,
+    IndicadorDataSchema,
+    IndicadoresResponse,
 )
 
 class AnalyticsService:
@@ -311,6 +313,59 @@ class AnalyticsService:
             print(f"❌ ERRO AO CALCULAR EVOLUÇÃO FINANCEIRA: {e}")
             print(traceback.format_exc())
             return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
+
+    @staticmethod
+    def get_indicadores(cnpj: str) -> IndicadoresResponse:
+        """Retorna os 18 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
+        MAPPING = {
+            'auditado':              ('pct_auditado',              'med_auditado_reg',             'med_auditado_uf',             'med_auditado_br',             'risco_auditado_reg',             'risco_auditado_uf',             'risco_auditado_br'),
+            'falecidos':             ('pct_falecidos',             'med_falecidos_reg',            'med_falecidos_uf',            'med_falecidos_br',            'risco_falecidos_reg',            'risco_falecidos_uf',            'risco_falecidos_br'),
+            'clinico':               ('pct_clinico',               'med_clinico_reg',              'med_clinico_uf',              'med_clinico_br',              'risco_clinico_reg',              'risco_clinico_uf',              'risco_clinico_br'),
+            'teto':                  ('pct_teto',                  'med_teto_reg',                 'med_teto_uf',                 'med_teto_br',                 'risco_teto_reg',                 'risco_teto_uf',                 'risco_teto_br'),
+            'polimedicamento':       ('pct_polimedicamento',       'med_polimedicamento_reg',      'med_polimedicamento_uf',      'med_polimedicamento_br',      'risco_polimedicamento_reg',      'risco_polimedicamento_uf',      'risco_polimedicamento_br'),
+            'media_itens':           ('val_media_itens',           'med_media_itens_reg',          'med_media_itens_uf',          'med_media_itens_br',          'risco_media_itens_reg',          'risco_media_itens_uf',          'risco_media_itens_br'),
+            'ticket':                ('val_ticket_medio',          'med_ticket_reg',               'med_ticket_uf',               'med_ticket_br',               'risco_ticket_reg',               'risco_ticket_uf',               'risco_ticket_br'),
+            'receita_paciente':      ('val_receita_paciente',      'med_receita_paciente_reg',     'med_receita_paciente_uf',     'med_receita_paciente_br',     'risco_receita_paciente_reg',     'risco_receita_paciente_uf',     'risco_receita_paciente_br'),
+            'per_capita':            ('val_per_capita',            'med_per_capita_reg',           'med_per_capita_uf',           'med_per_capita_br',           'risco_per_capita_reg',           'risco_per_capita_uf',           'risco_per_capita_br'),
+            'alto_custo':            ('pct_alto_custo',            'med_alto_custo_reg',           'med_alto_custo_uf',           'med_alto_custo_br',           'risco_alto_custo_reg',           'risco_alto_custo_uf',           'risco_alto_custo_br'),
+            'vendas_rapidas':        ('pct_vendas_rapidas',        'med_vendas_rapidas_reg',       'med_vendas_rapidas_uf',       'med_vendas_rapidas_br',       'risco_vendas_rapidas_reg',       'risco_vendas_rapidas_uf',       'risco_vendas_rapidas_br'),
+            'volume_atipico':        ('val_volume_atipico',        'med_volume_atipico_reg',       'med_volume_atipico_uf',       'med_volume_atipico_br',       'risco_volume_atipico_reg',       'risco_volume_atipico_uf',       'risco_volume_atipico_br'),
+            'recorrencia_sistemica': ('pct_recorrencia_sistemica', 'med_recorrencia_sistemica_reg','med_recorrencia_sistemica_uf','med_recorrencia_sistemica_br','risco_recorrencia_sistemica_reg','risco_recorrencia_sistemica_uf','risco_recorrencia_sistemica_br'),
+            'pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
+            'geografico':            ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
+            'pacientes_unicos':      ('pct_pacientes_unicos',      'med_pacientes_unicos_reg',     'med_pacientes_unicos_uf',     'med_pacientes_unicos_br',     'risco_pacientes_unicos_reg',     'risco_pacientes_unicos_uf',     'risco_pacientes_unicos_br'),
+            'hhi_crm':               ('val_hhi_crm',               'avg_hhi_crm_reg',              'avg_hhi_crm_uf',              'avg_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
+            'exclusividade_crm':     ('pct_exclusividade_crm',     'med_exclusividade_crm_reg',    'med_exclusividade_crm_uf',    'med_exclusividade_crm_br',    'risco_exclusividade_crm_reg',    'risco_exclusividade_crm_uf',    'risco_exclusividade_crm_br'),
+            'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
+        }
+        try:
+            df = get_df_matriz_risco()
+            rows = df.filter(pl.col("cnpj") == cnpj)
+            if rows.is_empty():
+                return IndicadoresResponse(cnpj=cnpj, indicadores={})
+            row = rows.row(0, named=True)
+
+            def _f(v):
+                return float(v) if v is not None else None
+
+            indicadores = {
+                key: IndicadorDataSchema(
+                    valor=_f(row.get(c_val)),
+                    med_reg=_f(row.get(c_mr)),
+                    med_uf=_f(row.get(c_mu)),
+                    med_br=_f(row.get(c_mb)),
+                    risco_reg=_f(row.get(c_rr)),
+                    risco_uf=_f(row.get(c_ru)),
+                    risco_br=_f(row.get(c_rb)),
+                )
+                for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in MAPPING.items()
+            }
+            return IndicadoresResponse(cnpj=cnpj, indicadores=indicadores)
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO BUSCAR INDICADORES: {e}")
+            print(traceback.format_exc())
+            return IndicadoresResponse(cnpj=cnpj, indicadores={})
 
     @staticmethod
     def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None) -> FatorRiscoResponseSchema:

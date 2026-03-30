@@ -2,16 +2,39 @@ USE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
--- SCRIPT: Matriz de Risco Final - Versão 5.5 (VISUAL REAL / CÁLCULO CAPADO)
--- OBJETIVO: Consolidação, Score de Risco, Rankings e Classificação
--- MUDANÇAS:
---   1. Visualização: Mostra o Risco Relativo REAL (ex: 34x) na tabela final.
---   2. Cálculo: Aplica TETO DE 10x internamente apenas para calcular o Score e Multiplicadores.
---   3. Mantém a lógica de "Sem Dados" (NULL) nas colunas originais.
+-- SCRIPT: Matriz de Risco Final - Versão 6.0 (MASTER: MÉDIA PONDERADA COM PESOS CONFIGURÁVEIS)
+-- OBJETIVO: Consolidação, Score de Risco Ponderado, Rankings e Classificação
+-- MUDANÇAS V6.0:
+--   1. Pesos Dinâmicos: Variáveis no topo permitem ajustar o impacto de cada indicador.
+--   2. Média Ponderada Real: O score é calculado considerando o peso dos indicadores disponíveis.
+--   3. Mantém agravantes de severidade interna (multiplicadores 3x, 5x, etc).
 -- ==========================================================================================
 
 SET NOCOUNT ON;
-PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V5.5...';
+PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V6.0 (PONDERADA)...';
+
+-- ============================================================================
+-- MATRIZ DE PESOS (0.1 a 5.0) - AJUSTE A IMPORTÂNCIA DE CADA INDICADOR AQUI
+-- ============================================================================
+DECLARE @PESO_FALECIDOS                      FLOAT = 2.5; 
+DECLARE @PESO_AUDITORIA_NAO_COMPROVACAO      FLOAT = 5.0; -- Peso Máximo
+DECLARE @PESO_RECORRENCIA_HORARIOS_SISTEMICA FLOAT = 2.0; 
+DECLARE @PESO_PACIENTES_UNICOS_FANTASMA      FLOAT = 1.0; 
+DECLARE @PESO_CRMS_IRREGULARES               FLOAT = 0.5; 
+DECLARE @PESO_INCONSISTENCIA_CLINICA         FLOAT = 1.5; 
+DECLARE @PESO_POLIMEDICAMENTO                FLOAT = 1.5; 
+DECLARE @PESO_ESTOURO_TETO                   FLOAT = 1.0; 
+DECLARE @PESO_ALTO_CUSTO                     FLOAT = 1.5; 
+DECLARE @PESO_VOLUME_ATIPICO                 FLOAT = 2.5; 
+DECLARE @PESO_DISTANCIA_GEOGRAFICA           FLOAT = 1.0; 
+DECLARE @PESO_RECEITA_POR_PACIENTE           FLOAT = 1.0; 
+DECLARE @PESO_VALOR_PER_CAPITA               FLOAT = 1.0; 
+DECLARE @PESO_EXCLUSIVIDADE_CRM              FLOAT = 0.5; 
+DECLARE @PESO_CONCENTRACAO_CRM_HHI           FLOAT = 0.5; 
+DECLARE @PESO_CONCENTRACAO_PICO              FLOAT = 1.0; 
+DECLARE @PESO_VENDAS_CONSECUTIVAS_RAPIDAS    FLOAT = 2.0; 
+DECLARE @PESO_MEDIA_ITENS                    FLOAT = 1.0; 
+DECLARE @PESO_TICKET_MEDIO                   FLOAT = 1.0;
 
 -- 1. LIMPEZA DE AMBIENTE
 IF OBJECT_ID('temp_CGUSC.fp.matriz_risco_consolidada', 'U') IS NOT NULL
@@ -379,20 +402,57 @@ RiscosAjustados AS (
     FROM IndicadoresPresenca
 ),
 
--- 4. CTE 3: CONSOLIDAÇÃO DOS RISCOS (SOMA)
+-- 4. CTE 3: CONSOLIDAÇÃO DOS RISCOS (SOMA PONDERADA V6.0)
 ScoreCalculado AS (
     SELECT 
         *,
         CAST(qtd_indicadores_preenchidos * 100.0 / 19.0 AS DECIMAL(5,2)) AS pct_completude,
         
-        -- Soma dos riscos ajustados (JÁ COM TETO APLICADO NA ETAPA ANTERIOR)
-        (risco_falecidos_ajustado + risco_clinico_ajustado + risco_teto_ajustado +
-         risco_polimedicamento_ajustado + risco_media_itens_ajustado + risco_ticket_ajustado +
-         risco_receita_paciente_ajustado + risco_per_capita_ajustado + risco_vendas_rapidas_ajustado +
-         risco_volume_atipico_ajustado + risco_geografico_ajustado + risco_alto_custo_ajustado +
-         risco_pico_ajustado + risco_pacientes_unicos_ajustado + risco_crm_ajustado +
-         risco_exclusividade_crm_ajustado + risco_crms_irregulares_ajustado + risco_recorrencia_sistemica_ajustado + risco_auditado_ajustado
-        ) AS soma_riscos_ajustados,
+        -- SOMA PONDERADA: Multiplica cada risco ajustado pelo seu peso configurado no topo
+        (
+            (risco_falecidos_ajustado * @PESO_FALECIDOS) +
+            (risco_clinico_ajustado * @PESO_INCONSISTENCIA_CLINICA) +
+            (risco_teto_ajustado * @PESO_ESTOURO_TETO) +
+            (risco_polimedicamento_ajustado * @PESO_POLIMEDICAMENTO) +
+            (risco_media_itens_ajustado * @PESO_MEDIA_ITENS) +
+            (risco_ticket_ajustado * @PESO_TICKET_MEDIO) +
+            (risco_receita_paciente_ajustado * @PESO_RECEITA_POR_PACIENTE) +
+            (risco_per_capita_ajustado * @PESO_VALOR_PER_CAPITA) +
+            (risco_vendas_rapidas_ajustado * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+            (risco_volume_atipico_ajustado * @PESO_VOLUME_ATIPICO) +
+            (risco_geografico_ajustado * @PESO_DISTANCIA_GEOGRAFICA) +
+            (risco_alto_custo_ajustado * @PESO_ALTO_CUSTO) +
+            (risco_pico_ajustado * @PESO_CONCENTRACAO_PICO) +
+            (risco_pacientes_unicos_ajustado * @PESO_PACIENTES_UNICOS_FANTASMA) +
+            (risco_crm_ajustado * @PESO_CONCENTRACAO_CRM_HHI) +
+            (risco_exclusividade_crm_ajustado * @PESO_EXCLUSIVIDADE_CRM) +
+            (risco_crms_irregulares_ajustado * @PESO_CRMS_IRREGULARES) +
+            (risco_recorrencia_sistemica_ajustado * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+            (risco_auditado_ajustado * @PESO_AUDITORIA_NAO_COMPROVACAO)
+        ) AS soma_riscos_ponderada,
+
+        -- SOMA DOS PESOS DISPONÍVEIS: Soma apenas os pesos dos indicadores que a farmácia possui dado
+        (
+            (tem_falecidos * @PESO_FALECIDOS) +
+            (tem_clinico * @PESO_INCONSISTENCIA_CLINICA) +
+            (tem_teto * @PESO_ESTOURO_TETO) +
+            (tem_polimedicamento * @PESO_POLIMEDICAMENTO) +
+            (tem_media_itens * @PESO_MEDIA_ITENS) +
+            (tem_ticket * @PESO_TICKET_MEDIO) +
+            (tem_receita_paciente * @PESO_RECEITA_POR_PACIENTE) +
+            (tem_per_capita * @PESO_VALOR_PER_CAPITA) +
+            (tem_vendas_rapidas * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+            (tem_volume_atipico * @PESO_VOLUME_ATIPICO) +
+            (tem_geografico * @PESO_DISTANCIA_GEOGRAFICA) +
+            (tem_alto_custo * @PESO_ALTO_CUSTO) +
+            (tem_pico * @PESO_CONCENTRACAO_PICO) +
+            (tem_fantasma * @PESO_PACIENTES_UNICOS_FANTASMA) +
+            (tem_crm * @PESO_CONCENTRACAO_CRM_HHI) +
+            (tem_exclusividade_crm * @PESO_EXCLUSIVIDADE_CRM) +
+            (tem_crms_irregulares * @PESO_CRMS_IRREGULARES) +
+            (tem_recorrencia_sistemica * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+            (tem_auditado * @PESO_AUDITORIA_NAO_COMPROVACAO)
+        ) AS soma_pesos_disponiveis,
         
         -- Contagem de flags críticos
         (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
@@ -405,20 +465,20 @@ ScoreCalculado AS (
     FROM RiscosAjustados
 ),
 
--- 5. CTE 4: CÁLCULO DOS SCORES FINAIS
+-- 5. CTE 4: CÁLCULO DOS SCORES FINAIS PONDERADOS
 ScoreCalculadoFim AS (
     SELECT
         *,
-        -- Score Base
+        -- Score Ponderado Base (Média Ponderada Real)
         CAST(
-            CASE WHEN qtd_indicadores_preenchidos > 0 
-            THEN soma_riscos_ajustados / 19.0 ELSE 0 END 
+            CASE WHEN soma_pesos_disponiveis > 0 
+            THEN soma_riscos_ponderada / soma_pesos_disponiveis ELSE 0 END 
         AS DECIMAL(18,4)) AS SCORE_BASE,
 
-        -- Score Final (com bônus de reincidência aplicados)
+        -- Score Final (com bônus de reincidência aplicados sobre a média ponderada)
         CAST(
-            CASE WHEN qtd_indicadores_preenchidos > 0 THEN
-                (soma_riscos_ajustados / (qtd_indicadores_preenchidos * 1.0)) *
+            CASE WHEN soma_pesos_disponiveis > 0 THEN
+                (soma_riscos_ponderada / soma_pesos_disponiveis) *
                 CASE 
                     WHEN qtd_indicadores_criticos >= 5 THEN 4.0
                     WHEN qtd_indicadores_criticos >= 3 THEN 2.0

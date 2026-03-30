@@ -998,17 +998,18 @@ const areaOption = computed(() => {
 
 /* ── INDICADORES ─────────────────────────────────────── */
 .indicadores-tab {
-  padding: 0;
+  padding: 1rem 0 0;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
 }
 
 /* Resumo de auditoria */
 .audit-summary {
-  border-top: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 25%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 25%, transparent);
+  border: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 30%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 6%, var(--card-bg));
-  margin: 1rem 0;
+  overflow: hidden;
 }
 
 .audit-summary-header {
@@ -1077,7 +1078,10 @@ const areaOption = computed(() => {
 }
 
 .ind-table-wrap {
-  overflow-x: auto;
+  overflow: hidden;
+  border-top: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--sidebar-border);
+  border-radius: 10px;
 }
 
 .ind-table {

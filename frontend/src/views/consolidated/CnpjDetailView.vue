@@ -1916,6 +1916,10 @@ const areaOption = computed(() => {
   border-radius: 12px !important;
 }
 
+.multi-cnpj-content {
+  padding: 0.5rem 0.25rem;
+}
+
 .multi-cnpj-panel::before, .multi-cnpj-panel::after {
   display: none !important; /* Remove a seta padrão para um look mais clean */
 }
@@ -1942,11 +1946,11 @@ const areaOption = computed(() => {
 
 .multi-list {
   list-style: none;
-  padding: 0;
+  padding: 0.75rem 1rem 1rem;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.6rem;
 }
 
 .multi-item {
@@ -2219,7 +2223,7 @@ const areaOption = computed(() => {
 
 .ranking-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.75rem;
   margin-top: 0.75rem;
 }
@@ -2306,6 +2310,13 @@ const areaOption = computed(() => {
 .r-label {
   font-size: 0.62rem;
   color: var(--text-secondary);
+}
+
+.r-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
 }
 
 .r-progress-bg {

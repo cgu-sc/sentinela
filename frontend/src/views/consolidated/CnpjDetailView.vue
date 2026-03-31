@@ -253,13 +253,14 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
-  font-size: 0.78rem;
+  font-size: 0.82rem; /* Leve redução para maior equilíbrio */
   font-weight: 700;
-  padding: 0.65rem 1.25rem;
+  padding: 0.55rem 1.1rem; /* Mais compacto também no respiro horizontal */
   gap: 0.5rem;
   transition: all 0.2s;
   color: var(--text-secondary) !important;
-  text-transform: none !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em;
 }
 
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {

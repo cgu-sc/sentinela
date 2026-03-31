@@ -64,7 +64,7 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     conexao_ms: Optional[str] = "Inativa"
     is_matriz: Optional[bool] = False
     id_ibge7: Optional[int] = None
-    score_risco: Optional[float] = None
+    score_risco_final: Optional[float] = None
     classificacao_risco: Optional[str] = None
     data_ultima_venda: Optional[date] = None
     municipio: Optional[str] = None

@@ -215,7 +215,8 @@ class AnalyticsService:
                     get_df_matriz_risco()
                     .select([
                         "cnpj", "rank_nacional", "total_nacional", "rank_uf", "total_uf",
-                        "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio"
+                        "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio",
+                        "score_risco_final", "classificacao_risco"
                     ])
                 )
                 cnpj_df = cnpj_df.join(risco_df, on="cnpj", how="left")

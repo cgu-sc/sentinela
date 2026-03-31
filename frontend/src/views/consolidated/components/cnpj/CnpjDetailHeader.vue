@@ -1,6 +1,6 @@
 <script setup>
 import { useRouter } from "vue-router";
-import { ref, computed } from "vue";
+import { ref, computed, watchEffect } from "vue";
 import { useFilterStore } from "@/stores/filters";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
@@ -15,6 +15,15 @@ const props = defineProps({
   cnpj: { type: String, required: true },
   cnpjData: { type: Object, default: null },
   geoData: { type: Object, default: null },
+});
+
+// DEBUG: Identificando o campo correto do score
+watchEffect(() => {
+  if (props.cnpjData) {
+    console.log('DEBUG [CnpjDetailHeader]: Chaves disponíveis no objeto:', Object.keys(props.cnpjData));
+    console.log('DEBUG [CnpjDetailHeader]: score_risco_final:', props.cnpjData.score_risco_final);
+    console.log('DEBUG [CnpjDetailHeader]: classificacao_risco:', props.cnpjData.classificacao_risco);
+  }
 });
 
 const copied = ref(false);
@@ -90,9 +99,10 @@ const formatCnpj = (v) => {
           <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
         </div>
 
-        <div v-if="cnpjData.score_final != null" class="score-badge-new" v-tooltip.top="'Score de Risco Consolidado'">
+        <!-- Corrigido para score_risco_final conforme Matriz Consolidada -->
+        <div v-if="cnpjData.score_risco_final != null" class="score-badge-new" v-tooltip.top="'Score de Risco Consolidado'">
           <span class="score-label">Score</span>
-          <span class="score-val">{{ cnpjData.score_final.toFixed(1) }}</span>
+          <span class="score-val">{{ cnpjData.score_risco_final.toFixed(1) }}</span>
         </div>
 
         <span
@@ -104,7 +114,7 @@ const formatCnpj = (v) => {
           ]"
         >
           <i class="pi pi-exclamation-triangle" />
-          Risco {{ getRiskLabel(risco) }}
+          Risco {{ cnpjData.classificacao_risco ?? getRiskLabel(risco) }}
         </span>
       </div>
     </div>
@@ -349,7 +359,7 @@ const formatCnpj = (v) => {
 }
 
 .razao-social-new {
-  font-size: 1.75rem;
+  font-size: 1.4rem; /* Leve redução para um look mais compacto */
   font-weight: 800;
   margin: 0;
   line-height: 1.1;

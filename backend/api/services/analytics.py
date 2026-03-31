@@ -24,6 +24,9 @@ from ..schemas.analytics import (
     FalecidosResponse,
     TimelineEventSchema,
     MultiCnpjTimelineResponse,
+    RegionalMunicipioSchema,
+    RegionalFarmaciaSchema,
+    RegionalResponse,
 )
 
 class AnalyticsService:
@@ -675,3 +678,152 @@ class AnalyticsService:
             )
         except Exception as e:
             return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
+
+    @staticmethod
+    def get_regional_data(regiao_saude: str) -> RegionalResponse:
+        """
+        Constrói o payload completo da aba 'Região de Saúde'.
+
+        Args:
+            regiao_saude: Nome da Região de Saúde (filtro da sidebar, ex: 'GRANDE FLORIANOPOLIS').
+
+        Returns:
+            RegionalResponse com resumo de municípios e ranking de farmácias.
+        """
+        try:
+            df_mov   = get_df()
+            df_loc   = get_localidades_df()
+            df_risco = get_df_matriz_risco()
+
+            # ── Filtra movimentação para a região ───────────────────────────────
+            df_reg = df_mov.filter(pl.col("no_regiao_saude") == regiao_saude)
+
+            if df_reg.is_empty():
+                return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+
+            # ── 1. Resumo por Município ─────────────────────────────────────────
+            # Agrega CNPJs únicos e valores financeiros por município
+            mun_agg = (
+                df_reg
+                .group_by(["no_municipio", "uf"])
+                .agg([
+                    pl.n_unique("cnpj").alias("qtd_farmacias"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                ])
+            )
+
+            # Enriquece com população do IBGE (localidades_df)
+            loc_pop = df_loc.select(["no_municipio", "sg_uf", "id_regiao_saude", "nu_populacao"]).unique()
+            mun_enriched = mun_agg.join(
+                loc_pop,
+                left_on=["no_municipio", "uf"],
+                right_on=["no_municipio", "sg_uf"],
+                how="left"
+            ).with_columns([
+                pl.col("nu_populacao").fill_null(0).alias("populacao"),
+                (
+                    pl.col("nu_populacao").fill_null(0).cast(pl.Float64) /
+                    pl.when(pl.col("qtd_farmacias") > 0)
+                    .then(pl.col("qtd_farmacias").cast(pl.Float64))
+                    .otherwise(pl.lit(1.0))
+                ).round(2).alias("densidade"),
+            ]).sort("no_municipio")
+
+            # Pega o id_regiao_saude a partir da primeira ocorrência
+            id_regiao: str | None = None
+            if not loc_pop.filter(pl.col("no_municipio").is_in(mun_agg["no_municipio"])).is_empty():
+                id_row = loc_pop.filter(
+                    pl.col("no_municipio").is_in(mun_agg["no_municipio"])
+                ).row(0, named=True)
+                id_regiao = str(id_row.get("id_regiao_saude", ""))
+
+            municipios = [
+                RegionalMunicipioSchema(
+                    uf=r["uf"],
+                    municipio=str(r["no_municipio"]).title(),
+                    populacao=int(r["populacao"] or 0),
+                    qtd_farmacias=int(r["qtd_farmacias"] or 0),
+                    densidade=float(r["densidade"] or 0.0),
+                )
+                for r in mun_enriched.iter_rows(named=True)
+            ]
+
+            # ── 2. Ranking de Farmácias ──────────────────────────────────────────
+            # Agrega valores financeiros acumulados por CNPJ (histórico completo)
+            cnpj_agg = (
+                df_reg
+                .group_by("cnpj")
+                .agg([
+                    pl.col("no_municipio").first().alias("municipio"),
+                    pl.col("uf").first().alias("uf"),
+                    pl.col("razao_social").first().alias("razao_social"),
+                    pl.col("conexao_ms").first().alias("conexao_ms"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                    pl.col("periodo").max().alias("data_ultima_venda"),
+                ])
+                .with_columns([
+                    (
+                        pl.col("valSemComp") /
+                        pl.when(pl.col("totalMov") > 0)
+                        .then(pl.col("totalMov"))
+                        .otherwise(pl.lit(1.0)) * 100
+                    ).round(2).alias("percValSemComp")
+                ])
+            )
+
+            # Enriquece com score e classificação de risco da matriz_risco_consolidada
+            risco_cols = ["cnpj"]
+            risco_available = []
+            for col in ["SCORE_RISCO_FINAL", "CLASSIFICACAO_RISCO"]:
+                if col in df_risco.columns:
+                    risco_available.append(col)
+                    risco_cols.append(col)
+
+            if risco_available:
+                df_risco_slim = df_risco.select(risco_cols)
+                cnpj_enriched = cnpj_agg.join(df_risco_slim, on="cnpj", how="left")
+            else:
+                cnpj_enriched = cnpj_agg.with_columns([
+                    pl.lit(None).cast(pl.Float64).alias("SCORE_RISCO_FINAL"),
+                    pl.lit(None).cast(pl.Utf8).alias("CLASSIFICACAO_RISCO"),
+                ])
+
+            # Ordena pelo score de risco (maior risco primeiro)
+            cnpj_sorted = cnpj_enriched.sort(
+                "SCORE_RISCO_FINAL", descending=True, nulls_last=True
+            ).with_columns(
+                pl.lit(range(1, cnpj_enriched.height + 1))
+                .alias("rank_")
+            )
+
+            farmacias = []
+            for i, r in enumerate(cnpj_sorted.iter_rows(named=True), start=1):
+                farmacias.append(RegionalFarmaciaSchema(
+                    cnpj=r["cnpj"],
+                    razao_social=str(r.get("razao_social") or "").title(),
+                    municipio=str(r.get("municipio") or "").title(),
+                    uf=r.get("uf"),
+                    score_risco=float(r["SCORE_RISCO_FINAL"]) if r.get("SCORE_RISCO_FINAL") is not None else None,
+                    classificacao_risco=r.get("CLASSIFICACAO_RISCO"),
+                    valSemComp=float(r.get("valSemComp") or 0.0),
+                    totalMov=float(r.get("totalMov") or 0.0),
+                    percValSemComp=float(r.get("percValSemComp") or 0.0),
+                    conexao_ms=r.get("conexao_ms"),
+                    data_ultima_venda=r.get("data_ultima_venda"),
+                    rank=i,
+                ))
+
+            return RegionalResponse(
+                nome_regiao=regiao_saude,
+                id_regiao=id_regiao,
+                municipios=municipios,
+                farmacias=farmacias,
+            )
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR DADOS REGIONAIS: {e}")
+            print(traceback.format_exc())
+            return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+

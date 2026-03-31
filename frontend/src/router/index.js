@@ -20,6 +20,7 @@ const routes = [
       { path: 'municipio', component: NationalAnalysisView },
       { path: 'empresa', component: NationalAnalysisView },
       { path: 'cnpj', component: NationalAnalysisView },
+      { path: 'regional', component: () => import('@/views/consolidated/RegionalAnalysisView.vue') },
 
       // Detalhamento de CNPJ
       { path: 'estabelecimento/:cnpj', name: 'CnpjDetail', component: () => import('@/views/consolidated/CnpjDetailView.vue') },

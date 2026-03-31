@@ -44,8 +44,8 @@
   /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
   --risk-low:      #166534;
   --risk-medium:   #b45309;
-  --risk-high:     #dc2626;
-  --risk-critical: #b91c1c;
+  --risk-high:     #ef4444; /* Vermelho puro (menos laranja) */
+  --risk-critical: #ef4444; /* Unificado com High */
 
   /* Badges de status */
   --status-info:      #1e40af;
@@ -91,8 +91,8 @@
   /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
   --risk-low:      #34d399;
   --risk-medium:   #fbbf24;
-  --risk-high:     #fb7185;
-  --risk-critical: #f87171;
+  --risk-high:     #f87171; /* Vermelho puro vibrante (Dark) */
+  --risk-critical: #f87171; /* Unificado com High */
 
   /* Badges de status */
   --status-info:      #60a5fa;

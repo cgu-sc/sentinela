@@ -6,7 +6,7 @@ from database import get_db
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
-    FalecidosResponse, MultiCnpjTimelineResponse,
+    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse,
 )
 from ..services.analytics import AnalyticsService
 
@@ -85,3 +85,13 @@ def get_cpf_timeline(
     detectados. Usado no Mapa de Trilhas Temporais (Audit History).
     """
     return AnalyticsService.get_timeline_cpf(cnpj_referencia=cnpj, cpf=cpf)
+
+@router.get("/regional", response_model=RegionalResponse)
+def get_regional(
+    regiao_saude: str = Query(..., description="Nome da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS')")
+):
+    """
+    Retorna o resumo municipal e o ranking de farmácias por risco da Região de Saúde selecionada.
+    Alimenta a aba 'Região de Saúde' no dashboard.
+    """
+    return AnalyticsService.get_regional_data(regiao_saude)

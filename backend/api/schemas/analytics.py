@@ -29,6 +29,8 @@ class ResultadoSentinelaMunicipioSchema(BaseModel):
     percQtdeSemComp: Optional[float] = 0.0
     qtdeSemComp: Optional[int] = 0
     totalQtde: Optional[int] = 0
+    populacao: Optional[int] = 0
+    densidade: Optional[float] = 0.0
 
 class ResultadoSentinelaSchema(BaseModel):
     uf: Optional[str] = None
@@ -61,6 +63,11 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     conexao_ms: Optional[str] = "Inativa"
     is_matriz: Optional[bool] = False
     id_ibge7: Optional[int] = None
+    score_risco: Optional[float] = None
+    classificacao_risco: Optional[str] = None
+    data_ultima_venda: Optional[date] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
 
 class RedeEstabelecimentoSchema(BaseModel):
     cnpj_raiz: str
@@ -77,6 +84,39 @@ class AnalyticsResponse(BaseModel):
     resultado_sentinela_uf: List[ResultadoSentinelaUFSchema]
     resultado_municipios: Optional[List[ResultadoSentinelaMunicipioSchema]] = None
     resultado_cnpjs: Optional[List[ResultadoSentinelaCnpjSchema]] = None
+
+
+class RegionalMunicipioSchema(BaseModel):
+    """Resumo de um município dentro da Região de Saúde selecionada."""
+    uf: Optional[str] = "ND"
+    municipio: Optional[str] = "ND"
+    populacao: Optional[int] = 0
+    qtd_farmacias: Optional[int] = 0
+    densidade: Optional[float] = 0.0
+
+
+class RegionalFarmaciaSchema(BaseModel):
+    """Dados de uma farmácia no ranking regional de risco."""
+    cnpj: str
+    razao_social: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+    score_risco: Optional[float] = None
+    classificacao_risco: Optional[str] = None
+    valSemComp: Optional[float] = 0.0
+    totalMov: Optional[float] = 0.0
+    percValSemComp: Optional[float] = 0.0
+    conexao_ms: Optional[str] = "Inativa"
+    data_ultima_venda: Optional[date] = None
+    rank: Optional[int] = None
+
+
+class RegionalResponse(BaseModel):
+    """Payload completo da aba Região de Saúde."""
+    nome_regiao: str
+    id_regiao: Optional[str] = None
+    municipios: List[RegionalMunicipioSchema]
+    farmacias: List[RegionalFarmaciaSchema]
 
 class EvolucaoSemestreSchema(BaseModel):
     semestre: str

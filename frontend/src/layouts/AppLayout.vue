@@ -17,6 +17,7 @@ import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import ProgressBar from 'primevue/progressbar';
+import SelectButton from 'primevue/selectbutton';
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
@@ -32,6 +33,7 @@ const tabs = computed(() => {
         return [
             { label: 'Análise UF', path: '/' },
             { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
+            { label: 'Região de Saúde', path: '/regional' },
             { label: 'Análise Município', path: '/municipio' },
             { label: 'Análise Empresa', path: '/empresa' },
             { label: 'Análise CNPJ', path: '/cnpj' }

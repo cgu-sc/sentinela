@@ -15,6 +15,11 @@ export const RISK_THRESHOLDS = {
   MEDIUM:    5,
 };
 
+/** Limiares para destaques de auditoria financeira */
+export const AUDIT_THRESHOLDS = {
+  HIGH_VALUE: 150000, // Valores acima de 150K recebem destaque especial
+};
+
 /** Paleta de cores hex associada a cada nível (para uso em ECharts e CSS via v-bind). */
 export { RISK_COLORS } from './colors.js';
 

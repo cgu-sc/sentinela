@@ -67,6 +67,17 @@ export function useFormatting() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
+  /**
+   * Converte strings em Caixa Alta para Title Case (primeira letra maiúscula).
+   * Útil para nomes geográficos ou razões sociais vindas do banco de dados.
+   * Ex: 'SÃO PAULO' -> 'São Paulo' | 'ESTABELECIMENTO LTDA' -> 'Estabelecimento Ltda'
+   * @param {string} str - Texto a ser formatado
+   */
+  const formatTitleCase = (str) => {
+    if (!str || typeof str !== 'string') return '';
+    return str.toLowerCase().replace(/(?:^|\s|-|\/)\S/g, (match) => match.toUpperCase());
+  };
+
   return {
     formatBRL,
     formatNumber,
@@ -74,6 +85,7 @@ export function useFormatting() {
     formatPercent,
     formatCurrencyFull,
     toLocalISO,
-    formatarData
+    formatarData,
+    formatTitleCase
   };
 }

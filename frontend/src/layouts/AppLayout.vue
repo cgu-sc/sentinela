@@ -32,11 +32,10 @@ const tabs = computed(() => {
     if (activeModule.value === 'consolidado') {
         return [
             { label: 'Análise UF', path: '/' },
-            { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
-            { label: 'Região de Saúde', path: '/regional' },
             { label: 'Análise Município', path: '/municipio' },
-            { label: 'Análise Empresa', path: '/empresa' },
-            { label: 'Análise CNPJ', path: '/cnpj' }
+            { label: 'Análise CNPJ', path: '/cnpj' },
+            { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
+            { label: 'Região de Saúde', path: '/regional' }
         ];
 
     } else {

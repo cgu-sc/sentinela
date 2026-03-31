@@ -22,6 +22,7 @@ class ResultadoSentinelaUFSchema(BaseModel):
 class ResultadoSentinelaMunicipioSchema(BaseModel):
     uf: Optional[str] = "ND"
     municipio: Optional[str] = "ND"
+    id_ibge7: Optional[int] = None
     cnpjs: Optional[int] = 0
     percValSemComp: Optional[float] = 0.0
     valSemComp: Optional[float] = 0.0

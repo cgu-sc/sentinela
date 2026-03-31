@@ -57,12 +57,15 @@ function applyFilter(field, value) {
   if (field === 'conexaoMS')  filterStore.selectedMS         = normalizeToOption(FILTER_OPTIONS.ms,         value);
 }
 
-// Helper para exibir o município formatado adequadamente
+// Helper para exibir a localização formatada adequadamente
 const filteredLocation = computed(() => {
   if (filterStore.selectedMunicipio && filterStore.selectedMunicipio !== 'Todos') {
     return filterStore.selectedMunicipio.split('|')[0];
   }
-  return '';
+  if (filterStore.selectedUF && filterStore.selectedUF !== 'Todos') {
+    return filterStore.selectedUF;
+  }
+  return 'Brasil';
 });
 
 </script>

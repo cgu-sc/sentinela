@@ -53,7 +53,7 @@ const onRowSelect = (event) => {
        </div>
        <div class="header-text-box">
          <h3>Análise por município</h3>
-         <span class="subtitle">{{ filterStore.selectedUF }} — {{ resultadoMunicipios.length }} Cidades</span>
+         <span class="subtitle">{{ filterStore.selectedUF === 'Todos' ? 'Brasil' : filterStore.selectedUF }} — {{ resultadoMunicipios.length }} Municípios</span>
        </div>
        <div class="spacer"></div>
     </div>

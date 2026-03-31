@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import NationalAnalysisView from '@/views/consolidated/NationalAnalysisView.vue'
+import MunicipalityAnalysisView from '@/views/consolidated/MunicipalityAnalysisView.vue'
+import CnpjAnalysisView from '@/views/consolidated/CnpjAnalysisView.vue'
 import TargetClusterView from '@/views/targets/TargetClusterView.vue'
 import PartnerNetworkView from '@/views/targets/PartnerNetworkView.vue'
 
@@ -17,9 +19,8 @@ const routes = [
       // Rotas do Módulo Consolidado
       { path: 'dispersao', component: NationalAnalysisView }, // Mockup reusando a mesma view por enquanto
       { path: 'dispersao-beneficio', component: () => import('@/views/consolidated/BeneficioDispersaoView.vue') },
-      { path: 'municipio', component: NationalAnalysisView },
-      { path: 'empresa', component: NationalAnalysisView },
-      { path: 'cnpj', component: NationalAnalysisView },
+      { path: 'municipio', component: MunicipalityAnalysisView },
+      { path: 'cnpj', component: CnpjAnalysisView },
       { path: 'regional', component: () => import('@/views/consolidated/RegionalAnalysisView.vue') },
 
       // Detalhamento de CNPJ

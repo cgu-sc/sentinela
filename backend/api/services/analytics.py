@@ -143,75 +143,76 @@ class AnalyticsService:
                 for r in uf_df.iter_rows(named=True)
             ]
 
-            # 6. Detalhamento por Município (Se UF estiver selecionada)
-            resultado_municipios = None
-            if uf and uf != 'Todos':
-                muni_df = (
-                    period_df
-                    .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
-                    .group_by(["uf", "no_municipio"])
-                    .agg([
-                        pl.n_unique("cnpj").alias("cnpjs"),
-                        pl.sum("total_vendas").alias("totalMov"),
-                        pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                        pl.sum("total_qnt_vendas").alias("totalQtde"),
-                        pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
-                    ])
-                    .with_columns([
-                        (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
-                        (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
-                    ])
-                    .sort("percValSemComp", descending=True, nulls_last=True)
-                )
-                resultado_municipios = [
-                    ResultadoSentinelaMunicipioSchema(municipio=r["no_municipio"], **r)
-                    for r in muni_df.iter_rows(named=True)
-                ]
+            # 6. Detalhamento por Município (Sempre calculado)
+            muni_df = (
+                period_df
+                .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                .group_by(["uf", "no_municipio"])
+                .agg([
+                    pl.n_unique("cnpj").alias("cnpjs"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                    pl.sum("total_qnt_vendas").alias("totalQtde"),
+                    pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                ])
+                .with_columns([
+                    (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
+                    (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
+                ])
+                .sort("percValSemComp", descending=True, nulls_last=True)
+            )
+            resultado_municipios = [
+                ResultadoSentinelaMunicipioSchema(municipio=r["no_municipio"], **r)
+                for r in muni_df.iter_rows(named=True)
+            ]
 
-            # 7. Detalhamento por CNPJ (Se Município estiver selecionado)
-            resultado_cnpjs = None
-            if (municipio and municipio != 'Todos') or cnpj_raiz:
-                cnpj_df = (
-                    period_df
-                    .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
-                    .group_by("cnpj")
-                    .agg([
-                        pl.col("no_municipio").first().alias("municipio"),
-                        pl.col("uf").first().alias("uf"),
-                        pl.col("razao_social").first().alias("razao_social"),
-                        pl.sum("total_vendas").alias("totalMov"),
-                        pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                        pl.sum("total_qnt_vendas").alias("totalQtde"),
-                        pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
-                        pl.col("flag_grandes_redes").first().alias("flag_grandes_redes"),
-                        pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
-                        pl.col("situacao_rf").first().alias("situacao_rf"),
-                        pl.col("conexao_ms").first().alias("conexao_ms"),
-                    ])
-                    .with_columns([
-                        (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
-                        (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
-                        (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf"),
-                        (pl.col("cnpj").str.slice(8, 4) == "0001").alias("is_matriz"),
-                    ])
-                    .sort("percValSemComp", descending=True, nulls_last=True)
+            # 7. Detalhamento por CNPJ (Sempre calculado)
+            cnpj_df = (
+                period_df
+                .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                .group_by("cnpj")
+                .agg([
+                    pl.col("no_municipio").first().alias("municipio"),
+                    pl.col("uf").first().alias("uf"),
+                    pl.col("razao_social").first().alias("razao_social"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                    pl.sum("total_qnt_vendas").alias("totalQtde"),
+                    pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                    pl.col("flag_grandes_redes").first().alias("flag_grandes_redes"),
+                    pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
+                    pl.col("situacao_rf").first().alias("situacao_rf"),
+                    pl.col("conexao_ms").first().alias("conexao_ms"),
+                ])
+                .with_columns([
+                    (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
+                    (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
+                    (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf"),
+                    (pl.col("cnpj").str.slice(8, 4) == "0001").alias("is_matriz"),
+                ])
+                .sort("percValSemComp", descending=True, nulls_last=True)
+            )
+            # Enrich with id_ibge7 from localidades (unique por município/UF para evitar duplicatas)
+            try:
+                loc_df = (
+                    get_localidades_df()
+                    .select(["no_municipio", "sg_uf", "id_ibge7"])
+                    .group_by(["no_municipio", "sg_uf"])
+                    .agg(pl.col("id_ibge7").first())
                 )
-                # Enrich with id_ibge7 from localidades
-                try:
-                    loc_df = get_localidades_df().select(["no_municipio", "sg_uf", "id_ibge7"])
-                    cnpj_df = cnpj_df.join(
-                        loc_df,
-                        left_on=["municipio", "uf"],
-                        right_on=["no_municipio", "sg_uf"],
-                        how="left"
-                    )
-                except Exception:
-                    cnpj_df = cnpj_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
+                cnpj_df = cnpj_df.join(
+                    loc_df,
+                    left_on=["municipio", "uf"],
+                    right_on=["no_municipio", "sg_uf"],
+                    how="left"
+                )
+            except Exception:
+                cnpj_df = cnpj_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
 
-                resultado_cnpjs = [
-                    ResultadoSentinelaCnpjSchema(**r)
-                    for r in cnpj_df.iter_rows(named=True)
-                ]
+            resultado_cnpjs = [
+                ResultadoSentinelaCnpjSchema(**r)
+                for r in cnpj_df.iter_rows(named=True)
+            ]
 
             return AnalyticsResponse(
                 kpis=kpis, 

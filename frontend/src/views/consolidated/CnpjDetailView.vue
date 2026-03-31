@@ -379,9 +379,24 @@ onMounted(() => {
 });
 
 const geoData = computed(() => {
-  const ibge7 = cnpjData.value?.id_ibge7;
-  if (!ibge7 || !localidades.value?.length) return null;
-  return localidades.value.find(l => l.id_ibge7 === ibge7) ?? null;
+  const data = cnpjData.value;
+  if (!data || !localidades.value?.length) return null;
+
+  // Primeiro tenta por id_ibge7, depois por município + UF
+  if (data.id_ibge7) {
+    const match = localidades.value.find(l => l.id_ibge7 === data.id_ibge7);
+    if (match) return match;
+  }
+
+  // Fallback: busca por nome do município e UF
+  const municipio = data.municipio?.toUpperCase();
+  const uf = data.uf?.toUpperCase();
+  if (!municipio || !uf) return null;
+
+  return localidades.value.find(l =>
+    l.no_municipio?.toUpperCase() === municipio &&
+    l.sg_uf?.toUpperCase() === uf
+  ) ?? null;
 });
 
 const risco = computed(() => cnpjData.value?.percValSemComp ?? 0);

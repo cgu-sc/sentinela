@@ -16,7 +16,7 @@ export function useRegional() {
    * @param {string} nomeRegiao - Nome exato da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS').
    */
   async function fetchRegional(nomeRegiao) {
-    if (!nomeRegiao) return;
+    if (!nomeRegiao || regionalLoaded.value) return;
     try {
       regionalLoading.value = true;
       regionalLoaded.value  = false;

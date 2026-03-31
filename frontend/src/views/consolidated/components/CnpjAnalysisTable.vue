@@ -9,6 +9,7 @@ import { useTableAggregation } from '@/composables/useTableAggregation';
 import { storeToRefs } from 'pinia';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import { extractCnpjRaiz } from '@/composables/useParsing';
+import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -73,7 +74,7 @@ const filteredLocation = computed(() => {
          <i class="pi pi-briefcase"></i>
        </div>
        <div class="header-text-box">
-         <h3>ANÁLISE POR CNPJ</h3>
+         <h3>Análise por CNPJ</h3>
          <span class="subtitle">{{ filteredLocation }} — {{ resultadoCnpjs.length }} Estabelecimentos</span>
        </div>
        <div class="spacer"></div>
@@ -115,21 +116,23 @@ const filteredLocation = computed(() => {
              </template>
           </Column>
 
-          <Column field="totalMov" header="Total Vendas" sortable style="width: 10%">
+          <Column field="totalMov" header="Valor Total Vendas" sortable style="width: 10%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
              <template #footer>{{ tableFooter.totalMov }}</template>
           </Column>
 
-          <Column field="valSemComp" header="Total Sem Comprovação" sortable style="width: 10%">
+          <Column field="valSemComp" header="Valor sem Comprovação" sortable style="width: 10%">
              <template #body="slotProps">
-                <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
+                <span :class="{ 'high-value-audit': slotProps.data.valSemComp >= AUDIT_THRESHOLDS.HIGH_VALUE }">
+                  {{ formatBRL(slotProps.data.valSemComp) }}
+                </span>
              </template>
              <template #footer>{{ tableFooter.valSemComp }}</template>
           </Column>
 
-          <Column field="percValSemComp" header="% Valor s/ Comp" sortable style="width: 8%">
+          <Column field="percValSemComp" header="% Valor sem Comprovação" sortable style="width: 8%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp) === 'risk-critical' ? 'risk-high' : getRiskClass(slotProps.data.percValSemComp)" />
              </template>
@@ -315,4 +318,22 @@ const filteredLocation = computed(() => {
 }
 
 /* light/dark automático via var(--accent-indigo) — override removido */
+
+/* RESET DE CAIXA ALTA FORÇADA */
+:deep(.p-datatable-thead th),
+:deep(.p-datatable-tbody td),
+:deep(.p-tag-value),
+:deep(.p-tag) {
+  text-transform: none !important;
+  font-variant: normal !important;
+}
+
+/* DESTAQUE DE ALTO VALOR (VERMELHO - IGUAL CONEXÃO MS) */
+.high-value-audit {
+  color: var(--risk-high);
+  font-weight: 700;
+  display: inline-block;
+  padding: 0 6px;
+  border-left: 3px solid color-mix(in srgb, var(--risk-high) 40%, transparent);
+}
 </style>

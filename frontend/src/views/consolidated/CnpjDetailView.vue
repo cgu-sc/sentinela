@@ -650,18 +650,18 @@ const areaOption = computed(() => {
 
       <div class="header-kpis" v-if="cnpjData">
         <div class="mini-kpi">
-          <span class="mini-kpi-label">% Sem Comp.</span>
+          <span class="mini-kpi-label">% Valor sem Comprovação</span>
           <span
             class="mini-kpi-value"
             :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
         </div>
         <div class="mini-kpi">
-          <span class="mini-kpi-label">Valor Sem Comp.</span>
+          <span class="mini-kpi-label">Valor sem Comprovação</span>
           <span class="mini-kpi-value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
         </div>
         <div class="mini-kpi">
-          <span class="mini-kpi-label">Total Movimentado</span>
+          <span class="mini-kpi-label">Valor Total Vendas</span>
           <span class="mini-kpi-value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
         </div>
       </div>
@@ -742,10 +742,10 @@ const areaOption = computed(() => {
                   <thead>
                     <tr>
                       <th>Semestre</th>
-                      <th>Total</th>
-                      <th>Regulares</th>
-                      <th>Irregulares</th>
-                      <th>% Irregular</th>
+                      <th>Valor Total Vendas</th>
+                      <th>Valor Regular</th>
+                      <th>Valor sem Comprovação</th>
+                      <th>% Valor sem Comprovação</th>
                       <th>Tendência</th>
                     </tr>
                   </thead>

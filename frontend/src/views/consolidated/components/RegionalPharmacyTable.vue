@@ -79,7 +79,7 @@ function getPercentClass(v) {
         <i class="pi pi-chart-bar"></i>
       </div>
       <div class="header-text-box">
-        <h3>RANKING DE RISCO DA REGIÃO</h3>
+        <h3>Ranking de Risco da Região</h3>
         <span class="subtitle">{{ farmacias.length }} estabelecimentos · ordenado por Score de Risco</span>
       </div>
     </div>
@@ -147,7 +147,7 @@ function getPercentClass(v) {
         </template>
       </Column>
 
-      <Column field="valSemComp" header="Valor s/ Comp." sortable style="width: 10%" bodyStyle="text-align:right">
+      <Column field="valSemComp" header="Valor sem Comprovação" sortable style="width: 10%" bodyStyle="text-align:right">
         <template #body="{ data }">
           <span :class="{ 'high-value-audit': data.valSemComp >= AUDIT_THRESHOLDS.HIGH_VALUE }">
             {{ formatBRL(data.valSemComp) }}
@@ -156,12 +156,12 @@ function getPercentClass(v) {
       </Column>
 
       <!-- Faturamento total -->
-      <Column field="totalMov" header="Faturamento" sortable style="width: 10%" bodyStyle="text-align:right">
+      <Column field="totalMov" header="Valor Total Vendas" sortable style="width: 10%" bodyStyle="text-align:right">
         <template #body="{ data }">{{ formatBRL(data.totalMov) }}</template>
       </Column>
 
       <!-- % sem comprovação -->
-      <Column field="percValSemComp" header="% s/ Comp." sortable style="width: 8%" bodyStyle="text-align:center">
+      <Column field="percValSemComp" header="% Valor sem Comprovação" sortable style="width: 8%" bodyStyle="text-align:center">
         <template #body="{ data }">
           <Tag :value="formatPercent(data.percValSemComp)" :class="getPercentClass(data.percValSemComp)" />
         </template>
@@ -300,6 +300,7 @@ function getPercentClass(v) {
 }
 
 /* RESET DE CAIXA ALTA FORÇADA */
+:deep(.p-datatable-thead th),
 :deep(.p-datatable-tbody td),
 :deep(.p-tag-value),
 :deep(.p-tag) {

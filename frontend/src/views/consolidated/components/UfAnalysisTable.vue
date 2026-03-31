@@ -50,7 +50,7 @@ const tableFooter = computed(() => {
   <div class="table-section shadow-card" :class="{ 'is-refreshing': isLoading }">
     <div class="section-header">
        <i class="pi pi-table"></i>
-       <h3>ANÁLISE UF</h3>
+       <h3>Análise UF</h3>
        <div class="spacer"></div>
     </div>
 
@@ -75,7 +75,7 @@ const tableFooter = computed(() => {
              <template #footer>{{ tableFooter.cnpjs }}</template>
           </Column>
 
-          <Column field="percValSemComp" header="% Valor Sem Comprovação" sortable style="width: 12%">
+          <Column field="percValSemComp" header="% Valor sem Comprovação" sortable style="width: 12%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
              </template>
@@ -89,7 +89,7 @@ const tableFooter = computed(() => {
              <template #footer>{{ tableFooter.valSemComp }}</template>
           </Column>
 
-          <Column field="totalMov" header="Valor Total Movimentado" sortable style="width: 15%">
+          <Column field="totalMov" header="Valor Total Vendas" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
@@ -140,5 +140,14 @@ const tableFooter = computed(() => {
 
 :deep(.clickable-rows .p-datatable-tbody > tr:hover) {
   background-color: var(--primary-color-lighter, rgba(0, 0, 0, 0.04)) !important;
+}
+
+/* RESET DE CAIXA ALTA FORÇADA */
+:deep(.p-datatable-thead th),
+:deep(.p-datatable-tbody td),
+:deep(.p-tag-value),
+:deep(.p-tag) {
+  text-transform: none !important;
+  font-variant: normal !important;
 }
 </style>

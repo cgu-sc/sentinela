@@ -52,7 +52,7 @@ const onRowSelect = (event) => {
          <i class="pi pi-map-marker"></i>
        </div>
        <div class="header-text-box">
-         <h3>ANÁLISE POR MUNICÍPIO</h3>
+         <h3>Análise por município</h3>
          <span class="subtitle">{{ filterStore.selectedUF }} — {{ resultadoMunicipios.length }} Cidades</span>
        </div>
        <div class="spacer"></div>
@@ -75,7 +75,7 @@ const onRowSelect = (event) => {
             <template #footer>TOTAL</template>
           </Column>
 
-          <Column field="municipio" header="MUNICÍPIO" sortable style="width: 15%"></Column>
+          <Column field="municipio" header="Município" sortable style="width: 15%"></Column>
 
           <Column field="cnpjs" header="Qtde CNPJs" sortable style="width: 10%">
              <template #body="slotProps">
@@ -84,21 +84,21 @@ const onRowSelect = (event) => {
              <template #footer>{{ tableFooter.cnpjs }}</template>
           </Column>
 
-          <Column field="percValSemComp" header="% Valor s/ Comp" sortable style="width: 12%">
+          <Column field="percValSemComp" header="% Valor sem Comprovação" sortable style="width: 12%">
              <template #body="slotProps">
                 <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
              </template>
              <template #footer>{{ tableFooter.percValSemComp }}</template>
           </Column>
 
-          <Column field="valSemComp" header="Valor s/ Comprovação" sortable style="width: 15%">
+          <Column field="valSemComp" header="Valor sem Comprovação" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.valSemComp) }}</span>
              </template>
              <template #footer>{{ tableFooter.valSemComp }}</template>
           </Column>
 
-          <Column field="totalMov" header="Valor Total Movimentado" sortable style="width: 15%">
+          <Column field="totalMov" header="Valor Total Vendas" sortable style="width: 15%">
              <template #body="slotProps">
                 <span>{{ formatBRL(slotProps.data.totalMov) }}</span>
              </template>
@@ -197,4 +197,13 @@ const onRowSelect = (event) => {
 }
 
 /* light/dark automático via var(--accent-indigo) — override removido */
+
+/* RESET DE CAIXA ALTA FORÇADA */
+:deep(.p-datatable-thead th),
+:deep(.p-datatable-tbody td),
+:deep(.p-tag-value),
+:deep(.p-tag) {
+  text-transform: none !important;
+  font-variant: normal !important;
+}
 </style>

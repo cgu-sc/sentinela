@@ -69,6 +69,14 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     data_ultima_venda: Optional[date] = None
     municipio: Optional[str] = None
     uf: Optional[str] = None
+    rank_nacional: Optional[int] = None
+    total_nacional: Optional[int] = None
+    rank_uf: Optional[int] = None
+    total_uf: Optional[int] = None
+    rank_regiao_saude: Optional[int] = None
+    total_regiao_saude: Optional[int] = None
+    rank_municipio: Optional[int] = None
+    total_municipio: Optional[int] = None
 
 class RedeEstabelecimentoSchema(BaseModel):
     cnpj_raiz: str

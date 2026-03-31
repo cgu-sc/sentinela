@@ -209,6 +209,29 @@ class AnalyticsService:
             except Exception:
                 cnpj_df = cnpj_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
 
+            # Enrich with rankings and counts from matriz_risco_consolidada
+            try:
+                risco_df = (
+                    get_df_matriz_risco()
+                    .select([
+                        "cnpj", "rank_nacional", "total_nacional", "rank_uf", "total_uf",
+                        "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio"
+                    ])
+                )
+                cnpj_df = cnpj_df.join(risco_df, on="cnpj", how="left")
+            except Exception as e:
+                print(f"⚠️ Erro ao cruzar rankings: {e}")
+                cnpj_df = cnpj_df.with_columns([
+                    pl.lit(None).cast(pl.Int64).alias("rank_nacional"),
+                    pl.lit(None).cast(pl.Int64).alias("total_nacional"),
+                    pl.lit(None).cast(pl.Int64).alias("rank_uf"),
+                    pl.lit(None).cast(pl.Int64).alias("total_uf"),
+                    pl.lit(None).cast(pl.Int64).alias("rank_regiao_saude"),
+                    pl.lit(None).cast(pl.Int64).alias("total_regiao_saude"),
+                    pl.lit(None).cast(pl.Int64).alias("rank_municipio"),
+                    pl.lit(None).cast(pl.Int64).alias("total_municipio"),
+                ])
+
             resultado_cnpjs = [
                 ResultadoSentinelaCnpjSchema(**r)
                 for r in cnpj_df.iter_rows(named=True)

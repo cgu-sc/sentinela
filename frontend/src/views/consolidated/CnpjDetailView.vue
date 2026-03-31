@@ -186,7 +186,7 @@ const timelineChartOption = computed(() => {
 
   return {
     backgroundColor: 'transparent',
-    grid: { top: 16, left: 170, right: 20, bottom: 40, containLabel: false },
+    grid: { top: 16, left: 210, right: 30, bottom: 40, containLabel: false },
     tooltip: {
       trigger: 'item',
       backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -253,6 +253,12 @@ const outrosCnpjList = computed(() => {
   if (!selectedMultiCpf.value) return [];
   return parseCnpjs(selectedMultiCpf.value.outros_cnpj);
 });
+
+const openEstablishment = (estabStr) => {
+  if (!estabStr) return;
+  const targetCnpj = estabStr.split(' - ')[0];
+  window.open(`/estabelecimento/${targetCnpj}`, '_blank');
+};
 
 
 
@@ -979,16 +985,38 @@ const areaOption = computed(() => {
               <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
                 <div class="section-title">
                   <i class="pi pi-share-alt" />
-                  <span>Outros Estabelecimentos com CPFs Falecidos em Comum</span>
+                  <span>Rank de Coincidência em Outros Estabelecimentos</span>
                 </div>
-                <div class="ranking-list">
-                  <div v-for="r in falecidosData.ranking" :key="r.estabelecimento" class="ranking-item">
-                    <div class="ranking-item-top">
-                      <span class="ranking-name" :title="r.estabelecimento">{{ r.estabelecimento }}</span>
-                      <span class="ranking-qty">{{ r.qtd_cpfs }} CPFs</span>
+                <div class="ranking-grid">
+                  <div 
+                    v-for="r in falecidosData.ranking" 
+                    :key="r.estabelecimento" 
+                    class="ranking-card"
+                    @click="openEstablishment(r.estabelecimento)"
+                    v-tooltip.top="'Clique para abrir detalhamento desta farmácia'"
+                  >
+                    <div class="r-card-header">
+                      <div class="r-icon-box">
+                        <i class="pi pi-building" />
+                      </div>
+                      <div class="r-info">
+                        <span class="r-name" :title="r.estabelecimento">{{ r.estabelecimento.split(' - ')[1]?.split(' | ')[0] || r.estabelecimento }}</span>
+                        <span class="r-meta">{{ formatCnpj(r.estabelecimento.split(' - ')[0]) }}</span>
+                      </div>
                     </div>
-                    <div class="ranking-bar-bg">
-                      <div class="ranking-bar-fill" :style="{ width: (r.pct_total * 100) + '%' }"></div>
+                    
+                    <div class="r-card-body">
+                      <div class="r-stats">
+                        <span class="r-qty">{{ r.qtd_cpfs }}</span>
+                        <span class="r-label">CPFs Concomitantes</span>
+                      </div>
+                      
+                      <div class="r-progress-wrap">
+                        <div class="r-progress-bg">
+                          <div class="r-progress-fill" :style="{ width: (r.pct_total * 100) + '%' }"></div>
+                        </div>
+                        <span class="r-pct">{{ Math.round(r.pct_total * 100) }}%</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1122,7 +1150,7 @@ const areaOption = computed(() => {
     </TabView>
 
     <!-- POPOVER MULTI-CNPJ (GRÁFICO DE TRILHAS) -->
-    <OverlayPanel ref="opMultiCnpj" class="multi-cnpj-panel" style="width: 560px">
+    <OverlayPanel ref="opMultiCnpj" class="multi-cnpj-panel" style="width: 900px">
       <div v-if="selectedMultiCpf" class="multi-cnpj-content">
         <header class="multi-header">
           <i class="pi pi-share-alt" />
@@ -1170,7 +1198,15 @@ const areaOption = computed(() => {
           <ul class="multi-list">
             <li v-for="(c, i) in outrosCnpjList" :key="c" class="multi-item">
               <span class="multi-idx">{{ i + 1 }}</span>
-              <span class="multi-cnpj-val">{{ formatCnpj(c) }}</span>
+              <a 
+                :href="`/estabelecimento/${c}`" 
+                target="_blank" 
+                class="multi-cnpj-link"
+                v-tooltip.bottom="'Abrir detalhamento deste CNPJ em nova aba'"
+              >
+                {{ formatCnpj(c) }}
+                <i class="pi pi-external-link" style="font-size: 0.6rem; margin-left: 0.3rem; opacity: 0.5;" />
+              </a>
             </li>
           </ul>
         </div>
@@ -1908,26 +1944,38 @@ const areaOption = computed(() => {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
 }
 
 .multi-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(255,255,255,0.03);
-  border-radius: 6px;
-  font-size: 0.78rem;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px;
+  font-size: 0.72rem;
   color: var(--text-secondary);
 }
 
-.multi-cnpj-val {
+.multi-cnpj-link {
   font-family: monospace;
   font-weight: 600;
   letter-spacing: 0.05em;
+  color: var(--primary-color);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.multi-cnpj-link:hover {
+  filter: brightness(1.2);
+  text-decoration: underline;
 }
 
 /* ── MAPA DE TRILHAS NO POPOVER ─────────────────────── */
@@ -1969,7 +2017,7 @@ const areaOption = computed(() => {
 
 .timeline-chart-wrap {
   width: 100%;
-  height: 260px;
+  height: 400px;
   background: rgba(0,0,0,0.15);
   border-radius: 8px;
   margin: 0.25rem 0 0.5rem;
@@ -2163,51 +2211,122 @@ const areaOption = computed(() => {
 .falecidos-ranking-panel {
   background: var(--card-bg);
   border: 1px solid var(--sidebar-border);
-  border-radius: 10px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 1.25rem;
   margin-top: 1.5rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
-.ranking-list {
+.ranking-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
-.ranking-item {
+.ranking-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.ranking-card:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.r-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.r-icon-box {
+  width: 28px;
+  height: 28px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  font-size: 0.8rem;
+}
+
+.r-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0; 
+  flex: 1;
+}
+
+.r-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.r-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.r-card-body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.ranking-item-top {
+.r-stats {
   display: flex;
-  justify-content: space-between;
-  font-size: 0.72rem;
+  align-items: center;
+  gap: 0.35rem;
 }
 
-.ranking-name {
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
+.r-qty {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.r-label {
+  font-size: 0.62rem;
+  color: var(--text-secondary);
+}
+
+.r-progress-bg {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
 }
 
-.ranking-qty { color: var(--text-muted); font-weight: 700; }
-
-.ranking-bar-bg {
-  height: 6px;
-  background: var(--sidebar-border);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.ranking-bar-fill {
+.r-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), v-bind('RISK_COLORS.HIGH'));
-  border-radius: 99px;
+  background: linear-gradient(90deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 70%, white));
+  border-radius: 2px;
+}
+
+.r-pct {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  min-width: 25px;
 }
 .highlight-red {
   border-left: 3px solid v-bind('chartDataColors.red') !important;

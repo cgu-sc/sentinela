@@ -6,32 +6,21 @@ import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
-import { useRegional } from '@/composables/useRegional';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import CnpjDetailHeader from './components/cnpj/CnpjDetailHeader.vue';
 import CnpjTabFinancialEvolution from './components/cnpj/CnpjTabFinancialEvolution.vue';
 import CnpjTabIndicators from './components/cnpj/CnpjTabIndicators.vue';
 import CnpjTabFalecidos from './components/cnpj/CnpjTabFalecidos.vue';
-import RegionalMunicipalityTable from './components/RegionalMunicipalityTable.vue';
-import RegionalPharmacyTable from './components/RegionalPharmacyTable.vue';
+import CnpjTabRegional from './components/cnpj/CnpjTabRegional.vue';
 import { useChartTheme } from '@/config/chartTheme';
 import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { RISK_COLORS, RISK_THRESHOLDS } from '@/config/riskConfig';
 import { storeToRefs } from 'pinia';
-import VChart from 'vue-echarts';
-import { use } from 'echarts/core';
-import { BarChart, LineChart, ScatterChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
-import OverlayPanel from 'primevue/overlaypanel';
 import Chip from 'primevue/chip';
-import Timeline from 'primevue/timeline';
-
-use([BarChart, LineChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = { MOVIMENTACAO: 0, EVOLUCAO: 1, INDICADORES: 2, CRMS: 3, FALECIDOS: 4, REGIAO: 5 };
@@ -51,29 +40,6 @@ const { getApiParams } = useFilterParameters();
 const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
-const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
-
-// ── Filtro Cruzado de Município (Regional) ────────────────
-const filterMunicipio = ref(null);
-
-function toggleMunicipioFilter(nome) {
-  // Se clicar no mesmo que já está selecionado, limpa o filtro
-  if (filterMunicipio.value?.toLowerCase() === nome?.toLowerCase()) {
-    filterMunicipio.value = null;
-  } else {
-    filterMunicipio.value = nome;
-  }
-}
-
-const filteredFarmacias = computed(() => {
-  const farmacias = regionalData.value?.farmacias ?? [];
-  if (!filterMunicipio.value) return farmacias;
-  
-  return farmacias.filter(f => 
-    f.municipio?.toLowerCase() === filterMunicipio.value.toLowerCase()
-  );
-});
-
 // ── Composables (Fim) ─────────────────────────────────────
 
 // ── Dados do CNPJ ─────────────────────────────────────────
@@ -147,13 +113,6 @@ const formatCnpj = (v) => {
     <TabView
       class="detail-tabs"
       :activeIndex="TAB_INDEX.EVOLUCAO"
-      @tab-change="(e) => {
-        console.log('🔄 Tab change event:', e.index);
-        if (e.index === TAB_INDEX.REGIAO) {
-           console.log('📍 Aba Região selecionada. GeoData:', geoData);
-           if (geoData?.no_regiao_saude) fetchRegional(geoData.no_regiao_saude);
-        }
-      }"
     >
 
       <TabPanel>
@@ -189,51 +148,7 @@ const formatCnpj = (v) => {
 
       <TabPanel>
         <template #header><i class="pi pi-map tab-icon" /><span>Região de Saúde</span></template>
-        <div class="tab-content regional-tab">
-
-          <!-- Sem geo data -->
-          <div v-if="!geoData?.no_regiao_saude" class="tab-placeholder">
-            <i class="pi pi-map-marker placeholder-icon" />
-            <p>Não foi possível identificar a Região de Saúde deste estabelecimento.</p>
-          </div>
-
-          <!-- Carregando -->
-          <div v-else-if="regionalLoading" class="tab-placeholder">
-            <i class="pi pi-spin pi-spinner placeholder-icon" />
-            <p>Carregando ranking regional — <strong>{{ geoData.no_regiao_saude }}</strong>...</p>
-          </div>
-
-          <!-- Sem dados carregados ainda -->
-          <div v-else-if="!regionalLoaded" class="tab-placeholder">
-            <i class="pi pi-globe placeholder-icon" />
-            <p>Clique na aba para carregar o ranking comparativo da <strong>{{ geoData.no_regiao_saude }}</strong>.</p>
-          </div>
-
-          <!-- Sem resultados -->
-          <div v-else-if="!regionalData?.farmacias?.length" class="tab-placeholder">
-            <i class="pi pi-exclamation-triangle placeholder-icon" />
-            <p>Nenhuma farmácia encontrada para a região <strong>{{ geoData.no_regiao_saude }}</strong>.</p>
-          </div>
-
-          <!-- Conteúdo principal -->
-          <template v-else>
-            <RegionalMunicipalityTable 
-              :municipios="regionalData.municipios"
-              :municipio-atual="filterMunicipio || geoData.no_municipio"
-              :uf-atual="geoData.sg_uf"
-              :selected-filter="filterMunicipio"
-              @select-municipio="toggleMunicipioFilter"
-            />
-
-            <RegionalPharmacyTable
-              :farmacias="filteredFarmacias"
-              :cnpj-atual="cnpj"
-              :municipio-atual="geoData.no_municipio"
-              :uf-atual="geoData.sg_uf"
-            />
-          </template>
-
-        </div>
+        <CnpjTabRegional :cnpj="cnpj" :geo-data="geoData" />
       </TabPanel>
 
     </TabView>
@@ -337,41 +252,5 @@ const formatCnpj = (v) => {
 .placeholder-icon { font-size: 3rem; }
 .tab-placeholder p { font-size: 0.875rem; }
 
-/* ── REGIÃO DE SAÚDE ─────────────────────────────────── */
-.regional-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem 0;
-}
 
-
-
-
-
-.filter-status-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
-  border: 1px dashed var(--sidebar-border);
-  border-radius: 8px;
-  margin: 1rem 0;
-}
-
-.filter-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-:deep(.municipio-chip) {
-  background: var(--primary-color) !important;
-  color: white !important;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
 </style>

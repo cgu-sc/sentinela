@@ -89,6 +89,12 @@ const formatCnpj = (v) => {
           <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
           <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
         </div>
+
+        <div v-if="cnpjData.score_final != null" class="score-badge-new" v-tooltip.top="'Score de Risco Consolidado'">
+          <span class="score-label">Score</span>
+          <span class="score-val">{{ cnpjData.score_final.toFixed(1) }}</span>
+        </div>
+
         <span
           class="risk-tag-new"
           :class="[
@@ -106,7 +112,12 @@ const formatCnpj = (v) => {
     <!-- Área Central: Razão Social e Localização -->
     <div class="header-main-info" v-if="cnpjData">
       <div class="title-group">
-        <h1 class="razao-social-new">{{ cnpjData.razao_social ?? "—" }}</h1>
+        <h1
+          class="razao-social-new"
+          v-tooltip.bottom="cnpjData.razao_social"
+        >
+          {{ cnpjData.razao_social ?? "—" }}
+        </h1>
         <div class="location-chips">
           <div
             class="loc-chip"
@@ -260,7 +271,32 @@ const formatCnpj = (v) => {
 .identity-badges {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1.25rem;
+}
+
+.score-badge-new {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 6px;
+}
+
+.score-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.score-val {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--primary-color);
+  font-family: 'Inter', sans-serif;
 }
 
 .cnpj-copy-wrap-new {

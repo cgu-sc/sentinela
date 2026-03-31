@@ -257,13 +257,14 @@ const openEstablishment = (estabStr) => {
         </div>
       </div>
     </template>
+
     <div v-else class="tab-placeholder">
       <i class="pi pi-exclamation-triangle placeholder-icon" />
       <p>Clique na aba para processar a análise de óbitos.</p>
     </div>
-  </div>
 
-  <FalecidosTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
+    <FalecidosTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
+  </div>
 </template>
 
 <style scoped>

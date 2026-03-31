@@ -73,14 +73,12 @@ function getPercentClass(v) {
 </script>
 
 <template>
-  <div class="table-section shadow-card modern-scroll-card">
+  <div class="table-section">
     <div class="section-header">
-      <div class="header-icon-box">
-        <i class="pi pi-chart-bar"></i>
-      </div>
+      <i class="pi pi-chart-bar section-icon"></i>
       <div class="header-text-box">
-        <h3>Ranking de Risco da Região</h3>
-        <span class="subtitle">{{ farmacias.length }} estabelecimentos · ordenado por Score de Risco</span>
+        <h3 class="section-title-text">Ranking de Risco da Região</h3>
+        <p class="subtitle">{{ farmacias.length }} estabelecimentos · Score de Risco</p>
       </div>
     </div>
 
@@ -193,36 +191,41 @@ function getPercentClass(v) {
   flex-direction: column;
 }
 
-.modern-scroll-card {
-  border: 1px solid var(--sidebar-border, #e2e8f0);
-  background: var(--card-bg, #ffffff);
-}
-
 .section-header {
-  padding: 1.25rem 1.5rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  border-bottom: 1px solid var(--sidebar-border, #e2e8f0);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--sidebar-border);
+  margin-bottom: 0.75rem;
 }
 
-.header-icon-box {
-  width: 42px;
-  height: 42px;
+.section-icon {
+  font-size: 1rem;
+  color: var(--primary-color);
+}
+
+.header-text-box {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--accent-indigo) 10%, transparent);
-  color: var(--accent-indigo);
-  border-radius: 10px;
-  font-size: 1.25rem;
+  flex-direction: column;
 }
 
 .header-text-box h3 {
   margin: 0;
-  font-size: 1.1rem;
+  padding: 0;
+}
+
+.header-text-box p {
+  margin: 0;
+  padding: 0;
+}
+
+.section-title-text {
+  font-size: 0.85rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
 }
 
 .subtitle {

@@ -125,12 +125,12 @@ const formatCnpj = (v) => {
 
       <TabPanel>
         <template #header><i class="pi pi-chart-line tab-icon" /><span>Evolução Financeira</span></template>
-        <CnpjTabFinancialEvolution />
+        <CnpjTabFinancialEvolution class="tab-content" />
       </TabPanel>
 
       <TabPanel>
         <template #header><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template>
-        <CnpjTabIndicators />
+        <CnpjTabIndicators class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -143,12 +143,12 @@ const formatCnpj = (v) => {
 
       <TabPanel>
         <template #header><i class="pi pi-exclamation-triangle tab-icon" /><span>Falecidos</span></template>
-        <CnpjTabFalecidos :cnpj="cnpj" />
+        <CnpjTabFalecidos :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
         <template #header><i class="pi pi-map tab-icon" /><span>Região de Saúde</span></template>
-        <CnpjTabRegional :cnpj="cnpj" :geo-data="geoData" />
+        <CnpjTabRegional :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
       </TabPanel>
 
     </TabView>
@@ -188,10 +188,6 @@ const formatCnpj = (v) => {
   box-shadow: none !important;
   background: transparent !important;
   padding: 0 !important;
-}
-
-.detail-tabs :deep(.table-section) {
-  padding: 1.5rem;
 }
 
 :deep(.p-tabview) {

@@ -50,14 +50,12 @@ const totals = computed(() => {
 </script>
 
 <template>
-  <div class="table-section shadow-card modern-scroll-card">
+  <div class="table-section">
     <div class="section-header">
-      <div class="header-icon-box">
-        <i class="pi pi-map-marker"></i>
-      </div>
+      <i class="pi pi-map-marker section-icon"></i>
       <div class="header-text-box">
         <div class="title-with-filter">
-          <h3>MUNICÍPIOS DA REGIÃO</h3>
+          <h3 class="section-title-text">MUNICÍPIOS DA REGIÃO</h3>
           <div v-if="selectedFilter" class="active-filter-inline">
             <i class="pi pi-angle-right sep-icon" />
             <Chip 
@@ -75,7 +73,7 @@ const totals = computed(() => {
             />
           </div>
         </div>
-        <span class="subtitle">{{ municipios.length }} municípios na região</span>
+        <p class="subtitle">{{ municipios.length }} municípios na região</p>
       </div>
     </div>
 
@@ -132,44 +130,50 @@ const totals = computed(() => {
 .table-section {
   display: flex;
   flex-direction: column;
-}
-
-.modern-scroll-card {
-  border: 1px solid var(--sidebar-border, #e2e8f0);
-  background: var(--card-bg, #ffffff);
+  margin-bottom: 0.5rem;
 }
 
 .section-header {
-  padding: 1.25rem 1.5rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  border-bottom: 1px solid var(--sidebar-border, #e2e8f0);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--sidebar-border);
+  margin-bottom: 0.75rem;
 }
 
-.header-icon-box {
-  width: 42px;
-  height: 42px;
+.section-icon {
+  font-size: 1rem;
+  color: var(--primary-color);
+}
+
+.header-text-box {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--accent-teal, #0d9488) 10%, transparent);
-  color: var(--accent-teal, #0d9488);
-  border-radius: 10px;
-  font-size: 1.25rem;
+  flex-direction: column;
 }
 
 .header-text-box h3 {
   margin: 0;
-  font-size: 1.1rem;
+  padding: 0;
+}
+
+.header-text-box p {
+  margin: 0;
+  padding: 0;
+}
+
+.section-title-text {
+  font-size: 0.85rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
 }
 
 .title-with-filter {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .active-filter-inline {

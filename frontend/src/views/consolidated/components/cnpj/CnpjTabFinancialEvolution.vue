@@ -9,11 +9,11 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
 
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
-import { BarChart, LineChart } from 'echarts/charts';
+import { BarChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
+use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
@@ -140,81 +140,6 @@ const chartOption = computed(() => {
   };
 });
 
-// ── Opção: área não comprovados ───────────────────────────
-const areaOption = computed(() => {
-  const c         = C.value;
-  const semestres = evolucaoData.value?.semestres ?? [];
-  const labels    = semestres.map(s => s.semestre);
-  const irregular = semestres.map(s => s.irregular);
-  const pct       = semestres.map(s => s.pct_irregular);
-
-  return {
-    ...baseChartConfig.value,
-
-    grid: { top: 24, left: 80, right: 24, bottom: 32, containLabel: false },
-
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
-      backgroundColor: c.tooltip,
-      borderColor: c.border,
-      borderWidth: 1,
-      padding: [12, 16],
-      textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
-      formatter: (params) => {
-        const idx = params[0]?.dataIndex ?? 0;
-        const s   = semestres[idx];
-        if (!s) return '';
-        return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${s.semestre}</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <span style="width:10px;height:10px;border-radius:2px;background:${c.red};display:inline-block;"></span>
-            <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Não Comprovado</span>
-          </div>
-          <div style="font-weight:700;font-size:14px;color:${c.red};">${formatCurrencyFull(s.irregular)}</div>
-          <div style="margin-top:6px;font-size:11px;opacity:.7;">% do total: ${pct[idx].toFixed(1)}%</div>`;
-      },
-    },
-
-    xAxis: {
-      type: 'category',
-      data: labels,
-      axisLine:  { lineStyle: { color: c.grid } },
-      axisTick:  { show: false },
-      axisLabel: { color: c.muted, fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif' },
-    },
-
-    yAxis: {
-      type: 'value',
-      axisLine:  { show: false },
-      axisTick:  { show: false },
-      splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
-      axisLabel: { color: c.muted, fontSize: 10, formatter: v => formatCurrencyFull(v) },
-    },
-
-    series: [
-      {
-        name: 'Não Comprovado',
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        data: irregular,
-        lineStyle: { color: c.red, width: 2.5 },
-        itemStyle: { color: c.red, borderWidth: 2, borderColor: c.red },
-        areaStyle: {
-          color: {
-            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: c.redGrad + 'bb' },
-              { offset: 1, color: c.red + '08' },
-            ],
-          },
-        },
-      },
-    ],
-  };
-});
 </script>
 
 <template>
@@ -230,23 +155,12 @@ const areaOption = computed(() => {
     </div>
 
     <template v-else-if="evolucaoLoaded">
-      <div class="evolucao-row">
-        <div class="evolucao-card flex-half">
-          <div class="evolucao-card-header">
-            <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
-          </div>
-          <div class="evolucao-chart-wrap">
-            <VChart :option="chartOption" autoresize class="evolucao-chart" />
-          </div>
+      <div class="evolucao-card">
+        <div class="evolucao-card-header">
+          <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
         </div>
-
-        <div class="evolucao-card flex-half">
-          <div class="evolucao-card-header">
-            <i class="pi pi-chart-line" /><span>Evolução dos Valores Não Comprovados</span>
-          </div>
-          <div class="evolucao-chart-wrap">
-            <VChart :option="areaOption" autoresize class="evolucao-chart" />
-          </div>
+        <div class="evolucao-chart-wrap">
+          <VChart :option="chartOption" autoresize class="evolucao-chart" />
         </div>
       </div>
 
@@ -346,20 +260,7 @@ const areaOption = computed(() => {
 .evolucao-tab {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.5rem 2rem;
-}
-
-.evolucao-row {
-  display: flex;
-  gap: 2rem;
-  width: 100%;
-  margin-bottom: 0.25rem;
-}
-
-.flex-half {
-  flex: 1;
-  min-width: 0;
+  gap: 1.5rem;
 }
 
 .evolucao-card {

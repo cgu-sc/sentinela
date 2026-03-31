@@ -93,8 +93,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
     <template v-else-if="indicadoresLoaded">
 
       <!-- RESUMO DE AUDITORIA -->
-      <div v-if="pontosCriticos.length" class="audit-summary">
-        <div class="audit-summary-header">
+      <div v-if="pontosCriticos.length" class="audit-summary-section">
+        <div class="section-title">
           <i class="pi pi-file-edit" />
           <span>Resumo para Auditoria — Pontos Críticos</span>
           <span class="audit-badge">{{ pontosCriticos.length }}</span>
@@ -112,10 +112,10 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
         </ul>
       </div>
 
-      <div class="shadow-card ind-card">
-        <div class="section-header">
+      <div class="ind-section">
+        <div class="section-title">
           <i class="pi pi-table" />
-          <h3>Indicadores de Risco</h3>
+          <span>Indicadores de Risco</span>
         </div>
         <div class="ind-table-wrap">
         <table class="ind-table">
@@ -215,31 +215,34 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 <style scoped>
 /* ── INDICADORES ─────────────────────────────────────── */
 .indicadores-tab {
-  padding: 1rem 0 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
+}
+
+/* Títulos de Sessão Padronizados */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--sidebar-border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+  margin-bottom: 0.75rem;
+}
+
+.section-title i {
+  font-size: 1rem;
+  color: var(--primary-color);
 }
 
 /* Resumo de auditoria */
-.audit-summary {
-  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--risk-high) 6%, var(--card-bg));
-  overflow: hidden;
-}
-
-.audit-summary-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--risk-high) 20%, transparent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--risk-high);
+.audit-summary-section {
+  margin-bottom: 0;
 }
 
 .audit-badge {
@@ -260,10 +263,10 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 .audit-list {
   list-style: none;
   margin: 0;
-  padding: 0.5rem 1.25rem 0.75rem;
+  padding: 0 0 0.75rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   text-transform: none;
 }
 
@@ -294,19 +297,12 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   margin-left: 0.25rem;
 }
 
-.ind-card {
-  padding-bottom: 0;
-}
-
-.ind-card .section-header {
-  margin-bottom: 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--sidebar-border);
+.ind-section {
+  margin-top: 0.5rem;
 }
 
 .ind-table-wrap {
-  overflow: hidden;
-  border-radius: 0 0 16px 16px;
+  overflow-x: auto;
 }
 
 .ind-table {
@@ -447,15 +443,5 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   opacity: 0.7;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-.section-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
+
 </style>

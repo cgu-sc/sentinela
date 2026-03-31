@@ -99,8 +99,7 @@ watch(() => props.geoData?.no_regiao_saude, (newVal) => {
 .regional-tab {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem 0;
+  gap: 1.5rem;
 }
 
 .tab-placeholder {

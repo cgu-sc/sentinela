@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
@@ -10,6 +11,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 
+const router = useRouter();
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
@@ -44,6 +46,10 @@ const tableFooter = computed(() => {
     totalQtde:      formatNumber(t.totalQtde),
   };
 });
+const handleRowClick = (event) => {
+  filterStore.selectedUF = event.data.uf;
+  router.push('/municipio');
+};
 </script>
 
 <template>
@@ -62,7 +68,7 @@ const tableFooter = computed(() => {
       sortField="percValSemComp" 
       :sortOrder="-1" 
       class="custom-table enterprise-table clickable-rows"
-      @row-click="(e) => filterStore.selectedUF = e.data.uf"
+      @row-click="handleRowClick"
     >
           <Column field="uf" header="UF" sortable style="width: 5%">
             <template #footer>TOTAL</template>

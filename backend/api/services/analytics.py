@@ -22,6 +22,8 @@ from ..schemas.analytics import (
     FalecidosRankingSchema,
     FalecidosSummarySchema,
     FalecidosResponse,
+    TimelineEventSchema,
+    MultiCnpjTimelineResponse,
 )
 
 class AnalyticsService:
@@ -516,6 +518,73 @@ class AnalyticsService:
                 ),
                 ranking=[],
                 transacoes=[]
+            )
+
+    @staticmethod
+    def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineResponse:
+        """
+        Retorna TODAS as transações de um CPF em TODOS os estabelecimentos
+        presentes no dataset de falecidos. Permite montar o Mapa de Trilhas
+        Temporais com dados 100% reais.
+
+        Args:
+            cnpj_referencia: O CNPJ do estabelecimento que originou a consulta
+                             (usado para marcar `is_this_cnpj`).
+            cpf: O CPF do paciente falecido a ser pesquisado.
+        """
+        try:
+            df_all = get_df_falecidos()
+            # Normaliza o CPF (remove zeros à esquerda para comparação segura)
+            cpf_clean = cpf.strip().lstrip('0').zfill(11)
+            df_cpf = df_all.filter(pl.col("cpf").cast(pl.Utf8).str.zfill(11) == cpf_clean)
+
+            if df_cpf.is_empty():
+                return MultiCnpjTimelineResponse(
+                    cpf=cpf, nome_falecido=None, dt_obito=None,
+                    events=[], cnpjs_envolvidos=[]
+                )
+
+            # Dados biográficos do falecido (primeira ocorrência)
+            row0 = df_cpf.row(0, named=True)
+            nome_falecido = row0.get("nome_falecido")
+            dt_obito = row0.get("dt_obito")
+
+            # Enriquece com razão social via rede_df
+            try:
+                rede_df = get_rede_df().select(["cnpj", "razao_social"])
+                df_enrich = df_cpf.join(rede_df, on="cnpj", how="left")
+            except Exception:
+                df_enrich = df_cpf.with_columns(pl.lit(None).cast(pl.Utf8).alias("razao_social"))
+
+            # Monta os eventos
+            events = []
+            for r in df_enrich.sort("data_autorizacao").iter_rows(named=True):
+                events.append(TimelineEventSchema(
+                    cnpj=str(r["cnpj"]),
+                    razao_social=r.get("razao_social"),
+                    data_autorizacao=r.get("data_autorizacao"),
+                    valor_total_autorizacao=float(r.get("valor_total_autorizacao") or 0.0),
+                    num_autorizacao=str(r.get("num_autorizacao") or ""),
+                    is_this_cnpj=(str(r["cnpj"]) == cnpj_referencia),
+                ))
+
+            cnpjs_envolvidos = df_cpf["cnpj"].unique().to_list()
+
+            return MultiCnpjTimelineResponse(
+                cpf=cpf,
+                nome_falecido=nome_falecido,
+                dt_obito=dt_obito,
+                events=events,
+                cnpjs_envolvidos=cnpjs_envolvidos,
+            )
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO BUSCAR TIMELINE DO CPF: {e}")
+            print(traceback.format_exc())
+            return MultiCnpjTimelineResponse(
+                cpf=cpf, nome_falecido=None, dt_obito=None,
+                events=[], cnpjs_envolvidos=[]
             )
 
     @staticmethod

@@ -147,3 +147,19 @@ class IndicadorDataSchema(BaseModel):
 class IndicadoresResponse(BaseModel):
     cnpj: str
     indicadores: Dict[str, IndicadorDataSchema]
+
+# ── Multi-CNPJ Timeline (Audit History) ──────────────────
+class TimelineEventSchema(BaseModel):
+    cnpj: str
+    razao_social: Optional[str] = None
+    data_autorizacao: Optional[date] = None
+    valor_total_autorizacao: float = 0.0
+    num_autorizacao: Optional[str] = None
+    is_this_cnpj: bool = False
+
+class MultiCnpjTimelineResponse(BaseModel):
+    cpf: str
+    nome_falecido: Optional[str] = None
+    dt_obito: Optional[date] = None
+    events: List[TimelineEventSchema]
+    cnpjs_envolvidos: List[str]

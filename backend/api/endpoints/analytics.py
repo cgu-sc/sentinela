@@ -3,7 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from database import get_db
-from ..schemas.analytics import AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema, RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse, FalecidosResponse
+from ..schemas.analytics import (
+    AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
+    RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
+    FalecidosResponse, MultiCnpjTimelineResponse,
+)
 from ..services.analytics import AnalyticsService
 
 router = APIRouter()
@@ -70,3 +74,14 @@ def get_rede_estabelecimentos(cnpj_raiz: str):
     """Retorna todos os estabelecimentos de uma rede dado o CNPJ raiz (8 dígitos)."""
     raiz = cnpj_raiz.replace(".", "").replace("/", "").replace("-", "")[:8]
     return AnalyticsService.get_rede_por_cnpj_raiz(raiz)
+
+@router.get("/cpf/{cpf}/timeline", response_model=MultiCnpjTimelineResponse)
+def get_cpf_timeline(
+    cpf: str,
+    cnpj: str = Query(..., description="CNPJ de referência (estabelecimento de origem)")
+):
+    """
+    Retorna todas as transações reais de um CPF falecido em todos os estabelecimentos
+    detectados. Usado no Mapa de Trilhas Temporais (Audit History).
+    """
+    return AnalyticsService.get_timeline_cpf(cnpj_referencia=cnpj, cpf=cpf)

@@ -9,6 +9,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useEvolucaoFinanceira } from '@/composables/useEvolucaoFinanceira';
 import { useIndicadores } from '@/composables/useIndicadores';
 import { useFalecidos } from '@/composables/useFalecidos';
+import { useMultiCnpjTimeline } from '@/composables/useMultiCnpjTimeline';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import { useChartTheme } from '@/config/chartTheme';
 import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
@@ -16,15 +17,17 @@ import { RISK_COLORS, RISK_THRESHOLDS, INDICATOR_GROUPS, INDICATOR_THRESHOLDS } 
 import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
-import { BarChart, LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { BarChart, LineChart, ScatterChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import OverlayPanel from 'primevue/overlaypanel';
+import Timeline from 'primevue/timeline';
 
-use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
+use([BarChart, LineChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = { MOVIMENTACAO: 0, EVOLUCAO: 1, INDICADORES: 2, CRMS: 3, FALECIDOS: 4, REGIAO: 5 };
@@ -82,6 +85,7 @@ const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
+const { timelineData, timelineLoading, fetchTimeline } = useMultiCnpjTimeline();
 
 // ── Composables (Fim) ─────────────────────────────────────
 
@@ -112,6 +116,145 @@ const falecidosAgrupados = computed(() => {
   }
   return [...grupos.values()];
 });
+
+const opMultiCnpj = ref(null);
+const selectedMultiCpf = ref(null);
+
+const toggleMultiCnpj = (event, grupo) => {
+  selectedMultiCpf.value = grupo;
+  opMultiCnpj.value.toggle(event);
+  // Dispara o fetch real ao abrir o painel
+  if (grupo?.cpf && cnpj.value) {
+    fetchTimeline(grupo.cpf, cnpj.value);
+  }
+};
+
+const parseCnpjs = (s) => (s ? s.split(',').map(v => v.trim()) : []);
+
+const parseDateSafe = (v) => {
+  if (!v) return null;
+  let d = new Date(v);
+  if (isNaN(d.getTime()) && typeof v === 'string') {
+    const parts = v.split('/');
+    if (parts.length === 3) d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+  }
+  return isNaN(d.getTime()) ? null : d.getTime();
+};
+
+
+// ── Gráfico de Trilhas Temporais — usa dados REAIS da API ──
+const timelineChartOption = computed(() => {
+  // Enquanto carrega, retorna null (o template mostra o spinner)
+  if (!timelineData.value || !timelineData.value.events?.length) return null;
+
+  const td = timelineData.value;
+
+  // 1. Mapeia CNPJs únicos → rótulos do eixo Y
+  //    O CNPJ de referência sempre fica no índice 0 (topo com inverse:true)
+  const cnpjsOrdenados = [cnpj.value];
+  td.cnpjs_envolvidos.forEach(c => { if (c !== cnpj.value) cnpjsOrdenados.push(c); });
+
+  // Rótulos: tenta usar a razão social do primeiro evento daquele CNPJ
+  const labelMap = {};
+  td.events.forEach(e => {
+    if (!labelMap[e.cnpj]) {
+      labelMap[e.cnpj] = e.razao_social
+        ? e.razao_social.substring(0, 22) + (e.razao_social.length > 22 ? '…' : '')
+        : e.cnpj;
+    }
+  });
+  const yLabels = cnpjsOrdenados.map((c, i) =>
+    i === 0 ? `▶ ${labelMap[c] ?? c}` : (labelMap[c] ?? c)
+  );
+  const cnpjToIdx = Object.fromEntries(cnpjsOrdenados.map((c, i) => [c, i]));
+
+  // 2. Monta os pontos do scatter
+  const dataPoints = td.events.map(e => {
+    const ts = parseDateSafe(e.data_autorizacao);
+    if (!ts) return null;
+    const yIdx = cnpjToIdx[e.cnpj] ?? 0;
+    return {
+      value: [ts, yIdx, e.valor_total_autorizacao ?? 0, e.num_autorizacao ?? ''],
+      itemStyle: { color: e.is_this_cnpj ? '#3b82f6' : '#f59e0b' }
+    };
+  }).filter(Boolean);
+
+  const allTs = dataPoints.map(p => p.value[0]);
+  const pad = 86400000; // 1 dia de margem
+  const minTs = Math.min(...allTs) - pad;
+  const maxTs = Math.max(...allTs) + pad;
+
+  return {
+    backgroundColor: 'transparent',
+    grid: { top: 16, left: 170, right: 20, bottom: 40, containLabel: false },
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: 'rgba(255,255,255,0.15)',
+      textStyle: { color: '#fff', fontSize: 11 },
+      formatter: (params) => {
+        const [ts, yIdx, valor, numAut] = params.value;
+        const estLabel = yLabels[yIdx] ?? `CNPJ ${yIdx}`;
+        const isRef = yIdx === 0;
+        const dataFmt = new Date(ts).toLocaleDateString('pt-BR');
+        return `<div style="font-weight:700;margin-bottom:4px;color:${isRef ? '#3b82f6' : '#f59e0b'}">${estLabel}</div>
+                <div style="opacity:0.8;">Data: ${dataFmt}</div>
+                <div style="margin-top:4px;">Valor: <strong>${formatCurrencyFull(valor)}</strong></div>
+                ${numAut ? `<div style="opacity:0.5;font-size:10px;">Aut.: ${numAut}</div>` : ''}`;
+      }
+    },
+    dataZoom: [{ type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true }],
+    xAxis: {
+      type: 'time',
+      min: minTs,
+      max: maxTs,
+      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
+      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.06)', type: 'dashed' } },
+      axisLabel: {
+        color: 'rgba(255,255,255,0.5)',
+        fontSize: 9,
+        formatter: (v) => {
+          const date = new Date(v);
+          return date.getFullYear().toString();
+        }
+      },
+      splitNumber: 2, // Isso força 3 marcas (Início, Meio e Fim)
+    },
+    yAxis: {
+      type: 'category',
+      data: yLabels,
+      inverse: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: 'rgba(255,255,255,0.75)',
+        fontSize: 9,
+        fontWeight: 700,
+        width: 160,
+        overflow: 'truncate'
+      },
+      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.07)' } }
+    },
+    series: [{
+      type: 'scatter',
+      data: dataPoints,
+      symbolSize: v => Math.max(12, Math.min(24, 12 + Math.log1p(v[2] / 50))),
+      encode: { x: 0, y: 1 }
+    }]
+  };
+});
+
+// CNPJs envolvidos — usa dados reais quando disponíveis
+const outrosCnpjList = computed(() => {
+  if (timelineData.value?.cnpjs_envolvidos?.length) {
+    // Exclui o CNPJ de referência da lista
+    return timelineData.value.cnpjs_envolvidos.filter(c => c !== cnpj.value);
+  }
+  if (!selectedMultiCpf.value) return [];
+  return parseCnpjs(selectedMultiCpf.value.outros_cnpj);
+});
+
+
 
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
@@ -581,10 +724,10 @@ const areaOption = computed(() => {
                             class="pct-bar"
                             :style="{
                               width: Math.min(s.pct_irregular, 100) + '%',
-                              background: s.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? RISK_COLORS.CRITICAL
-                                        : s.pct_irregular >= RISK_THRESHOLDS.HIGH     ? RISK_COLORS.HIGH
-                                        : s.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? RISK_COLORS.MEDIUM
-                                        : RISK_COLORS.LOW
+                              background: s.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
+                                        : s.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
+                                        : s.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
+                                        : 'var(--risk-low)'
                             }"
                           />
                         </div>
@@ -899,7 +1042,14 @@ const areaOption = computed(() => {
                             <span class="f-group-meta">{{ formatCurrencyFull(grupo.total_valor) }}</span>
                             <span class="f-group-sep">|</span>
                             <span class="f-group-meta">Óbito: {{ grupo.dt_obito }}</span>
-                            <Tag v-if="grupo.outros_cnpj" icon="pi pi-share-alt" value="MULTI-CNPJ" severity="warning" class="f-multi-tag" v-tooltip.top="grupo.outros_cnpj" style="margin-left: 0.75rem;" />
+                            <Tag 
+                              v-if="grupo.outros_cnpj" 
+                              icon="pi pi-share-alt" 
+                              value="MULTI-CNPJ" 
+                              class="f-multi-tag risk-medium clickable-badge" 
+                              @click="(e) => toggleMultiCnpj(e, grupo)"
+                              style="margin-left: 0.75rem;" 
+                            />
                           </td>
                         </tr>
                         <!-- ── LINHAS DE TRANSAÇÃO ── -->
@@ -970,6 +1120,62 @@ const areaOption = computed(() => {
       </TabPanel>
 
     </TabView>
+
+    <!-- POPOVER MULTI-CNPJ (GRÁFICO DE TRILHAS) -->
+    <OverlayPanel ref="opMultiCnpj" class="multi-cnpj-panel" style="width: 560px">
+      <div v-if="selectedMultiCpf" class="multi-cnpj-content">
+        <header class="multi-header">
+          <i class="pi pi-share-alt" />
+          <span>Mapa de Relacionamento Temporal</span>
+          <i v-if="timelineLoading" class="pi pi-spin pi-spinner" style="margin-left:auto;font-size:0.8rem;opacity:0.6;" />
+        </header>
+
+        <!-- Meta do CPF -->
+        <div class="multi-cpf-meta">
+          <span class="multi-cpf-label">CPF:</span>
+          <span class="multi-cpf-val">{{ selectedMultiCpf.cpf }}</span>
+          <span class="multi-cpf-sep">·</span>
+          <span class="multi-cpf-name">{{ selectedMultiCpf.nome }}</span>
+          <span class="multi-cpf-sep">·</span>
+          <span class="multi-cpf-obito">Óbito: {{ selectedMultiCpf.dt_obito }}</span>
+        </div>
+
+        <p class="multi-desc">Relacionamento gráfico das vendas detectadas nos diferentes estabelecimentos:</p>
+
+        <!-- Legenda -->
+        <div class="multi-legend">
+          <span class="legend-dot" style="background:#3b82f6"></span><span>Este Estabelecimento</span>
+          <span class="legend-dot" style="background:#f59e0b;margin-left:1rem"></span><span>Outro Estabelecimento</span>
+        </div>
+
+        <!-- Área do gráfico: spinner | gráfico | sem dados -->
+        <div class="timeline-chart-wrap">
+          <div v-if="timelineLoading" class="timeline-loading">
+            <i class="pi pi-spin pi-spinner" />
+            <span>Buscando transações reais...</span>
+          </div>
+          <div v-else-if="!timelineChartOption" class="timeline-empty">
+            <i class="pi pi-inbox" />
+            <span>Sem dados de transações para exibir.</span>
+          </div>
+          <VChart v-else :option="timelineChartOption" autoresize />
+        </div>
+
+        <!-- Lista dos CNPJs vinculados -->
+        <div class="multi-cnpj-list-section" v-if="outrosCnpjList.length">
+          <div class="multi-cnpj-list-title">
+            <i class="pi pi-building" />
+            <span>CNPJs vinculados ao mesmo CPF</span>
+          </div>
+          <ul class="multi-list">
+            <li v-for="(c, i) in outrosCnpjList" :key="c" class="multi-item">
+              <span class="multi-idx">{{ i + 1 }}</span>
+              <span class="multi-cnpj-val">{{ formatCnpj(c) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </OverlayPanel>
   </div>
 </template>
 
@@ -1266,8 +1472,8 @@ const areaOption = computed(() => {
 }
 
 .sem-label   { font-weight: 600; color: var(--text-secondary); }
-.col-regular { color: v-bind('RISK_COLORS.LOW'); }
-.col-irregular { color: v-bind('RISK_COLORS.HIGH'); }
+.col-regular { color: var(--risk-low); }
+.col-irregular { color: var(--risk-high); }
 
 /* ── Barra de progresso % ────────────────────────────── */
 .pct-cell {
@@ -1290,10 +1496,10 @@ const areaOption = computed(() => {
 }
 
 .pct-value    { font-weight: 600; font-size: 0.82rem; }
-.pct-critical { color: v-bind('RISK_COLORS.CRITICAL'); }
-.pct-high     { color: v-bind('RISK_COLORS.HIGH'); }
-.pct-medium   { color: v-bind('RISK_COLORS.MEDIUM'); }
-.pct-low      { color: v-bind('RISK_COLORS.LOW'); }
+.pct-critical { color: var(--risk-critical); }
+.pct-high     { color: var(--risk-high); }
+.pct-medium   { color: var(--risk-medium); }
+.pct-low      { color: var(--risk-low); }
 
 /* ── Tendência ───────────────────────────────────────── */
 .trend-cell {
@@ -1303,8 +1509,8 @@ const areaOption = computed(() => {
   white-space: nowrap;
 }
 
-.trend-up      { color: v-bind('RISK_COLORS.HIGH'); }
-.trend-down    { color: v-bind('RISK_COLORS.LOW'); }
+.trend-up      { color: var(--risk-high); }
+.trend-down    { color: var(--risk-low); }
 .trend-neutral { color: var(--text-muted); font-weight: 400; }
 
 /* ── INDICADORES ─────────────────────────────────────── */
@@ -1317,9 +1523,9 @@ const areaOption = computed(() => {
 
 /* Resumo de auditoria */
 .audit-summary {
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--risk-critical) 6%, var(--card-bg));
+  background: color-mix(in srgb, var(--risk-high) 6%, var(--card-bg));
   overflow: hidden;
 }
 
@@ -1328,12 +1534,12 @@ const areaOption = computed(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--risk-critical) 20%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--risk-high) 20%, transparent);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--risk-critical);
+  color: var(--risk-high);
 }
 
 .audit-badge {
@@ -1344,8 +1550,8 @@ const areaOption = computed(() => {
   height: 1.25rem;
   padding: 0 0.3rem;
   border-radius: 99px;
-  background: color-mix(in srgb, var(--risk-critical) 20%, transparent);
-  color: var(--risk-critical);
+  background: color-mix(in srgb, var(--risk-high) 20%, transparent);
+  color: var(--risk-high);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -1651,9 +1857,205 @@ const areaOption = computed(() => {
 
 .f-multi-tag {
   align-self: flex-start;
-  font-size: 0.6rem !important;
-  margin-top: 0.3rem;
-  height: 1.2rem;
+  font-size: 0.65rem !important;
+  margin-top: 0.1rem;
+  height: auto;
+  padding: 0.1rem 0.5rem;
+  background: transparent;
+  border-radius: 99px;
+}
+
+.clickable-badge {
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.clickable-badge:hover { transform: scale(1.05); }
+
+/* ── MULTI-CNPJ OVERLAY ────────────────────────────── */
+.multi-cnpj-panel {
+  background: color-mix(in srgb, var(--card-bg) 85%, transparent) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--sidebar-border) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4) !important;
+  border-radius: 12px !important;
+}
+
+.multi-cnpj-panel::before, .multi-cnpj-panel::after {
+  display: none !important; /* Remove a seta padrão para um look mais clean */
+}
+
+.multi-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--risk-medium);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.multi-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+.multi-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.multi-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.multi-cnpj-val {
+  font-family: monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+/* ── MAPA DE TRILHAS NO POPOVER ─────────────────────── */
+.multi-cpf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.multi-cpf-label { color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; font-size: 0.63rem; }
+.multi-cpf-val   { font-family: monospace; font-weight: 700; color: rgba(255,255,255,0.9); letter-spacing: 0.05em; }
+.multi-cpf-sep   { color: rgba(255,255,255,0.25); }
+.multi-cpf-name  { font-weight: 600; color: rgba(255,255,255,0.75); }
+.multi-cpf-obito { font-size: 0.68rem; color: rgba(255,165,0,0.8); font-weight: 600; }
+
+.multi-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 0.4rem;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-chart-wrap {
+  width: 100%;
+  height: 260px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 8px;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(255,255,255,0.05);
+  position: relative;
+}
+
+.timeline-loading,
+.timeline-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+}
+
+.timeline-loading i,
+.timeline-empty i {
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.3);
+}
+
+.multi-cnpj-list-section {
+  margin-top: 0.5rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.multi-cnpj-list-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,165,0,0.8);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,165,0,0.06);
+}
+
+.multi-idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(245,158,11,0.2);
+  color: #f59e0b;
+  font-size: 0.65rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.timeline-footer {
+  margin-top: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255,165,0,0.06);
+  border: 1px solid rgba(255,165,0,0.15);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.timeline-footer i {
+  color: orange;
+  font-size: 0.8rem;
+  margin-top: 0.1rem;
+}
+
+.timeline-footer span {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-weight: 500;
 }
 
 .f-date, .f-aut, .f-num, .f-val { font-size: 0.78rem; }

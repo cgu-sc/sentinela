@@ -1349,14 +1349,17 @@ const areaOption = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  gap: 0.75rem; /* Respiro entre os grandes blocos */
+  background: transparent;
 }
 
-/* ── HEADER REFORMULADO (FULL WIDTH) ──────────────────── */
+/* ── HEADER REFORMULADO (COM LARGURA MÁXIMA E BORDAS ARREDONDADAS) ── */
 .detail-header-new {
   background: var(--card-bg);
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--sidebar-border);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 12px; /* Suaviza as bordas sem encurtar lateralmente */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -1602,12 +1605,15 @@ const areaOption = computed(() => {
   color: var(--text-muted);
 }
 
-/* ── TABS ────────────────────────────────────────────── */
+/* ── TABS (COM BORDAS PARA ALINHAMENTO) ─────── */
 .detail-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 12px; /* Mantém o padrão de design em todo o corpo */
 }
 
 :deep(.p-tabview) {

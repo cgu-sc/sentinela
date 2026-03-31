@@ -220,8 +220,8 @@ const filteredLocation = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: color-mix(in srgb, var(--accent-indigo) 10%, transparent);
+  color: var(--accent-indigo);
   border-radius: 10px;
   font-size: 1.25rem;
 }
@@ -294,15 +294,15 @@ const filteredLocation = computed(() => {
 }
 
 .tipo-badge.matriz {
-  background: rgba(99, 102, 241, 0.18);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #818cf8;
+  background: color-mix(in srgb, var(--accent-indigo)    18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-indigo)    35%, transparent);
+  color: var(--accent-indigo);
 }
 
 .tipo-badge.filial {
-  background: rgba(100, 116, 139, 0.12);
-  border: 1px solid rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
+  background: color-mix(in srgb, var(--status-secondary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-secondary) 20%, transparent);
+  color: var(--status-secondary);
 }
 
 :deep(.clickable-badge) {
@@ -314,8 +314,5 @@ const filteredLocation = computed(() => {
   transform: scale(1.08);
 }
 
-body.dark-mode .header-icon-box {
-  background: rgba(99, 102, 241, 0.2);
-  color: #818cf8;
-}
+/* light/dark automático via var(--accent-indigo) — override removido */
 </style>

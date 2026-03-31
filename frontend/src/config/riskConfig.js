@@ -15,13 +15,8 @@ export const RISK_THRESHOLDS = {
   MEDIUM:    5,
 };
 
-/** Paleta de cores hex associada a cada nível (para uso em ECharts). */
-export const RISK_COLORS = {
-  CRITICAL: '#991b1b',
-  HIGH:     '#ef4444',
-  MEDIUM:   '#f59e0b',
-  LOW:      '#10b981',
-};
+/** Paleta de cores hex associada a cada nível (para uso em ECharts e CSS via v-bind). */
+export { RISK_COLORS } from './colors.js';
 
 /** Classes CSS associadas a cada nível (para uso em Tags/Badges do PrimeVue). */
 export const RISK_CSS_CLASSES = {

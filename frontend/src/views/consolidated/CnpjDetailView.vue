@@ -11,6 +11,7 @@ import { useIndicadores } from '@/composables/useIndicadores';
 import { useFalecidos } from '@/composables/useFalecidos';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import { useChartTheme } from '@/config/chartTheme';
+import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { RISK_COLORS, RISK_THRESHOLDS, INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
@@ -187,6 +188,10 @@ watch(
   { immediate: true }
 );
 
+onMounted(() => {
+  if (cnpj.value) fetchEvolucao(cnpj.value);
+});
+
 const geoData = computed(() => {
   const ibge7 = cnpjData.value?.id_ibge7;
   if (!ibge7 || !localidades.value?.length) return null;
@@ -228,7 +233,7 @@ const chartOption = computed(() => {
 
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.04)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,
@@ -327,7 +332,7 @@ const areaOption = computed(() => {
 
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.04)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,
@@ -406,11 +411,14 @@ const areaOption = computed(() => {
       <div class="header-identity" v-if="cnpjData">
         <div class="header-top">
           <span class="cnpj-badge">{{ cnpj }}</span>
-          <Tag
-            :value="getRiskLabel(risco)"
-            :severity="getRiskSeverity(risco)"
+          <span
             class="risk-tag"
-          />
+            :style="{
+              background: `color-mix(in srgb, ${getRiskColor(risco)} 18%, transparent)`,
+              color: getRiskColor(risco),
+              borderColor: `color-mix(in srgb, ${getRiskColor(risco)} 40%, transparent)`,
+            }"
+          >{{ getRiskLabel(risco) }}</span>
         </div>
         <h1 class="razao-social">{{ cnpjData.razao_social ?? '—' }}</h1>
         <p class="localidade">
@@ -463,6 +471,7 @@ const areaOption = computed(() => {
     <!-- TABS -->
     <TabView
       class="detail-tabs"
+      :activeIndex="TAB_INDEX.EVOLUCAO"
       @tab-change="(e) => {
         if (e.index === TAB_INDEX.EVOLUCAO)    fetchEvolucao(cnpj);
         if (e.index === TAB_INDEX.INDICADORES) fetchIndicadores(cnpj);
@@ -642,7 +651,12 @@ const areaOption = computed(() => {
               </ul>
             </div>
 
-            <div class="ind-table-wrap">
+            <div class="shadow-card ind-card">
+              <div class="section-header">
+                <i class="pi pi-table" />
+                <h3>Indicadores de Risco</h3>
+              </div>
+              <div class="ind-table-wrap">
               <table class="ind-table">
                 <colgroup>
                   <col style="width:28%" />
@@ -725,7 +739,8 @@ const areaOption = computed(() => {
                   </template>
                 </tbody>
               </table>
-            </div>
+              </div><!-- ind-table-wrap -->
+            </div><!-- ind-card -->
           </template>
 
           <div v-else class="tab-placeholder">
@@ -795,7 +810,7 @@ const areaOption = computed(() => {
               <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
                 <div class="section-title">
                   <i class="pi pi-share-alt" />
-                  <span>Cross-Pharmacy: Outros Estabelecimentos Relacionados</span>
+                  <span>Outros Estabelecimentos com CPFs Falecidos em Comum</span>
                 </div>
                 <div class="ranking-list">
                   <div v-for="r in falecidosData.ranking" :key="r.estabelecimento" class="ranking-item">
@@ -976,7 +991,19 @@ const areaOption = computed(() => {
   letter-spacing: 0.05em;
 }
 
-.risk-tag { font-size: 0.7rem; }
+.risk-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+  border: 1px solid;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 
 .razao-social {
   font-size: 1.1rem;
@@ -1306,11 +1333,19 @@ const areaOption = computed(() => {
   margin-left: 0.25rem;
 }
 
+.ind-card {
+  padding-bottom: 0;
+}
+
+.ind-card .section-header {
+  margin-bottom: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
 .ind-table-wrap {
   overflow: hidden;
-  border-top: 1px solid var(--sidebar-border);
-  border-bottom: 1px solid var(--sidebar-border);
-  border-radius: 10px;
+  border-radius: 0 0 16px 16px;
 }
 
 .ind-table {
@@ -1557,9 +1592,9 @@ const areaOption = computed(() => {
   font-weight: 700;
 }
 
-.d-medium { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
-.d-high { background: rgba(255, 87, 34, 0.15); color: #ff5722; }
-.d-critical { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+.d-medium   { background: color-mix(in srgb, v-bind('RISK_COLORS.MEDIUM')   15%, transparent); color: v-bind('RISK_COLORS.MEDIUM');   }
+.d-high     { background: color-mix(in srgb, v-bind('RISK_COLORS.HIGH')     15%, transparent); color: v-bind('RISK_COLORS.HIGH');     }
+.d-critical { background: color-mix(in srgb, v-bind('RISK_COLORS.CRITICAL') 15%, transparent); color: v-bind('RISK_COLORS.CRITICAL'); }
 
 .f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); }
 .f-fonte { font-size: 0.72rem; color: var(--text-muted); }
@@ -1691,20 +1726,12 @@ const areaOption = computed(() => {
   border-radius: 99px;
 }
 .highlight-red {
-  border-left: 3px solid #ef4444 !important;
-  background: color-mix(in srgb, #ef4444 8%, var(--card-bg)) !important;
-}
-
-body.dark-mode .highlight-red {
-  background: color-mix(in srgb, #f87171 12%, var(--card-bg)) !important;
+  border-left: 3px solid v-bind('chartDataColors.red') !important;
+  background: color-mix(in srgb, v-bind('chartDataColors.red') 10%, var(--card-bg)) !important;
 }
 
 .highlight-red .f-kpi-val {
-  color: #ef4444 !important;
+  color: v-bind('chartDataColors.red') !important;
   font-weight: 800;
-}
-
-body.dark-mode .highlight-red .f-kpi-val {
-  color: #f87171 !important;
 }
 </style>

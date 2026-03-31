@@ -1,9 +1,9 @@
 <script setup>
 import { computed } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
-import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
-import { useChartTheme } from '@/config/chartTheme'; // eslint-disable-line
+import { useChartTheme } from '@/config/chartTheme';
+import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
@@ -23,17 +23,15 @@ use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, Legen
 
 // ── Stores ────────────────────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
-const themeStore     = useThemeStore();
 const { fatorRisco, fatorRiscoLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull, formatNumberFull } = useFormatting();
-const { chartTheme } = useChartTheme();
+const { chartTheme, chartDataColors, chartRiskAccents } = useChartTheme();
 
-// ── Tema (cores específicas do gráfico + base do chartTheme) ──────────────
+// ── Tema (cores do gráfico vindas de colors.js via useChartTheme) ─────────
 const C = computed(() => ({
   ...chartTheme.value,
-  bar:     themeStore.isDark ? '#8b5cf6' : '#7c3aed',
-  barGrad: themeStore.isDark ? '#a78bfa' : '#8b5cf6',
-  area:    themeStore.isDark ? '#ef4444' : '#dc2626',
+  ...chartRiskAccents.value,        // bar, barGrad (violeta)
+  area: chartDataColors.value.red,  // mesmo vermelho do Volume Financeiro
 }));
 
 // ── Opção ECharts ─────────────────────────────────────────────────────────
@@ -96,7 +94,7 @@ const chartOption = computed(() => {
 
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.04)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,

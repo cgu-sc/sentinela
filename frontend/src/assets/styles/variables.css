@@ -32,13 +32,32 @@
   --scrollbar-thumb-hover: #94a3b8;
 
   /* Cor Primária Sentinela */
-  --primary-color: #3b82f6; 
+  --primary-color: #3b82f6;
+
+  /* Texto sobre cor primária (botões, itens de lista ativos) */
+  --color-on-primary: #ffffff;
+
+  /* Cor de erro vibrante — ícones e títulos de alerta */
+  --color-error: #ef4444;
+
+  /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
+  --risk-low:      #166534;
+  --risk-medium:   #92400e;
+  --risk-high:     #991b1b;
+  --risk-critical: #7f1d1d;
+
+  /* Badges de status */
+  --status-info:      #1e40af;
+  --status-secondary: #475569;
+
+  /* Accent Indigo — paginadores e ícones de tabela */
+  --accent-indigo: #6366f1;
 }
 
 :root.dark-mode {
   --bg-color: #0d1117;
   --text-color: #cbd5e1;
-  --text-muted: #8b949e;
+  --text-muted: #9aa4ae;
   --card-bg: #161b22;
   --sidebar-bg: #0d1117;
   --sidebar-text: #e6edf3;
@@ -66,4 +85,17 @@
 
   /* Cor Primária Sentinela */
   --primary-color: #6366f1;
+
+  /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
+  --risk-low:      #4ade80;
+  --risk-medium:   #fbbf24;
+  --risk-high:     #f87171;
+  --risk-critical: #ff8a8a;
+
+  /* Badges de status */
+  --status-info:      #60a5fa;
+  --status-secondary: #94a3b8;
+
+  /* Accent Indigo dark */
+  --accent-indigo: #818cf8;
 }

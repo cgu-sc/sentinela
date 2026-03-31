@@ -1,10 +1,10 @@
 <script setup>
 import { computed } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
-import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
-import { useChartTheme } from '@/config/chartTheme'; // eslint-disable-line
+import { useChartTheme } from '@/config/chartTheme';
+import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
@@ -30,26 +30,20 @@ const props = defineProps({
 
 // ── Stores ────────────────────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
-const themeStore     = useThemeStore();
 const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull } = useFormatting();
 const { getRiskColor, getRiskLabel } = useRiskMetrics();
-const { chartTheme } = useChartTheme();
+const { chartTheme, chartUFAccents } = useChartTheme();
 
 // ── Dados ordenados por % Valor decrescente ───────────────────────────────
 const sortedData = computed(() =>
   [...resultadoSentinelaUF.value].sort((a, b) => (b.percValSemComp ?? 0) - (a.percValSemComp ?? 0))
 );
 
-// ── Tema (cores específicas do gráfico + base do chartTheme) ──────────────
+// ── Tema (cores do gráfico vindas de colors.js via useChartTheme) ─────────
 const C = computed(() => ({
   ...chartTheme.value,
-  bar1:     themeStore.isDark ? '#6366f1' : '#4f46e5',
-  bar1Grad: themeStore.isDark ? '#6366f144' : '#4f46e522',
-  bar2:     themeStore.isDark ? '#10b981' : '#059669',
-  bar2Grad: themeStore.isDark ? '#10b98144' : '#05966922',
-  area:     themeStore.isDark ? '#3b82f6' : '#2563eb',
-  areaGrad: themeStore.isDark ? '#3b82f608' : '#2563eb08',
+  ...chartUFAccents.value,  // bar1, bar1Grad, bar2, bar2Grad, area, areaGrad, barRed, barOrange
 }));
 
 // ── Opção ECharts ─────────────────────────────────────────────────────────
@@ -140,7 +134,7 @@ axisPointer: {
 
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(255,255,255,0.04)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,
@@ -169,14 +163,14 @@ axisPointer: {
             </div>
             <div>
               <div style="font-size:10px;opacity:.6;letter-spacing:.04em;display:flex;align-items:center;gap:5px;">
-                <span style="width:10px;height:10px;border-radius:2px;background:#ef4444;display:inline-block;"></span>
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.barRed};display:inline-block;"></span>
                 % VALOR S/ COMP
               </div>
               <div style="font-weight:700;font-size:14px;color:${riskColor};">${perc.toFixed(2)}%</div>
             </div>
             <div>
               <div style="font-size:10px;opacity:.6;letter-spacing:.04em;display:flex;align-items:center;gap:5px;">
-                <span style="width:10px;height:10px;border-radius:2px;background:#f97316;display:inline-block;"></span>
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.barOrange};display:inline-block;"></span>
                 % QTDE S/ COMP
               </div>
               <div style="font-weight:700;font-size:14px;">${(item.percQtdeSemComp ?? 0).toFixed(2)}%</div>
@@ -225,8 +219,8 @@ axisPointer: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: '#ef4444' },
-              { offset: 1, color: '#ef444433' },
+              { offset: 0, color: c.barRed },
+              { offset: 1, color: c.barRed + '33' },
             ],
           },
         },
@@ -247,8 +241,8 @@ axisPointer: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: '#f97316' },
-              { offset: 1, color: '#f9731633' },
+              { offset: 0, color: c.barOrange },
+              { offset: 1, color: c.barOrange + '33' },
             ],
           },
         },

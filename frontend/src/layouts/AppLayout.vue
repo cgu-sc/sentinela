@@ -2,7 +2,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, ANALYSIS_YEARS, TIMING } from '@/config/constants';
+import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, FILTER_ALL_VALUE, ANALYSIS_YEARS, TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
@@ -210,42 +210,57 @@ const {
         
         <!-- 1. FILTROS GLOBAIS (SEMPRE PRESENTES) -->
         <div class="filter-section">
-          <label class="filter-label">UF</label>
+          <label class="filter-label">
+            UF
+            <button v-if="isFilterActive('selectedUF')" class="filter-clear-btn" @click="filterStore.selectedUF = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
           <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
         </div>
 
         <div class="filter-section">
-          <label class="filter-label">Região de Saúde</label>
-          <Dropdown 
-            v-model="filterStore.selectedRegiaoSaude" 
-            :options="regiaoSaudeOptions" 
-            placeholder="Região" 
-            filter 
+          <label class="filter-label">
+            Região de Saúde
+            <button v-if="isFilterActive('selectedRegiaoSaude')" class="filter-clear-btn" @click="filterStore.selectedRegiaoSaude = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
+          <Dropdown
+            v-model="filterStore.selectedRegiaoSaude"
+            :options="regiaoSaudeOptions"
+            placeholder="Região"
+            filter
             reset-filter-on-hide
             auto-option-focus
             filter-match-mode="contains"
             @show="onDropdownShow"
-            :virtualScrollerOptions="{ itemSize: 32 }" 
-            class="w-full filter-input" 
+            :virtualScrollerOptions="{ itemSize: 32 }"
+            class="w-full filter-input"
             :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }"
           />
         </div>
 
         <div class="filter-section">
-          <label class="filter-label">Município</label>
-          <Dropdown 
-            v-model="filterStore.selectedMunicipio" 
-            :options="municipioOptions" 
-            placeholder="Município" 
-            filter 
+          <label class="filter-label">
+            Município
+            <button v-if="isFilterActive('selectedMunicipio')" class="filter-clear-btn" @click="filterStore.selectedMunicipio = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
+          <Dropdown
+            v-model="filterStore.selectedMunicipio"
+            :options="municipioOptions"
+            placeholder="Município"
+            filter
             optionLabel="label"
             optionValue="value"
             reset-filter-on-hide
             auto-option-focus
             filter-match-mode="contains"
             @show="onDropdownShow"
-            :virtualScrollerOptions="{ itemSize: 32 }" 
-            class="w-full filter-input" 
+            :virtualScrollerOptions="{ itemSize: 32 }"
+            class="w-full filter-input"
             :class="{ 'filter-active': isFilterActive('selectedMunicipio') }"
           />
         </div>
@@ -280,6 +295,9 @@ const {
                 style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;"
                 v-tooltip.right="'Aceita CNPJ completo (14 dígitos) ou apenas a raiz (8 dígitos), com ou sem máscara. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede.'"
               />
+              <button v-if="isFilterActive('selectedCnpjRaiz')" class="filter-clear-btn" @click="filterStore.selectedCnpjRaiz = ''" v-tooltip.right="'Limpar filtro'">
+                <i class="pi pi-eraser" />
+              </button>
             </label>
             <InputText
               v-model="filterStore.selectedCnpjRaiz"
@@ -650,13 +668,46 @@ const {
 }
 
 .filter-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   margin-bottom: 0.25rem;
   color: var(--text-muted);
   letter-spacing: 0.5px;
+}
+
+.filter-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.filter-clear-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--color-error);
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.filter-clear-btn:hover {
+  opacity: 1;
+}
+
+.filter-clear-btn .pi {
+  font-size: 0.75rem;
 }
 
 /* COMPONENTES COMPACTOS DO PRIMEVUE */
@@ -944,7 +995,7 @@ const {
 
 :deep(.custom-listbox .p-listbox-item.p-highlight) {
     background: var(--primary-color);
-    color: #fff;
+    color: var(--color-on-primary);
 }
 
 :deep(.custom-listbox .p-listbox-item:not(.p-highlight):hover) {
@@ -1199,7 +1250,7 @@ const {
 }
 :global(.admin-layout) .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
     background: var(--primary-color);
-    color: #fff;
+    color: var(--color-on-primary);
     border-color: var(--primary-color);
 }
 
@@ -1252,7 +1303,7 @@ const {
 :global(.dark-mode) .p-monthpicker .p-monthpicker-month.p-highlight,
 :global(.dark-mode) .p-yearpicker .p-yearpicker-year.p-highlight {
     background: var(--primary-color) !important;
-    color: #ffffff !important;
+    color: var(--color-on-primary) !important;
 }
 
 :global(.p-dropdown-item) {
@@ -1272,13 +1323,13 @@ const {
 
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
     background: var(--primary-color) !important;
-    color: #ffffff !important;
+    color: var(--color-on-primary) !important;
 }
 
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight:hover),
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight.p-focus) {
     background: var(--primary-color) !important;
-    color: #ffffff !important;
+    color: var(--color-on-primary) !important;
     opacity: 0.9;
 }
 
@@ -1441,16 +1492,16 @@ const {
 
 /* ── ESTADO DE ERRO NO MODAL DE SYNC ── */
 .sync-error-icon {
-    background: color-mix(in srgb, #ef4444 12%, transparent) !important;
+    background: color-mix(in srgb, var(--color-error) 12%, transparent) !important;
     animation: shake 0.4s ease;
 }
 
 .sync-error-icon i {
-    color: #ef4444 !important;
+    color: var(--color-error) !important;
 }
 
 .sync-error-title {
-    color: #ef4444 !important;
+    color: var(--color-error) !important;
 }
 
 .sync-error-msg {

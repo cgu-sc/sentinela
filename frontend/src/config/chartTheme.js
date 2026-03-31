@@ -1,14 +1,16 @@
 /**
  * Tema central para gráficos ECharts.
- * Fonte única de verdade para cores, fontes e estilos visuais.
- * Importar em todos os componentes de gráfico em vez de duplicar as cores.
+ * Todos os tokens de cor são importados de colors.js.
+ * Importar este composable em todos os componentes de gráfico.
  */
 import { computed } from 'vue';
 import { useThemeStore } from '@/stores/theme';
+import { CHART_SERIES, CHART_RISK_ACCENTS, CHART_UF_ACCENTS } from './colors.js';
 
 export function useChartTheme() {
   const themeStore = useThemeStore();
 
+  /** Cores de interface do gráfico (texto, grid, tooltip, fundo). */
   const chartTheme = computed(() => themeStore.isDark
     ? {
         text:    '#e2e8f0',
@@ -28,20 +30,19 @@ export function useChartTheme() {
       }
   );
 
-  /** Cores de dados para séries de gráficos (verde=regular, vermelho=irregular). */
-  const chartDataColors = computed(() => themeStore.isDark
-    ? {
-        green:     '#4ade80',
-        greenGrad: '#86efac',
-        red:       '#f87171',
-        redGrad:   '#fca5a5',
-      }
-    : {
-        green:     '#22c55e',
-        greenGrad: '#4ade80',
-        red:       '#ef4444',
-        redGrad:   '#f87171',
-      }
+  /** Par regular (verde) / irregular (vermelho) — Volume Financeiro e similares. */
+  const chartDataColors = computed(() =>
+    themeStore.isDark ? CHART_SERIES.dark : CHART_SERIES.light
+  );
+
+  /** Acentos do RiskAnalysisChart (barras violeta). */
+  const chartRiskAccents = computed(() =>
+    themeStore.isDark ? CHART_RISK_ACCENTS.dark : CHART_RISK_ACCENTS.light
+  );
+
+  /** Acentos do UfAnalysisChart (índigo, esmeralda, azul, vermelho, laranja). */
+  const chartUFAccents = computed(() =>
+    themeStore.isDark ? CHART_UF_ACCENTS.dark : CHART_UF_ACCENTS.light
   );
 
   /** Configuração base compartilhada por todos os gráficos ECharts do projeto. */
@@ -53,5 +54,5 @@ export function useChartTheme() {
     textStyle: { fontFamily: 'Inter, sans-serif' },
   }));
 
-  return { chartTheme, chartDataColors, baseChartConfig };
+  return { chartTheme, chartDataColors, chartRiskAccents, chartUFAccents, baseChartConfig };
 }

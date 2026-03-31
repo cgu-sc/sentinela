@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { PALETTE } from '@/config/colors.js';
 
 export function useChartStyles(themeStore) {
   /**
@@ -14,87 +15,61 @@ export function useChartStyles(themeStore) {
         easing: 'easeinout',
         speed: 800
       },
-      foreColor: themeStore.isDark ? '#94a3b8' : '#64748b'
+      foreColor: themeStore.isDark ? PALETTE.slate[400]  : PALETTE.slate[500],
     },
     grid: {
       borderColor: themeStore.isDark ? '#27272a' : '#f1f5f9',
       strokeDashArray: 4,
-      padding: {
-        top: 20,
-        right: 20,
-        bottom: 20,
-        left: 20
-      }
+      padding: { top: 20, right: 20, bottom: 20, left: 20 }
     },
     tooltip: {
       theme: themeStore.isDark ? 'dark' : 'light',
       shared: true,
       intersect: false,
-      style: {
-        fontSize: '12px',
-        fontFamily: 'Inter, sans-serif'
-      }
+      style: { fontSize: '12px', fontFamily: 'Inter, sans-serif' }
     },
     legend: {
       position: 'top',
       horizontalAlign: 'center',
       labels: {
-        colors: themeStore.isDark ? '#f4f4f5' : '#1e293b'
+        colors: themeStore.isDark ? PALETTE.zinc[100] : PALETTE.slate[800],
       },
-      markers: {
-        radius: 12
-      }
+      markers: { radius: 12 }
     },
     xaxis: {
       axisBorder: { show: false },
-      axisTicks: { show: false },
-      labels: {
-        style: {
-          fontSize: '11px',
-          fontWeight: 500
-        }
-      }
+      axisTicks:  { show: false },
+      labels: { style: { fontSize: '11px', fontWeight: 500 } }
     },
     yaxis: {
-      labels: {
-        style: {
-          fontSize: '11px',
-          fontWeight: 500
-        }
-      }
+      labels: { style: { fontSize: '11px', fontWeight: 500 } }
     }
   }));
 
   /**
    * Paleta de cores oficial do Sentinela para séries de dados.
-   * Dinamizada para garantir ótimo contraste tanto no claro quanto no escuro.
+   * Importada de colors.js — fonte única de verdade.
    */
-  const chartColors = computed(() => {
-    if (themeStore.isDark) {
-      return {
-        primary: '#6366f1',  // Indigo 500 (Brilha no claro escuro)
-        secondary: '#3b82f6', // Blue 500
-        warning: '#f59e0b',  // Amber 500
-        danger: '#ef4444',   // Red 500
-        success: '#10b981',  // Emerald 500
-        info: '#0ea5e9',
-        muted: '#94a3b8'
-      };
-    } else {
-      return {
-        primary: '#4f46e5',  // Indigo 600 (Melhor contraste no branco)
-        secondary: '#2563eb', // Blue 600
-        warning: '#d97706',  // Amber 600
-        danger: '#dc2626',   // Red 600
-        success: '#059669',  // Emerald 600
-        info: '#0284c7',
-        muted: '#64748b'
-      };
-    }
-  });
+  const chartColors = computed(() => themeStore.isDark
+    ? {
+        primary:   PALETTE.indigo[500],   // '#6366f1'
+        secondary: PALETTE.blue[500],     // '#3b82f6'
+        warning:   PALETTE.amber[500],    // '#f59e0b'
+        danger:    PALETTE.red[500],      // '#ef4444'
+        success:   PALETTE.emerald[500],  // '#10b981'
+        info:      '#0ea5e9',
+        muted:     PALETTE.slate[400],    // '#94a3b8'
+      }
+    : {
+        primary:   PALETTE.indigo[600],   // '#4f46e5'
+        secondary: PALETTE.blue[600],     // '#2563eb'
+        warning:   PALETTE.amber[600],    // '#d97706'
+        danger:    PALETTE.red[600],      // '#dc2626'
+        success:   PALETTE.emerald[600],  // '#059669'
+        info:      '#0284c7',
+        muted:     PALETTE.slate[500],    // '#64748b'
+      }
+  );
 
-  return {
-    chartBaseOptions,
-    chartColors
-  };
+  return { chartBaseOptions, chartColors };
 }

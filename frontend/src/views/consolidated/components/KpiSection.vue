@@ -1,10 +1,12 @@
 <script setup>
 import { useAnalyticsStore } from '@/stores/analytics';
+import { useChartTheme } from '@/config/chartTheme';
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
 const analyticsStore = useAnalyticsStore();
 const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
+const { chartDataColors } = useChartTheme();
 </script>
 
 <template>
@@ -127,10 +129,10 @@ const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: color-mix(in srgb, v-bind('chartDataColors.red') 10%, transparent);
+  border: 1px solid color-mix(in srgb, v-bind('chartDataColors.red') 20%, transparent);
   border-radius: 8px;
-  color: #f87171;
+  color: v-bind('chartDataColors.red');
   margin-bottom: 2rem;
 }
 </style>

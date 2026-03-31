@@ -74,8 +74,8 @@
     font-size: 1.25rem;
   }
   
-  .kpi-icon.total { background: rgba(99, 102, 241, 0.15); color: #6366f1; } 
-  .kpi-icon.danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+  .kpi-icon.total  { background: color-mix(in srgb, var(--accent-indigo)  15%, transparent); color: var(--accent-indigo);  }
+  .kpi-icon.danger { background: color-mix(in srgb, var(--color-error)    15%, transparent); color: var(--color-error);   }
   
   /* BADGES ELEGANTES */
   .p-tag {
@@ -89,78 +89,68 @@
       border: 1px solid transparent;
   }
   
+  /* RISK BADGES — cores via var() — light/dark automático */
   .risk-low {
-      background: rgba(34, 197, 94, 0.12) !important;
-      color: #166534 !important;
-      border: 1px solid rgba(34, 197, 94, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-low)      12%, transparent) !important;
+      color: var(--risk-low) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-low)      25%, transparent) !important;
   }
 
   .risk-medium {
-      background: rgba(245, 158, 11, 0.15) !important;
-      color: #92400e !important;
-      border: 1px solid rgba(245, 158, 11, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-medium)   15%, transparent) !important;
+      color: var(--risk-medium) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
   }
 
   .risk-high {
-      background: rgba(239, 68, 68, 0.12) !important;
-      color: #991b1b !important;
-      border: 1px solid rgba(239, 68, 68, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-high)     12%, transparent) !important;
+      color: var(--risk-high) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
   }
 
   .risk-critical {
-      background: rgba(153, 27, 27, 0.18) !important;
-      color: #7f1d1d !important;
-      border: 1px solid rgba(153, 27, 27, 0.35) !important;
+      background: color-mix(in srgb, var(--risk-critical) 18%, transparent) !important;
+      color: var(--risk-critical) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-critical) 35%, transparent) !important;
+      font-weight: 800;
   }
 
-  /* STATUS BADGES (MODERN GLASS STYLE) */
+  /* STATUS BADGES */
   .status-success {
-      background: rgba(34, 197, 94, 0.12) !important;
-      color: #166534 !important;
-      border: 1px solid rgba(34, 197, 94, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-low)          12%, transparent) !important;
+      color: var(--risk-low) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-low)      25%, transparent) !important;
   }
 
   .status-danger {
-      background: rgba(239, 68, 68, 0.12) !important;
-      color: #991b1b !important;
-      border: 1px solid rgba(239, 68, 68, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-high)          12%, transparent) !important;
+      color: var(--risk-high) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
   }
 
   .status-warn {
-      background: rgba(245, 158, 11, 0.15) !important;
-      color: #92400e !important;
-      border: 1px solid rgba(245, 158, 11, 0.25) !important;
+      background: color-mix(in srgb, var(--risk-medium)        15%, transparent) !important;
+      color: var(--risk-medium) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
   }
 
   .status-info {
-      background: rgba(59, 130, 246, 0.12) !important;
-      color: #1e40af !important;
-      border: 1px solid rgba(59, 130, 246, 0.25) !important;
+      background: color-mix(in srgb, var(--status-info)        12%, transparent) !important;
+      color: var(--status-info) !important;
+      border: 1px solid color-mix(in srgb, var(--status-info)   25%, transparent) !important;
   }
 
   .status-secondary {
-      background: rgba(100, 116, 139, 0.12) !important;
-      color: #475569 !important;
-      border: 1px solid rgba(100, 116, 139, 0.25) !important;
+      background: color-mix(in srgb, var(--status-secondary)   12%, transparent) !important;
+      color: var(--status-secondary) !important;
+      border: 1px solid color-mix(in srgb, var(--status-secondary) 25%, transparent) !important;
   }
-  
-  body.dark-mode .risk-low, body.dark-mode .status-success { color: #4ade80 !important; }
-  body.dark-mode .risk-medium, body.dark-mode .status-warn { color: #fbbf24 !important; }
-  body.dark-mode .risk-high, body.dark-mode .status-danger { color: #f87171 !important; }
-  body.dark-mode .status-info { color: #60a5fa !important; }
-  body.dark-mode .status-secondary { color: #94a3b8 !important; }
-  body.dark-mode .risk-critical { color: #ff8a8a !important; font-weight: 800; }
-  
-  /* TEXT COLOR UTILITIES PARA KPIs e dados brutos */
-  .text-risk-low { color: #166534 !important; }
-  .text-risk-medium { color: #92400e !important; }
-  .text-risk-high { color: #991b1b !important; }
-  .text-risk-critical { color: #7f1d1d !important; font-weight: 800; }
-  
-  body.dark-mode .text-risk-low { color: #4ade80 !important; }
-  body.dark-mode .text-risk-medium { color: #fbbf24 !important; }
-  body.dark-mode .text-risk-high { color: #f87171 !important; }
-  body.dark-mode .text-risk-critical { color: #ff8a8a !important; font-weight: 800; }
+
+  /* TEXT COLOR UTILITIES — light/dark automático via var() */
+  .text-risk-low      { color: var(--risk-low)      !important; }
+  .text-risk-medium   { color: var(--risk-medium)   !important; }
+  .text-risk-high     { color: var(--risk-high)      !important; }
+  .text-risk-critical { color: var(--risk-critical) !important; font-weight: 800; }
   
   /* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */
   .p-dialog, 
@@ -248,13 +238,8 @@
 }
 
 .enterprise-table .p-paginator .p-paginator-page.p-highlight {
-  background: rgba(99, 102, 241, 0.1) !important;
-  color: #6366f1 !important;
-}
-
-body.dark-mode .enterprise-table .p-paginator .p-paginator-page.p-highlight {
-  background: rgba(99, 102, 241, 0.2) !important;
-  color: #818cf8 !important;
+  background: color-mix(in srgb, var(--accent-indigo) 12%, transparent) !important;
+  color: var(--accent-indigo) !important;
 }
 
 /* ── TABVIEW - DETALHAMENTO CNPJ ─────────────────────── */

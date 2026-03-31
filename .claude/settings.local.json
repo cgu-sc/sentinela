@@ -14,6 +14,9 @@
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/backend/**)",
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/backend/api/**)",
       "Read(//sdp-powerstore.cgu.local/dados$/guilhermemw/Documents/sentinela/frontend/src/views/targets/**)"
+    ],
+    "additionalDirectories": [
+      "\\\\sdp-powerstore.cgu.local\\dados$\\guilhermemw\\Documents\\sentinela\\frontend\\src\\views\\consolidated\\components"
     ]
   }
 }

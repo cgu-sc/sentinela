@@ -141,8 +141,8 @@ const onRowSelect = (event) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: color-mix(in srgb, var(--accent-indigo) 10%, transparent);
+  color: var(--accent-indigo);
   border-radius: 10px;
   font-size: 1.25rem;
 }
@@ -196,9 +196,5 @@ const onRowSelect = (event) => {
   background: #cbd5e1;
 }
 
-/* Modo escuro - Ajustes finos */
-body.dark-mode .header-icon-box {
-  background: rgba(99, 102, 241, 0.2);
-  color: #818cf8;
-}
+/* light/dark automático via var(--accent-indigo) — override removido */
 </style>

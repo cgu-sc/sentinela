@@ -131,7 +131,7 @@ const filteredLocation = computed(() => {
 
           <Column field="percValSemComp" header="% Valor s/ Comp" sortable style="width: 8%">
              <template #body="slotProps">
-                <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp)" />
+                <Tag :value="formatPercent(slotProps.data.percValSemComp)" :class="getRiskClass(slotProps.data.percValSemComp) === 'risk-critical' ? 'risk-high' : getRiskClass(slotProps.data.percValSemComp)" />
              </template>
              <template #footer>{{ tableFooter.percValSemComp }}</template>
           </Column>

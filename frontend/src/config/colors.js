@@ -35,16 +35,16 @@ export const RISK_COLORS = {
 // Par regular (verde) / irregular (vermelho) para Volume Financeiro e similares.
 export const CHART_SERIES = {
   dark: {
-    green:     PALETTE.green[400],   // '#4ade80'
-    greenGrad: PALETTE.green[300],   // '#86efac'
-    red:       PALETTE.red[400],     // '#f87171'
-    redGrad:   PALETTE.red[300],     // '#fca5a5'
-  },
-  light: {
     green:     PALETTE.green[500],   // '#22c55e'
     greenGrad: PALETTE.green[400],   // '#4ade80'
     red:       PALETTE.red[500],     // '#ef4444'
     redGrad:   PALETTE.red[400],     // '#f87171'
+  },
+  light: {
+    green:     PALETTE.green[600],   // '#16a34a'
+    greenGrad: PALETTE.green[500],   // '#22c55e'
+    red:       PALETTE.red[600],     // '#dc2626'
+    redGrad:   PALETTE.red[500],     // '#ef4444'
   },
 };
 

@@ -1,6 +1,6 @@
 <script setup>
 import { useRoute, useRouter } from 'vue-router';
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
@@ -32,6 +32,15 @@ const TAB_INDEX = { MOVIMENTACAO: 0, EVOLUCAO: 1, INDICADORES: 2, CRMS: 3, FALEC
 const route  = useRoute();
 const router = useRouter();
 const cnpj   = computed(() => route.params.cnpj);
+
+const copied = ref(false);
+const copyCnpj = () => {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(cnpj.value);
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 2000);
+  }
+};
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
@@ -108,10 +117,10 @@ const falecidosAgrupados = computed(() => {
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
   const t = INDICATOR_THRESHOLDS[thresholdKey] ?? INDICATOR_THRESHOLDS.default;
   const r = riscoUf != null ? Math.round(riscoUf * 10) / 10 : null;
-  if (r == null) return { label: 'SEM DADOS', color: 'var(--text-muted)', severity: 'secondary' };
-  if (r >= t.critico) return { label: 'CRÍTICO',  color: RISK_COLORS.CRITICAL, severity: 'danger'  };
-  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: RISK_COLORS.MEDIUM,   severity: 'warning' };
-  return                      { label: 'NORMAL',   color: RISK_COLORS.LOW,      severity: 'success' };
+  if (r == null)     return { label: 'SEM DADOS', color: 'var(--text-muted)',      severity: 'secondary' };
+  if (r >= t.critico) return { label: 'CRÍTICO',  color: 'var(--risk-critical)', severity: 'danger'    };
+  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: 'var(--risk-medium)',   severity: 'warning'   };
+  return              { label: 'NORMAL',   color: 'var(--risk-low)',      severity: 'success'   };
 }
 
 function formatIndicadorValue(valor, formato) {
@@ -158,9 +167,11 @@ const pontosCriticos = computed(() => {
 
 function riscoPillStyle(risco, thresholdKey = 'default') {
   const s = getIndicadorStatus(risco, thresholdKey);
-  // CRITICAL usa a cor HIGH (vermelho vivo) para garantir leitura no dark mode
-  const c = s.color === RISK_COLORS.CRITICAL ? RISK_COLORS.HIGH : s.color;
-  return { background: c + '28', color: c };
+  const c = s.color;
+  return { 
+    background: `color-mix(in srgb, ${c} 15%, transparent)`, 
+    color: c 
+  };
 }
 
 // ── Dados do CNPJ ─────────────────────────────────────────
@@ -202,6 +213,13 @@ const risco = computed(() => cnpjData.value?.percValSemComp ?? 0);
 
 const formatPopulacao = (value) =>
   value == null ? '—' : formatNumberFull(value) + ' hab.';
+
+const formatCnpj = (v) => {
+  if (!v) return '—';
+  const clean = v.replace(/\D/g, '');
+  if (clean.length !== 14) return v;
+  return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+};
 
 // ── Cores dos gráficos ────────────────────────────────────
 const C = computed(() => ({
@@ -410,14 +428,17 @@ const areaOption = computed(() => {
 
       <div class="header-identity" v-if="cnpjData">
         <div class="header-top">
-          <span class="cnpj-badge">{{ cnpj }}</span>
+          <div
+            class="cnpj-copy-wrap"
+            v-tooltip.top="'Copiar CNPJ'"
+            @click="copyCnpj"
+          >
+            <span class="cnpj-badge">{{ formatCnpj(cnpj) }}</span>
+            <i :class="['pi', copied ? 'pi-check text-success' : 'pi-copy', 'copy-icon']" />
+          </div>
           <span
-            class="risk-tag"
-            :style="{
-              background: `color-mix(in srgb, ${getRiskColor(risco)} 18%, transparent)`,
-              color: getRiskColor(risco),
-              borderColor: `color-mix(in srgb, ${getRiskColor(risco)} 40%, transparent)`,
-            }"
+            class="risk-pill-header"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >{{ getRiskLabel(risco) }}</span>
         </div>
         <h1 class="razao-social">{{ cnpjData.razao_social ?? '—' }}</h1>
@@ -455,7 +476,10 @@ const areaOption = computed(() => {
       <div class="header-kpis" v-if="cnpjData">
         <div class="mini-kpi">
           <span class="mini-kpi-label">% Sem Comp.</span>
-          <span class="mini-kpi-value" :class="getRiskClass(risco)">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
+          <span
+            class="mini-kpi-value"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+          >{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
         </div>
         <div class="mini-kpi">
           <span class="mini-kpi-label">Valor Sem Comp.</span>
@@ -784,9 +808,11 @@ const areaOption = computed(() => {
                 <span class="f-kpi-label">Vendas Afetadas</span>
                 <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
               </div>
-              <div class="f-kpi-card highlight-red">
+               <div class="f-kpi-card highlight-red">
                 <span class="f-kpi-label">Prejuízo Estimado</span>
-                <span class="f-kpi-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
+                <div class="f-kpi-val-container">
+                  <span class="f-kpi-val risk-high">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
+                </div>
               </div>
               <div class="f-kpi-card">
                 <span class="f-kpi-label">Média Dias Pós-Óbito</span>
@@ -981,41 +1007,66 @@ const areaOption = computed(() => {
   gap: 0.6rem;
 }
 
+.cnpj-copy-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  background: var(--sidebar-border);
+  padding: 0.15rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.cnpj-copy-wrap:hover {
+  background: color-mix(in srgb, var(--sidebar-border) 85%, var(--primary-color));
+}
+
 .cnpj-badge {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--text-muted);
-  background: var(--sidebar-border);
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  color: var(--text-secondary);
   letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
-.risk-tag {
+.copy-icon {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.cnpj-copy-wrap:hover .copy-icon {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+.risk-pill-header {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.65rem;
+  padding: 0.15rem 0.6rem;
   border-radius: 99px;
-  border: 1px solid;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
-  line-height: 1.4;
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
+
 
 .razao-social {
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.2;
 }
 
 .localidade {
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  font-weight: 600;
   margin: 0;
   display: flex;
   align-items: center;
@@ -1055,15 +1106,18 @@ const areaOption = computed(() => {
 
 .mini-kpi-label {
   font-size: 0.65rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-weight: 600;
 }
 
 .mini-kpi-value {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
+  border-radius: 99px;
+  padding: 0.1rem 0.5rem;
 }
 
 /* ── TABS ────────────────────────────────────────────── */
@@ -1106,6 +1160,7 @@ const areaOption = computed(() => {
   padding: 0.75rem 1rem;
   gap: 0.4rem;
   transition: all 0.2s;
+  color: var(--text-secondary) !important;
 }
 
 
@@ -1157,7 +1212,7 @@ const areaOption = computed(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .evolucao-chart-wrap {
@@ -1184,7 +1239,7 @@ const areaOption = computed(() => {
   text-align: right;
   padding: 0.5rem 1rem;
   background: var(--card-bg);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -1198,7 +1253,7 @@ const areaOption = computed(() => {
 .evolucao-table td {
   text-align: right;
   padding: 0.5rem 1rem;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   border-bottom: 1px solid var(--sidebar-border);
 }
 
@@ -1210,7 +1265,7 @@ const areaOption = computed(() => {
   background: color-mix(in srgb, var(--card-bg) 80%, var(--sidebar-border));
 }
 
-.sem-label   { font-weight: 600; color: var(--text-muted); }
+.sem-label   { font-weight: 600; color: var(--text-secondary); }
 .col-regular { color: v-bind('RISK_COLORS.LOW'); }
 .col-irregular { color: v-bind('RISK_COLORS.HIGH'); }
 
@@ -1262,9 +1317,9 @@ const areaOption = computed(() => {
 
 /* Resumo de auditoria */
 .audit-summary {
-  border: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 6%, var(--card-bg));
+  background: color-mix(in srgb, var(--risk-critical) 6%, var(--card-bg));
   overflow: hidden;
 }
 
@@ -1273,12 +1328,12 @@ const areaOption = computed(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid color-mix(in srgb, v-bind('RISK_COLORS.HIGH') 20%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--risk-critical) 20%, transparent);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: v-bind('RISK_COLORS.HIGH');
+  color: var(--risk-critical);
 }
 
 .audit-badge {
@@ -1289,8 +1344,8 @@ const areaOption = computed(() => {
   height: 1.25rem;
   padding: 0 0.3rem;
   border-radius: 99px;
-  background: v-bind('RISK_COLORS.HIGH');
-  color: #fff;
+  background: color-mix(in srgb, var(--risk-critical) 20%, transparent);
+  color: var(--risk-critical);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -1311,20 +1366,20 @@ const areaOption = computed(() => {
   align-items: baseline;
   gap: 0.5rem;
   font-size: 0.8rem;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .audit-item-icon {
   font-size: 0.7rem;
-  color: v-bind('RISK_COLORS.HIGH');
+  color: var(--risk-critical);
   flex-shrink: 0;
   margin-top: 0.05rem;
 }
 
 .audit-risco {
   font-weight: 700;
-  color: v-bind('RISK_COLORS.HIGH');
+  color: var(--risk-critical);
 }
 
 .audit-detail {
@@ -1362,7 +1417,7 @@ const areaOption = computed(() => {
   text-align: center;
   padding: 0.6rem 0.75rem;
   background: color-mix(in srgb, var(--primary-color, #3b82f6) 14%, var(--card-bg));
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1380,7 +1435,7 @@ const areaOption = computed(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   background: color-mix(in srgb, var(--sidebar-border) 60%, var(--card-bg));
   border-top: 1px solid var(--sidebar-border);
   border-left: 3px solid color-mix(in srgb, var(--primary-color, #3b82f6) 50%, transparent);
@@ -1392,6 +1447,7 @@ const areaOption = computed(() => {
   border-bottom: 1px solid var(--sidebar-border);
   vertical-align: middle;
   text-transform: none;
+  color: var(--text-secondary);
 }
 
 .ind-data-row:hover td {
@@ -1496,9 +1552,14 @@ const areaOption = computed(() => {
 .f-kpi-label {
   font-size: 0.62rem;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.f-kpi-val-container {
+  display: flex;
+  margin-top: 0.2rem;
 }
 
 .f-kpi-val {
@@ -1507,13 +1568,29 @@ const areaOption = computed(() => {
   color: var(--text-primary);
 }
 
+.f-kpi-val.risk-high {
+  font-size: 0.95rem; /* Leve ajuste para caber no badge */
+  padding: 0.1rem 0.6rem;
+  border-radius: 99px;
+}
+
 .f-kpi-val small {
   font-size: 0.7rem;
   opacity: 0.6;
 }
 
-.highlight-red .f-kpi-val { color: v-bind('RISK_COLORS.CRITICAL'); }
-.warning .f-kpi-val { color: v-bind('RISK_COLORS.MEDIUM'); }
+.highlight-red {
+  background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg)) !important;
+  border-color: color-mix(in srgb, var(--risk-high) 25%, transparent) !important;
+}
+.highlight-red .f-kpi-label { color: var(--risk-high) !important; opacity: 0.75; }
+
+.warning {
+  background: color-mix(in srgb, var(--risk-medium) 12%, var(--card-bg)) !important;
+  border-color: color-mix(in srgb, var(--risk-medium) 35%, transparent) !important;
+}
+.warning .f-kpi-val { color: var(--risk-medium) !important; }
+.warning .f-kpi-label { color: var(--risk-medium) !important; opacity: 0.85; }
 
 .falecidos-list-container {
   margin-top: 1.5rem;
@@ -1551,7 +1628,7 @@ const areaOption = computed(() => {
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border-bottom: 2px solid var(--sidebar-border);
 }
 
@@ -1559,7 +1636,7 @@ const areaOption = computed(() => {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--sidebar-border);
   font-size: 0.8rem;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .f-row:hover td { background: rgba(255,255,255,0.02); }
@@ -1592,12 +1669,17 @@ const areaOption = computed(() => {
   font-weight: 700;
 }
 
-.d-medium   { background: color-mix(in srgb, v-bind('RISK_COLORS.MEDIUM')   15%, transparent); color: v-bind('RISK_COLORS.MEDIUM');   }
-.d-high     { background: color-mix(in srgb, v-bind('RISK_COLORS.HIGH')     15%, transparent); color: v-bind('RISK_COLORS.HIGH');     }
-.d-critical { background: color-mix(in srgb, v-bind('RISK_COLORS.CRITICAL') 15%, transparent); color: v-bind('RISK_COLORS.CRITICAL'); }
+.d-medium   { background: color-mix(in srgb, var(--risk-medium)   15%, transparent); color: var(--risk-medium);   border: 1px solid color-mix(in srgb, var(--risk-medium) 30%, transparent); }
+.d-high     { background: color-mix(in srgb, var(--risk-high)     15%, transparent); color: var(--risk-high);     border: 1px solid color-mix(in srgb, var(--risk-high)   30%, transparent); }
+.d-critical { 
+  background: color-mix(in srgb, var(--risk-critical) 15%, transparent); 
+  color: var(--risk-critical); 
+  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent); 
+  font-weight: 800; 
+}
 
-.f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); }
-.f-fonte { font-size: 0.72rem; color: var(--text-muted); }
+.f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); }
+.f-fonte { font-size: 0.72rem; color: var(--text-secondary); }
 
 /* ── Linha de cabeçalho do grupo (por falecido) ── */
 .f-group-header td {
@@ -1611,21 +1693,21 @@ const areaOption = computed(() => {
 .f-group-cpf {
   font-family: monospace;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-right: 0.6rem;
 }
 
 .f-group-nome {
   font-weight: 800;
   font-size: 0.82rem;
-  color: var(--text-color);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-right: 0.4rem;
 }
 
 .f-group-sep {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin: 0 0.4rem;
   opacity: 0.6;
 }
@@ -1633,7 +1715,7 @@ const areaOption = computed(() => {
 .f-group-meta {
   font-size: 0.76rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* ── Linha de subtotal por falecido ── */
@@ -1649,13 +1731,13 @@ const areaOption = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: right;
 }
 
 .f-subtotal-val {
   font-weight: 800 !important;
-  color: var(--text-color) !important;
+  color: var(--text-secondary) !important;
 }
 
 /* ── Total geral (tfoot) ── */
@@ -1667,11 +1749,11 @@ const areaOption = computed(() => {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--text-secondary);
 }
 
 .f-grand-total .f-val {
-  color: var(--primary-color) !important;
+  color: var(--text-secondary) !important;
   font-size: 0.88rem;
 }
 

@@ -8,6 +8,7 @@
   --sidebar-collapsed: 80px;
   --bg-color: #f8fafc;
   --text-color: #1e293b;
+  --text-secondary: #475569;
   --text-muted: #64748b;
   --card-bg: #ffffff;
   --sidebar-bg: #ffffff;
@@ -42,9 +43,9 @@
 
   /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
   --risk-low:      #166534;
-  --risk-medium:   #92400e;
-  --risk-high:     #991b1b;
-  --risk-critical: #7f1d1d;
+  --risk-medium:   #b45309;
+  --risk-high:     #dc2626;
+  --risk-critical: #b91c1c;
 
   /* Badges de status */
   --status-info:      #1e40af;
@@ -57,6 +58,7 @@
 :root.dark-mode {
   --bg-color: #0d1117;
   --text-color: #cbd5e1;
+  --text-secondary: #b1bbcc;
   --text-muted: #9aa4ae;
   --card-bg: #161b22;
   --sidebar-bg: #0d1117;
@@ -87,10 +89,10 @@
   --primary-color: #6366f1;
 
   /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
-  --risk-low:      #4ade80;
+  --risk-low:      #34d399;
   --risk-medium:   #fbbf24;
-  --risk-high:     #f87171;
-  --risk-critical: #ff8a8a;
+  --risk-high:     #fb7185;
+  --risk-critical: #f87171;
 
   /* Badges de status */
   --status-info:      #60a5fa;

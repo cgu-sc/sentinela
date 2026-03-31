@@ -764,21 +764,23 @@ const areaOption = computed(() => {
 
           <template v-else-if="evolucaoLoaded">
 
-            <div class="evolucao-card">
-              <div class="evolucao-card-header">
-                <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
+            <div class="evolucao-row">
+              <div class="evolucao-card flex-half">
+                <div class="evolucao-card-header">
+                  <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
+                </div>
+                <div class="evolucao-chart-wrap">
+                  <VChart :option="chartOption" autoresize class="evolucao-chart" />
+                </div>
               </div>
-              <div class="evolucao-chart-wrap">
-                <VChart :option="chartOption" autoresize class="evolucao-chart" />
-              </div>
-            </div>
 
-            <div class="evolucao-card">
-              <div class="evolucao-card-header">
-                <i class="pi pi-chart-line" /><span>Evolução dos Valores Não Comprovados</span>
-              </div>
-              <div class="evolucao-chart-wrap">
-                <VChart :option="areaOption" autoresize class="evolucao-chart" />
+              <div class="evolucao-card flex-half">
+                <div class="evolucao-card-header">
+                  <i class="pi pi-chart-line" /><span>Evolução dos Valores Não Comprovados</span>
+                </div>
+                <div class="evolucao-chart-wrap">
+                  <VChart :option="areaOption" autoresize class="evolucao-chart" />
+                </div>
               </div>
             </div>
 
@@ -1350,16 +1352,16 @@ const areaOption = computed(() => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  gap: 0.75rem; /* Respiro entre os grandes blocos */
+  gap: 1.25rem; /* Respiro clássico entre os grandes blocos (Header e Dados) */
   background: transparent;
 }
 
-/* ── HEADER REFORMULADO (COM LARGURA MÁXIMA E BORDAS ARREDONDADAS) ── */
+/* ── CABEÇALHO RESUMO (SOLTO - OPÇÃO B) ────────────────── */
 .detail-header-new {
   background: var(--card-bg);
   padding: 1.5rem 2rem;
   border: 1px solid var(--sidebar-border);
-  border-radius: 12px; /* Suaviza as bordas sem encurtar lateralmente */
+  border-radius: 12px; /* Flutua como um resumo independente */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -1440,7 +1442,7 @@ const areaOption = computed(() => {
   margin: 0;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1505,7 +1507,7 @@ const areaOption = computed(() => {
 .kpi-item-new .value {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-color);
 }
 
 .kpi-item-new.large .value {
@@ -1577,7 +1579,7 @@ const areaOption = computed(() => {
 .rank-val {
   font-size: 1.1rem;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--text-color);
 }
 
 .rank-val small {
@@ -1605,15 +1607,29 @@ const areaOption = computed(() => {
   color: var(--text-muted);
 }
 
-/* ── TABS (COM BORDAS PARA ALINHAMENTO) ─────── */
+/* ── CARD MESTRE DE DADOS (ABAS + CONTEÚDO UNIFICADOS - OPÇÃO B) ── */
 .detail-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--card-bg);
+  background: var(--card-bg); /* O conteúdo técnico agora vive dentro deste grande card */
   border: 1px solid var(--sidebar-border);
-  border-radius: 12px; /* Mantém o padrão de design em todo o corpo */
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+/* Removemos a redundância de cards aninhados para um visual cleaner */
+.detail-tabs :deep(.shadow-card) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.detail-tabs :deep(.table-section) {
+  padding: 1.5rem;
 }
 
 :deep(.p-tabview) {
@@ -1634,29 +1650,31 @@ const areaOption = computed(() => {
 }
 
 :deep(.p-tabview-nav) {
-  background: transparent !important;
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--sidebar-border)) !important; /* Ligeiro destaque na barra de navegação */
   border-bottom: 1px solid var(--sidebar-border);
   padding: 0 1.25rem;
 }
 
-:deep(.p-tabview-nav-content) {
-  background: var(--card-bg) !important;
-}
-
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
-  font-size: 0.8rem;
-  padding: 0.75rem 1rem;
-  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.65rem 1.25rem;
+  gap: 0.5rem;
   transition: all 0.2s;
   color: var(--text-secondary) !important;
+  text-transform: none !important;
 }
 
-
+:deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {
+  border-bottom-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+}
 
 .tab-icon { font-size: 0.8rem; }
 
-/* ── PLACEHOLDER ─────────────────────────────────────── */
-.tab-content { padding: 2rem; }
+/* ── PLACEHOLDER E CONTEÚDO ──────────────────────────── */
+.tab-content { padding: 1.5rem 2rem; } /* Alinhado horizontalmente com o header */
 
 .tab-placeholder {
   display: flex;
@@ -1677,43 +1695,59 @@ const areaOption = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem 0 1rem 0;
+  padding: 1.25rem 0;
 }
 
-/* ── EVOLUÇÃO FINANCEIRA ─────────────────────────────── */
 .evolucao-tab {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: 1rem 0 0; /* Removido padding lateral para alinhar com o cabeçalho */
+  padding: 1.5rem 2rem;
+}
+
+.evolucao-row {
+  display: flex;
+  gap: 2rem;
+  width: 100%;
+  margin-bottom: 0.25rem; /* Ajuste para máxima densidade */
+}
+
+.flex-half {
+  flex: 1;
+  min-width: 0;
 }
 
 .evolucao-card {
-  background: var(--card-bg);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  margin-bottom: 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+  margin-bottom: 0; /* Removida margem residual */
 }
 
 .evolucao-card-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.5rem 0; /* Padding inferior reduzido */
   border-bottom: 1px solid var(--sidebar-border);
-  font-size: 0.78rem;
-  font-weight: 600;
+  margin-bottom: 0.5rem; /* Margem reduzida para aproximar do gráfico */
+  font-size: 0.85rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+}
+
+.evolucao-card-header i {
+  font-size: 1rem;
+  color: var(--primary-color);
 }
 
 .evolucao-chart-wrap {
-  height: 25vh;
-  min-height: 260px;
-  padding: 0.5rem;
+  height: 350px;
+  padding: 0.5rem 0 0 0; /* Removido padding inferior do gráfico */
 }
 
 .evolucao-chart {

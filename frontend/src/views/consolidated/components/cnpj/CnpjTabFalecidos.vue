@@ -1,18 +1,10 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue';
 import { useFalecidos } from '@/composables/useFalecidos';
-import { useMultiCnpjTimeline } from '@/composables/useMultiCnpjTimeline';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
-import VChart from 'vue-echarts';
-import { use } from 'echarts/core';
-import { ScatterChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
 import Tag from 'primevue/tag';
-import OverlayPanel from 'primevue/overlaypanel';
-
-use([ScatterChart, GridComponent, TooltipComponent, DataZoomComponent, CanvasRenderer]);
+import FalecidosTimelineOverlay from './FalecidosTimelineOverlay.vue';
 
 const props = defineProps({
   cnpj: {
@@ -22,7 +14,6 @@ const props = defineProps({
 });
 
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
-const { timelineData, timelineLoading, fetchTimeline } = useMultiCnpjTimeline();
 const { formatCurrencyFull, formatarData } = useFormatting();
 const { chartDataColors } = useChartTheme();
 
@@ -62,131 +53,11 @@ const falecidosAgrupados = computed(() => {
   return [...grupos.values()];
 });
 
-const opMultiCnpj = ref(null);
-const selectedMultiCpf = ref(null);
+const timelineOverlay = ref(null);
 
 const toggleMultiCnpj = (event, grupo) => {
-  selectedMultiCpf.value = grupo;
-  opMultiCnpj.value.toggle(event);
-  if (grupo?.cpf && props.cnpj) {
-    fetchTimeline(grupo.cpf, props.cnpj);
-  }
+  timelineOverlay.value?.open(event, grupo);
 };
-
-const parseCnpjs = (s) => (s ? s.split(',').map(v => v.trim()) : []);
-
-const parseDateSafe = (v) => {
-  if (!v) return null;
-  let d = new Date(v);
-  if (isNaN(d.getTime()) && typeof v === 'string') {
-    const parts = v.split('/');
-    if (parts.length === 3) d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-  }
-  return isNaN(d.getTime()) ? null : d.getTime();
-};
-
-const timelineChartOption = computed(() => {
-  if (!timelineData.value || !timelineData.value.events?.length) return null;
-
-  const td = timelineData.value;
-  const cnpjsOrdenados = [props.cnpj];
-  td.cnpjs_envolvidos.forEach(c => { if (c !== props.cnpj) cnpjsOrdenados.push(c); });
-
-  const labelMap = {};
-  td.events.forEach(e => {
-    if (!labelMap[e.cnpj]) {
-      labelMap[e.cnpj] = e.razao_social
-        ? e.razao_social.substring(0, 22) + (e.razao_social.length > 22 ? '…' : '')
-        : e.cnpj;
-    }
-  });
-  const yLabels = cnpjsOrdenados.map((c, i) =>
-    i === 0 ? `▶ ${labelMap[c] ?? c}` : (labelMap[c] ?? c)
-  );
-  const cnpjToIdx = Object.fromEntries(cnpjsOrdenados.map((c, i) => [c, i]));
-
-  const dataPoints = td.events.map(e => {
-    const ts = parseDateSafe(e.data_autorizacao);
-    if (!ts) return null;
-    const yIdx = cnpjToIdx[e.cnpj] ?? 0;
-    return {
-      value: [ts, yIdx, e.valor_total_autorizacao ?? 0, e.num_autorizacao ?? ''],
-      itemStyle: { color: e.is_this_cnpj ? '#3b82f6' : '#f59e0b' }
-    };
-  }).filter(Boolean);
-
-  const allTs = dataPoints.map(p => p.value[0]);
-  const pad = 86400000;
-  const minTs = Math.min(...allTs) - pad;
-  const maxTs = Math.max(...allTs) + pad;
-
-  return {
-    backgroundColor: 'transparent',
-    grid: { top: 16, left: 210, right: 30, bottom: 40, containLabel: false },
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      borderColor: 'rgba(255,255,255,0.15)',
-      textStyle: { color: '#fff', fontSize: 11 },
-      formatter: (params) => {
-        const [ts, yIdx, valor, numAut] = params.value;
-        const estLabel = yLabels[yIdx] ?? `CNPJ ${yIdx}`;
-        const isRef = yIdx === 0;
-        const dataFmt = new Date(ts).toLocaleDateString('pt-BR');
-        return `<div style="font-weight:700;margin-bottom:4px;color:${isRef ? '#3b82f6' : '#f59e0b'}">${estLabel}</div>
-                <div style="opacity:0.8;">Data: ${dataFmt}</div>
-                <div style="margin-top:4px;">Valor: <strong>${formatCurrencyFull(valor)}</strong></div>
-                ${numAut ? `<div style="opacity:0.5;font-size:10px;">Aut.: ${numAut}</div>` : ''}`;
-      }
-    },
-    dataZoom: [{ type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true }],
-    xAxis: {
-      type: 'time',
-      min: minTs,
-      max: maxTs,
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.06)', type: 'dashed' } },
-      axisLabel: {
-        color: 'rgba(255,255,255,0.5)',
-        fontSize: 9,
-        formatter: (v) => {
-          const date = new Date(v);
-          return date.getFullYear().toString();
-        }
-      },
-      splitNumber: 2,
-    },
-    yAxis: {
-      type: 'category',
-      data: yLabels,
-      inverse: true,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: {
-        color: 'rgba(255,255,255,0.75)',
-        fontSize: 9,
-        fontWeight: 700,
-        width: 160,
-        overflow: 'truncate'
-      },
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.07)' } }
-    },
-    series: [{
-      type: 'scatter',
-      data: dataPoints,
-      symbolSize: v => Math.max(12, Math.min(24, 12 + Math.log1p(v[2] / 50))),
-      encode: { x: 0, y: 1 }
-    }]
-  };
-});
-
-const outrosCnpjList = computed(() => {
-  if (timelineData.value?.cnpjs_envolvidos?.length) {
-    return timelineData.value.cnpjs_envolvidos.filter(c => c !== props.cnpj);
-  }
-  if (!selectedMultiCpf.value) return [];
-  return parseCnpjs(selectedMultiCpf.value.outros_cnpj);
-});
 
 const formatCnpj = (v) => {
   if (!v) return '—';
@@ -392,60 +263,7 @@ const openEstablishment = (estabStr) => {
     </div>
   </div>
 
-  <!-- POPOVER MULTI-CNPJ (GRÁFICO DE TRILHAS) -->
-  <OverlayPanel ref="opMultiCnpj" class="multi-cnpj-panel" style="width: 900px">
-    <div v-if="selectedMultiCpf" class="multi-cnpj-content">
-      <header class="multi-header">
-        <i class="pi pi-share-alt" />
-        <span>Mapa de Relacionamento Temporal</span>
-        <i v-if="timelineLoading" class="pi pi-spin pi-spinner" style="margin-left:auto;font-size:0.8rem;opacity:0.6;" />
-      </header>
-
-      <div class="multi-cpf-meta">
-        <span class="multi-cpf-label">CPF:</span>
-        <span class="multi-cpf-val">{{ selectedMultiCpf.cpf }}</span>
-        <span class="multi-cpf-sep">·</span>
-        <span class="multi-cpf-name">{{ selectedMultiCpf.nome }}</span>
-        <span class="multi-cpf-sep">·</span>
-        <span class="multi-cpf-obito">Óbito: {{ selectedMultiCpf.dt_obito }}</span>
-      </div>
-
-      <p class="multi-desc">Relacionamento gráfico das vendas detectadas nos diferentes estabelecimentos:</p>
-
-      <div class="multi-legend">
-        <span class="legend-dot" style="background:#3b82f6"></span><span>Este Estabelecimento</span>
-        <span class="legend-dot" style="background:#f59e0b;margin-left:1rem"></span><span>Outro Estabelecimento</span>
-      </div>
-
-      <div class="timeline-chart-wrap">
-        <div v-if="timelineLoading" class="timeline-loading">
-          <i class="pi pi-spin pi-spinner" />
-          <span>Buscando transações reais...</span>
-        </div>
-        <div v-else-if="!timelineChartOption" class="timeline-empty">
-          <i class="pi pi-inbox" />
-          <span>Sem dados de transações para exibir.</span>
-        </div>
-        <VChart v-else :option="timelineChartOption" autoresize />
-      </div>
-
-      <div class="multi-cnpj-list-section" v-if="outrosCnpjList.length">
-        <div class="multi-cnpj-list-title">
-          <i class="pi pi-building" />
-          <span>CNPJs vinculados ao mesmo CPF</span>
-        </div>
-        <ul class="multi-list">
-          <li v-for="(c, i) in outrosCnpjList" :key="c" class="multi-item">
-            <span class="multi-idx">{{ i + 1 }}</span>
-            <a :href="`/estabelecimento/${c}`" target="_blank" class="multi-cnpj-link" v-tooltip.bottom="'Abrir detalhamento deste CNPJ em nova aba'">
-              {{ formatCnpj(c) }}
-              <i class="pi pi-external-link" style="font-size: 0.6rem; margin-left: 0.3rem; opacity: 0.5;" />
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </OverlayPanel>
+  <FalecidosTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
 </template>
 
 <style scoped>
@@ -594,208 +412,6 @@ const openEstablishment = (estabStr) => {
 }
 .clickable-badge:hover { transform: scale(1.05); }
 
-/* ── MULTI-CNPJ OVERLAY ────────────────────────────── */
-.multi-cnpj-panel {
-  background: color-mix(in srgb, var(--card-bg) 85%, transparent) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--sidebar-border) !important;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.4) !important;
-  border-radius: 12px !important;
-}
-
-.multi-cnpj-content {
-  padding: 0.5rem 0.25rem;
-}
-
-.multi-cnpj-panel::before, .multi-cnpj-panel::after {
-  display: none !important; /* Remove a seta padrão para um look mais clean */
-}
-
-.multi-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--risk-medium);
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--sidebar-border);
-}
-
-.multi-desc {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 0.75rem;
-}
-
-.multi-list {
-  list-style: none;
-  padding: 0.75rem 1rem 1rem;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.6rem;
-}
-
-.multi-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.6rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 4px;
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-}
-
-.multi-cnpj-link {
-  font-family: monospace;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--primary-color);
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-}
-
-.multi-cnpj-link:hover {
-  filter: brightness(1.2);
-  text-decoration: underline;
-}
-
-/* ── MAPA DE TRILHAS NO POPOVER ─────────────────────── */
-.multi-cpf-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  margin-bottom: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(255,255,255,0.04);
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-
-.multi-cpf-label { color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; font-size: 0.63rem; }
-.multi-cpf-val   { font-family: monospace; font-weight: 700; color: rgba(255,255,255,0.9); letter-spacing: 0.05em; }
-.multi-cpf-sep   { color: rgba(255,255,255,0.25); }
-.multi-cpf-name  { font-weight: 600; color: rgba(255,255,255,0.75); }
-.multi-cpf-obito { font-size: 0.68rem; color: rgba(255,165,0,0.8); font-weight: 600; }
-
-.multi-legend {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.5);
-  margin-bottom: 0.4rem;
-}
-
-.legend-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.timeline-chart-wrap {
-  width: 100%;
-  height: 400px;
-  background: rgba(0,0,0,0.15);
-  border-radius: 8px;
-  margin: 0.25rem 0 0.5rem;
-  padding: 0.25rem;
-  border: 1px solid rgba(255,255,255,0.05);
-  position: relative;
-}
-
-.timeline-loading,
-.timeline-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.4);
-}
-
-.timeline-loading i,
-.timeline-empty i {
-  font-size: 1.2rem;
-  color: rgba(255,255,255,0.3);
-}
-
-.multi-cnpj-list-section {
-  margin-top: 0.5rem;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.multi-cnpj-list-title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255,165,0,0.8);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,165,0,0.06);
-}
-
-.multi-idx {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(245,158,11,0.2);
-  color: #f59e0b;
-  font-size: 0.65rem;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-.timeline-footer {
-  margin-top: 0.25rem;
-  padding: 0.6rem 0.75rem;
-  background: rgba(255,165,0,0.06);
-  border: 1px solid rgba(255,165,0,0.15);
-  border-radius: 8px;
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-}
-
-.timeline-footer i {
-  color: orange;
-  font-size: 0.8rem;
-  margin-top: 0.1rem;
-}
-
-.timeline-footer span {
-  font-size: 0.68rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  font-weight: 500;
-}
 
 .f-date, .f-aut, .f-num, .f-val { font-size: 0.78rem; }
 .f-num, .f-val { font-weight: 500; }

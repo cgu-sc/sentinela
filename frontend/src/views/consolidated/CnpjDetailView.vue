@@ -1,32 +1,39 @@
 <script setup>
-import { useRoute, useRouter } from 'vue-router';
-import { computed, onMounted, ref } from 'vue';
-import { useAnalyticsStore } from '@/stores/analytics';
-import { useGeoStore } from '@/stores/geo';
-import { useFilterStore } from '@/stores/filters';
-import { useRiskMetrics } from '@/composables/useRiskMetrics';
-import { useFormatting } from '@/composables/useFormatting';
-import { useFilterParameters } from '@/composables/useFilterParameters';
-import CnpjDetailHeader from './components/cnpj/CnpjDetailHeader.vue';
-import CnpjTabFinancialEvolution from './components/cnpj/CnpjTabFinancialEvolution.vue';
-import CnpjTabIndicators from './components/cnpj/CnpjTabIndicators.vue';
-import CnpjTabFalecidos from './components/cnpj/CnpjTabFalecidos.vue';
-import CnpjTabRegional from './components/cnpj/CnpjTabRegional.vue';
-import { useChartTheme } from '@/config/chartTheme';
-import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
-import { RISK_COLORS, RISK_THRESHOLDS } from '@/config/riskConfig';
-import { storeToRefs } from 'pinia';
-import TabView from 'primevue/tabview';
-import TabPanel from 'primevue/tabpanel';
-import Button from 'primevue/button';
-import Tag from 'primevue/tag';
-import Chip from 'primevue/chip';
+import { useRoute, useRouter } from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { useAnalyticsStore } from "@/stores/analytics";
+import { useGeoStore } from "@/stores/geo";
+import { useFilterStore } from "@/stores/filters";
+import { useRiskMetrics } from "@/composables/useRiskMetrics";
+import { useFormatting } from "@/composables/useFormatting";
+import { useFilterParameters } from "@/composables/useFilterParameters";
+import CnpjDetailHeader from "./components/cnpj/CnpjDetailHeader.vue";
+import CnpjTabFinancialEvolution from "./components/cnpj/CnpjTabFinancialEvolution.vue";
+import CnpjTabIndicators from "./components/cnpj/CnpjTabIndicators.vue";
+import CnpjTabFalecidos from "./components/cnpj/CnpjTabFalecidos.vue";
+import CnpjTabRegional from "./components/cnpj/CnpjTabRegional.vue";
+import { useChartTheme } from "@/config/chartTheme";
+import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
+import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
+import { storeToRefs } from "pinia";
+import TabView from "primevue/tabview";
+import TabPanel from "primevue/tabpanel";
+import Button from "primevue/button";
+import Tag from "primevue/tag";
+import Chip from "primevue/chip";
 
 // ── Índices das abas (evita números mágicos no template) ──
-const TAB_INDEX = { MOVIMENTACAO: 0, EVOLUCAO: 1, INDICADORES: 2, CRMS: 3, FALECIDOS: 4, REGIAO: 5 };
+const TAB_INDEX = {
+  MOVIMENTACAO: 0,
+  EVOLUCAO: 1,
+  INDICADORES: 2,
+  CRMS: 3,
+  FALECIDOS: 4,
+  REGIAO: 5,
+};
 
-const route  = useRoute();
-const cnpj   = computed(() => route.params.cnpj);
+const route = useRoute();
+const cnpj = computed(() => route.params.cnpj);
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
@@ -37,17 +44,18 @@ const { localidades } = storeToRefs(geoStore);
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
-const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } = useRiskMetrics();
+const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
+  useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 // ── Composables (Fim) ─────────────────────────────────────
 
 // ── Dados do CNPJ ─────────────────────────────────────────
-const cnpjData = computed(() =>
-  resultadoCnpjs.value?.find(c => c.cnpj === cnpj.value) ?? null
+const cnpjData = computed(
+  () => resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ?? null,
 );
 
-import { watch } from 'vue';
+import { watch } from "vue";
 watch(
   () => cnpj.value,
   async (newCnpj) => {
@@ -55,16 +63,26 @@ watch(
       const p = getApiParams();
       try {
         await analyticsStore.fetchDashboardSummary(
-          p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-          'Todos', 'Todos', 'Todos', 'Todos',
-          'Todos', 'Todos', 'Todos', newCnpj
+          p.inicio,
+          p.fim,
+          p.percMin,
+          p.percMax,
+          p.valMin,
+          "Todos",
+          "Todos",
+          "Todos",
+          "Todos",
+          "Todos",
+          "Todos",
+          "Todos",
+          newCnpj,
         );
       } catch (e) {
-        console.error('Erro ao hidratar CNPJ direto:', e);
+        console.error("Erro ao hidratar CNPJ direto:", e);
       }
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 onMounted(() => {
@@ -77,7 +95,7 @@ const geoData = computed(() => {
 
   // Primeiro tenta por id_ibge7, depois por município + UF
   if (data.id_ibge7) {
-    const match = localidades.value.find(l => l.id_ibge7 === data.id_ibge7);
+    const match = localidades.value.find((l) => l.id_ibge7 === data.id_ibge7);
     if (match) return match;
   }
 
@@ -86,37 +104,37 @@ const geoData = computed(() => {
   const uf = data.uf?.toUpperCase();
   if (!municipio || !uf) return null;
 
-  return localidades.value.find(l =>
-    l.no_municipio?.toUpperCase() === municipio &&
-    l.sg_uf?.toUpperCase() === uf
-  ) ?? null;
+  return (
+    localidades.value.find(
+      (l) =>
+        l.no_municipio?.toUpperCase() === municipio &&
+        l.sg_uf?.toUpperCase() === uf,
+    ) ?? null
+  );
 });
 
-
-
 const formatCnpj = (v) => {
-  if (!v) return '—';
-  const clean = v.replace(/\D/g, '');
+  if (!v) return "—";
+  const clean = v.replace(/\D/g, "");
   if (clean.length !== 14) return v;
-  return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  return clean.replace(
+    /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
+    "$1.$2.$3/$4-$5",
+  );
 };
-
 </script>
 
 <template>
   <div class="cnpj-detail-page">
-
     <!-- HEADER (COMPONENTE ISOLADO) -->
     <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" />
 
     <!-- TABS -->
-    <TabView
-      class="detail-tabs"
-      :activeIndex="TAB_INDEX.EVOLUCAO"
-    >
-
+    <TabView class="detail-tabs" :activeIndex="TAB_INDEX.EVOLUCAO">
       <TabPanel>
-        <template #header><i class="pi pi-list tab-icon" /><span>Movimentação</span></template>
+        <template #header
+          ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
+        >
         <div class="tab-content tab-placeholder">
           <i class="pi pi-inbox placeholder-icon" />
           <p>Dados de movimentação serão exibidos aqui.</p>
@@ -124,36 +142,53 @@ const formatCnpj = (v) => {
       </TabPanel>
 
       <TabPanel>
-        <template #header><i class="pi pi-chart-line tab-icon" /><span>Evolução Financeira</span></template>
+        <template #header
+          ><i class="pi pi-chart-line tab-icon" /><span
+            >Evolução Financeira</span
+          ></template
+        >
         <CnpjTabFinancialEvolution class="tab-content" />
       </TabPanel>
 
       <TabPanel>
-        <template #header><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template>
+        <template #header
+          ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
+        >
         <CnpjTabIndicators class="tab-content" />
       </TabPanel>
 
       <TabPanel>
-        <template #header><i class="pi pi-id-card tab-icon" /><span>Análise de CRMs</span></template>
+        <template #header
+          ><i class="pi pi-id-card tab-icon" /><span
+            >Análise de CRMs</span
+          ></template
+        >
         <div class="tab-content tab-placeholder">
           <i class="pi pi-users placeholder-icon" />
-          <p>Perfil de prescritores e alertas de anomalias serão exibidos aqui.</p>
+          <p>
+            Perfil de prescritores e alertas de anomalias serão exibidos aqui.
+          </p>
         </div>
       </TabPanel>
 
       <TabPanel>
-        <template #header><i class="pi pi-exclamation-triangle tab-icon" /><span>Falecidos</span></template>
+        <template #header
+          ><i class="pi pi-exclamation-triangle tab-icon" /><span
+            >Falecidos</span
+          ></template
+        >
         <CnpjTabFalecidos :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
-        <template #header><i class="pi pi-map tab-icon" /><span>Região de Saúde</span></template>
+        <template #header
+          ><i class="pi pi-map tab-icon" /><span
+            >Região de Saúde</span
+          ></template
+        >
         <CnpjTabRegional :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
       </TabPanel>
-
     </TabView>
-
-
   </div>
 </template>
 
@@ -163,11 +198,9 @@ const formatCnpj = (v) => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  gap: 1.25rem; /* Respiro clássico entre os grandes blocos (Header e Dados) */
+  gap: 0.5rem; /* Reduzido de 1.25rem para "colar" mais no cabeçalho */
   background: transparent;
 }
-
-
 
 /* ── CARD MESTRE DE DADOS (ABAS + CONTEÚDO UNIFICADOS - OPÇÃO B) ── */
 .detail-tabs {
@@ -175,7 +208,9 @@ const formatCnpj = (v) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--card-bg); /* O conteúdo técnico agora vive dentro deste grande card */
+  background: var(
+    --card-bg
+  ); /* O conteúdo técnico agora vive dentro deste grande card */
   border: 1px solid var(--sidebar-border);
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
@@ -208,7 +243,11 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav) {
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--sidebar-border)) !important; /* Ligeiro destaque na barra de navegação */
+  background: color-mix(
+    in srgb,
+    var(--card-bg) 95%,
+    var(--sidebar-border)
+  ) !important; /* Ligeiro destaque na barra de navegação */
   border-bottom: 1px solid var(--sidebar-border);
   padding: 0 1.25rem;
 }
@@ -226,13 +265,21 @@ const formatCnpj = (v) => {
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {
   border-bottom-color: var(--primary-color) !important;
   color: var(--primary-color) !important;
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 8%,
+    transparent
+  ) !important;
 }
 
-.tab-icon { font-size: 0.8rem; }
+.tab-icon {
+  font-size: 0.8rem;
+}
 
 /* ── PLACEHOLDER E CONTEÚDO ──────────────────────────── */
-.tab-content { padding: 1.5rem 2rem; } /* Alinhado horizontalmente com o header */
+.tab-content {
+  padding: 1.5rem 2rem;
+} /* Alinhado horizontalmente com o header */
 
 .tab-placeholder {
   display: flex;
@@ -245,8 +292,10 @@ const formatCnpj = (v) => {
   opacity: 0.5;
 }
 
-.placeholder-icon { font-size: 3rem; }
-.tab-placeholder p { font-size: 0.875rem; }
-
-
+.placeholder-icon {
+  font-size: 3rem;
+}
+.tab-placeholder p {
+  font-size: 0.875rem;
+}
 </style>

@@ -211,15 +211,21 @@ class AnalyticsService:
 
             # Enrich with rankings and counts from matriz_risco_consolidada
             try:
-                risco_df = (
-                    get_df_matriz_risco()
-                    .select([
-                        "cnpj", "rank_nacional", "total_nacional", "rank_uf", "total_uf",
-                        "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio",
-                        "score_risco_final", "classificacao_risco"
-                    ])
-                )
-                cnpj_df = cnpj_df.join(risco_df, on="cnpj", how="left")
+                risco_df = get_df_matriz_risco()
+                # Tornar colunas case-insensitive de forma segura (cria novo DataFrame devido ao copy-on-write construtivo)
+                risco_df = risco_df.rename({c: c.lower() for c in risco_df.columns})
+                
+                expected_cols = [
+                    "cnpj", "rank_nacional", "total_nacional", "rank_uf", "total_uf",
+                    "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio",
+                    "score_risco_final", "classificacao_risco"
+                ]
+                # Apenas seleciona colunas que de fato existem na matriz
+                available_cols = [c for c in expected_cols if c in risco_df.columns]
+                
+                if "cnpj" in available_cols and len(available_cols) > 1:
+                    risco_df = risco_df.select(available_cols)
+                    cnpj_df = cnpj_df.join(risco_df, on="cnpj", how="left")
             except Exception as e:
                 print(f"⚠️ Erro ao cruzar rankings: {e}")
                 cnpj_df = cnpj_df.with_columns([
@@ -374,6 +380,7 @@ class AnalyticsService:
         }
         try:
             df = get_df_matriz_risco()
+            df = df.rename({c: c.lower() for c in df.columns})
             rows = df.filter(pl.col("cnpj") == cnpj)
             if rows.is_empty():
                 return IndicadoresResponse(cnpj=cnpj, indicadores={})
@@ -719,6 +726,7 @@ class AnalyticsService:
             df_mov   = get_df()
             df_loc   = get_localidades_df()
             df_risco = get_df_matriz_risco()
+            df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
             # ── Filtra movimentação para a região ───────────────────────────────
             df_reg = df_mov.filter(pl.col("no_regiao_saude") == regiao_saude)
@@ -800,7 +808,7 @@ class AnalyticsService:
             # Enriquece com score e classificação de risco da matriz_risco_consolidada
             risco_cols = ["cnpj"]
             risco_available = []
-            for col in ["SCORE_RISCO_FINAL", "CLASSIFICACAO_RISCO"]:
+            for col in ["score_risco_final", "classificacao_risco"]:
                 if col in df_risco.columns:
                     risco_available.append(col)
                     risco_cols.append(col)
@@ -810,13 +818,13 @@ class AnalyticsService:
                 cnpj_enriched = cnpj_agg.join(df_risco_slim, on="cnpj", how="left")
             else:
                 cnpj_enriched = cnpj_agg.with_columns([
-                    pl.lit(None).cast(pl.Float64).alias("SCORE_RISCO_FINAL"),
-                    pl.lit(None).cast(pl.Utf8).alias("CLASSIFICACAO_RISCO"),
+                    pl.lit(None).cast(pl.Float64).alias("score_risco_final"),
+                    pl.lit(None).cast(pl.Utf8).alias("classificacao_risco"),
                 ])
 
             # Ordena pelo score de risco (maior risco primeiro)
             cnpj_sorted = cnpj_enriched.sort(
-                "SCORE_RISCO_FINAL", descending=True, nulls_last=True
+                "score_risco_final", descending=True, nulls_last=True
             ).with_columns(
                 pl.lit(range(1, cnpj_enriched.height + 1))
                 .alias("rank_")
@@ -829,8 +837,8 @@ class AnalyticsService:
                     razao_social=str(r.get("razao_social") or "").title(),
                     municipio=str(r.get("municipio") or "").title(),
                     uf=r.get("uf"),
-                    score_risco=float(r["SCORE_RISCO_FINAL"]) if r.get("SCORE_RISCO_FINAL") is not None else None,
-                    classificacao_risco=r.get("CLASSIFICACAO_RISCO"),
+                    score_risco=float(r["score_risco_final"]) if r.get("score_risco_final") is not None else None,
+                    classificacao_risco=r.get("classificacao_risco"),
                     valSemComp=float(r.get("valSemComp") or 0.0),
                     totalMov=float(r.get("totalMov") or 0.0),
                     percValSemComp=float(r.get("percValSemComp") or 0.0),

@@ -8,7 +8,7 @@ import Button from "primevue/button";
 
 const router = useRouter();
 const filtersStore = useFilterStore();
-const { getRiskLabel, getRiskClass } = useRiskMetrics();
+const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
 
 const props = defineProps({
@@ -100,12 +100,20 @@ const formatCnpj = (v) => {
         </div>
 
         <!-- Corrigido para score_risco_final conforme Matriz Consolidada -->
-        <div v-if="cnpjData.score_risco_final != null" class="score-badge-new" v-tooltip.top="'Score de Risco Consolidado'">
-          <span class="score-label">Score</span>
-          <span class="score-val">{{ cnpjData.score_risco_final.toFixed(1) }}</span>
+        <div 
+          v-if="cnpjData.score_risco_final != null" 
+          class="score-badge-new" 
+          :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+          v-tooltip.top="'Score de Risco Consolidado'"
+        >
+          <span class="score-label" style="color: inherit; opacity: 0.75;">Score</span>
+          <span class="score-val" style="color: inherit;">
+            {{ cnpjData.score_risco_final.toFixed(1) }}
+          </span>
         </div>
 
         <span
+          v-if="cnpjData.classificacao_risco"
           class="risk-tag-new"
           :class="[
             getRiskClass(risco) === 'risk-critical'
@@ -114,7 +122,7 @@ const formatCnpj = (v) => {
           ]"
         >
           <i class="pi pi-exclamation-triangle" />
-          Risco {{ cnpjData.classificacao_risco ?? getRiskLabel(risco) }}
+          {{ cnpjData.classificacao_risco }}
         </span>
       </div>
     </div>

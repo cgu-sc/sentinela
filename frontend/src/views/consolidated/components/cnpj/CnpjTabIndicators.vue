@@ -92,24 +92,39 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 
     <template v-else-if="indicadoresLoaded">
 
-      <!-- RESUMO DE AUDITORIA -->
-      <div v-if="pontosCriticos.length" class="audit-summary-section">
-        <div class="section-title">
-          <i class="pi pi-file-edit" />
-          <span>Resumo para Auditoria — Pontos Críticos</span>
-          <span class="audit-badge">{{ pontosCriticos.length }}</span>
+      <!-- RESUMO DE AUDITORIA (CARD DE PONTOS CRÍTICOS) -->
+      <div v-if="pontosCriticos.length" class="audit-card-new">
+        <div class="audit-card-header">
+          <div class="audit-title-wrap">
+            <i class="pi pi-shield audit-shield-icon" />
+            <div class="audit-title-text">
+              <h3>Resumo para Auditoria</h3>
+              <p>Identificados {{ pontosCriticos.length }} pontos críticos de alto risco</p>
+            </div>
+          </div>
         </div>
-        <ul class="audit-list">
-          <li v-for="p in pontosCriticos" :key="p.label" class="audit-item">
-            <i class="pi pi-exclamation-circle audit-item-icon" />
-            <span>
-              <strong>{{ p.label }}</strong>: operação
-              <span class="audit-risco">{{ p.riscoReg?.toFixed(1) ?? p.riscoUf.toFixed(1) }}x</span>
-              acima da mediana regional
-              <span class="audit-detail">(Farmácia: {{ formatIndicadorValue(p.valor, p.formato) }} | Mediana Região: {{ formatIndicadorValue(p.medReg, p.formato) }})</span>
-            </span>
-          </li>
-        </ul>
+        
+        <div class="audit-card-body">
+          <div v-for="p in pontosCriticos" :key="p.label" class="audit-row-new">
+            <div class="audit-item-main">
+              <span class="audit-item-label">{{ p.label }}</span>
+              <div class="audit-item-data">
+                <span class="audit-badge-val">{{ p.riscoReg?.toFixed(1) ?? p.riscoUf.toFixed(1) }}x</span>
+                <span class="audit-item-desc">acima da média regional</span>
+              </div>
+            </div>
+            <div class="audit-item-stats">
+              <div class="stat-mini">
+                <span class="s-label">Farmácia</span>
+                <span class="s-val">{{ formatIndicadorValue(p.valor, p.formato) }}</span>
+              </div>
+              <div class="stat-mini">
+                <span class="s-label">Regional</span>
+                <span class="s-val">{{ formatIndicadorValue(p.medReg, p.formato) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="ind-section">
@@ -241,60 +256,143 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 }
 
 /* Resumo de auditoria */
-.audit-summary-section {
-  margin-bottom: 0;
+/* Novo Card de Auditoria Premiun */
+.audit-card-new {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.04));
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
-.audit-badge {
-  display: inline-flex;
+.audit-card-new::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--risk-critical);
+  opacity: 0.8;
+}
+
+.audit-card-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.3rem;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--risk-high) 20%, transparent);
-  color: var(--risk-high);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.1);
 }
 
-.audit-list {
-  list-style: none;
+.audit-title-wrap {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.audit-shield-icon {
+  font-size: 1.1rem;
+  color: var(--risk-critical);
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.4rem;
+  border-radius: 8px;
+}
+
+.audit-title-text h3 {
   margin: 0;
-  padding: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-color);
+}
+
+.audit-title-text p {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.audit-card-body {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  text-transform: none;
+  gap: 0.4rem;
 }
 
-.audit-item {
+.audit-row-new {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.8rem;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.audit-row-new:hover {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+  transform: translateX(4px);
+}
+
+.audit-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.audit-item-label {
   font-size: 0.8rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.audit-item-icon {
-  font-size: 0.7rem;
-  color: var(--risk-critical);
-  flex-shrink: 0;
-  margin-top: 0.05rem;
-}
-
-.audit-risco {
   font-weight: 700;
-  color: var(--risk-critical);
+  color: var(--text-color);
 }
 
-.audit-detail {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-left: 0.25rem;
+.audit-item-data {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.audit-badge-val {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--risk-critical);
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+}
+
+.audit-item-desc {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.audit-item-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.stat-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.stat-mini .s-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.stat-mini .s-val {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
 }
 
 .ind-section {

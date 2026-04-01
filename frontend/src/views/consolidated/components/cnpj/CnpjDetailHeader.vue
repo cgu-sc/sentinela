@@ -225,7 +225,7 @@ const formatCnpj = (v) => {
   flex-direction: column;
   gap: 1rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   z-index: 10;
   position: relative;
   overflow: hidden;
@@ -322,7 +322,7 @@ const formatCnpj = (v) => {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
 }
 
 .header-main-info {

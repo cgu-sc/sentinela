@@ -6,15 +6,15 @@ export const SURFACE_COLORS = {
   azul: {
     light: {
       'bg-color': '#ffffff',
-      'bg-gradient': 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+      'bg-gradient': 'linear-gradient(to bottom, #ffffff 0%, #f1f5f9 100%)',
       'text-color': '#1e293b',
       'text-muted': '#64748b',
       'card-bg': '#f9fafb',
-      'sidebar-bg': '#f1f5f9',
+      'sidebar-bg': '#f9fafb',
       'sidebar-text': '#1e293b',
       'sidebar-border': '#e2e8f0',
-      'table-hover': '#f8fafc',
-      'table-stripe': '#f9fafb'
+      'table-hover': '#eef6ff',
+      'table-stripe': '#f8fafc'
     },
     dark: {
       'bg-color': '#0f172a',
@@ -32,15 +32,15 @@ export const SURFACE_COLORS = {
   carbon: {
     light: {
       'bg-color': '#ffffff',
-      'bg-gradient': 'linear-gradient(135deg, #ffffff 0%, #fefcf8 100%)',
+      'bg-gradient': 'linear-gradient(to bottom, #ffffff 0%, #f1f5f9 100%)',
       'text-color': '#1e2127',
       'text-muted': '#64748b',
-      'card-bg': '#fdf8ec',
-      'sidebar-bg': '#ffffff',
+      'card-bg': '#f9fafb',
+      'sidebar-bg': '#f9fafb',
       'sidebar-text': '#1e2127',
-      'sidebar-border': '#e2e8f0',
-      'table-hover': '#f9f4e8',
-      'table-stripe': '#fefcf8'
+      'sidebar-border': '#f1f5f9',
+      'table-hover': '#f1f5f9',
+      'table-stripe': '#f8fafc'
     },
     dark: {
       'bg-color': '#0d1117',

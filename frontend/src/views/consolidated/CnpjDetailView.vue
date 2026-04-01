@@ -203,7 +203,7 @@ const formatCnpj = (v) => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  gap: 0.5rem; /* Reduzido de 1.25rem para "colar" mais no cabeçalho */
+  gap: 0.75rem; /* Ajustado para equilíbrio visual ideal */
   background: transparent;
 }
 
@@ -218,7 +218,7 @@ const formatCnpj = (v) => {
   ); /* O conteúdo técnico agora vive dentro deste grande card */
   border: 1px solid var(--sidebar-border);
   border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   margin-bottom: 2rem;
 }
 
@@ -248,16 +248,13 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav) {
-  background: color-mix(
-    in srgb,
-    var(--card-bg) 95%,
-    var(--sidebar-border)
-  ) !important; /* Ligeiro destaque na barra de navegação */
+  background: var(--card-bg) !important;
   border-bottom: 1px solid var(--sidebar-border);
   padding: 0 1.25rem;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
+  background: var(--card-bg) !important;
   font-size: 0.82rem; /* Leve redução para maior equilíbrio */
   font-weight: 700;
   padding: 0.55rem 1.1rem; /* Mais compacto também no respiro horizontal */

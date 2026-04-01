@@ -551,11 +551,11 @@ const {
   overflow: hidden;
   color: var(--text-color);
   scrollbar-gutter: stable;
-  /* 🌫️ LINEAR HORIZON */
+  /* 🌫️ LINEAR HORIZON (Suavizado para 3% de cor dinâmica) */
   background: linear-gradient(
     to bottom, 
     var(--bg-color) 0%, 
-    color-mix(in srgb, var(--primary-color) 4%, var(--bg-color)) 100%
+    color-mix(in srgb, var(--primary-color) 3%, var(--bg-color)) 100%
   ) !important;
 }
 
@@ -566,10 +566,8 @@ const {
 /* SIDEBAR */
 .admin-sidebar {
   width: var(--sidebar-width);
-  /* MÁGICA: Sidebar integrada com efeito vidro fosco */
-  background: color-mix(in srgb, var(--navbar-bg) 35%, transparent) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* MÁGICA: Sidebar integrada com fundo sólido do design system */
+  background: var(--sidebar-bg) !important;
   color: var(--sidebar-text);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -1089,11 +1087,11 @@ const {
   max-height: 64px;
   flex-shrink: 0; /* IMPEDE QUE A NAVBAR ESTIQUE OU ENCOLHA */
   
-  /* MÁGICA: Navbar integrada com efeito vidro fosco */
-  background: color-mix(in srgb, var(--navbar-bg) 35%, transparent) !important;
+  /* MÁGICA: Glassmorphism translúcido (Opacidade de 60%) */
+  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--navbar-border);
+  border-bottom: 1px solid var(--sidebar-border);
   display: flex;
   justify-content: space-between;
   align-items: center;

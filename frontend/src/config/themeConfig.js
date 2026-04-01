@@ -17,16 +17,16 @@ export const SURFACE_COLORS = {
       'table-stripe': '#f8fafc'
     },
     dark: {
-      'bg-color': '#0f172a',
-      'bg-gradient': 'radial-gradient(circle at 20% 0%, #1e293b 0%, #0f172a 100%)',
-      'text-color': '#cbd5e1',
-      'text-muted': '#64748b',
-      'card-bg': '#1e293b',
-      'sidebar-bg': '#0f172a',
-      'sidebar-text': '#e2e8f0',
-      'sidebar-border': '#334155',
-      'table-hover': '#1e293b',
-      'table-stripe': '#0f172a'
+      'bg-color': '#0d1117',
+      'bg-gradient': 'radial-gradient(circle at 20% 0%, #1c2533 0%, #0d1117 100%)',
+      'text-color': '#e0e5ee',
+      'text-muted': '#8b949e',
+      'card-bg': '#161b22',
+      'sidebar-bg': '#0d1117',
+      'sidebar-text': '#e6edf3',
+      'sidebar-border': '#30363d',
+      'table-hover': '#1f2937',
+      'table-stripe': '#131920'
     }
   },
   carbon: {

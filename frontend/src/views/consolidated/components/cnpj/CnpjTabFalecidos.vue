@@ -365,12 +365,12 @@ const openEstablishment = (estabStr) => {
 .f-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
   font-size: 0.80rem;
   text-transform: none;
   letter-spacing: 0.06em;
   color: var(--text-color);
-  border-bottom: 2px solid var(--primary-color);
+  border-bottom: 1px solid var(--primary-color);
 }
 
 .f-table td {
@@ -409,9 +409,9 @@ const openEstablishment = (estabStr) => {
 
 .f-days-badge {
   display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 99px;
-  font-size: 0.7rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -429,9 +429,8 @@ const openEstablishment = (estabStr) => {
 
 /* ── Linha de cabeçalho do grupo (por falecido) ── */
 .f-group-header td {
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
-  border-top: 2px solid var(--primary-color);
-  border-bottom: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
+  border-top: 1px solid var(--sidebar-border);
   padding: 0.55rem 1rem;
   font-size: 0.78rem;
 }
@@ -489,8 +488,8 @@ const openEstablishment = (estabStr) => {
 
 /* ── Total geral (tfoot) ── */
 .f-grand-total td {
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
-  border-top: 2px solid var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
+  border-top: 1px solid var(--primary-color);
   padding: 0.65rem 1rem;
   font-size: 0.78rem;
   font-weight: 800;

@@ -267,13 +267,18 @@ function getPercentClass(v) {
   border-left: 4px solid var(--primary-color) !important;
 }
 
-/* DESTAQUE DE ALTO VALOR (VERMELHO - IGUAL CONEXÃO MS) */
+/* DESTAQUE DE ALTO VALOR (VALOR SEM COMPROVAÇÃO) */
 .high-value-audit {
   color: var(--risk-high);
   font-weight: 700;
-  display: inline-block;
-  padding: 0 6px;
-  border-left: 3px solid color-mix(in srgb, var(--risk-high) 40%, transparent);
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  border-radius: 0 6px 6px 0;
 }
 
 /* Linhas do mesmo município (Sutil) */

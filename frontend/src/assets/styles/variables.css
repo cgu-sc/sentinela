@@ -44,13 +44,13 @@
   /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
   --risk-low: #059669;      /* Esmeralda Premium — idêntico ao status-success  */
   --risk-medium: #f97316;   /* Laranja vibrante — Orange 500 */
-  --risk-high: #e11d48;     /* Rose Premium — idêntico ao status-danger */
-  /* Vermelho puro (menos laranja) */
-  --risk-critical: #e11d48;
+  --risk-high: #ef4444;      /* Red 500 — vibrante e autoritário (Alerta Puro) */
   /* Unificado com High */
+  --risk-critical: #ef4444;
+  /* Cor de borda/bg baseada no Red 500 */
 
   /* Badges de status */
-  --status-info: #1e40af;
+  --status-info: #3b82f6; /* Blue Ocean - Vibrante (Light) */
   --status-secondary: #475569;
 
   /* Accent Indigo — paginadores e ícones de tabela */

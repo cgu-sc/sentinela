@@ -79,10 +79,10 @@
   
   /* BADGES ELEGANTES */
   .p-tag {
-      border-radius: 99px;
-      padding: 2px 8px;
+      border-radius: 6px;
+      padding: 0.25rem 0.65rem;
       font-weight: 700;
-      font-size: 0.75rem;
+      font-size: 0.82rem;
       letter-spacing: 0.02em;
       min-width: 60px;
       text-align: center;
@@ -102,47 +102,41 @@
       border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
   }
 
-  .risk-high {
+  .risk-high, .risk-critical {
       background: color-mix(in srgb, var(--risk-high)     12%, transparent) !important;
       color: var(--risk-high) !important;
       border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
   }
 
-  .risk-critical {
-      background: color-mix(in srgb, var(--risk-critical) 12%, transparent) !important;
-      color: var(--risk-critical) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-critical) 25%, transparent) !important;
-  }
-
   /* STATUS BADGES — Sincronizados com Risco para consistência visual */
   .status-success {
-      background: color-mix(in srgb, var(--risk-low)          15%, transparent) !important;
+      background: color-mix(in srgb, var(--risk-low)          12%, transparent) !important;
       color: var(--risk-low) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-low)      35%, transparent) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-low)      25%, transparent) !important;
   }
 
   .status-danger {
       background: color-mix(in srgb, var(--risk-high)          12%, transparent) !important;
       color: var(--risk-high) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-high)     35%, transparent) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
   }
 
   .status-warn {
       background: color-mix(in srgb, var(--risk-medium)        15%, transparent) !important;
       color: var(--risk-medium) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-medium)   35%, transparent) !important;
+      border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
   }
 
   .status-info {
       background: color-mix(in srgb, var(--status-info)        12%, transparent) !important;
       color: var(--status-info) !important;
-      border: 1px solid color-mix(in srgb, var(--status-info)   35%, transparent) !important;
+      border: 1px solid color-mix(in srgb, var(--status-info)   25%, transparent) !important;
   }
 
   .status-secondary {
-      background: color-mix(in srgb, var(--status-secondary)   12%, transparent) !important;
-      color: var(--status-secondary) !important;
-      border: 1px solid color-mix(in srgb, var(--status-secondary) 35%, transparent) !important;
+      background: color-mix(in srgb, var(--text-muted)   12%, transparent) !important;
+      color: var(--text-muted) !important;
+      border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent) !important;
   }
 
   /* TEXT COLOR UTILITIES — light/dark automático via var() */

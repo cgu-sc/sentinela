@@ -7,7 +7,7 @@
   --sidebar-width: 280px;
   --sidebar-collapsed: 80px;
   --bg-color: #f8fafc;
-  --text-color: #1e293b;
+  --text-color: #1e2127;
   --text-secondary: #475569;
   --text-muted: #64748b;
   --card-bg: #ffffff;
@@ -59,7 +59,7 @@
 
 :root.dark-mode {
   --bg-color: #0d1117;
-  --text-color: #e1d3cb;
+  --text-color: #e0e5ee;
   --text-secondary: #b1bbcc;
   --text-muted: #9aa4ae;
   --card-bg: #161b22;

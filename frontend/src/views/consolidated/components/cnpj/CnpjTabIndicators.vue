@@ -324,10 +324,15 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0.8rem;
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--sidebar-border);
   border-radius: 8px;
   transition: all 0.2s ease;
+}
+
+:global(.dark-mode) .audit-row-new {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .audit-row-new:hover {
@@ -344,7 +349,7 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 
 .audit-item-label {
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-color);
 }
 
@@ -380,16 +385,17 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 }
 
 .stat-mini .s-label {
-  font-size: 0.55rem;
-  font-weight: 700;
+  font-size: 0.6rem;
+  font-weight: 600;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--text-color);
+  opacity: 0.8;
 }
 
 .stat-mini .s-val {
   font-size: 0.8rem;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 600;
+  color: var(--text-color);
 }
 
 .ind-section {

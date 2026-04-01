@@ -4,7 +4,7 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
-  analyticsRegional:    (regiao) => `${BASE_URL}/api/v1/analytics/regional?regiao_saude=${encodeURIComponent(regiao)}`,
+  analyticsRegional:    (regiao, uf) => `${BASE_URL}/api/v1/analytics/regional?regiao_saude=${encodeURIComponent(regiao)}${uf ? '&uf=' + uf : ''}`,
   targetsSummary:       `${BASE_URL}/api/v1/targets/summary`,
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
   analyticsEvolucao:    (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,

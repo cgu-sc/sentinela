@@ -34,7 +34,7 @@ const regiaoSelecionada = computed(() =>
 );
 
 // ── Fetch ────────────────────────────────────────────────────────────────────
-async function fetchRegional(regiao) {
+async function fetchRegional(regiao, uf) {
   if (!regiao) {
     regionalData.value = null;
     return;
@@ -42,7 +42,7 @@ async function fetchRegional(regiao) {
   try {
     isLoading.value = true;
     errorMsg.value  = null;
-    const url = API_ENDPOINTS.analyticsRegional(regiao);
+    const url = API_ENDPOINTS.analyticsRegional(regiao, uf);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     regionalData.value = await res.json();
@@ -56,7 +56,9 @@ async function fetchRegional(regiao) {
 }
 
 // Reage ao filtro da sidebar
-watch(regiaoSelecionada, (nova) => fetchRegional(nova), { immediate: true });
+watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) => {
+  fetchRegional(novaRegiao, novoUF);
+}, { immediate: true });
 </script>
 
 <template>

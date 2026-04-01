@@ -712,12 +712,13 @@ class AnalyticsService:
             return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
     @staticmethod
-    def get_regional_data(regiao_saude: str) -> RegionalResponse:
+    def get_regional_data(regiao_saude: str, uf: str = None) -> RegionalResponse:
         """
         Constrói o payload completo da aba 'Região de Saúde'.
 
         Args:
             regiao_saude: Nome da Região de Saúde (filtro da sidebar, ex: 'GRANDE FLORIANOPOLIS').
+            uf: Sigla do estado (ex: 'SC'). Evita mistura se o mesmo nome existir em outro estado.
 
         Returns:
             RegionalResponse com resumo de municípios e ranking de farmácias.
@@ -729,7 +730,10 @@ class AnalyticsService:
             df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
             # ── Filtra movimentação para a região ───────────────────────────────
-            df_reg = df_mov.filter(pl.col("no_regiao_saude") == regiao_saude)
+            mask = (pl.col("no_regiao_saude") == regiao_saude)
+            if uf and uf != 'Todos':
+                mask = mask & (pl.col("uf") == uf)
+            df_reg = df_mov.filter(mask)
 
             if df_reg.is_empty():
                 return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
@@ -762,13 +766,10 @@ class AnalyticsService:
                 ).round(2).alias("densidade"),
             ]).sort("no_municipio")
 
-            # Pega o id_regiao_saude a partir da primeira ocorrência
+            # Pega o id_regiao_saude a partir da primeira ocorrência no dataset filtrado
             id_regiao: str | None = None
-            if not loc_pop.filter(pl.col("no_municipio").is_in(mun_agg["no_municipio"])).is_empty():
-                id_row = loc_pop.filter(
-                    pl.col("no_municipio").is_in(mun_agg["no_municipio"])
-                ).row(0, named=True)
-                id_regiao = str(id_row.get("id_regiao_saude", ""))
+            if not mun_enriched.is_empty():
+                id_regiao = str(mun_enriched.row(0, named=True).get("id_regiao_saude") or "")
 
             municipios = [
                 RegionalMunicipioSchema(

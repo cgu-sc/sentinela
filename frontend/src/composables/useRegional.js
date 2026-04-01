@@ -14,13 +14,14 @@ export function useRegional() {
   /**
    * Busca os dados regionais para a região informada.
    * @param {string} nomeRegiao - Nome exato da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS').
+   * @param {string} uf - Sigla do estado (ex: 'SC').
    */
-  async function fetchRegional(nomeRegiao) {
+  async function fetchRegional(nomeRegiao, uf) {
     if (!nomeRegiao || regionalLoaded.value) return;
     try {
       regionalLoading.value = true;
       regionalLoaded.value  = false;
-      const url = API_ENDPOINTS.analyticsRegional(nomeRegiao);
+      const url = API_ENDPOINTS.analyticsRegional(nomeRegiao, uf);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       regionalData.value = await res.json();

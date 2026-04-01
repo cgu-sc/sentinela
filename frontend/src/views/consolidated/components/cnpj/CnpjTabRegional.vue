@@ -33,7 +33,7 @@ const filteredFarmacias = computed(() => {
 
 const loadData = () => {
     if (props.geoData?.no_regiao_saude && !regionalLoaded.value) {
-        fetchRegional(props.geoData.no_regiao_saude);
+        fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf);
     }
 }
 

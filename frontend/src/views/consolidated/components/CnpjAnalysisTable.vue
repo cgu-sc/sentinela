@@ -311,16 +311,54 @@ const filteredLocation = computed(() => {
   color: var(--status-secondary);
 }
 
-:deep(.clickable-badge) {
-  cursor: pointer;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-}
-:deep(.clickable-badge:hover) {
-  opacity: 0.8;
-  transform: scale(1.08);
+/* ── ESTILOS DE BADGES PREMIUM (Sincronizados com o novo colors.js) ── */
+:deep(.p-tag) {
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-weight: 400;
+  font-size: 0.72rem;
+  border: 1px solid transparent;
 }
 
-/* light/dark automático via var(--accent-indigo) — override removido */
+/* 🟣 ESTILO VIOLET TECH (Atributos: Grande Rede / Estab > 1) */
+:deep(.status-info) {
+  background: color-mix(in srgb, #8b5cf6 15%, transparent) !important;
+  color: #7c3aed !important;
+  border-color: color-mix(in srgb, #8b5cf6 25%, transparent) !important;
+}
+
+/* 🟢 ESTILO ESMERALDA (Ativa) */
+:deep(.status-success) {
+  background: color-mix(in srgb, #10b981 12%, transparent) !important;
+  color: #059669 !important;
+  border-color: color-mix(in srgb, #10b981 20%, transparent) !important;
+}
+
+/* 🔴 ESTILO ROSE/ALERTA (Baixada / Inativa / Risco Alto) */
+:deep(.status-danger),
+:deep(.risk-high),
+:deep(.risk-critical) {
+  background: color-mix(in srgb, var(--risk-high) 12%, transparent) !important;
+  color: var(--risk-high) !important;
+  border-color: color-mix(in srgb, var(--risk-high) 20%, transparent) !important;
+}
+
+:deep(.status-secondary) {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent) !important;
+  color: var(--text-muted) !important;
+  border-color: color-mix(in srgb, var(--text-muted) 15%, transparent) !important;
+}
+
+:deep(.clickable-badge) {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:deep(.clickable-badge:hover) {
+  opacity: 1;
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
 
 /* RESET DE CAIXA ALTA FORÇADA */
 :deep(.p-datatable-thead th),
@@ -331,12 +369,17 @@ const filteredLocation = computed(() => {
   font-variant: normal !important;
 }
 
-/* DESTAQUE DE ALTO VALOR (VERMELHO - IGUAL CONEXÃO MS) */
+/* DESTAQUE DE ALTO VALOR (VALOR SEM COMPROVAÇÃO) */
 .high-value-audit {
   color: var(--risk-high);
-  font-weight: 700;
-  display: inline-block;
-  padding: 0 6px;
-  border-left: 3px solid color-mix(in srgb, var(--risk-high) 40%, transparent);
+  font-weight: 400;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  border-radius: 0 6px 6px 0;
 }
 </style>

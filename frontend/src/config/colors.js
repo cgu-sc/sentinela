@@ -18,6 +18,7 @@ export const PALETTE = {
   blue:    { 500: '#3b82f6', 600: '#2563eb' },
   indigo:  { 500: '#6366f1', 600: '#4f46e5' },
   violet:  { 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed' },
+  rose:    { 500: '#f43f5e', 600: '#e11d48' },
   slate:   { 200: '#e2e8f0', 400: '#94a3b8', 500: '#64748b', 800: '#1e293b' },
   zinc:    { 100: '#f4f4f5' },
 };
@@ -25,8 +26,8 @@ export const PALETTE = {
 // ── Cores semânticas de risco ─────────────────────────────────────────────────
 // Usadas em badges, tabelas, CSS (via v-bind) e configurações de limiar.
 export const RISK_COLORS = {
-  CRITICAL: PALETTE.red[800],      // '#991b1b'
-  HIGH:     PALETTE.red[500],      // '#ef4444'
+  CRITICAL: PALETTE.red[800],      // Conservando o Dark/Seriedade
+  HIGH:     PALETTE.rose[600],     // '#e11d48' - O seu novo vermelho Premium
   MEDIUM:   PALETTE.amber[500],    // '#f59e0b'
   LOW:      PALETTE.emerald[500],  // '#10b981'
 };
@@ -41,10 +42,10 @@ export const CHART_SERIES = {
     redGrad:   PALETTE.red[400],     // '#f87171'
   },
   light: {
-    green:     PALETTE.green[600],   // '#16a34a'
-    greenGrad: PALETTE.green[500],   // '#22c55e'
-    red:       PALETTE.red[600],     // '#dc2626'
-    redGrad:   PALETTE.red[500],     // '#ef4444'
+    green:     PALETTE.emerald[600], // '#059669' - Premium
+    greenGrad: PALETTE.emerald[500], // '#10b981' - Premium
+    red:       PALETTE.rose[600],    // '#e11d48' - Premium
+    redGrad:   PALETTE.rose[500],    // '#f43f5e' - Premium
   },
 };
 

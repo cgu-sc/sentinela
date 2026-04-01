@@ -42,11 +42,11 @@
   --color-error: #ef4444;
 
   /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
-  --risk-low: #166534;
-  --risk-medium: #b45309;
-  --risk-high: #ef4444;
+  --risk-low: #059669;      /* Esmeralda Premium — idêntico ao status-success  */
+  --risk-medium: #f97316;   /* Laranja vibrante — Orange 500 */
+  --risk-high: #e11d48;     /* Rose Premium — idêntico ao status-danger */
   /* Vermelho puro (menos laranja) */
-  --risk-critical: #ef4444;
+  --risk-critical: #e11d48;
   /* Unificado com High */
 
   /* Badges de status */

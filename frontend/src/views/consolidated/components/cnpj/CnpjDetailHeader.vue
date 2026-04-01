@@ -1,13 +1,12 @@
 <script setup>
 import { useRouter } from "vue-router";
 import { ref, computed, watchEffect } from "vue";
-import { useFilterStore } from "@/stores/filters";
+
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import Button from "primevue/button";
 
 const router = useRouter();
-const filtersStore = useFilterStore();
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
 
@@ -20,9 +19,18 @@ const props = defineProps({
 // DEBUG: Identificando o campo correto do score
 watchEffect(() => {
   if (props.cnpjData) {
-    console.log('DEBUG [CnpjDetailHeader]: Chaves disponíveis no objeto:', Object.keys(props.cnpjData));
-    console.log('DEBUG [CnpjDetailHeader]: score_risco_final:', props.cnpjData.score_risco_final);
-    console.log('DEBUG [CnpjDetailHeader]: classificacao_risco:', props.cnpjData.classificacao_risco);
+    console.log(
+      "DEBUG [CnpjDetailHeader]: Chaves disponíveis no objeto:",
+      Object.keys(props.cnpjData),
+    );
+    console.log(
+      "DEBUG [CnpjDetailHeader]: score_risco_final:",
+      props.cnpjData.score_risco_final,
+    );
+    console.log(
+      "DEBUG [CnpjDetailHeader]: classificacao_risco:",
+      props.cnpjData.classificacao_risco,
+    );
   }
 });
 
@@ -37,26 +45,7 @@ const copyCnpj = () => {
   }
 };
 
-function navigateWithFilter(type) {
-  const geo = props.geoData;
-  if (!geo) return;
 
-  if (type === "municipio") {
-    filtersStore.selectedUF = geo.sg_uf;
-    filtersStore.selectedRegiaoSaude = geo.no_regiao_saude;
-    filtersStore.selectedMunicipio = `${geo.no_municipio}|${geo.sg_uf}`;
-  } else if (type === "uf") {
-    filtersStore.selectedMunicipio = "Todos";
-    filtersStore.selectedRegiaoSaude = "Todos";
-    filtersStore.selectedUF = geo.sg_uf;
-  } else if (type === "regiao") {
-    filtersStore.selectedMunicipio = "Todos";
-    filtersStore.selectedUF = geo.sg_uf;
-    filtersStore.selectedRegiaoSaude = geo.no_regiao_saude;
-  }
-
-  router.push({ name: "Dashboard" });
-}
 
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
 
@@ -90,24 +79,21 @@ const formatCnpj = (v) => {
       />
 
       <div class="identity-badges" v-if="cnpjData">
-        <div
-          class="cnpj-copy-wrap-new"
-          v-tooltip.top="'Copiar CNPJ'"
-          @click="copyCnpj"
-        >
-          <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
-          <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
-        </div>
-
         <!-- Corrigido para score_risco_final conforme Matriz Consolidada -->
-        <div 
-          v-if="cnpjData.score_risco_final != null" 
-          class="score-badge-new" 
-          :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+        <div
+          v-if="cnpjData.score_risco_final != null"
+          class="score-badge-new"
+          :class="[
+            getRiskClass(risco) === 'risk-critical'
+              ? 'risk-high'
+              : getRiskClass(risco),
+          ]"
           v-tooltip.top="'Score de Risco Consolidado'"
         >
-          <span class="score-label" style="color: inherit; opacity: 0.75;">Score</span>
-          <span class="score-val" style="color: inherit;">
+          <span class="score-label" style="color: inherit; opacity: 0.75"
+            >Score</span
+          >
+          <span class="score-val" style="color: inherit">
             {{ cnpjData.score_risco_final.toFixed(1) }}
           </span>
         </div>
@@ -130,67 +116,49 @@ const formatCnpj = (v) => {
     <!-- Área Central: Razão Social e Localização -->
     <div class="header-main-info" v-if="cnpjData">
       <div class="title-group">
-        <h1
-          class="razao-social-new"
-          v-tooltip.bottom="cnpjData.razao_social"
-        >
+        <h1 class="razao-social-new">
           {{ cnpjData.razao_social ?? "—" }}
         </h1>
         <div class="location-chips">
-          <div
-            class="loc-chip"
-            @click="navigateWithFilter('municipio')"
-            v-tooltip.bottom="
-              'Filtrar por ' + (geoData?.no_municipio ?? cnpjData.municipio)
-            "
-          >
+          <div class="loc-chip static">
             <i class="pi pi-map-marker" />
             {{ geoData?.no_municipio ?? cnpjData.municipio }}
           </div>
-          <div
-            class="loc-chip"
-            @click="navigateWithFilter('uf')"
-            v-tooltip.bottom="'Filtrar por ' + (geoData?.sg_uf ?? cnpjData.uf)"
-          >
+          <div class="loc-chip static">
             {{ geoData?.sg_uf ?? cnpjData.uf }}
           </div>
-          <div
-            class="loc-chip highlight"
-            @click="navigateWithFilter('regiao')"
-            v-tooltip.bottom="
-              'Ver todos da ' + (geoData?.no_regiao_saude ?? 'esta região')
-            "
-          >
+          <div class="loc-chip static highlight">
             <i class="pi pi-share-alt" />
             Região: {{ geoData?.no_regiao_saude ?? "Não Identificada" }}
           </div>
-          <div class="loc-chip muted" v-if="geoData?.nu_populacao">
-            <i class="pi pi-users" />
-            {{ formatNumberFull(geoData.nu_populacao) }} hab.
+
+          <div
+            class="cnpj-copy-wrap-new"
+            v-tooltip.bottom="'Copiar CNPJ'"
+            @click="copyCnpj"
+          >
+            <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
+            <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
           </div>
         </div>
       </div>
 
       <div class="header-kpis-new">
-        <div class="kpi-item-new large">
+        <div class="kpi-item-new">
           <span class="label">% Valor sem Comprovação</span>
           <span
             class="value"
-            :class="[
-              getRiskClass(risco) === 'risk-critical'
-                ? 'risk-high'
-                : getRiskClass(risco),
-            ]"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >
             {{ cnpjData.percValSemComp?.toFixed(2) }}%
           </span>
         </div>
+        <div class="kpi-divider"></div>
         <div class="kpi-item-new">
           <span class="label">Valor sem Comprovação</span>
-          <span class="value">{{
-            formatCurrencyFull(cnpjData.valSemComp)
-          }}</span>
+          <span class="value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
         </div>
+        <div class="kpi-divider"></div>
         <div class="kpi-item-new">
           <span class="label">Total Vendas</span>
           <span class="value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
@@ -201,55 +169,41 @@ const formatCnpj = (v) => {
     <!-- Painel de Rankings e Estatísticas -->
     <div class="header-ranking-panel" v-if="cnpjData">
       <div class="ranking-grid-new">
-        <div class="rank-card-new">
-          <div class="rank-icon-box gold"><i class="pi pi-globe" /></div>
-          <div class="rank-info-new">
+        <div class="rank-stat">
+          <i class="pi pi-globe gold" />
+          <div class="rank-details">
             <span class="rank-label">Rank Nacional</span>
-            <span class="rank-val"
-              >{{ formatRank(cnpjData.rank_nacional) }}
-              <small>/ {{ cnpjData.total_nacional }}</small></span
-            >
+            <span class="rank-val">{{ formatRank(cnpjData.rank_nacional) }} <small>/ {{ cnpjData.total_nacional }}</small></span>
           </div>
         </div>
-        <div class="rank-card-new">
-          <div class="rank-icon-box silver"><i class="pi pi-map" /></div>
-          <div class="rank-info-new">
+        <div class="rank-stat">
+          <i class="pi pi-map silver" />
+          <div class="rank-details">
             <span class="rank-label">Rank Estadual</span>
-            <span class="rank-val"
-              >{{ formatRank(cnpjData.rank_uf) }}
-              <small>/ {{ cnpjData.total_uf }}</small></span
-            >
+            <span class="rank-val">{{ formatRank(cnpjData.rank_uf) }} <small>/ {{ cnpjData.total_uf }}</small></span>
           </div>
         </div>
-        <div class="rank-card-new highlighted">
-          <div class="rank-icon-box bronze"><i class="pi pi-share-alt" /></div>
-          <div class="rank-info-new">
+        <div class="rank-stat active">
+          <i class="pi pi-share-alt bronze" />
+          <div class="rank-details">
             <span class="rank-label">Rank Regional</span>
-            <span class="rank-val"
-              >{{ formatRank(cnpjData.rank_regiao_saude) }}
-              <small>/ {{ cnpjData.total_regiao_saude }}</small></span
-            >
+            <span class="rank-val">{{ formatRank(cnpjData.rank_regiao_saude) }} <small>/ {{ cnpjData.total_regiao_saude }}</small></span>
           </div>
         </div>
-        <div class="rank-card-new">
-          <div class="rank-icon-box neutral"><i class="pi pi-building" /></div>
-          <div class="rank-info-new">
+        <div class="rank-stat">
+          <i class="pi pi-building neutral" />
+          <div class="rank-details">
             <span class="rank-label">Rank Municipal</span>
-            <span class="rank-val"
-              >{{ formatRank(cnpjData.rank_municipio) }}
-              <small>/ {{ cnpjData.total_municipio }}</small></span
-            >
+            <span class="rank-val">{{ formatRank(cnpjData.rank_municipio) }} <small>/ {{ cnpjData.total_municipio }}</small></span>
           </div>
         </div>
-      </div>
-
-      <div class="regional-stats-new" v-if="cnpjData.total_regiao_saude">
-        <i class="pi pi-info-circle" />
-        <span
-          >Esta região de saúde possui
-          <strong>{{ cnpjData.total_regiao_saude }}</strong> estabelecimentos de
-          saúde.</span
-        >
+        <div class="rank-stat" v-if="cnpjData.total_regiao_saude">
+          <i class="pi pi-users-group" style="color: var(--text-muted); opacity: 0.8;" />
+          <div class="rank-details">
+            <span class="rank-label">Estabelecimentos</span>
+            <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -264,15 +218,28 @@ const formatCnpj = (v) => {
 /* ── CABEÇALHO RESUMO (SOLTO) ────────────────── */
 .detail-header-new {
   background: var(--card-bg);
-  padding: 1.5rem 2rem;
+  padding: 1.25rem 2rem;
   border: 1px solid var(--sidebar-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   z-index: 10;
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-header-new::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary-color), transparent);
+  opacity: 0.3;
 }
 
 .header-top-bar {
@@ -296,60 +263,66 @@ const formatCnpj = (v) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.2rem 0.6rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
 }
 
 .score-label {
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.6rem;
+  font-weight: 800;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.05em;
 }
 
 .score-val {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 800;
   color: var(--primary-color);
-  font-family: 'Inter', sans-serif;
 }
 
 .cnpj-copy-wrap-new {
-  background: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
-  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.2rem 0.6rem;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .cnpj-copy-wrap-new:hover {
-  background: color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .cnpj-text {
-  font-family: monospace;
-  font-size: 0.85rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+}
+
+.cnpj-copy-wrap-new i {
+  font-size: 0.7rem;
+  opacity: 0.7;
 }
 
 .risk-tag-new {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.7rem;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .header-main-info {
@@ -367,10 +340,10 @@ const formatCnpj = (v) => {
 }
 
 .razao-social-new {
-  font-size: 1.4rem; /* Leve redução para um look mais compacto */
+  font-size: 1.4rem;
   font-weight: 800;
   margin: 0;
-  line-height: 1.1;
+  line-height: 1.2;
   letter-spacing: -0.02em;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -409,6 +382,11 @@ const formatCnpj = (v) => {
   border-color: color-mix(in srgb, var(--risk-low) 20%, transparent);
 }
 
+.loc-chip.static {
+  cursor: default;
+  opacity: 0.8;
+}
+
 .loc-chip.muted {
   background: transparent;
   border: 1px dashed var(--sidebar-border);
@@ -417,17 +395,27 @@ const formatCnpj = (v) => {
 
 .header-kpis-new {
   display: flex;
+  align-items: center;
   gap: 2rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.kpi-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .kpi-item-new {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
 }
 
 .kpi-item-new .label {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -435,14 +423,26 @@ const formatCnpj = (v) => {
 }
 
 .kpi-item-new .value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-color);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  background: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
 
-.kpi-item-new.large .value {
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
+/* Garante que as classes de risco não tragam fundo para este componente */
+.kpi-item-new .value.risk-high,
+.kpi-item-new .value.risk-critical,
+.kpi-item-new .value.risk-medium,
+.kpi-item-new .value.risk-low {
+  background: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 /* ── RANKING PANEL ── */
@@ -450,94 +450,69 @@ const formatCnpj = (v) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--sidebar-border);
+  gap: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ranking-grid-new {
   display: flex;
-  gap: 1rem;
+  gap: 3rem;
 }
 
-.rank-card-new {
-  background: color-mix(in srgb, var(--card-bg) 60%, var(--sidebar-border));
-  border: 1px solid var(--sidebar-border);
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
+.rank-stat {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-width: 160px;
-  backdrop-filter: blur(8px);
+  gap: 0.8rem;
+  opacity: 0.7;
+  transition: all 0.3s;
 }
 
-.rank-card-new.highlighted {
-  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
-  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.1);
+.rank-stat:hover {
+  opacity: 1;
+  transform: translateY(-1px);
 }
 
-.rank-icon-box {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
+.rank-stat.active {
+  opacity: 1;
+  position: relative;
 }
 
-.rank-icon-box.gold {
-  background: rgba(255, 215, 0, 0.15);
-  color: #ffd700;
-}
-.rank-icon-box.silver {
-  background: rgba(192, 192, 192, 0.15);
-  color: #c0c0c0;
-}
-.rank-icon-box.bronze {
-  background: rgba(205, 127, 50, 0.15);
-  color: #cd7f32;
-}
-.rank-icon-box.neutral {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+.rank-stat i {
+  font-size: 1.25rem;
 }
 
-.rank-info-new {
+.rank-details {
   display: flex;
   flex-direction: column;
 }
 
 .rank-label {
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.6rem;
+  font-weight: 800;
   text-transform: uppercase;
   color: var(--text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .rank-val {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 800;
-  color: var(--text-color);
+  color: var(--text-secondary);
 }
 
 .rank-val small {
   font-size: 0.75rem;
   font-weight: 500;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
-.regional-stats-new {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
+.pi.gold { color: #ffd700; }
+.pi.silver { color: #cbd5e1; }
+.pi.bronze { color: #fbbf24; }
+.pi.neutral { color: #94a3b8; }
+
+.pi-users-group {
+  color: var(--text-muted);
 }
 </style>

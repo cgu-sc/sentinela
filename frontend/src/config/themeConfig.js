@@ -3,29 +3,57 @@
  * Centralizadas para garantir consistência entre CSS e JavaScript (Gráficos).
  */
 export const SURFACE_COLORS = {
-  light: {
-    'bg-color': '#f8fafc',
-    'bg-gradient': 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
-    'text-color': '#1e293b',
-    'text-muted': '#64748b',
-    'card-bg': '#ffffff',
-    'sidebar-bg': '#ffffff',
-    'sidebar-text': '#1e293b',
-    'sidebar-border': '#e2e8f0',
-    'table-hover': '#f1f5f9',
-    'table-stripe': '#f8fafc'
+  azul: {
+    light: {
+      'bg-color': '#ffffff',
+      'bg-gradient': 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+      'text-color': '#1e293b',
+      'text-muted': '#64748b',
+      'card-bg': '#f9fafb',
+      'sidebar-bg': '#f1f5f9',
+      'sidebar-text': '#1e293b',
+      'sidebar-border': '#e2e8f0',
+      'table-hover': '#f8fafc',
+      'table-stripe': '#f9fafb'
+    },
+    dark: {
+      'bg-color': '#0f172a',
+      'bg-gradient': 'radial-gradient(circle at 20% 0%, #1e293b 0%, #0f172a 100%)',
+      'text-color': '#cbd5e1',
+      'text-muted': '#64748b',
+      'card-bg': '#1e293b',
+      'sidebar-bg': '#0f172a',
+      'sidebar-text': '#e2e8f0',
+      'sidebar-border': '#334155',
+      'table-hover': '#1e293b',
+      'table-stripe': '#0f172a'
+    }
   },
-  dark: {
-    'bg-color': '#0d1117',
-    'bg-gradient': 'radial-gradient(circle at 20% 0%, #1c2533 0%, #0d1117 100%)',
-    'text-color': '#cbd5e1',
-    'text-muted': '#8b949e',
-    'card-bg': '#161b22',
-    'sidebar-bg': '#0d1117',
-    'sidebar-text': '#e6edf3',
-    'sidebar-border': '#30363d',
-    'table-hover': '#1f2937',
-    'table-stripe': '#131920'
+  carbon: {
+    light: {
+      'bg-color': '#ffffff',
+      'bg-gradient': 'linear-gradient(135deg, #ffffff 0%, #fefcf8 100%)',
+      'text-color': '#1e2127',
+      'text-muted': '#64748b',
+      'card-bg': '#fdf8ec',
+      'sidebar-bg': '#ffffff',
+      'sidebar-text': '#1e2127',
+      'sidebar-border': '#e2e8f0',
+      'table-hover': '#f9f4e8',
+      'table-stripe': '#fefcf8'
+    },
+    dark: {
+      'bg-color': '#0d1117',
+      'bg-gradient': 'radial-gradient(circle at 20% 0%, #1c2533 0%, #0d1117 100%)',
+      'text-color': '#e0e5ee',
+      'text-muted': '#8b949e',
+      'card-bg': '#161b22',
+      'sidebar-bg': '#0d1117',
+      'sidebar-text': '#e6edf3',
+      'sidebar-border': '#30363d',
+      'table-hover': '#1f2937',
+      'table-stripe': '#131920'
+    }
   }
 };
 

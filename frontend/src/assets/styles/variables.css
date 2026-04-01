@@ -6,11 +6,11 @@
 :root {
   --sidebar-width: 280px;
   --sidebar-collapsed: 80px;
-  --bg-color: #f8fafc;
+  --bg-color: #ffffff;
   --text-color: #1e2127;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --card-bg: #ffffff;
+  --card-bg: #fdf8ec;
   --sidebar-bg: #ffffff;
   --sidebar-text: #1e293b;
   --sidebar-border: #e2e8f0;

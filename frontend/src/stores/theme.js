@@ -39,7 +39,9 @@ export const useThemeStore = defineStore('theme', () => {
     html.style.setProperty('--primary-color-text', p.text);
 
     // 3. Aplicar Cores de Superfície (Backgrounds/Cards/Textos) para consistência absoluta
-    const surface = SURFACE_COLORS[isDark.value ? 'dark' : 'light'];
+    const themeKey = currentPalette.value === 'carbon' ? 'carbon' : 'azul';
+    const surface = SURFACE_COLORS[themeKey][isDark.value ? 'dark' : 'light'];
+    
     Object.keys(surface).forEach(key => {
       html.style.setProperty(`--${key}`, surface[key]);
     });
@@ -85,9 +87,10 @@ export const useThemeStore = defineStore('theme', () => {
    * Permite que você peça a cor de um card ou texto no JS sem hardcodar o HEX.
    */
   const tokens = computed(() => {
-    const palette = palettes[currentPalette.value] ?? palettes.azul;
+    const themeKey = currentPalette.value === 'carbon' ? 'carbon' : 'azul';
+    const palette = palettes[themeKey] ?? palettes.azul;
     const isDarkMode = isDark.value;
-    const surface = SURFACE_COLORS[isDarkMode ? 'dark' : 'light'];
+    const surface = SURFACE_COLORS[themeKey][isDarkMode ? 'dark' : 'light'];
 
     return {
       primary: palette.primary.color,

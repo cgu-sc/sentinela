@@ -90,9 +90,7 @@ const formatCnpj = (v) => {
           ]"
           v-tooltip.top="'Score de Risco Consolidado'"
         >
-          <span class="score-label" style="color: inherit; opacity: 0.75"
-            >Score</span
-          >
+          <span class="score-label">Score</span>
           <span class="score-val" style="color: inherit">
             {{ cnpjData.score_risco_final.toFixed(1) }}
           </span>
@@ -183,7 +181,7 @@ const formatCnpj = (v) => {
             <span class="rank-val">{{ formatRank(cnpjData.rank_uf) }} <small>/ {{ cnpjData.total_uf }}</small></span>
           </div>
         </div>
-        <div class="rank-stat active">
+        <div class="rank-stat">
           <i class="pi pi-share-alt bronze" />
           <div class="rank-details">
             <span class="rank-label">Rank Regional</span>
@@ -273,7 +271,8 @@ const formatCnpj = (v) => {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: inherit;
+  opacity: 0.8;
   letter-spacing: 0.05em;
 }
 
@@ -284,32 +283,33 @@ const formatCnpj = (v) => {
 }
 
 .cnpj-copy-wrap-new {
-  background: rgba(255, 255, 255, 0.04);
-  padding: 0.2rem 0.6rem;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  padding: 0.2rem 0.65rem;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease-in-out;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
 }
 
 .cnpj-copy-wrap-new:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  border-color: var(--primary-color) !important;
+  transform: translateY(-1px);
 }
 
 .cnpj-text {
   font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .cnpj-copy-wrap-new i {
   font-size: 0.7rem;
-  opacity: 0.7;
+  color: var(--primary-color);
 }
 
 .risk-tag-new {
@@ -361,30 +361,23 @@ const formatCnpj = (v) => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.65rem;
   background: color-mix(in srgb, var(--primary-color) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent);
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
+  cursor: default;
+  transition: all 0.2s ease-in-out;
 }
 
-.loc-chip:hover {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  border-color: var(--primary-color);
-}
-
-.loc-chip.highlight {
-  background: color-mix(in srgb, var(--risk-low) 10%, transparent);
-  border-color: color-mix(in srgb, var(--risk-low) 20%, transparent);
+.loc-chip i {
+  color: var(--primary-color);
 }
 
 .loc-chip.static {
   cursor: default;
-  opacity: 0.8;
 }
 
 .loc-chip.muted {
@@ -418,7 +411,7 @@ const formatCnpj = (v) => {
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   letter-spacing: 0.05em;
 }
 
@@ -464,7 +457,6 @@ const formatCnpj = (v) => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  opacity: 0.7;
   transition: all 0.3s;
 }
 
@@ -491,7 +483,7 @@ const formatCnpj = (v) => {
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   letter-spacing: 0.05em;
 }
 
@@ -504,7 +496,7 @@ const formatCnpj = (v) => {
 .rank-val small {
   font-size: 0.75rem;
   font-weight: 500;
-  opacity: 0.4;
+  opacity: 0.8;
 }
 
 .pi.gold { color: #ffd700; }

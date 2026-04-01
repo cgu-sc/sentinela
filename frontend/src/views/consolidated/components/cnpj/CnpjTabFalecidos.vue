@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
-const { formatCurrencyFull, formatarData } = useFormatting();
+const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
 const { chartDataColors } = useChartTheme();
 
 onMounted(() => {
@@ -34,8 +34,8 @@ const falecidosAgrupados = computed(() => {
     if (!grupos.has(t.cpf)) {
       grupos.set(t.cpf, {
         cpf:           t.cpf,
-        nome:          t.nome_falecido || 'NÃO IDENTIFICADO',
-        municipio:     t.municipio_falecido,
+        nome:          formatTitleCase(t.nome_falecido) || 'Não Identificado',
+        municipio:     formatTitleCase(t.municipio_falecido),
         uf:            t.uf_falecido,
         dt_obito:      formatarData(t.dt_obito),
         dt_nascimento: formatarData(t.dt_nascimento),
@@ -46,7 +46,7 @@ const falecidosAgrupados = computed(() => {
       });
     }
     const g = grupos.get(t.cpf);
-    g.transacoes.push(t);
+    g.transacoes.push({ ...t, nome_falecido: formatTitleCase(t.nome_falecido) });
     g.total_valor += t.valor_total_autorizacao ?? 0;
     g.max_dias = Math.max(g.max_dias, t.dias_apos_obito ?? 0);
   }
@@ -57,13 +57,6 @@ const timelineOverlay = ref(null);
 
 const toggleMultiCnpj = (event, grupo) => {
   timelineOverlay.value?.open(event, grupo);
-};
-
-const formatCnpj = (v) => {
-  if (!v) return '—';
-  const clean = v.replace(/\D/g, '');
-  if (clean.length !== 14) return v;
-  return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 };
 
 const openEstablishment = (estabStr) => {
@@ -213,7 +206,7 @@ const openEstablishment = (estabStr) => {
                 <tr v-for="t in grupo.transacoes" :key="t.num_autorizacao" class="f-row">
                   <td class="f-cpf-cell">{{ t.cpf }}</td>
                   <td>
-                    <span class="f-nome">{{ t.nome_falecido || 'NÃO IDENTIFICADO' }}</span>
+                    <span class="f-nome">{{ t.nome_falecido || 'Não Identificado' }}</span>
                   </td>
                   <td class="f-date">{{ grupo.municipio }}/{{ grupo.uf }}</td>
                   <td class="f-fonte">
@@ -373,8 +366,8 @@ const openEstablishment = (estabStr) => {
   text-align: left;
   padding: 0.75rem 1rem;
   background: color-mix(in srgb, var(--sidebar-border) 40%, var(--card-bg));
-  font-size: 0.68rem;
-  text-transform: uppercase;
+  font-size: 0.80rem;
+  text-transform: none;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--sidebar-border);
@@ -389,13 +382,7 @@ const openEstablishment = (estabStr) => {
 
 .f-row:hover td { background: rgba(255,255,255,0.02); }
 
-.f-beneficiario {
-  display: flex;
-  flex-direction: column;
-}
-
-.f-nome { font-weight: 600; font-size: 0.82rem; }
-.f-cpf { font-size: 0.72rem; color: var(--text-muted); font-family: monospace; }
+.f-nome { font-weight: 600; font-size: 0.82rem; text-transform: none !important; }
 
 .f-multi-tag {
   align-self: flex-start;
@@ -415,6 +402,7 @@ const openEstablishment = (estabStr) => {
 
 
 .f-date, .f-aut, .f-num, .f-val { font-size: 0.78rem; }
+.f-date { text-transform: none !important; }
 .f-num, .f-val { font-weight: 500; }
 
 .txt-center { text-align: center !important; }
@@ -459,9 +447,9 @@ const openEstablishment = (estabStr) => {
   font-weight: 800;
   font-size: 0.82rem;
   color: var(--text-secondary);
-  text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-right: 0.4rem;
+  text-transform: none !important;
 }
 
 .f-group-sep {
@@ -474,6 +462,7 @@ const openEstablishment = (estabStr) => {
   font-size: 0.76rem;
   font-weight: 600;
   color: var(--text-secondary);
+  text-transform: none !important;
 }
 
 /* ── Linha de subtotal por falecido ── */
@@ -487,7 +476,7 @@ const openEstablishment = (estabStr) => {
 .f-subtotal-label {
   font-size: 0.72rem;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none !important;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
   text-align: right;
@@ -505,7 +494,7 @@ const openEstablishment = (estabStr) => {
   padding: 0.65rem 1rem;
   font-size: 0.78rem;
   font-weight: 800;
-  text-transform: uppercase;
+  text-transform: none !important;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
 }

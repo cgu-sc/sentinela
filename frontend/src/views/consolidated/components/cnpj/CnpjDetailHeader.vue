@@ -200,7 +200,7 @@ const formatCnpj = (v) => {
         <div class="rank-stat" v-if="cnpjData.total_regiao_saude">
           <i class="pi pi-users-group" style="color: var(--text-muted); opacity: 0.8;" />
           <div class="rank-details">
-            <span class="rank-label">Estabelecimentos</span>
+            <span class="rank-label">CNPJs Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
           </div>
         </div>

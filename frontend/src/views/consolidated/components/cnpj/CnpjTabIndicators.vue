@@ -42,17 +42,14 @@ const pontosCriticos = computed(() => {
       const d = indicadoresData.value.indicadores[ind.key];
       if (!d || d.valor == null) continue;
       const t = INDICATOR_THRESHOLDS[ind.thresholdKey] ?? INDICATOR_THRESHOLDS.default;
-      const riscoUf  = d.risco_uf  != null ? Math.round(d.risco_uf  * 10) / 10 : null;
       const riscoReg = d.risco_reg != null ? Math.round(d.risco_reg * 10) / 10 : null;
-      const isCritico = riscoUf != null && riscoUf >= t.critico;
-      const isAuditadoComValor = ind.key === 'auditado' && d.valor > 0;
+      const isCriticoReg = riscoReg != null && riscoReg >= t.critico;
 
-      if (isCritico || isAuditadoComValor) {
+      if (isCriticoReg) {
         result.push({
           key:     ind.key,
           label:   ind.label,
           formato: ind.formato,
-          riscoUf,
           riscoReg,
           valor:   d.valor,
           medReg:  d.med_reg,
@@ -99,7 +96,7 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
             <i class="pi pi-shield audit-shield-icon" />
             <div class="audit-title-text">
               <h3>Resumo para Auditoria</h3>
-              <p>Identificados {{ pontosCriticos.length }} pontos críticos de alto risco</p>
+              <p>Identificados {{ pontosCriticos.length }} indicador(es) em nível crítico</p>
             </div>
           </div>
         </div>
@@ -109,8 +106,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
             <div class="audit-item-main">
               <span class="audit-item-label">{{ p.label }}</span>
               <div class="audit-item-data">
-                <span class="audit-badge-val">{{ p.riscoReg?.toFixed(1) ?? p.riscoUf.toFixed(1) }}x</span>
-                <span class="audit-item-desc">acima da média regional</span>
+                <span class="audit-badge-val">{{ p.riscoReg.toFixed(1) }}x</span>
+                <span class="audit-item-desc">acima da mediana regional</span>
               </div>
             </div>
             <div class="audit-item-stats">
@@ -204,8 +201,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
                   <td class="ind-status-cell">
                     <span
                       class="ind-status-pill"
-                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)"
-                    >{{ getIndicadorStatus(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey).label }}</span>
+                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
+                    >{{ getIndicadorStatus(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey).label }}</span>
                   </td>
                 </template>
                 <template v-else>
@@ -418,9 +415,9 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   padding: 0.6rem 0.75rem;
   background: color-mix(in srgb, var(--primary-color, #3b82f6) 14%, var(--card-bg));
   color: var(--text-secondary);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.07em;
   border-bottom: 2px solid var(--primary-color, #3b82f6);
   white-space: nowrap;

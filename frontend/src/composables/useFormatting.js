@@ -78,6 +78,18 @@ export function useFormatting() {
     return str.toLowerCase().replace(/(?:^|\s|-|\/)\S/g, (match) => match.toUpperCase());
   };
 
+  /**
+   * Formata um CNPJ bruto (14 dígitos) no padrão XX.XXX.XXX/XXXX-XX.
+   * @param {string} v - CNPJ bruto ou formatado
+   * @returns {string}
+   */
+  const formatCnpj = (v) => {
+    if (!v) return '—';
+    const clean = v.replace(/\D/g, '');
+    if (clean.length !== 14) return v;
+    return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  };
+
   return {
     formatBRL,
     formatNumber,
@@ -86,6 +98,7 @@ export function useFormatting() {
     formatCurrencyFull,
     toLocalISO,
     formatarData,
-    formatTitleCase
+    formatTitleCase,
+    formatCnpj,
   };
 }

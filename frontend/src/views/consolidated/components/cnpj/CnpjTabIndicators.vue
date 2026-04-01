@@ -72,6 +72,11 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
     color: c 
   };
 }
+
+function riscoTextStyle(risco, thresholdKey = 'default') {
+  const s = getIndicadorStatus(risco, thresholdKey);
+  return { color: s.color };
+}
 </script>
 
 <template>
@@ -148,10 +153,10 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
               <th>Farmácia</th>
               <th>Mediana Região</th>
               <th>Mediana UF</th>
-              <th>Mediana BR</th>
+              <th>Mediana Nacional</th>
               <th>Risco Região</th>
               <th>Risco UF</th>
-              <th>Risco BR</th>
+              <th>Risco Nacional</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -178,25 +183,19 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
                 <template v-if="indicadoresData.indicadores[ind.key]?.valor != null">
                   <td class="ind-val-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
                   <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
-                  <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</td>
-                  <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</td>
+                  <td class="ind-med-cell ind-secondary-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</td>
+                  <td class="ind-med-cell ind-secondary-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</td>
                   <td class="ind-risco-cell">
                     <span
                       class="ind-risco-pill"
                       :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
                     >{{ indicadoresData.indicadores[ind.key].risco_reg != null ? indicadoresData.indicadores[ind.key].risco_reg.toFixed(1) + 'x' : '—' }}</span>
                   </td>
-                  <td class="ind-risco-cell">
-                    <span
-                      class="ind-risco-pill"
-                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)"
-                    >{{ indicadoresData.indicadores[ind.key].risco_uf != null ? indicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
+                  <td class="ind-risco-cell ind-secondary-cell">
+                    <span class="ind-risco-muted" :style="riscoTextStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)">{{ indicadoresData.indicadores[ind.key].risco_uf != null ? indicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
                   </td>
-                  <td class="ind-risco-cell">
-                    <span
-                      class="ind-risco-pill"
-                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)"
-                    >{{ indicadoresData.indicadores[ind.key].risco_br != null ? indicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
+                  <td class="ind-risco-cell ind-secondary-cell">
+                    <span class="ind-risco-muted" :style="riscoTextStyle(indicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)">{{ indicadoresData.indicadores[ind.key].risco_br != null ? indicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-status-cell">
                     <span
@@ -419,13 +418,13 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   z-index: 2;
   text-align: center;
   padding: 0.6rem 0.75rem;
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
-  color: var(--text-color);
-  font-size: 0.75rem;
+  background: var(--table-header-bg);
+  color: var(--table-header-text);
+  font-size: 0.8rem;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.07em;
-  border-bottom: 2px solid var(--primary-color);
+  border-bottom: 1px solid var(--sidebar-border);
   white-space: nowrap;
 }
 
@@ -434,14 +433,13 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 /* Linha de grupo */
 .ind-group-row td {
   padding: 0.4rem 1rem;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.07em;
   color: var(--text-color);
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
   border-top: 1px solid var(--sidebar-border);
-  border-left: 3px solid var(--primary-color);
 }
 
 /* Linha de dados */
@@ -450,7 +448,7 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   border-bottom: 1px solid var(--sidebar-border);
   vertical-align: middle;
   text-transform: none;
-  color: var(--text-secondary);
+  color: var(--text-color);
 }
 
 .ind-data-row:hover td {
@@ -459,7 +457,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 
 /* Célula do nome */
 .ind-nome-cell {
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 400;
 }
 
 .ind-nome-inner {
@@ -472,12 +471,25 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 /* Células de valor e mediana */
 .ind-val-cell {
   text-align: center;
-  font-weight: 700;
 }
 
 .ind-med-cell {
   text-align: center;
 }
+
+/* Colunas coadjuvantes — Mediana UF/BR e Risco UF/BR */
+.ind-secondary-cell {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  opacity: 0.7;
+}
+
+.ind-risco-muted {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 
 /* Células de risco */
 .ind-risco-cell {
@@ -511,7 +523,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
 /* Info icon */
 .ind-info-icon {
   font-size: 0.7rem;
-  opacity: 0.4;
+  color: var(--text-color);
+  opacity: 0.7;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity 0.15s;

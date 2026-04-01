@@ -58,7 +58,11 @@ const cnpjData = computed(
 import { watch } from "vue";
 watch(
   () => cnpj.value,
-  async (newCnpj) => {
+  async (newCnpj, oldCnpj) => {
+    // Ao trocar de CNPJ, limpa os dados de evolução para forçar novo fetch
+    if (newCnpj !== oldCnpj) {
+      analyticsStore.resetEvolucaoFinanceira();
+    }
     if (newCnpj && !cnpjData.value) {
       const p = getApiParams();
       try {
@@ -84,6 +88,7 @@ watch(
   },
   { immediate: true },
 );
+
 
 onMounted(() => {
   // Evolução Financeira agora é carregada de forma autônoma pelo componente filho

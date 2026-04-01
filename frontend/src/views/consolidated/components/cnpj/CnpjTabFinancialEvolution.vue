@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { useEvolucaoFinanceira } from '@/composables/useEvolucaoFinanceira';
+import { useAnalyticsStore } from '@/stores/analytics';
+import { storeToRefs } from 'pinia';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
@@ -19,11 +20,13 @@ const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 
 const { formatCurrencyFull } = useFormatting();
-const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
-const { evolucaoData, evolucaoLoading, evolucaoLoaded, fetchEvolucao } = useEvolucaoFinanceira();
+const { chartTheme, chartDataColors } = useChartTheme();
+
+const analyticsStore = useAnalyticsStore();
+const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded } = storeToRefs(analyticsStore);
 
 onMounted(() => {
-  if (cnpj.value) fetchEvolucao(cnpj.value);
+  if (cnpj.value) analyticsStore.fetchEvolucaoFinanceira(cnpj.value);
 });
 
 // ── Cores dos gráficos ────────────────────────────────────
@@ -41,7 +44,11 @@ const chartOption = computed(() => {
   const irregular = semestres.map(s => s.irregular);
 
   return {
-    ...baseChartConfig.value,
+    backgroundColor: c.bg,
+    animation: true,
+    animationDuration: 900,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
 
     legend: {
       top: 6,
@@ -160,7 +167,7 @@ const chartOption = computed(() => {
           <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
         </div>
         <div class="evolucao-chart-wrap">
-          <VChart :option="chartOption" autoresize class="evolucao-chart" />
+          <VChart :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" />
         </div>
       </div>
 

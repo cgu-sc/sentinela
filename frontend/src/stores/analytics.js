@@ -33,8 +33,11 @@ export const useAnalyticsStore = defineStore('analytics', {
     resultadoMunicipios: [],
     resultadoCnpjs: [],
     fatorRisco: [],
+    evolucaoFinanceira: null,
     isLoading: false,
     fatorRiscoLoading: false,
+    evolucaoLoading: false,
+    evolucaoLoaded: false,
     error: null,
     lastSync: null
   }),
@@ -71,6 +74,26 @@ export const useAnalyticsStore = defineStore('analytics', {
       } finally {
         this.fatorRiscoLoading = false;
       }
+    },
+
+    async fetchEvolucaoFinanceira(cnpj) {
+      if (this.evolucaoLoaded) return;
+      this.evolucaoLoading = true;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj));
+        this.evolucaoFinanceira = data;
+        this.evolucaoLoaded = true;
+      } catch (e) {
+        console.error('Erro ao buscar evolução financeira:', e);
+      } finally {
+        this.evolucaoLoading = false;
+      }
+    },
+
+    resetEvolucaoFinanceira() {
+      this.evolucaoFinanceira = null;
+      this.evolucaoLoaded = false;
+      this.evolucaoLoading = false;
     }
   },
 

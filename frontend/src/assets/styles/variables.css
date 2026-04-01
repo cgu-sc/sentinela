@@ -42,13 +42,15 @@
   --color-error: #ef4444;
 
   /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
-  --risk-low:      #166534;
-  --risk-medium:   #b45309;
-  --risk-high:     #ef4444; /* Vermelho puro (menos laranja) */
-  --risk-critical: #ef4444; /* Unificado com High */
+  --risk-low: #166534;
+  --risk-medium: #b45309;
+  --risk-high: #ef4444;
+  /* Vermelho puro (menos laranja) */
+  --risk-critical: #ef4444;
+  /* Unificado com High */
 
   /* Badges de status */
-  --status-info:      #1e40af;
+  --status-info: #1e40af;
   --status-secondary: #475569;
 
   /* Accent Indigo — paginadores e ícones de tabela */
@@ -57,7 +59,7 @@
 
 :root.dark-mode {
   --bg-color: #0d1117;
-  --text-color: #cbd5e1;
+  --text-color: #e1d3cb;
   --text-secondary: #b1bbcc;
   --text-muted: #9aa4ae;
   --card-bg: #161b22;
@@ -89,13 +91,15 @@
   --primary-color: #6366f1;
 
   /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
-  --risk-low:      #34d399;
-  --risk-medium:   #fbbf24;
-  --risk-high:     #f87171; /* Vermelho puro vibrante (Dark) */
-  --risk-critical: #f87171; /* Unificado com High */
+  --risk-low: #34d399;
+  --risk-medium: #fbbf24;
+  --risk-high: #f87171;
+  /* Vermelho puro vibrante (Dark) */
+  --risk-critical: #f87171;
+  /* Unificado com High */
 
   /* Badges de status */
-  --status-info:      #60a5fa;
+  --status-info: #60a5fa;
   --status-secondary: #94a3b8;
 
   /* Accent Indigo dark */

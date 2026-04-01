@@ -419,13 +419,13 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   z-index: 2;
   text-align: center;
   padding: 0.6rem 0.75rem;
-  background: color-mix(in srgb, var(--primary-color, #3b82f6) 14%, var(--card-bg));
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  color: var(--text-color);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.07em;
-  border-bottom: 2px solid var(--primary-color, #3b82f6);
+  border-bottom: 2px solid var(--primary-color);
   white-space: nowrap;
 }
 
@@ -438,10 +438,10 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--sidebar-border) 60%, var(--card-bg));
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
   border-top: 1px solid var(--sidebar-border);
-  border-left: 3px solid color-mix(in srgb, var(--primary-color, #3b82f6) 50%, transparent);
+  border-left: 3px solid var(--primary-color);
 }
 
 /* Linha de dados */

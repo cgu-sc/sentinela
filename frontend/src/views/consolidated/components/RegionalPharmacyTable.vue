@@ -307,8 +307,13 @@ function getPercentClass(v) {
   min-height: 700px;
 }
 
-/* RESET DE CAIXA ALTA FORÇADA */
-:deep(.p-datatable-thead th),
+/* RESET DE CAIXA ALTA FORÇADA E TAMANHO */
+:deep(.p-datatable-thead th) {
+  text-transform: none !important;
+  font-variant: normal !important;
+  font-size: 0.85rem !important;
+}
+
 :deep(.p-datatable-tbody td),
 :deep(.p-tag-value),
 :deep(.p-tag) {

@@ -323,7 +323,7 @@ const openEstablishment = (estabStr) => {
 .highlight-red .f-kpi-label { color: var(--risk-high) !important; opacity: 0.75; }
 .highlight-red .f-kpi-val {
   color: v-bind('chartDataColors.red') !important;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .warning {
@@ -341,12 +341,17 @@ const openEstablishment = (estabStr) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-color);
   margin-bottom: 1rem;
   letter-spacing: 0.05em;
+}
+
+.section-title i {
+  color: var(--primary-color);
+  font-size: 0.9rem;
 }
 
 /* Tabela de Falecidos */
@@ -365,19 +370,20 @@ const openEstablishment = (estabStr) => {
 .f-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
-  font-size: 0.80rem;
+  background: var(--table-header-bg);
+  font-size: 0.85rem;
+  font-weight: 700;
   text-transform: none;
   letter-spacing: 0.06em;
-  color: var(--text-color);
-  border-bottom: 1px solid var(--primary-color);
+  color: var(--table-header-text);
+  border-bottom: 1px solid var(--sidebar-border);
 }
 
 .f-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--sidebar-border);
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--text-color);
 }
 
 .f-row:hover td { background: rgba(255,255,255,0.02); }
@@ -482,20 +488,20 @@ const openEstablishment = (estabStr) => {
 }
 
 .f-subtotal-val {
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   color: var(--text-secondary) !important;
 }
 
 /* ── Total geral (tfoot) ── */
 .f-grand-total td {
-  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
-  border-top: 1px solid var(--primary-color);
+  background: var(--table-header-bg);
+  border-top: 1px solid var(--sidebar-border);
   padding: 0.65rem 1rem;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: none !important;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--table-header-text);
 }
 
 .f-grand-total .f-val {
@@ -573,7 +579,7 @@ const openEstablishment = (estabStr) => {
 .r-name {
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -582,7 +588,7 @@ const openEstablishment = (estabStr) => {
 
 .r-meta {
   font-size: 0.65rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: monospace;
 }
 
@@ -600,7 +606,7 @@ const openEstablishment = (estabStr) => {
 
 .r-qty {
   font-size: 1.1rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--primary-color);
 }
 
@@ -636,7 +642,7 @@ const openEstablishment = (estabStr) => {
 
 .r-pct {
   font-size: 0.65rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 700;
   min-width: 25px;
 }

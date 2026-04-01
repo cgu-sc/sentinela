@@ -14,7 +14,7 @@
   --sidebar-bg: #ffffff;
   --sidebar-text: #1e293b;
   --sidebar-border: #e2e8f0;
-  --navbar-bg: #f8fafc;
+  --navbar-bg: #f3f4f6;
   --navbar-border: #e2e8f0;
 
   /* Sobrescreve o surface-ground do PrimeVue Lara Light */
@@ -22,7 +22,7 @@
   --surface-section: #f8fafc;
 
   /* Tabelas */
-  --table-header-bg: #f8fafc;
+  --table-header-bg: #e9ecef;
   --table-header-text: #475569;
   --table-hover: #f1f5f9;
   --table-stripe: #f8fafc;
@@ -93,9 +93,9 @@
   /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
   --risk-low: #34d399;
   --risk-medium: #fbbf24;
-  --risk-high: #f87171;
-  /* Vermelho puro vibrante (Dark) */
-  --risk-critical: #f87171;
+  --risk-high: rgba(248, 113, 113, 0.85);
+  /* Red 400 @ 85% — suave mas presente */
+  --risk-critical: rgba(248, 113, 113, 0.85);
   /* Unificado com High */
 
   /* Badges de status */

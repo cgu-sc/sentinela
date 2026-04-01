@@ -301,8 +301,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 .audit-title-text h3 {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text-color);
 }
 
@@ -420,7 +420,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   padding: 0.6rem 0.75rem;
   background: var(--table-header-bg);
   color: var(--table-header-text);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.07em;

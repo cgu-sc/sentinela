@@ -263,23 +263,23 @@ const formatCnpj = (v) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.3rem 0.75rem;
+  padding: 0.35rem 0.8rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 20px;
 }
 
 .score-label {
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.05em;
 }
 
 .score-val {
-  font-size: 0.9rem;
-  font-weight: 800;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--primary-color);
 }
 
@@ -319,7 +319,7 @@ const formatCnpj = (v) => {
   padding: 0.35rem 1rem;
   border-radius: 20px;
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   box-shadow: none;
@@ -341,7 +341,7 @@ const formatCnpj = (v) => {
 
 .razao-social-new {
   font-size: 1.4rem;
-  font-weight: 800;
+  font-weight: 700;
   margin: 0;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -424,7 +424,7 @@ const formatCnpj = (v) => {
 
 .kpi-item-new .value {
   font-size: 1.2rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-secondary);
   font-family: 'Inter', sans-serif;
   background: none !important;
@@ -489,7 +489,7 @@ const formatCnpj = (v) => {
 
 .rank-label {
   font-size: 0.6rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.05em;
@@ -497,7 +497,7 @@ const formatCnpj = (v) => {
 
 .rank-val {
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-secondary);
 }
 

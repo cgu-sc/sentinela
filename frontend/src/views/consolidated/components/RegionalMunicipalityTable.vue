@@ -298,4 +298,11 @@ const totals = computed(() => {
 :deep(.align-center) {
   text-align: center !important;
 }
+
+/* Padroniza todos os headers para sentence case e aumenta o tamanho */
+:deep(.p-datatable-thead th) {
+  text-transform: none !important;
+  font-variant: normal !important;
+  font-size: 0.85rem !important;
+}
 </style>

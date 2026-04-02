@@ -183,8 +183,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
                 <template v-if="indicadoresData.indicadores[ind.key]?.valor != null">
                   <td class="ind-val-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
                   <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
-                  <td class="ind-med-cell ind-secondary-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</td>
-                  <td class="ind-med-cell ind-secondary-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</td>
+                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</span></td>
+                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</span></td>
                   <td class="ind-risco-cell">
                     <span
                       class="ind-risco-pill"
@@ -237,7 +237,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--tabs-border);
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -417,42 +417,45 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   top: 0;
   z-index: 2;
   text-align: center;
-  padding: 0.6rem 0.75rem;
-  background: var(--table-header-bg);
-  color: var(--table-header-text);
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: none;
-  letter-spacing: 0.07em;
-  border-bottom: 1px solid var(--sidebar-border);
+  padding: 0.75rem 0.75rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--tabs-border);
   white-space: nowrap;
 }
 
 .ind-thead th:first-child { text-align: left; }
 
-/* Linha de grupo */
+/* Linha de grupo - Estilo Relatório de Mesa (Refinado) */
 .ind-group-row td {
-  padding: 0.4rem 1rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.07em;
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
-  border-top: 1px solid var(--sidebar-border);
+  padding: 0.5rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg));
+  border-top: 1px solid var(--tabs-border);
+  border-bottom: 1px solid var(--tabs-border);
 }
 
-/* Linha de dados */
+/* Linha de dados - Corrigindo Uniformidade do Hover */
 .ind-data-row td {
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--sidebar-border);
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--tabs-border);
   vertical-align: middle;
   text-transform: none;
   color: var(--text-color);
+  background: transparent; /* Garante que a célula seja transparente à base do TR */
+  transition: background 0.15s ease;
 }
 
 .ind-data-row:hover td {
-  background: color-mix(in srgb, var(--card-bg) 70%, var(--sidebar-border));
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
 }
 
 /* Célula do nome */
@@ -479,15 +482,19 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 /* Colunas coadjuvantes — Mediana UF/BR e Risco UF/BR */
 .ind-secondary-cell {
-  color: var(--text-muted);
   font-size: 0.74rem;
+}
+
+.ind-muted-text {
+  color: var(--text-color);
   opacity: 0.7;
 }
 
 .ind-risco-muted {
   font-size: 0.74rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-color);
+  opacity: 0.7; /* Transparência age na span e não na TD */
 }
 
 
@@ -523,22 +530,20 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 /* Info icon */
 .ind-info-icon {
   font-size: 0.7rem;
-  color: var(--text-color);
-  opacity: 0.7;
+  color: var(--text-muted); /* Usamos a cor muted em vez de opacidade */
   cursor: pointer;
   flex-shrink: 0;
-  transition: opacity 0.15s;
+  transition: color 0.15s;
 }
-.ind-info-icon:hover { opacity: 1; }
+.ind-info-icon:hover { color: var(--text-color); }
 
 /* Sem dados */
 .ind-sem-dados {
   text-align: center;
   color: var(--text-muted);
-  opacity: 0.5;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.5rem;
+  padding: 0.75rem;
 }
 
 .tab-placeholder {

@@ -210,9 +210,9 @@ const formatCnpj = (v) => {
   flex-direction: column;
   overflow: hidden;
   background: var(
-    --card-bg
+    --tabs-bg
   ); /* O conteúdo técnico agora vive dentro deste grande card */
-  border: 1px solid var(--sidebar-border);
+  border: 1px solid var(--tabs-border);
   border-radius: 12px;
   box-shadow: none;
   margin-bottom: 2rem;
@@ -244,13 +244,13 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav) {
-  background: var(--card-bg) !important;
-  border-bottom: 1px solid var(--sidebar-border);
+  background: var(--tabs-bg) !important;
+  border-bottom: 1px solid var(--tabs-border);
   padding: 0 1.25rem;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
-  background: var(--card-bg) !important;
+  background: var(--tabs-bg) !important;
   font-size: 0.82rem; /* Leve redução para maior equilíbrio */
   font-weight: 700;
   padding: 0.55rem 1.1rem; /* Mais compacto também no respiro horizontal */
@@ -262,13 +262,31 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {
-  border-bottom-color: var(--primary-color) !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
   color: var(--primary-color) !important;
+  font-weight: 700;
   background: color-mix(
     in srgb,
-    var(--primary-color) 8%,
+    var(--primary-color) 12%,
     transparent
   ) !important;
+  position: relative;
+}
+
+/* O DESIGN FINAL DA CÁPSULA CARBON GOLD */
+:deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link::after) {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 20%; /* Centralizado e curto */
+  width: 60%;
+  height: 4px;
+  background: var(--primary-color) !important;
+  border-radius: 99px; /* Formato Pílula/Cápsula */
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color) 50%, transparent);
+  transition: all 0.3s ease;
 }
 
 .tab-icon {

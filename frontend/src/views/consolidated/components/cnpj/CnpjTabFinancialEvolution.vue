@@ -162,7 +162,7 @@ const chartOption = computed(() => {
     </div>
 
     <template v-else-if="evolucaoLoaded">
-      <div class="evolucao-card">
+      <div class="evolucao-card evolucao-card-highlight">
         <div class="evolucao-card-header">
           <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
         </div>
@@ -243,10 +243,10 @@ const chartOption = computed(() => {
             </tbody>
             <tfoot>
               <tr>
-                <td><b>TOTAL</b></td>
-                <td><b>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.total, 0)) }}</b></td>
-                <td><b>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.regular, 0)) }}</b></td>
-                <td class="col-irregular"><b>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.irregular, 0)) }}</b></td>
+                <td>TOTAL</td>
+                <td>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.total, 0)) }}</td>
+                <td>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.regular, 0)) }}</td>
+                <td class="col-irregular">{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.irregular, 0)) }}</td>
                 <td></td>
                 <td></td>
               </tr>
@@ -279,13 +279,27 @@ const chartOption = computed(() => {
   margin-bottom: 0;
 }
 
+.evolucao-card-highlight {
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  padding: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.evolucao-card-highlight:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
 .evolucao-card-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0 0.5rem 0;
-  border-bottom: 1px solid var(--sidebar-border);
-  margin-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--tabs-border);
+  margin-bottom: 1rem;
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -297,20 +311,44 @@ const chartOption = computed(() => {
 .evolucao-chart-wrap { height: 350px; padding: 0.5rem 0 0 0; }
 .evolucao-chart { width: 100%; height: 100%; }
 
-.evolucao-table-wrap { overflow-x: auto; }
+.evolucao-table-wrap { overflow-x: auto; padding-top: 0.5rem; }
 .evolucao-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.evolucao-table th { text-align: right; padding: 0.5rem 1rem; background: var(--card-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--sidebar-border); }
+.evolucao-table th { 
+  text-align: right; 
+  padding: 0.75rem 1rem; 
+  background: transparent; 
+  color: var(--text-secondary); 
+  font-weight: 600; 
+  font-size: 0.72rem; 
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+  border-bottom: 2px solid var(--tabs-border); 
+}
 .evolucao-table th:first-child, .evolucao-table td:first-child { text-align: left; }
-.evolucao-table td { text-align: right; padding: 0.5rem 1rem; color: var(--text-secondary); border-bottom: 1px solid var(--sidebar-border); }
-.evolucao-table tbody tr:hover td { background: var(--sidebar-border); }
-.evolucao-table tfoot td { border-top: 2px solid var(--sidebar-border); border-bottom: none; background: color-mix(in srgb, var(--card-bg) 80%, var(--sidebar-border)); }
+.evolucao-table td { 
+  text-align: right; 
+  padding: 0.65rem 1rem; 
+  color: var(--text-secondary); 
+  border-bottom: 1px solid var(--tabs-border); 
+  transition: background 0.2s ease;
+}
+.evolucao-table tbody tr:hover td { 
+  background: color-mix(in srgb, var(--tabs-bg) 93%, var(--text-color) 7%); 
+}
+.evolucao-table tfoot td { 
+  border-top: 2px solid var(--tabs-border); 
+  border-bottom: none; 
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%); 
+  font-weight: 600;
+  color: var(--text-color);
+}
 
 .sem-label { font-weight: 600; color: var(--text-secondary); }
 .col-regular { color: var(--risk-low); }
 .col-irregular { color: var(--risk-high); }
 
 .pct-cell { text-align: right; padding: 0.4rem 1rem; }
-.pct-bar-wrap { height: 4px; background: var(--sidebar-border); border-radius: 99px; margin-bottom: 3px; overflow: hidden; }
+.pct-bar-wrap { height: 4px; background: var(--tabs-border); border-radius: 99px; margin-bottom: 3px; overflow: hidden; }
 .pct-bar { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
 .pct-value { font-weight: 600; font-size: 0.82rem; }
 

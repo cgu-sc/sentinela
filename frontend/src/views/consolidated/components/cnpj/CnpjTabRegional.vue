@@ -60,19 +60,19 @@ watch(() => props.geoData?.no_regiao_saude, (newVal) => {
     <!-- Carregando -->
     <div v-else-if="regionalLoading" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
-      <p>Carregando ranking regional — <strong>{{ geoData.no_regiao_saude }}</strong>...</p>
+      <p>Carregando ranking regional — <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
     </div>
 
     <!-- Sem dados carregados ainda -->
     <div v-else-if="!regionalLoaded" class="tab-placeholder">
       <i class="pi pi-globe placeholder-icon" />
-      <p>Carregando o ranking comparativo da <strong>{{ geoData.no_regiao_saude }}</strong>...</p>
+      <p>Carregando o ranking comparativo da <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
     </div>
 
     <!-- Sem resultados -->
     <div v-else-if="!regionalData?.farmacias?.length" class="tab-placeholder">
       <i class="pi pi-exclamation-triangle placeholder-icon" />
-      <p>Nenhuma farmácia encontrada para a região <strong>{{ geoData.no_regiao_saude }}</strong>.</p>
+      <p>Nenhuma farmácia encontrada para a região <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>.</p>
     </div>
 
     <!-- Conteúdo principal -->
@@ -115,6 +115,10 @@ watch(() => props.geoData?.no_regiao_saude, (newVal) => {
 
 .placeholder-icon {
   font-size: 3rem;
+}
+
+.semi-bold-text {
+  font-weight: 600;
 }
 
 .tab-placeholder p {

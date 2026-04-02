@@ -438,7 +438,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--primary-color) 3%, var(--tabs-bg));
   border-top: 1px solid var(--tabs-border);
   border-bottom: 1px solid var(--tabs-border);
 }

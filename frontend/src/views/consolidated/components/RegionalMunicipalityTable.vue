@@ -80,7 +80,6 @@ const totals = computed(() => {
     <DataTable
       :value="municipios"
       size="small"
-      stripedRows
       removableSort
       sortField="populacao"
       :sortOrder="-1"
@@ -92,7 +91,7 @@ const totals = computed(() => {
 
       <Column field="municipio" header="Município" sortable style="width: 30%; text-transform: none">
         <template #footer>
-          <strong>{{ municipios.length }} Municípios</strong>
+          {{ municipios.length }} Municípios
         </template>
       </Column>
 
@@ -131,6 +130,7 @@ const totals = computed(() => {
   display: flex;
   flex-direction: column;
   margin-bottom: 0.5rem;
+  background: var(--tabs-bg);
 }
 
 .section-header {
@@ -138,8 +138,8 @@ const totals = computed(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--sidebar-border);
-  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--tabs-border);
+  margin-bottom: 1rem;
 }
 
 .section-icon {
@@ -166,7 +166,7 @@ const totals = computed(() => {
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-color);
 }
 
@@ -255,24 +255,58 @@ const totals = computed(() => {
   color: var(--primary-color);
 }
 
-:deep(.clickable-rows .p-datatable-tbody > tr) {
+:deep(.p-datatable),
+:deep(.p-datatable-wrapper),
+:deep(.p-datatable-table),
+:deep(.p-datatable-thead > tr > th),
+:deep(.p-datatable-tbody > tr > td),
+:deep(.p-datatable-tfoot > tr > td) {
+  background: var(--tabs-bg) !important;
+  background-color: var(--tabs-bg) !important;
+}
+
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  color: var(--text-secondary) !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 2px solid var(--tabs-border) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
   cursor: pointer;
+  border-bottom: 1px solid var(--tabs-border) !important;
   transition: background-color 0.15s ease;
 }
 
-:deep(.clickable-rows .p-datatable-tbody > tr:hover td) {
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg)) !important;
+:deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg)) !important;
+}
+
+:deep(.p-datatable .p-datatable-tfoot > tr > td) {
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
+  border-top: 2px solid var(--tabs-border) !important;
+  font-weight: 600 !important;
+  color: var(--text-color) !important;
+  padding: 0.75rem 1rem !important;
 }
 
 :deep(.p-datatable-thead) {
   position: sticky;
   top: 0;
   z-index: 10;
+  background: var(--tabs-bg) !important;
 }
 
-/* Linha destacada para o Município em análise */
-:deep(.enterprise-table .p-datatable-tbody > tr.row-highlight td) {
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg)) !important;
+/* Padroniza o destaque do município analisado (Estilo Hover Persistente) */
+:deep(.p-datatable-tbody > tr.row-highlight > td) {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg)) !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-highlight > td:first-child) {
+  border-left: 4px solid var(--primary-color) !important;
 }
 
 :deep(.enterprise-table .p-datatable-tbody > tr.row-highlight td:first-child) {
@@ -299,10 +333,22 @@ const totals = computed(() => {
   text-align: center !important;
 }
 
-/* Padroniza todos os headers para sentence case e aumenta o tamanho */
+/* Padroniza todos os headers para o novo padrão Clean */
 :deep(.p-datatable-thead th) {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 2px solid var(--tabs-border) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+:deep(.p-datatable-tbody td),
+:deep(.p-tag-value),
+:deep(.p-tag) {
   text-transform: none !important;
   font-variant: normal !important;
-  font-size: 0.85rem !important;
 }
 </style>

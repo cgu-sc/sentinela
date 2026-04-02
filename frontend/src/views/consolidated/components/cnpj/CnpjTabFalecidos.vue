@@ -157,15 +157,15 @@ const openEstablishment = (estabStr) => {
           <table class="f-table">
             <colgroup>
               <col style="width: 10%" />
-              <col style="width: 18%" />
+              <col style="width: 17%" />
               <col style="width: 12%" />
               <col style="width: 6%" />
-              <col style="width: 13%" />
+              <col style="width: 12%" />
               <col style="width: 8%" />
               <col style="width: 10%" />
               <col style="width: 6%" />
               <col style="width: 9%" />
-              <col style="width: 8%" />
+              <col style="width: 10%" />
             </colgroup>
             <thead>
               <tr>
@@ -347,6 +347,8 @@ const openEstablishment = (estabStr) => {
   color: var(--text-color);
   margin-bottom: 1rem;
   letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--tabs-border);
+  padding-bottom: 0.5rem;
 }
 
 .section-title i {
@@ -356,10 +358,8 @@ const openEstablishment = (estabStr) => {
 
 /* Tabela de Falecidos */
 .f-table-wrap {
-  background: var(--card-bg);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 10px;
   overflow: hidden;
+  padding-top: 0.5rem;
 }
 
 .f-table {
@@ -370,25 +370,28 @@ const openEstablishment = (estabStr) => {
 .f-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  background: var(--table-header-bg);
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: none;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--table-header-text);
-  border-bottom: 1px solid var(--sidebar-border);
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--tabs-border);
 }
 
 .f-table td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--tabs-border);
   font-size: 0.8rem;
   color: var(--text-color);
+  transition: background 0.15s ease;
 }
 
-.f-row:hover td { background: rgba(255,255,255,0.02); }
+.f-row:hover td { 
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important; 
+}
 
-.f-nome { font-weight: 600; font-size: 0.82rem; text-transform: none !important; }
+.f-nome { font-weight: 400; font-size: 0.82rem; text-transform: none !important; }
 
 .f-multi-tag {
   align-self: flex-start;
@@ -433,23 +436,26 @@ const openEstablishment = (estabStr) => {
 .f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); }
 .f-fonte { font-size: 0.72rem; color: var(--text-secondary); }
 
-/* ── Linha de cabeçalho do grupo (por falecido) ── */
+/* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa ── */
 .f-group-header td {
-  background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
-  border-top: 1px solid var(--sidebar-border);
-  padding: 0.55rem 1rem;
-  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--primary-color) 3%, var(--tabs-bg));
+  border-top: 1px solid var(--tabs-border);
+  border-bottom: 1px solid var(--tabs-border);
+  padding: 0.6rem 1rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .f-group-cpf {
   font-family: monospace;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-secondary);
   margin-right: 0.6rem;
 }
 
 .f-group-nome {
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.82rem;
   color: var(--text-color);
   letter-spacing: 0.03em;
@@ -465,17 +471,17 @@ const openEstablishment = (estabStr) => {
 
 .f-group-meta {
   font-size: 0.76rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-secondary);
   text-transform: none !important;
 }
 
 /* ── Linha de subtotal por falecido ── */
 .f-subtotal-row td {
-  background: var(--card-bg);
-  border-top: 1px solid var(--sidebar-border);
-  border-bottom: 2px solid var(--sidebar-border);
-  padding: 0.4rem 1rem;
+  background: transparent;
+  border-top: 1px solid var(--tabs-border);
+  border-bottom: 2px solid var(--tabs-border);
+  padding: 0.45rem 1rem;
 }
 
 .f-subtotal-label {
@@ -494,14 +500,12 @@ const openEstablishment = (estabStr) => {
 
 /* ── Total geral (tfoot) ── */
 .f-grand-total td {
-  background: var(--table-header-bg);
-  border-top: 1px solid var(--sidebar-border);
-  padding: 0.65rem 1rem;
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%);
+  border-top: 2px solid var(--tabs-border);
+  padding: 0.75rem 1rem;
   font-size: 0.78rem;
   font-weight: 700;
-  text-transform: none !important;
-  letter-spacing: 0.04em;
-  color: var(--table-header-text);
+  color: var(--text-color);
 }
 
 .f-grand-total .f-val {

@@ -6,6 +6,7 @@
  * espelhando a lógica da coluna "Classificação" do relatório Excel (aba_regiao.py).
  * A coluna "Conexão" usa o campo `conexao_ms` já presente no backend.
  */
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFormatting } from '@/composables/useFormatting';
 import { RISK_THRESHOLDS, RISK_CSS_CLASSES, AUDIT_THRESHOLDS } from '@/config/riskConfig';
@@ -70,6 +71,20 @@ function getPercentClass(v) {
   if (v >= RISK_THRESHOLDS.MEDIUM)   return RISK_CSS_CLASSES.MEDIUM;
   return RISK_CSS_CLASSES.LOW;
 }
+
+/** Totais para o rodapé da tabela */
+const totals = computed(() => {
+  const semComp = props.farmacias.reduce((s, f) => s + (f.valSemComp || 0), 0);
+  const total   = props.farmacias.reduce((s, f) => s + (f.totalMov   || 0), 0);
+  // Multiplicamos por 100 para bater com a escala 0-100 das linhas
+  const perc    = total > 0 ? (semComp / total) * 100 : 0;
+  
+  // Cálculo da média de Score
+  const scoreSum = props.farmacias.reduce((s, f) => s + (f.score_risco || 0), 0);
+  const avgScore = props.farmacias.length > 0 ? scoreSum / props.farmacias.length : 0;
+
+  return { semComp, total, perc, avgScore };
+});
 </script>
 
 <template>
@@ -85,7 +100,6 @@ function getPercentClass(v) {
     <DataTable
       :value="farmacias"
       size="small"
-      stripedRows
       removableSort
       paginator
       :rows="15"
@@ -96,34 +110,31 @@ function getPercentClass(v) {
       @row-click="goToDetail"
     >
       <!-- Ranking -->
-      <Column field="rank" header="#" sortable style="width: 4%" bodyStyle="text-align:center; font-weight:700; color: var(--text-muted)" />
-
+      <Column field="rank" header="#" sortable style="width: 3%" bodyStyle="text-align:center; font-weight:700; color: var(--text-muted)" />
       <!-- CNPJ -->
-      <Column field="cnpj" header="CNPJ" sortable style="width: 12%">
+      <Column field="cnpj" header="CNPJ" sortable style="width: 9%">
         <template #body="{ data }">
           <span class="cnpj-text">{{ data.cnpj }}</span>
         </template>
       </Column>
-
-      <!-- Razão Social -->
-      <Column field="razao_social" header="Razão Social" sortable style="width: 22%; text-transform: none">
+      <Column field="razao_social" header="Razão Social" sortable style="width: 14%; text-transform: none" footerStyle="text-align: right">
         <template #body="{ data }">
           <span
-            v-tooltip.top="data.razao_social?.length > 24 ? data.razao_social : undefined"
+            v-tooltip.top="data.razao_social?.length > 20 ? data.razao_social : undefined"
             class="razao-social-cell"
-          >{{ formatTitleCase(data.razao_social?.length > 24 ? data.razao_social.slice(0, 24) + '…' : data.razao_social) }}</span>
+          >{{ formatTitleCase(data.razao_social?.length > 20 ? data.razao_social.slice(0, 20) + '…' : data.razao_social) }}</span>
+        </template>
+        <template #footer>
+          <span class="f-footer-label">Totais da Região:</span>
         </template>
       </Column>
-
       <!-- Município -->
-      <Column field="municipio" header="Município" sortable style="width: 14%; text-transform: none">
+      <Column field="municipio" header="Município" sortable style="width: 10%; text-transform: none">
         <template #body="{ data }">
           {{ formatTitleCase(data.municipio) }}
         </template>
       </Column>
-
-      <!-- Score de Risco -->
-      <Column field="score_risco" header="Score" sortable style="width: 7%" bodyStyle="text-align:center">
+      <Column field="score_risco" header="Score" sortable style="width: 6%" bodyStyle="text-align:center" footerStyle="text-align: center">
         <template #body="{ data }">
           <span
             v-if="data.score_risco != null"
@@ -131,10 +142,12 @@ function getPercentClass(v) {
           >{{ data.score_risco?.toFixed(2) }}</span>
           <span v-else class="text-muted">—</span>
         </template>
+        <template #footer>
+          {{ totals.avgScore.toFixed(2) }}
+        </template>
       </Column>
-
       <!-- Classificação -->
-      <Column field="classificacao_risco" header="Classificação" sortable style="width: 12%">
+      <Column field="classificacao_risco" header="Classificação" sortable style="width: 10%">
         <template #body="{ data }">
           <Tag
             v-if="data.classificacao_risco"
@@ -144,29 +157,31 @@ function getPercentClass(v) {
           <span v-else class="text-muted">—</span>
         </template>
       </Column>
-
-      <Column field="valSemComp" header="Valor sem Comprovação" sortable style="width: 10%" bodyStyle="text-align:right">
+      <Column field="valSemComp" header="Valor s/ Comp." sortable style="width: 10%" bodyStyle="text-align:right" footerStyle="text-align: right">
         <template #body="{ data }">
           <span :class="{ 'high-value-audit': data.valSemComp >= AUDIT_THRESHOLDS.HIGH_VALUE }">
             {{ formatBRL(data.valSemComp) }}
           </span>
         </template>
+        <template #footer>
+          {{ formatBRL(totals.semComp) }}
+        </template>
       </Column>
-
-      <!-- Faturamento total -->
-      <Column field="totalMov" header="Valor Total Vendas" sortable style="width: 10%" bodyStyle="text-align:right">
+      <Column field="totalMov" header="Valor Total" sortable style="width: 10%" bodyStyle="text-align:right" footerStyle="text-align: right">
         <template #body="{ data }">{{ formatBRL(data.totalMov) }}</template>
+        <template #footer>
+          {{ formatBRL(totals.total) }}
+        </template>
       </Column>
-
-      <!-- % sem comprovação -->
-      <Column field="percValSemComp" header="% Valor sem Comprovação" sortable style="width: 8%" bodyStyle="text-align:center">
+      <Column field="percValSemComp" header="% s/ Comp." sortable style="width: 10%" bodyStyle="text-align:center" footerStyle="text-align: center">
         <template #body="{ data }">
           <Tag :value="formatPercent(data.percValSemComp)" :class="getPercentClass(data.percValSemComp)" />
         </template>
+        <template #footer>
+          {{ formatPercent(totals.perc) }}
+        </template>
       </Column>
-
-      <!-- Última venda -->
-      <Column field="data_ultima_venda" header="Última Venda" sortable style="width: 8%" bodyStyle="text-align:center">
+      <Column field="data_ultima_venda" header="Última Venda" sortable style="width: 10%" bodyStyle="text-align:center">
         <template #body="{ data }">
           <span v-if="data.data_ultima_venda">
             {{ new Date(data.data_ultima_venda).toLocaleDateString('pt-BR') }}
@@ -174,8 +189,6 @@ function getPercentClass(v) {
           <span v-else class="text-muted">—</span>
         </template>
       </Column>
-
-      <!-- Conexão MS -->
       <Column field="conexao_ms" header="Conexão MS" sortable style="width: 8%" bodyStyle="text-align:center">
         <template #body="{ data }">
           <Tag :value="data.conexao_ms ?? '—'" :class="conexaoClass(data.conexao_ms)" />
@@ -189,6 +202,7 @@ function getPercentClass(v) {
 .table-section {
   display: flex;
   flex-direction: column;
+  background: var(--tabs-bg);
 }
 
 .section-header {
@@ -196,8 +210,8 @@ function getPercentClass(v) {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--sidebar-border);
-  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--tabs-border);
+  margin-bottom: 1rem;
 }
 
 .section-icon {
@@ -224,7 +238,7 @@ function getPercentClass(v) {
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-color);
 }
 
@@ -258,9 +272,13 @@ function getPercentClass(v) {
   color: var(--text-color);
 }
 
-/* Linha do CNPJ específico em análise (Forte) */
-:deep(.enterprise-table .p-datatable-tbody > tr.row-highlight td) {
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg)) !important;
+/* Linha do CNPJ específico em análise (Estilo Hover Persistente) */
+:deep(.p-datatable-tbody > tr.row-highlight > td) {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-highlight > td:first-child) {
+  border-left: 4px solid var(--primary-color) !important;
 }
 
 :deep(.enterprise-table .p-datatable-tbody > tr.row-highlight td:first-child) {
@@ -282,36 +300,72 @@ function getPercentClass(v) {
 }
 
 /* Linhas do mesmo município (Sutil) */
-:deep(.enterprise-table .p-datatable-tbody > tr.municipio-highlight td) {
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg)) !important;
+:deep(.p-datatable-tbody > tr.municipio-highlight > td) {
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--tabs-bg)) !important;
 }
 
 :deep(.enterprise-table .p-datatable-tbody > tr.municipio-highlight td:first-child) {
   border-left: 2px solid color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
 }
 
-:deep(.clickable-rows .p-datatable-tbody > tr) {
+:deep(.p-datatable),
+:deep(.p-datatable-wrapper),
+:deep(.p-datatable-table),
+:deep(.p-datatable-thead > tr > th),
+:deep(.p-datatable-tbody > tr > td) {
+  background: var(--tabs-bg) !important;
+  background-color: var(--tabs-bg) !important;
+}
+
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  color: var(--text-secondary) !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  border-bottom: 2px solid var(--tabs-border) !important;
+  padding: 0.75rem 0.5rem !important;
+  line-height: 1.1 !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  border-bottom: 1px solid var(--tabs-border) !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg)) !important;
   cursor: pointer;
-  transition: background-color 0.15s ease;
 }
 
 :deep(.p-datatable-thead) {
   position: sticky;
   top: 0;
   z-index: 10;
+  background: var(--tabs-bg) !important;
+}
+
+:deep(.p-datatable .p-datatable-tfoot > tr > td) {
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
+  border-top: 2px solid var(--tabs-border) !important;
+  font-weight: 600 !important;
+  color: var(--text-color) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.f-footer-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  text-align: right;
+  padding-right: 0.5rem;
 }
 
 :deep(.p-datatable-wrapper) {
   border-radius: 0 0 12px 12px;
   /* Altura fixa para 15 linhas (modo small) para evitar pulos de layout */
-  min-height: 700px;
-}
-
-/* RESET DE CAIXA ALTA FORÇADA E TAMANHO */
-:deep(.p-datatable-thead th) {
-  text-transform: none !important;
-  font-variant: normal !important;
-  font-size: 0.85rem !important;
+  min-height: 500px; /* Reduzi levemente para acomodar o footer sem barra vertical */
 }
 
 :deep(.p-datatable-tbody td),

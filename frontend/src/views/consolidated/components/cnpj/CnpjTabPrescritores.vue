@@ -30,13 +30,19 @@ const top20 = computed(() => prescritoresData.value?.top20 || []);
 const concentracaoTop1 = computed(() => summary.value.pct_concentracao_top1 || 0);
 const concentracaoTop5 = computed(() => summary.value.pct_concentracao_top5 || 0);
 
+const valorTop1 = computed(() => top20.value.length > 0 ? (top20.value[0].vl_total_prescricoes || 0) : 0);
+const valorTop5 = computed(() => top20.value.slice(0, 5).reduce((acc, curr) => acc + (curr.vl_total_prescricoes || 0), 0));
+
 // Prescrição Intensiva (Robôs)
 const qtdPrescrIntensivaLocal = computed(() => summary.value.qtd_prescritores_robos || top20.value.filter(m => m.flag_robo > 0).length);
 const qtdPrescrIntensivaOcultos = computed(() => summary.value.qtd_prescritores_robos_ocultos || top20.value.filter(m => m.flag_robo_oculto > 0).length);
 
 // CRMs Inválidos e Irregulares
 const qtdCrmInvalido = computed(() => summary.value.qtd_crm_invalido ?? top20.value.filter(m => m.flag_crm_invalido > 0).length);
-const qtdPrescrAntesRegistro = computed(() => summary.value.qtd_prescr_antes_registro ?? top20.value.filter(m => m.flag_prescricao_antes_registro > 0).length);
+const qtdPrescrAntesRegistro = computed(() => summary.value.qtd_crm_antes_registro ?? top20.value.filter(m => m.flag_prescricao_antes_registro > 0).length);
+const totalIrregularesCfm = computed(() => qtdCrmInvalido.value + qtdPrescrAntesRegistro.value);
+const pctFraudeCrm = computed(() => (summary.value.pct_valor_crm_invalido || 0) + (summary.value.pct_valor_crm_antes_registro || 0));
+const valorFraudeCrm = computed(() => (summary.value.vl_crm_invalido || 0) + (summary.value.vl_crm_antes_registro || 0));
 
 // Exclusividade
 const maxExclusivos = computed(() => summary.value.max_exclusivos || Math.max(...top20.value.map(m => m.pct_volume_aqui_vs_total || 0), 0));
@@ -116,7 +122,7 @@ const formatPct = formatting.formatPct;
             </div>
             <div class="alert-kpi-body">
               <span class="alert-kpi-val">{{ formatPct(concentracaoTop1) }}</span>
-              <span class="alert-kpi-hint">CRM: {{ summary.id_top1_prescritor || 'ND' }}</span>
+              <span class="alert-kpi-hint">CRM: {{ summary.id_top1_prescritor || 'ND' }}<br/><strong style="color: var(--text-color)">{{ formatCurrencyFull(valorTop1) }}</strong></span>
             </div>
           </div>
 
@@ -128,7 +134,7 @@ const formatPct = formatting.formatPct;
             </div>
             <div class="alert-kpi-body">
               <span class="alert-kpi-val">{{ formatPct(concentracaoTop5) }}</span>
-              <span class="alert-kpi-hint">Mediana BR: {{ formatPct(summary.mediana_concentracao_top5_br || 40) }}</span>
+              <span class="alert-kpi-hint">Mediana BR: {{ formatPct(summary.mediana_concentracao_top5_br || 40) }}<br/><strong style="color: var(--text-color)">{{ formatCurrencyFull(valorTop5) }}</strong></span>
             </div>
           </div>
 
@@ -157,7 +163,7 @@ const formatPct = formatting.formatPct;
           </div>
 
           <!-- Prescrição Intensiva Rede -->
-          <div class="alert-kpi-card" :class="qtdPrescrIntensivaOcultos > 0 ? 'highlight-red' : ''">
+          <div class="alert-kpi-card" :class="qtdPrescrIntensivaOcultos > 0 ? 'highlight-orange' : ''">
             <div class="alert-kpi-header">
               <span class="alert-kpi-label">>30 PRESCRIÇÕES/DIA BRASIL</span>
               <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos atuando com volume aceitável aqui, mas que emitem mais de 30 prescrições/dia se somadas todas as farmácias do Brasil (Robô Oculto).'" />
@@ -181,14 +187,14 @@ const formatPct = formatting.formatPct;
           </div>
 
           <!-- Fraudes CRM -->
-          <div class="alert-kpi-card" :class="(summary.total_irregulares_cfm > 0) ? 'highlight-red' : ''">
+          <div class="alert-kpi-card" :class="(totalIrregularesCfm > 0) ? 'highlight-red' : ''">
             <div class="alert-kpi-header">
               <span class="alert-kpi-label">FRAUDES CRM</span>
               <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Fonte: CFM. CRMs inexistentes ou vendas antes do registro oficial.'" />
             </div>
             <div class="alert-kpi-body">
-              <span class="alert-kpi-val">{{ summary.total_irregulares_cfm || 0 }}</span>
-              <span class="alert-kpi-hint">{{ summary.qtd_crm_invalido || 0 }} Inválidos | {{ summary.qtd_prescr_antes_registro || 0 }} Irregulares</span>
+              <span class="alert-kpi-val">{{ totalIrregularesCfm }}</span>
+              <span class="alert-kpi-hint">{{ qtdCrmInvalido }} Inválidos | {{ qtdPrescrAntesRegistro }} Irregulares<br/><strong style="color: var(--risk-critical)">{{ formatCurrencyFull(valorFraudeCrm) }} ({{ formatPct(pctFraudeCrm) }})</strong> da produção</span>
             </div>
           </div>
 
@@ -217,7 +223,7 @@ const formatPct = formatting.formatPct;
            <div v-if="prescrIntensivaDetalhe.length > 0" class="alert-row">
               <span class="bullet-point bg-orange"></span>
               <div class="alert-row-content">
-                 <p class="text-orange">PRESCRIÇÃO INTENSIVA (ROBÔ): <b>{{ qtdPrescrIntensivaLocal + qtdPrescrIntensivaOcultos }} médico(s)</b>.</p>
+                 <p class="text-orange">>30 PRESCRIÇÕES/DIA considerando todos os CNPJs do BRASIL: <b>{{ qtdPrescrIntensivaLocal + qtdPrescrIntensivaOcultos }} médico(s)</b>.</p>
                  <p class="text-muted text-sm">• CRMs: 
                     <template v-if="!showAllPrescrIntensiva">
                        {{ prescrIntensivaDetalhe }}

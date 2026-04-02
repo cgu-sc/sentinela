@@ -249,8 +249,8 @@ const totals = computed(() => {
 
 .cnpj-text {
   font-family: monospace;
-  font-size: 0.8rem;
-  letter-spacing: 0.5px;
+  font-size: 0.75rem;
+  letter-spacing: 0.2px;
 }
 
 .razao-social-cell,
@@ -267,7 +267,7 @@ const totals = computed(() => {
 
 /* Score text — Cor padrão (limpeza visual) */
 .score-text {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-color);
 }
@@ -289,19 +289,24 @@ const totals = computed(() => {
 .high-value-audit {
   color: var(--risk-high);
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.65rem;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
   background: color-mix(in srgb, var(--risk-high) 10%, transparent);
   border-left: 3px solid var(--risk-high);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 4px 4px 0;
 }
 
 /* Linhas do mesmo município (Sutil) */
 :deep(.p-datatable-tbody > tr.municipio-highlight > td) {
   background: color-mix(in srgb, var(--primary-color) 6%, var(--tabs-bg)) !important;
+}
+
+/* Linha de dados — Hover Neutro Suave 4% */
+.f-row:hover td {
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
 }
 
 :deep(.enterprise-table .p-datatable-tbody > tr.municipio-highlight td:first-child) {
@@ -319,21 +324,22 @@ const totals = computed(() => {
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
   color: var(--text-secondary) !important;
-  font-size: 0.68rem !important;
+  font-size: 0.72rem !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em !important;
   border-bottom: 2px solid var(--tabs-border) !important;
-  padding: 0.75rem 0.5rem !important;
+  padding: 0.65rem 0.5rem !important;
   line-height: 1.1 !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr > td) {
   border-bottom: 1px solid var(--tabs-border) !important;
+  font-size: 0.75rem !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
   cursor: pointer;
 }
 
@@ -348,13 +354,14 @@ const totals = computed(() => {
   background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
+  font-size: 0.75rem !important;
   color: var(--text-color) !important;
-  padding: 0.75rem 1rem !important;
+  padding: 0.65rem 1rem !important;
 }
 
 .f-footer-label {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.7;

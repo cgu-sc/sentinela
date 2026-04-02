@@ -388,7 +388,7 @@ const openEstablishment = (estabStr) => {
 }
 
 .f-row:hover td { 
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important; 
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important; 
 }
 
 .f-nome { font-weight: 400; font-size: 0.82rem; text-transform: none !important; }

@@ -56,21 +56,16 @@ const totals = computed(() => {
       <div class="header-text-box">
         <div class="title-with-filter">
           <h3 class="section-title-text">MUNICÍPIOS DA REGIÃO</h3>
-          <div v-if="selectedFilter" class="active-filter-inline">
-            <i class="pi pi-angle-right sep-icon" />
-            <Chip 
-              :label="selectedFilter" 
-              class="municipio-chip-mini" 
-            />
-            <Button 
-              label="Limpar" 
-              icon="pi pi-refresh" 
-              outlined 
-              severity="warn"
-              size="small"
-              class="clear-filter-btn filters-active"
+          <div v-if="selectedFilter" class="active-filter-tag">
+            <span class="filter-label">Filtro:</span>
+            <span class="filter-value">{{ selectedFilter.toUpperCase() }}</span>
+            <button 
+              class="filter-clear-btn" 
+              title="Limpar Filtro"
               @click="emits('select-municipio', selectedFilter)"
-            />
+            >
+              <i class="pi pi-times" />
+            </button>
           </div>
         </div>
         <p class="subtitle">{{ municipios.length }} municípios na região</p>
@@ -168,64 +163,61 @@ const totals = computed(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-color);
+  line-height: 1.2;
 }
 
 .title-with-filter {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-height: 28px; /* Reserva o espaço para evitar o "salto" no layout */
 }
 
-.active-filter-inline {
-  display: flex;
+.active-filter-tag {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg));
+  border: 1px solid var(--tabs-border);
+  padding: 0 0.5rem;
+  height: 24px; /* Altura fixa controlada */
+  border-radius: 4px;
   animation: fadeIn 0.2s ease-out;
 }
 
-.sep-icon {
-  font-size: 0.8rem;
-  opacity: 0.3;
+.filter-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
 }
 
-:deep(.municipio-chip-mini) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
-  color: var(--primary-color) !important;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
-  font-weight: 700 !important;
-  font-size: 0.75rem !important;
-  height: 24px !important;
-  padding: 0 8px !important;
+.filter-value {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-color);
+  letter-spacing: 0.02em;
 }
 
-/* BOTÃO LIMPAR (Igual Sidebar) */
-:deep(.clear-filter-btn.p-button) {
-  height: 24px !important;
-  font-size: 0.72rem !important;
-  padding: 0 10px !important;
-  background: transparent !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.02em !important;
+.filter-clear-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
 }
 
-:deep(.filters-active.p-button),
-:deep(.filters-active.p-button:enabled:hover) {
-  background: transparent !important;
-  border-color: var(--risk-high) !important;
-  color: var(--risk-high) !important;
-  animation: pulse-mini 1.5s ease-in-out infinite !important;
+.filter-clear-btn:hover {
+  color: var(--risk-high);
+  transform: scale(1.1);
 }
 
-:deep(.filters-active.p-button .p-button-label),
-:deep(.filters-active.p-button .p-button-icon),
-:deep(.filters-active.p-button:enabled:hover .p-button-label),
-:deep(.filters-active.p-button:enabled:hover .p-button-icon) {
-  color: var(--risk-high) !important;
-}
-
-:deep(.filters-active.p-button:enabled:hover) {
-  background: color-mix(in srgb, var(--risk-high) 8%, transparent) !important;
+.filter-clear-btn i {
+  font-size: 0.7rem;
 }
 
 @keyframes pulse-mini {
@@ -282,7 +274,8 @@ const totals = computed(() => {
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  cursor: pointer;
 }
 
 :deep(.p-datatable .p-datatable-tfoot > tr > td) {

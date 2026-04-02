@@ -408,9 +408,8 @@ const formatCnpj = (v) => {
 }
 
 .kpi-item-new .label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--text-secondary);
   letter-spacing: 0.05em;
 }

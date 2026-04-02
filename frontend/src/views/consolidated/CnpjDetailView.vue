@@ -12,6 +12,7 @@ import CnpjTabFinancialEvolution from "./components/cnpj/CnpjTabFinancialEvoluti
 import CnpjTabIndicators from "./components/cnpj/CnpjTabIndicators.vue";
 import CnpjTabFalecidos from "./components/cnpj/CnpjTabFalecidos.vue";
 import CnpjTabRegional from "./components/cnpj/CnpjTabRegional.vue";
+import CnpjTabPrescritores from "./components/cnpj/CnpjTabPrescritores.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -168,12 +169,7 @@ const formatCnpj = (v) => {
             >Análise de CRMs</span
           ></template
         >
-        <div class="tab-content tab-placeholder">
-          <i class="pi pi-users placeholder-icon" />
-          <p>
-            Perfil de prescritores e alertas de anomalias serão exibidos aqui.
-          </p>
-        </div>
+        <CnpjTabPrescritores :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

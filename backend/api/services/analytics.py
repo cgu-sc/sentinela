@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_crms_detalhado, get_df_top20_crms
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -27,6 +27,7 @@ from ..schemas.analytics import (
     RegionalMunicipioSchema,
     RegionalFarmaciaSchema,
     RegionalResponse,
+    PrescritoresResponse,
 )
 
 class AnalyticsService:
@@ -860,4 +861,49 @@ class AnalyticsService:
             print(f"❌ ERRO AO CALCULAR DADOS REGIONAIS: {e}")
             print(traceback.format_exc())
             return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+
+    @staticmethod
+    def get_prescritores_data(cnpj: str) -> PrescritoresResponse:
+        """Retorna indicadores consolidados e os top 20 CRMs atuantes em uma farmácia específica."""
+        try:
+            df_crms = get_df_crms_detalhado()
+            df_top20 = get_df_top20_crms()
+            
+            # 1. Summary
+            rows_crms = df_crms.filter(pl.col("nu_cnpj") == cnpj)
+            summary_dict = {}
+            if not rows_crms.is_empty():
+                try:
+                    df_risco = get_df_matriz_risco()
+                    df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
+                    row_risco = df_risco.filter(pl.col("cnpj") == cnpj)
+                    risco_dict = {}
+                    if not row_risco.is_empty():
+                        risco_dict = row_risco.row(0, named=True)
+                        
+                    row_data = rows_crms.row(0, named=True)
+                    summary_dict = {
+                        **row_data,
+                        "razaoSocial": risco_dict.get("razaosocial") or risco_dict.get("razao_social"),
+                        "municipio": risco_dict.get("municipio"),
+                        "uf": risco_dict.get("uf"),
+                        "populacao_cidade": risco_dict.get("populacao"),
+                        "estabelecimentos_cidade": risco_dict.get("total_municipio")
+                    }
+                except:
+                    summary_dict = rows_crms.row(0, named=True)
+
+            # 2. Top 20
+            rows_top20 = df_top20.filter(pl.col("cnpj") == cnpj).sort("ranking")
+            top20_list = []
+            if not rows_top20.is_empty():
+                top20_list = [r for r in rows_top20.iter_rows(named=True)]
+                
+            return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, top20=top20_list)
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR DADOS DE PRESCRITORES: {e}")
+            print(traceback.format_exc())
+            return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
 

@@ -6,7 +6,7 @@ from database import get_db
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
-    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse,
+    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -96,3 +96,8 @@ def get_regional(
     Alimenta a aba 'Região de Saúde' no dashboard.
     """
     return AnalyticsService.get_regional_data(regiao_saude, uf)
+
+@router.get("/cnpj/{cnpj}/prescritores", response_model=PrescritoresResponse)
+def get_prescritores(cnpj: str):
+    """Retorna os dados detalhados e KPIs de prescritores (CRMs) atuantes no CNPJ."""
+    return AnalyticsService.get_prescritores_data(cnpj)

@@ -19,6 +19,8 @@ _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet"
 _REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_rede_estabelecimentos.parquet")
 _MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_matriz_risco.parquet")
 _FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_falecidos.parquet")
+_CRMS_DETALHADO_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_crms_detalhado.parquet")
+_TOP20_CRMS_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_top20_crms.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -29,6 +31,8 @@ _df_localidades: pl.DataFrame | None = None
 _df_rede: pl.DataFrame | None = None
 _df_matriz_risco: pl.DataFrame | None = None
 _df_falecidos: pl.DataFrame | None = None
+_df_crms_detalhado: pl.DataFrame | None = None
+_df_top20_crms: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 
@@ -126,6 +130,51 @@ def _sync_falecidos(engine, progress_callback=None):
     ])
     _df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="lz4")
 
+def _sync_crms_detalhado(engine, progress_callback=None):
+    """Tarefa 6: Sincroniza indicadores detalhados de CRMs."""
+    global _df_crms_detalhado
+    print("Sincronizando Indicadores CRMs...")
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[indicador_crm_detalhado]"
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[indicador_crm_detalhado]")).scalar()
+    print(f"   -> Registros CRMs Detalhado: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 5_000
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_list.append(chunk)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        print(f"   -> Progresso CRMs Detalhado: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback: progress_callback(p)
+    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
+    _df_crms_detalhado = pl.from_pandas(pdf)
+    _df_crms_detalhado.write_parquet(_CRMS_DETALHADO_PARQUET_PATH, compression="lz4")
+
+def _sync_top20_crms(engine, progress_callback=None):
+    """Tarefa 7: Sincroniza top 20 CRMs."""
+    global _df_top20_crms
+    print("Sincronizando Top 20 CRMs...")
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[top_20_crms_farmacia]"
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[top_20_crms_farmacia]")).scalar()
+    print(f"   -> Registros Top 20 CRMs: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 5_000
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_list.append(chunk)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        print(f"   -> Progresso Top 20 CRMs: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback: progress_callback(p)
+    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
+    _df_top20_crms = pl.from_pandas(pdf).with_columns([
+        pl.col("dt_primeira_prescricao").cast(pl.Date, strict=False),
+        pl.col("dt_inscricao_crm").cast(pl.Date, strict=False)
+    ]) if not pdf.empty else pl.from_pandas(pdf)
+    _df_top20_crms.write_parquet(_TOP20_CRMS_PARQUET_PATH, compression="lz4")
+
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
     global _df_movimentacao
@@ -186,7 +235,7 @@ def _sync_movimentacao(engine, progress_callback):
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_crms_detalhado, _df_top20_crms, _cache_progress, _cache_status
     import time
 
     # 1. Boot Rápido (Se os arquivos já existem)
@@ -206,6 +255,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                     _df_matriz_risco = pl.read_parquet(_MATRIZ_PARQUET_PATH)
                 if os.path.exists(_FALECIDOS_PARQUET_PATH):
                     _df_falecidos = pl.read_parquet(_FALECIDOS_PARQUET_PATH)
+                if os.path.exists(_CRMS_DETALHADO_PARQUET_PATH):
+                    _df_crms_detalhado = pl.read_parquet(_CRMS_DETALHADO_PARQUET_PATH)
+                if os.path.exists(_TOP20_CRMS_PARQUET_PATH):
+                    _df_top20_crms = pl.read_parquet(_TOP20_CRMS_PARQUET_PATH)
                 _cache_progress = 100
                 _cache_status = "ready"
                 print("🚀 Caches carregados via Parquet.")
@@ -225,7 +278,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Rede Estabelecimentos", "status": "fetching", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "status": "fetching", "weight": 25, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Falecidos",             "status": "fetching", "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
-        {"name": "Movimentação",          "status": "fetching", "weight": 65, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "CRMs Detalhado",        "status": "fetching", "weight": 5,  "func": lambda cb: _sync_crms_detalhado(engine, cb)},
+        {"name": "CRMs Top 20",           "status": "fetching", "weight": 10, "func": lambda cb: _sync_top20_crms(engine, cb)},
+        {"name": "Movimentação",          "status": "fetching", "weight": 50, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -294,6 +349,16 @@ def get_df_falecidos() -> pl.DataFrame:
     if _df_falecidos is None:
         raise RuntimeError("Cache de Falecidos não carregado. Execute uma sincronização.")
     return _df_falecidos
+
+def get_df_crms_detalhado() -> pl.DataFrame:
+    if _df_crms_detalhado is None:
+        raise RuntimeError("Cache de CRMs Detalhado não carregado. Execute uma sincronização.")
+    return _df_crms_detalhado
+
+def get_df_top20_crms() -> pl.DataFrame:
+    if _df_top20_crms is None:
+        raise RuntimeError("Cache de Top 20 CRMs não carregado. Execute uma sincronização.")
+    return _df_top20_crms
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""

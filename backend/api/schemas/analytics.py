@@ -212,3 +212,10 @@ class MultiCnpjTimelineResponse(BaseModel):
     dt_obito: Optional[date] = None
     events: List[TimelineEventSchema]
     cnpjs_envolvidos: List[str]
+
+# ── Análise CRMs (Prescritores) ─────────────────────────
+class PrescritoresResponse(BaseModel):
+    cnpj: str
+    summary: dict
+    top20: list
+

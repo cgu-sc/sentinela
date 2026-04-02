@@ -217,7 +217,7 @@ const {
               <i class="pi pi-eraser" />
             </button>
           </label>
-          <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
+          <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
         </div>
 
         <div class="filter-section">
@@ -237,6 +237,7 @@ const {
             filter-match-mode="contains"
             @show="onDropdownShow"
             :virtualScrollerOptions="{ itemSize: 32 }"
+            panelClass="sidebar-panel"
             class="w-full filter-input"
             :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }"
           />
@@ -261,6 +262,7 @@ const {
             filter-match-mode="contains"
             @show="onDropdownShow"
             :virtualScrollerOptions="{ itemSize: 32 }"
+            panelClass="sidebar-panel"
             class="w-full filter-input"
             :class="{ 'filter-active': isFilterActive('selectedMunicipio') }"
           />
@@ -269,22 +271,22 @@ const {
         <div class="grid-filters">
             <div class="filter-section">
                 <label class="filter-label">Situação RF</label>
-                <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
+                <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
             </div>
             <div class="filter-section">
                 <label class="filter-label">Conexão MS</label>
-                <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedMS') }" />
+                <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedMS') }" />
             </div>
         </div>
 
         <div class="grid-filters">
             <div class="filter-section">
                 <label class="filter-label">Porte CNPJ</label>
-                <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
+                <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
             </div>
             <div class="filter-section">
                 <label class="filter-label">Grande Rede</label>
-                <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
+                <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
             </div>
         </div>
 
@@ -388,11 +390,11 @@ const {
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Target Cluster</label>
-                    <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('clusterSelection') }" />
+                    <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('clusterSelection') }" />
                 </div>
                 <div class="filter-section mini">
                     <label class="filter-label sm">Risco (RFA)</label>
-                    <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('rfaSelection') }" />
+                    <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('rfaSelection') }" />
                 </div>
              </div>
 
@@ -406,7 +408,7 @@ const {
 
              <!-- Filtros para DASHBOARD (CONSOLIDADO) -->
              <div v-if="activeModule === 'consolidado'" class="contextual-filters">
-                <p class="text-xs px-2 italic" style="color: var(--text-muted)">Nenhum filtro extra necessário.</p>
+                <p class="text-xs px-2 italic" style="color: var(--sidebar-text); opacity: 0.7;">Nenhum filtro extra necessário.</p>
              </div>
         </div>
 
@@ -643,13 +645,13 @@ const {
   font-weight: 700;
   font-size: 1.2rem;
   display: block;
-  color: var(--text-color);
+  color: var(--sidebar-text);
 }
 
 .brand-version {
   font-size: 0.7rem;
   opacity: 0.7;
-  color: var(--text-color);
+  color: var(--sidebar-text);
 }
 
 .sidebar-content {
@@ -674,7 +676,8 @@ const {
   font-weight: 700;
   text-transform: uppercase;
   margin-bottom: 0.25rem;
-  color: var(--text-muted);
+  color: var(--sidebar-text);
+  opacity: 0.85;
   letter-spacing: 0.5px;
 }
 
@@ -790,8 +793,8 @@ const {
   padding: 0.28rem 0;
   border-radius: 6px;
   border: 1px solid var(--sidebar-border);
-  color: var(--text-muted);
-  background: var(--card-bg);
+  color: var(--sidebar-text);
+  background: var(--sidebar-input-bg);
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
@@ -824,8 +827,8 @@ const {
   font-weight: 700 !important;
   border: 1px solid var(--sidebar-border) !important;
   border-radius: 8px !important;
-  color: var(--text-muted) !important;
-  background: var(--card-bg) !important;
+  color: var(--sidebar-text) !important;
+  background: var(--sidebar-input-bg) !important;
   text-transform: uppercase;
   transition: all 0.2s ease;
 }
@@ -914,8 +917,8 @@ const {
   position: absolute;
   top: 16px;
   transform: translateX(-50%);
-  background: var(--card-bg);
-  color: var(--text-color);
+  background: var(--sidebar-input-bg);
+  color: var(--sidebar-text);
   border: 1px solid var(--sidebar-border);
   padding: 3px 7px;
   border-radius: 4px;
@@ -1025,7 +1028,7 @@ const {
     font-size: 0.75rem; 
     font-weight: 800; 
     text-transform: uppercase; 
-    color: var(--text-muted); 
+    color: var(--sidebar-text); 
     letter-spacing: 0.5px;
 }
 
@@ -1069,9 +1072,9 @@ const {
 :global(.admin-sidebar .filter-active.p-dropdown),
 :global(.admin-sidebar .filter-active.p-calendar),
 :global(.admin-sidebar .filter-active.p-inputtext:not(.p-dropdown-label)) {
-  border: 1px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  border: 2px solid color-mix(in srgb, var(--primary-color) 85%, transparent) !important;
   background: rgba(255, 255, 255, 0.05) !important;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
   outline: none !important;
 }
 
@@ -1087,11 +1090,11 @@ const {
   max-height: 64px;
   flex-shrink: 0; /* IMPEDE QUE A NAVBAR ESTIQUE OU ENCOLHA */
   
-  /* MÁGICA: Glassmorphism translúcido (Opacidade de 60%) */
-  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent) !important;
+  /* Glassmorphism translúcido usando a opacidade do tema */
+  background: color-mix(in srgb, var(--navbar-bg) calc(var(--navbar-glass-opacity) * 100%), transparent) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--navbar-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1112,7 +1115,7 @@ const {
 .nav-divider {
   width: 1px;
   height: 32px;
-  background-color: var(--sidebar-border);
+  background-color: var(--navbar-border);
 }
 
 :deep(.module-select-button) {
@@ -1122,8 +1125,8 @@ const {
 
 :deep(.module-select-button .p-button) {
   background: var(--card-bg);
-  border-color: var(--sidebar-border);
-  color: var(--text-color);
+  border-color: var(--navbar-border);
+  color: var(--navbar-text);
   padding: 0.4rem 0.75rem;
 }
 
@@ -1134,7 +1137,7 @@ const {
 }
 
 :deep(.module-select-button .p-button.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  background: var(--navbar-active-bg) !important;
   border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
   color: var(--primary-color) !important;
   box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
@@ -1149,7 +1152,7 @@ const {
 .nav-tab {
   padding: 0.4rem 0.75rem;
   text-decoration: none;
-  color: var(--text-color);
+  color: var(--navbar-text);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1166,7 +1169,7 @@ const {
 }
 
 .nav-tab.active {
-  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  background-color: var(--navbar-active-bg);
   border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
   color: var(--primary-color);
   box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
@@ -1179,11 +1182,18 @@ const {
   flex: 1;
 }
 
-/* Tratamento dos inputs do PrimeVue na Sidebar */
-:deep(.filter-input .p-inputtext) {
-  background: var(--card-bg);
-  border-color: var(--sidebar-border);
-  color: var(--text-color);
+/* Tratamento ultra-específico para inputs na Sidebar (Eliminar empilhamento de fundo) */
+:deep(.filter-input.p-dropdown),
+:deep(.filter-input.p-inputtext) {
+  background: var(--sidebar-input-bg) !important;
+  border-color: var(--sidebar-border) !important;
+  color: var(--sidebar-text) !important;
+}
+
+:deep(.filter-input .p-dropdown-label),
+:deep(.filter-input .p-dropdown-trigger) {
+  background: transparent !important;
+  color: inherit !important;
 }
 
 /* 
@@ -1369,12 +1379,27 @@ const {
   border-color: var(--sidebar-border);
 }
 
-:global(.admin-layout) .p-inputtext,
-:global(.admin-layout) .p-dropdown,
-:global(.admin-layout) .p-calendar .p-inputtext {
+:global(.admin-layout:not(.admin-sidebar)) .p-inputtext,
+:global(.admin-layout:not(.admin-sidebar)) .p-dropdown,
+:global(.admin-layout:not(.admin-sidebar)) .p-calendar .p-inputtext {
   background: var(--card-bg) !important;
   border-color: var(--sidebar-border) !important;
   color: var(--text-color) !important;
+}
+
+/* Forçar especificamente na SIDEBAR (Seletores Atômicos) */
+:global(.admin-sidebar) .p-inputtext,
+:global(.admin-sidebar) .p-dropdown,
+:global(.admin-sidebar) .p-calendar .p-inputtext {
+  background: var(--sidebar-input-bg) !important;
+  border-color: var(--sidebar-border) !important;
+  color: var(--sidebar-text) !important;
+}
+
+/* Evitar fundo duplo em sub-elementos */
+:global(.admin-sidebar) .p-dropdown-label,
+:global(.admin-sidebar) .p-dropdown-trigger {
+  background: transparent !important;
 }
 
 :global(.admin-layout) .p-inputtext:enabled:hover,
@@ -1421,7 +1446,37 @@ const {
     gap: 1rem;
 }
 
-/* AJUSTE PARA MODO ESCURO NOS DIÁLOGOS DO PRIMEVUE */
+/* PAINEL DOS DROPDOWNS NA SIDEBAR */
+:global(.p-dropdown-panel.sidebar-panel) {
+  background: var(--sidebar-bg) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4) !important;
+}
+
+:global(.sidebar-panel .p-dropdown-items .p-dropdown-item) {
+  color: var(--sidebar-text) !important;
+  font-size: 0.8rem;
+}
+
+:global(.sidebar-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
+  background: var(--sidebar-input-bg) !important;
+  color: var(--sidebar-text) !important;
+}
+
+:global(.sidebar-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+  color: var(--primary-color) !important;
+}
+
+:global(.sidebar-panel .p-dropdown-header) {
+  background: var(--sidebar-bg) !important;
+  border-bottom: 1px solid var(--sidebar-border) !important;
+}
+
+:global(.sidebar-panel .p-dropdown-filter-container .p-inputtext) {
+  background: var(--sidebar-input-bg) !important;
+  color: var(--sidebar-text) !important;
+}
 :deep(.p-dialog) {
     background: var(--card-bg);
     color: var(--text-color);

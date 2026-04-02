@@ -275,21 +275,29 @@ const openEstablishment = (estabStr) => {
 }
 
 .f-kpi-card {
-  background: var(--card-bg);
+  background: color-mix(in srgb, var(--text-color) 2.5%, var(--tabs-bg));
   border: 1px solid var(--sidebar-border);
-  padding: 0.75rem;
-  border-radius: 8px;
+  padding: 0.85rem;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.f-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
 .f-kpi-label {
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.65rem;
+  font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
 }
 
 .f-kpi-val-container {

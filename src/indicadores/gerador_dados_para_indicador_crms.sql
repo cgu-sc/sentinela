@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 2
 -- ============================================================================
 -- CORREÇÕES APLICADAS:
@@ -201,9 +201,11 @@ SELECT
     C.latitude,
     C.longitude,
     A.nu_prescricoes_medico,
+    -- CORRIGIDO: usa nu_dias + 1 (dias inclusivos), igual ao crms.sql
+    -- sem o +1, medicos que prescrevem em 1 dia unico geram nu_dias=0 -> NULL -> alertas 3 e 4 nunca disparam
     TRY_CAST(
         TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(18,2)) / 
-        NULLIF(TRY_CAST(A.nu_dias_prescricao_inicial_final AS DECIMAL(18,2)), 0) 
+        NULLIF(TRY_CAST(A.nu_dias_prescricao_inicial_final + 1 AS DECIMAL(18,2)), 0) 
     AS DECIMAL(18,2)) AS nu_prescricoes_dia,
     A.nu_autorizacoes_estabelecimento,
     A.dt_prescricao_inicial_medico,
@@ -263,9 +265,14 @@ DROP TABLE IF EXISTS #prescricoes_todos_estabelecimentos
 SELECT 
     nu_crm,
     sg_uf_crm,
-    SUM(nu_prescricoes_dia) AS nu_prescricoes_dia_em_todos_estabelecimentos,
     SUM(nu_prescricoes_medico) AS nu_prescricoes_medico_em_todos_estabelecimentos,
-    COUNT(*) AS nu_estabelecimentos_com_registro_mesmo_crm
+    COUNT(*) AS nu_estabelecimentos_com_registro_mesmo_crm,
+    -- CORRIGIDO: recalcula a taxa usando os totais agregados em vez de somar taxas individuais
+    -- Somar nu_prescricoes_dia (taxa por farmacia) entre farmacias e matematicamente invalido
+    CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
+        NULLIF(CAST(
+            DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
+        AS DECIMAL(18,2)), 0) AS nu_prescricoes_dia_em_todos_estabelecimentos
 INTO #prescricoes_todos_estabelecimentos
 FROM #lista_medicos_farmacia_popularFP_temp2
 GROUP BY nu_crm, sg_uf_crm
@@ -342,7 +349,7 @@ select * from dados_crm_detalhado
 -- ============================================================================
 CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
 ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj)
-INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico);
+INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico, no_municipio, sg_uf, nu_prescricoes_medico);
 GO
 
 

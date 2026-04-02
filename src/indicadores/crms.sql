@@ -168,15 +168,36 @@ WHERE nu_prescricoes_dia > 30
 GROUP BY cnpj;
 CREATE CLUSTERED INDEX IDX_Robos_CNPJ ON #RobosPorFarmacia(cnpj);
 
--- CRM Inválido (mantido igual)
+-- CRM Inválido (Atualizado para utilizar a base oficial do CFM)
 DROP TABLE IF EXISTS #CRMInvalidoPorFarmacia;
-SELECT P.cnpj AS cnpj, COUNT(*) AS qtd_crm_invalido
+SELECT P.cnpj AS cnpj, 
+       COUNT(*) AS qtd_crm_invalido,
+       SUM(P.vl_total_prescricoes) AS vl_crm_invalido
 INTO #CRMInvalidoPorFarmacia
 FROM #CRMsPorFarmacia P
-INNER JOIN temp_CGUSC.fp.uf_crm U ON U.uf = P.sg_uf_crm
-WHERE P.nu_crm > U.nu_max_crm
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM temp_CFM.dbo.medicos_jul_2025_mod CFM
+    WHERE CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) 
+      AND CFM.SG_uf = P.sg_uf_crm
+)
 GROUP BY P.cnpj;
 CREATE CLUSTERED INDEX IDX_CRMInv_CNPJ ON #CRMInvalidoPorFarmacia(cnpj);
+
+-- Vendas antes do Registro no CFM
+DROP TABLE IF EXISTS #CRMAntesRegistroPorFarmacia;
+SELECT P.cnpj AS cnpj, 
+       COUNT(*) AS qtd_crm_antes_registro,
+       SUM(P.vl_total_prescricoes) AS vl_crm_antes_registro
+INTO #CRMAntesRegistroPorFarmacia
+FROM #CRMsPorFarmacia P
+INNER JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM 
+    ON CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) 
+   AND CFM.SG_uf = P.sg_uf_crm
+WHERE TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103) IS NOT NULL 
+  AND P.dt_primeira_prescricao < TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103)
+GROUP BY P.cnpj;
+CREATE CLUSTERED INDEX IDX_CRMAntesReg_CNPJ ON #CRMAntesRegistroPorFarmacia(cnpj);
 
 -- Turistas (mantido igual)
 DROP TABLE IF EXISTS #TuristasPorFarmacia;
@@ -187,19 +208,25 @@ WHERE alerta5 IS NOT NULL AND alerta5 <> ''
 GROUP BY nu_cnpj;
 CREATE CLUSTERED INDEX IDX_Turistas_CNPJ ON #TuristasPorFarmacia(cnpj);
 
--- Pareto (mantido igual)
+-- Pareto (CORRIGIDO: acumulado inclusivo, condição pré-cruzamento, sem +1)
 DROP TABLE IF EXISTS #ParetoPorFarmacia;
 WITH PrescritoresAcumulado AS (
     SELECT 
         P.cnpj AS cnpj, P.vl_total_prescricoes, T.total_valor_farmacia,
-        SUM(P.vl_total_prescricoes) OVER (PARTITION BY P.cnpj ORDER BY P.vl_total_prescricoes DESC) AS acumulado
+        SUM(P.vl_total_prescricoes) OVER (
+            PARTITION BY P.cnpj
+            ORDER BY P.vl_total_prescricoes DESC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS acumulado
     FROM #CRMsPorFarmacia P
     INNER JOIN #TotaisFarmacia T ON T.cnpj = P.cnpj
 )
-SELECT cnpj, COUNT(*) + 1 AS qtd_prescritores_80pct
+-- Conta prescritores cuja contribuicao ainda nao havia cruzado 80% antes desta linha
+-- (acumulado - vl_atual) = acumulado antes de incluir o prescritor atual
+SELECT cnpj, COUNT(*) AS qtd_prescritores_80pct
 INTO #ParetoPorFarmacia
 FROM PrescritoresAcumulado
-WHERE acumulado <= total_valor_farmacia * 0.80
+WHERE acumulado - vl_total_prescricoes < total_valor_farmacia * 0.80
 GROUP BY cnpj;
 CREATE CLUSTERED INDEX IDX_Pareto_CNPJ ON #ParetoPorFarmacia(cnpj);
 
@@ -215,9 +242,9 @@ SELECT
         THEN P.id_medico 
     END) AS qtd_prescritores_robos_ocultos,
     
-    -- ? Multi-Farmácia: Atua em > 20 estabelecimentos
+    -- ? Multi-Farmácia: Atua em > 70 estabelecimentos
     COUNT(DISTINCT CASE 
-        WHEN ISNULL(R.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 20 
+        WHEN ISNULL(R.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 70 
         THEN P.id_medico 
     END) AS qtd_prescritores_multi_farmacia,
     
@@ -249,6 +276,11 @@ SELECT T.cnpj AS nu_cnpj,
     ISNULL(H.indice_hhi, 0) AS indice_hhi,
     ISNULL(R.qtd_prescritores_robos, 0) AS qtd_prescritores_robos,
     ISNULL(C.qtd_crm_invalido, 0) AS qtd_crm_invalido,
+    ISNULL(C.vl_crm_invalido, 0) AS vl_crm_invalido,
+    ISNULL(CAST(C.vl_crm_invalido AS DECIMAL(18,2)) / NULLIF(CAST(T.total_valor_farmacia AS DECIMAL(18,2)), 0) * 100.0, 0) AS pct_valor_crm_invalido,
+    ISNULL(AR.qtd_crm_antes_registro, 0) AS qtd_crm_antes_registro,
+    ISNULL(AR.vl_crm_antes_registro, 0) AS vl_crm_antes_registro,
+    ISNULL(CAST(AR.vl_crm_antes_registro AS DECIMAL(18,2)) / NULLIF(CAST(T.total_valor_farmacia AS DECIMAL(18,2)), 0) * 100.0, 0) AS pct_valor_crm_antes_registro,
     ISNULL(TU.qtd_prescritores_turistas, 0) AS qtd_prescritores_turistas,
     ISNULL(PA.qtd_prescritores_80pct, 1) AS qtd_prescritores_80pct,
     
@@ -264,6 +296,7 @@ LEFT JOIN #Top5PorFarmacia T5 ON T5.cnpj = T.cnpj
 LEFT JOIN #HHIPorFarmacia H ON H.cnpj = T.cnpj
 LEFT JOIN #RobosPorFarmacia R ON R.cnpj = T.cnpj
 LEFT JOIN #CRMInvalidoPorFarmacia C ON C.cnpj = T.cnpj
+LEFT JOIN #CRMAntesRegistroPorFarmacia AR ON AR.cnpj = T.cnpj
 LEFT JOIN #TuristasPorFarmacia TU ON TU.cnpj = T.cnpj
 LEFT JOIN #ParetoPorFarmacia PA ON PA.cnpj = T.cnpj
 LEFT JOIN #RedePorFarmacia RE ON RE.cnpj = T.cnpj;
@@ -409,6 +442,11 @@ SELECT
     I.indice_hhi,
     I.qtd_prescritores_robos,
     I.qtd_crm_invalido,
+    I.vl_crm_invalido,
+    I.pct_valor_crm_invalido,
+    I.qtd_crm_antes_registro,
+    I.vl_crm_antes_registro,
+    I.pct_valor_crm_antes_registro,
     
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (ORDER BY ISNULL(I.indice_hhi, 0) DESC) AS ranking_br,
@@ -514,14 +552,22 @@ SELECT
     CAST(CASE WHEN REG.mediana_turistas_reg > 0 THEN (I.qtd_prescritores_turistas + 0.001) / (REG.mediana_turistas_reg + 0.001) ELSE CASE WHEN I.qtd_prescritores_turistas > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_turistas_reg,
     CAST(CASE WHEN UF.mediana_turistas_uf > 0 THEN (I.qtd_prescritores_turistas + 0.001) / (UF.mediana_turistas_uf + 0.001) ELSE CASE WHEN I.qtd_prescritores_turistas > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_turistas_uf,
     CAST(CASE WHEN BR.mediana_turistas_br > 0 THEN (I.qtd_prescritores_turistas + 0.001) / (BR.mediana_turistas_br + 0.001) ELSE CASE WHEN I.qtd_prescritores_turistas > 0 THEN 99.0 ELSE 0 END END AS DECIMAL(18,4)) AS risco_turistas_br,
-    
-    -- Score de Prescritores (Baseado no risco mediano Regional)
+
+    -- Score de Prescritores (componentes normalizados 0-1, ponderados)
+    -- HHI relativo (teto 5x normalizado): peso 40%
+    -- CRM invalido (flag binaria):         peso 30%
+    -- Robos locais (flag binaria):         peso 20%
+    -- Prescritores turistas (flag bin.):   peso 10%
     CAST((
-        CAST((ISNULL(I.indice_hhi, 0) + 0.01) / (ISNULL(REG.mediana_hhi_reg, 0) + 0.01) AS DECIMAL(18,4)) +
-        CASE WHEN I.qtd_prescritores_robos > 0 THEN 5.0 ELSE 0 END +
-        CASE WHEN I.qtd_crm_invalido > 0 THEN 10.0 ELSE 0 END +
-        CASE WHEN I.qtd_prescritores_turistas > 0 THEN 5.0 ELSE 0 END
-    ) / 4.0 AS DECIMAL(18,4)) AS score_prescritores
+        CASE
+            WHEN (ISNULL(I.indice_hhi, 0) + 0.01) / (ISNULL(REG.mediana_hhi_reg, 0) + 0.01) > 5.0
+            THEN 1.0
+            ELSE CAST((ISNULL(I.indice_hhi, 0) + 0.01) / (ISNULL(REG.mediana_hhi_reg, 0) + 0.01) AS DECIMAL(18,4)) / 5.0
+        END * 0.4 +
+        CASE WHEN I.qtd_crm_invalido > 0 THEN 1.0 ELSE 0.0 END * 0.3 +
+        CASE WHEN I.qtd_prescritores_robos > 0 THEN 1.0 ELSE 0.0 END * 0.2 +
+        CASE WHEN I.qtd_prescritores_turistas > 0 THEN 1.0 ELSE 0.0 END * 0.1
+    ) AS DECIMAL(18,4)) AS score_prescritores
 
 INTO temp_CGUSC.fp.indicador_crm_detalhado
 FROM temp_CGUSC.fp.indicador_crm I
@@ -597,9 +643,9 @@ WITH CRMsRankeados AS (
             ELSE 0 
         END AS flag_robo_oculto,
         
-        -- Flag Multi-Farmácia (>20 estabelecimentos)
+        -- Flag Multi-Farmácia (>70 estabelecimentos)
         CASE 
-            WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 20 
+            WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 70 
             THEN 1 
             ELSE 0 
         END AS flag_multi_farmacia,
@@ -715,6 +761,7 @@ DROP TABLE IF EXISTS #Top5PorFarmacia;
 DROP TABLE IF EXISTS #HHIPorFarmacia;
 DROP TABLE IF EXISTS #RobosPorFarmacia;
 DROP TABLE IF EXISTS #CRMInvalidoPorFarmacia;
+DROP TABLE IF EXISTS #CRMAntesRegistroPorFarmacia;
 DROP TABLE IF EXISTS #TuristasPorFarmacia;
 DROP TABLE IF EXISTS #ParetoPorFarmacia;
 DROP TABLE IF EXISTS #DadosRedePorPrescritor;

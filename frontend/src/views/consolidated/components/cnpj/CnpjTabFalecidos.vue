@@ -436,12 +436,12 @@ const openEstablishment = (estabStr) => {
 .f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); }
 .f-fonte { font-size: 0.72rem; color: var(--text-secondary); }
 
-/* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa ── */
+/* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa (Neutro Ultra-Suave) ── */
 .f-group-header td {
-  background: color-mix(in srgb, var(--primary-color) 3%, var(--tabs-bg));
-  border-top: 1px solid var(--tabs-border);
-  border-bottom: 1px solid var(--tabs-border);
-  padding: 0.6rem 1rem;
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  border-top: 1px solid var(--tabs-border) !important;
+  border-bottom: 1px solid var(--tabs-border) !important;
+  padding: 0.6rem 1rem !important;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -449,31 +449,24 @@ const openEstablishment = (estabStr) => {
 
 .f-group-cpf {
   font-family: monospace;
-  font-weight: 400;
-  color: var(--text-secondary);
-  margin-right: 0.6rem;
+  font-weight: 700;
+  margin-right: 0.75rem;
+  color: var(--text-color);
 }
 
 .f-group-nome {
-  font-weight: 400;
-  font-size: 0.82rem;
   color: var(--text-color);
-  letter-spacing: 0.03em;
-  margin-right: 0.4rem;
-  text-transform: none !important;
+  opacity: 0.9;
 }
 
 .f-group-sep {
-  color: var(--text-secondary);
-  margin: 0 0.4rem;
-  opacity: 0.6;
+  margin: 0 0.5rem;
+  opacity: 0.3;
 }
 
 .f-group-meta {
-  font-size: 0.76rem;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--text-secondary);
-  text-transform: none !important;
 }
 
 /* ── Linha de subtotal por falecido ── */

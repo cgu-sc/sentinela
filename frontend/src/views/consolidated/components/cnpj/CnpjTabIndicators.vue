@@ -433,14 +433,14 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 /* Linha de grupo - Estilo Relatório de Mesa (Refinado) */
 .ind-group-row td {
   padding: 0.5rem 1rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--primary-color) 3%, var(--tabs-bg));
-  border-top: 1px solid var(--tabs-border);
-  border-bottom: 1px solid var(--tabs-border);
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  border-top: 1px solid var(--tabs-border) !important;
+  border-bottom: 1px solid var(--tabs-border) !important;
 }
 
 /* Linha de dados - Corrigindo Uniformidade do Hover */
@@ -455,7 +455,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .ind-data-row:hover td {
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--tabs-bg)) !important;
 }
 
 /* Célula do nome */

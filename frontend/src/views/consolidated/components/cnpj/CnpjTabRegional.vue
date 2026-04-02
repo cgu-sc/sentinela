@@ -68,7 +68,11 @@ watch(
 
     // Aplica o filtro e consome o estado
     await nextTick();
-    filterMunicipio.value = municipio;
+    if (municipio === '__RESET__') {
+      filterMunicipio.value = null; // Limpa qualquer filtro anterior
+    } else {
+      filterMunicipio.value = municipio;
+    }
     cnpjNav.consumePendingMunicipio();
 
     // Scroll suave para a tabela de farmácias (Ranking)

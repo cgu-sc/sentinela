@@ -18,11 +18,12 @@ export const useCnpjNavStore = defineStore('cnpjNav', () => {
 
   /**
    * Navega para a aba de Região de Saúde e agenda a seleção de um município.
-   * @param {string} municipioNome - Nome do município a selecionar.
-   * @param {number} tabIndex      - Índice da aba Regional (default 5).
+   * @param {string|null} municipioNome - Nome do município ou null para ver todos.
+   * @param {number} tabIndex           - Índice da aba Regional (default 5).
    */
-  function navigateToRegiao(municipioNome, tabIndex = 5) {
-    pendingMunicipio.value = municipioNome;
+  function navigateToRegiao(municipioNome = null, tabIndex = 5) {
+    // Se for null, usamos um marcador interno para forçar a limpeza do filtro no destino
+    pendingMunicipio.value = municipioNome === null ? '__RESET__' : municipioNome;
     activeTabIndex.value = tabIndex;
   }
 

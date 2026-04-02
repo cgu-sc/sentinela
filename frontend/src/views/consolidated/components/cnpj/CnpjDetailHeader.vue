@@ -205,12 +205,18 @@ const formatCnpj = (v) => {
             <span class="rank-val">{{ formatRank(cnpjData.rank_municipio) }} <small>/ {{ cnpjData.total_municipio }}</small></span>
           </div>
         </div>
-        <div class="rank-stat" v-if="cnpjData.total_regiao_saude">
+        <div
+          class="rank-stat rank-stat--clickable"
+          v-if="cnpjData.total_regiao_saude"
+          v-tooltip.top="'Ver ranking completo da Região de Saúde'"
+          @click="cnpjNav.navigateToRegiao(null)"
+        >
           <i class="pi pi-users-group" style="color: var(--text-muted); opacity: 0.8;" />
           <div class="rank-details">
-            <span class="rank-label">CNPJs Região</span>
+            <span class="rank-label">Estab. Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
           </div>
+          <i class="pi pi-arrow-right nav-hint" />
         </div>
         <div class="rank-stat" v-if="geoData?.nu_populacao">
           <i class="pi pi-users" style="color: #60a5fa;" />

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
+import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
@@ -43,6 +44,8 @@ const { resultadoCnpjs } = storeToRefs(analyticsStore);
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
 
+const cnpjNav = useCnpjNavStore();
+
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
 const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
@@ -60,9 +63,10 @@ import { watch } from "vue";
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
-    // Ao trocar de CNPJ, limpa os dados de evolução para forçar novo fetch
+    // Ao trocar de CNPJ, reseta navegação e limpa a evolução financeira
     if (newCnpj !== oldCnpj) {
       analyticsStore.resetEvolucaoFinanceira();
+      cnpjNav.reset(TAB_INDEX.EVOLUCAO);
     }
     if (newCnpj && !cnpjData.value) {
       const p = getApiParams();
@@ -136,7 +140,7 @@ const formatCnpj = (v) => {
     <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" />
 
     <!-- TABS -->
-    <TabView class="detail-tabs" :activeIndex="TAB_INDEX.EVOLUCAO">
+    <TabView class="detail-tabs" :activeIndex="cnpjNav.activeTabIndex" @tab-change="cnpjNav.activeTabIndex = $event.index">
       <TabPanel>
         <template #header
           ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template

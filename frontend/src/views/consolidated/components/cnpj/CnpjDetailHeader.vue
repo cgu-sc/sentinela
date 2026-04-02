@@ -4,11 +4,21 @@ import { ref, computed, watchEffect } from "vue";
 
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
+import { useCnpjNavStore } from "@/stores/cnpjNav";
 import Button from "primevue/button";
+
+const cnpjNav = useCnpjNavStore();
 
 const router = useRouter();
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
+
+const formatPopulacao = (n) => {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace('.', ',')} M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.', ',')} mil`;
+  return n.toLocaleString("pt-BR");
+};
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -201,6 +211,26 @@ const formatCnpj = (v) => {
             <span class="rank-label">CNPJs Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
           </div>
+        </div>
+        <div class="rank-stat" v-if="geoData?.nu_populacao">
+          <i class="pi pi-users" style="color: #60a5fa;" />
+          <div class="rank-details">
+            <span class="rank-label">Pop. Município</span>
+            <span class="rank-val">{{ formatPopulacao(geoData.nu_populacao) }}</span>
+          </div>
+        </div>
+        <div
+          class="rank-stat rank-stat--clickable"
+          v-if="cnpjData.total_municipio"
+          v-tooltip.top="'Ver ranking do município na Região de Saúde'"
+          @click="cnpjNav.navigateToRegiao(geoData?.no_municipio ?? cnpjData.municipio)"
+        >
+          <i class="pi pi-building" style="color: #a78bfa;" />
+          <div class="rank-details">
+            <span class="rank-label">Estab. Município</span>
+            <span class="rank-val">{{ cnpjData.total_municipio }}</span>
+          </div>
+          <i class="pi pi-arrow-right nav-hint" />
         </div>
       </div>
     </div>
@@ -458,6 +488,29 @@ const formatCnpj = (v) => {
   align-items: center;
   gap: 0.8rem;
   transition: all 0.3s;
+}
+
+.rank-stat--clickable {
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  margin: -0.3rem -0.6rem;
+}
+
+.rank-stat--clickable:hover {
+  background: color-mix(in srgb, #a78bfa 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.nav-hint {
+  font-size: 0.65rem;
+  color: #a78bfa;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.rank-stat--clickable:hover .nav-hint {
+  opacity: 1;
 }
 
 .rank-stat:hover {

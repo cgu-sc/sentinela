@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import { useRegional } from '@/composables/useRegional';
+import { useCnpjNavStore } from '@/stores/cnpjNav';
 import RegionalMunicipalityTable from '../RegionalMunicipalityTable.vue';
 import RegionalPharmacyTable from '../RegionalPharmacyTable.vue';
 
@@ -9,6 +10,7 @@ const props = defineProps({
   geoData: { type: Object, default: null }
 });
 
+const cnpjNav = useCnpjNavStore();
 const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
 
 // ── Filtro Cruzado de Município (Regional) ────────────────
@@ -46,6 +48,37 @@ onMounted(() => {
 watch(() => props.geoData?.no_regiao_saude, (newVal) => {
     if (newVal) loadData();
 });
+
+// ── Consome o múnicipio pendente do store (navegação via header) ──────────
+watch(
+  () => cnpjNav.pendingMunicipio,
+  async (municipio) => {
+    if (!municipio) return;
+
+    // Garante que os dados regionais estejam carregados primeiro
+    if (!regionalLoaded.value) {
+      loadData();
+      // Aguarda até os dados estarem prontos
+      await new Promise((resolve) => {
+        const stop = watch(regionalLoaded, (loaded) => {
+          if (loaded) { stop(); resolve(); }
+        });
+      });
+    }
+
+    // Aplica o filtro e consome o estado
+    await nextTick();
+    filterMunicipio.value = municipio;
+    cnpjNav.consumePendingMunicipio();
+
+    // Scroll suave para a tabela de farmácias (Ranking)
+    setTimeout(() => {
+      const el = document.querySelector('.pharmacy-ranking-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+  },
+  { immediate: true }
+);
 
 </script>
 
@@ -90,6 +123,7 @@ watch(() => props.geoData?.no_regiao_saude, (newVal) => {
         :cnpj-atual="cnpj"
         :municipio-atual="geoData.no_municipio"
         :uf-atual="geoData.sg_uf"
+        class="pharmacy-ranking-section"
       />
     </template>
   </div>

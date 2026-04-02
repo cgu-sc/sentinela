@@ -546,19 +546,15 @@ const {
 <style scoped>
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
-  --sidebar-width: 280px; /* Variável Mestra */
+  --sidebar-width: 280px;
   display: flex !important;
   height: 100vh !important;
   width: 100vw;
   overflow: hidden;
   color: var(--text-color);
   scrollbar-gutter: stable;
-  /* 🌫️ LINEAR HORIZON (Suavizado para 3% de cor dinâmica) */
-  background: linear-gradient(
-    to bottom, 
-    var(--bg-color) 0%, 
-    color-mix(in srgb, var(--primary-color) 3%, var(--bg-color)) 100%
-  ) !important;
+  /* Responde diretamente ao bg-color do themeConfig.js */
+  background: var(--bg-color) !important;
 }
 
 .admin-layout.collapsed {
@@ -1058,11 +1054,11 @@ const {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Altura cravada para o scroll interno funcionar */
-  overflow-y: auto; /* Aqui acontece a magica do scroll */
-  scrollbar-gutter: stable; /* MÁGICA: Fixa o espaço da barra de rolagem para evitar o 'salto' lateral */
-  min-width: 0; 
-  background: transparent;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  min-width: 0;
+  background: transparent !important; /* MÁGICA: Revela o fundo do layout vindo do themeConfig.js */
 }
 
 /* DESTAQUE DE FILTRO ATIVO E FOCO (IMPEDE O HALO SÓLIDO DO PRIMEVUE E BORDA DUPLA) */
@@ -1180,6 +1176,7 @@ const {
 .page-content {
   padding: 1.5rem;
   flex: 1;
+  background: transparent !important;
 }
 
 /* Tratamento ultra-específico para inputs na Sidebar (Eliminar empilhamento de fundo) */
@@ -1379,9 +1376,10 @@ const {
   border-color: var(--sidebar-border);
 }
 
-:global(.admin-layout:not(.admin-sidebar)) .p-inputtext,
-:global(.admin-layout:not(.admin-sidebar)) .p-dropdown,
-:global(.admin-layout:not(.admin-sidebar)) .p-calendar .p-inputtext {
+:global(.admin-layout) .p-inputtext,
+:global(.admin-layout) .p-dropdown,
+:global(.admin-layout) .p-calendar .p-inputtext,
+:global(.admin-layout) .p-multiselect {
   background: var(--card-bg) !important;
   border-color: var(--sidebar-border) !important;
   color: var(--text-color) !important;

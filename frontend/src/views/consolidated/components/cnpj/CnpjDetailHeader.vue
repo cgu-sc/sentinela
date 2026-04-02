@@ -215,9 +215,9 @@ const formatCnpj = (v) => {
 <style scoped>
 /* ── CABEÇALHO RESUMO (SOLTO) ────────────────── */
 .detail-header-new {
-  background: var(--card-bg);
+  background: var(--establishment-header-bg);
   padding: 1.25rem 2rem;
-  border: 1px solid var(--sidebar-border);
+  border: 1px solid var(--establishment-header-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -345,7 +345,7 @@ const formatCnpj = (v) => {
   margin: 0;
   line-height: 1.2;
   letter-spacing: -0.02em;
-  color: var(--text-secondary);
+  color: var(--establishment-header-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -410,14 +410,15 @@ const formatCnpj = (v) => {
 .kpi-item-new .label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--establishment-header-text);
+  opacity: 0.7;
   letter-spacing: 0.05em;
 }
 
 .kpi-item-new .value {
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--establishment-header-text);
   font-family: 'Inter', sans-serif;
   background: none !important;
   background-color: transparent !important;
@@ -482,14 +483,15 @@ const formatCnpj = (v) => {
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--establishment-header-text);
+  opacity: 0.7;
   letter-spacing: 0.05em;
 }
 
 .rank-val {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--establishment-header-text);
 }
 
 .rank-val small {

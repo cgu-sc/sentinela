@@ -74,7 +74,7 @@ export const SURFACE_COLORS = {
       "establishment-header-bg": "#FAF9F6",
       "establishment-header-text": "#1e2127",
       "establishment-header-border": "#D1CEC3",
-      "tabs-bg": "#FAF9F6",
+      "tabs-bg": "#faf7f6ff",
       "tabs-border": "#D1CEC3",
       "table-hover": "#f1f5f9",
       "table-stripe": "#f8fafc",

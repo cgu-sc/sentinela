@@ -96,6 +96,26 @@ const formatting = {
   formatPct: (val) => val != null ? `${Number(val).toFixed(2)}%` : '0.00%'
 };
 const formatPct = formatting.formatPct;
+const filterOnlyIssues = ref(false);
+
+const hasAnyIssue = (m) => {
+  return (
+    m.flag_robo > 0 ||
+    m.flag_robo_oculto > 0 ||
+    m.alerta2_tempo_concentrado ||
+    m.alerta2 ||
+    m.flag_crm_invalido > 0 ||
+    m.flag_prescricao_antes_registro > 0 ||
+    m.alerta5_geografico ||
+    m.qtd_estabelecimentos_atua === 1
+  );
+};
+
+const filteredTop20 = computed(() => {
+  if (!filterOnlyIssues.value) return top20.value;
+  return top20.value.filter(hasAnyIssue);
+});
+
 </script>
 
 <template>
@@ -473,17 +493,29 @@ const formatPct = formatting.formatPct;
       <!-- 3. TOP 20 CRMs (TABELA DETALHADA) -->
       <div class="section-container">
         <div class="section-title" style="border-bottom: none; margin-bottom: 0;">
-          <i class="pi pi-users" />
-          <span>CRMs DE INTERESSE - DETALHAMENTO</span>
+          <div style="display: flex; align-items: center; gap: 1.5rem; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <i class="pi pi-users" />
+              <span>CRMs DE INTERESSE - DETALHAMENTO</span>
+            </div>
+            
+            <div class="filter-controls">
+              <label class="filter-toggle">
+                <input type="checkbox" v-model="filterOnlyIssues">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Apenas com Alertas / Anomalias</span>
+              </label>
+            </div>
+          </div>
         </div>
         <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.5rem; margin-bottom: 1rem;">
           Detalhamento dos médicos que mais aprovaram medicamentos nesta unidade, ordenados pelo financeiro.
+          <span v-if="filterOnlyIssues && filteredTop20.length < top20.length" class="text-orange" style="font-weight: 600; margin-left: 8px;">
+            (Filtrado: exibindo {{ filteredTop20.length }} de {{ top20.length }})
+          </span>
         </p>
 
-        <div
-          class="table-responsive"
-          style="max-height: 500px; overflow-y: auto"
-        >
+        <div class="table-responsive">
           <table class="ind-table premium-table row-hover">
             <thead class="sticky-thead">
               <tr>
@@ -502,7 +534,7 @@ const formatPct = formatting.formatPct;
             </thead>
             <tbody>
               <tr
-                v-for="(m, i) in top20"
+                v-for="(m, i) in filteredTop20"
                 :key="i"
                 :class="{
                   'severe-row':
@@ -801,6 +833,63 @@ const formatPct = formatting.formatPct;
   border-top: 4px solid var(--risk-high) !important;
 }
 
+/* Filtro Estilizado */
+.filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.75rem;
+  text-transform: none;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.filter-toggle input {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background-color: var(--tabs-border);
+  border: 1px solid var(--tabs-border);
+  border-radius: 20px;
+  transition: .3s;
+}
+
+.toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .3s;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--primary-color);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(14px);
+}
+
+.toggle-label {
+  letter-spacing: normal;
+}
+
 .highlight-yellow .alert-kpi-val {
   color: var(--risk-medium);
 }
@@ -1016,9 +1105,9 @@ const formatPct = formatting.formatPct;
   gap: 0.25rem;
 }
 .issue-tag {
-  font-size: 0.6rem; /* Reduzido de 0.65 para 0.6 */
+  font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.05rem 0.3rem; /* Padding mais justo */
+  padding: 0.15rem 0.45rem;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
@@ -1026,7 +1115,7 @@ const formatPct = formatting.formatPct;
   white-space: nowrap;
 }
 .issue-tag i {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
 }
 .issue-tag.red {
   background: color-mix(in srgb, var(--risk-critical) 10%, var(--tabs-bg));
@@ -1037,7 +1126,7 @@ const formatPct = formatting.formatPct;
   background: color-mix(in srgb, var(--risk-critical) 15%, var(--tabs-bg));
   color: var(--risk-critical);
   border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent);
-  font-weight: 800;
+  font-weight: 700;
 }
 .issue-tag.orange {
   background: color-mix(in srgb, var(--risk-high) 10%, var(--tabs-bg));

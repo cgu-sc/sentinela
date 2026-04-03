@@ -254,7 +254,7 @@ const formatPct = formatting.formatPct;
            <div v-if="antesRegistroDetalhe.length > 0" class="alert-row">
               <span class="bullet-point bg-red"></span>
               <div class="alert-row-content">
-                  <p class="text-red">Vendas antes do Registro no CRM: <b>{{ qtdPrescrAntesRegistro }} médico(s)</b>.</p>
+                  <p class="text-red">CRMs Irregulares (Vendas antes do Registro no CRM): <b>{{ qtdPrescrAntesRegistro }} médico(s)</b>.</p>
                  <p class="text-muted text-sm">• CRMs: 
                     <template v-if="!showAllAntesRegistro">
                        {{ antesRegistroDetalhe }}
@@ -488,16 +488,16 @@ const formatPct = formatting.formatPct;
             <thead class="sticky-thead">
               <tr>
                 <th style="width: 40px">#</th>
-                <th>Médico / CRM</th>
-                <th>Flags / Alertas Ocultos</th>
-                <th class="col-right">Autorizações</th>
-                <th class="col-right">Vol (R$)</th>
-                <th class="col-center">% Vendas</th>
-                <th class="col-center">% Acumulado</th>
-                <th class="col-center">Atuação (Rede)</th>
-                <th class="col-center">Presc/Dia Aqui</th>
-                <th class="col-center">Presc/Dia Nacional</th>
-                <th class="col-center">Exclusividade Aqui (%)</th>
+                <th>CRM do<br />Médico</th>
+                <th>Status e Alertas de Auditoria</th>
+                <th class="col-right">Qtd. Total Autorizada</th>
+                <th class="col-right">Volume Total (R$) CRM</th>
+                <th class="col-center">% Vendas CRM</th>
+                <th class="col-center">% Vendas Acumulado</th>
+                <th class="col-center">Network / Rede (Farm.)</th>
+                <th class="col-center">Presc/Dia Neste CNPJ</th>
+                <th class="col-center">Presc/Dia em todo o Brasil</th>
+                <th class="col-center">% Exclusividade CRM Neste CNPJ</th>
               </tr>
             </thead>
             <tbody>
@@ -864,23 +864,26 @@ const formatPct = formatting.formatPct;
 }
 
 .premium-table th {
-  background: transparent !important;
+  background-color: var(--tabs-bg) !important; /* Usando o fundo da aba que é sólido */
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700; /* Mais negrito para destacar */
   text-transform: uppercase;
   font-size: 0.72rem;
-  padding: 0.75rem 1rem;
-  letter-spacing: 0.05em;
+  padding: 0.75rem 0.4rem; /* Um pouco mais de respiro vertical */
+  letter-spacing: 0.02em;
   border-bottom: 2px solid var(--tabs-border);
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.2;
   text-align: left;
+  vertical-align: bottom;
+  opacity: 1 !important;
 }
 
 .premium-table td {
-  padding: 0.7rem 1rem;
+  padding: 0.6rem 0.4rem; /* Reduzido padding lateral */
   border-bottom: 1px solid var(--tabs-border);
   color: var(--text-color);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
 
 .premium-table tbody tr:last-child td {
@@ -899,7 +902,8 @@ const formatPct = formatting.formatPct;
 .sticky-thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 10; /* Aumentado para garantir que fique sobre o conteúdo */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Sombra para separar visualmente o header dos dados */
 }
 
 .col-center {
@@ -1012,13 +1016,13 @@ const formatPct = formatting.formatPct;
   gap: 0.25rem;
 }
 .issue-tag {
-  font-size: 0.65rem;
+  font-size: 0.6rem; /* Reduzido de 0.65 para 0.6 */
   font-weight: 700;
-  padding: 0.1rem 0.4rem;
+  padding: 0.05rem 0.3rem; /* Padding mais justo */
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   white-space: nowrap;
 }
 .issue-tag i {
@@ -1053,13 +1057,13 @@ const formatPct = formatting.formatPct;
 
 .bar-container {
   position: relative;
-  height: 1.25rem;
+  height: 1.1rem; /* Levemente mais baixa */
   background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
-  min-width: 60px;
+  min-width: 45px; /* Reduzido de 60 para 45 */
 }
 :global(.dark-mode) .bar-container {
   background: rgba(255, 255, 255, 0.1);

@@ -112,7 +112,11 @@ const formatPct = formatting.formatPct;
 
     <div v-else class="content-wrapper">
       <!-- 1. RESUMO DE AUDITORIA (KPIs) -->
-      <div class="audit-summary-section">
+      <div class="section-title">
+        <i class="pi pi-chart-bar" />
+        <span>Resumo de Auditoria de CRMs</span>
+      </div>
+      <div class="no-padding-mobile">
         <div class="alerts-kpi-grid">
           <!-- Concentração TOP 1 -->
           <div class="alert-kpi-card" :class="concentracaoTop1 > 40 ? 'highlight-red' : (concentracaoTop1 > 20 ? 'highlight-orange' : '')">
@@ -214,9 +218,9 @@ const formatPct = formatting.formatPct;
 
       <!-- ALERTAS IDENTIFICADOS (DETALHAMENTO TEXTUAL) -->
       <div v-if="prescrIntensivaDetalhe.length > 0 || antesRegistroDetalhe.length > 0 || multiFarmaciaDetalhe.length > 0 || agrupamentoDetalhe.length > 0 || qtdAcima400km > 0" class="alerts-details-section">
-        <div class="section-header line-header">
-           <i class="pi pi-exclamation-triangle text-primary"></i>
-           <h3>Alertas Identificados</h3>
+        <div class="section-title">
+          <i class="pi pi-exclamation-triangle" />
+          <span>Alertas Identificados (Detalhes)</span>
         </div>
         
         <div class="alerts-list">
@@ -336,14 +340,13 @@ const formatPct = formatting.formatPct;
 
       <!-- 2. TABELA COMPARATIVA (MEDIANAS) -->
       <div class="section-container">
-        <div class="section-header">
-          <h3>Indicadores vs Mercado (Região / Brasil)</h3>
-          <p class="subtitle">
-            Compara o comportamento dos médicos que atuam aqui com a média de
-            outras farmácias da região de
-            <b>{{ summary.municipio }}/{{ summary.uf }}</b>
-          </p>
+        <div class="section-title" style="border-bottom: none; margin-bottom: 0;">
+          <i class="pi pi-globe" />
+          <span>Indicadores vs Mercado (Região / Brasil)</span>
         </div>
+        <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.5rem; margin-bottom: 1rem;">
+          Compara o comportamento dos médicos que atuam aqui com a média de outras farmácias da região de <b>{{ summary.municipio }}/{{ summary.uf }}</b>
+        </p>
 
         <div class="table-responsive">
           <table class="ind-table premium-table">
@@ -469,13 +472,13 @@ const formatPct = formatting.formatPct;
 
       <!-- 3. TOP 20 CRMs (TABELA DETALHADA) -->
       <div class="section-container">
-        <div class="section-header">
-          <h3>Top 20 Prescritores Concentrados</h3>
-          <p class="subtitle">
-            Detalhamento dos médicos que mais aprovaram medicamentos nesta
-            unidade, ordenados pelo financeiro.
-          </p>
+        <div class="section-title" style="border-bottom: none; margin-bottom: 0;">
+          <i class="pi pi-users" />
+          <span>CRMs DE INTERESSE - DETALHAMENTO</span>
         </div>
+        <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.5rem; margin-bottom: 1rem;">
+          Detalhamento dos médicos que mais aprovaram medicamentos nesta unidade, ordenados pelo financeiro.
+        </p>
 
         <div
           class="table-responsive"
@@ -676,7 +679,15 @@ const formatPct = formatting.formatPct;
 .content-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+.no-padding-mobile {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
 }
 
 /* 1. RESUMO AUDITORIA */
@@ -684,24 +695,26 @@ const formatPct = formatting.formatPct;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
 }
 .section-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 2px solid var(--tabs-border);
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-color);
   margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--tabs-border);
+  padding-bottom: 0.5rem;
+  width: 100%;
 }
 
 .section-title i {
-  font-size: 1rem;
   color: var(--primary-color);
+  font-size: 1rem;
 }
 
 .alerts-kpi-grid {
@@ -811,12 +824,27 @@ const formatPct = formatting.formatPct;
   background: var(--surface-bg);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 0; /* Removido padding para a tabela ocupar largura total */
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden; /* Garante que o border-radius se aplique à tabela interna */
 }
+
+.section-header {
+  padding: 1rem 1.25rem 0.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+}
+
 .section-header h3 {
   margin: 0;
   font-size: 1rem;
   color: var(--text-color);
+  font-weight: 700;
+  line-height: normal;
 }
 .subtitle {
   margin: 0.25rem 0 0 0;
@@ -919,16 +947,7 @@ const formatPct = formatting.formatPct;
   gap: 1rem;
 }
 .line-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: color-mix(in srgb, var(--text-color) 2.5%, var(--tabs-bg));
-  padding: 0.85rem 1.25rem;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--text-color) 4%, transparent);
-  border-left: 6px solid var(--primary-color);
-  color: var(--text-color);
-  margin-bottom: 0.25rem;
+  display: none; /* Desativada em favor do novo padrão de títulos */
 }
 .line-header h3 {
   font-size: 0.9rem;

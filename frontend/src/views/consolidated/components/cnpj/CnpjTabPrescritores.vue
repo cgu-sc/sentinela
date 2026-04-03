@@ -489,9 +489,12 @@ const formatPct = formatting.formatPct;
                 <th>Flags / Alertas Ocultos</th>
                 <th class="col-right">Autorizações</th>
                 <th class="col-right">Vol (R$)</th>
-                <th class="col-center">% Part. CNPJ</th>
-                <th class="col-center">Qtd / Dia (Nacional)</th>
-                <th class="col-center">Exclusividade Aqui</th>
+                <th class="col-center">% Vendas</th>
+                <th class="col-center">% Acumulado</th>
+                <th class="col-center">Atuação (Rede)</th>
+                <th class="col-center">Presc/Dia Aqui</th>
+                <th class="col-center">Presc/Dia Nacional</th>
+                <th class="col-center">Exclusividade Aqui (%)</th>
               </tr>
             </thead>
             <tbody>
@@ -582,6 +585,35 @@ const formatPct = formatting.formatPct;
                       formatPct(m.pct_participacao)
                     }}</span>
                   </div>
+                </td>
+                <td class="col-center">
+                  <div class="bar-container">
+                    <div
+                      class="bar-fill"
+                      :style="{
+                        width: Math.min(m.pct_acumulado, 100) + '%',
+                      }"
+                    ></div>
+                    <span class="bar-text text-sm font-mono">{{
+                      formatPct(m.pct_acumulado)
+                    }}</span>
+                  </div>
+                </td>
+                <td class="col-center font-mono">
+                  <span
+                    :class="{
+                      'text-purple font-bold': m.qtd_estabelecimentos_atua > 50,
+                    }"
+                    >{{ m.qtd_estabelecimentos_atua }}</span
+                  >
+                  farm.
+                </td>
+                <td class="col-center font-mono">
+                  <span
+                    :class="{ 'text-red font-bold': m.nu_prescricoes_dia > 30 }"
+                    >{{ formatNumberFull(m.nu_prescricoes_dia) }}</span
+                  >
+                  / dia
                 </td>
                 <td class="col-center font-mono">
                   <span

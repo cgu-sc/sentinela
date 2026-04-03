@@ -147,7 +147,7 @@ SELECT
 INTO #lista_medicos_farmacia_popularFP_temp
 FROM #tb_info_medico_farmacia_popular A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj
-WHERE A.nu_prescricoes_medico > 20
+WHERE A.nu_prescricoes_medico > 0
 
 
 -- ============================================================================
@@ -174,6 +174,7 @@ SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
               CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' + 
               CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)' 
 WHERE nu_dias_prescricao_inicial_final = 1
+  AND nu_prescricoes_medico > 5
 
 
 -- Caso: todas as prescrições no mesmo dia (diferença de 0 dias = mesmo momento)
@@ -185,6 +186,7 @@ SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
               CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)',
     nu_dias_prescricao_inicial_final = 1 
 WHERE nu_dias_prescricao_inicial_final = 0
+  AND nu_prescricoes_medico > 5
 
 
 -- ============================================================================

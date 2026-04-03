@@ -528,30 +528,30 @@ const formatPct = formatting.formatPct;
                 <td class="flags-cell">
                   <div class="tags-container">
                     <span v-if="m.flag_robo" class="issue-tag red"
-                      ><i class="pi pi-history"></i> Intensiva Local</span
+                      ><i class="pi pi-history"></i> >30 PRESCRIÇÕES/DIA NESTE CNPJ</span
                     >
                     <span
                       v-if="m.flag_robo_oculto && !m.flag_robo"
                       class="issue-tag orange"
-                      ><i class="pi pi-globe"></i> Intensiva Nacional</span
+                      ><i class="pi pi-globe"></i> >30 PRESCRIÇÕES/DIA BRASIL</span
                     >
                     <span
                       v-if="m.alerta2_tempo_concentrado || m.alerta2"
                       class="issue-tag red"
-                      ><i class="pi pi-stopwatch"></i> Emissão Agrupada</span
+                      ><i class="pi pi-stopwatch"></i> Lançamento Sequencial</span
                     >
                     <span v-if="m.flag_crm_invalido" class="issue-tag dark-red"
-                      ><i class="pi pi-ban"></i> Inválido</span
+                      ><i class="pi pi-ban"></i> CRM Inválido</span
                     >
                     <span
                       v-if="m.flag_prescricao_antes_registro"
                       class="issue-tag dark-red"
-                      ><i class="pi pi-calendar-times"></i> Fraude Data</span
+                      ><i class="pi pi-calendar-times"></i> CRM Irregular</span
                     >
                     <span
                       v-if="m.qtd_estabelecimentos_atua === 1"
                       class="issue-tag purple"
-                      ><i class="pi pi-lock"></i> Exclusivo</span
+                      ><i class="pi pi-lock"></i> Exclusivo neste CNPJ</span
                     >
                     <span v-if="m.alerta5_geografico" class="issue-tag yellow"
                       ><i class="pi pi-map-marker"></i> >400km</span

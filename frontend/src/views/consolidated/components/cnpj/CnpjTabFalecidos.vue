@@ -275,8 +275,8 @@ const openEstablishment = (estabStr) => {
 }
 
 .f-kpi-card {
-  background: color-mix(in srgb, var(--text-color) 2.5%, var(--tabs-bg));
-  border: 1px solid var(--sidebar-border);
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
   padding: 0.85rem;
   border-radius: 12px;
   display: flex;

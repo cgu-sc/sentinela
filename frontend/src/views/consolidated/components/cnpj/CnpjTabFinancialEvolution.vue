@@ -171,7 +171,7 @@ const chartOption = computed(() => {
         </div>
       </div>
 
-      <div class="evolucao-card">
+      <div class="evolucao-card evolucao-card-highlight">
         <div class="evolucao-card-header">
           <i class="pi pi-table" /><span>Detalhamento Semestral</span>
         </div>

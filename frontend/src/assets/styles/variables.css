@@ -7,14 +7,14 @@
   --sidebar-width: 280px;
   --sidebar-collapsed: 80px;
   --bg-color: #ffffff;
-  --text-color: #1e2127;
+  --text-color: #1e293b;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --card-bg: #fdf8ec;
-  --sidebar-bg: #ffffff;
-  --sidebar-text: #1e293b;
-  --sidebar-border: #e2e8f0;
-  --navbar-bg: #f3f4f6;
+  --card-bg: #f8fafc;
+  --sidebar-bg: #212120;
+  --sidebar-text: #A1A1AA;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --navbar-bg: #ffffff;
   --navbar-border: #e2e8f0;
 
   /* Sobrescreve o surface-ground do PrimeVue Lara Light */
@@ -22,7 +22,7 @@
   --surface-section: #f8fafc;
 
   /* Tabelas */
-  --table-header-bg: #e9ecef;
+  --table-header-bg: #f1f5f9;
   --table-header-text: #475569;
   --table-hover: #f1f5f9;
   --table-stripe: #f8fafc;

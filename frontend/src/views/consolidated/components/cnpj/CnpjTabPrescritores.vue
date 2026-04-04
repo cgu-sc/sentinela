@@ -454,7 +454,6 @@ const filteredTop20 = computed(() => {
           <table class="ind-table premium-table row-hover">
             <thead class="sticky-thead">
               <tr>
-                <th style="width: 40px">#</th>
                 <th>CRM do<br />Médico</th>
                 <th>Status e Alertas de Auditoria</th>
                 <th class="col-right">Qtd. Total Autorizada</th>
@@ -478,9 +477,6 @@ const filteredTop20 = computed(() => {
                     m.flag_prescricao_antes_registro > 0,
                 }"
               >
-                <td>
-                  <b>{{ i + 1 }}</b>
-                </td>
                 <td>
                   <div class="med-id">{{ m.id_medico }}</div>
                   <div class="med-sub">
@@ -692,8 +688,8 @@ const filteredTop20 = computed(() => {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--text-color) 2.5%, var(--tabs-bg));
-  border: 1px solid var(--sidebar-border);
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
   border-top: 4px solid transparent;
   border-radius: 12px;
   transition: all 0.2s ease;
@@ -703,7 +699,7 @@ const filteredTop20 = computed(() => {
 
 .alert-kpi-card:hover {
   transform: translateY(-2px);
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--text-color) 4%, var(--card-bg));
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
 }
 
@@ -895,10 +891,10 @@ input:checked + .toggle-slider:before {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  background: var(--surface-bg);
-  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
   border-radius: 12px;
-  padding: 0; /* Removido padding para a tabela ocupar largura total */
+  padding: 1.25rem;
   width: 100%;
   box-sizing: border-box;
   overflow: hidden; /* Garante que o border-radius se aplique à tabela interna */
@@ -928,8 +924,8 @@ input:checked + .toggle-slider:before {
 
 .table-responsive {
   overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid var(--tabs-border);
+  border-top: 1px solid var(--tabs-border);
+  border-bottom: 1px solid var(--tabs-border);
   min-height: 35rem;
 }
 

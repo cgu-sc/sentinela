@@ -165,24 +165,20 @@ const formatCnpj = (v) => {
       </div>
 
       <div class="header-kpis-new">
-        <div class="kpi-item-new">
-          <span class="label">% Valor sem Comprovação</span>
-          <span
-            class="value"
-            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-          >
-            {{ cnpjData.percValSemComp?.toFixed(2) }}%
-          </span>
+        <div
+          class="kpi-card"
+          :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+        >
+          <span class="kpi-card-label">% Sem Comprovação</span>
+          <span class="kpi-card-value">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
         </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi-item-new">
-          <span class="label">Valor sem Comprovação</span>
-          <span class="value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Valor sem Comprovação</span>
+          <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
         </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi-item-new">
-          <span class="label">Total Vendas</span>
-          <span class="value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Total Vendas</span>
+          <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
         </div>
       </div>
     </div>
@@ -506,55 +502,47 @@ const formatCnpj = (v) => {
 
 .header-kpis-new {
   display: flex;
-  align-items: center;
-  gap: 2rem;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 0.75rem 1.5rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: stretch;
+  gap: 0.5rem;
 }
 
-.kpi-divider {
-  width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.kpi-item-new {
+.kpi-card {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid rgba(255, 255, 255, 0.1);
+  background: none;
 }
 
-.kpi-item-new .label {
-  font-size: 0.75rem;
+.kpi-card-label {
+  font-size: 0.65rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--establishment-header-text);
-  opacity: 0.7;
-  letter-spacing: 0.05em;
+  opacity: 0.5;
+  white-space: nowrap;
 }
 
-.kpi-item-new .value {
-  font-size: 1.2rem;
+.kpi-card-value {
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--establishment-header-text);
   font-family: 'Inter', sans-serif;
-  background: none !important;
-  background-color: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  box-shadow: none !important;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-/* Garante que as classes de risco não tragam fundo para este componente */
-.kpi-item-new .value.risk-high,
-.kpi-item-new .value.risk-critical,
-.kpi-item-new .value.risk-medium,
-.kpi-item-new .value.risk-low {
-  background: none !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
+.kpi-card.risk-high .kpi-card-value   { color: var(--risk-high); }
+.kpi-card.risk-high                   { border-left-color: var(--risk-high); }
+.kpi-card.risk-critical .kpi-card-value { color: var(--risk-critical); }
+.kpi-card.risk-critical               { border-left-color: var(--risk-critical); }
+.kpi-card.risk-medium .kpi-card-value  { color: var(--risk-medium); }
+.kpi-card.risk-medium                  { border-left-color: var(--risk-medium); }
+.kpi-card.risk-low .kpi-card-value     { color: var(--risk-low); }
+.kpi-card.risk-low                     { border-left-color: var(--risk-low); }
 
 /* ── RANKING PANEL ── */
 .header-ranking-panel {

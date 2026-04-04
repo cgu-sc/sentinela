@@ -35,6 +35,16 @@ export const useGeoStore = defineStore('geo', () => {
   }
 
   // Municípios filtrados por UF e/ou Região de Saúde (Com tratamento de homônimos)
+  function qtdMunicipiosPorRegiao(regiao) {
+    if (!regiao) return null;
+    const municipios = new Set(
+      localidades.value
+        .filter((l) => l.no_regiao_saude === regiao)
+        .map((l) => l.no_municipio)
+    );
+    return municipios.size || null;
+  }
+
   function municipiosPorFiltro(uf, regiao) {
     let filtradas = localidades.value;
     if (uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
@@ -63,5 +73,6 @@ export const useGeoStore = defineStore('geo', () => {
     ufs,
     regioesPorUF,
     municipiosPorFiltro,
+    qtdMunicipiosPorRegiao,
   };
 });

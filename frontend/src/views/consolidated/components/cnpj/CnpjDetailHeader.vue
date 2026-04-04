@@ -5,9 +5,17 @@ import { ref, computed, watchEffect } from "vue";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
+import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
+import { useGeoStore } from "@/stores/geo";
 import Button from "primevue/button";
 
 const cnpjNav = useCnpjNavStore();
+const farmaciaLists = useFarmaciaListsStore();
+const geoStore = useGeoStore();
+
+const qtdMunicipiosRegiao = computed(() =>
+  geoStore.qtdMunicipiosPorRegiao(props.geoData?.no_regiao_saude),
+);
 
 const router = useRouter();
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
@@ -88,58 +96,36 @@ const formatCnpj = (v) => {
         v-tooltip.right="'Voltar para a lista'"
       />
 
-      <div class="identity-badges" v-if="cnpjData">
-        <!-- Corrigido para score_risco_final conforme Matriz Consolidada -->
-        <div
-          v-if="cnpjData.score_risco_final != null"
-          class="score-badge-new"
-          :class="[
-            getRiskClass(risco) === 'risk-critical'
-              ? 'risk-high'
-              : getRiskClass(risco),
-          ]"
-          v-tooltip.top="'Score de Risco Consolidado'"
+      <div class="list-actions" v-if="cnpjData">
+        <button
+          class="list-btn"
+          :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
+          @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
+          v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
         >
-          <span class="score-label">Score</span>
-          <span class="score-val" style="color: inherit">
-            {{ cnpjData.score_risco_final.toFixed(1) }}
-          </span>
-        </div>
-
-        <span
-          v-if="cnpjData.classificacao_risco"
-          class="risk-tag-new"
-          :class="[
-            getRiskClass(risco) === 'risk-critical'
-              ? 'risk-high'
-              : getRiskClass(risco),
-          ]"
+          <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
+          <span>{{ farmaciaLists.isInteresse(cnpj) ? 'Interesse' : 'Interesse' }}</span>
+        </button>
+        <button
+          class="list-btn"
+          :class="farmaciaLists.isBlacklisted(cnpj) ? 'list-btn--black-active' : 'list-btn--black'"
+          @click="farmaciaLists.toggleBlacklist(cnpj, cnpjData.razao_social)"
+          v-tooltip.bottom="farmaciaLists.isBlacklisted(cnpj) ? 'Remover da Blacklist' : 'Adicionar à Blacklist'"
         >
-          <i class="pi pi-exclamation-triangle" />
-          {{ cnpjData.classificacao_risco }}
-        </span>
+          <i class="pi pi-ban" />
+          <span>Blacklist</span>
+        </button>
       </div>
+
     </div>
 
     <!-- Área Central: Razão Social e Localização -->
     <div class="header-main-info" v-if="cnpjData">
       <div class="title-group">
-        <h1 class="razao-social-new">
-          {{ cnpjData.razao_social ?? "—" }}
-        </h1>
-        <div class="location-chips">
-          <div class="loc-chip static">
-            <i class="pi pi-map-marker" />
-            {{ geoData?.no_municipio ?? cnpjData.municipio }}
-          </div>
-          <div class="loc-chip static">
-            {{ geoData?.sg_uf ?? cnpjData.uf }}
-          </div>
-          <div class="loc-chip static highlight">
-            <i class="pi pi-share-alt" />
-            Região: {{ geoData?.no_regiao_saude ?? "Não Identificada" }}
-          </div>
-
+        <div class="razao-social-row">
+          <h1 class="razao-social-new">
+            {{ cnpjData.razao_social ?? "—" }}
+          </h1>
           <div
             class="cnpj-copy-wrap-new"
             v-tooltip.bottom="'Copiar CNPJ'"
@@ -147,6 +133,33 @@ const formatCnpj = (v) => {
           >
             <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
             <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
+          </div>
+        </div>
+        <div class="location-chips">
+          <span class="loc-text">
+            <i class="pi pi-map-marker" />
+            {{ geoData?.no_municipio ?? cnpjData.municipio }},
+            {{ geoData?.sg_uf ?? cnpjData.uf }}
+          </span>
+          <span class="loc-separator">·</span>
+          <span class="loc-text">{{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
+          <span class="loc-separator">·</span>
+
+          <div
+            v-if="cnpjData.score_risco_final != null"
+            class="loc-chip risk-chip"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+            v-tooltip.bottom="'Score de Risco Consolidado'"
+          >
+            Score {{ cnpjData.score_risco_final.toFixed(1) }}
+          </div>
+
+          <div
+            v-if="cnpjData.classificacao_risco"
+            class="loc-chip risk-chip"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+          >
+            {{ cnpjData.classificacao_risco }}
           </div>
         </div>
       </div>
@@ -185,7 +198,7 @@ const formatCnpj = (v) => {
           </div>
         </div>
         <div class="rank-stat">
-          <i class="pi pi-map silver" />
+          <i class="pi pi-compass silver" />
           <div class="rank-details">
             <span class="rank-label">Rank Estadual</span>
             <span class="rank-val">{{ formatRank(cnpjData.rank_uf) }} <small>/ {{ cnpjData.total_uf }}</small></span>
@@ -211,12 +224,11 @@ const formatCnpj = (v) => {
           v-tooltip.top="'Ver ranking completo da Região de Saúde'"
           @click="cnpjNav.navigateToRegiao(null)"
         >
-          <i class="pi pi-users-group" style="color: var(--text-muted); opacity: 0.8;" />
+          <i class="pi pi-sitemap" style="color: var(--text-muted); opacity: 0.8;" />
           <div class="rank-details">
             <span class="rank-label">Estab. Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
           </div>
-          <i class="pi pi-arrow-right nav-hint" />
         </div>
         <div class="rank-stat" v-if="geoData?.nu_populacao">
           <i class="pi pi-users" style="color: #60a5fa;" />
@@ -236,7 +248,13 @@ const formatCnpj = (v) => {
             <span class="rank-label">Estab. Município</span>
             <span class="rank-val">{{ cnpjData.total_municipio }}</span>
           </div>
-          <i class="pi pi-arrow-right nav-hint" />
+        </div>
+        <div class="rank-stat" v-if="qtdMunicipiosRegiao">
+          <i class="pi pi-map" style="color: #34d399;" />
+          <div class="rank-details">
+            <span class="rank-label">Municípios da Região</span>
+            <span class="rank-val">{{ qtdMunicipiosRegiao }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -282,40 +300,105 @@ const formatCnpj = (v) => {
   gap: 1.5rem;
 }
 
+.list-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.list-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 20px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.list-btn--interesse {
+  color: #ca8a04;
+  border-color: rgba(202, 138, 4, 0.3);
+  background: rgba(202, 138, 4, 0.08);
+}
+.list-btn--interesse:hover {
+  background: rgba(202, 138, 4, 0.18);
+  border-color: #ca8a04;
+}
+.list-btn--interesse-active {
+  color: #fff;
+  border-color: #ca8a04;
+  background: #ca8a04;
+}
+.list-btn--interesse-active:hover {
+  background: #a16207;
+  border-color: #a16207;
+}
+
+.list-btn--black {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+.list-btn--black:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #ef4444;
+}
+.list-btn--black-active {
+  color: #fff;
+  border-color: #dc2626;
+  background: #dc2626;
+}
+.list-btn--black-active:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
 .back-btn-new {
   width: 36px !important;
   height: 36px !important;
 }
 
-.identity-badges {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.score-badge-new {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.8rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-}
-
-.score-label {
-  font-size: 0.75rem;
+.risk-chip {
   font-weight: 700;
   text-transform: uppercase;
-  color: inherit;
-  opacity: 0.8;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  cursor: default;
 }
 
-.score-val {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--primary-color);
+.risk-chip i {
+  color: inherit;
+}
+
+.risk-chip.risk-high {
+  color: var(--risk-high);
+  border-color: color-mix(in srgb, var(--risk-high) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+}
+
+.risk-chip.risk-critical {
+  color: var(--risk-critical);
+  border-color: color-mix(in srgb, var(--risk-critical) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-critical) 10%, transparent);
+}
+
+.risk-chip.risk-medium {
+  color: var(--risk-medium);
+  border-color: color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-medium) 10%, transparent);
+}
+
+.risk-chip.risk-low {
+  color: var(--risk-low);
+  border-color: color-mix(in srgb, var(--risk-low) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-low) 10%, transparent);
 }
 
 .cnpj-copy-wrap-new {
@@ -348,18 +431,6 @@ const formatCnpj = (v) => {
   color: var(--primary-color);
 }
 
-.risk-tag-new {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 1rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  box-shadow: none;
-}
 
 .header-main-info {
   display: flex;
@@ -373,6 +444,12 @@ const formatCnpj = (v) => {
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
+}
+
+.razao-social-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .razao-social-new {
@@ -393,32 +470,37 @@ const formatCnpj = (v) => {
   gap: 0.5rem;
 }
 
+.loc-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.loc-text i {
+  font-size: 0.75rem;
+}
+
+.loc-separator {
+  color: var(--text-color);
+  opacity: 0.4;
+  font-size: 0.85rem;
+}
+
+/* mantido para os risk-chips que ainda usam loc-chip como base */
 .loc-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.65rem;
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent);
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
-  cursor: default;
-  transition: all 0.2s ease-in-out;
-}
-
-.loc-chip i {
-  color: var(--primary-color);
-}
-
-.loc-chip.static {
-  cursor: default;
-}
-
-.loc-chip.muted {
-  background: transparent;
-  border: 1px dashed var(--sidebar-border);
   cursor: default;
 }
 

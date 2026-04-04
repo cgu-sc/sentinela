@@ -130,6 +130,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
       </div>
 
       <div class="ind-section">
+        <div class="ind-card">
         <div class="section-title">
           <i class="pi pi-table" />
           <span>Indicadores de Risco</span>
@@ -212,7 +213,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
           </tbody>
         </table>
         </div><!-- ind-table-wrap -->
-      </div><!-- ind-card -->
+        </div><!-- ind-card -->
+      </div><!-- ind-section -->
     </template>
 
     <div v-else class="tab-placeholder">
@@ -401,8 +403,22 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   margin-top: 0.5rem;
 }
 
+.ind-card {
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 0 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.ind-card .section-title {
+  margin-bottom: 1rem;
+}
+
 .ind-table-wrap {
   overflow-x: auto;
+  margin: 0 -1.25rem;
 }
 
 .ind-table {
@@ -432,15 +448,15 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 /* Linha de grupo - Estilo Relatório de Mesa (Refinado) */
 .ind-group-row td {
-  padding: 0.5rem 1rem;
+  padding: 1rem 1rem 0.35rem 1rem;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
-  border-top: 1px solid var(--tabs-border) !important;
-  border-bottom: 1px solid var(--tabs-border) !important;
+  color: var(--primary-color);
+  background: transparent !important;
+  border-top: 2px solid var(--primary-color) !important;
+  border-bottom: none !important;
 }
 
 /* Linha de dados - Corrigindo Uniformidade do Hover */

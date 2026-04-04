@@ -35,6 +35,7 @@ const TAB_INDEX = {
 };
 
 const route = useRoute();
+const router = useRouter();
 const cnpj = computed(() => route.params.cnpj);
 
 // ── Stores ────────────────────────────────────────────────
@@ -136,6 +137,16 @@ const formatCnpj = (v) => {
 
 <template>
   <div class="cnpj-detail-page">
+    <!-- BREADCRUMB -->
+    <div class="breadcrumb">
+      <span class="breadcrumb-link" @click="router.push('/cnpj')">
+        <i class="pi pi-briefcase" />
+        Análise CNPJ
+      </span>
+      <i class="pi pi-angle-right breadcrumb-sep" />
+      <span class="breadcrumb-current">{{ cnpjData?.razao_social ?? cnpj }}</span>
+    </div>
+
     <!-- HEADER (COMPONENTE ISOLADO) -->
     <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" />
 
@@ -198,6 +209,37 @@ const formatCnpj = (v) => {
 </template>
 
 <style scoped>
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.breadcrumb-link {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: var(--primary-color);
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+.breadcrumb-link:hover { opacity: 0.75; }
+.breadcrumb-link i { font-size: 0.75rem; }
+
+.breadcrumb-sep { font-size: 0.65rem; opacity: 0.5; }
+
+.breadcrumb-current {
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}
+
 .cnpj-detail-page {
   display: flex;
   flex-direction: column;

@@ -451,12 +451,12 @@ const {
           <div class="nav-divider"></div>
 
           <div class="nav-tabs">
-            <router-link 
-              v-for="tab in tabs" 
-              :key="tab.path" 
-              :to="tab.path" 
+            <router-link
+              v-for="tab in tabs"
+              :key="tab.path"
+              :to="tab.path"
               class="nav-tab"
-              exact-active-class="active"
+              :class="{ active: route.path === tab.path || (tab.path === '/cnpj' && route.path.startsWith('/estabelecimento')) }"
             >
               {{ tab.label }}
             </router-link>

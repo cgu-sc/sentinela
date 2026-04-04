@@ -256,15 +256,14 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 /* Resumo de auditoria */
 /* Novo Card de Auditoria Premiun */
 .audit-card-new {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.04));
-  border: 1px solid rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--risk-critical) 6%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-critical) 20%, transparent);
   border-radius: 12px;
   padding: 0.75rem 1rem;
   margin-bottom: 0.75rem;
-  backdrop-filter: blur(10px);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .audit-card-new::before {
@@ -284,7 +283,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   align-items: center;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(239, 68, 68, 0.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--risk-critical) 15%, transparent);
 }
 
 .audit-title-wrap {
@@ -296,7 +295,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 .audit-shield-icon {
   font-size: 1.1rem;
   color: var(--risk-critical);
-  background: rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--risk-critical) 10%, transparent);
   padding: 0.4rem;
   border-radius: 8px;
 }
@@ -325,15 +324,10 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0.8rem;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid var(--sidebar-border);
+  background: color-mix(in srgb, var(--risk-critical) 4%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-critical) 12%, transparent);
   border-radius: 8px;
   transition: all 0.2s ease;
-}
-
-:global(.dark-mode) .audit-row-new {
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .audit-row-new:hover {
@@ -361,7 +355,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .audit-badge-val {
-  background: rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--risk-critical) 15%, transparent);
   color: var(--risk-critical);
   font-size: 0.7rem;
   font-weight: 800;

@@ -6,6 +6,7 @@ import { SYSTEM_MODULES as modules, FILTER_DEFAULTS, FILTER_ALL_VALUE, ANALYSIS_
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
+import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import { useFormatting } from '@/composables/useFormatting';
 import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
 import { useSyncManager } from '@/composables/useSyncManager';
@@ -22,6 +23,8 @@ import SelectButton from 'primevue/selectbutton';
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const geoStore = useGeoStore();
+const farmaciaLists = useFarmaciaListsStore();
+const totalListas = computed(() => farmaciaLists.interesse.length);
 const route = useRoute();
 const router = useRouter();
 
@@ -461,12 +464,16 @@ const {
         </div>
         <div class="nav-actions">
            <ThemeSelector />
-           <Button 
-              icon="pi pi-refresh" 
-              text rounded 
-              severity="secondary" 
+           <div class="lists-nav-btn" @click="router.push('/listas')" v-tooltip.bottom="'Farmácias Monitoradas'">
+             <i class="pi pi-bookmark" />
+             <span v-if="totalListas > 0" class="lists-nav-badge">{{ totalListas }}</span>
+           </div>
+           <Button
+              icon="pi pi-refresh"
+              text rounded
+              severity="secondary"
               v-tooltip.bottom="'Sincronizar com CGUData'"
-              @click="showConfirmSync = true" 
+              @click="showConfirmSync = true"
            />
         </div>
       </nav>
@@ -544,6 +551,46 @@ const {
 </template>
 
 <style scoped>
+.lists-nav-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.lists-nav-btn:hover {
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  color: var(--text-color);
+}
+
+.lists-nav-btn i {
+  font-size: 1rem;
+}
+
+.lists-nav-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 10px;
+  background: var(--primary-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 /* SISTEMA DE CORES DINÂMICO (DNA ARBFLOW) */
 .admin-layout {
   --sidebar-width: 280px;
@@ -658,6 +705,9 @@ const {
   gap: 0.75rem; /* Reduzido de 1.5rem */
   overflow-y: auto;
   overflow-x: hidden;
+  --scrollbar-track: var(--sidebar-bg);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
 }
 
 .filter-section {
@@ -1410,7 +1460,7 @@ const {
   width: 4px;
 }
 .sidebar-content::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--sidebar-bg);
 }
 .sidebar-content::-webkit-scrollbar-thumb {
   background: var(--sidebar-border);

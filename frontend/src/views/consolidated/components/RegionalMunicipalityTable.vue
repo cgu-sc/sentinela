@@ -124,8 +124,11 @@ const totals = computed(() => {
 .table-section {
   display: flex;
   flex-direction: column;
-  margin-bottom: 0.5rem;
   background: var(--tabs-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .section-header {

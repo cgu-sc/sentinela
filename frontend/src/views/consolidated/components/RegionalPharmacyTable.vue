@@ -203,6 +203,10 @@ const totals = computed(() => {
   display: flex;
   flex-direction: column;
   background: var(--tabs-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .section-header {

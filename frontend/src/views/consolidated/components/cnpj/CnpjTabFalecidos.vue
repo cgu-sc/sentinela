@@ -342,7 +342,11 @@ const openEstablishment = (estabStr) => {
 .warning .f-kpi-label { color: var(--risk-medium) !important; opacity: 0.85; }
 
 .falecidos-list-container {
-  margin-top: 1.5rem;
+  background: var(--tabs-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .section-title {
@@ -516,8 +520,8 @@ const openEstablishment = (estabStr) => {
 
 /* Ranking Panel */
 .falecidos-ranking-panel {
-  background: var(--card-bg);
-  border: 1px solid var(--sidebar-border);
+  background: var(--tabs-bg);
+  border: 1px solid var(--tabs-border);
   border-radius: 12px;
   padding: 1.25rem;
   margin-top: 1.5rem;
@@ -532,8 +536,8 @@ const openEstablishment = (estabStr) => {
 }
 
 .ranking-card {
-  background: rgba(0,0,0,0.03);
-  border: 1px solid var(--sidebar-border);
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  border: 1px solid var(--tabs-border);
   border-radius: 10px;
   padding: 0.75rem 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -543,10 +547,6 @@ const openEstablishment = (estabStr) => {
   cursor: pointer;
 }
 
-:global(.dark-mode) .ranking-card {
-  background: rgba(255,255,255,0.03);
-  border-color: rgba(255,255,255,0.08);
-}
 
 .ranking-card:hover {
   background: rgba(255,255,255,0.05);

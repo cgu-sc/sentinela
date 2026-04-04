@@ -142,7 +142,7 @@ const formatCnpj = (v) => {
             {{ geoData?.sg_uf ?? cnpjData.uf }}
           </span>
           <span class="loc-separator">·</span>
-          <span class="loc-text">{{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
+          <span class="loc-text">Região de Saúde: {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
           <span class="loc-separator">·</span>
 
           <div
@@ -214,6 +214,13 @@ const formatCnpj = (v) => {
             <span class="rank-val">{{ formatRank(cnpjData.rank_municipio) }} <small>/ {{ cnpjData.total_municipio }}</small></span>
           </div>
         </div>
+        <div class="rank-stat" v-if="qtdMunicipiosRegiao">
+          <i class="pi pi-map" style="color: #34d399;" />
+          <div class="rank-details">
+            <span class="rank-label">Municípios da Região</span>
+            <span class="rank-val">{{ qtdMunicipiosRegiao }}</span>
+          </div>
+        </div>
         <div
           class="rank-stat rank-stat--clickable"
           v-if="cnpjData.total_regiao_saude"
@@ -224,13 +231,6 @@ const formatCnpj = (v) => {
           <div class="rank-details">
             <span class="rank-label">Estab. Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
-          </div>
-        </div>
-        <div class="rank-stat" v-if="geoData?.nu_populacao">
-          <i class="pi pi-users" style="color: #60a5fa;" />
-          <div class="rank-details">
-            <span class="rank-label">Pop. Município</span>
-            <span class="rank-val">{{ formatPopulacao(geoData.nu_populacao) }}</span>
           </div>
         </div>
         <div
@@ -245,11 +245,11 @@ const formatCnpj = (v) => {
             <span class="rank-val">{{ cnpjData.total_municipio }}</span>
           </div>
         </div>
-        <div class="rank-stat" v-if="qtdMunicipiosRegiao">
-          <i class="pi pi-map" style="color: #34d399;" />
+        <div class="rank-stat" v-if="geoData?.nu_populacao">
+          <i class="pi pi-users" style="color: #60a5fa;" />
           <div class="rank-details">
-            <span class="rank-label">Municípios da Região</span>
-            <span class="rank-val">{{ qtdMunicipiosRegiao }}</span>
+            <span class="rank-label">Pop. Município</span>
+            <span class="rank-val">{{ formatPopulacao(geoData.nu_populacao) }}</span>
           </div>
         </div>
       </div>

@@ -110,6 +110,17 @@ const filteredLocation = computed(() => {
             <template #footer>TOTAL</template>
           </Column>
           
+          <Column field="uf" header="UF" sortable style="width: 5%" />
+
+          <Column field="municipio" header="Município" sortable style="width: 10%">
+            <template #body="slotProps">
+              <span
+                v-tooltip.top="slotProps.data.municipio?.length > 14 ? slotProps.data.municipio : undefined"
+                class="razao-social-cell"
+              >{{ slotProps.data.municipio?.length > 14 ? slotProps.data.municipio.slice(0, 14) + '…' : slotProps.data.municipio }}</span>
+            </template>
+          </Column>
+
           <Column field="razao_social" header="Razão Social" sortable style="width: 18%">
              <template #body="slotProps">
                 <span

@@ -202,12 +202,10 @@ const filteredTop20 = computed(() => {
               <span class="alert-kpi-val">{{
                 formatPct(concentracaoTop1)
               }}</span>
-              <span class="alert-kpi-hint"
-                >CRM: {{ summary.id_top1_prescritor || "ND" }}<br /><strong
-                  style="color: var(--text-color)"
-                  >{{ formatCurrencyFull(valorTop1) }}</strong
-                ></span
-              >
+              <span class="alert-kpi-hint">
+                CRM: {{ summary.id_top1_prescritor || "ND" }}
+                <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(valorTop1) }}</strong>
+              </span>
             </div>
           </div>
 
@@ -233,13 +231,10 @@ const filteredTop20 = computed(() => {
               <span class="alert-kpi-val">{{
                 formatPct(concentracaoTop5)
               }}</span>
-              <span class="alert-kpi-hint"
-                >Mediana BR:
-                {{ formatPct(summary.mediana_concentracao_top5_br || 40)
-                }}<br /><strong style="color: var(--text-color)">{{
-                  formatCurrencyFull(valorTop5)
-                }}</strong></span
-              >
+              <span class="alert-kpi-hint">
+                Mediana BR: {{ formatPct(summary.mediana_concentracao_top5_br || 40) }}
+                <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(valorTop5) }}</strong>
+              </span>
             </div>
           </div>
 
@@ -264,7 +259,7 @@ const filteredTop20 = computed(() => {
             <div class="alert-kpi-body">
               <span class="alert-kpi-val">{{ qtdLancamentosAgrupados }}</span>
               <span class="alert-kpi-hint"
-                >Muitas Autorizações em Intervalo curto para o mesmo CRM</span
+                >Muitas Autorizações em Intervalo Curto</span
               >
             </div>
           </div>
@@ -364,17 +359,16 @@ const filteredTop20 = computed(() => {
               />
             </div>
             <div class="alert-kpi-body">
-              <span class="alert-kpi-val">{{ totalIrregularesCfm }}</span>
-              <span class="alert-kpi-hint"
-                >{{ qtdCrmInvalido }} Inválidos |
-                {{ qtdPrescrAntesRegistro }} Irregulares<br /><strong
-                  style="color: var(--risk-critical)"
-                  >{{ formatCurrencyFull(valorFraudeCrm) }} ({{
-                    formatPct(pctFraudeCrm)
-                  }})</strong
-                >
-                da produção</span
-              >
+              <div class="alert-kpi-val-row">
+                <span class="alert-kpi-val">{{ totalIrregularesCfm }}</span>
+                <span class="alert-kpi-val-sub">{{ qtdCrmInvalido }} Inválidos | {{ qtdPrescrAntesRegistro }} Irregulares</span>
+              </div>
+              <span class="alert-kpi-hint">
+                <strong style="color: var(--risk-critical)">
+                  {{ formatCurrencyFull(valorFraudeCrm) }} ({{ formatPct(pctFraudeCrm) }})
+                </strong>
+                da produção
+              </span>
             </div>
           </div>
 
@@ -399,7 +393,7 @@ const filteredTop20 = computed(() => {
             <div class="alert-kpi-body">
               <span class="alert-kpi-val">{{ qtdAcima400km }}</span>
               <span class="alert-kpi-hint"
-                >CRMs com Prescrições simultâneas em locais distantes</span
+                >Prescrições em Locais Distantes</span
               >
             </div>
           </div>
@@ -787,11 +781,24 @@ const filteredTop20 = computed(() => {
   gap: 0.2rem;
 }
 
+.alert-kpi-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
 .alert-kpi-val {
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--text-color);
   line-height: 1;
+}
+
+.alert-kpi-val-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-color);
+  opacity: 0.7;
 }
 
 .alert-kpi-hint {

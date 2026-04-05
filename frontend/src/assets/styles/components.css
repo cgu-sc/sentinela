@@ -174,12 +174,12 @@
 .enterprise-table .p-datatable-thead > tr > th {
   background: var(--table-header-bg) !important;
   color: var(--table-header-text) !important;
-  font-size: 0.75rem;
+  font-size: 0.70rem;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   padding: 0.75rem 0.5rem;
-  border-bottom: 2px solid var(--sidebar-border) !important;
+  border-bottom: 1px solid var(--tabs-border) !important;
 }
 
 .enterprise-table .p-datatable-tbody > tr > td {
@@ -198,12 +198,12 @@
 }
 
 .enterprise-table .p-datatable-tfoot td {
-  background: var(--table-header-bg) !important;
+  background: var(--table-footer-bg) !important;
   color: var(--table-header-text) !important;
   font-weight: 800;
   padding: 0.75rem 0.5rem;
   font-size: 0.8rem;
-  border-top: 2px solid var(--sidebar-border) !important;
+  border-top: 1px solid var(--tabs-border) !important;
 }
 
 .enterprise-table .p-datatable-tbody > tr {

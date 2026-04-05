@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
@@ -11,7 +10,6 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 
-const router = useRouter();
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
@@ -44,7 +42,6 @@ const tableFooter = computed(() => {
 const onRowSelect = (event) => {
   const { municipio, uf } = event.data;
   filterStore.selectedMunicipio = `${municipio}|${uf}`;
-  router.push('/cnpj');
 };
 </script>
 
@@ -202,7 +199,6 @@ const onRowSelect = (event) => {
 /* light/dark automático via var(--accent-indigo) — override removido */
 
 /* RESET DE CAIXA ALTA FORÇADA */
-:deep(.p-datatable-thead th),
 :deep(.p-datatable-tbody td),
 :deep(.p-tag-value),
 :deep(.p-tag) {

@@ -202,7 +202,7 @@ const totals = computed(() => {
 .table-section {
   display: flex;
   flex-direction: column;
-  background: var(--tabs-bg);
+  background: var(--card-bg);
   border: 1px solid var(--tabs-border);
   border-radius: 12px;
   padding: 1.25rem;
@@ -278,7 +278,7 @@ const totals = computed(() => {
 
 /* Linha do CNPJ específico em análise (Estilo Hover Persistente) */
 :deep(.p-datatable-tbody > tr.row-highlight > td) {
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
 }
 
 :deep(.p-datatable-tbody > tr.row-highlight > td:first-child) {
@@ -305,12 +305,12 @@ const totals = computed(() => {
 
 /* Linhas do mesmo município (Sutil) */
 :deep(.p-datatable-tbody > tr.municipio-highlight > td) {
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg)) !important;
 }
 
 /* Linha de dados — Hover Neutro Suave 4% */
 .f-row:hover td {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  background: var(--table-hover) !important;
 }
 
 :deep(.enterprise-table .p-datatable-tbody > tr.municipio-highlight td:first-child) {
@@ -322,8 +322,8 @@ const totals = computed(() => {
 :deep(.p-datatable-table),
 :deep(.p-datatable-thead > tr > th),
 :deep(.p-datatable-tbody > tr > td) {
-  background: var(--tabs-bg) !important;
-  background-color: var(--tabs-bg) !important;
+  background: var(--card-bg) !important;
+  background-color: var(--card-bg) !important;
 }
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
@@ -343,7 +343,7 @@ const totals = computed(() => {
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  background: var(--table-hover) !important;
   cursor: pointer;
 }
 
@@ -351,11 +351,11 @@ const totals = computed(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--tabs-bg) !important;
+  background: var(--card-bg) !important;
 }
 
 :deep(.p-datatable .p-datatable-tfoot > tr > td) {
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
+  background: var(--table-footer-bg) !important;
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
   font-size: 0.75rem !important;

@@ -22,8 +22,9 @@
   --surface-section: #f8fafc;
 
   /* Tabelas */
-  --table-header-bg: #f1f5f9;
-  --table-header-text: #475569;
+  --table-header-bg: transparent;
+  --table-header-text: #64748b;
+  --table-footer-bg: #f1f5f9;
   --table-hover: #f1f5f9;
   --table-stripe: #f8fafc;
 
@@ -70,8 +71,9 @@
   --navbar-border: #30363d;
 
   /* Tabelas Dark */
-  --table-header-bg: #1c2128;
+  --table-header-bg: transparent;
   --table-header-text: #8b949e;
+  --table-footer-bg: #1c2128;
   --table-hover: #1f2937;
   --table-stripe: #131920;
 

@@ -465,7 +465,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .ind-data-row:hover td {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  background: var(--table-hover) !important;
 }
 
 /* Célula do nome */

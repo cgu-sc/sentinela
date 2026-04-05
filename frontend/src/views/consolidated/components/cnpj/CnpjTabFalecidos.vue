@@ -342,7 +342,7 @@ const openEstablishment = (estabStr) => {
 .warning .f-kpi-label { color: var(--risk-medium) !important; opacity: 0.85; }
 
 .falecidos-list-container {
-  background: var(--tabs-bg);
+  background: var(--card-bg);
   border: 1px solid var(--tabs-border);
   border-radius: 12px;
   padding: 1.25rem;
@@ -399,8 +399,8 @@ const openEstablishment = (estabStr) => {
   transition: background 0.15s ease;
 }
 
-.f-row:hover td { 
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important; 
+.f-row:hover td {
+  background: var(--table-hover) !important;
 }
 
 .f-nome { font-weight: 400; font-size: 0.82rem; text-transform: none !important; }

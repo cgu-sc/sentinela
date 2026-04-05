@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
@@ -11,7 +10,6 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 
-const router = useRouter();
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
@@ -41,7 +39,6 @@ const tableFooter = computed(() => {
 });
 const handleRowClick = (event) => {
   filterStore.selectedUF = event.data.uf;
-  router.push('/municipio');
 };
 </script>
 
@@ -142,7 +139,6 @@ const handleRowClick = (event) => {
 }
 
 /* RESET DE CAIXA ALTA FORÇADA */
-:deep(.p-datatable-thead th),
 :deep(.p-datatable-tbody td),
 :deep(.p-tag-value),
 :deep(.p-tag) {

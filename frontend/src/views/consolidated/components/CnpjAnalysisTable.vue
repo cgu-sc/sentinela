@@ -347,7 +347,6 @@ const filteredLocation = computed(() => {
 }
 
 /* RESET DE CAIXA ALTA FORÇADA */
-:deep(.p-datatable-thead th),
 :deep(.p-datatable-tbody td),
 :deep(.p-tag-value),
 :deep(.p-tag) {

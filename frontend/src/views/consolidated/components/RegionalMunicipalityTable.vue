@@ -147,7 +147,7 @@ const totals = computed(() => {
 .table-section {
   display: flex;
   flex-direction: column;
-  background: var(--tabs-bg);
+  background: var(--card-bg);
   border: 1px solid var(--tabs-border);
   border-radius: 12px;
   padding: 1.25rem;
@@ -282,8 +282,8 @@ const totals = computed(() => {
 :deep(.p-datatable-thead > tr > th),
 :deep(.p-datatable-tbody > tr > td),
 :deep(.p-datatable-tfoot > tr > td) {
-  background: var(--tabs-bg) !important;
-  background-color: var(--tabs-bg) !important;
+  background: var(--card-bg) !important;
+  background-color: var(--card-bg) !important;
 }
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
@@ -303,12 +303,12 @@ const totals = computed(() => {
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  background: var(--table-hover) !important;
   cursor: pointer;
 }
 
 :deep(.p-datatable .p-datatable-tfoot > tr > td) {
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%) !important;
+  background: var(--table-footer-bg) !important;
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
   color: var(--text-color) !important;
@@ -319,12 +319,12 @@ const totals = computed(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--tabs-bg) !important;
+  background: var(--card-bg) !important;
 }
 
 /* Padroniza o destaque do município analisado (Estilo Hover Persistente) */
 :deep(.p-datatable-tbody > tr.row-highlight > td) {
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr.row-highlight > td:first-child) {
@@ -357,13 +357,6 @@ const totals = computed(() => {
 
 /* Padroniza todos os headers para o novo padrão Clean */
 :deep(.p-datatable-thead th) {
-  background: transparent !important;
-  color: var(--text-secondary) !important;
-  font-size: 0.72rem !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  border-bottom: 2px solid var(--tabs-border) !important;
   padding: 0.75rem 1rem !important;
 }
 

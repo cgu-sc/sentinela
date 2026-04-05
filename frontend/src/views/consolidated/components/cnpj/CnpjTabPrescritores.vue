@@ -935,16 +935,14 @@ input:checked + .toggle-slider:before {
 }
 
 .premium-table th {
-  background-color: var(
-    --tabs-bg
-  ) !important; /* Usando o fundo da aba que é sólido */
-  color: var(--text-secondary);
-  font-weight: 700; /* Mais negrito para destacar */
+  background-color: transparent !important;
+  color: var(--table-header-text);
+  font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.72rem;
-  padding: 0.75rem 0.4rem; /* Um pouco mais de respiro vertical */
-  letter-spacing: 0.02em;
-  border-bottom: 2px solid var(--tabs-border);
+  font-size: 0.70rem;
+  padding: 0.75rem 0.4rem;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--tabs-border);
   white-space: normal;
   line-height: 1.2;
   text-align: left;
@@ -964,11 +962,7 @@ input:checked + .toggle-slider:before {
 }
 
 .premium-table.row-hover tbody tr:hover {
-  background: color-mix(
-    in srgb,
-    var(--text-color) 4%,
-    var(--tabs-bg)
-  ) !important;
+  background: var(--table-hover) !important;
   cursor: pointer;
 }
 

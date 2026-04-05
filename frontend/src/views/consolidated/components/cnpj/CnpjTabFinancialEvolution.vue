@@ -332,8 +332,8 @@ const chartOption = computed(() => {
   border-bottom: 1px solid var(--tabs-border); 
   transition: background 0.2s ease;
 }
-.evolucao-table tbody tr:hover td { 
-  background: color-mix(in srgb, var(--tabs-bg) 93%, var(--text-color) 7%); 
+.evolucao-table tbody tr:hover td {
+  background: var(--table-hover);
 }
 .evolucao-table tfoot td { 
   border-top: 2px solid var(--tabs-border); 

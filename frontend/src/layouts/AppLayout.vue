@@ -1216,11 +1216,11 @@ const {
 }
 
 .nav-tab.active {
-  background: var(--card-bg);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--navbar-border));
+  background: var(--navbar-active-bg);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
   border-radius: 8px;
   color: var(--primary-color);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
   opacity: 1;
 }
 

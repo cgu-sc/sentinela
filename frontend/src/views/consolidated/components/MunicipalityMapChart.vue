@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, watch, ref } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
+import { useGeoStore } from '@/stores/geo';
+import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
-import { useFilterStore } from '@/stores/filters';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -14,26 +15,49 @@ import VChart from 'vue-echarts';
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
 const analyticsStore = useAnalyticsStore();
+const geoStore = useGeoStore();
 const filterStore = useFilterStore();
-const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
+const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 
-const mapReady = ref(false);
+const mapKey = ref(0);
 
-onMounted(async () => {
-  const geo = await fetch('/geo/brasil-uf.json').then(r => r.json());
-  registerMap('brasil-uf', geo);
-  mapReady.value = true;
+// Registra o mapa da UF quando a seleção muda
+watch(
+  () => filterStore.selectedUF,
+  (uf) => {
+    if (!uf || uf === 'Todos') return;
+    const geo = geoStore.getMunicipiosGeoByUF(uf);
+    if (geo) {
+      registerMap(`municipios-${uf}`, geo);
+      mapKey.value++; // força re-render do VChart
+    }
+  },
+  { immediate: true }
+);
+
+const mapName = computed(() => `municipios-${filterStore.selectedUF}`);
+
+// Lookup id_ibge7 → nome do GeoJSON (para usar nameProperty: 'name')
+const idToGeoName = computed(() => {
+  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
+  if (!geo) return {};
+  const map = {};
+  geo.features.forEach(f => { map[String(f.properties.id)] = f.properties.name; });
+  return map;
 });
 
 const mapData = computed(() =>
-  resultadoSentinelaUF.value.map(d => ({
-    name: d.uf,
-    value: d.percValSemComp ?? 0,
-    valSemComp: d.valSemComp ?? 0,
-    cnpjs: d.cnpjs ?? 0,
-  }))
+  resultadoMunicipios.value
+    .filter(d => d.id_ibge7 && idToGeoName.value[String(d.id_ibge7)])
+    .map(d => ({
+      name: idToGeoName.value[String(d.id_ibge7)],
+      value: d.percValSemComp ?? 0,
+      municipio: d.municipio,
+      valSemComp: d.valSemComp ?? 0,
+      cnpjs: d.cnpjs ?? 0,
+    }))
 );
 
 const maxVal = computed(() =>
@@ -52,10 +76,12 @@ const chartOption = computed(() => {
       padding: [12, 16],
       textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
-        if (!params.data) return params.name;
+        if (!params.data?.municipio) return `
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
+          <div style="font-size:11px;opacity:0.6;">Sem Estabelecimentos</div>`;
         const d = params.data;
         return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${params.name}</div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>
           <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
             <div>% s/ Comp: <strong>${formatPercent(d.value)}</strong></div>
             <div>Valor s/ Comp: <strong>${formatBRL(d.valSemComp)}</strong></div>
@@ -73,28 +99,19 @@ const chartOption = computed(() => {
     },
     series: [{
       type: 'map',
-      map: 'brasil-uf',
-      nameProperty: 'UF',
-      roam: false,
-      layoutCenter: ['50%', '45%'],
-      layoutSize: '95%',
-      aspectScale: 1.1,
+      map: mapName.value,
+      nameProperty: 'name',
+      roam: true,
       emphasis: {
-        label: { show: true, fontSize: 10, fontWeight: 700, color: '#fff' },
+        label: { show: false },
         itemStyle: { areaColor: 'var(--primary-color)', borderColor: '#fff', borderWidth: 1.5 },
       },
       select: { disabled: true },
-      label: {
-        show: true,
-        fontSize: 9,
-        fontWeight: 600,
-        color: c.text,
-        fontFamily: 'Inter, sans-serif',
-      },
+      label: { show: false },
       itemStyle: {
-        borderColor: c.bg,
-        borderWidth: 1,
-        areaColor: c.grid,
+        borderColor: c.muted,
+        borderWidth: 0.5,
+        areaColor: '#d1d5db',
       },
       data: mapData.value,
     }],
@@ -102,9 +119,8 @@ const chartOption = computed(() => {
 });
 
 const onClick = (params) => {
-  if (params.data?.name) {
-    filterStore.selectedUF = params.data.name;
-  }
+  if (!params.data?.municipio) return;
+  filterStore.selectedMunicipio = `${params.data.municipio}|${filterStore.selectedUF}`;
 };
 </script>
 
@@ -112,12 +128,12 @@ const onClick = (params) => {
   <div class="chart-section" :class="{ 'is-refreshing': isLoading }">
     <div class="chart-header">
       <i class="pi pi-map"></i>
-      <h3>MAPA DE RISCO — UFs</h3>
+      <h3>MAPA DE RISCO — {{ filterStore.selectedUF }}</h3>
       <div class="spacer"></div>
     </div>
     <div class="chart-wrapper">
       <VChart
-        v-if="mapReady"
+        :key="mapKey"
         class="echart"
         :option="chartOption"
         autoresize

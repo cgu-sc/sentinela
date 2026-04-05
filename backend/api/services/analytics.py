@@ -162,6 +162,22 @@ class AnalyticsService:
                 ])
                 .sort("percValSemComp", descending=True, nulls_last=True)
             )
+            # Enrich muni_df with id_ibge7 from localidades
+            try:
+                loc_muni = (
+                    get_localidades_df()
+                    .select(["no_municipio", "sg_uf", "id_ibge7"])
+                    .group_by(["no_municipio", "sg_uf"])
+                    .agg(pl.col("id_ibge7").first())
+                )
+                muni_df = muni_df.join(
+                    loc_muni,
+                    left_on=["no_municipio", "uf"],
+                    right_on=["no_municipio", "sg_uf"],
+                    how="left"
+                )
+            except Exception:
+                muni_df = muni_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
             resultado_municipios = [
                 ResultadoSentinelaMunicipioSchema(municipio=r["no_municipio"], **r)
                 for r in muni_df.iter_rows(named=True)

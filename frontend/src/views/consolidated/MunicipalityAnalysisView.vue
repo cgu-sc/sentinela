@@ -2,6 +2,7 @@
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
 import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
+import MunicipalityMapChart from './components/MunicipalityMapChart.vue';
 import MunicipalityAnalysisTable from './components/MunicipalityAnalysisTable.vue';
 import { useFilterStore } from '@/stores/filters';
 
@@ -12,10 +13,11 @@ useFetchAnalytics({ includeFatorRisco: true });
 <template>
   <div class="dashboard-container">
     <KpiSection />
-    <div class="charts-table-grid">
+    <div class="charts-row" :class="{ 'has-map': filterStore.selectedUF !== 'Todos' }">
       <RiskAnalysisChart />
-      <MunicipalityAnalysisTable />
+      <MunicipalityMapChart v-if="filterStore.selectedUF !== 'Todos'" />
     </div>
+    <MunicipalityAnalysisTable />
   </div>
 </template>
 
@@ -26,9 +28,13 @@ useFetchAnalytics({ includeFatorRisco: true });
   gap: 1.5rem;
 }
 
-.charts-table-grid {
-  display: flex;
-  flex-direction: column;
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 1.5rem;
+}
+
+.charts-row.has-map {
+  grid-template-columns: 1fr 1fr;
 }
 </style>

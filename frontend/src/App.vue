@@ -73,7 +73,8 @@ onMounted(async () => {
       resultadoStore.fetchResultados(),
       analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
-      geoStore.fetchLocalidades()
+      geoStore.fetchLocalidades(),
+      geoStore.loadMunicipiosGeo(),
     ]);
 
   } catch (error) {

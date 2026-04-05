@@ -2,20 +2,19 @@
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
 import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
+import BrazilMapChart from './components/BrazilMapChart.vue';
 import UfAnalysisTable from './components/UfAnalysisTable.vue';
-import { useFilterStore } from '@/stores/filters';
-
-const filterStore = useFilterStore();
 useFetchAnalytics({ includeFatorRisco: true });
 </script>
 
 <template>
   <div class="dashboard-container">
     <KpiSection />
-    <div class="charts-table-grid">
+    <div class="charts-row">
       <RiskAnalysisChart />
-      <UfAnalysisTable />
+      <BrazilMapChart />
     </div>
+    <UfAnalysisTable />
   </div>
 </template>
 
@@ -26,9 +25,9 @@ useFetchAnalytics({ includeFatorRisco: true });
   gap: 1.5rem;
 }
 
-.charts-table-grid {
-  display: flex;
-  flex-direction: column;
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
 }
 </style>

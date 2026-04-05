@@ -90,7 +90,7 @@ const filteredLocation = computed(() => {
       removableSort
       paginator
       :rows="20"
-      sortField="percValSemComp"
+      sortField="valSemComp"
       :sortOrder="-1"
       class="custom-table enterprise-table clickable-rows"
       @row-click="goToDetail"

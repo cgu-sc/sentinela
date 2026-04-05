@@ -167,8 +167,8 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="chart-section shadow-card" :class="{ 'is-refreshing': fatorRiscoLoading }">
-    <div class="section-header">
+  <div class="chart-section" :class="{ 'is-refreshing': fatorRiscoLoading }">
+    <div class="chart-header">
       <i class="pi pi-chart-bar"></i>
       <h3>FATOR RISCO X QTD ESTAB</h3>
       <div class="spacer"></div>
@@ -188,12 +188,23 @@ const chartOption = computed(() => {
 .chart-section {
   display: flex;
   flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
 }
 
 .chart-wrapper {
   height: 35vh;
   min-height: 400px;
-  margin: 0 -1rem -1rem -1rem;
 }
 
 .echart {

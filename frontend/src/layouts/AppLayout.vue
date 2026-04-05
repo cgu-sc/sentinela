@@ -37,6 +37,7 @@ const tabs = computed(() => {
             { label: 'Análise UF', path: '/' },
             { label: 'Análise Município', path: '/municipio' },
             { label: 'Análise CNPJ', path: '/cnpj' },
+            { label: 'Análise Indicadores', path: '/indicadores' },
             { label: 'Dispersão Benefício', path: '/dispersao-beneficio' },
             { label: 'Região de Saúde', path: '/regional' }
         ];

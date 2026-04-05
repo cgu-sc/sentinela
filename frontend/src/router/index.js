@@ -21,6 +21,7 @@ const routes = [
       { path: 'dispersao-beneficio', component: () => import('@/views/consolidated/BeneficioDispersaoView.vue') },
       { path: 'municipio', component: MunicipalityAnalysisView },
       { path: 'cnpj', component: CnpjAnalysisView },
+      { path: 'indicadores', component: () => import('@/views/consolidated/IndicadoresAnalysisView.vue') },
       { path: 'regional', component: () => import('@/views/consolidated/RegionalAnalysisView.vue') },
 
       // Detalhamento de CNPJ

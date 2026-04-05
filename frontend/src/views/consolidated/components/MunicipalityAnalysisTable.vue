@@ -70,8 +70,8 @@ const onRowSelect = (event) => {
       :rows="20"
       selectionMode="single"
       @row-click="onRowSelect"
-      sortField="percValSemComp" 
-      :sortOrder="-1" 
+      sortField="valSemComp"
+      :sortOrder="-1"
       class="custom-table enterprise-table clickable-rows"
     >
           <Column field="uf" header="UF" sortable style="width: 5%">

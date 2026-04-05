@@ -38,6 +38,7 @@ export const useGeoStore = defineStore('geo', () => {
     };
   }
 
+
   async function fetchLocalidades() {
     isLoading.value = true;
     try {

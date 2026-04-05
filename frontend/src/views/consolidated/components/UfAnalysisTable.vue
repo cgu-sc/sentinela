@@ -18,14 +18,7 @@ const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent } = useFormatting();
 
-const filteredData = computed(() => {
-  if (filterStore.selectedUF === 'Todos') {
-    return resultadoSentinelaUF.value;
-  }
-  return resultadoSentinelaUF.value.filter(item => item.uf === filterStore.selectedUF);
-});
-
-const { totals } = useTableAggregation(filteredData, {
+const { totals } = useTableAggregation(resultadoSentinelaUF, {
   sums: ['cnpjs', 'valSemComp', 'totalMov', 'qtdeSemComp', 'totalQtde'],
   percents: [
     { field: 'percValSemComp',  numerator: 'valSemComp',  denominator: 'totalMov'   },
@@ -61,7 +54,7 @@ const handleRowClick = (event) => {
     </div>
 
     <DataTable 
-      :value="filteredData" 
+      :value="resultadoSentinelaUF" 
       size="small" 
       stripedRows 
       removableSort 

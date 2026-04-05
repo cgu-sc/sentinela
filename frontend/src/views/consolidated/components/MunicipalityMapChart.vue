@@ -31,7 +31,7 @@ watch(
     const geo = geoStore.getMunicipiosGeoByUF(uf);
     if (geo) {
       registerMap(`municipios-${uf}`, geo);
-      mapKey.value++; // força re-render do VChart
+      mapKey.value++;
     }
   },
   { immediate: true }

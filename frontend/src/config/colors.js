@@ -14,7 +14,7 @@ export const PALETTE = {
   orange:  { 400: '#fb923c', 500: '#f97316' },
   amber:   { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706' },
   green:   { 300: '#86efac', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a' },
-  emerald: { 500: '#10b981', 600: '#059669' },
+  emerald: { 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669' },
   blue:    { 500: '#3b82f6', 600: '#2563eb' },
   indigo:  { 500: '#6366f1', 600: '#4f46e5' },
   violet:  { 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed' },
@@ -42,8 +42,8 @@ export const CHART_SERIES = {
     redGrad:   PALETTE.red[400],     // '#f87171'
   },
   light: {
-    green:     PALETTE.emerald[600], // '#059669' - Premium
-    greenGrad: PALETTE.emerald[500], // '#10b981' - Premium
+    green:     PALETTE.emerald[500], // '#10b981'
+    greenGrad: PALETTE.emerald[400], // '#34d399'
     red:       PALETTE.rose[600],    // '#e11d48' - Premium
     redGrad:   PALETTE.rose[500],    // '#f43f5e' - Premium
   },

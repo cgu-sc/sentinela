@@ -5,6 +5,8 @@ import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
+import { useThemeStore } from '@/stores/theme';
+import { THEME_PALETTES } from '@/config/themeConfig';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -20,6 +22,14 @@ const filterStore = useFilterStore();
 const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
+const themeStore = useThemeStore();
+const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : '#d1d5db');
+const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
+const hoverColor     = computed(() => {
+  const p = THEME_PALETTES[themeStore.currentPalette]?.primary;
+  return themeStore.isDark ? (p?.[900] ?? '#1e3a8a') : (p?.[600] ?? '#2563eb');
+});
+const hoverBorder    = computed(() => themeStore.isDark ? '#fff' : THEME_PALETTES[themeStore.currentPalette]?.primary[900]);
 
 const mapKey = ref(0);
 
@@ -35,6 +45,12 @@ watch(
     }
   },
   { immediate: true }
+);
+
+// Força re-render ao mudar município ou região (atualiza zoom)
+watch(
+  () => [filterStore.selectedMunicipio, filterStore.selectedRegiaoSaude],
+  () => { mapKey.value++; }
 );
 
 const mapName = computed(() => `municipios-${filterStore.selectedUF}`);
@@ -63,6 +79,74 @@ const mapData = computed(() =>
 const maxVal = computed(() =>
   Math.max(...mapData.value.map(d => d.value), 1)
 );
+
+// Extrai coords de uma feature (Polygon ou MultiPolygon)
+function featureCoords(feature) {
+  if (feature.geometry.type === 'Polygon') return feature.geometry.coordinates[0];
+  if (feature.geometry.type === 'MultiPolygon')
+    return feature.geometry.coordinates.reduce((a, b) => a[0].length >= b[0].length ? a : b)[0];
+  return [];
+}
+
+// Bounding box → { center, zoom }
+function bboxToView(lons, lats) {
+  if (!lons.length) return null;
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const span = Math.max(maxLon - minLon, maxLat - minLat);
+  const zoom = span > 3 ? 4 : span > 1.5 ? 5 : span > 0.7 ? 7 : span > 0.3 ? 9 : span > 0.1 ? 12 : 15;
+  return { center: [(minLon + maxLon) / 2, (minLat + maxLat) / 2], zoom };
+}
+
+// Zoom num único município (pelo nome GeoJSON)
+function getFeatureView(geoName) {
+  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
+  if (!geo) return null;
+  const feature = geo.features.find(f => f.properties.name === geoName);
+  if (!feature) return null;
+  const coords = featureCoords(feature);
+  return bboxToView(coords.map(c => c[0]), coords.map(c => c[1]));
+}
+
+// Zoom na bounding box de todos os municípios de uma região de saúde
+function getRegiaoView(regiao) {
+  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
+  if (!geo) return null;
+  const normalize = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const munNomes = geoStore.localidades
+    .filter(l => l.no_regiao_saude === regiao && (filterStore.selectedUF === 'Todos' || l.sg_uf === filterStore.selectedUF))
+    .map(l => normalize(l.no_municipio));
+  const features = geo.features.filter(f => munNomes.includes(normalize(f.properties.name)));
+  if (!features.length) return null;
+  const allLons = [], allLats = [];
+  features.forEach(f => {
+    featureCoords(f).forEach(c => { allLons.push(c[0]); allLats.push(c[1]); });
+  });
+  return bboxToView(allLons, allLats);
+}
+
+const selectedGeoName = computed(() => {
+  const sel = filterStore.selectedMunicipio;
+  if (!sel || sel === 'Todos') return null;
+  const nome = sel.split('|')[0];
+  const match = mapData.value.find(d => d.municipio?.toLowerCase() === nome.toLowerCase());
+  return match?.name ?? null;
+});
+
+const mapView = computed(() => {
+  // 1. Município selecionado → zoom no município
+  if (selectedGeoName.value) {
+    const view = getFeatureView(selectedGeoName.value);
+    if (view) return { center: view.center, zoom: view.zoom };
+  }
+  // 2. Região selecionada → zoom na região
+  if (filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos') {
+    const view = getRegiaoView(filterStore.selectedRegiaoSaude);
+    if (view) return { center: view.center, zoom: view.zoom };
+  }
+  // 3. Sem filtro → auto-fit na UF
+  return {};
+});
 
 const chartOption = computed(() => {
   const c = chartTheme.value;
@@ -102,16 +186,17 @@ const chartOption = computed(() => {
       map: mapName.value,
       nameProperty: 'name',
       roam: true,
+      ...mapView.value,
       emphasis: {
         label: { show: false },
-        itemStyle: { areaColor: 'var(--primary-color)', borderColor: '#fff', borderWidth: 1.5 },
+        itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
       select: { disabled: true },
       label: { show: false },
       itemStyle: {
-        borderColor: c.muted,
+        borderColor: mapBorderColor.value,
         borderWidth: 0.5,
-        areaColor: '#d1d5db',
+        areaColor: mapAreaColor.value,
       },
       data: mapData.value,
     }],

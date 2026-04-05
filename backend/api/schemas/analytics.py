@@ -102,6 +102,9 @@ class RegionalMunicipioSchema(BaseModel):
     populacao: Optional[int] = 0
     qtd_farmacias: Optional[int] = 0
     densidade: Optional[float] = 0.0
+    totalMov: Optional[float] = 0.0
+    valSemComp: Optional[float] = 0.0
+    percValSemComp: Optional[float] = 0.0
 
 
 class RegionalFarmaciaSchema(BaseModel):

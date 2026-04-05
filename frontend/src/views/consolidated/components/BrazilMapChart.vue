@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
+import { useThemeStore } from '@/stores/theme';
+import { THEME_PALETTES } from '@/config/themeConfig';
 import { useFilterStore } from '@/stores/filters';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
@@ -18,6 +20,13 @@ const filterStore = useFilterStore();
 const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
+const themeStore = useThemeStore();
+const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)');
+const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
+const hoverColor     = computed(() => {
+  const p = THEME_PALETTES[themeStore.currentPalette]?.primary;
+  return themeStore.isDark ? (p?.[900] ?? themeStore.tokens.primary) : (p?.[600] ?? themeStore.tokens.primary);
+});
 
 const mapReady = ref(false);
 
@@ -78,10 +87,10 @@ const chartOption = computed(() => {
       roam: false,
       layoutCenter: ['50%', '45%'],
       layoutSize: '95%',
-      aspectScale: 1.1,
+      aspectScale: 1,
       emphasis: {
         label: { show: true, fontSize: 10, fontWeight: 700, color: '#fff' },
-        itemStyle: { areaColor: 'var(--primary-color)', borderColor: '#fff', borderWidth: 1.5 },
+        itemStyle: { areaColor: hoverColor.value, borderColor: themeStore.isDark ? '#fff' : THEME_PALETTES[themeStore.currentPalette]?.primary[900], borderWidth: 1.5 },
       },
       select: { disabled: true },
       label: {
@@ -92,9 +101,9 @@ const chartOption = computed(() => {
         fontFamily: 'Inter, sans-serif',
       },
       itemStyle: {
-        borderColor: c.bg,
+        borderColor: mapBorderColor.value,
         borderWidth: 1,
-        areaColor: c.grid,
+        areaColor: mapAreaColor.value,
       },
       data: mapData.value,
     }],

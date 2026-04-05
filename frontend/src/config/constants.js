@@ -109,6 +109,7 @@ export const KPI_LABEL_MAP = {
 
 /** Ordem de exibição dos KPIs no dashboard. */
 export const KPI_PRIORITY_ORDER = [
+    'MUNICÍPIOS',
     'CNPJS',
     'VALOR TOTAL DE VENDAS',
     'TOTAL DE MEDICAMENTOS',

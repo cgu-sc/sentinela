@@ -47,7 +47,7 @@ const { chartDataColors } = useChartTheme();
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
+  grid-template-columns: repeat(6, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
   gap: 1.25rem;
   width: 100%;
   padding-top: 4px; /* espaço para o lift do hover não ser cortado */
@@ -57,10 +57,10 @@ const { chartDataColors } = useChartTheme();
   /* MÁGICA BALANCEADA: Gradiente interno e borda com visibilidade ideal */
   background: linear-gradient(135deg, var(--card-bg) 75%, color-mix(in srgb, var(--primary-color) 3%, var(--card-bg)) 100%);
   border-radius: 12px;
-  padding: 1.10rem 1.2rem; /* MEDIDA DO USUÁRIO */
+  padding: 0.8rem 1rem; /* MEDIDA DO USUÁRIO */
   border: 1px solid color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-border));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 86px; /* TRAVA VERTICAL */
+  min-height: 0; /* TRAVA VERTICAL */
   display: flex;
   align-items: center;
 }
@@ -87,7 +87,7 @@ const { chartDataColors } = useChartTheme();
 }
 
 .kpi-label {
-  font-size: 0.75rem; /* MEDIDA DO USUÁRIO */
+  font-size: 0.70rem; /* MEDIDA DO USUÁRIO */
   color: var(--text-muted);
   font-weight: 700;
   text-transform: uppercase;
@@ -97,7 +97,7 @@ const { chartDataColors } = useChartTheme();
 }
 
 .kpi-value {
-  font-size: 1.4rem; /* MEDIDA DO USUÁRIO */
+  font-size: 1.3rem; /* MEDIDA DO USUÁRIO */
   white-space: nowrap;
   letter-spacing: -0.6px;
   font-weight: 800;

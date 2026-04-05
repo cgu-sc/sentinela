@@ -6,46 +6,42 @@
  */
 import { computed } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
+import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
-import Chip from 'primevue/chip';
-import Button from 'primevue/button';
+import Tag from 'primevue/tag';
 
 const props = defineProps({
-  /** Array de objetos RegionalMunicipioSchema vindos da API */
   municipios: { type: Array, default: () => [] },
-  /** Município de referência para destaque visual inicial */
   municipioAtual: { type: String, default: null },
-  /** UF de referência para destaque visual inicial */
   ufAtual: { type: String, default: null },
-  /** Nome do município que está sendo usado como filtro (opcional) */
   selectedFilter: { type: String, default: null },
 });
 
-/** Row class para destacar o município em análise. */
+const emits = defineEmits(['select-municipio']);
+
+const { formatBRL, formatPercent } = useFormatting();
+const { getRiskClass } = useRiskMetrics();
+
 function rowClass(data) {
-  const isCurrent = props.municipioAtual && 
+  const isCurrent = props.municipioAtual &&
                     data.municipio?.toUpperCase() === props.municipioAtual?.toUpperCase() &&
                     data.uf?.toUpperCase() === props.ufAtual?.toUpperCase();
   return isCurrent ? 'row-highlight' : '';
 }
 
-const emits = defineEmits(['select-municipio']);
-
-const { formatNumber } = useFormatting();
-
 function onRowClick(event) {
-  // Se clicar no que já está selecionado, poderíamos limpar, 
-  // mas vamos apenas emitir e o pai decide se limpa ou troca.
   emits('select-municipio', event.data.municipio);
 }
 
-// Totalizador de rodapé
 const totals = computed(() => {
-  const pop     = props.municipios.reduce((s, m) => s + (m.populacao  || 0), 0);
-  const far     = props.municipios.reduce((s, m) => s + (m.qtd_farmacias || 0), 0);
-  const dens    = far > 0 ? pop / far : 0;
-  return { pop, far, dens: Math.round(dens) };
+  const pop      = props.municipios.reduce((s, m) => s + (m.populacao      || 0), 0);
+  const far      = props.municipios.reduce((s, m) => s + (m.qtd_farmacias  || 0), 0);
+  const totalMov = props.municipios.reduce((s, m) => s + (m.totalMov       || 0), 0);
+  const valSem   = props.municipios.reduce((s, m) => s + (m.valSemComp     || 0), 0);
+  const dens     = far > 0 ? pop / far : 0;
+  const perc     = totalMov > 0 ? (valSem / totalMov) * 100 : 0;
+  return { pop, far, dens: Math.round(dens), totalMov, valSem, perc };
 });
 </script>
 
@@ -76,7 +72,7 @@ const totals = computed(() => {
       :value="municipios"
       size="small"
       removableSort
-      sortField="populacao"
+      sortField="valSemComp"
       :sortOrder="-1"
       :row-class="rowClass"
       class="custom-table enterprise-table clickable-rows"
@@ -90,7 +86,7 @@ const totals = computed(() => {
         </template>
       </Column>
 
-      <Column field="populacao" header="População" sortable style="width: 20%" class="align-right">
+      <Column field="populacao" header="População" sortable style="width: 10%">
         <template #body="{ data }">
           {{ (data.populacao || 0).toLocaleString('pt-BR') }}
         </template>
@@ -99,7 +95,7 @@ const totals = computed(() => {
         </template>
       </Column>
 
-      <Column field="qtd_farmacias" header="Farmácias" sortable style="width: 15%" class="align-center">
+      <Column field="qtd_farmacias" header="Farmácias" sortable style="width: 8%" class="align-center">
         <template #body="{ data }">
           <span class="badge-count">{{ data.qtd_farmacias }}</span>
         </template>
@@ -108,12 +104,39 @@ const totals = computed(() => {
         </template>
       </Column>
 
-      <Column field="densidade" header="Hab. / Farmácia" sortable style="width: 20%" class="align-right">
+      <Column field="densidade" header="Hab./Farm." sortable style="width: 10%">
         <template #body="{ data }">
           {{ (data.densidade || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) }}
         </template>
         <template #footer>
           {{ totals.dens.toLocaleString('pt-BR') }}
+        </template>
+      </Column>
+
+      <Column field="totalMov" header="Total Vendas" sortable style="width: 14%">
+        <template #body="{ data }">
+          {{ formatBRL(data.totalMov) }}
+        </template>
+        <template #footer>
+          {{ formatBRL(totals.totalMov) }}
+        </template>
+      </Column>
+
+      <Column field="valSemComp" header="Valor s/ Comp." sortable style="width: 14%">
+        <template #body="{ data }">
+          {{ formatBRL(data.valSemComp) }}
+        </template>
+        <template #footer>
+          {{ formatBRL(totals.valSem) }}
+        </template>
+      </Column>
+
+      <Column field="percValSemComp" header="% s/ Comp." sortable style="width: 10%">
+        <template #body="{ data }">
+          <Tag :value="formatPercent(data.percValSemComp)" :class="getRiskClass(data.percValSemComp)" />
+        </template>
+        <template #footer>
+          {{ formatPercent(totals.perc) }}
         </template>
       </Column>
     </DataTable>
@@ -179,27 +202,28 @@ const totals = computed(() => {
 .active-filter-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg));
-  border: 1px solid var(--tabs-border);
-  padding: 0 0.5rem;
-  height: 24px; /* Altura fixa controlada */
-  border-radius: 4px;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  padding: 0 0.75rem;
+  height: 28px;
+  border-radius: 6px;
   animation: fadeIn 0.2s ease-out;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 10%, transparent);
 }
 
 .filter-label {
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  color: var(--primary-color);
+  letter-spacing: 0.06em;
 }
 
 .filter-value {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-color);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-color);
   letter-spacing: 0.02em;
 }
 
@@ -207,20 +231,22 @@ const totals = computed(() => {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 0 0.2rem;
+  padding: 0 0.15rem;
   display: flex;
   align-items: center;
   transition: all 0.15s ease;
-  color: var(--text-muted);
+  color: var(--primary-color);
+  opacity: 0.7;
 }
 
 .filter-clear-btn:hover {
   color: var(--risk-high);
-  transform: scale(1.1);
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 .filter-clear-btn i {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 @keyframes pulse-mini {

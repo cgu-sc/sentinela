@@ -60,8 +60,9 @@ class AnalyticsService:
                     return f"{num/1_000:.0f} K"
                 return f"{num:.0f}"
 
-            def build_kpis(cnpjs, total_vendas, val_sem_comp, perc_sem_comp, total_meds):
+            def build_kpis(cnpjs, total_vendas, val_sem_comp, perc_sem_comp, total_meds, qtd_municipios):
                 return [
+                    AnalyticsKPISchema(id='total_municipios', label='Municípios', value=f"{(qtd_municipios or 0):,}".replace(',', '.'), color='#06b6d4', icon='pi pi-map-marker'),
                     AnalyticsKPISchema(id='total_cnpjs', label='CNPJs', value=f"{(cnpjs or 0):,}".replace(',', '.'), color='#3b82f6', icon='pi pi-id-card'),
                     AnalyticsKPISchema(id='valor_vendas', label='Valor Total de Vendas', value=human_format(total_vendas), color='#10b981', icon='pi pi-dollar'),
                     AnalyticsKPISchema(id='perc_valor', label='% sem comprovação', value=f"{(perc_sem_comp or 0):.2f}%".replace('.', ','), color='#f59e0b', icon='pi pi-percentage'),
@@ -118,7 +119,8 @@ class AnalyticsService:
             tsc = float(cnpj_ok["tsc"].sum() or 0)
             tqv = float(cnpj_ok["tqv"].sum() or 0)
             pct = (tsc / tv * 100) if tv else 0.0
-            kpis = build_kpis(cnpj_ok.height, tv, tsc, pct, tqv)
+            qtd_mun = int(period_df.join(cnpj_ok.select("cnpj"), on="cnpj", how="inner").select(pl.n_unique("no_municipio")).item() or 0)
+            kpis = build_kpis(cnpj_ok.height, tv, tsc, pct, tqv, qtd_mun)
 
             # 5. Detalhamento por UF (Breakdown)
             uf_df = (
@@ -763,6 +765,15 @@ class AnalyticsService:
                 .agg([
                     pl.n_unique("cnpj").alias("qtd_farmacias"),
                     pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                ])
+                .with_columns([
+                    (
+                        pl.col("valSemComp") /
+                        pl.when(pl.col("totalMov") > 0)
+                        .then(pl.col("totalMov"))
+                        .otherwise(pl.lit(1.0)) * 100
+                    ).round(2).alias("percValSemComp")
                 ])
             )
 
@@ -795,6 +806,9 @@ class AnalyticsService:
                     populacao=int(r["populacao"] or 0),
                     qtd_farmacias=int(r["qtd_farmacias"] or 0),
                     densidade=float(r["densidade"] or 0.0),
+                    totalMov=float(r.get("totalMov") or 0.0),
+                    valSemComp=float(r.get("valSemComp") or 0.0),
+                    percValSemComp=float(r.get("percValSemComp") or 0.0),
                 )
                 for r in mun_enriched.iter_rows(named=True)
             ]

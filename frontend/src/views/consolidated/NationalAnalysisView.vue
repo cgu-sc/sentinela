@@ -27,7 +27,7 @@ useFetchAnalytics({ includeFatorRisco: true });
 
 .charts-row {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: 13fr 7fr;
   gap: 1.5rem;
 }
 </style>

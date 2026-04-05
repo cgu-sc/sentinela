@@ -35,6 +35,6 @@ useFetchAnalytics({ includeFatorRisco: true });
 }
 
 .charts-row.has-map {
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: 13fr 7fr;
 }
 </style>

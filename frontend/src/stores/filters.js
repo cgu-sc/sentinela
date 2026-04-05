@@ -49,11 +49,22 @@ export const useFilterStore = defineStore('filters', () => {
   const searchTarget = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
 
   // 4. INTELIGÊNCIA DE DADOS (CASCATA REVERSA)
+  watch(selectedUF, (newUF) => {
+    if (newUF === FILTER_ALL_VALUE) {
+      selectedRegiaoSaude.value = FILTER_ALL_VALUE;
+      selectedMunicipio.value = FILTER_ALL_VALUE;
+    }
+  });
+
   watch(selectedRegiaoSaude, (newRegiao) => {
-    if (newRegiao !== FILTER_ALL_VALUE && geoStore.localidades.length > 0) {
-      // Tenta encontrar a região dentro do UF já selecionado (se houver um)
-      const found = geoStore.localidades.find(l => 
-        l.no_regiao_saude === newRegiao && 
+    if (newRegiao === FILTER_ALL_VALUE) {
+      // Limpar região cascateia para município
+      selectedMunicipio.value = FILTER_ALL_VALUE;
+      return;
+    }
+    if (geoStore.localidades.length > 0) {
+      const found = geoStore.localidades.find(l =>
+        l.no_regiao_saude === newRegiao &&
         (selectedUF.value === FILTER_ALL_VALUE || l.sg_uf === selectedUF.value)
       );
       if (found && selectedUF.value !== found.sg_uf) {

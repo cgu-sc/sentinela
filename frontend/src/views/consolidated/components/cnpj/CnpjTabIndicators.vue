@@ -399,7 +399,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 .ind-card {
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 1.25rem 1.25rem 0 1.25rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);

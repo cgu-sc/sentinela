@@ -689,7 +689,7 @@ const filteredTop20 = computed(() => {
   gap: 0.5rem;
   padding: 1.25rem;
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-top: 4px solid transparent;
   border-radius: 12px;
   transition: all 0.2s ease;
@@ -892,7 +892,7 @@ input:checked + .toggle-slider:before {
   flex-direction: column;
   gap: 0.75rem;
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 1.25rem;
   width: 100%;

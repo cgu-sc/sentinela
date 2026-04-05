@@ -276,7 +276,7 @@ const openEstablishment = (estabStr) => {
 
 .f-kpi-card {
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   padding: 0.85rem;
   border-radius: 12px;
   display: flex;
@@ -343,7 +343,7 @@ const openEstablishment = (estabStr) => {
 
 .falecidos-list-container {
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 1.25rem;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -520,8 +520,8 @@ const openEstablishment = (estabStr) => {
 
 /* Ranking Panel */
 .falecidos-ranking-panel {
-  background: var(--tabs-bg);
-  border: 1px solid var(--tabs-border);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 1.25rem;
   margin-top: 1.5rem;
@@ -537,7 +537,7 @@ const openEstablishment = (estabStr) => {
 
 .ranking-card {
   background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-radius: 10px;
   padding: 0.75rem 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

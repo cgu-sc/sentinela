@@ -281,7 +281,7 @@ const chartOption = computed(() => {
 
 .evolucao-card-highlight {
   background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);

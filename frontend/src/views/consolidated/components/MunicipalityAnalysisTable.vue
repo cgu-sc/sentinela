@@ -123,8 +123,8 @@ const onRowSelect = (event) => {
 }
 
 .modern-scroll-card {
-  border: 1px solid var(--sidebar-border, #e2e8f0);
-  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
 }
 
 .section-header {
@@ -132,7 +132,7 @@ const onRowSelect = (event) => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  border-bottom: 1px solid var(--sidebar-border, #e2e8f0);
+  border-bottom: 1px solid var(--tabs-border);
 }
 
 .header-icon-box {
@@ -189,7 +189,7 @@ const onRowSelect = (event) => {
   background: var(--bg-color, #f8fafc);
 }
 :deep(.p-datatable-wrapper::-webkit-scrollbar-thumb) {
-  background: var(--sidebar-border, #e2e8f0);
+  background: var(--scrollbar-thumb);
   border-radius: 10px;
 }
 :deep(.p-datatable-wrapper::-webkit-scrollbar-thumb:hover) {

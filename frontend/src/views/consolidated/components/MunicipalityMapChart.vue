@@ -6,7 +6,6 @@ import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
-import { THEME_PALETTES } from '@/config/themeConfig';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -23,13 +22,10 @@ const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
-const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : '#d1d5db');
+const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
 const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
-const hoverColor     = computed(() => {
-  const p = THEME_PALETTES[themeStore.currentPalette]?.primary;
-  return themeStore.isDark ? (p?.[900] ?? '#1e3a8a') : (p?.[600] ?? '#2563eb');
-});
-const hoverBorder    = computed(() => themeStore.isDark ? '#fff' : THEME_PALETTES[themeStore.currentPalette]?.primary[900]);
+const hoverColor     = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
+const hoverBorder    = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)');
 
 const mapKey = ref(0);
 
@@ -76,9 +72,6 @@ const mapData = computed(() =>
     }))
 );
 
-const maxVal = computed(() =>
-  Math.max(...mapData.value.map(d => d.value), 1)
-);
 
 // Extrai coords de uma feature (Polygon ou MultiPolygon)
 function featureCoords(feature) {
@@ -122,7 +115,9 @@ function getRegiaoView(regiao) {
   features.forEach(f => {
     featureCoords(f).forEach(c => { allLons.push(c[0]); allLats.push(c[1]); });
   });
-  return bboxToView(allLons, allLats);
+  const result = bboxToView(allLons, allLats);
+  if (!result) return null;
+  return { ...result, zoom: Math.max(result.zoom - 2, 4) };
 }
 
 const selectedGeoName = computed(() => {
@@ -175,7 +170,7 @@ const chartOption = computed(() => {
     },
     visualMap: {
       min: 0,
-      max: maxVal.value,
+      max: 100,
       show: false,
       inRange: {
         color: ['#fef9c3', '#fde68a', '#fca5a5', '#ef4444', '#7f1d1d'],

@@ -4,7 +4,6 @@ import { useAnalyticsStore } from '@/stores/analytics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
-import { THEME_PALETTES } from '@/config/themeConfig';
 import { useFilterStore } from '@/stores/filters';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
@@ -21,12 +20,9 @@ const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
-const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)');
+const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
 const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
-const hoverColor     = computed(() => {
-  const p = THEME_PALETTES[themeStore.currentPalette]?.primary;
-  return themeStore.isDark ? (p?.[900] ?? themeStore.tokens.primary) : (p?.[600] ?? themeStore.tokens.primary);
-});
+const hoverColor     = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
 
 const mapReady = ref(false);
 
@@ -45,9 +41,6 @@ const mapData = computed(() =>
   }))
 );
 
-const maxVal = computed(() =>
-  Math.max(...mapData.value.map(d => d.value), 1)
-);
 
 const chartOption = computed(() => {
   const c = chartTheme.value;
@@ -74,7 +67,7 @@ const chartOption = computed(() => {
     },
     visualMap: {
       min: 0,
-      max: maxVal.value,
+      max: 40,
       show: false,
       inRange: {
         color: ['#fef9c3', '#fde68a', '#fca5a5', '#ef4444', '#7f1d1d'],
@@ -90,7 +83,7 @@ const chartOption = computed(() => {
       aspectScale: 1,
       emphasis: {
         label: { show: true, fontSize: 10, fontWeight: 700, color: '#fff' },
-        itemStyle: { areaColor: hoverColor.value, borderColor: themeStore.isDark ? '#fff' : THEME_PALETTES[themeStore.currentPalette]?.primary[900], borderWidth: 1.5 },
+        itemStyle: { areaColor: hoverColor.value, borderColor: themeStore.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)', borderWidth: 1.5 },
       },
       select: { disabled: true },
       label: {

@@ -66,7 +66,14 @@ const qtdMunicipiosRegiao = computed(() =>
   geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
 );
 
-const handleExport = () => {
+const handleExport = async () => {
+  // Garante que temos os dados de risco de todos os municípios da região
+  const geo = geoData.value;
+  if (geo?.sg_uf && geo?.no_regiao_saude) {
+    const p = getApiParams();
+    await analyticsStore.fetchMunicipiosRegiao(geo.sg_uf, geo.no_regiao_saude, p.inicio, p.fim);
+  }
+
   exportCnpjPdf({
     cnpjData: cnpjData.value,
     geoData: geoData.value,
@@ -77,6 +84,8 @@ const handleExport = () => {
     crmsTabRef,
     falecidosTabRef,
     cnpjNavStore: cnpjNav,
+    geoStore,
+    resultadoMunicipios: analyticsStore.municipiosRegiao,
     formatCurrencyFull,
     formatNumberFull,
     formatarData,

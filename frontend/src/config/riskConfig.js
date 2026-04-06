@@ -23,12 +23,64 @@ export const AUDIT_THRESHOLDS = {
 /** Paleta de cores hex associada a cada nível (para uso em ECharts e CSS via v-bind). */
 export { RISK_COLORS } from './colors.js';
 
+/**
+ * Equivalentes RGB dos RISK_COLORS para uso em jsPDF (pdf.setFillColor/setTextColor).
+ * Mantidos em sincronia com RISK_COLORS em colors.js.
+ */
+export const RISK_COLORS_RGB = {
+  CRITICAL: [153,  27,  27],   // red-800   #991b1b
+  HIGH:     [225,  29,  72],   // rose-600  #e11d48
+  MEDIUM:   [245, 158,  11],   // amber-500 #f59e0b
+  LOW:      [ 16, 185, 129],   // emerald-500 #10b981
+  NONE:     [203, 213, 225],   // slate-300 — sem dados
+};
+
 /** Classes CSS associadas a cada nível (para uso em Tags/Badges do PrimeVue). */
 export const RISK_CSS_CLASSES = {
   CRITICAL: 'risk-critical',
   HIGH:     'risk-high',
   MEDIUM:   'risk-medium',
   LOW:      'risk-low',
+};
+
+/**
+ * Regras de semáforo para os cards de KPI da aba Análise de CRMs.
+ * Nível de alerta: 'red' | 'orange' | 'yellow'  (verde implícito quando valor = 0)
+ *
+ * TOP 1 / TOP 5 usam dois limiares (3 níveis); demais são binários (0 = verde, >0 = alerta).
+ */
+// Mapeamento de nível → variável CSS e RGB para PDF
+// 'red'    → --risk-high/critical  #ef4444  [239,68,68]
+// 'orange' → --risk-medium         #f97316  [249,115,22]
+// 'green'  → --risk-low            #10b981  [16,185,129]
+
+/**
+ * Regras de semáforo para os cards de KPI da aba Análise de CRMs.
+ * TOP 1 / TOP 5 usam dois limiares (ambos disparam 'red'); demais são binários.
+ */
+export const CRM_KPI_THRESHOLDS = {
+  concentracaoTop1:       { atencao: 20, critico: 40, alert: 'red'    },
+  concentracaoTop5:       { atencao: 50, critico: 70, alert: 'red'    },
+  lancamentosAgrupados:   { alert: 'red'    },
+  prescrIntensivaLocal:   { alert: 'red'    },
+  prescrIntensivaOcultos: { alert: 'red'    },
+  multiFarmacia:          { alert: 'red'    },
+  fraudesCrm:             { alert: 'red'    },
+  distancia400km:         { alert: 'orange' },  // risco médio — prescrições distantes
+};
+
+/**
+ * Regras de semáforo para os cards de KPI da aba Falecidos.
+ * Binários: verde quando 0, cor de alerta quando > 0.
+ */
+export const FALECIDOS_KPI_THRESHOLDS = {
+  cpfsDistintos:     { alert: 'red'    },
+  totalAutorizacoes: { alert: 'red'    },
+  valorTotal:        { alert: 'red'    },
+  mediaDias:         { alert: 'red'    },
+  maxDias:           { alert: 'red'    },
+  pctFaturamento:    { alert: 'orange' },
+  cpfsMultiCnpj:     { alert: 'red'    },
 };
 
 /**

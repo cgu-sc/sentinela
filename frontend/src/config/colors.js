@@ -49,6 +49,17 @@ export const CHART_SERIES = {
   },
 };
 
+// ── Escala de cor do mapa de risco (VisualMap ECharts + PDF) ─────────────────
+// Fonte única de verdade: 0% → amarelo claro, 100% → vermelho escuro.
+// Usada tanto no visualMap do ECharts quanto na interpolação do PDF.
+export const MAP_VISUAL_SCALE = [
+  '#fef9c3', // 0%   yellow-100
+  '#fde68a', // 25%  yellow-200
+  '#fca5a5', // 50%  red-300
+  '#ef4444', // 75%  red-500
+  '#7f1d1d', // 100% red-900
+];
+
 // ── Constantes de tooltip ECharts ─────────────────────────────────────────────
 // Sombra do axisPointer — usada em todos os gráficos ECharts do projeto.
 export const CHART_TOOLTIP_SHADOW = 'rgba(255, 255, 255, 0.04)';

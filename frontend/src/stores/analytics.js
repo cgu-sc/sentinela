@@ -34,6 +34,10 @@ export const useAnalyticsStore = defineStore('analytics', {
     resultadoCnpjs: [],
     fatorRisco: [],
     evolucaoFinanceira: null,
+    // Cache de municípios por região — carregado lazily no detalhe do CNPJ
+    municipiosRegiao: [],
+    municipiosRegiaoKey: null,   // 'UF|regiao' da última carga
+    municipiosRegiaoLoading: false,
     isLoading: false,
     fatorRiscoLoading: false,
     evolucaoLoading: false,
@@ -87,6 +91,27 @@ export const useAnalyticsStore = defineStore('analytics', {
         console.error('Erro ao buscar evolução financeira:', e);
       } finally {
         this.evolucaoLoading = false;
+      }
+    },
+
+    /**
+     * Busca os municípios de uma região de saúde com seus % de não-comprovação,
+     * respeitando o período atual (inicio/fim). Usa cache por região.
+     */
+    async fetchMunicipiosRegiao(uf, regiao, inicio = null, fim = null) {
+      if (!uf || !regiao) return;
+      const key = `${uf}|${regiao}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.municipiosRegiaoKey === key) return; // já carregado para esta combinação
+      this.municipiosRegiaoLoading = true;
+      try {
+        const params = buildAnalyticsParams(inicio, fim, null, null, null, uf, regiao, null, null, null, null, null, null);
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        this.municipiosRegiao    = response.data.resultado_municipios || [];
+        this.municipiosRegiaoKey = key;
+      } catch (err) {
+        console.error('Erro ao buscar municípios da região:', err);
+      } finally {
+        this.municipiosRegiaoLoading = false;
       }
     },
 

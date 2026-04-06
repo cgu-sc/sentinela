@@ -711,7 +711,7 @@ defineExpose({
   padding: 1.25rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-top: 4px solid transparent;
+  border-left: 3px solid transparent;
   border-radius: 12px;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -728,7 +728,7 @@ defineExpose({
   outline: 2px solid var(--primary-color);
   outline-offset: 1px;
   background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg));
-  border-top: 4px solid transparent !important;
+  border-left: 3px solid var(--primary-color) !important;
 }
 
 .filter-badge {
@@ -829,14 +829,14 @@ defineExpose({
   color: var(--risk-critical);
 }
 .highlight-red {
-  border-top: 4px solid var(--risk-critical) !important;
+  border-left: 3px solid var(--risk-critical) !important;
 }
 
 .highlight-orange .alert-kpi-val {
   color: var(--risk-high);
 }
 .highlight-orange {
-  border-top: 4px solid var(--risk-high) !important;
+  border-left: 3px solid var(--risk-high) !important;
 }
 
 /* Filtro Estilizado */
@@ -900,7 +900,7 @@ input:checked + .toggle-slider:before {
   color: var(--risk-medium);
 }
 .highlight-yellow {
-  border-top: 4px solid var(--risk-medium) !important;
+  border-left: 3px solid var(--risk-medium) !important;
 }
 
 .text-red {

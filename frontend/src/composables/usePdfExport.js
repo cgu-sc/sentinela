@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
+import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS, RISK_COLORS_RGB } from '@/config/riskConfig';
+import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -97,6 +98,195 @@ function fmtRisco(v) {
   return v != null ? v.toFixed(1) + 'x' : '—';
 }
 
+/** Converte hex (#rrggbb) → [r, g, b]. */
+function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+/**
+ * Interpola ao longo da mesma escala de cores do ECharts visualMap.
+ * Retorna [r, g, b] para qualquer valor entre min e max.
+ */
+function getRiskRgbByPerc(perc) {
+  if (perc == null) return RISK_COLORS_RGB.NONE;
+  const t = Math.max(0, Math.min(1, perc / 100));
+  const stops = MAP_VISUAL_SCALE;
+  const seg = Math.min(Math.floor(t * (stops.length - 1)), stops.length - 2);
+  const segT = t * (stops.length - 1) - seg;
+  const c0 = hexToRgb(stops[seg]);
+  const c1 = hexToRgb(stops[seg + 1]);
+  return [
+    Math.round(c0[0] + (c1[0] - c0[0]) * segT),
+    Math.round(c0[1] + (c1[1] - c0[1]) * segT),
+    Math.round(c0[2] + (c1[2] - c0[2]) * segT),
+  ];
+}
+
+/**
+ * Desenha o mapa de todos os municípios de uma região de saúde, coloridos por risco.
+ * @param {jsPDF} pdf
+ * @param {object} geoJson - GeoJSON FeatureCollection da UF
+ * @param {Array}  regionIds - array de id_ibge7 dos municípios da região
+ * @param {string|number} targetIbge7 - id_ibge7 do município da farmácia (destaque)
+ * @param {Array}  resultadoMunicipios - dados de risco por município [{id_ibge7, percValSemComp}]
+ * @param {number} x, y, w, h - caixa de desenho (mm)
+ */
+function drawRegionMap(pdf, geoJson, regionIds, targetIbge7, resultadoMunicipios, x, y, w, h) {
+  if (!geoJson?.features || !regionIds?.length) return;
+
+  // Mapeia id_ibge7 → percValSemComp
+  const riskMap = {};
+  (resultadoMunicipios ?? []).forEach(m => { riskMap[String(m.id_ibge7)] = m.percValSemComp; });
+
+  // Filtra features da região
+  const features = regionIds
+    .map(id => geoJson.features.find(f => String(f.properties.id) === String(id)))
+    .filter(Boolean);
+  if (!features.length) return;
+
+  // Bounding box de toda a região
+  const allCoords = features.flatMap(f => {
+    if (f.geometry.type === 'Polygon') return f.geometry.coordinates[0];
+    if (f.geometry.type === 'MultiPolygon') return f.geometry.coordinates.flatMap(p => p[0]);
+    return [];
+  });
+  const lons = allCoords.map(c => c[0]);
+  const lats = allCoords.map(c => c[1]);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const spanLon = maxLon - minLon || 0.001;
+  const spanLat = maxLat - minLat || 0.001;
+
+  const pad = 4;
+  const scale = Math.min((w - pad * 2) / spanLon, (h - pad * 2) / spanLat);
+  const ox = x + pad + ((w - pad * 2) - spanLon * scale) / 2;
+  const oy = y + h - pad - ((h - pad * 2) - spanLat * scale) / 2;
+  const project = ([lon, lat]) => [ox + (lon - minLon) * scale, oy - (lat - minLat) * scale];
+
+  pdf.setLineJoin('round');
+
+  // Desenha em duas passagens: vizinhos primeiro, alvo por último (para a borda não ser sobreposta)
+  let targetFeature = null;
+  const noDataFill = [214, 221, 230]; // Voltando para o cinza-azulado neutro
+
+  const drawFeature = (f) => {
+    const id = String(f.properties.id);
+    const isTarget = id === String(targetIbge7);
+    const perc = riskMap[id];
+    const hasData = perc != null;
+
+    let fill, stroke, lw;
+    if (isTarget) {
+      const rgb = getRiskRgbByPerc(perc);
+      fill   = rgb;
+      stroke = rgb.map(c => Math.max(0, c - 40)); // Voltando para o contorno escurecido relativo
+      lw     = 0.45;
+    } else if (hasData) {
+      fill   = getRiskRgbByPerc(perc);
+      stroke = [255, 255, 255];
+      lw     = 0.15;
+    } else {
+      fill   = noDataFill;
+      stroke = [255, 255, 255];
+      lw     = 0.15;
+    }
+
+    let rings = [];
+    if (f.geometry.type === 'Polygon') rings = [f.geometry.coordinates[0]];
+    else if (f.geometry.type === 'MultiPolygon') rings = f.geometry.coordinates.map(p => p[0]);
+
+    for (const ring of rings) {
+      const pts = ring.map(project);
+      const deltas = [];
+      for (let i = 1; i < pts.length; i++) {
+        deltas.push([pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]]);
+      }
+      pdf.setFillColor(...fill);
+      pdf.setDrawColor(...stroke);
+      pdf.setLineWidth(lw);
+      pdf.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
+    }
+  };
+
+  for (const f of features) {
+    if (String(f.properties.id) === String(targetIbge7)) {
+      targetFeature = f;
+      continue;
+    }
+    drawFeature(f);
+  }
+  if (targetFeature) drawFeature(targetFeature);
+}
+
+/**
+ * Desenha o polígono de um único município diretamente no PDF (vetor).
+ * @param {jsPDF} pdf
+ * @param {object} geoJson - GeoJSON FeatureCollection da UF
+ * @param {string|number} targetIbge7 - id_ibge7 do município
+ * @param {number} x - posição X da caixa
+ * @param {number} y - posição Y da caixa
+ * @param {number} w - largura da caixa (mm)
+ * @param {number} h - altura da caixa (mm)
+ * @param {number[]} fillRgb - cor de preenchimento [r,g,b]
+ * @param {number[]} strokeRgb - cor da borda [r,g,b]
+ */
+function drawMunicipalityPolygon(pdf, geoJson, targetIbge7, x, y, w, h, fillRgb, strokeRgb) {
+  if (!geoJson?.features) return;
+  const feature = geoJson.features.find(f => String(f.properties.id) === String(targetIbge7));
+  if (!feature) return;
+
+  // Suporte a Polygon e MultiPolygon — usa o maior anel
+  let rings = [];
+  if (feature.geometry.type === 'Polygon') {
+    rings = [feature.geometry.coordinates[0]];
+  } else if (feature.geometry.type === 'MultiPolygon') {
+    rings = feature.geometry.coordinates.map(p => p[0]);
+  }
+  if (!rings.length) return;
+
+  // Bounding box de todos os aneis
+  const allCoords = rings.flat();
+  const lons = allCoords.map(c => c[0]);
+  const lats = allCoords.map(c => c[1]);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const spanLon = maxLon - minLon || 0.001;
+  const spanLat = maxLat - minLat || 0.001;
+
+  // Escala preservando proporção, com padding interno
+  const pad = 4;
+  const scaleX = (w - pad * 2) / spanLon;
+  const scaleY = (h - pad * 2) / spanLat;
+  const scale  = Math.min(scaleX, scaleY);
+
+  // Centraliza dentro da caixa
+  const ox = x + pad + ((w - pad * 2) - spanLon * scale) / 2;
+  const oy = y + h - pad - ((h - pad * 2) - spanLat * scale) / 2;
+
+  const project = ([lon, lat]) => [
+    ox + (lon - minLon) * scale,
+    oy - (lat - minLat) * scale,  // lat cresce pra cima, PDF cresce pra baixo
+  ];
+
+  pdf.setFillColor(...fillRgb);
+  pdf.setDrawColor(...strokeRgb);
+  pdf.setLineWidth(0.4);
+
+  for (const ring of rings) {
+    const pts = ring.map(project);
+    // Monta deltas relativos para pdf.lines()
+    const lines = [];
+    for (let i = 1; i < pts.length; i++) {
+      lines.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+    }
+    pdf.lines(lines, pts[0][0], pts[0][1], [1, 1], 'FD', true);
+  }
+}
+
 // ── Composable ─────────────────────────────────────────────
 export function usePdfExport() {
   const isExporting = ref(false);
@@ -104,7 +294,7 @@ export function usePdfExport() {
   async function exportCnpjPdf({
     cnpjData, geoData, cnpj, qtdMunicipiosRegiao,
     evolutionTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
-    cnpjNavStore, formatCurrencyFull, formatNumberFull, formatarData,
+    cnpjNavStore, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
     isExporting.value = true;
     const originalTab = cnpjNavStore.activeTabIndex;
@@ -117,7 +307,7 @@ export function usePdfExport() {
 
       // ── Fontes ───────────────────────────────────────────
       const { inter: hasInter, primeicons: hasPrimeicons } = await loadFontsInto(pdf);
-      const F = hasInter ? 'inter' : F;
+      const F = hasInter ? 'inter' : 'helvetica';
 
       /**
        * Draws a PrimeIcon glyph and returns the horizontal space it occupied
@@ -230,12 +420,11 @@ export function usePdfExport() {
 
       currentCY += 35;
 
-      // Cor de risco da capa (baseada no % sem comprovação)
+      // Cor de risco da capa — alinhada com --risk-* do sistema
       const capPerc = cnpjData.percValSemComp ?? 0;
-      const capRiskRgb = capPerc >= 30 ? [239, 68, 68]
-                       : capPerc >= 15 ? [249, 115, 22]
-                       : capPerc >= 5  ? [234, 179, 8]
-                       :                 [16, 185, 129];
+      const capRiskRgb = capPerc >= 20 ? [239, 68,  68 ]   // --risk-critical/high
+                       : capPerc >= 5  ? [249, 115, 22 ]   // --risk-medium
+                       :                 [16,  185, 129];  // --risk-low
 
       const cardX = margin + 8;
       const cardW2 = contentW - 16;
@@ -297,9 +486,8 @@ export function usePdfExport() {
       // ── PÁGINA 2 — Identificação (Subsequente Branco) ──────
       // Cor de risco a partir do % sem comprovação
       const perc = cnpjData.percValSemComp ?? 0;
-      const riskRgb = perc >= 30 ? [239, 68,  68]
-                    : perc >= 15 ? [249, 115, 22]
-                    : perc >= 5  ? [234, 179, 8]
+      const riskRgb = perc >= 20 ? [239, 68,  68 ]   // --risk-critical/high
+                    : perc >= 5  ? [249, 115, 22 ]   // --risk-medium
                     :              [16,  185, 129];
 
       // ── Banner escuro ──────────────────────────────
@@ -358,14 +546,18 @@ export function usePdfExport() {
         pdf.text(badge2, pageW - margin - bW2 + bW2 / 2, bY + 5.2, { align: 'center' });
       }
 
-      // ── KPI Cards ──────────────────────────────────
+      // ── KPI Cards (4: financeiros + score/classificação) ──
       let y = headerH + 10;
-      const cardW = (contentW - 8) / 3;
+      const cardW = (contentW - 12) / 4;
       const cardH = 24;
       const kpiCards = [
-        { label: '% SEM COMPROVAÇÃO',    value: `${cnpjData.percValSemComp?.toFixed(2) ?? '—'}%`, accent: riskRgb },
-        { label: 'VALOR SEM COMPROVAÇÃO', value: formatCurrencyFull(cnpjData.valSemComp),          accent: [99, 102, 241] },
-        { label: 'TOTAL VENDAS',          value: formatCurrencyFull(cnpjData.totalMov),            accent: [71, 85, 105] },
+        { label: '% SEM COMPROVAÇÃO',    value: `${cnpjData.percValSemComp?.toFixed(2) ?? '—'}%`, accent: riskRgb,        valueColor: riskRgb      },
+        { label: 'VALOR SEM COMPROVAÇÃO', value: formatCurrencyFull(cnpjData.valSemComp),          accent: [99, 102, 241], valueColor: [15, 23, 42] },
+        { label: 'TOTAL VENDAS',          value: formatCurrencyFull(cnpjData.totalMov),            accent: [71, 85, 105],  valueColor: [15, 23, 42] },
+        { label: 'SCORE DE RISCO',
+          value:    cnpjData.score_risco_final != null ? cnpjData.score_risco_final.toFixed(1) : '—',
+          sublabel: cnpjData.classificacao_risco ?? '',
+          accent:   riskRgb, valueColor: riskRgb },
       ];
       kpiCards.forEach((card, i) => {
         const x = margin + i * (cardW + 4);
@@ -373,14 +565,14 @@ export function usePdfExport() {
         pdf.roundedRect(x, y, cardW, cardH, 2, 2, 'F');
         pdf.setFillColor(...card.accent);
         pdf.roundedRect(x, y, 2.5, cardH, 1, 1, 'F');
-        pdf.setFontSize(8);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text(card.label, x + 6, y + 8);
-        pdf.setFontSize(13);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(...(i === 0 ? riskRgb : [15, 23, 42]));
-        pdf.text(card.value, x + 6, y + 18);
+        pdf.setFontSize(7.5); pdf.setFont(F, 'bold'); pdf.setTextColor(100, 116, 139);
+        pdf.text(card.label, x + 6, y + 7);
+        pdf.setFontSize(13); pdf.setFont(F, 'bold'); pdf.setTextColor(...card.valueColor);
+        pdf.text(card.value, x + 6, y + 16);
+        if (card.sublabel) {
+          pdf.setFontSize(7); pdf.setFont(F, 'bold'); pdf.setTextColor(...card.valueColor);
+          pdf.text(card.sublabel, x + 6, y + 21.5);
+        }
       });
       y += cardH + 12;
 
@@ -406,7 +598,6 @@ export function usePdfExport() {
         const tx = x + 8;
         pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(148, 163, 184);
         pdf.text(r.label, tx, y);
-        // Rank value (grande) + total (pequeno) na mesma linha
         const rankStr = r.val != null ? `${r.val}º` : '—';
         pdf.setFontSize(13); pdf.setFont(F, 'bold'); pdf.setTextColor(15, 23, 42);
         pdf.text(rankStr, tx, y + 9);
@@ -434,20 +625,64 @@ export function usePdfExport() {
       });
       y += 20;
 
-      // ── Score consolidado ──────────────────────────
-      if (cnpjData.score_risco_final != null) {
-        const scoreCardH = 20;
-        pdf.setFillColor(248, 250, 252);
-        pdf.roundedRect(margin, y, contentW, scoreCardH, 2, 2, 'F');
-        pdf.setFillColor(...riskRgb);
-        pdf.roundedRect(margin, y, 2.5, scoreCardH, 1, 1, 'F');
-        pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(100, 116, 139);
-        pdf.text('SCORE DE RISCO CONSOLIDADO', margin + 6, y + 7);
-        pdf.text('CLASSIFICAÇÃO', margin + 70, y + 7);
-        pdf.setFontSize(17); pdf.setFont(F, 'bold'); pdf.setTextColor(...riskRgb);
-        pdf.text(cnpjData.score_risco_final.toFixed(1), margin + 6, y + 16);
-        pdf.setFontSize(12); pdf.setFont(F, 'bold'); pdf.setTextColor(15, 23, 42);
-        pdf.text(cnpjData.classificacao_risco ?? '—', margin + 70, y + 16);
+      // ── Mapas: Região de Saúde + Município ────────────
+      if (geoData?.id_ibge7 && geoData?.sg_uf && geoStore) {
+        const geoJson = geoStore.getMunicipiosGeoByUF(geoData.sg_uf);
+        if (geoJson) {
+          y += 8;
+          const mapCardH = 95;
+          const mapGap   = 4;
+          const mapCardW = (contentW - mapGap) / 2;
+          const munLabel = (geoData.no_municipio ?? cnpjData.municipio ?? '').toUpperCase();
+          const uf       = (geoData.sg_uf ?? cnpjData.uf ?? '').toUpperCase();
+          const regLabel = (geoData.no_regiao_saude ?? '').toUpperCase();
+
+          // IDs dos municípios da região de saúde
+          const regionIds = (geoStore.localidades ?? [])
+            .filter(l => l.no_regiao_saude === geoData.no_regiao_saude && l.sg_uf === geoData.sg_uf)
+            .map(l => l.id_ibge7);
+
+          const mapCards = [
+            { x: margin,                    title: `REGIÃO — ${regLabel}`,   type: 'region' },
+            { x: margin + mapCardW + mapGap, title: `MUNICÍPIO — ${munLabel}`, type: 'mun'  },
+          ];
+
+          for (const card of mapCards) {
+            // Fundo
+            pdf.setFillColor(248, 250, 252);
+            pdf.roundedRect(card.x, y, mapCardW, mapCardH, 3, 3, 'F');
+            pdf.setDrawColor(226, 232, 240);
+            pdf.setLineWidth(0.3);
+            pdf.roundedRect(card.x, y, mapCardW, mapCardH, 3, 3, 'S');
+
+            // Título
+            pdf.setFontSize(7); pdf.setFont(F, 'bold'); pdf.setTextColor(148, 163, 184);
+            pdf.text(card.title, card.x + mapCardW / 2, y + 6, { align: 'center' });
+
+            // Badge UF
+            if (uf) {
+              const bW = 10, bH = 5.5, bX = card.x + mapCardW - bW - 3, bY = y + 2;
+              pdf.setFillColor(30, 41, 59);
+              pdf.roundedRect(bX, bY, bW, bH, 1.5, 1.5, 'F');
+              pdf.setFontSize(6); pdf.setFont(F, 'bold'); pdf.setTextColor(203, 213, 225);
+              pdf.text(uf, bX + bW / 2, bY + 3.7, { align: 'center' });
+            }
+
+            // Mapa
+            if (card.type === 'region') {
+              drawRegionMap(pdf, geoJson, regionIds, geoData.id_ibge7, resultadoMunicipios,
+                card.x + 3, y + 9, mapCardW - 6, mapCardH - 13);
+            } else {
+              // Sincroniza a cor com a escala visual real (0-100%) do componente de mapa
+              const polyFill = getRiskRgbByPerc(capPerc);
+              const polyStroke = polyFill.map(c => Math.max(0, c - 40));
+
+              drawMunicipalityPolygon(pdf, geoJson, geoData.id_ibge7,
+                card.x + 3, y + 9, mapCardW - 6, mapCardH - 13,
+                polyFill, polyStroke);
+            }
+          }
+        }
       }
 
       // ── PÁGINA 2 — Evolução Financeira ───────────────────
@@ -579,13 +814,15 @@ export function usePdfExport() {
       y3 = sectionTitle('INDICADORES DE RISCO POR GRUPO', y3, [30, 41, 59], PI.CHART_BAR);
 
       const indRows = [];
+      const rowThresholdKeys = []; // paralelo a indRows: thresholdKey por linha (null = cabeçalho de grupo)
       for (const grupo of INDICATOR_GROUPS) {
-        // Linha de cabeçalho do grupo
         indRows.push([{ content: grupo.label, colSpan: 9, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [30, 41, 59], fontSize: 7.5 } }]);
+        rowThresholdKeys.push(null);
         for (const ind of grupo.indicators) {
           const d = indicadores[ind.key];
           if (!d || d.valor == null) {
             indRows.push([ind.label, { content: 'SEM DADOS', colSpan: 8, styles: { halign: 'center', textColor: [150, 150, 150] } }]);
+            rowThresholdKeys.push(null);
             continue;
           }
           const status = getRiscoStatus(d.risco_reg, ind.thresholdKey);
@@ -600,12 +837,13 @@ export function usePdfExport() {
             fmtRisco(d.risco_br),
             status.label,
           ]);
+          rowThresholdKeys.push(ind.thresholdKey ?? 'default');
         }
       }
 
       autoTable(pdf, {
         startY: y3 + 2,
-        head: [['Indicador', 'Farmácia', 'Mediana\nRegião', 'Mediana\nUF', 'Mediana\nBR', 'Risco\nRegião', 'Risco\nUF', 'Risco\nBR', 'Status']],
+        head: [['Indicador', 'Farmácia', 'Mediana\nRegião ★', 'Mediana\nUF', 'Mediana\nBR', 'Risco\nRegião ★', 'Risco\nUF', 'Risco\nBR', 'Status']],
         body: indRows,
         margin: { left: margin, right: margin },
         styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', font: F, fontStyle: 'semibold' },
@@ -623,22 +861,42 @@ export function usePdfExport() {
           8: { halign: 'center' },
         },
         didParseCell: (data) => {
+          const col = data.column.index;
+          const hAligns = ['left', 'right', 'right', 'right', 'right', 'center', 'center', 'center', 'center'];
+
           if (data.section === 'head') {
-            const hAligns = ['left', 'right', 'right', 'right', 'right', 'center', 'center', 'center', 'center'];
-            data.cell.styles.halign = hAligns[data.column.index];
+            data.cell.styles.halign = hAligns[col];
+            // Destaque no header das colunas de referência (Mediana Região e Risco Região)
+            if (col === 2 || col === 5) {
+              data.cell.styles.fillColor = [49, 60, 80];   // slate ligeiramente mais claro
+              data.cell.styles.textColor = [199, 210, 254]; // indigo-200 — destaque suave
+            }
           }
-          if (data.section !== 'body' || data.column.index < 5) return;
-          // Colorir colunas de risco e status
+
+          if (data.section === 'body') {
+            // Fundo levíssimo nas colunas de referência para o body
+            if (col === 2 || col === 5) {
+              data.cell.styles.fillColor = [248, 248, 255]; // off-white azulado
+            }
+          }
+
+          if (data.section !== 'body') return;
           const raw = data.cell.raw;
           if (typeof raw !== 'string') return;
-          const risco = parseFloat(raw);
-          if (!isNaN(risco)) {
-            if (risco >= 3)      data.cell.styles.textColor = [239, 68,  68];
-            else if (risco >= 2) data.cell.styles.textColor = [249, 115, 22];
-          } else {
-            if (raw === 'CRÍTICO')   { data.cell.styles.textColor = [239, 68, 68];  data.cell.styles.fillColor = [255, 240, 240]; }
-            else if (raw === 'ATENÇÃO')  { data.cell.styles.textColor = [180, 83,  9]; data.cell.styles.fillColor = [255, 250, 235]; }
-            else if (raw === 'NORMAL')   { data.cell.styles.textColor = [5,  150, 105]; }
+
+          if (col >= 5 && col <= 7) {
+            // Colunas numéricas de risco: usa threshold específico do indicador
+            const risco = parseFloat(raw);
+            if (!isNaN(risco)) {
+              const tKey = rowThresholdKeys[data.row.index] ?? 'default';
+              const t = INDICATOR_THRESHOLDS[tKey] ?? INDICATOR_THRESHOLDS.default;
+              if      (risco >= t.critico) data.cell.styles.textColor = [239, 68,  68];
+              else if (risco >= t.atencao) data.cell.styles.textColor = [249, 115, 22];
+            }
+          } else if (col === 8) {
+            if      (raw === 'CRÍTICO') { data.cell.styles.textColor = [239, 68, 68];  data.cell.styles.fillColor = [255, 240, 240]; }
+            else if (raw === 'ATENÇÃO') { data.cell.styles.textColor = [180, 83,  9];  data.cell.styles.fillColor = [255, 250, 235]; }
+            else if (raw === 'NORMAL')  { data.cell.styles.textColor = [5,  150, 105]; }
           }
         },
       });
@@ -659,17 +917,23 @@ export function usePdfExport() {
           let y4 = 26;
 
           // KPI Cards
-          const red = [239, 68, 68], orange = [249, 115, 22], yellow = [234, 179, 8], green = [16, 185, 129];
+          // Paleta alinhada com variáveis CSS do sistema:
+          // red    = --risk-high/critical (#ef4444)
+          // orange = --risk-medium        (#f97316)
+          // green  = --risk-low           (#10b981)
+          const red    = [239, 68,  68 ];
+          const orange = [249, 115, 22 ];
+          const green  = [16,  185, 129];
           const summary2 = crmsTabRef.value.getSummary() || {};
           const crmCards = [
-            { label: 'TOP 1 CRM - VOLUME R$', val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull), color: kpis.concentracaoTop1 > 40 ? red : kpis.concentracaoTop1 > 20 ? orange : green, subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
-            { label: 'TOP 5 CRMs - VOLUME R$', val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull), color: kpis.concentracaoTop5 > 70 ? red : kpis.concentracaoTop5 > 50 ? orange : green, subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
-            { label: 'LANÇAMENTOS EM SEQUÊNCIA', val: String(kpis.qtdLancamentosAgrupados || 0), color: kpis.qtdLancamentosAgrupados > 0 ? red : green, subtitle: 'Muitas autorizações em intervalo curto' },
-            { label: '>30 PRESCRIÇÕES/DIA NESTE CNPJ', val: String(kpis.qtdPrescrIntensivaLocal || 0), color: kpis.qtdPrescrIntensivaLocal > 0 ? orange : green, subtitle: 'Na unidade local' },
-            { label: '>30 PRESCRIÇÕES/DIA NO BRASIL', val: String(kpis.qtdPrescrIntensivaOcultos || 0), color: kpis.qtdPrescrIntensivaOcultos > 0 ? orange : green, subtitle: 'Soma de todo o Brasil' },
-            { label: 'MULTI-FARMÁCIA', val: String(kpis.qtdMultiFarmacia || 0), color: kpis.qtdMultiFarmacia > 0 ? orange : green, subtitle: 'CRMs com registro em > 70 farmácias distintas' },
-            { label: 'FRAUDES CRM', val: String(kpis.totalIrregularesCfm || 0), color: kpis.totalIrregularesCfm > 0 ? red : green, subtitle: `${kpis.qtdCrmInvalido || 0} Inexist. | ${kpis.qtdPrescrAntesRegistro || 0} Irreg. | ${formatCurrencyFull((summary2.vl_crm_invalido || 0) + (summary2.vl_crm_antes_registro || 0))}` },
-            { label: 'DISTÂNCIA (>400KM)', val: String(kpis.qtdAcima400km || 0), color: kpis.qtdAcima400km > 0 ? yellow : green, subtitle: 'Prescrições em locais distantes' },
+            { label: 'TOP 1 CRM - VOLUME R$',         val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop1        > 40 ? red : kpis.concentracaoTop1 > 20 ? red : green,    subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
+            { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
+            { label: 'LANÇAMENTOS EM SEQUÊNCIA',        val: String(kpis.qtdLancamentosAgrupados  || 0),               color: kpis.qtdLancamentosAgrupados  > 0  ? red    : green, subtitle: 'Muitas autorizações em intervalo curto' },
+            { label: '>30 PRESCRIÇÕES/DIA NESTE CNPJ', val: String(kpis.qtdPrescrIntensivaLocal   || 0),               color: kpis.qtdPrescrIntensivaLocal  > 0  ? red    : green, subtitle: 'Na unidade local' },
+            { label: '>30 PRESCRIÇÕES/DIA NO BRASIL',  val: String(kpis.qtdPrescrIntensivaOcultos || 0),               color: kpis.qtdPrescrIntensivaOcultos > 0 ? red    : green, subtitle: 'Soma de todo o Brasil' },
+            { label: 'MULTI-FARMÁCIA',                  val: String(kpis.qtdMultiFarmacia          || 0),               color: kpis.qtdMultiFarmacia         > 0  ? red    : green, subtitle: 'CRMs com registro em > 70 farmácias distintas' },
+            { label: 'FRAUDES CRM',                     val: String(kpis.totalIrregularesCfm       || 0),               color: kpis.totalIrregularesCfm      > 0  ? red    : green, subtitle: `${kpis.qtdCrmInvalido || 0} Inexist. | ${kpis.qtdPrescrAntesRegistro || 0} Irreg. | ${formatCurrencyFull((summary2.vl_crm_invalido || 0) + (summary2.vl_crm_antes_registro || 0))}` },
+            { label: 'DISTÂNCIA (>400KM)',              val: String(kpis.qtdAcima400km             || 0),               color: kpis.qtdAcima400km            > 0  ? orange : green, subtitle: 'Prescrições em locais distantes' },
           ];
 
           const cW = (contentW - 9) / 4;
@@ -775,15 +1039,19 @@ export function usePdfExport() {
 
         let y5 = 26;
 
-        // KPI cards
+        // KPI cards — cor dinâmica alinhada com --risk-* do sistema:
+        // red    = --risk-high/critical | orange = --risk-medium | green = --risk-low
+        const fRed    = [239, 68,  68 ];
+        const fOrange = [249, 115, 22 ];
+        const fGreen  = [16,  185, 129];
         const fKpis = [
-          { label: 'CPFs Distintos',       val: String(summary.cpfs_distintos),                               color: [239, 68, 68]   },
-          { label: 'Núm. Autorizações',     val: String(summary.total_autorizacoes),                           color: [249, 115, 22]  },
-          { label: 'Prejuízo Estimado',     val: formatCurrencyFull(summary.valor_total),                      color: [239, 68, 68]   },
-          { label: 'Média Dias Pós-Óbito',  val: `${summary.media_dias?.toFixed(1)} dias`,                    color: [249, 115, 22]  },
-          { label: 'Máx. Dias Pós-Óbito',  val: `${summary.max_dias} dias`,                                   color: [249, 115, 22]  },
-          { label: '% do Faturamento',      val: `${(summary.pct_faturamento * 100).toFixed(3)}%`,            color: [234, 179, 8]   },
-          { label: 'CPFs Multi-CNPJ',       val: `${summary.cpfs_multi_cnpj} (${(summary.pct_multi_cnpj * 100).toFixed(1)}%)`, color: [249, 115, 22] },
+          { label: 'CPFs Distintos',       val: String(summary.cpfs_distintos),                                                  color: (summary.cpfs_distintos     || 0) > 0 ? fRed    : fGreen },
+          { label: 'Núm. Autorizações',     val: String(summary.total_autorizacoes),                                              color: (summary.total_autorizacoes || 0) > 0 ? fRed    : fGreen },
+          { label: 'Prejuízo Estimado',     val: formatCurrencyFull(summary.valor_total),                                         color: (summary.valor_total        || 0) > 0 ? fRed    : fGreen },
+          { label: 'Média Dias Pós-Óbito',  val: `${summary.media_dias?.toFixed(1)} dias`,                                       color: (summary.media_dias         || 0) > 0 ? fRed    : fGreen },
+          { label: 'Máx. Dias Pós-Óbito',  val: `${summary.max_dias} dias`,                                                      color: (summary.max_dias           || 0) > 0 ? fRed    : fGreen },
+          { label: '% do Faturamento',      val: `${(summary.pct_faturamento * 100).toFixed(3)}%`,                               color: (summary.pct_faturamento    || 0) > 0 ? fOrange : fGreen },
+          { label: 'CPFs Multi-CNPJ',       val: `${summary.cpfs_multi_cnpj} (${(summary.pct_multi_cnpj * 100).toFixed(1)}%)`,   color: (summary.cpfs_multi_cnpj    || 0) > 0 ? fRed    : fGreen },
         ];
 
         const fCols = 4;

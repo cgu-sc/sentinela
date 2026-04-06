@@ -2,7 +2,6 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import { useFalecidos } from '@/composables/useFalecidos';
 import { useFormatting } from '@/composables/useFormatting';
-import { useChartTheme } from '@/config/chartTheme';
 import Tag from 'primevue/tag';
 import FalecidosTimelineOverlay from './FalecidosTimelineOverlay.vue';
 
@@ -15,7 +14,6 @@ const props = defineProps({
 
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
-const { chartDataColors } = useChartTheme();
 
 onMounted(() => {
   if (props.cnpj && !falecidosLoaded.value) {
@@ -89,33 +87,33 @@ const openEstablishment = (estabStr) => {
     <template v-else-if="falecidosLoaded">
       <!-- 7 CARDS DE KPI -->
       <div class="falecidos-kpi-grid">
-        <div class="f-kpi-card">
+        <div class="f-kpi-card" :class="falecidosData.summary.cpfs_distintos > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">CPFs Distintos</span>
           <span class="f-kpi-val">{{ falecidosData.summary.cpfs_distintos }}</span>
         </div>
-        <div class="f-kpi-card">
+        <div class="f-kpi-card" :class="falecidosData.summary.total_autorizacoes > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Núm. Autorizações</span>
           <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
         </div>
-        <div class="f-kpi-card highlight-red">
+        <div class="f-kpi-card" :class="falecidosData.summary.valor_total > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Prejuízo Estimado</span>
           <div class="f-kpi-val-container">
-            <span class="f-kpi-val risk-high">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
+            <span class="f-kpi-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
           </div>
         </div>
-        <div class="f-kpi-card">
+        <div class="f-kpi-card" :class="(falecidosData.summary.media_dias || 0) > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Média Dias Pós-Óbito</span>
           <span class="f-kpi-val">{{ falecidosData.summary.media_dias.toFixed(1) }} <small>dias</small></span>
         </div>
-        <div class="f-kpi-card">
+        <div class="f-kpi-card" :class="falecidosData.summary.max_dias > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Máximo Dias Pós-Óbito</span>
           <span class="f-kpi-val">{{ falecidosData.summary.max_dias }} <small>dias</small></span>
         </div>
-        <div class="f-kpi-card">
+        <div class="f-kpi-card" :class="falecidosData.summary.pct_faturamento > 0 ? 'highlight-orange' : ''">
           <span class="f-kpi-label">% do Faturamento</span>
           <span class="f-kpi-val">{{ (falecidosData.summary.pct_faturamento * 100).toFixed(3) }}%</span>
         </div>
-        <div class="f-kpi-card warning">
+        <div class="f-kpi-card" :class="falecidosData.summary.cpfs_multi_cnpj > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">CPFs Multi-CNPJ</span>
           <span class="f-kpi-val">{{ falecidosData.summary.cpfs_multi_cnpj }} <small>({{ (falecidosData.summary.pct_multi_cnpj * 100).toFixed(1) }}%)</small></span>
         </div>
@@ -330,23 +328,19 @@ const openEstablishment = (estabStr) => {
 }
 
 .highlight-red {
-  background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg)) !important;
-  border-color: color-mix(in srgb, var(--risk-high) 25%, transparent) !important;
-  border-left: 3px solid v-bind('chartDataColors.red') !important;
+  border-left: 3px solid var(--risk-critical) !important;
 }
+.highlight-red .f-kpi-val { color: var(--risk-critical) !important; font-weight: 700; }
 
-.highlight-red .f-kpi-label { color: var(--risk-high) !important; opacity: 0.75; }
-.highlight-red .f-kpi-val {
-  color: v-bind('chartDataColors.red') !important;
-  font-weight: 700;
+.highlight-orange {
+  border-left: 3px solid var(--risk-high) !important;
 }
+.highlight-orange .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
-.warning {
-  background: color-mix(in srgb, var(--risk-medium) 12%, var(--card-bg)) !important;
-  border-color: color-mix(in srgb, var(--risk-medium) 35%, transparent) !important;
+.highlight-yellow {
+  border-left: 3px solid var(--risk-medium) !important;
 }
-.warning .f-kpi-val { color: var(--risk-medium) !important; }
-.warning .f-kpi-label { color: var(--risk-medium) !important; opacity: 0.85; }
+.highlight-yellow .f-kpi-val { color: var(--risk-medium) !important; font-weight: 700; }
 
 .falecidos-list-container {
   background: var(--card-bg);

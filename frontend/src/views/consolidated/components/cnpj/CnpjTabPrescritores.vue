@@ -156,6 +156,21 @@ const filteredTop20 = computed(() => {
   }
   return list;
 });
+
+defineExpose({
+  getSummary: () => summary.value,
+  getTop20: () => top20.value,
+  getKpis: () => ({
+    concentracaoTop1: concentracaoTop1.value,
+    concentracaoTop5: concentracaoTop5.value,
+    qtdLancamentosAgrupados: qtdLancamentosAgrupados.value,
+    qtdPrescrIntensivaLocal: qtdPrescrIntensivaLocal.value,
+    qtdPrescrIntensivaOcultos: qtdPrescrIntensivaOcultos.value,
+    qtdMultiFarmacia: qtdMultiFarmacia.value,
+    totalIrregularesCfm: totalIrregularesCfm.value,
+    qtdAcima400km: qtdAcima400km.value,
+  })
+});
 </script>
 
 <template>
@@ -361,7 +376,7 @@ const filteredTop20 = computed(() => {
             <div class="alert-kpi-body">
               <div class="alert-kpi-val-row">
                 <span class="alert-kpi-val">{{ totalIrregularesCfm }}</span>
-                <span class="alert-kpi-val-sub">{{ qtdCrmInvalido }} Inválidos | {{ qtdPrescrAntesRegistro }} Irregulares</span>
+                <span class="alert-kpi-val-sub">{{ qtdCrmInvalido }} Inexistentes | {{ qtdPrescrAntesRegistro }} Irregulares</span>
               </div>
               <span class="alert-kpi-hint">
                 <strong style="color: var(--risk-critical)">
@@ -507,11 +522,12 @@ const filteredTop20 = computed(() => {
                       Sequencial</span
                     >
                     <span v-if="m.flag_crm_invalido" class="issue-tag dark-red"
-                      ><i class="pi pi-ban"></i> CRM Inválido</span
+                      ><i class="pi pi-ban"></i> CRM Inexistente</span
                     >
                     <span
                       v-if="m.flag_prescricao_antes_registro"
                       class="issue-tag dark-red"
+                      v-tooltip.top="'Venda anterior ao Registro'"
                       ><i class="pi pi-calendar-times"></i> CRM Irregular</span
                     >
                     <span

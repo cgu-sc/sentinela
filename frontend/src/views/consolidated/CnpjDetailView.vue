@@ -59,6 +59,7 @@ const { isExporting, exportCnpjPdf } = usePdfExport();
 
 const evolutionTabRef = ref(null);
 const indicatorsTabRef = ref(null);
+const crmsTabRef = ref(null);
 
 const qtdMunicipiosRegiao = computed(() =>
   geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
@@ -72,8 +73,10 @@ const handleExport = () => {
     qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
     evolutionTabRef,
     indicatorsTabRef,
+    crmsTabRef,
     cnpjNavStore: cnpjNav,
     formatCurrencyFull,
+    formatNumberFull,
   });
 };
 // ── Composables (Fim) ─────────────────────────────────────
@@ -207,7 +210,7 @@ const formatCnpj = (v) => {
             >Análise de CRMs</span
           ></template
         >
-        <CnpjTabPrescritores :cnpj="cnpj" class="tab-content" />
+        <CnpjTabPrescritores ref="crmsTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

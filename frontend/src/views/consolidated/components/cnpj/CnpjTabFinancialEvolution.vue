@@ -196,10 +196,10 @@ const chartOption = computed(() => {
             <thead>
               <tr>
                 <th>Semestre</th>
-                <th>Valor Total Vendas</th>
-                <th>Valor Regular</th>
-                <th>Valor sem Comprovação</th>
-                <th>% Valor sem Comprovação</th>
+                <th>Total Movimentado</th>
+                <th>Total Regular</th>
+                <th>Sem Comprovação</th>
+                <th>% S/ Comp</th>
                 <th>Tendência</th>
               </tr>
             </thead>

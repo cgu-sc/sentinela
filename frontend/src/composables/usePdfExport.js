@@ -83,8 +83,8 @@ export function usePdfExport() {
 
   async function exportCnpjPdf({
     cnpjData, geoData, cnpj, qtdMunicipiosRegiao,
-    evolutionTabRef, indicatorsTabRef,
-    cnpjNavStore, formatCurrencyFull,
+    evolutionTabRef, indicatorsTabRef, crmsTabRef,
+    cnpjNavStore, formatCurrencyFull, formatNumberFull,
   }) {
     isExporting.value = true;
     const originalTab = cnpjNavStore.activeTabIndex;
@@ -351,7 +351,7 @@ export function usePdfExport() {
 
       autoTable(pdf, {
         startY: y2 + 2,
-        head: [['Semestre', 'Total', 'Regular', 'Sem Comprovação', '% S/ Comp', 'Tendência']],
+        head: [['Semestre', 'Total Movimentado', 'Total Regular', 'Sem Comprovação', '% S/ Comp', 'Tendência']],
         body: semRows,
         foot: [['TOTAL', formatCurrencyFull(totalAll), formatCurrencyFull(totalReg), formatCurrencyFull(totalIrr), '', '']],
         margin: { left: margin, right: margin },
@@ -380,10 +380,8 @@ export function usePdfExport() {
           }
           if (data.section === 'body' && data.column.index === 4) {
             const pct = parseFloat(data.cell.raw);
-            if (pct >= 30)     data.cell.styles.textColor = [239, 68, 68];
-            else if (pct >= 15) data.cell.styles.textColor = [249, 115, 22];
-            else if (pct >= 5)  data.cell.styles.textColor = [234, 179, 8];
-            else                data.cell.styles.textColor = [16, 185, 129];
+            if (pct > 5) data.cell.styles.textColor = [239, 68, 68];
+            else         data.cell.styles.textColor = [30, 41, 59];
           }
         },
       });
@@ -502,6 +500,113 @@ export function usePdfExport() {
           }
         },
       });
+
+      // ── PÁGINA 4 — Prescritores ────────────────────────────
+      if (crmsTabRef?.value) {
+        cnpjNavStore.activeTabIndex = 3;
+        await sleep(500);
+
+        const summary = crmsTabRef.value.getSummary() || {};
+        const top20 = crmsTabRef.value.getTop20() || [];
+        const kpis = crmsTabRef.value.getKpis?.() || {};
+
+        if (top20.length > 0) {
+          pdf.addPage();
+          pageHeader('Análise de CRMs e Prescritores', cnpjData.razao_social, PI.USERS);
+
+          let y4 = 26;
+
+          // KPI Cards
+          const red = [239, 68, 68], orange = [249, 115, 22], yellow = [234, 179, 8], green = [16, 185, 129];
+          const crmCards = [
+            { label: 'CONCENTRAÇÃO TOP 1', val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull), color: kpis.concentracaoTop1 > 40 ? red : kpis.concentracaoTop1 > 20 ? orange : green },
+            { label: 'CONCENTRAÇÃO TOP 5', val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull), color: kpis.concentracaoTop5 > 70 ? red : kpis.concentracaoTop5 > 50 ? orange : green },
+            { label: 'LANÇ. EM SEQUÊNCIA', val: String(kpis.qtdLancamentosAgrupados || 0), color: kpis.qtdLancamentosAgrupados > 0 ? red : green },
+            { label: '>30 PRESC/DIA CNPJ', val: String(kpis.qtdPrescrIntensivaLocal || 0), color: kpis.qtdPrescrIntensivaLocal > 0 ? orange : green },
+            { label: '>30 PRESC/DIA BRASIL', val: String(kpis.qtdPrescrIntensivaOcultos || 0), color: kpis.qtdPrescrIntensivaOcultos > 0 ? orange : green },
+            { label: 'MULTI-FARMÁCIA', val: String(kpis.qtdMultiFarmacia || 0), color: kpis.qtdMultiFarmacia > 0 ? orange : green },
+            { label: 'FRAUDES CRM', val: String(kpis.totalIrregularesCfm || 0), color: kpis.totalIrregularesCfm > 0 ? red : green },
+            { label: 'DISTÂNCIA (>400KM)', val: String(kpis.qtdAcima400km || 0), color: kpis.qtdAcima400km > 0 ? yellow : green },
+          ];
+
+          const cW = (contentW - 9) / 4;
+          const cH = 15;
+          crmCards.forEach((c, i) => {
+            const row = Math.floor(i / 4);
+            const col = i % 4;
+            const x = margin + col * (cW + 3);
+            const cy = y4 + row * (cH + 3);
+
+            pdf.setFillColor(248, 250, 252);
+            pdf.roundedRect(x, cy, cW, cH, 2, 2, 'F');
+            pdf.setFillColor(...c.color);
+            pdf.roundedRect(x, cy, 2, cH, 1, 1, 'F');
+            pdf.setFontSize(5.8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(100, 116, 139);
+            pdf.text(c.label, x + 4, cy + 5.5);
+            pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...c.color);
+            pdf.text(c.val, x + 4, cy + 12);
+          });
+
+          y4 += (cH * 2 + 10);
+          y4 = sectionTitle('CRMs DE INTERESSE - DETALHAMENTO', y4, [30, 41, 59], PI.TABLE);
+
+          const crmRows = top20.map(m => {
+            const issues = [];
+            if (m.flag_robo > 0) issues.push('>30 presc/dia local');
+            if (m.flag_robo_oculto > 0 && !m.flag_robo) issues.push('>30 presc/dia Brasil');
+            if (m.alerta2_tempo_concentrado || m.alerta2) issues.push('Lançamentos sequenciais');
+            if (m.flag_crm_invalido > 0) issues.push('CRM Inexistente');
+            if (m.flag_prescricao_antes_registro > 0) issues.push('CRM Irregular (Venda anterior ao Registro)');
+            if (m.qtd_estabelecimentos_atua === 1) issues.push('Exclusivo do CNPJ');
+            if (m.alerta5_geografico) issues.push('Distância >400km');
+
+            let alertStr = issues.length > 0 ? issues.join(' | ') : 'Regular';
+            return [
+              m.id_medico,
+              alertStr,
+              formatCurrencyFull(m.vl_total_prescricoes),
+              m.nu_prescricoes,
+              fmtVal(m.pct_participacao, 'pct', formatCurrencyFull),
+              formatNumberFull(m.nu_prescricoes_dia),
+              m.qtd_estabelecimentos_atua
+            ];
+          });
+
+          autoTable(pdf, {
+            startY: y4 + 2,
+            head: [['CRM', 'Alertas / Status de Auditoria', 'Volume (R$)', 'Prescrições', '% Volume', 'Presc/Dia\nAqui', 'Nº\nFarmácias']],
+            body: crmRows,
+            margin: { left: margin, right: margin },
+            styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak' },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+            alternateRowStyles: { fillColor: [249, 250, 251] },
+            columnStyles: {
+              0: { fontStyle: 'bold', cellWidth: 24 },
+              1: { cellWidth: 56 },
+              2: { halign: 'right', fontStyle: 'bold', textColor: [99, 102, 241] },
+              3: { halign: 'right' },
+              4: { halign: 'center', fontStyle: 'bold' },
+              5: { halign: 'center', fontStyle: 'bold' },
+              6: { halign: 'center' }
+            },
+            didParseCell: (data) => {
+              if (data.section === 'head') {
+                const hAligns = ['left', 'left', 'right', 'right', 'center', 'center', 'center'];
+                data.cell.styles.halign = hAligns[data.column.index];
+              }
+              if (data.section === 'body') {
+                if (data.column.index === 1 && data.cell.raw !== 'Regular') {
+                  data.cell.styles.textColor = [239, 68, 68];
+                  data.cell.styles.fontStyle = 'bold';
+                }
+                if (data.column.index === 1 && data.cell.raw === 'Regular') {
+                  data.cell.styles.textColor = [150, 150, 150];
+                }
+              }
+            }
+          });
+        }
+      }
 
       // ── Salvar ────────────────────────────────────────────
       const safeName = (cnpjData.razao_social ?? cnpj).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);

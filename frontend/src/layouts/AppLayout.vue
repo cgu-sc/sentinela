@@ -1225,7 +1225,7 @@ const {
 }
 
 .page-content {
-  padding: 1.5rem;
+  padding: 1.3rem 1.5rem 1.5rem;
   flex: 1;
   background: transparent !important;
 }

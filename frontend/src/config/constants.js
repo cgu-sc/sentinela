@@ -104,15 +104,17 @@ export const TIMING = {
 
 /** Mapeamento de labels vindos do backend para labels exibidos na UI. */
 export const KPI_LABEL_MAP = {
-    'QTDE DE MEDICAMENTOS': 'TOTAL DE MEDICAMENTOS',
+    'QTDE DE MEDICAMENTOS':   'Nº MEDICAMENTOS',
+    'VALOR TOTAL DE VENDAS':  'VALOR DAS VENDAS',
+    'VALOR SEM COMPROVAÇÃO':  'SEM COMPROVAÇÃO',
 };
 
 /** Ordem de exibição dos KPIs no dashboard. */
 export const KPI_PRIORITY_ORDER = [
     'MUNICÍPIOS',
     'CNPJS',
-    'VALOR TOTAL DE VENDAS',
-    'TOTAL DE MEDICAMENTOS',
-    'VALOR SEM COMPROVAÇÃO',
+    'VALOR DAS VENDAS',
+    'SEM COMPROVAÇÃO',
     '% SEM COMPROVAÇÃO',
+    'Nº MEDICAMENTOS',
 ];

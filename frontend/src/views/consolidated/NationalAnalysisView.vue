@@ -22,12 +22,12 @@ useFetchAnalytics({ includeFatorRisco: true });
 .dashboard-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.3rem;
 }
 
 .charts-row {
   display: grid;
   grid-template-columns: 13fr 7fr;
-  gap: 1.5rem;
+  gap: 1.3rem;
 }
 </style>

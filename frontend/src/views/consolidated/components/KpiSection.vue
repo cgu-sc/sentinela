@@ -48,7 +48,7 @@ const { chartDataColors } = useChartTheme();
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
-  gap: 1.25rem;
+  gap: 1.15rem;
   width: 100%;
   padding-top: 4px; /* espaço para o lift do hover não ser cortado */
 }

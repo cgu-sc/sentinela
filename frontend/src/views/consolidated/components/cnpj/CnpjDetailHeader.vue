@@ -38,22 +38,12 @@ const props = defineProps({
 
 const emit = defineEmits(['export']);
 
-// DEBUG: Identificando o campo correto do score
+
+
+// --- DEBUG ENDEREÇO ---
 watchEffect(() => {
-  if (props.cnpjData) {
-    console.log(
-      "DEBUG [CnpjDetailHeader]: Chaves disponíveis no objeto:",
-      Object.keys(props.cnpjData),
-    );
-    console.log(
-      "DEBUG [CnpjDetailHeader]: score_risco_final:",
-      props.cnpjData.score_risco_final,
-    );
-    console.log(
-      "DEBUG [CnpjDetailHeader]: classificacao_risco:",
-      props.cnpjData.classificacao_risco,
-    );
-  }
+  console.log("🔍 DEBUG [Header Cadastro]:", props.cadastro);
+  console.log("🔍 DEBUG [Endereço Formato]:", formattedFullAddress.value);
 });
 
 const copied = ref(false);

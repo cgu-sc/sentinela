@@ -168,6 +168,11 @@ defineExpose({
     qtdPrescrIntensivaOcultos: qtdPrescrIntensivaOcultos.value,
     qtdMultiFarmacia: qtdMultiFarmacia.value,
     totalIrregularesCfm: totalIrregularesCfm.value,
+    qtdCrmInvalido: qtdCrmInvalido.value,
+    qtdPrescrAntesRegistro: qtdPrescrAntesRegistro.value,
+    valorTop1: valorTop1.value,
+    valorTop5: valorTop5.value,
+    medianaTop5Reg: summary.value.mediana_concentracao_top5_reg ?? summary.value.mediana_concentracao_top5_br ?? 40,
     qtdAcima400km: qtdAcima400km.value,
   })
 });
@@ -205,7 +210,7 @@ defineExpose({
             @click="setKpiFilter('top1')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">CONCENTRAÇÃO TOP 1</span>
+              <span class="alert-kpi-label">TOP 1 CRM - VOLUME R$</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -234,7 +239,7 @@ defineExpose({
             @click="setKpiFilter('top5')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">CONCENTRAÇÃO TOP 5</span>
+              <span class="alert-kpi-label">TOP 5 CRMs - VOLUME R$</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -247,7 +252,7 @@ defineExpose({
                 formatPct(concentracaoTop5)
               }}</span>
               <span class="alert-kpi-hint">
-                Mediana BR: {{ formatPct(summary.mediana_concentracao_top5_br || 40) }}
+                Mediana Região: {{ formatPct(summary.mediana_concentracao_top5_reg || summary.mediana_concentracao_top5_br || 40) }}
                 <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(valorTop5) }}</strong>
               </span>
             </div>

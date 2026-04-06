@@ -55,6 +55,13 @@ const falecidosAgrupados = computed(() => {
 
 const timelineOverlay = ref(null);
 
+defineExpose({
+  getSummary:  () => falecidosData.value?.summary ?? null,
+  getAgrupados: () => falecidosAgrupados.value ?? [],
+  getRanking:  () => falecidosData.value?.ranking ?? [],
+  hasData:     () => !!(falecidosLoaded.value && falecidosData.value?.transacoes?.length),
+});
+
 const toggleMultiCnpj = (event, grupo) => {
   timelineOverlay.value?.open(event, grupo);
 };
@@ -87,7 +94,7 @@ const openEstablishment = (estabStr) => {
           <span class="f-kpi-val">{{ falecidosData.summary.cpfs_distintos }}</span>
         </div>
         <div class="f-kpi-card">
-          <span class="f-kpi-label">Vendas Afetadas</span>
+          <span class="f-kpi-label">Núm. Autorizações</span>
           <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
         </div>
         <div class="f-kpi-card highlight-red">

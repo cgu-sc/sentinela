@@ -60,6 +60,7 @@ const { isExporting, exportCnpjPdf } = usePdfExport();
 const evolutionTabRef = ref(null);
 const indicatorsTabRef = ref(null);
 const crmsTabRef = ref(null);
+const falecidosTabRef = ref(null);
 
 const qtdMunicipiosRegiao = computed(() =>
   geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
@@ -74,9 +75,11 @@ const handleExport = () => {
     evolutionTabRef,
     indicatorsTabRef,
     crmsTabRef,
+    falecidosTabRef,
     cnpjNavStore: cnpjNav,
     formatCurrencyFull,
     formatNumberFull,
+    formatarData,
   });
 };
 // ── Composables (Fim) ─────────────────────────────────────
@@ -219,7 +222,7 @@ const formatCnpj = (v) => {
             >Falecidos</span
           ></template
         >
-        <CnpjTabFalecidos :cnpj="cnpj" class="tab-content" />
+        <CnpjTabFalecidos ref="falecidosTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

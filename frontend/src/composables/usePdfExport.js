@@ -34,25 +34,45 @@ function formatPopulacao(n) {
   return n.toLocaleString('pt-BR');
 }
 
-async function loadPrimeiconsFontInto(pdf) {
+async function ttfToBase64(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(binary);
+}
+
+async function loadFontsInto(pdf) {
+  const results = { inter: false, primeicons: false };
   try {
-    const res = await fetch('/fonts/primeicons.ttf');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = await res.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let binary = '';
-    // Build binary string in chunks to avoid stack overflow on large fonts
-    for (let i = 0; i < bytes.length; i += 8192) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    }
-    const b64 = btoa(binary);
+    const [regular, semibold, bold] = await Promise.all([
+      ttfToBase64('/fonts/Inter_18pt-Regular.ttf'),
+      ttfToBase64('/fonts/Inter_18pt-SemiBold.ttf'),
+      ttfToBase64('/fonts/Inter_18pt-Bold.ttf'),
+    ]);
+    pdf.addFileToVFS('Inter-Regular.ttf', regular);
+    pdf.addFont('Inter-Regular.ttf', 'inter', 'normal');
+    pdf.addFileToVFS('Inter-SemiBold.ttf', semibold);
+    pdf.addFont('Inter-SemiBold.ttf', 'inter', 'semibold');
+    pdf.addFileToVFS('Inter-Bold.ttf', bold);
+    pdf.addFont('Inter-Bold.ttf', 'inter', 'bold');
+    results.inter = true;
+  } catch (e) {
+    console.warn('[usePdfExport] Inter not loaded:', e);
+  }
+  try {
+    const b64 = await ttfToBase64('/fonts/primeicons.ttf');
     pdf.addFileToVFS('primeicons.ttf', b64);
     pdf.addFont('primeicons.ttf', 'primeicons', 'normal');
-    return true;
+    results.primeicons = true;
   } catch (e) {
     console.warn('[usePdfExport] PrimeIcons not loaded:', e);
-    return false;
   }
+  return results;
 }
 
 // ── Helpers de cor/risco ───────────────────────────────────
@@ -83,8 +103,8 @@ export function usePdfExport() {
 
   async function exportCnpjPdf({
     cnpjData, geoData, cnpj, qtdMunicipiosRegiao,
-    evolutionTabRef, indicatorsTabRef, crmsTabRef,
-    cnpjNavStore, formatCurrencyFull, formatNumberFull,
+    evolutionTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
+    cnpjNavStore, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
     isExporting.value = true;
     const originalTab = cnpjNavStore.activeTabIndex;
@@ -95,8 +115,9 @@ export function usePdfExport() {
       const margin = 14;
       const contentW = pageW - margin * 2;
 
-      // ── PrimeIcons font ──────────────────────────────────
-      const hasPrimeicons = await loadPrimeiconsFontInto(pdf);
+      // ── Fontes ───────────────────────────────────────────
+      const { inter: hasInter, primeicons: hasPrimeicons } = await loadFontsInto(pdf);
+      const F = hasInter ? 'inter' : F;
 
       /**
        * Draws a PrimeIcon glyph and returns the horizontal space it occupied
@@ -124,12 +145,12 @@ export function usePdfExport() {
           titleX += drawIcon(iconCodepoint, margin, 13.5, { size: 10, color: [99, 179, 237] });
         }
         pdf.setFontSize(12);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont(F, 'bold');
         pdf.setTextColor(255, 255, 255);
         pdf.text(title, titleX, 13);
         if (subtitle) {
           pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'normal');
+          pdf.setFont(F, 'normal');
           pdf.setTextColor(180, 180, 180);
           pdf.text(subtitle, pageW - margin, 13, { align: 'right' });
         }
@@ -141,7 +162,7 @@ export function usePdfExport() {
           textX += drawIcon(iconCodepoint, margin, y, { size: 9, color });
         }
         pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont(F, 'bold');
         pdf.setTextColor(...color);
         pdf.text(text, textX, y);
         return y + 7;
@@ -171,62 +192,102 @@ export function usePdfExport() {
       pdf.setFillColor(99, 102, 241); 
       pdf.rect(0, 0, 4, pageH, 'F');
 
-      let currentCY = 15;
+      let currentCY = 8;
 
       if (cguB64) {
-        // Logo oficial, proporção 750x800 (15:16)
-        const sizeW = 110; 
-        const sizeH = 117.3;
+        // Logo oficial, proporção 700x800 (7:8)
+        const sizeW = 110;
+        const sizeH = 125.7;
         pdf.addImage(cguB64, 'PNG', (pageW - sizeW) / 2, currentCY, sizeW, sizeH);
         currentCY += (sizeH + 10);
       } else {
         currentCY += 50; // Fallback caso não carregue
       }
       
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(12);
-      pdf.setTextColor(148, 163, 184); 
-      pdf.text('SISTEMA DE AUDITORIA CONTÍNUA', margin + 8, currentCY);
-      
-      currentCY += 8;
-      pdf.setFont('helvetica', 'bold');
+      currentCY += 12; // espaço extra antes do bloco de texto
+
+      pdf.setFont(F, 'bold');
       pdf.setFontSize(28);
-      pdf.setTextColor(248, 250, 252); 
-      pdf.text('Farmácia Popular', margin + 8, currentCY);
-      
+      pdf.setTextColor(203, 213, 225);
+      pdf.text('SENTINELA', margin + 8, currentCY);
+      const sentinelaW = pdf.getTextWidth('SENTINELA');
+      pdf.setFont(F, 'normal');
+      pdf.setFontSize(12);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('/ Sistema de Auditoria Contínua', margin + 8 + sentinelaW + 3, currentCY);
+
+      currentCY += 10;
+      pdf.setFont(F, 'bold');
+      pdf.setFontSize(16);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Programa Farmácia Popular do Brasil — PFPB', margin + 8, currentCY);
+
       currentCY += 12;
-      pdf.setFont('helvetica', 'bold');
+      pdf.setFont(F, 'bold');
       pdf.setFontSize(18);
-      pdf.setTextColor(99, 102, 241); 
-      pdf.text('Relatório de Conformidade do CNPJ', margin + 8, currentCY);
+      pdf.setTextColor(99, 102, 241);
+      pdf.text('Relatório de Análise de Risco', margin + 8, currentCY);
 
-      currentCY += 40;
-      pdf.setFillColor(30, 41, 59); 
-      pdf.roundedRect(margin + 8, currentCY, contentW - 16, 42, 3, 3, 'F');
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(248, 250, 252);
-      pdf.text(`RAZÃO SOCIAL:`, margin + 14, currentCY + 10);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      const capRazaoLines = pdf.splitTextToSize(cnpjData.razao_social ?? '—', contentW - 30);
-      pdf.text(capRazaoLines, margin + 45, currentCY + 10);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`CNPJ:`, margin + 14, currentCY + 22);
-      pdf.setFont('helvetica', 'normal');
-      const cnpjFormatted = cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-      pdf.text(`${cnpjFormatted}`, margin + 45, currentCY + 22);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`LOCALIDADE:`, margin + 14, currentCY + 34);
-      pdf.setFont('helvetica', 'normal');
-      const capLocal = [geoData?.no_municipio, geoData?.sg_uf].filter(Boolean).join(' - ') || cnpjData?.uf;
-      pdf.text(capLocal ?? '', margin + 45, currentCY + 34);
+      currentCY += 35;
 
-      pdf.setFont('helvetica', 'normal');
+      // Cor de risco da capa (baseada no % sem comprovação)
+      const capPerc = cnpjData.percValSemComp ?? 0;
+      const capRiskRgb = capPerc >= 30 ? [239, 68, 68]
+                       : capPerc >= 15 ? [249, 115, 22]
+                       : capPerc >= 5  ? [234, 179, 8]
+                       :                 [16, 185, 129];
+
+      const cardX = margin + 8;
+      const cardW2 = contentW - 16;
+      const cardH2 = 52;
+
+      // Card fundo
+      pdf.setFillColor(30, 41, 59);
+      pdf.roundedRect(cardX, currentCY, cardW2, cardH2, 3, 3, 'F');
+
+      // Borda esquerda colorida pelo risco
+      pdf.setFillColor(...capRiskRgb);
+      pdf.roundedRect(cardX, currentCY, 3.5, cardH2, 2, 2, 'F');
+
+      // Razão social em destaque
+      const cnpjFormatted = cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+      const capRazaoLines = pdf.splitTextToSize(cnpjData.razao_social ?? '—', cardW2 - 55);
+      pdf.setFontSize(12);
+      pdf.setFont(F, 'bold');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(capRazaoLines.slice(0, 2), cardX + 8, currentCY + 12);
+
+      // CNPJ + localidade + região em linha menor
+      const capLocal = [
+        geoData?.no_municipio ?? cnpjData?.municipio,
+        geoData?.sg_uf ?? cnpjData?.uf,
+        geoData?.no_regiao_saude ? `Região de Saúde ${geoData.no_regiao_saude}` : null,
+      ].filter(Boolean).join('  ·  ');
+      pdf.setFontSize(8.5);
+      pdf.setFont(F, 'normal');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`CNPJ ${cnpjFormatted}`, cardX + 8, currentCY + 26);
+      pdf.text(capLocal, cardX + 8, currentCY + 33);
+
+      // Score + Classificação no canto direito
+      if (cnpjData.score_risco_final != null) {
+        const scoreX = cardX + cardW2 - 38;
+        pdf.setFontSize(7);
+        pdf.setFont(F, 'bold');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('SCORE', scoreX, currentCY + 10, { align: 'center' });
+        pdf.setFontSize(22);
+        pdf.setFont(F, 'bold');
+        pdf.setTextColor(...capRiskRgb);
+        pdf.text(cnpjData.score_risco_final.toFixed(1), scoreX, currentCY + 25, { align: 'center' });
+        pdf.setFontSize(7.5);
+        pdf.setFont(F, 'bold');
+        pdf.setTextColor(...capRiskRgb);
+        pdf.text(cnpjData.classificacao_risco ?? '—', scoreX, currentCY + 32, { align: 'center' });
+      }
+
+
+      pdf.setFont(F, 'normal');
       pdf.setFontSize(9);
       pdf.setTextColor(100, 116, 139); 
       pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, margin + 8, pageH - 20);
@@ -246,17 +307,14 @@ export function usePdfExport() {
       pdf.setFillColor(15, 23, 42);
       pdf.rect(0, 0, pageW, headerH, 'F');
 
-      // Accent line no topo (efeito gradiente parcial)
-      pdf.setFillColor(99, 102, 241);
-      pdf.rect(0, 0, contentW * 0.45, 2.5, 'F');
 
       // Branding
       pdf.setFontSize(7.5);
-      pdf.setFont('helvetica', 'bold');
+      pdf.setFont(F, 'bold');
       pdf.setTextColor(99, 102, 241);
       pdf.text('SENTINELA · PFPB · CGU', margin, 11);
       pdf.setFontSize(7);
-      pdf.setFont('helvetica', 'normal');
+      pdf.setFont(F, 'normal');
       pdf.setTextColor(100, 116, 139);
       pdf.setFontSize(8);
       pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, pageW - margin, 11, { align: 'right' });
@@ -264,14 +322,14 @@ export function usePdfExport() {
       // Razão social
       const razaoLines = pdf.splitTextToSize(cnpjData.razao_social ?? '—', contentW * 0.78);
       pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
+      pdf.setFont(F, 'bold');
       pdf.setTextColor(255, 255, 255);
       pdf.text(razaoLines.slice(0, 2), margin, 23);
 
       // CNPJ + localização
       const cnpjFmt = cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
       pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
+      pdf.setFont(F, 'normal');
       pdf.setTextColor(148, 163, 184);
       const locLine = [
         `CNPJ ${cnpjFmt}`,
@@ -290,7 +348,7 @@ export function usePdfExport() {
         pdf.setFillColor(...riskRgb);
         pdf.roundedRect(pageW - margin - bW1 - bW2 - 3, bY, bW1, bH, 2, 2, 'F');
         pdf.setFontSize(7.5);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont(F, 'bold');
         pdf.setTextColor(255, 255, 255);
         pdf.text(badge1, pageW - margin - bW1 - bW2 - 3 + bW1 / 2, bY + 5.2, { align: 'center' });
         // Classificação badge
@@ -316,11 +374,11 @@ export function usePdfExport() {
         pdf.setFillColor(...card.accent);
         pdf.roundedRect(x, y, 2.5, cardH, 1, 1, 'F');
         pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont(F, 'bold');
         pdf.setTextColor(100, 116, 139);
         pdf.text(card.label, x + 6, y + 8);
         pdf.setFontSize(13);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont(F, 'bold');
         pdf.setTextColor(...(i === 0 ? riskRgb : [15, 23, 42]));
         pdf.text(card.value, x + 6, y + 18);
       });
@@ -328,7 +386,7 @@ export function usePdfExport() {
 
       // ── Rankings ───────────────────────────────────
       pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'bold');
+      pdf.setFont(F, 'bold');
       pdf.setTextColor(148, 163, 184);
       pdf.text('RANKINGS DE CRITICIDADE', margin, y);
       pdf.setDrawColor(226, 232, 240);
@@ -346,14 +404,14 @@ export function usePdfExport() {
         const x = margin + i * rankColW;
         drawIcon(r.icon, x, y + 7, { size: 13, color: r.iconColor });
         const tx = x + 8;
-        pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(148, 163, 184);
+        pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(148, 163, 184);
         pdf.text(r.label, tx, y);
         // Rank value (grande) + total (pequeno) na mesma linha
         const rankStr = r.val != null ? `${r.val}º` : '—';
-        pdf.setFontSize(13); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(13); pdf.setFont(F, 'bold'); pdf.setTextColor(15, 23, 42);
         pdf.text(rankStr, tx, y + 9);
         const rankW = pdf.getTextWidth(rankStr);
-        pdf.setFontSize(8); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(148, 163, 184);
+        pdf.setFontSize(8); pdf.setFont(F, 'normal'); pdf.setTextColor(148, 163, 184);
         pdf.text(`/ ${r.total ?? '—'}`, tx + rankW + 1.5, y + 9);
       });
       y += 22;
@@ -369,9 +427,9 @@ export function usePdfExport() {
         const x = margin + i * rankColW;
         drawIcon(s.icon, x, y + 7, { size: 13, color: s.iconColor });
         const tx = x + 8;
-        pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(148, 163, 184);
+        pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(148, 163, 184);
         pdf.text(s.label, tx, y);
-        pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(12); pdf.setFont(F, 'bold'); pdf.setTextColor(15, 23, 42);
         pdf.text(String(s.val), tx, y + 9);
       });
       y += 20;
@@ -383,12 +441,12 @@ export function usePdfExport() {
         pdf.roundedRect(margin, y, contentW, scoreCardH, 2, 2, 'F');
         pdf.setFillColor(...riskRgb);
         pdf.roundedRect(margin, y, 2.5, scoreCardH, 1, 1, 'F');
-        pdf.setFontSize(8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(100, 116, 139);
+        pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(100, 116, 139);
         pdf.text('SCORE DE RISCO CONSOLIDADO', margin + 6, y + 7);
         pdf.text('CLASSIFICAÇÃO', margin + 70, y + 7);
-        pdf.setFontSize(17); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...riskRgb);
+        pdf.setFontSize(17); pdf.setFont(F, 'bold'); pdf.setTextColor(...riskRgb);
         pdf.text(cnpjData.score_risco_final.toFixed(1), margin + 6, y + 16);
-        pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(12); pdf.setFont(F, 'bold'); pdf.setTextColor(15, 23, 42);
         pdf.text(cnpjData.classificacao_risco ?? '—', margin + 70, y + 16);
       }
 
@@ -440,16 +498,16 @@ export function usePdfExport() {
         body: semRows,
         foot: [['TOTAL', formatCurrencyFull(totalAll), formatCurrencyFull(totalReg), formatCurrencyFull(totalIrr), '', '']],
         margin: { left: margin, right: margin },
-        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        styles: { fontSize: 8, cellPadding: 3, font: F, fontStyle: 'semibold' },
         headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
         footStyles: { fillColor: [240, 240, 240], textColor: [30, 30, 30], fontStyle: 'bold' },
         alternateRowStyles: { fillColor: [249, 250, 251] },
         columnStyles: {
-          0: { fontStyle: 'bold' },
+          0: {},
           1: { halign: 'right' },
           2: { halign: 'right', textColor: [16, 185, 129] },
           3: { halign: 'right', textColor: [239, 68, 68] },
-          4: { halign: 'center', fontStyle: 'bold' },
+          4: { halign: 'center' },
           5: { halign: 'center' },
         },
         didParseCell: (data) => {
@@ -498,7 +556,6 @@ export function usePdfExport() {
             fmtVal(p.medReg, p.formato, formatCurrencyFull),
           ]),
           margin: { left: margin, right: margin },
-          styles: { fontSize: 8, cellPadding: 3 },
           headStyles: { fillColor: [127, 29, 29], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
           styles: { fontSize: 8, cellPadding: 3, fillColor: [255, 245, 245] },
           alternateRowStyles: { fillColor: [255, 245, 245] },
@@ -551,19 +608,19 @@ export function usePdfExport() {
         head: [['Indicador', 'Farmácia', 'Mediana\nRegião', 'Mediana\nUF', 'Mediana\nBR', 'Risco\nRegião', 'Risco\nUF', 'Risco\nBR', 'Status']],
         body: indRows,
         margin: { left: margin, right: margin },
-        styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak' },
+        styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', font: F, fontStyle: 'semibold' },
         headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
         alternateRowStyles: { fillColor: [255, 255, 255] },
         columnStyles: {
           0: { cellWidth: 48 },
-          1: { halign: 'right', fontStyle: 'bold' },
+          1: { halign: 'right' },
           2: { halign: 'right' },
           3: { halign: 'right', textColor: [120, 120, 120] },
           4: { halign: 'right', textColor: [120, 120, 120] },
-          5: { halign: 'center', fontStyle: 'bold' },
+          5: { halign: 'center' },
           6: { halign: 'center', textColor: [120, 120, 120] },
           7: { halign: 'center', textColor: [120, 120, 120] },
-          8: { halign: 'center', fontStyle: 'bold' },
+          8: { halign: 'center' },
         },
         didParseCell: (data) => {
           if (data.section === 'head') {
@@ -603,19 +660,20 @@ export function usePdfExport() {
 
           // KPI Cards
           const red = [239, 68, 68], orange = [249, 115, 22], yellow = [234, 179, 8], green = [16, 185, 129];
+          const summary2 = crmsTabRef.value.getSummary() || {};
           const crmCards = [
-            { label: 'CONCENTRAÇÃO TOP 1', val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull), color: kpis.concentracaoTop1 > 40 ? red : kpis.concentracaoTop1 > 20 ? orange : green },
-            { label: 'CONCENTRAÇÃO TOP 5', val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull), color: kpis.concentracaoTop5 > 70 ? red : kpis.concentracaoTop5 > 50 ? orange : green },
-            { label: 'LANÇ. EM SEQUÊNCIA', val: String(kpis.qtdLancamentosAgrupados || 0), color: kpis.qtdLancamentosAgrupados > 0 ? red : green },
-            { label: '>30 PRESC/DIA CNPJ', val: String(kpis.qtdPrescrIntensivaLocal || 0), color: kpis.qtdPrescrIntensivaLocal > 0 ? orange : green },
-            { label: '>30 PRESC/DIA BRASIL', val: String(kpis.qtdPrescrIntensivaOcultos || 0), color: kpis.qtdPrescrIntensivaOcultos > 0 ? orange : green },
-            { label: 'MULTI-FARMÁCIA', val: String(kpis.qtdMultiFarmacia || 0), color: kpis.qtdMultiFarmacia > 0 ? orange : green },
-            { label: 'FRAUDES CRM', val: String(kpis.totalIrregularesCfm || 0), color: kpis.totalIrregularesCfm > 0 ? red : green },
-            { label: 'DISTÂNCIA (>400KM)', val: String(kpis.qtdAcima400km || 0), color: kpis.qtdAcima400km > 0 ? yellow : green },
+            { label: 'TOP 1 CRM - VOLUME R$', val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull), color: kpis.concentracaoTop1 > 40 ? red : kpis.concentracaoTop1 > 20 ? orange : green, subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
+            { label: 'TOP 5 CRMs - VOLUME R$', val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull), color: kpis.concentracaoTop5 > 70 ? red : kpis.concentracaoTop5 > 50 ? orange : green, subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
+            { label: 'LANÇAMENTOS EM SEQUÊNCIA', val: String(kpis.qtdLancamentosAgrupados || 0), color: kpis.qtdLancamentosAgrupados > 0 ? red : green, subtitle: 'Muitas autorizações em intervalo curto' },
+            { label: '>30 PRESCRIÇÕES/DIA NESTE CNPJ', val: String(kpis.qtdPrescrIntensivaLocal || 0), color: kpis.qtdPrescrIntensivaLocal > 0 ? orange : green, subtitle: 'Na unidade local' },
+            { label: '>30 PRESCRIÇÕES/DIA NO BRASIL', val: String(kpis.qtdPrescrIntensivaOcultos || 0), color: kpis.qtdPrescrIntensivaOcultos > 0 ? orange : green, subtitle: 'Soma de todo o Brasil' },
+            { label: 'MULTI-FARMÁCIA', val: String(kpis.qtdMultiFarmacia || 0), color: kpis.qtdMultiFarmacia > 0 ? orange : green, subtitle: 'CRMs com registro em > 70 farmácias distintas' },
+            { label: 'FRAUDES CRM', val: String(kpis.totalIrregularesCfm || 0), color: kpis.totalIrregularesCfm > 0 ? red : green, subtitle: `${kpis.qtdCrmInvalido || 0} Inexist. | ${kpis.qtdPrescrAntesRegistro || 0} Irreg. | ${formatCurrencyFull((summary2.vl_crm_invalido || 0) + (summary2.vl_crm_antes_registro || 0))}` },
+            { label: 'DISTÂNCIA (>400KM)', val: String(kpis.qtdAcima400km || 0), color: kpis.qtdAcima400km > 0 ? yellow : green, subtitle: 'Prescrições em locais distantes' },
           ];
 
           const cW = (contentW - 9) / 4;
-          const cH = 15;
+          const cH = 20;
           crmCards.forEach((c, i) => {
             const row = Math.floor(i / 4);
             const col = i % 4;
@@ -626,10 +684,15 @@ export function usePdfExport() {
             pdf.roundedRect(x, cy, cW, cH, 2, 2, 'F');
             pdf.setFillColor(...c.color);
             pdf.roundedRect(x, cy, 2, cH, 1, 1, 'F');
-            pdf.setFontSize(5.8); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(100, 116, 139);
-            pdf.text(c.label, x + 4, cy + 5.5);
-            pdf.setFontSize(10); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...c.color);
-            pdf.text(c.val, x + 4, cy + 12);
+            pdf.setFontSize(7); pdf.setFont(F, 'bold'); pdf.setTextColor(100, 116, 139);
+            const labelLines = pdf.splitTextToSize(c.label.toUpperCase(), cW - 8);
+            pdf.text(labelLines.slice(0, 2), x + 4, cy + 6);
+            if (c.subtitle) {
+              pdf.setFontSize(5.5); pdf.setFont(F, 'normal'); pdf.setTextColor(148, 163, 184);
+              pdf.text(c.subtitle, x + 4, cy + 12);
+            }
+            pdf.setFontSize(12); pdf.setFont(F, 'bold'); pdf.setTextColor(...c.color);
+            pdf.text(c.val, x + 4, cy + 17);
           });
 
           y4 += (cH * 2 + 20);
@@ -641,7 +704,7 @@ export function usePdfExport() {
             if (m.flag_robo_oculto > 0 && !m.flag_robo) issues.push('>30 presc/dia Brasil');
             if (m.alerta2_tempo_concentrado || m.alerta2) issues.push('Lançamentos sequenciais');
             if (m.flag_crm_invalido > 0) issues.push('CRM Inexistente');
-            if (m.flag_prescricao_antes_registro > 0) issues.push('CRM Irregular (Venda anterior ao Registro)');
+            if (m.flag_prescricao_antes_registro > 0) issues.push('CRM Irregular (Autor. antes do Registro)');
             if (m.qtd_estabelecimentos_atua === 1) issues.push('Exclusivo do CNPJ');
             if (m.alerta5_geografico) issues.push('Distância >400km');
 
@@ -662,16 +725,16 @@ export function usePdfExport() {
             head: [['CRM', 'Alertas / Status de Auditoria', 'Volume (R$)', 'Prescrições', '% Volume', 'Presc/Dia\nAqui', 'Nº\nFarmácias']],
             body: crmRows,
             margin: { left: margin, right: margin },
-            styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak' },
+            styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak', font: F, fontStyle: 'normal' },
             headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
             alternateRowStyles: { fillColor: [249, 250, 251] },
             columnStyles: {
-              0: { fontStyle: 'bold', cellWidth: 24 },
+              0: { cellWidth: 24 },
               1: { cellWidth: 56 },
-              2: { halign: 'right', fontStyle: 'bold', textColor: [99, 102, 241] },
+              2: { halign: 'right', textColor: [30, 41, 59] },
               3: { halign: 'right' },
-              4: { halign: 'center', fontStyle: 'bold' },
-              5: { halign: 'center', fontStyle: 'bold' },
+              4: { halign: 'center' },
+              5: { halign: 'center' },
               6: { halign: 'center' }
             },
             didParseCell: (data) => {
@@ -680,17 +743,109 @@ export function usePdfExport() {
                 data.cell.styles.halign = hAligns[data.column.index];
               }
               if (data.section === 'body') {
-                if (data.column.index === 1 && data.cell.raw !== 'Regular') {
+                const hasAlert = data.row.cells[1]?.raw !== 'Regular';
+                if (data.column.index === 1 && hasAlert) {
                   data.cell.styles.textColor = [239, 68, 68];
-                  data.cell.styles.fontStyle = 'bold';
+                  data.cell.styles.fontStyle = 'normal';
                 }
-                if (data.column.index === 1 && data.cell.raw === 'Regular') {
+                if (data.column.index === 1 && !hasAlert) {
+                  data.cell.styles.fontStyle = 'normal';
                   data.cell.styles.textColor = [150, 150, 150];
+                }
+                if (data.column.index === 2 && hasAlert) {
+                  data.cell.styles.textColor = [239, 68, 68];
+                  data.cell.styles.fillColor = [255, 240, 240];
                 }
               }
             }
           });
         }
+      }
+
+      // ── PÁGINA 5 — Falecidos ─────────────────────────────
+      if (falecidosTabRef?.value?.hasData()) {
+        cnpjNavStore.activeTabIndex = 4;
+        await sleep(500);
+
+        const summary    = falecidosTabRef.value.getSummary();
+        const agrupados  = falecidosTabRef.value.getAgrupados();
+
+        pdf.addPage();
+        pageHeader('Vendas para Pacientes Falecidos', cnpjData.razao_social, PI.EXCLAMATION_TRIANGLE);
+
+        let y5 = 26;
+
+        // KPI cards
+        const fKpis = [
+          { label: 'CPFs Distintos',       val: String(summary.cpfs_distintos),                               color: [239, 68, 68]   },
+          { label: 'Núm. Autorizações',     val: String(summary.total_autorizacoes),                           color: [249, 115, 22]  },
+          { label: 'Prejuízo Estimado',     val: formatCurrencyFull(summary.valor_total),                      color: [239, 68, 68]   },
+          { label: 'Média Dias Pós-Óbito',  val: `${summary.media_dias?.toFixed(1)} dias`,                    color: [249, 115, 22]  },
+          { label: 'Máx. Dias Pós-Óbito',  val: `${summary.max_dias} dias`,                                   color: [249, 115, 22]  },
+          { label: '% do Faturamento',      val: `${(summary.pct_faturamento * 100).toFixed(3)}%`,            color: [234, 179, 8]   },
+          { label: 'CPFs Multi-CNPJ',       val: `${summary.cpfs_multi_cnpj} (${(summary.pct_multi_cnpj * 100).toFixed(1)}%)`, color: [249, 115, 22] },
+        ];
+
+        const fCols = 4;
+        const fCardW = (contentW - (fCols - 1) * 3) / fCols;
+        const fCardH = 18;
+        let maxRow = 0;
+        fKpis.forEach((k, i) => {
+          const col = i % fCols;
+          const row = Math.floor(i / fCols);
+          const x = margin + col * (fCardW + 3);
+          const fy = y5 + row * (fCardH + 3);
+          maxRow = Math.max(maxRow, row);
+          pdf.setFillColor(248, 250, 252);
+          pdf.roundedRect(x, fy, fCardW, fCardH, 2, 2, 'F');
+          pdf.setFillColor(...k.color);
+          pdf.roundedRect(x, fy, 2, fCardH, 1, 1, 'F');
+          pdf.setFontSize(7); pdf.setFont(F, 'bold'); pdf.setTextColor(100, 116, 139);
+          pdf.text(k.label.toUpperCase(), x + 4, fy + 6);
+          pdf.setFontSize(12); pdf.setFont(F, 'bold'); pdf.setTextColor(...k.color);
+          pdf.text(k.val, x + 4, fy + 14);
+        });
+        y5 += (maxRow + 1) * (fCardH + 3) + 7;
+
+        y5 = sectionTitle('DETALHAMENTO POR FALECIDO', y5, [30, 41, 59], PI.TABLE);
+
+        const falRows = [];
+        for (const g of agrupados) {
+          // linha de grupo
+          falRows.push([{
+            content: `${g.cpf}  —  ${g.nome}  |  ${g.transacoes.length} autorização(ões)  |  Óbito: ${g.dt_obito}`,
+            colSpan: 7,
+            styles: { fontStyle: 'semibold', fillColor: [241, 245, 249], textColor: [30, 41, 59], fontSize: 7 },
+          }]);
+          for (const t of g.transacoes) {
+            const dias = t.dias_apos_obito ?? 0;
+            const diasColor = dias > 365 ? [239, 68, 68] : dias > 30 ? [249, 115, 22] : [234, 179, 8];
+            falRows.push([
+              t.num_autorizacao ?? '—',
+              formatarData(t.dt_obito),
+              formatarData(t.data_autorizacao),
+              `${g.municipio ?? ''}/${g.uf ?? ''}`,
+              t.fonte_obito ?? '—',
+              formatCurrencyFull(t.valor_total_autorizacao),
+              { content: `${dias}d`, styles: { halign: 'center', textColor: diasColor, fontStyle: 'bold' } },
+            ]);
+          }
+        }
+
+        autoTable(pdf, {
+          startY: y5 + 2,
+          head: [['Nº Autorização', 'Dt. Óbito', 'Dt. Venda', 'Município/UF', 'Fonte Óbito', 'Valor (R$)', 'Dias Pós-Óbito']],
+          body: falRows,
+          margin: { left: margin, right: margin },
+          styles: { fontSize: 7, cellPadding: 2.5, overflow: 'linebreak', font: F, fontStyle: 'normal' },
+          headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+          alternateRowStyles: { fillColor: [255, 255, 255] },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            5: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] },
+            6: { halign: 'center' },
+          },
+        });
       }
 
       // ── Salvar ────────────────────────────────────────────

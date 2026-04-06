@@ -43,10 +43,22 @@ const onRowSelect = (event) => {
   const { municipio, uf } = event.data;
   filterStore.selectedMunicipio = `${municipio}|${uf}`;
 };
+
+let _lastHoveredRow = null;
+const onTableHover = (e) => {
+  const row = e.target.closest('tr[data-p-selectable-row="true"]');
+  if (row === _lastHoveredRow) return;
+  _lastHoveredRow = row;
+  filterStore.hoveredMunicipioName = row ? (row.cells[1]?.textContent?.trim() ?? null) : null;
+};
+const onTableLeave = () => {
+  _lastHoveredRow = null;
+  filterStore.hoveredMunicipioName = null;
+};
 </script>
 
 <template>
-  <div class="table-section shadow-card modern-scroll-card" :class="{ 'is-refreshing': isLoading }">
+  <div class="table-section shadow-card modern-scroll-card" :class="{ 'is-refreshing': isLoading }" @mouseover="onTableHover" @mouseleave="onTableLeave">
     <div class="section-header">
        <div class="header-icon-box">
          <i class="pi pi-map-marker"></i>

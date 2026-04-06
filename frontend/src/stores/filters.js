@@ -33,6 +33,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
+  const hoveredMunicipioName = ref(null);
 
   // 2. FILTROS DE FAIXA (RANGES)
   const percentualNaoComprovacaoRange = ref(saved?.percentualNaoComprovacaoRange ?? FILTER_DEFAULTS.PERCENTUAL_RANGE);
@@ -168,6 +169,7 @@ export const useFilterStore = defineStore('filters', () => {
     statusSelection,
     rfaSelection,
     searchTarget,
+    hoveredMunicipioName,
     resetFilters
   };
 });

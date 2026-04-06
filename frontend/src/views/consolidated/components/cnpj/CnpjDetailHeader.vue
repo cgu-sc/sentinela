@@ -32,7 +32,10 @@ const props = defineProps({
   cnpj: { type: String, required: true },
   cnpjData: { type: Object, default: null },
   geoData: { type: Object, default: null },
+  isExporting: { type: Boolean, default: false },
 });
+
+const emit = defineEmits(['export']);
 
 // DEBUG: Identificando o campo correto do score
 watchEffect(() => {
@@ -97,6 +100,15 @@ const formatCnpj = (v) => {
       />
 
       <div class="list-actions" v-if="cnpjData">
+        <button
+          class="list-btn list-btn--export"
+          @click="emit('export')"
+          :disabled="isExporting"
+          v-tooltip.bottom="'Exportar relatório PDF'"
+        >
+          <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+          <span>{{ isExporting ? 'Gerando...' : 'Exportar PDF' }}</span>
+        </button>
         <button
           class="list-btn"
           :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
@@ -316,6 +328,20 @@ const formatCnpj = (v) => {
   transition: all 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.list-btn--export {
+  color: #6366f1;
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+}
+.list-btn--export:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: #6366f1;
+}
+.list-btn--export:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .list-btn--interesse {

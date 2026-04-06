@@ -53,6 +53,29 @@ const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
   useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
+
+import { usePdfExport } from '@/composables/usePdfExport';
+const { isExporting, exportCnpjPdf } = usePdfExport();
+
+const evolutionTabRef = ref(null);
+const indicatorsTabRef = ref(null);
+
+const qtdMunicipiosRegiao = computed(() =>
+  geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
+);
+
+const handleExport = () => {
+  exportCnpjPdf({
+    cnpjData: cnpjData.value,
+    geoData: geoData.value,
+    cnpj: cnpj.value,
+    qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
+    evolutionTabRef,
+    indicatorsTabRef,
+    cnpjNavStore: cnpjNav,
+    formatCurrencyFull,
+  });
+};
 // ── Composables (Fim) ─────────────────────────────────────
 
 // ── Dados do CNPJ ─────────────────────────────────────────
@@ -148,7 +171,7 @@ const formatCnpj = (v) => {
     </div>
 
     <!-- HEADER (COMPONENTE ISOLADO) -->
-    <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" />
+    <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :is-exporting="isExporting" @export="handleExport" />
 
     <!-- TABS -->
     <TabView class="detail-tabs" :activeIndex="cnpjNav.activeTabIndex" @tab-change="cnpjNav.activeTabIndex = $event.index">
@@ -168,14 +191,14 @@ const formatCnpj = (v) => {
             >Evolução Financeira</span
           ></template
         >
-        <CnpjTabFinancialEvolution class="tab-content" />
+        <CnpjTabFinancialEvolution ref="evolutionTabRef" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
         <template #header
           ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
         >
-        <CnpjTabIndicators class="tab-content" />
+        <CnpjTabIndicators ref="indicatorsTabRef" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

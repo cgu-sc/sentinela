@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { storeToRefs } from 'pinia';
@@ -27,6 +27,14 @@ const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded } = st
 
 onMounted(() => {
   if (cnpj.value) analyticsStore.fetchEvolucaoFinanceira(cnpj.value);
+});
+
+const chartRef = ref(null);
+
+defineExpose({
+  getChartImage: (pixelRatio = 2) =>
+    chartRef.value?.chart?.getDataURL({ type: 'jpeg', pixelRatio, backgroundColor: '#ffffff', quality: 0.85 }) ?? null,
+  getSemestresData: () => evolucaoData.value?.semestres ?? [],
 });
 
 // ── Cores dos gráficos ────────────────────────────────────
@@ -167,7 +175,7 @@ const chartOption = computed(() => {
           <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
         </div>
         <div class="evolucao-chart-wrap">
-          <VChart :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" />
+          <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" />
         </div>
       </div>
 

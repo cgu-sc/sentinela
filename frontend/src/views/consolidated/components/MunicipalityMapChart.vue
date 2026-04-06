@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, ref } from 'vue';
+import { computed, watch, ref, nextTick } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
@@ -198,6 +198,28 @@ const chartOption = computed(() => {
   };
 });
 
+const chartRef = ref(null);
+let _prevGeoName = null;
+
+watch(() => filterStore.hoveredMunicipioName, async (municipioName) => {
+  await nextTick();
+  const chart = chartRef.value?.chart;
+  if (!chart) return;
+
+  if (_prevGeoName) {
+    chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: _prevGeoName });
+    _prevGeoName = null;
+  }
+
+  if (municipioName) {
+    const match = mapData.value.find(d => d.municipio?.toLowerCase() === municipioName.toLowerCase());
+    if (match?.name) {
+      _prevGeoName = match.name;
+      chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: match.name });
+    }
+  }
+});
+
 const onClick = (params) => {
   if (!params.data?.municipio) return;
   filterStore.selectedMunicipio = `${params.data.municipio}|${filterStore.selectedUF}`;
@@ -213,6 +235,7 @@ const onClick = (params) => {
     </div>
     <div class="chart-wrapper">
       <VChart
+        ref="chartRef"
         :key="mapKey"
         class="echart"
         :option="chartOption"

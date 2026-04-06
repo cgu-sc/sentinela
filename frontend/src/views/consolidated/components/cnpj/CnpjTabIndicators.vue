@@ -64,6 +64,11 @@ const pontosCriticos = computed(() => {
   });
 });
 
+defineExpose({
+  getIndicadoresData: () => indicadoresData.value?.indicadores ?? {},
+  getPontosCriticos: () => pontosCriticos.value,
+});
+
 function riscoPillStyle(risco, thresholdKey = 'default') {
   const s = getIndicadorStatus(risco, thresholdKey);
   const c = s.color;

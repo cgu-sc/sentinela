@@ -147,8 +147,93 @@ export function usePdfExport() {
         return y + 7;
       };
 
-      // ── PÁGINA 1 — Identificação ─────────────────────────
+      // ── PÁGINA CAPA (Início) ──────────────────────────────────
+      const fetchBase64 = async (url) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return new Promise(resolve => {
+            const rd = new FileReader();
+            rd.onload = () => resolve(rd.result);
+            rd.readAsDataURL(blob);
+          });
+        } catch(e) { return null; }
+      };
 
+      // Usando Date.now() para invalidar o cache forte do navegador (Cache Busting)
+      const cguB64 = await fetchBase64(`/img/logo_cgu.png?v=${Date.now()}`);
+
+      const pageH = pdf.internal.pageSize.getHeight();
+      pdf.setFillColor(15, 23, 42); 
+      pdf.rect(0, 0, pageW, pageH, 'F');
+      
+      pdf.setFillColor(99, 102, 241); 
+      pdf.rect(0, 0, 4, pageH, 'F');
+
+      let currentCY = 15;
+
+      if (cguB64) {
+        // Logo oficial, proporção 750x800 (15:16)
+        const sizeW = 110; 
+        const sizeH = 117.3;
+        pdf.addImage(cguB64, 'PNG', (pageW - sizeW) / 2, currentCY, sizeW, sizeH);
+        currentCY += (sizeH + 10);
+      } else {
+        currentCY += 50; // Fallback caso não carregue
+      }
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(12);
+      pdf.setTextColor(148, 163, 184); 
+      pdf.text('SISTEMA DE AUDITORIA CONTÍNUA', margin + 8, currentCY);
+      
+      currentCY += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(28);
+      pdf.setTextColor(248, 250, 252); 
+      pdf.text('Farmácia Popular', margin + 8, currentCY);
+      
+      currentCY += 12;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor(99, 102, 241); 
+      pdf.text('Relatório de Conformidade do CNPJ', margin + 8, currentCY);
+
+      currentCY += 40;
+      pdf.setFillColor(30, 41, 59); 
+      pdf.roundedRect(margin + 8, currentCY, contentW - 16, 42, 3, 3, 'F');
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(248, 250, 252);
+      pdf.text(`RAZÃO SOCIAL:`, margin + 14, currentCY + 10);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      const capRazaoLines = pdf.splitTextToSize(cnpjData.razao_social ?? '—', contentW - 30);
+      pdf.text(capRazaoLines, margin + 45, currentCY + 10);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`CNPJ:`, margin + 14, currentCY + 22);
+      pdf.setFont('helvetica', 'normal');
+      const cnpjFormatted = cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+      pdf.text(`${cnpjFormatted}`, margin + 45, currentCY + 22);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`LOCALIDADE:`, margin + 14, currentCY + 34);
+      pdf.setFont('helvetica', 'normal');
+      const capLocal = [geoData?.no_municipio, geoData?.sg_uf].filter(Boolean).join(' - ') || cnpjData?.uf;
+      pdf.text(capLocal ?? '', margin + 45, currentCY + 34);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139); 
+      pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, margin + 8, pageH - 20);
+
+      pdf.addPage();
+
+      // ── PÁGINA 2 — Identificação (Subsequente Branco) ──────
       // Cor de risco a partir do % sem comprovação
       const perc = cnpjData.percValSemComp ?? 0;
       const riskRgb = perc >= 30 ? [239, 68,  68]
@@ -192,7 +277,7 @@ export function usePdfExport() {
         `CNPJ ${cnpjFmt}`,
         geoData?.no_municipio ?? cnpjData?.municipio,
         geoData?.sg_uf ?? cnpjData?.uf,
-        geoData?.no_regiao_saude ? `Reg. ${geoData.no_regiao_saude}` : null,
+        geoData?.no_regiao_saude ? `Região de Saúde: ${geoData.no_regiao_saude}` : null,
       ].filter(Boolean).join('  ·  ');
       pdf.text(locLine, margin, 36);
 
@@ -547,7 +632,7 @@ export function usePdfExport() {
             pdf.text(c.val, x + 4, cy + 12);
           });
 
-          y4 += (cH * 2 + 10);
+          y4 += (cH * 2 + 20);
           y4 = sectionTitle('CRMs DE INTERESSE - DETALHAMENTO', y4, [30, 41, 59], PI.TABLE);
 
           const crmRows = top20.map(m => {

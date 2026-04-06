@@ -280,7 +280,12 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             all_exist = (
                 os.path.exists(_PARQUET_PATH) and
                 os.path.exists(_LOCALIDADES_PARQUET_PATH) and
-                os.path.exists(_REDE_PARQUET_PATH)
+                os.path.exists(_REDE_PARQUET_PATH) and
+                os.path.exists(_MATRIZ_PARQUET_PATH) and
+                os.path.exists(_FALECIDOS_PARQUET_PATH) and
+                os.path.exists(_CRMS_DETALHADO_PARQUET_PATH) and
+                os.path.exists(_TOP20_CRMS_PARQUET_PATH) and
+                os.path.exists(_DADOS_FARMACIA_PARQUET_PATH)
             )
             if all_exist:
                 _cache_status = "loading_parquet"
@@ -411,5 +416,14 @@ def get_cache_status() -> dict:
     return {
         "progress": _cache_progress,
         "status": _cache_status,
-        "is_ready": _df_movimentacao is not None and _df_localidades is not None
+        "is_ready": (
+            _df_movimentacao is not None and 
+            _df_localidades is not None and 
+            _df_rede is not None and
+            _df_matriz_risco is not None and
+            _df_falecidos is not None and
+            _df_crms_detalhado is not None and
+            _df_top20_crms is not None and
+            _df_dados_farmacia is not None
+        )
     }

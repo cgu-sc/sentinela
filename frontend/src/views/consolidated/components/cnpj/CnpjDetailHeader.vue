@@ -32,6 +32,7 @@ const props = defineProps({
   cnpj: { type: String, required: true },
   cnpjData: { type: Object, default: null },
   geoData: { type: Object, default: null },
+  cadastro: { type: Object, default: null },
   isExporting: { type: Boolean, default: false },
 });
 
@@ -84,6 +85,28 @@ const formatCnpj = (v) => {
     "$1.$2.$3/$4-$5",
   );
 };
+
+// ── Formatação Robusta de Endereço ────────────────────────
+const formattedFullAddress = computed(() => {
+  const c = props.cadastro;
+  if (!c || !c.logradouro) return null;
+
+  // 1. Parte Principal: Tipo + Logradouro + Número
+  let main = [c.tipo_logradouro, c.logradouro].filter(Boolean).join(" ");
+  if (c.numero && c.numero !== "None") main += `, ${c.numero}`;
+
+  // 2. Complemento (se existir)
+  if (c.complemento && c.complemento !== "None" && c.complemento !== "null") {
+    main += ` - ${c.complemento}`;
+  }
+
+  // 3. Bairro e CEP
+  const parts = [main];
+  if (c.bairro && c.bairro !== "None") parts.push(c.bairro);
+  if (c.cep && c.cep !== "None") parts.push(`CEP: ${c.cep}`);
+
+  return parts.filter(Boolean).join(" · ");
+});
 </script>
 
 <template>
@@ -147,6 +170,14 @@ const formatCnpj = (v) => {
             <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
           </div>
         </div>
+        <!-- NOVO: Linha de Endereço e Geolocalização -->
+        <div class="address-row-new" v-if="cadastro && formattedFullAddress">
+          <span class="address-text">
+            <i class="pi pi-home" />
+            {{ formattedFullAddress }}
+          </span>
+        </div>
+
         <div class="location-chips">
           <span class="loc-text">
             <i class="pi pi-map-marker" />
@@ -504,6 +535,34 @@ const formatCnpj = (v) => {
 
 .loc-text i {
   font-size: 0.75rem;
+}
+
+.address-row-new {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0.15rem 0 0.4rem 0;
+}
+
+.address-text {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.9;
+}
+
+.address-text i {
+  font-size: 0.75rem;
+  color: var(--primary-color);
+  opacity: 0.7;
+}
+
+.sep-dot {
+  margin: 0 0.1rem;
+  opacity: 0.4;
 }
 
 .loc-separator {

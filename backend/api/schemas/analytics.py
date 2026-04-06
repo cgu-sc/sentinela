@@ -222,3 +222,17 @@ class PrescritoresResponse(BaseModel):
     summary: dict
     top20: list
 
+# ── Dados Cadastrais e Geográficos ─────────────────────
+class DadosFarmaciaSchema(BaseModel):
+    cnpj: str
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    tipo_logradouro: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cep: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+

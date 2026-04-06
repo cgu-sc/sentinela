@@ -28,6 +28,7 @@ from ..schemas.analytics import (
     RegionalFarmaciaSchema,
     RegionalResponse,
     PrescritoresResponse,
+    DadosFarmaciaSchema,
 )
 
 class AnalyticsService:
@@ -936,4 +937,16 @@ class AnalyticsService:
             print(f"❌ ERRO AO CALCULAR DADOS DE PRESCRITORES: {e}")
             print(traceback.format_exc())
             return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
-
+    @staticmethod
+    def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
+        """Retorna os dados cadastrais e geográficos de uma farmácia específica."""
+        try:
+            from data_cache import get_df_dados_farmacia
+            df = get_df_dados_farmacia()
+            rows = df.filter(pl.col("cnpj") == cnpj)
+            if rows.is_empty():
+                return DadosFarmaciaSchema(cnpj=cnpj)
+            return DadosFarmaciaSchema(**rows.row(0, named=True))
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar dados cadastrais da farmácia {cnpj}: {e}")
+            return DadosFarmaciaSchema(cnpj=cnpj)

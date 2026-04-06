@@ -40,7 +40,7 @@ const cnpj = computed(() => route.params.cnpj);
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
-const { resultadoCnpjs } = storeToRefs(analyticsStore);
+const { resultadoCnpjs, dadosCadastro } = storeToRefs(analyticsStore);
 
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
@@ -105,28 +105,32 @@ watch(
     // Ao trocar de CNPJ, reseta navegação e limpa a evolução financeira
     if (newCnpj !== oldCnpj) {
       analyticsStore.resetEvolucaoFinanceira();
+      analyticsStore.resetDadosCadastro();
       cnpjNav.reset(TAB_INDEX.EVOLUCAO);
     }
-    if (newCnpj && !cnpjData.value) {
-      const p = getApiParams();
-      try {
-        await analyticsStore.fetchDashboardSummary(
-          p.inicio,
-          p.fim,
-          p.percMin,
-          p.percMax,
-          p.valMin,
-          "Todos",
-          "Todos",
-          "Todos",
-          "Todos",
-          "Todos",
-          "Todos",
-          "Todos",
-          newCnpj,
-        );
-      } catch (e) {
-        console.error("Erro ao hidratar CNPJ direto:", e);
+    if (newCnpj) {
+      analyticsStore.fetchDadosCadastro(newCnpj);
+      if (!cnpjData.value) {
+        const p = getApiParams();
+        try {
+          await analyticsStore.fetchDashboardSummary(
+            p.inicio,
+            p.fim,
+            p.percMin,
+            p.percMax,
+            p.valMin,
+            "Todos",
+            "Todos",
+            "Todos",
+            "Todos",
+            "Todos",
+            "Todos",
+            "Todos",
+            newCnpj,
+          );
+        } catch (e) {
+          console.error("Erro ao hidratar CNPJ direto:", e);
+        }
       }
     }
   },
@@ -186,7 +190,7 @@ const formatCnpj = (v) => {
     </div>
 
     <!-- HEADER (COMPONENTE ISOLADO) -->
-    <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :is-exporting="isExporting" @export="handleExport" />
+    <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :cadastro="dadosCadastro" :is-exporting="isExporting" @export="handleExport" />
 
     <!-- TABS -->
     <TabView class="detail-tabs" :activeIndex="cnpjNav.activeTabIndex" @tab-change="cnpjNav.activeTabIndex = $event.index">

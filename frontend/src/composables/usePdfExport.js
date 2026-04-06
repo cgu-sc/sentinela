@@ -629,8 +629,8 @@ export function usePdfExport() {
       if (geoData?.id_ibge7 && geoData?.sg_uf && geoStore) {
         const geoJson = geoStore.getMunicipiosGeoByUF(geoData.sg_uf);
         if (geoJson) {
-          y += 8;
-          const mapCardH = 95;
+          y += 14;
+          const mapCardH = 122;
           const mapGap   = 4;
           const mapCardW = (contentW - mapGap) / 2;
           const munLabel = (geoData.no_municipio ?? cnpjData.municipio ?? '').toUpperCase();

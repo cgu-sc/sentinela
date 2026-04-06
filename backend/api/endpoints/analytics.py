@@ -6,11 +6,19 @@ from database import get_db
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
-    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse
+    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse,
+    DadosFarmaciaSchema
 )
 from ..services.analytics import AnalyticsService
 
 router = APIRouter()
+
+
+
+@router.get("/cnpj/{cnpj}/cadastro", response_model=DadosFarmaciaSchema)
+def get_dados_farmacia(cnpj: str):
+    """Retorna os dados cadastrais e geográficos (endereço, lat/lon) para um CNPJ."""
+    return AnalyticsService.get_dados_farmacia(cnpj)
 
 @router.get("/resumo", response_model=AnalyticsResponse)
 def get_analytics_summary(

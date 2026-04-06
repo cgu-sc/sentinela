@@ -34,6 +34,7 @@ export const useAnalyticsStore = defineStore('analytics', {
     resultadoCnpjs: [],
     fatorRisco: [],
     evolucaoFinanceira: null,
+    dadosCadastro: null,
     // Cache de municípios por região — carregado lazily no detalhe do CNPJ
     municipiosRegiao: [],
     municipiosRegiaoKey: null,   // 'UF|regiao' da última carga
@@ -42,6 +43,7 @@ export const useAnalyticsStore = defineStore('analytics', {
     fatorRiscoLoading: false,
     evolucaoLoading: false,
     evolucaoLoaded: false,
+    dadosCadastroLoading: false,
     error: null,
     lastSync: null
   }),
@@ -93,6 +95,19 @@ export const useAnalyticsStore = defineStore('analytics', {
         this.evolucaoLoading = false;
       }
     },
+    
+    async fetchDadosCadastro(cnpj) {
+      if (!cnpj) return;
+      this.dadosCadastroLoading = true;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCadastro(cnpj));
+        this.dadosCadastro = data;
+      } catch (e) {
+        console.error('Erro ao buscar dados cadastrais:', e);
+      } finally {
+        this.dadosCadastroLoading = false;
+      }
+    },
 
     /**
      * Busca os municípios de uma região de saúde com seus % de não-comprovação,
@@ -119,6 +134,11 @@ export const useAnalyticsStore = defineStore('analytics', {
       this.evolucaoFinanceira = null;
       this.evolucaoLoaded = false;
       this.evolucaoLoading = false;
+    },
+
+    resetDadosCadastro() {
+      this.dadosCadastro = null;
+      this.dadosCadastroLoading = false;
     }
   },
 

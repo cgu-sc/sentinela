@@ -368,6 +368,10 @@ export function usePdfExport() {
           5: { halign: 'center' },
         },
         didParseCell: (data) => {
+          if (data.section === 'head' || data.section === 'foot') {
+            const hAligns = ['left', 'right', 'right', 'right', 'center', 'center'];
+            data.cell.styles.halign = hAligns[data.column.index];
+          }
           if (data.section === 'body' && data.column.index === 5) {
             const v = data.cell.raw;
             if (v?.startsWith('+')) data.cell.styles.textColor = [239, 68, 68];
@@ -420,6 +424,12 @@ export function usePdfExport() {
             2: { halign: 'right' },
             3: { halign: 'right', textColor: [100, 100, 100] },
           },
+          didParseCell: (data) => {
+            if (data.section === 'head') {
+              const hAligns = ['left', 'center', 'right', 'right'];
+              data.cell.styles.halign = hAligns[data.column.index];
+            }
+          },
         });
 
         y3 = pdf.lastAutoTable.finalY + 8;
@@ -455,7 +465,7 @@ export function usePdfExport() {
 
       autoTable(pdf, {
         startY: y3 + 2,
-        head: [['Indicador', 'Farmácia', 'Med. Região', 'Med. UF', 'Med. BR', 'Risco Reg.', 'Risco UF', 'Risco BR', 'Status']],
+        head: [['Indicador', 'Farmácia', 'Mediana\nRegião', 'Mediana\nUF', 'Mediana\nBR', 'Risco\nRegião', 'Risco\nUF', 'Risco\nBR', 'Status']],
         body: indRows,
         margin: { left: margin, right: margin },
         styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak' },
@@ -473,6 +483,10 @@ export function usePdfExport() {
           8: { halign: 'center', fontStyle: 'bold' },
         },
         didParseCell: (data) => {
+          if (data.section === 'head') {
+            const hAligns = ['left', 'right', 'right', 'right', 'right', 'center', 'center', 'center', 'center'];
+            data.cell.styles.halign = hAligns[data.column.index];
+          }
           if (data.section !== 'body' || data.column.index < 5) return;
           // Colorir colunas de risco e status
           const raw = data.cell.raw;

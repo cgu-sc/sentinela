@@ -56,21 +56,12 @@ export const useAnalyticsStore = defineStore('analytics', {
       try {
         const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz);
 
-        // Quando há filtro de UF, busca nacional em paralelo para manter o mapa do Brasil atualizado.
-        // O fetch nacional usa apenas os filtros de valores/percentuais (sem UF/região/município).
-        const isUfFiltered = uf && uf !== FILTER_ALL_VALUE;
-        const requests = [axios.get(API_ENDPOINTS.analyticsResumo, { params })];
-        if (isUfFiltered) {
-          const nationalParams = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null);
-          requests.push(axios.get(API_ENDPOINTS.analyticsResumo, { params: nationalParams }));
-        }
-
-        const [response, nationalResponse] = await Promise.all(requests);
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
-        this.resultadoSentinelaUFNacional = isUfFiltered
-          ? (nationalResponse.data.resultado_sentinela_uf ?? this.resultadoSentinelaUFNacional)
-          : response.data.resultado_sentinela_uf;
+        if (!uf || uf === FILTER_ALL_VALUE) {
+          this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
+        }
         this.resultadoMunicipios = response.data.resultado_municipios || [];
         this.resultadoCnpjs = response.data.resultado_cnpjs || [];
         this.lastSync = new Date();
@@ -79,6 +70,21 @@ export const useAnalyticsStore = defineStore('analytics', {
         this.error = 'Não foi possível carregar as métricas estratégicas.';
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    /**
+     * Atualiza apenas resultadoSentinelaUFNacional (mapa do Brasil).
+     * Chamado quando filtros de valor/percentual mudam com UF selecionada.
+     * Nunca inclui filtros de UF/região/município para garantir dados nacionais.
+     */
+    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null) {
+      try {
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null);
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
+      } catch (err) {
+        console.error('Erro ao buscar dados nacionais por UF:', err);
       }
     },
 

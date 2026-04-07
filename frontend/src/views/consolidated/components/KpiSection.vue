@@ -101,9 +101,9 @@ const { chartDataColors } = useChartTheme();
   font-size: 1.3rem; /* MEDIDA DO USUÁRIO */
   white-space: nowrap;
   letter-spacing: -0.6px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-color);
-  opacity: 0.95;
+  opacity: 0.90;
   line-height: 1;
   white-space: nowrap; /* IMPEDE QUEBRA */
   letter-spacing: -0.6px; /* COMPACTO */

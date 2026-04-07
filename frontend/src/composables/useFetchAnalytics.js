@@ -27,6 +27,16 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
     if (includeFatorRisco) analyticsStore.fetchFatorRisco(...args);
   };
 
+  // Filtros que afetam os dados nacionais do mapa do Brasil (sem UF/região/município)
+  const fetchNacionalIfNeeded = () => {
+    if (!isPeriodoValido() || !filterStore.selectedUF) return;
+    const p = getApiParams();
+    analyticsStore.fetchSentinelaUFNacional(
+      p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
+      p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede,
+    );
+  };
+
   watch(
     () => [
       filterStore.periodo,
@@ -41,6 +51,21 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedGrandeRede,
     ],
     () => { if (isPeriodoValido()) fetchAll(); },
+    { deep: true, immediate: false }
+  );
+
+  // Watch separado para filtros que atualizam o mapa nacional quando UF está selecionada
+  watch(
+    () => [
+      filterStore.periodo,
+      filterStore.percentualNaoComprovacaoFilter,
+      filterStore.valorMinSemCompFilter,
+      filterStore.selectedSituacao,
+      filterStore.selectedMS,
+      filterStore.selectedPorte,
+      filterStore.selectedGrandeRede,
+    ],
+    fetchNacionalIfNeeded,
     { deep: true, immediate: false }
   );
 

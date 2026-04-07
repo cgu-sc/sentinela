@@ -169,6 +169,8 @@ const onClick = (params) => {
 .chart-section {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -181,11 +183,12 @@ const onClick = (params) => {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
+  flex-shrink: 0;
 }
 
 .chart-wrapper {
-  height: 35vh;
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
 }
 
 .echart {

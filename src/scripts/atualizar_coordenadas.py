@@ -7,7 +7,7 @@ a tabela diretamente.
 
 HERE Maps: alta precisão para endereços brasileiros, plano gratuito com
 250.000 requisições/mês. Para 35k registros o processamento leva ~20-30 minutos.
-Rode com LIMITE = 10 para testar antes de processar tudo.
+Rode com LIMITE = None para testar antes de processar tudo.
 
 Uso:
     python src/scripts/atualizar_coordenadas.py
@@ -64,7 +64,7 @@ if not HERE_API_KEY:
 DELAY_ENTRE_REQUESTS = 0.05
 
 # Quantos registros processar (None = todos). Use 10 para testar primeiro.
-LIMITE = 10
+LIMITE = None
 
 # Para depurar endereços específicos, liste os CNPJs aqui.
 # Quando preenchido, ignora o LIMITE e o filtro de nulos — processa só estes.
@@ -73,7 +73,7 @@ TEST_CNPJS = []
 # Filtra por código IBGE do município (7 dígitos). Ignora o LIMITE mas respeita
 # o filtro de nulos (só geocodifica quem ainda não tem coordenadas).
 # Ex: 4207205 para Imaruí/SC. Deixe None para processar todos.
-TEST_CODIBGE = 4207205  # Imaruí/SC
+TEST_CODIBGE = None
 
 # Tamanho do lote para commit no banco
 BATCH_SIZE = 50

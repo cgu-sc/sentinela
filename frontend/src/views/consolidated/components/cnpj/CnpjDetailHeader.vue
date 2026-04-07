@@ -625,7 +625,7 @@ const formattedFullAddress = computed(() => {
 
 .pill-value {
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 600;
   font-family: 'Inter', sans-serif;
   color: var(--accent, var(--establishment-header-text));
   line-height: 1.1;

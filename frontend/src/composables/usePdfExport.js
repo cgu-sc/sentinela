@@ -111,15 +111,24 @@ function hexToRgb(hex) {
  * Retorna [r, g, b] para um percentual usando os mesmos breakpoints do ECharts visualMap.
  * Usa a estrutura `pieces` de MAP_VISUAL_SCALE para garantir consistência total com os mapas.
  */
-function getRiskRgbByPerc(perc) {
-  if (perc == null) return RISK_COLORS_RGB.NONE;
+function getScalePiece(perc) {
+  if (perc == null) return null;
   const scale = MAP_VISUAL_SCALE.light; // PDF é sempre modo claro
-  const piece = scale.find(p => {
+  return scale.find(p => {
     const aboveMin = p.min == null || perc >= p.min;
     const belowMax = p.max == null || perc < p.max;
     return aboveMin && belowMax;
   }) ?? scale[scale.length - 1];
-  return hexToRgb(piece.color);
+}
+
+function getRiskRgbByPerc(perc) {
+  const piece = getScalePiece(perc);
+  return piece ? hexToRgb(piece.color) : RISK_COLORS_RGB.NONE;
+}
+
+function getRiskBorderRgbByPerc(perc) {
+  const piece = getScalePiece(perc);
+  return piece ? hexToRgb(piece.borderColor) : [255, 255, 255];
 }
 
 /**
@@ -171,10 +180,9 @@ function drawRegionMap(pdf, geoJson, regionIds, targetIbge7, resultadoMunicipios
 
     let fill, stroke, lw;
     if (isTarget) {
-      const rgb = getRiskRgbByPerc(perc);
-      fill   = rgb;
-      stroke = rgb.map(c => Math.max(0, c - 40)); // Voltando para o contorno escurecido relativo
-      lw     = 0.45;
+      fill   = getRiskRgbByPerc(perc);
+      stroke = getRiskBorderRgbByPerc(perc);
+      lw     = 0.5;
     } else if (hasData) {
       fill   = getRiskRgbByPerc(perc);
       stroke = [255, 255, 255];
@@ -321,7 +329,7 @@ export function usePdfExport() {
         if (subtitle) {
           pdf.setFontSize(8);
           pdf.setFont(F, 'normal');
-          pdf.setTextColor(180, 180, 180);
+          pdf.setTextColor(100, 116, 139);
           pdf.text(subtitle, pageW - margin, 13, { align: 'right' });
         }
       };
@@ -452,21 +460,29 @@ export function usePdfExport() {
         pdf.text(capAddress, cardX + 8, currentCY + 40);
       }
 
-      // Score + Classificação no canto direito
+      // Métricas (% Sem Comp + Score) — tipografia pura, sem card extra
       if (cnpjData.score_risco_final != null) {
-        const scoreX = cardX + cardW2 - 38;
-        pdf.setFontSize(7);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('SCORE', scoreX, currentCY + 10, { align: 'center' });
-        pdf.setFontSize(22);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(...capRiskRgb);
-        pdf.text(cnpjData.score_risco_final.toFixed(1), scoreX, currentCY + 25, { align: 'center' });
-        pdf.setFontSize(7.5);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(...capRiskRgb);
-        pdf.text(cnpjData.classificacao_risco ?? '—', scoreX, currentCY + 32, { align: 'center' });
+        const mx  = cardX + cardW2 - 4; // âncora direita
+        const my  = currentCY + 8;
+
+        // % Sem Comprovação
+        pdf.setFontSize(6); pdf.setFont(F, 'semibold'); pdf.setTextColor(100, 116, 139);
+        pdf.text('% SEM COMPROVAÇÃO', mx, my, { align: 'right' });
+        pdf.setFontSize(18); pdf.setFont(F, 'bold'); pdf.setTextColor(...capRiskRgb);
+        pdf.text(capPerc.toFixed(1) + '%', mx, my + 10, { align: 'right' });
+
+        // Divisor
+        pdf.setDrawColor(51, 65, 85);
+        pdf.setLineWidth(0.25);
+        pdf.line(mx - 44, my + 13, mx, my + 13);
+
+        // Score
+        pdf.setFontSize(6); pdf.setFont(F, 'semibold'); pdf.setTextColor(100, 116, 139);
+        pdf.text('SCORE DE RISCO', mx, my + 19, { align: 'right' });
+        pdf.setFontSize(18); pdf.setFont(F, 'bold'); pdf.setTextColor(...capRiskRgb);
+        pdf.text(cnpjData.score_risco_final.toFixed(1), mx, my + 29, { align: 'right' });
+        pdf.setFontSize(7); pdf.setFont(F, 'bold'); pdf.setTextColor(...capRiskRgb);
+        pdf.text(cnpjData.classificacao_risco ?? '', mx, my + 34, { align: 'right' });
       }
 
 
@@ -505,7 +521,7 @@ export function usePdfExport() {
       const razaoLines = pdf.splitTextToSize(cnpjData.razao_social ?? '—', contentW * 0.78);
       pdf.setFontSize(16);
       pdf.setFont(F, 'bold');
-      pdf.setTextColor(255, 255, 255);
+      pdf.setTextColor(148, 163, 184);
       pdf.text(razaoLines.slice(0, 2), margin, 23);
 
       // CNPJ + localização
@@ -536,24 +552,6 @@ export function usePdfExport() {
         pdf.text(address, margin, 44);
       }
 
-      // Badge de score (canto inferior direito do banner)
-      if (cnpjData.score_risco_final != null) {
-        const badge1 = `Score ${cnpjData.score_risco_final.toFixed(1)}`;
-        const badge2 = cnpjData.classificacao_risco ?? '';
-        const bW1 = 26, bW2 = 32, bH = 8, bY = headerH - 13;
-        // Score badge
-        pdf.setFillColor(...riskRgb);
-        pdf.roundedRect(pageW - margin - bW1 - bW2 - 3, bY, bW1, bH, 2, 2, 'F');
-        pdf.setFontSize(7.5);
-        pdf.setFont(F, 'bold');
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(badge1, pageW - margin - bW1 - bW2 - 3 + bW1 / 2, bY + 5.2, { align: 'center' });
-        // Classificação badge
-        pdf.setFillColor(30, 41, 59);
-        pdf.roundedRect(pageW - margin - bW2, bY, bW2, bH, 2, 2, 'F');
-        pdf.setTextColor(...riskRgb);
-        pdf.text(badge2, pageW - margin - bW2 + bW2 / 2, bY + 5.2, { align: 'center' });
-      }
 
       // ── KPI Cards (4: financeiros + score/classificação) ──
       let y = headerH + 10;
@@ -682,11 +680,23 @@ export function usePdfExport() {
               drawRegionMap(pdf, geoJson, regionIds, geoData.id_ibge7, resultadoMunicipios,
                 card.x + 3, y + 9, mapCardW - 6, mapCardH - 13);
             } else {
-              const polyFill   = getRiskRgbByPerc(capPerc);
-              const polyStroke = polyFill.map(c => Math.max(0, c - 40));
+              const munPerc    = resultadoMunicipios?.find(m => String(m.id_ibge7) === String(geoData.id_ibge7))?.percValSemComp ?? capPerc;
+              const polyFill   = getRiskRgbByPerc(munPerc);
+              const polyStroke = getRiskBorderRgbByPerc(munPerc);
+              // Reserva rodapé para o badge de % sem comp
               drawMunicipalityPolygon(pdf, geoJson, geoData.id_ibge7,
-                card.x + 3, y + 9, mapCardW - 6, mapCardH - 13,
+                card.x + 3, y + 9, mapCardW - 6, mapCardH - 22,
                 polyFill, polyStroke);
+              // Badge % sem comprovação do município
+              const badgeY = y + mapCardH - 14;
+              pdf.setFillColor(248, 250, 252);
+              pdf.setDrawColor(226, 232, 240);
+              pdf.setLineWidth(0.3);
+              pdf.roundedRect(card.x + 4, badgeY, mapCardW - 8, 11, 1.5, 1.5, 'FD');
+              pdf.setFontSize(6); pdf.setFont(F, 'semibold'); pdf.setTextColor(71, 85, 105);
+              pdf.text('% SEM COMPROVAÇÃO NO MUNICÍPIO', card.x + mapCardW / 2, badgeY + 4, { align: 'center' });
+              pdf.setFontSize(8); pdf.setFont(F, 'bold'); pdf.setTextColor(...polyStroke);
+              pdf.text(munPerc.toFixed(1) + '%', card.x + mapCardW / 2, badgeY + 9, { align: 'center' });
             }
           }
         }
@@ -736,7 +746,7 @@ export function usePdfExport() {
 
       autoTable(pdf, {
         startY: y2 + 2,
-        head: [['Semestre', 'Total Movimentado', 'Total Regular', 'Sem Comprovação', '% S/ Comp', 'Tendência']],
+        head: [['Semestre', 'Total Movimentado', 'Total Comprovado', 'Sem Comprovação', '% Sem Comp', 'Tendência']],
         body: semRows,
         foot: [['TOTAL', formatCurrencyFull(totalAll), formatCurrencyFull(totalReg), formatCurrencyFull(totalIrr), '', '']],
         margin: { left: margin, right: margin },
@@ -747,7 +757,7 @@ export function usePdfExport() {
         columnStyles: {
           0: {},
           1: { halign: 'right' },
-          2: { halign: 'right', textColor: [16, 185, 129] },
+          2: { halign: 'right' },
           3: { halign: 'right', textColor: [239, 68, 68] },
           4: { halign: 'center' },
           5: { halign: 'center' },

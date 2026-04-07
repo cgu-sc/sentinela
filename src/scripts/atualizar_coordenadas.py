@@ -22,10 +22,21 @@ import urllib.parse
 import unicodedata
 import logging
 import sys
+import os
 import requests
 import urllib3
+from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
+
+# Carrega .env da raiz do projeto (dois níveis acima de src/scripts/)
+_env_path = Path(__file__).resolve().parents[2] / '.env'
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding='utf-8').splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _v = _line.split('=', 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +56,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── Configurações ─────────────────────────────────────────────────────────────
 
-HERE_API_KEY = 'XlkeZrfBYHjQeU8dEQU5kNUxLCJdCfxSorW3qfBo_PE'
+HERE_API_KEY = os.environ.get('HERE_API_KEY', '')
+if not HERE_API_KEY:
+    raise EnvironmentError("HERE_API_KEY não encontrada. Defina no arquivo .env na raiz do projeto.")
 
 # HERE não tem limite estrito por segundo — delay pequeno por cortesia
 DELAY_ENTRE_REQUESTS = 0.05

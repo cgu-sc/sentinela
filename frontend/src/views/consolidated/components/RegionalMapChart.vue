@@ -216,10 +216,14 @@ const mapData = computed(() => {
 
       let itemStyle = {};
       if (isSelected) {
+        // areaColor é sobrescrito pelo visualMap — compensamos com borda forte + sombra
         itemStyle = {
-          areaColor:   `${themeStore.tokens.primary}55`,
           borderColor: themeStore.tokens.primary,
-          borderWidth: 2.5,
+          borderWidth: 4,
+          shadowColor: themeStore.tokens.primary,
+          shadowBlur:  12,
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
         };
       } else if (isCurrent && !hasFilter) {
         itemStyle = { borderColor: themeStore.tokens.primary, borderWidth: 2 };

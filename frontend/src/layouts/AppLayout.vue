@@ -103,7 +103,7 @@ const clusterOptions  = FILTER_OPTIONS.cluster;
 const rfaOptions      = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
-const { isSyncing, showConfirmSync, syncProgress, syncError, syncErrorMessage, handleSync, retrySync, dismissError } = useSyncManager();
+const { isSyncing, showConfirmSync, syncProgress, syncStatus, syncError, syncErrorMessage, handleSync, retrySync, dismissError } = useSyncManager();
 
 // Controle de Menu
 const isCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
@@ -505,7 +505,7 @@ const {
               <p>O sistema está reconstruindo os arquivos de cache para garantir máxima performance. Por favor, aguarde.</p>
               <div class="progress-wrapper">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.7rem; font-weight: 800; color: var(--primary-color); letter-spacing: 0.5px;">
-                      <span>PROCESSANDO REGISTROS</span>
+                      <span>{{ syncStatus ? syncStatus.toUpperCase() : 'PROCESSANDO REGISTROS' }}</span>
                       <span>{{ syncProgress }}%</span>
                   </div>
                   <ProgressBar :value="syncProgress" :show-value="false" style="height: 10px"></ProgressBar>

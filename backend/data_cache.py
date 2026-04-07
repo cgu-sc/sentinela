@@ -42,12 +42,14 @@ _cache_status: str = "idle"
 
 # --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
 
-def _sync_localidades(engine):
+def _sync_localidades(engine, progress_callback=None):
     """Tarefa 1: Sincroniza dados geográficos (IBGE)."""
     global _df_localidades
     print("Sincronizando Localidades (IBGE)...")
     sql = "SELECT sg_uf, no_regiao_saude, id_regiao_saude, no_municipio, id_ibge7, nu_populacao FROM [temp_CGUSC].[fp].[dados_ibge] ORDER BY sg_uf, no_regiao_saude, no_municipio"
     pdf = pd.read_sql(sql, engine)
+    print(f"   -> Localidades carregadas: {len(pdf):,} registros.")
+    if progress_callback: progress_callback(100)
     _df_localidades = pl.from_pandas(pdf).with_columns([
         pl.col("sg_uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
@@ -61,9 +63,8 @@ def _sync_rede(engine, progress_callback=None):
     print("Sincronizando Rede de Estabelecimentos...")
     sql = "SELECT * FROM [temp_CGUSC].[fp].[rede_estabelecimentos]"
     
-    # Se for pequena, carregamos em um chunk só, mas reportamos progresso
     pdf = pd.read_sql(sql, engine)
-    print("   -> Rede carregada com sucesso.")
+    print(f"   -> Rede carregada com sucesso: {len(pdf):,} registros.")
     if progress_callback: progress_callback(100)
     
     _df_rede = pl.from_pandas(pdf).with_columns([
@@ -100,7 +101,7 @@ def _sync_matriz_risco(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
             
-    pdf = pd.concat(chunk_list, ignore_index=True)
+    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
     _df_matriz_risco = pl.from_pandas(pdf)
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="lz4")
 
@@ -126,7 +127,7 @@ def _sync_falecidos(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
             
-    pdf = pd.concat(chunk_list, ignore_index=True)
+    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
     _df_falecidos = pl.from_pandas(pdf).with_columns([
         pl.col("dt_nascimento").cast(pl.Date, strict=False),
         pl.col("dt_obito").cast(pl.Date, strict=False),
@@ -165,7 +166,7 @@ def _sync_top20_crms(engine, progress_callback=None):
     print(f"   -> Registros Top 20 CRMs: {total_rows:,}")
     chunk_list = []
     rows_processed = 0
-    CHUNK_SIZE = 5_000
+    CHUNK_SIZE = 10_000
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_list.append(chunk)
         rows_processed += len(chunk)
@@ -184,12 +185,13 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     global _df_dados_farmacia
     print("Sincronizando Dados Cadastrais das Farmácias...")
     sql = """
-        SELECT cnpj, 
-               razaoSocial as razao_social, 
-               nomeFantasia as nome_fantasia, 
-               tipoLogradouro as tipo_logradouro, 
+        SELECT cnpj,
+               razaoSocial as razao_social,
+               nomeFantasia as nome_fantasia,
+               tipoLogradouro as tipo_logradouro,
                logradouro, numero, complemento, bairro, cep,
-               latitude, longitude
+               latitude, longitude,
+               codibge as id_ibge7
         FROM [temp_CGUSC].[fp].[dados_farmacia]
     """
     with engine.connect() as conn:
@@ -198,14 +200,15 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     print(f"   -> Registros Cadastrais: {total_rows:,}")
     chunk_list = []
     rows_processed = 0
-    CHUNK_SIZE = 10_000
-    
+    CHUNK_SIZE = 5_000
+
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_list.append(chunk)
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        print(f"   -> Progresso Dados Farmácias: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
-            
+
     pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
     _df_dados_farmacia = pl.from_pandas(pdf)
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="lz4")
@@ -246,8 +249,6 @@ def _sync_movimentacao(engine, progress_callback):
         print(f"   -> Progresso Movimentação: {p}% ({rows_processed:,} / {total_rows:,})")
         progress_callback(p)
 
-    global _cache_status
-    _cache_status = "processing"
     print("   -> Organizando e otimizando dados (Polars)...")
     pdf = pd.concat(chunk_list, ignore_index=True)
     _df_movimentacao = pl.from_pandas(pdf).with_columns([
@@ -289,20 +290,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             )
             if all_exist:
                 _cache_status = "loading_parquet"
-                _df_movimentacao = pl.read_parquet(_PARQUET_PATH)
-                _df_localidades  = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
-                _df_rede         = pl.read_parquet(_REDE_PARQUET_PATH)
-                if os.path.exists(_DADOS_FARMACIA_PARQUET_PATH):
-                    _df_dados_farmacia = pl.read_parquet(_DADOS_FARMACIA_PARQUET_PATH)
-
-                if os.path.exists(_MATRIZ_PARQUET_PATH):
-                    _df_matriz_risco = pl.read_parquet(_MATRIZ_PARQUET_PATH)
-                if os.path.exists(_FALECIDOS_PARQUET_PATH):
-                    _df_falecidos = pl.read_parquet(_FALECIDOS_PARQUET_PATH)
-                if os.path.exists(_CRMS_DETALHADO_PARQUET_PATH):
-                    _df_crms_detalhado = pl.read_parquet(_CRMS_DETALHADO_PARQUET_PATH)
-                if os.path.exists(_TOP20_CRMS_PARQUET_PATH):
-                    _df_top20_crms = pl.read_parquet(_TOP20_CRMS_PARQUET_PATH)
+                _df_movimentacao   = pl.read_parquet(_PARQUET_PATH)
+                _df_localidades    = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
+                _df_rede           = pl.read_parquet(_REDE_PARQUET_PATH)
+                _df_matriz_risco   = pl.read_parquet(_MATRIZ_PARQUET_PATH)
+                _df_falecidos      = pl.read_parquet(_FALECIDOS_PARQUET_PATH)
+                _df_crms_detalhado = pl.read_parquet(_CRMS_DETALHADO_PARQUET_PATH)
+                _df_top20_crms     = pl.read_parquet(_TOP20_CRMS_PARQUET_PATH)
+                _df_dados_farmacia = pl.read_parquet(_DADOS_FARMACIA_PARQUET_PATH)
                 _cache_progress = 100
                 _cache_status = "ready"
                 print("🚀 Caches carregados via Parquet.")
@@ -318,15 +313,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
     # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
     # Definimos pesos baseados no tempo estimado de execução (total = 100)
     TASKS = [
-        {"name": "Localidades",           "status": "fetching", "weight": 2,  "func": lambda: _sync_localidades(engine)},
-        {"name": "Rede Estabelecimentos", "status": "fetching", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
-        {"name": "Matriz de Risco",       "status": "fetching", "weight": 25, "func": lambda cb: _sync_matriz_risco(engine, cb)},
-        {"name": "Falecidos",             "status": "fetching", "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
-        {"name": "CRMs Detalhado",        "status": "fetching", "weight": 5,  "func": lambda cb: _sync_crms_detalhado(engine, cb)},
-        {"name": "CRMs Top 20",           "status": "fetching", "weight": 5,  "func": lambda cb: _sync_top20_crms(engine, cb)},
-        {"name": "Dados das Farmácias",   "status": "fetching", "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
-        {"name": "Movimentação",          "status": "fetching", "weight": 50, "func": lambda cb: _sync_movimentacao(engine, cb)},
-
+        {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
+        {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
+        {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
+        {"name": "Falecidos",             "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
+        {"name": "CRMs Detalhado",        "weight": 5,  "func": lambda cb: _sync_crms_detalhado(engine, cb)},
+        {"name": "CRMs de Interesse",      "weight": 46, "func": lambda cb: _sync_top20_crms(engine, cb)},
+        {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
+        {"name": "Movimentação",          "weight": 23, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -335,24 +329,15 @@ def load_cache(engine, force_refresh: bool = False) -> None:
 
     try:
         for index, task in enumerate(TASKS):
-            _cache_status = task["status"]
+            _cache_status = task["name"]
             current_weight = task["weight"]
             print(f"[{index+1}/{total_tasks}] {task['name']}...")
 
-            # Função auxiliar para atualizar o progresso global baseado no peso da tarefa
-            def update_global_progress(task_internal_p):
+            def update_global_progress(task_internal_p, _base=acumulado_weight, _w=current_weight):
                 global _cache_progress
-                # Lógica Ponderada: Peso Acumulado + (% da Tarefa Atual * Peso da Tarefa)
-                p = acumulado_weight + (task_internal_p / 100 * current_weight)
-                _cache_progress = int(p)
+                _cache_progress = int(_base + (task_internal_p / 100 * _w))
 
-            # Executa a tarefa (checa se ela suporta callback de progresso)
-            if task["func"].__code__.co_argcount > 0:
-                task["func"](update_global_progress)
-            else:
-                task["func"]()
-                update_global_progress(100)
-            
+            task["func"](update_global_progress)
             acumulado_weight += current_weight
 
         _cache_progress = 100

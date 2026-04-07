@@ -6,15 +6,15 @@ import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
-import { MAP_VISUAL_SCALE } from '@/config/colors.js';
+import { MAP_VISUAL_SCALE, RISK_COLORS } from '@/config/colors.js';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { MapChart } from 'echarts/charts';
-import { TooltipComponent, VisualMapComponent } from 'echarts/components';
+import { MapChart, ScatterChart } from 'echarts/charts';
+import { TooltipComponent, VisualMapComponent, GeoComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 
-use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
+use([CanvasRenderer, MapChart, ScatterChart, TooltipComponent, VisualMapComponent, GeoComponent]);
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
@@ -25,10 +25,138 @@ const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
 const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
 const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
-const hoverColor     = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
-const hoverBorder    = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)');
+const hoverColor     = computed(() => {
+  const hex = themeStore.tokens.primary;
+  return `${hex}4D`; // 30% opacidade
+});
+const hoverBorder    = computed(() => {
+  const hex = themeStore.tokens.primary;
+  return `${hex}B3`; // 70% opacidade
+});
+
+// ── Cor por classificação de risco ────────────────────────────────────────────
+function getRiskPointColor(classificacao) {
+  const c = (classificacao ?? '').toUpperCase();
+  if (c.includes('CRITICO')) return RISK_COLORS.CRITICAL;
+  if (c.includes('ALTO'))    return RISK_COLORS.HIGH;
+  if (c.includes('MEDIO'))   return RISK_COLORS.MEDIUM;
+  return RISK_COLORS.LOW;
+}
+
+const pointBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)');
+
+// ── Zoom tracking — variável simples (não-reativa) ────────────────────────────
+// Usar ref causaria chartOption a recomputar no zoom, resetando center/zoom do mapa.
+// A atualização do scatter é feita imperativamente em onGeoRoam.
+let _currentZoom = 1;
+
+const onGeoRoam = () => {
+  const chart = chartRef.value?.chart;
+  if (!chart) return;
+  const opt = chart.getOption();
+  _currentZoom = opt?.geo?.[0]?.zoom ?? 1;
+  // Atualiza apenas a série scatter sem re-renderizar o mapa inteiro
+  chart.setOption({
+    series: [{}, { data: clusterPoints(scatterData.value, _currentZoom) }],
+  });
+};
+
+// ── Clustering por grade geográfica ───────────────────────────────────────────
+// Agrupa pontos dentro da mesma célula de threshold × threshold graus.
+// O(n) — adequado para dezenas de milhares de pontos.
+const RISK_PRIORITY = { CRITICO: 4, ALTO: 3, MEDIO: 2, BAIXO: 1 };
+
+function highestRiskColor(group) {
+  let best = { priority: 0, color: RISK_COLORS.LOW };
+  for (const p of group) {
+    const c = (p.classificacao_risco ?? '').toUpperCase();
+    const key = Object.keys(RISK_PRIORITY).find(k => c.includes(k)) ?? 'BAIXO';
+    const priority = RISK_PRIORITY[key];
+    if (priority > best.priority) best = { priority, color: getRiskPointColor(p.classificacao_risco) };
+  }
+  return best.color;
+}
+
+function clusterPoints(rawPoints, zoom) {
+  const threshold = 0.08 / Math.max(zoom, 1);
+  const grid = new Map();
+
+  for (const p of rawPoints) {
+    const cellKey = `${Math.round(p.value[0] / threshold)},${Math.round(p.value[1] / threshold)}`;
+    if (!grid.has(cellKey)) grid.set(cellKey, []);
+    grid.get(cellKey).push(p);
+  }
+
+  const result = [];
+  for (const group of grid.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+    } else {
+      const count = group.length;
+      const avgLon = group.reduce((s, p) => s + p.value[0], 0) / count;
+      const avgLat = group.reduce((s, p) => s + p.value[1], 0) / count;
+      result.push({
+        value: [avgLon, avgLat],
+        count,
+        isCluster: true,
+        itemStyle: { color: highestRiskColor(group) },
+        label: {
+          show: true,
+          formatter: String(count),
+          color: '#fff',
+          fontSize: 10,
+          fontWeight: 'bold',
+        },
+      });
+    }
+  }
+  return result;
+}
+
+// ── Pontos dos estabelecimentos filtrados pelos municípios visíveis ────────────
+const scatterData = computed(() => {
+  const { estabelecimentosPorIbge7 } = geoStore;
+  const sel = selectedMunicipioNome.value;
+  const regiao = filterStore.selectedRegiaoSaude;
+
+  // Determina os id_ibge7 visíveis com base no filtro ativo
+  let ibge7s;
+  if (sel) {
+    // Município selecionado → só ele
+    const match = resultadoMunicipios.value.find(d => d.municipio?.toLowerCase() === sel);
+    ibge7s = match?.id_ibge7 ? [match.id_ibge7] : [];
+  } else if (regiao && regiao !== 'Todos') {
+    // Região selecionada → todos os municípios da região
+    ibge7s = geoStore.localidades
+      .filter(l => l.no_regiao_saude === regiao && (filterStore.selectedUF === 'Todos' || l.sg_uf === filterStore.selectedUF))
+      .map(l => l.id_ibge7)
+      .filter(Boolean);
+  } else {
+    // UF inteira → todos os municípios com dados
+    ibge7s = resultadoMunicipios.value.map(d => d.id_ibge7).filter(Boolean);
+  }
+
+  const points = [];
+  for (const ibge7 of ibge7s) {
+    const lista = estabelecimentosPorIbge7.get(Number(ibge7)) ?? [];
+    for (const e of lista) {
+      points.push({
+        value: [e.lon, e.lat],
+        cnpj: e.cnpj,
+        razao_social: e.razao_social,
+        score_risco: e.score_risco,
+        classificacao_risco: e.classificacao_risco,
+        itemStyle: { color: getRiskPointColor(e.classificacao_risco) },
+      });
+    }
+  }
+  return points;
+});
 
 const mapKey = ref(0);
+
+// Reset zoom não-reativo quando filtros mudam (o mapa vai ser recriado via mapKey)
+watch(mapKey, () => { _currentZoom = 1; });
 
 // Registra o mapa da UF quando a seleção muda
 watch(
@@ -61,17 +189,30 @@ const idToGeoName = computed(() => {
   return map;
 });
 
-const mapData = computed(() =>
-  resultadoMunicipios.value
+const selectedMunicipioNome = computed(() => {
+  const sel = filterStore.selectedMunicipio;
+  if (!sel || sel === 'Todos') return null;
+  return sel.split('|')[0].toLowerCase();
+});
+
+const mapData = computed(() => {
+  const selNome = selectedMunicipioNome.value;
+  return resultadoMunicipios.value
     .filter(d => d.id_ibge7 && idToGeoName.value[String(d.id_ibge7)])
-    .map(d => ({
-      name: idToGeoName.value[String(d.id_ibge7)],
-      value: d.percValSemComp ?? 0,
-      municipio: d.municipio,
-      valSemComp: d.valSemComp ?? 0,
-      cnpjs: d.cnpjs ?? 0,
-    }))
-);
+    .map(d => {
+      const geoName = idToGeoName.value[String(d.id_ibge7)];
+      const isSelected = selNome && d.municipio?.toLowerCase() === selNome;
+      const dimmed = selNome && !isSelected;
+      return {
+        name: geoName,
+        value: d.percValSemComp ?? 0,
+        municipio: d.municipio,
+        valSemComp: d.valSemComp ?? 0,
+        cnpjs: d.cnpjs ?? 0,
+        ...(dimmed ? { itemStyle: { areaColor: mapAreaColor.value } } : {}),
+      };
+    });
+});
 
 
 // Extrai coords de uma feature (Polygon ou MultiPolygon)
@@ -156,6 +297,27 @@ const chartOption = computed(() => {
       padding: [12, 16],
       textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
+        // Ponto de estabelecimento
+        if (params.seriesType === 'scatter') {
+          const d = params.data;
+          if (d.isCluster) {
+            return `
+              <div style="font-weight:700;font-size:13px;margin-bottom:4px;">Cluster</div>
+              <div style="font-size:12px;">${d.count} farmácias próximas</div>
+              <div style="font-size:11px;opacity:0.6;margin-top:4px;">Dê zoom para ver individualmente</div>`;
+          }
+          const score = d.score_risco != null ? d.score_risco.toFixed(1) : '—';
+          const risco = d.classificacao_risco ?? '—';
+          const riscoCor = getRiskPointColor(d.classificacao_risco);
+          return `
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${d.razao_social ?? d.cnpj}</div>
+            <div style="font-size:11px;opacity:0.7;margin-bottom:8px;">${d.cnpj}</div>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;">
+              <div>Score de Risco: <strong style="color:${riscoCor}">${score} — ${risco}</strong></div>
+            </div>`;
+        }
+        // Polígono do município
+        if (selectedMunicipioNome.value && params.data?.municipio?.toLowerCase() !== selectedMunicipioNome.value) return '';
         if (!params.data?.municipio) return `
           <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
           <div style="font-size:11px;opacity:0.6;">Sem Estabelecimentos</div>`;
@@ -169,14 +331,7 @@ const chartOption = computed(() => {
           </div>`;
       },
     },
-    visualMap: {
-      min: 0,
-      max: 100,
-      show: false,
-      inRange: { color: MAP_VISUAL_SCALE },
-    },
-    series: [{
-      type: 'map',
+    geo: {
       map: mapName.value,
       nameProperty: 'name',
       roam: true,
@@ -192,8 +347,47 @@ const chartOption = computed(() => {
         borderWidth: 0.5,
         areaColor: mapAreaColor.value,
       },
-      data: mapData.value,
-    }],
+    },
+    visualMap: {
+      min: 0,
+      max: 100,
+      show: false,
+      inRange: { color: MAP_VISUAL_SCALE },
+      seriesIndex: 0,
+    },
+    series: [
+      {
+        type: 'map',
+        map: mapName.value,
+        nameProperty: 'name',
+        geoIndex: 0,
+        roam: true,
+        emphasis: { label: { show: false } },
+        select: { disabled: true },
+        label: { show: false },
+        data: mapData.value,
+      },
+      {
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        geoIndex: 0,
+        data: clusterPoints(scatterData.value, _currentZoom),
+        symbolSize: (_, params) => {
+          const count = params.data.count ?? 1;
+          return count === 1 ? 6 : Math.min(10 + Math.sqrt(count) * 4, 36);
+        },
+        itemStyle: {
+          borderColor: pointBorderColor.value,
+          borderWidth: 0.8,
+          opacity: 0.85,
+        },
+        emphasis: {
+          scale: true,
+          itemStyle: { opacity: 1, borderWidth: 1.5 },
+        },
+        zlevel: 5,
+      },
+    ],
   };
 });
 
@@ -240,6 +434,7 @@ const onClick = (params) => {
         :option="chartOption"
         autoresize
         @click="onClick"
+        @georoam="onGeoRoam"
       />
     </div>
   </div>

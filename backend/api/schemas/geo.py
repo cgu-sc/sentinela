@@ -14,3 +14,15 @@ class LocalidadeSchema(BaseModel):
 
 class LocalidadesResponseSchema(BaseModel):
     localidades: List[LocalidadeSchema]
+
+class EstabelecimentoGeoSchema(BaseModel):
+    cnpj: str
+    razao_social: Optional[str] = None
+    lat: float
+    lon: float
+    id_ibge7: Optional[int] = None
+    score_risco: Optional[float] = None
+    classificacao_risco: Optional[str] = None
+
+class EstabelecimentosGeoResponseSchema(BaseModel):
+    estabelecimentos: List[EstabelecimentoGeoSchema]

@@ -6,6 +6,7 @@ import { API_ENDPOINTS } from '../config/api';
 export const useGeoStore = defineStore('geo', () => {
   const localidades = ref([]);
   const isLoading = ref(false);
+  const estabelecimentos = ref([]);  // [{cnpj, razao_social, lat, lon, id_ibge7, score_risco, classificacao_risco}]
 
   // GeoJSON de municípios — carregado no boot, filtrado por UF sob demanda
   const municipiosGeoJson = ref(null);
@@ -50,6 +51,28 @@ export const useGeoStore = defineStore('geo', () => {
       isLoading.value = false;
     }
   }
+
+  async function fetchEstabelecimentos() {
+    try {
+      const response = await axios.get(API_ENDPOINTS.geoEstabelecimentos);
+      estabelecimentos.value = response.data.estabelecimentos;
+    } catch (err) {
+      console.error('Erro ao buscar estabelecimentos geo:', err);
+    }
+  }
+
+  // Lookup O(1) por id_ibge7 → lista de estabelecimentos
+  const estabelecimentosPorIbge7 = computed(() => {
+    const map = new Map();
+    for (const e of estabelecimentos.value) {
+      if (e.id_ibge7 == null) continue;
+      const key = Number(e.id_ibge7); // normaliza: string "4207205" e number 4207205 viram o mesmo tipo
+      if (isNaN(key)) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
+    }
+    return map;
+  });
 
   // UFs distintas (sempre fixo, mas derivado dos dados reais)
   const ufs = computed(() => {
@@ -109,5 +132,8 @@ export const useGeoStore = defineStore('geo', () => {
     municipiosGeoJson,
     loadMunicipiosGeo,
     getMunicipiosGeoByUF,
+    estabelecimentos,
+    fetchEstabelecimentos,
+    estabelecimentosPorIbge7,
   };
 });

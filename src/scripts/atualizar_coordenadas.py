@@ -2,12 +2,12 @@
 atualizar_coordenadas.py
 ------------------------
 Busca na tabela [temp_CGUSC].[fp].[dados_farmacia] todos os registros com
-latitude ou longitude nulas, geocodifica via Mapbox Geocoding API e atualiza
+latitude ou longitude nulas, geocodifica via HERE Geocoding API e atualiza
 a tabela diretamente.
 
-Mapbox: 100.000 requisições gratuitas/mês, sem limite estrito por segundo.
-Para 35k registros o processamento completo leva ~20-30 minutos.
-Rode com LIMITE = None para testar antes de processar tudo.
+HERE Maps: alta precisão para endereços brasileiros, plano gratuito com
+250.000 requisições/mês. Para 35k registros o processamento leva ~20-30 minutos.
+Rode com LIMITE = 10 para testar antes de processar tudo.
 
 Uso:
     python src/scripts/atualizar_coordenadas.py
@@ -16,7 +16,6 @@ Dependências:
     pip install requests sqlalchemy pyodbc
 """
 
-import os
 import time
 import urllib
 import urllib.parse
@@ -46,17 +45,22 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── Configurações ─────────────────────────────────────────────────────────────
 
-MAPBOX_TOKEN = os.environ.get('MAPBOX_TOKEN', '')
+HERE_API_KEY = 'XlkeZrfBYHjQeU8dEQU5kNUxLCJdCfxSorW3qfBo_PE'
 
-# Mapbox não tem limite por segundo — delay pequeno por cortesia
-DELAY_ENTRE_REQUESTS = 0.15
+# HERE não tem limite estrito por segundo — delay pequeno por cortesia
+DELAY_ENTRE_REQUESTS = 0.05
 
 # Quantos registros processar (None = todos). Use 10 para testar primeiro.
-LIMITE = None
+LIMITE = 10
 
 # Para depurar endereços específicos, liste os CNPJs aqui.
 # Quando preenchido, ignora o LIMITE e o filtro de nulos — processa só estes.
 TEST_CNPJS = []
+
+# Filtra por código IBGE do município (7 dígitos). Ignora o LIMITE mas respeita
+# o filtro de nulos (só geocodifica quem ainda não tem coordenadas).
+# Ex: 4207205 para Imaruí/SC. Deixe None para processar todos.
+TEST_CODIBGE = 4207205  # Imaruí/SC
 
 # Tamanho do lote para commit no banco
 BATCH_SIZE = 50
@@ -85,23 +89,26 @@ engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 _session = requests.Session()
 _session.verify = False  # proxy corporativo CGU não reconhecido pelo Python
 
-# ── Geocodificação via Mapbox ──────────────────────────────────────────────────
+# ── Geocodificação via HERE ────────────────────────────────────────────────────
 
-MAPBOX_BASE = 'https://api.mapbox.com/geocoding/v5/mapbox.places'
+HERE_BASE = 'https://geocode.search.hereapi.com/v1/geocode'
 
 
-def _parse_mapbox(resp_json: dict) -> tuple[float | None, float | None]:
-    """Extrai (lat, lon) do primeiro resultado Mapbox, ou (None, None)."""
-    features = resp_json.get('features', [])
-    if features:
-        lon, lat = features[0]['center']  # Mapbox retorna [longitude, latitude]
-        return float(lat), float(lon)
+def _parse_here(resp_json: dict) -> tuple[float | None, float | None]:
+    """Extrai (lat, lon) do primeiro resultado HERE, ou (None, None)."""
+    items = resp_json.get('items', [])
+    if items:
+        pos = items[0].get('position', {})
+        lat = pos.get('lat')
+        lng = pos.get('lng')
+        if lat is not None and lng is not None:
+            return float(lat), float(lng)
     return None, None
 
 
 def geocodificar(endereco: str) -> tuple[float | None, float | None]:
     """
-    Geocodifica um endereço via Mapbox Geocoding API.
+    Geocodifica um endereço via HERE Geocoding API.
 
     Retorna (latitude, longitude) ou (None, None) em caso de falha.
     Realiza até MAX_RETRIES_GEO tentativas com backoff em erros de rede.
@@ -109,19 +116,19 @@ def geocodificar(endereco: str) -> tuple[float | None, float | None]:
     if not endereco or not endereco.strip():
         return None, None
 
-    url = f"{MAPBOX_BASE}/{urllib.parse.quote(endereco.strip())}.json"
     params = {
-        'access_token': MAPBOX_TOKEN,
-        'country': 'br',
+        'q': endereco.strip(),
+        'apiKey': HERE_API_KEY,
+        'lang': 'pt-BR',
+        'in': 'countryCode:BRA',
         'limit': 1,
-        'language': 'pt',
     }
 
     for tentativa in range(1, MAX_RETRIES_GEO + 1):
         try:
-            resp = _session.get(url, params=params, timeout=15)
+            resp = _session.get(HERE_BASE, params=params, timeout=15)
             resp.raise_for_status()
-            lat, lon = _parse_mapbox(resp.json())
+            lat, lon = _parse_here(resp.json())
             if lat is None:
                 log.info("  ⚠️  Não encontrado: '%s'", endereco)
             return lat, lon
@@ -138,7 +145,7 @@ def geocodificar(endereco: str) -> tuple[float | None, float | None]:
                 time.sleep(30)
                 continue
             if status in (401, 403):
-                log.error("  🔑 Token inválido ou sem permissão. Verifique MAPBOX_TOKEN.")
+                log.error("  🔑 API Key inválida ou sem permissão. Verifique HERE_API_KEY.")
                 return None, None
         except Exception as e:
             log.warning("  ❌ Erro inesperado (tentativa %d/%d): %s", tentativa, MAX_RETRIES_GEO, e)
@@ -150,7 +157,7 @@ def geocodificar(endereco: str) -> tuple[float | None, float | None]:
 
 
 def geocodificar_cep(cep: str) -> tuple[float | None, float | None]:
-    """Geocodifica via CEP usando Mapbox (busca textual pelo CEP)."""
+    """Geocodifica via CEP usando HERE."""
     if not cep:
         return None, None
     return geocodificar(f"{cep}, Brasil")
@@ -164,10 +171,51 @@ def normalizar(texto: str) -> str:
 
 
 TIPO_LOGRADOURO = {
-    'R': 'Rua', 'AV': 'Avenida', 'AL': 'Alameda', 'PC': 'Praca',
-    'EST': 'Estrada', 'ROD': 'Rodovia', 'TV': 'Travessa', 'LG': 'Largo',
-    'VL': 'Vila', 'SIT': 'Sitio', 'FAZ': 'Fazenda', 'LOT': 'Loteamento',
-    'CON': 'Condominio', 'PRQ': 'Parque', 'QD': 'Quadra', 'BL': 'Bloco',
+    # Rua / Via
+    'R':   'Rua',
+    'VIA': 'Via',
+    'VEL': 'Viela',
+    'LAD': 'Ladeira',
+    'TRC': 'Trecho',
+    # Avenida / Rodovia / Estrada
+    'AV':  'Avenida',
+    'ROD': 'Rodovia',
+    'RDV': 'Rodovia',
+    'EST': 'Estrada',
+    # Praça / Largo
+    'PC':  'Praca',
+    'PCA': 'Praca',
+    'PR':  'Praca',
+    'LG':  'Largo',
+    'LGO': 'Largo',
+    # Travessa / Alameda
+    'TV':  'Travessa',
+    'TR':  'Travessa',
+    'AL':  'Alameda',
+    # Bairro / Setor / Quadra / Conjunto
+    'ST':  'Setor',
+    'QD':  'Quadra',
+    'CJ':  'Conjunto',
+    'BL':  'Bloco',
+    # Vila / Residencial / Loteamento / Condomínio
+    'VL':  'Vila',
+    'RSD': 'Residencial',
+    'LOT': 'Loteamento',
+    'CON': 'Condominio',
+    'CND': 'Condominio',
+    # Parque / Área
+    'PRQ': 'Parque',
+    'PQ':  'Parque',
+    'AR':  'Area',
+    # Rural
+    'SIT': 'Sitio',
+    'CH':  'Chacara',
+    'COL': 'Colonia',
+    'FAZ': 'Fazenda',
+    'DT':  'Distrito',
+    # Genéricos / sem tipo válido
+    'OTR': '',
+    'ETC': '',
 }
 
 
@@ -175,12 +223,8 @@ def montar_endereco(row: dict) -> tuple[str | None, str | None, str | None]:
     """Monta string de endereço expandindo as abreviações de tipo de logradouro.
 
     Returns:
-        Tupla (endereco_completo, endereco_simples, cep) — qualquer elemento
-        pode ser None se não houver dados suficientes.
+        Tupla (endereco_completo, endereco_simples, cep).
     """
-    tipo = (row.get('tipoLogradouro', '') or '').strip().upper()
-    tipo_expandido = TIPO_LOGRADOURO.get(tipo, tipo.title())
-
     logradouro = (row.get('logradouro', '') or '').strip()
     numero     = str(row.get('numero',  '') or '').strip()
     bairro     = str(row.get('bairro',  '') or '').strip()
@@ -195,7 +239,7 @@ def montar_endereco(row: dict) -> tuple[str | None, str | None, str | None]:
     if numero:
         numero = numero.replace('.', '')
 
-    logradouro_completo = f"{tipo_expandido} {logradouro}" if tipo_expandido else logradouro
+    logradouro_completo = logradouro
 
     partes_completo = [logradouro_completo]
     if numero and numero not in ('None', ''):
@@ -229,11 +273,7 @@ def montar_endereco(row: dict) -> tuple[str | None, str | None, str | None]:
 # ── Persistência com retry ─────────────────────────────────────────────────────
 
 def commit_lote(conn, update_sql, pendentes: list) -> bool:
-    """Executa UPDATE em lote com até DB_MAX_RETRIES tentativas.
-
-    Returns:
-        True se o commit foi bem-sucedido, False caso contrário.
-    """
+    """Executa UPDATE em lote com até DB_MAX_RETRIES tentativas."""
     for tentativa in range(1, DB_MAX_RETRIES + 1):
         try:
             conn.execute(update_sql, pendentes)
@@ -274,6 +314,21 @@ def main():
             ) m ON f.cnpj = m.cnpj
             WHERE f.cnpj IN ({cnpjs_in})
               AND (f.latitude IS NULL OR f.longitude IS NULL)
+        """
+    elif TEST_CODIBGE is not None:
+        select_sql = f"""
+            SELECT
+                f.cnpj, f.tipoLogradouro, f.logradouro, f.numero, f.bairro, f.cep,
+                m.no_municipio AS municipio, m.uf
+            FROM [temp_CGUSC].[fp].[dados_farmacia] f
+            LEFT JOIN (
+                SELECT cnpj, MAX(no_municipio) AS no_municipio, MAX(uf) AS uf
+                FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
+                GROUP BY cnpj
+            ) m ON f.cnpj = m.cnpj
+            WHERE f.codibge = {TEST_CODIBGE}
+              AND (f.latitude IS NULL OR f.longitude IS NULL)
+              AND f.logradouro IS NOT NULL
         """
     else:
         limit_clause = f"TOP {LIMITE}" if LIMITE else ""
@@ -347,12 +402,6 @@ def main():
                         if lat is not None:
                             log.info("     ↳ Encontrado pelo simplificado")
 
-                    if lat is None and cep:
-                        log.info("  🔄 Último recurso — CEP: %s", cep)
-                        lat, lon = geocodificar_cep(cep)
-                        time.sleep(DELAY_ENTRE_REQUESTS)
-                        if lat is not None:
-                            log.info("     ↳ Encontrado pelo CEP (precisão aproximada)")
 
                 except KeyboardInterrupt:
                     log.warning("\n⚠️  Interrompido durante geocodificação.")
@@ -382,12 +431,10 @@ def main():
                     taxa, atualizadas, falhas, restantes, tempo_restante,
                 )
 
-                # Commit a cada BATCH_SIZE registros geocodificados
                 if len(pendentes) >= BATCH_SIZE:
                     commit_lote(conn, update_sql, pendentes)
                     pendentes = []
 
-            # Commit dos registros restantes
             if pendentes:
                 commit_lote(conn, update_sql, pendentes)
 

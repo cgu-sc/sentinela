@@ -75,6 +75,7 @@ onMounted(async () => {
       analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
+      geoStore.fetchEstabelecimentos(),
     ]);
 
   } catch (error) {

@@ -14,6 +14,7 @@ export function useSyncManager() {
   const isSyncing        = ref(false);
   const showConfirmSync  = ref(false);
   const syncProgress     = ref(0);
+  const syncStatus       = ref('');
   const syncError        = ref(false);
   const syncErrorMessage = ref('');
   let _pollTimer         = null;
@@ -47,6 +48,7 @@ export function useSyncManager() {
       const response = await axios.get(API_ENDPOINTS.cacheStatus);
       const { progress, status } = response.data;
       syncProgress.value = progress;
+      syncStatus.value = status;
 
       if (status === 'ready' && progress === 100) {
         _stopPolling();
@@ -85,5 +87,5 @@ export function useSyncManager() {
   // Garante limpeza do interval mesmo se o componente for desmontado durante o polling
   onBeforeUnmount(_stopPolling);
 
-  return { isSyncing, showConfirmSync, syncProgress, syncError, syncErrorMessage, handleSync, retrySync, dismissError };
+  return { isSyncing, showConfirmSync, syncProgress, syncStatus, syncError, syncErrorMessage, handleSync, retrySync, dismissError };
 }

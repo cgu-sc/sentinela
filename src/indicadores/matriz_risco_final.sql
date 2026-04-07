@@ -486,7 +486,7 @@ ScoreCalculadoFim AS (
                     ELSE 1.0
                 END
             ELSE 0 END
-        AS DECIMAL(18,4)) AS SCORE_RISCO_FINAL,
+        AS DECIMAL(18,4)) AS score_risco_final,
 
         -- Lista textual de problemas
         STUFF(
@@ -523,18 +523,18 @@ ClassificacaoFinal AS (
 
             -- 2. ALTO (2 problemas graves OU Score alto)
             WHEN qtd_indicadores_criticos >= 2 THEN 'RISCO ALTO'
-            WHEN SCORE_RISCO_FINAL >= 4.0 THEN 'RISCO ALTO' 
+            WHEN score_risco_final >= 4.0 THEN 'RISCO ALTO' 
 
             -- 3. MÉDIO (1 problema grave OU Score moderado)
             WHEN qtd_indicadores_criticos = 1 THEN 'RISCO MEDIO'
-            WHEN SCORE_RISCO_FINAL >= 2.0 THEN 'RISCO MEDIO'
+            WHEN score_risco_final >= 2.0 THEN 'RISCO MEDIO'
 
             -- 4. BAIXO
-            WHEN SCORE_RISCO_FINAL >= 1.0 THEN 'RISCO BAIXO'
+            WHEN score_risco_final >= 1.0 THEN 'RISCO BAIXO'
 
             -- 5. MÍNIMO
             ELSE 'RISCO MINIMO'
-        END AS CLASSIFICACAO_RISCO
+        END AS classificacao_risco
     FROM ScoreCalculadoFim
 )
 
@@ -543,27 +543,27 @@ SELECT
     S.*,
     
     -- RANKINGS NACIONAIS E ESTADUAIS
-    RANK() OVER (ORDER BY SCORE_RISCO_FINAL DESC) AS rank_nacional,
+    RANK() OVER (ORDER BY score_risco_final DESC) AS rank_nacional,
     COUNT(*) OVER () AS total_nacional,
-    RANK() OVER (PARTITION BY uf ORDER BY SCORE_RISCO_FINAL DESC) AS rank_uf,
+    RANK() OVER (PARTITION BY uf ORDER BY score_risco_final DESC) AS rank_uf,
     COUNT(*) OVER (PARTITION BY uf) AS total_uf,
 
     -- REGIAO DE SAUDE
-    RANK() OVER (PARTITION BY id_regiao_saude ORDER BY SCORE_RISCO_FINAL DESC) AS rank_regiao_saude,
+    RANK() OVER (PARTITION BY id_regiao_saude ORDER BY score_risco_final DESC) AS rank_regiao_saude,
     COUNT(*) OVER (PARTITION BY id_regiao_saude) AS total_regiao_saude,
-    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY SCORE_RISCO_FINAL) OVER (PARTITION BY id_regiao_saude) AS DECIMAL(18,2)) AS avg_score_regiao_saude,
-    CAST(MAX(SCORE_RISCO_FINAL) OVER (PARTITION BY id_regiao_saude) AS DECIMAL(18,2)) AS max_score_regiao_saude,
+    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY score_risco_final) OVER (PARTITION BY id_regiao_saude) AS DECIMAL(18,2)) AS avg_score_regiao_saude,
+    CAST(MAX(score_risco_final) OVER (PARTITION BY id_regiao_saude) AS DECIMAL(18,2)) AS max_score_regiao_saude,
 
     -- INTELIGÊNCIA MUNICIPAL
-    RANK() OVER (PARTITION BY uf, municipio ORDER BY SCORE_RISCO_FINAL DESC) AS rank_municipio,
+    RANK() OVER (PARTITION BY uf, municipio ORDER BY score_risco_final DESC) AS rank_municipio,
     COUNT(*) OVER (PARTITION BY uf, municipio) AS total_municipio,
 
     -- ESTATÍSTICAS LOCAIS
-    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS avg_score_municipio,
-    CAST(MAX(SCORE_RISCO_FINAL) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS max_score_municipio,
+    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY score_risco_final) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS avg_score_municipio,
+    CAST(MAX(score_risco_final) OVER (PARTITION BY uf, municipio) AS DECIMAL(18,2)) AS max_score_municipio,
 
     -- PERCENTIL
-    CAST(CUME_DIST() OVER (ORDER BY SCORE_RISCO_FINAL ASC) * 100 AS DECIMAL(5,2)) AS percentil_risco
+    CAST(CUME_DIST() OVER (ORDER BY score_risco_final ASC) * 100 AS DECIMAL(5,2)) AS percentil_risco
 
 INTO temp_CGUSC.fp.matriz_risco_consolidada
 FROM ClassificacaoFinal S;
@@ -579,15 +579,15 @@ CREATE CLUSTERED INDEX IDX_MatrizFinal_CNPJ
     ON temp_CGUSC.fp.matriz_risco_consolidada(cnpj);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_ScoreRiscoFinal 
-    ON temp_CGUSC.fp.matriz_risco_consolidada(SCORE_RISCO_FINAL DESC)
-    INCLUDE (razaoSocial, uf, rank_nacional, CLASSIFICACAO_RISCO);
+    ON temp_CGUSC.fp.matriz_risco_consolidada(score_risco_final DESC)
+    INCLUDE (razaoSocial, uf, rank_nacional, classificacao_risco);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Municipio 
-    ON temp_CGUSC.fp.matriz_risco_consolidada(uf, municipio, SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.matriz_risco_consolidada(uf, municipio, score_risco_final DESC)
     INCLUDE (rank_municipio, avg_score_municipio);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Regiao
-    ON temp_CGUSC.fp.matriz_risco_consolidada(id_regiao_saude, SCORE_RISCO_FINAL DESC)
+    ON temp_CGUSC.fp.matriz_risco_consolidada(id_regiao_saude, score_risco_final DESC)
     INCLUDE (no_regiao_saude, rank_regiao_saude, avg_score_regiao_saude);
 
 PRINT '>> PROCESSO CONCLUÍDO COM SUCESSO.';
@@ -596,10 +596,10 @@ GO
 -- ============================================================================
 -- VALIDAÇÃO RÁPIDA
 -- ============================================================================
-SELECT CLASSIFICACAO_RISCO, COUNT(*) as Qtd, 
-       CAST(AVG(SCORE_RISCO_FINAL) as DECIMAL(10,2)) as Media_Score,
-       MIN(SCORE_RISCO_FINAL) as Min_Score,
-       MAX(SCORE_RISCO_FINAL) as Max_Score
+SELECT classificacao_risco, COUNT(*) as Qtd, 
+       CAST(AVG(score_risco_final) as DECIMAL(10,2)) as Media_Score,
+       MIN(score_risco_final) as Min_Score,
+       MAX(score_risco_final) as Max_Score
 FROM temp_CGUSC.fp.matriz_risco_consolidada
-GROUP BY CLASSIFICACAO_RISCO
+GROUP BY classificacao_risco
 ORDER BY Media_Score DESC;

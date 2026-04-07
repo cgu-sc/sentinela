@@ -45,9 +45,7 @@ function getRiskPointColor(classificacao) {
 
 const pointBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)');
 
-// ── Zoom tracking — variável simples (não-reativa) ────────────────────────────
-// Usar ref causaria chartOption a recomputar no zoom, resetando center/zoom do mapa.
-// A atualização do scatter é feita imperativamente em onGeoRoam.
+// ── Zoom tracking ───────────────────────────────────────────────────────────
 let _currentZoom = 1;
 
 const onGeoRoam = () => {
@@ -55,6 +53,7 @@ const onGeoRoam = () => {
   if (!chart) return;
   const opt = chart.getOption();
   _currentZoom = opt?.geo?.[0]?.zoom ?? 1;
+  
   // Atualiza apenas a série scatter sem re-renderizar o mapa inteiro
   chart.setOption({
     series: [{}, { data: clusterPoints(scatterData.value, _currentZoom) }],
@@ -146,6 +145,9 @@ const scatterData = computed(() => {
         razao_social: e.razao_social,
         score_risco: e.score_risco,
         classificacao_risco: e.classificacao_risco,
+        percValSemComp: e.percValSemComp,
+        totalMov: e.totalMov,
+        valSemComp: e.valSemComp,
         itemStyle: { color: getRiskPointColor(e.classificacao_risco) },
       });
     }
@@ -312,8 +314,13 @@ const chartOption = computed(() => {
           return `
             <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${d.razao_social ?? d.cnpj}</div>
             <div style="font-size:11px;opacity:0.7;margin-bottom:8px;">${d.cnpj}</div>
-            <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;">
+            <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
               <div>Score de Risco: <strong style="color:${riscoCor}">${score} — ${risco}</strong></div>
+              <div style="margin-top:4px;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px;display:flex;flex-direction:column;gap:2px;">
+                <div>Valor Total: <strong>${formatBRL(d.totalMov)}</strong></div>
+                <div>Valor s/ Comp: <strong>${formatBRL(d.valSemComp)}</strong></div>
+                <div>% s/ Comprovação: <strong style="color:${riscoCor}">${formatPercent(d.percValSemComp)}</strong></div>
+              </div>
             </div>`;
         }
         // Polígono do município

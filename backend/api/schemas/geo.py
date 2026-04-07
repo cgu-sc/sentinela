@@ -23,6 +23,9 @@ class EstabelecimentoGeoSchema(BaseModel):
     id_ibge7: Optional[int] = None
     score_risco: Optional[float] = None
     classificacao_risco: Optional[str] = None
+    percValSemComp: Optional[float] = 0.0
+    totalMov: Optional[float] = 0.0
+    valSemComp: Optional[float] = 0.0
 
 class EstabelecimentosGeoResponseSchema(BaseModel):
     estabelecimentos: List[EstabelecimentoGeoSchema]

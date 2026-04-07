@@ -165,22 +165,20 @@ const formattedFullAddress = computed(() => {
       <div class="header-right-col">
         <div class="list-actions">
           <button
-            class="list-btn list-btn--export"
+            class="list-btn list-btn--icon-only list-btn--export"
             @click="emit('export')"
             :disabled="isExporting"
             v-tooltip.bottom="'Exportar relatório PDF'"
           >
             <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
-            <span>{{ isExporting ? 'Gerando...' : 'Exportar PDF' }}</span>
           </button>
           <button
-            class="list-btn"
+            class="list-btn list-btn--icon-only"
             :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
             @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
             v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
           >
             <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
-            <span>{{ farmaciaLists.isInteresse(cnpj) ? 'Interesse' : 'Interesse' }}</span>
           </button>
         </div>
         <div class="header-kpis-new">
@@ -343,15 +341,26 @@ const formattedFullAddress = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.8rem;
+  padding: 0.35rem 0.8rem;
   font-size: 0.75rem;
   font-weight: 700;
-  border-radius: 20px;
+  border-radius: 8px; /* Padronizado para 8px */
   border: 1px solid;
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.list-btn--icon-only {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.list-btn--icon-only i {
+  font-size: 1rem;
 }
 
 .list-btn--export {

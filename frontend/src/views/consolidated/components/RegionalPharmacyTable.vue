@@ -110,7 +110,7 @@ const totals = computed(() => {
       @row-click="goToDetail"
     >
       <!-- Ranking -->
-      <Column field="rank" header="#" sortable style="width: 3%" bodyStyle="text-align:center; font-weight:700; color: var(--text-muted)" />
+      <Column field="rank" header="#" sortable style="width: 3%" bodyStyle="text-align:center; font-weight:600; color: var(--text-muted)" />
       <!-- CNPJ -->
       <Column field="cnpj" header="CNPJ" sortable style="width: 9%">
         <template #body="{ data }">
@@ -272,7 +272,7 @@ const totals = computed(() => {
 /* Score text — Cor padrão (limpeza visual) */
 .score-text {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 400; /* Removido o negrito pesado */
   color: var(--text-color);
 }
 
@@ -384,5 +384,6 @@ const totals = computed(() => {
 :deep(.p-tag) {
   text-transform: none !important;
   font-variant: normal !important;
+  font-weight: 500 !important; /* Deixando os badges mais leves */
 }
 </style>

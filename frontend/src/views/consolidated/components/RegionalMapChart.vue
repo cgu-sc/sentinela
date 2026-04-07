@@ -203,6 +203,13 @@ const mapData = computed(() => {
   
   const ibge7s    = regiaoIbge7Set.value;
   const targetId  = props.selectedMunicipioId;
+  
+  // Normalização robusta de nomes para garantir o "match" entre tabela e GeoJSON
+  const normalize = (s) => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() || '';
+
+  // Encontra o nome do município alvo uma única vez para o loop
+  const targetMun = props.regionalData?.municipios?.find(m => Number(m.id_ibge7) === Number(targetId))?.municipio;
+  const targetMunNorm = targetMun ? normalize(targetMun) : null;
 
   return fullGeo.features
     .filter(f => ibge7s.has(Number(f.properties.id)))
@@ -211,7 +218,12 @@ const mapData = computed(() => {
       const munData    = munDataByIbge7.value.get(ibge7);
       const isCurrent  = currentIbge7.value && ibge7 === currentIbge7.value;
       const mNome      = munData?.municipio ?? f.properties.name;
-      const isSelected = targetId && Number(ibge7) === Number(targetId);
+      const mNomeNorm  = normalize(mNome);
+      
+      const isSelected = targetId && (
+        Number(ibge7) === Number(targetId) || 
+        (targetMunNorm && mNomeNorm === targetMunNorm)
+      );
       const isDimmed   = targetId && !isSelected;
 
       return {
@@ -226,9 +238,16 @@ const mapData = computed(() => {
         isSelected,
         isCurrent,
         isDimmed,
-        // Se estiver selecionado, garantimos uma borda primária fina. Se esmaecido, cor de fundo.
-        itemStyle: isSelected ? { borderColor: themeStore.tokens.primary, borderWidth: 1 } :
-                   isDimmed   ? { areaColor: mapAreaColor.value } : {}
+        itemStyle: isSelected ? { 
+                     borderColor: themeStore.tokens.primary, 
+                     borderWidth: 2,
+                     shadowBlur: 10,
+                     shadowColor: themeStore.tokens.primary
+                   } :
+                   isDimmed   ? { 
+                     areaColor: themeStore.isDark ? '#1e1e1e' : '#f0f0f0', 
+                     opacity: 1 
+                   } : {}
       };
     });
 });
@@ -315,7 +334,16 @@ const chartOption = computed(() => {
         label: { show: false },
         itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
-      select: { disabled: true },
+      selectedMode: 'single',
+      select: {
+        label: { show: false },
+        itemStyle: {
+          borderColor: themeStore.tokens.primary,
+          borderWidth: 3,
+          shadowColor: themeStore.tokens.primary,
+          shadowBlur: 15,
+        }
+      },
       label: { show: false },
       itemStyle: {
         borderColor: mapBorderColor.value,
@@ -348,7 +376,14 @@ const chartOption = computed(() => {
         geoIndex: 0,
         roam: false,
         emphasis: { label: { show: false } },
-        select: { disabled: true },
+        select: {
+          itemStyle: {
+            borderColor: themeStore.tokens.primary,
+            borderWidth: 3,
+            shadowColor: themeStore.tokens.primary,
+            shadowBlur: 15,
+          }
+        },
         label: { show: false },
         data: mapData.value,
       },
@@ -386,9 +421,9 @@ watch(
     const chart = chartRef.value?.chart;
     if (!chart) return;
 
-    // Limpa estado anterior (Highligh/Hover persistente)
+    // Limpa estado anterior (Select persistente)
     if (_prevSelectedName) {
-      chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: _prevSelectedName });
+      chart.dispatchAction({ type: 'unselect', seriesIndex: 0, name: _prevSelectedName });
       _prevSelectedName = null;
     }
 
@@ -397,7 +432,7 @@ watch(
     const match = mapData.value.find(d => Number(d.id) === Number(ibgeId) || Number(d.ibge7) === Number(ibgeId));
     if (match?.name) {
       _prevSelectedName = match.name;
-      chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: match.name });
+      chart.dispatchAction({ type: 'select', seriesIndex: 0, name: match.name });
     }
   },
   { immediate: true }

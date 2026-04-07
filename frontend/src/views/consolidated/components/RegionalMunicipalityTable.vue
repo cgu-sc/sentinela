@@ -40,6 +40,7 @@ function rowClass(data) {
 }
 
 function onRowClick(event) {
+  console.log('[Table] Clique na linha:', event.data.municipio, 'ID:', event.data.id_ibge7);
   emits('select-municipio', event.data.id_ibge7, event.data.municipio);
 }
 

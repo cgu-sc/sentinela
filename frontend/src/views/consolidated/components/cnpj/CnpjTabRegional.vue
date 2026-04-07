@@ -18,6 +18,7 @@ const filterMunicipioId = ref(null);
 
 function toggleMunicipioFilter(ibge7) {
   const id = ibge7 ? Number(ibge7) : null;
+  console.log('[Parent] CnpjTabRegional - Toggle Filtro ID:', id);
   if (filterMunicipioId.value === id) {
     filterMunicipioId.value = null;
   } else {

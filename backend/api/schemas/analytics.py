@@ -99,6 +99,7 @@ class RegionalMunicipioSchema(BaseModel):
     """Resumo de um município dentro da Região de Saúde selecionada."""
     uf: Optional[str] = "ND"
     municipio: Optional[str] = "ND"
+    id_ibge7: Optional[int] = None
     populacao: Optional[int] = 0
     qtd_farmacias: Optional[int] = 0
     densidade: Optional[float] = 0.0

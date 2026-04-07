@@ -779,7 +779,7 @@ class AnalyticsService:
             )
 
             # Enriquece com população do IBGE (localidades_df)
-            loc_pop = df_loc.select(["no_municipio", "sg_uf", "id_regiao_saude", "nu_populacao"]).unique()
+            loc_pop = df_loc.select(["no_municipio", "sg_uf", "id_regiao_saude", "nu_populacao", "id_ibge7"]).unique(subset=["no_municipio", "sg_uf"])
             mun_enriched = mun_agg.join(
                 loc_pop,
                 left_on=["no_municipio", "uf"],
@@ -804,6 +804,7 @@ class AnalyticsService:
                 RegionalMunicipioSchema(
                     uf=r["uf"],
                     municipio=str(r["no_municipio"]).title(),
+                    id_ibge7=int(r["id_ibge7"]) if r.get("id_ibge7") else None,
                     populacao=int(r["populacao"] or 0),
                     qtd_farmacias=int(r["qtd_farmacias"] or 0),
                     densidade=float(r["densidade"] or 0.0),

@@ -38,6 +38,10 @@ const route = useRoute();
 const router = useRouter();
 const cnpj = computed(() => route.params.cnpj);
 
+// Só monta CnpjTabRegional quando a aba for ativada pela primeira vez,
+// evitando que o ECharts tente inicializar dentro de um painel oculto (display:none).
+const regionalTabMounted = ref(false);
+
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
 const { resultadoCnpjs, dadosCadastro } = storeToRefs(analyticsStore);
@@ -100,6 +104,12 @@ const cnpjData = computed(
 );
 
 import { watch } from "vue";
+
+// Ativa o mount de CnpjTabRegional na primeira vez que a aba for aberta
+watch(() => cnpjNav.activeTabIndex, (idx) => {
+  if (idx === TAB_INDEX.REGIAO) regionalTabMounted.value = true;
+}, { immediate: true });
+
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
@@ -253,7 +263,7 @@ const formatCnpj = (v) => {
             >Região de Saúde</span
           ></template
         >
-        <CnpjTabRegional :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
+        <CnpjTabRegional v-if="regionalTabMounted" :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
       </TabPanel>
     </TabView>
   </div>

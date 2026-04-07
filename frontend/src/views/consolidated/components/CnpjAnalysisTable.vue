@@ -185,7 +185,7 @@ const filteredLocation = computed(() => {
             <template #body="slotProps">
                 <Tag
                   :value="slotProps.data.situacao_rf"
-                  :class="[slotProps.data.situacao_rf?.toUpperCase() === 'ATIVA' ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  :class="[slotProps.data.situacao_rf?.toUpperCase()?.startsWith('ATIV') ? 'status-success' : 'status-danger', 'clickable-badge']"
                   v-tooltip.top="'Filtrar por Situação RF: ' + slotProps.data.situacao_rf"
                   @click="applyFilter('situacaoRF', slotProps.data.situacao_rf)"
                 />
@@ -196,7 +196,7 @@ const filteredLocation = computed(() => {
             <template #body="slotProps">
                 <Tag
                   :value="slotProps.data.conexao_ms"
-                  :class="[slotProps.data.conexao_ms?.toUpperCase() === 'ATIVA' ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  :class="[slotProps.data.conexao_ms?.toUpperCase()?.startsWith('ATIV') ? 'status-success' : 'status-danger', 'clickable-badge']"
                   v-tooltip.top="'Filtrar por Conexão MS: ' + slotProps.data.conexao_ms"
                   @click="applyFilter('conexaoMS', slotProps.data.conexao_ms)"
                 />

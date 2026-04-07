@@ -4,168 +4,206 @@
  */
 
 .shadow-card {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-    border: 1px solid var(--card-border);
-    transition: background-color 0.3s ease, transform 0.2s ease;
-  }
-  
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .section-header h3 {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-color);
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  /* CARDS DE KPI MINI */
-  .kpi-mini-card {
-    background: var(--card-bg);
-    padding: 1rem 1.25rem;
-    border-radius: 12px;
-    border: 1px solid var(--sidebar-border);
-    transition: transform 0.2s, background-color 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-  
-  .kpi-mini-card:hover { 
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-  
-  .kpi-mini-card.danger { 
-    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2); 
-    border-color: rgba(239, 68, 68, 0.2); 
-  }
-  
-  .kpi-mini-card .label { 
-    font-size: 0.75rem; 
-    display: block; 
-    text-transform: uppercase; 
-    font-weight: 600; 
-    color: var(--text-muted); 
-  }
-  
-  .kpi-mini-card .value { 
-    font-size: 1.5rem; 
-    font-weight: 800; 
-    color: var(--text-color); 
-  }
-  
-  .kpi-icon {
-    width: 2.75rem;
-    height: 2.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.5rem;
-    font-size: 1.25rem;
-  }
-  
-  .kpi-icon.total  { background: color-mix(in srgb, var(--accent-indigo)  15%, transparent); color: var(--accent-indigo);  }
-  .kpi-icon.danger { background: color-mix(in srgb, var(--color-error)    15%, transparent); color: var(--color-error);   }
-  
-  /* BADGES ELEGANTES */
-  .p-tag {
-      border-radius: 6px;
-      padding: 0.25rem 0.65rem;
-      font-weight: 700;
-      font-size: 0.82rem;
-      letter-spacing: 0.02em;
-      min-width: 60px;
-      text-align: center;
-      border: 1px solid transparent;
-  }
-  
-  /* RISK BADGES — cores via var() — light/dark automático */
-  .risk-low {
-      background: color-mix(in srgb, var(--risk-low)      12%, transparent) !important;
-      color: var(--risk-low) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-low)      25%, transparent) !important;
-  }
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--card-border);
+  transition:
+    background-color 0.3s ease,
+    transform 0.2s ease;
+}
 
-  .risk-medium {
-      background: color-mix(in srgb, var(--risk-medium)   15%, transparent) !important;
-      color: var(--risk-medium) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
-  }
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
 
-  .risk-high, .risk-critical {
-      background: color-mix(in srgb, var(--risk-high)     12%, transparent) !important;
-      color: var(--risk-high) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
-  }
+.section-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-color);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
-  /* STATUS BADGES — Sincronizados com Risco para consistência visual */
-  .status-success {
-      background: color-mix(in srgb, var(--risk-low)          12%, transparent) !important;
-      color: var(--risk-low) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-low)      25%, transparent) !important;
-  }
+/* CARDS DE KPI MINI */
+.kpi-mini-card {
+  background: var(--card-bg);
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--sidebar-border);
+  transition:
+    transform 0.2s,
+    background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 
-  .status-danger {
-      background: color-mix(in srgb, var(--risk-high)          12%, transparent) !important;
-      color: var(--risk-high) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-high)     25%, transparent) !important;
-  }
+.kpi-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
 
-  .status-warn {
-      background: color-mix(in srgb, var(--risk-medium)        15%, transparent) !important;
-      color: var(--risk-medium) !important;
-      border: 1px solid color-mix(in srgb, var(--risk-medium)   25%, transparent) !important;
-  }
+.kpi-mini-card.danger {
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.2);
+}
 
-  .status-info {
-      background: color-mix(in srgb, var(--status-info)        12%, transparent) !important;
-      color: var(--status-info) !important;
-      border: 1px solid color-mix(in srgb, var(--status-info)   25%, transparent) !important;
-  }
+.kpi-mini-card .label {
+  font-size: 0.75rem;
+  display: block;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-muted);
+}
 
-  .status-secondary {
-      background: color-mix(in srgb, var(--text-muted)   12%, transparent) !important;
-      color: var(--text-muted) !important;
-      border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent) !important;
-  }
+.kpi-mini-card .value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-color);
+}
 
-  /* TEXT COLOR UTILITIES — light/dark automático via var() */
-  .text-risk-low      { color: var(--risk-low)      !important; }
-  .text-risk-medium   { color: var(--risk-medium)   !important; }
-  .text-risk-high     { color: var(--risk-high)      !important; }
-  .text-risk-critical { color: var(--risk-critical) !important; font-weight: 800; }
-  
-  /* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */
-  .p-dialog, 
-  .p-overlaypanel,
-  .p-popover {
-      background: var(--card-bg) !important;
-      color: var(--text-color) !important;
-      border: 1px solid var(--sidebar-border) !important;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
-  }
-  
-  .p-dialog-header, 
-  .p-dialog-content, 
-  .p-dialog-footer,
-  .p-overlaypanel-content,
-  .p-popover-content {
-      background: var(--card-bg) !important;
-      color: var(--text-color) !important;
-  }
-  
-  .p-dialog-header-icon { color: var(--text-color) !important; }
-  .p-dialog .p-button-label { font-weight: 700; }
+.kpi-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.kpi-icon.total {
+  background: color-mix(in srgb, var(--accent-indigo) 15%, transparent);
+  color: var(--accent-indigo);
+}
+.kpi-icon.danger {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
+}
+
+/* BADGES ELEGANTES */
+.p-tag {
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  min-width: 60px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+/* RISK BADGES — cores via var() — light/dark automático */
+.risk-low {
+  background: color-mix(in srgb, var(--risk-low) 12%, transparent) !important;
+  color: var(--risk-low) !important;
+  border: 1px solid color-mix(in srgb, var(--risk-low) 25%, transparent) !important;
+}
+
+.risk-medium {
+  background: color-mix(
+    in srgb,
+    var(--risk-medium) 10%,
+    transparent
+  ) !important;
+  color: var(--risk-medium) !important;
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 25%, transparent) !important;
+}
+
+.risk-high,
+.risk-critical {
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent) !important;
+  color: var(--risk-high) !important;
+  border: 1px solid color-mix(in srgb, var(--risk-high) 25%, transparent) !important;
+}
+
+/* STATUS BADGES — Sincronizados com Risco para consistência visual */
+.status-success {
+  background: color-mix(in srgb, var(--status-success) 12%, transparent) !important;
+  color: var(--status-success) !important;
+  border: 1px solid color-mix(in srgb, var(--status-success) 25%, transparent) !important;
+}
+
+.status-danger {
+  background: color-mix(in srgb, var(--risk-high) 12%, transparent) !important;
+  color: var(--risk-high) !important;
+  border: 1px solid color-mix(in srgb, var(--risk-high) 25%, transparent) !important;
+}
+
+.status-warn {
+  background: color-mix(
+    in srgb,
+    var(--risk-medium) 15%,
+    transparent
+  ) !important;
+  color: var(--risk-medium) !important;
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 25%, transparent) !important;
+}
+
+.status-info {
+  background: color-mix(
+    in srgb,
+    var(--status-info) 12%,
+    transparent
+  ) !important;
+  color: var(--status-info) !important;
+  border: 1px solid color-mix(in srgb, var(--status-info) 25%, transparent) !important;
+}
+
+.status-secondary {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent) !important;
+}
+
+/* TEXT COLOR UTILITIES — light/dark automático via var() */
+.text-risk-low {
+  color: var(--risk-low) !important;
+}
+.text-risk-medium {
+  color: var(--risk-medium) !important;
+}
+.text-risk-high {
+  color: var(--risk-high) !important;
+}
+.text-risk-critical {
+  color: var(--risk-critical) !important;
+  font-weight: 800;
+}
+
+/* 🎨 SOBREPOSIÇÃO GLOBAL PARA DIÁLOGOS E OVERLAYS (CORREÇÃO DARK MODE) */
+.p-dialog,
+.p-overlaypanel,
+.p-popover {
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+.p-dialog-header,
+.p-dialog-content,
+.p-dialog-footer,
+.p-overlaypanel-content,
+.p-popover-content {
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+}
+
+.p-dialog-header-icon {
+  color: var(--text-color) !important;
+}
+.p-dialog .p-button-label {
+  font-weight: 700;
+}
 
 /** 
  * ESTILO ENTERPRISE TABLE (PrimeVue DataTable)
@@ -174,7 +212,7 @@
 .enterprise-table .p-datatable-thead > tr > th {
   background: var(--table-header-bg) !important;
   color: var(--table-header-text) !important;
-  font-size: 0.70rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -183,18 +221,21 @@
 }
 
 .enterprise-table .p-datatable-tbody > tr > td {
-    background: var(--card-bg) !important;
-    color: var(--text-color) !important;
-    border-color: var(--sidebar-border) !important;
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--sidebar-border) !important;
 }
 
 .enterprise-table.p-datatable-striped .p-datatable-tbody > tr.p-row-odd > td {
-    background: var(--table-stripe) !important;
+  background: var(--table-stripe) !important;
 }
 
 .enterprise-table .p-datatable-tbody > tr:hover > td,
-.enterprise-table.p-datatable-striped .p-datatable-tbody > tr.p-row-odd:hover > td {
-    background: var(--table-hover) !important;
+.enterprise-table.p-datatable-striped
+  .p-datatable-tbody
+  > tr.p-row-odd:hover
+  > td {
+  background: var(--table-hover) !important;
 }
 
 .enterprise-table .p-datatable-tfoot td {
@@ -231,7 +272,11 @@
 }
 
 .enterprise-table .p-paginator .p-paginator-page.p-highlight {
-  background: color-mix(in srgb, var(--accent-indigo) 12%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--accent-indigo) 12%,
+    transparent
+  ) !important;
   color: var(--accent-indigo) !important;
 }
 
@@ -255,7 +300,11 @@ body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
 }
 
 body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
-  background: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 20%,
+    transparent
+  ) !important;
   color: var(--primary-color) !important;
   border-bottom-color: var(--primary-color) !important;
   border-radius: 8px 8px 0 0 !important;

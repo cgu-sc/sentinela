@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useIndicadores } from '@/composables/useIndicadores';
 import { useFormatting } from '@/composables/useFormatting';
@@ -10,6 +10,15 @@ const cnpj = computed(() => route.params.cnpj);
 
 const { formatCurrencyFull } = useFormatting();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
+const isAuditExpanded = ref(false); // Começa recolhido por padrão para dar destaque
+
+// Inicializa o filtro a partir do localStorage (persistência)
+const showOnlyHighRisk = ref(localStorage.getItem('sentinela_indicators_filter_only_risky') === 'true');
+
+// Salva no localStorage sempre que o filtro for alterado
+watch(showOnlyHighRisk, (newVal) => {
+  localStorage.setItem('sentinela_indicators_filter_only_risky', newVal);
+});
 
 onMounted(() => {
   if (cnpj.value) fetchIndicadores(cnpj.value);
@@ -19,10 +28,10 @@ onMounted(() => {
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
   const t = INDICATOR_THRESHOLDS[thresholdKey] ?? INDICATOR_THRESHOLDS.default;
   const r = riscoUf != null ? Math.round(riscoUf * 10) / 10 : null;
-  if (r == null)     return { label: 'SEM DADOS', color: 'var(--text-muted)',      severity: 'secondary' };
-  if (r >= t.critico) return { label: 'CRÍTICO',  color: 'var(--risk-critical)', severity: 'danger'    };
-  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: 'var(--risk-medium)',   severity: 'warning'   };
-  return              { label: 'NORMAL',   color: 'var(--risk-low)',      severity: 'success'   };
+  if (r == null)     return { label: 'SEM DADOS', color: 'var(--text-muted)',  severity: 'secondary' };
+  if (r >= t.critico) return { label: 'CRÍTICO',  color: 'var(--risk-indicator-critical)', severity: 'danger'    };
+  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: 'var(--risk-indicator-warning)',  severity: 'warning'   };
+  return              { label: 'NORMAL',   color: 'var(--risk-indicator-normal)',   severity: 'success'   };
 }
 
 function formatIndicadorValue(valor, formato) {
@@ -64,6 +73,21 @@ const pontosCriticos = computed(() => {
   });
 });
 
+// Filtra os grupos conforme o toggle de risco
+const filteredGroups = computed(() => {
+  if (!showOnlyHighRisk.value) return INDICATOR_GROUPS;
+
+  return INDICATOR_GROUPS.map(grupo => {
+    const indicators = grupo.indicators.filter(ind => {
+      const d = indicadoresData.value?.indicadores?.[ind.key];
+      if (!d || d.valor == null) return false;
+      const status = getIndicadorStatus(d.risco_reg, ind.thresholdKey);
+      return status.label !== 'NORMAL';
+    });
+    return { ...grupo, indicators };
+  }).filter(grupo => grupo.indicators.length > 0);
+});
+
 defineExpose({
   getIndicadoresData: () => indicadoresData.value?.indicadores ?? {},
   getPontosCriticos: () => pontosCriticos.value,
@@ -100,8 +124,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
     <template v-else-if="indicadoresLoaded">
 
       <!-- RESUMO DE AUDITORIA (CARD DE PONTOS CRÍTICOS) -->
-      <div v-if="pontosCriticos.length" class="audit-card-new">
-        <div class="audit-card-header">
+      <div v-if="pontosCriticos.length" class="audit-card-new" :class="{ 'is-collapsed': !isAuditExpanded }">
+        <div class="audit-card-header" @click="isAuditExpanded = !isAuditExpanded" style="cursor: pointer;">
           <div class="audit-title-wrap">
             <i class="pi pi-shield audit-shield-icon" />
             <div class="audit-title-text">
@@ -109,36 +133,53 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
               <p>Identificados {{ pontosCriticos.length }} indicador(es) em nível crítico</p>
             </div>
           </div>
+          <div class="audit-header-actions">
+            <span class="audit-expand-label">{{ isAuditExpanded ? 'Recolher detalhes' : 'Ver detalhes' }}</span>
+            <i class="pi" :class="isAuditExpanded ? 'pi-chevron-up' : 'pi-chevron-down'" />
+          </div>
         </div>
         
-        <div class="audit-card-body">
-          <div v-for="p in pontosCriticos" :key="p.label" class="audit-row-new">
-            <div class="audit-item-main">
-              <span class="audit-item-label">{{ p.label }}</span>
-              <div class="audit-item-data">
-                <span class="audit-badge-val">{{ p.riscoReg.toFixed(1) }}x</span>
-                <span class="audit-item-desc">acima da mediana regional</span>
+        <transition name="audit-slide">
+          <div v-show="isAuditExpanded" class="audit-card-body">
+            <div v-for="p in pontosCriticos" :key="p.label" class="audit-row-new">
+              <div class="audit-item-main">
+                <span class="audit-item-label">{{ p.label }}</span>
+                <div class="audit-item-data">
+                  <span class="audit-badge-val">{{ p.riscoReg.toFixed(1) }}x</span>
+                  <span class="audit-item-desc">acima da mediana regional</span>
+                </div>
               </div>
-            </div>
-            <div class="audit-item-stats">
-              <div class="stat-mini">
-                <span class="s-label">Farmácia</span>
-                <span class="s-val">{{ formatIndicadorValue(p.valor, p.formato) }}</span>
-              </div>
-              <div class="stat-mini">
-                <span class="s-label">Regional</span>
-                <span class="s-val">{{ formatIndicadorValue(p.medReg, p.formato) }}</span>
+              <div class="audit-item-stats">
+                <div class="stat-mini">
+                  <span class="s-label">Farmácia</span>
+                  <span class="s-val">{{ formatIndicadorValue(p.valor, p.formato) }}</span>
+                </div>
+                <div class="stat-mini">
+                  <span class="s-label">Regional</span>
+                  <span class="s-val">{{ formatIndicadorValue(p.medReg, p.formato) }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </transition>
       </div>
 
       <div class="ind-section">
         <div class="ind-card">
         <div class="section-title">
-          <i class="pi pi-table" />
-          <span>Indicadores de Risco</span>
+          <div class="title-main">
+            <i class="pi pi-table" />
+            <span>Indicadores de Risco</span>
+          </div>
+          <div class="title-actions">
+            <div class="risk-toggle-pill" :class="{ 'active': showOnlyHighRisk }" @click="showOnlyHighRisk = !showOnlyHighRisk">
+              <div class="risk-icon-wrap">
+                <i class="pi" :class="showOnlyHighRisk ? 'pi-filter-fill' : 'pi-filter'" />
+                <span v-if="showOnlyHighRisk" class="risk-ping" />
+              </div>
+              <span>Somente itens com risco</span>
+            </div>
+          </div>
         </div>
         <div class="ind-table-wrap">
         <table class="ind-table">
@@ -167,7 +208,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
             </tr>
           </thead>
           <tbody>
-            <template v-for="grupo in INDICATOR_GROUPS" :key="grupo.id">
+            <template v-for="grupo in filteredGroups" :key="grupo.id">
               <tr class="ind-group-row">
                 <td colspan="9">{{ grupo.label }}</td>
               </tr>
@@ -238,36 +279,103 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   gap: 1.5rem;
 }
 
-/* Títulos de Sessão Padronizados */
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: space-between;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--tabs-border);
+  margin-bottom: 0.75rem;
+}
+
+.title-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.title-main i {
+  font-size: 1rem;
+  color: var(--primary-color);
+}
+
+.title-main span {
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-color);
-  margin-bottom: 0.75rem;
 }
 
-.section-title i {
-  font-size: 1rem;
-  color: var(--primary-color);
+.risk-toggle-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-color);
+  border: 1px solid var(--tabs-border);
+  border-radius: 99px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.risk-toggle-pill:hover {
+  border-color: var(--risk-indicator-warning);
+  color: var(--text-color);
+}
+
+.risk-toggle-pill.active {
+  background: color-mix(in srgb, var(--risk-indicator-warning) 18%, var(--card-bg));
+  border-color: var(--risk-indicator-warning);
+  color: var(--risk-indicator-warning);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--risk-indicator-warning) 25%, transparent);
+  animation: risk-pulse 2s infinite ease-in-out;
+}
+
+.risk-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.risk-ping {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 6px;
+  height: 6px;
+  background: var(--risk-indicator-critical);
+  border-radius: 50%;
+  border: 1px solid var(--card-bg);
+  box-shadow: 0 0 4px var(--risk-indicator-critical);
+}
+
+@keyframes risk-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 8px color-mix(in srgb, var(--risk-indicator-warning) 15%, transparent); }
+  50% { transform: scale(1.02); box-shadow: 0 0 15px color-mix(in srgb, var(--risk-indicator-warning) 35%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 8px color-mix(in srgb, var(--risk-indicator-warning) 15%, transparent); }
 }
 
 /* Resumo de auditoria */
 /* Novo Card de Auditoria Premiun */
 .audit-card-new {
-  background: color-mix(in srgb, var(--risk-critical) 6%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 20%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 25%, transparent);
   border-radius: 12px;
   padding: 0.75rem 1rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.4rem;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08); /* Sombra um pouco mais forte para destaque */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.audit-card-new.is-collapsed {
+  background: color-mix(in srgb, var(--risk-indicator-critical) 8%, var(--card-bg));
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
@@ -278,7 +386,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   left: 0;
   width: 4px;
   height: 100%;
-  background: var(--risk-critical);
+  background: var(--risk-indicator-critical);
   opacity: 0.8;
 }
 
@@ -286,9 +394,32 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 0px; /* Removido para transição */
+  padding-bottom: 0px; /* Removido para transição */
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+/* Quando expandido, recupera as margens e borda */
+.audit-card-new:not(.is-collapsed) .audit-card-header {
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--risk-critical) 15%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 20%, transparent);
+}
+
+.audit-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--risk-indicator-critical);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.audit-expand-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
 }
 
 .audit-title-wrap {
@@ -299,8 +430,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 .audit-shield-icon {
   font-size: 1.1rem;
-  color: var(--risk-critical);
-  background: color-mix(in srgb, var(--risk-critical) 10%, transparent);
+  color: var(--risk-indicator-critical);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 18%, transparent);
   padding: 0.4rem;
   border-radius: 8px;
 }
@@ -329,8 +460,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0.8rem;
-  background: color-mix(in srgb, var(--risk-critical) 4%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 12%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 8%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 15%, transparent);
   border-radius: 8px;
   transition: all 0.2s ease;
 }
@@ -360,8 +491,8 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .audit-badge-val {
-  background: color-mix(in srgb, var(--risk-critical) 15%, transparent);
-  color: var(--risk-critical);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 22%, transparent);
+  color: var(--risk-indicator-critical);
   font-size: 0.7rem;
   font-weight: 800;
   padding: 0.05rem 0.4rem;
@@ -392,6 +523,21 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   opacity: 0.8;
 }
 
+/* Transição Slide */
+.audit-slide-enter-active,
+.audit-slide-leave-active {
+  transition: all 0.3s ease-out;
+  max-height: 1000px;
+}
+
+.audit-slide-enter-from,
+.audit-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  transform: translateY(-8px);
+}
+
 .stat-mini .s-val {
   font-size: 0.8rem;
   font-weight: 600;
@@ -399,7 +545,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .ind-section {
-  margin-top: 0.5rem;
+  margin-top: 0;
 }
 
 .ind-card {

@@ -384,7 +384,7 @@ defineExpose({
                 <span class="alert-kpi-val-sub">{{ qtdCrmInvalido }} Inexistentes | {{ qtdPrescrAntesRegistro }} Irregulares</span>
               </div>
               <span class="alert-kpi-hint">
-                <strong style="color: var(--risk-critical)">
+                <strong style="color: var(--risk-high)">
                   {{ formatCurrencyFull(valorFraudeCrm) }} ({{ formatPct(pctFraudeCrm) }})
                 </strong>
                 da produção
@@ -826,17 +826,17 @@ defineExpose({
 
 /* Semafórica de Risco nos Cards */
 .highlight-red .alert-kpi-val {
-  color: var(--risk-critical);
+  color: var(--risk-high);
 }
 .highlight-red {
-  border-left: 3px solid var(--risk-critical) !important;
+  border-left: 3px solid var(--risk-high) !important;
 }
 
 .highlight-orange .alert-kpi-val {
-  color: var(--risk-high);
+  color: var(--risk-medium);
 }
 .highlight-orange {
-  border-left: 3px solid var(--risk-high) !important;
+  border-left: 3px solid var(--risk-medium) !important;
 }
 
 /* Filtro Estilizado */
@@ -1051,20 +1051,20 @@ input:checked + .toggle-slider:before {
   font-size: 0.75rem;
 }
 .issue-tag.red {
-  background: color-mix(in srgb, var(--risk-critical) 10%, var(--tabs-bg));
-  color: var(--risk-critical);
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 20%, transparent);
-}
-.issue-tag.dark-red {
-  background: color-mix(in srgb, var(--risk-critical) 15%, var(--tabs-bg));
-  color: var(--risk-critical);
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent);
-  font-weight: 700;
-}
-.issue-tag.orange {
   background: color-mix(in srgb, var(--risk-high) 10%, var(--tabs-bg));
   color: var(--risk-high);
   border: 1px solid color-mix(in srgb, var(--risk-high) 20%, transparent);
+}
+.issue-tag.dark-red {
+  background: color-mix(in srgb, var(--risk-high) 15%, var(--tabs-bg));
+  color: var(--risk-high);
+  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
+  font-weight: 700;
+}
+.issue-tag.orange {
+  background: color-mix(in srgb, var(--risk-medium) 10%, var(--tabs-bg));
+  color: var(--risk-medium);
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 20%, transparent);
 }
 .issue-tag.yellow {
   background: color-mix(in srgb, var(--risk-medium) 10%, var(--tabs-bg));

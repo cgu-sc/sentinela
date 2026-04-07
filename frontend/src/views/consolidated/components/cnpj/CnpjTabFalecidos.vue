@@ -328,9 +328,9 @@ const openEstablishment = (estabStr) => {
 }
 
 .highlight-red {
-  border-left: 3px solid var(--risk-critical) !important;
+  border-left: 3px solid var(--risk-high) !important;
 }
-.highlight-red .f-kpi-val { color: var(--risk-critical) !important; font-weight: 700; }
+.highlight-red .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
 .highlight-orange {
   border-left: 3px solid var(--risk-high) !important;
@@ -338,9 +338,9 @@ const openEstablishment = (estabStr) => {
 .highlight-orange .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
 .highlight-yellow {
-  border-left: 3px solid var(--risk-medium) !important;
+  border-left: 3px solid var(--risk-high) !important;
 }
-.highlight-yellow .f-kpi-val { color: var(--risk-medium) !important; font-weight: 700; }
+.highlight-yellow .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
 .falecidos-list-container {
   background: var(--card-bg);
@@ -437,12 +437,12 @@ const openEstablishment = (estabStr) => {
   font-weight: 700;
 }
 
-.d-medium   { background: color-mix(in srgb, var(--risk-medium)   15%, transparent); color: var(--risk-medium);   border: 1px solid color-mix(in srgb, var(--risk-medium) 30%, transparent); }
-.d-high     { background: color-mix(in srgb, var(--risk-high)     15%, transparent); color: var(--risk-high);     border: 1px solid color-mix(in srgb, var(--risk-high)   30%, transparent); }
+.d-medium   { background: color-mix(in srgb, var(--risk-high)   15%, transparent); color: var(--risk-high);   border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); }
+.d-high     { background: color-mix(in srgb, var(--risk-high)   15%, transparent); color: var(--risk-high);   border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); }
 .d-critical { 
-  background: color-mix(in srgb, var(--risk-critical) 15%, transparent); 
-  color: var(--risk-critical); 
-  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent); 
+  background: color-mix(in srgb, var(--risk-high) 15%, transparent); 
+  color: var(--risk-high); 
+  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); 
   font-weight: 800; 
 }
 

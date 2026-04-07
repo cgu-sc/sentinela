@@ -24,7 +24,7 @@ const emits = defineEmits(['select-municipio']);
 const { formatBRL, formatPercent } = useFormatting();
 const { getRiskClass } = useRiskMetrics();
 
-const ROWS_PER_PAGE = 14;
+const ROWS_PER_PAGE = 10;
 const first = ref(0);
 
 // Replica a ordenação padrão da tabela para calcular em qual página o município selecionado está
@@ -408,8 +408,8 @@ const onTableLeave = () => {
 
 :deep(.p-datatable-wrapper) {
   border-radius: 0 0 12px 12px;
-  /* Altura FIXA para 14 linhas (modo small) sem ativar scrollbar */
-  height: 640px;
+  /* Altura FIXA para 10 linhas (modo small) sem ativar scrollbar */
+  height: 495px;
   overflow-y: hidden !important;
 }
 

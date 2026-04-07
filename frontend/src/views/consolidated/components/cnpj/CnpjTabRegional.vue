@@ -14,23 +14,26 @@ const props = defineProps({
 const cnpjNav = useCnpjNavStore();
 const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
 
-// ── Filtro Cruzado de Município (Regional) ────────────────
-const filterMunicipio = ref(null);
+const filterMunicipioId = ref(null);
 
-function toggleMunicipioFilter(nome) {
-  if (filterMunicipio.value?.toLowerCase() === nome?.toLowerCase()) {
-    filterMunicipio.value = null;
+function toggleMunicipioFilter(ibge7) {
+  if (filterMunicipioId.value === ibge7) {
+    filterMunicipioId.value = null;
   } else {
-    filterMunicipio.value = nome;
+    filterMunicipioId.value = ibge7;
   }
 }
 
 const filteredFarmacias = computed(() => {
   const farmacias = regionalData.value?.farmacias ?? [];
-  if (!filterMunicipio.value) return farmacias;
+  if (!filterMunicipioId.value) return farmacias;
   
+  // Encontra o nome do município pelo ID para filtrar a lista de farmácias (que só tem o nome)
+  const targetMun = regionalData.value?.municipios?.find(m => m.id_ibge7 === filterMunicipioId.value);
+  if (!targetMun) return farmacias;
+
   return farmacias.filter(f => 
-    f.municipio?.toLowerCase() === filterMunicipio.value.toLowerCase()
+    f.municipio?.toLowerCase() === targetMun.municipio?.toLowerCase()
   );
 });
 
@@ -70,9 +73,13 @@ watch(
     // Aplica o filtro e consome o estado
     await nextTick();
     if (municipio === '__RESET__') {
-      filterMunicipio.value = null; // Limpa qualquer filtro anterior
+      filterMunicipioId.value = null;
     } else {
-      filterMunicipio.value = municipio;
+      // Tenta encontrar o ID pelo nome fornecido pelo store
+      const match = regionalData.value?.municipios?.find(m => 
+        m.municipio?.toLowerCase() === municipio.toLowerCase()
+      );
+      if (match) filterMunicipioId.value = match.id_ibge7;
     }
     cnpjNav.consumePendingMunicipio();
 
@@ -119,10 +126,10 @@ watch(
         <div class="table-wrapper-col">
           <RegionalMunicipalityTable 
             :municipios="regionalData.municipios"
-            :municipio-atual="filterMunicipio || geoData.no_municipio"
+            :municipio-atual="geoData.no_municipio"
             :uf-atual="geoData.sg_uf"
             :regiao-nome="geoData.no_regiao_saude"
-            :selected-filter="filterMunicipio"
+            :selected-filter="filterMunicipioId"
             @select-municipio="toggleMunicipioFilter"
           />
         </div>
@@ -130,7 +137,7 @@ watch(
           <RegionalMapChart
             :regional-data="regionalData"
             :geo-data="geoData"
-            :selected-municipio="filterMunicipio"
+            :selected-municipio-id="filterMunicipioId"
             @select-municipio="toggleMunicipioFilter"
           />
         </div>

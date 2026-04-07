@@ -18,8 +18,8 @@ const props = defineProps({
   regionalData: { type: Object, default: null },
   /** Dados geo da farmácia atual — { sg_uf, no_regiao_saude, no_municipio } */
   geoData: { type: Object, required: true },
-  /** Município selecionado pelo filtro cruzado (nome, ou null) */
-  selectedMunicipio: { type: String, default: null },
+  /** id_ibge7 selecionado pelo filtro cruzado (número, ou null) */
+  selectedMunicipioId: { type: Number, default: null },
 });
 
 const emit = defineEmits(['select-municipio']);
@@ -183,17 +183,12 @@ const munDataByIbge7 = computed(() => {
 });
 
 /** id_ibge7 da farmácia atual (município destacado por padrão) */
-const currentIbge7 = computed(() => {
-  const norm = (s) => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const loc = regiaoLocalidades.value.find(l => norm(l.no_municipio) === norm(props.geoData?.no_municipio));
-  return loc ? Number(loc.id_ibge7) : null;
-});
+const norm = (s) => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
-/** id_ibge7 do município selecionado pelo filtro cruzado */
-const selectedIbge7 = computed(() => {
-  if (!props.selectedMunicipio) return null;
-  const norm = (s) => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const loc = regiaoLocalidades.value.find(l => norm(l.no_municipio) === norm(props.selectedMunicipio));
+/** id_ibge7 da farmácia atual (município destacado por padrão) */
+const currentIbge7 = computed(() => {
+  const target = norm(props.geoData?.no_municipio);
+  const loc = regiaoLocalidades.value.find(l => norm(l.no_municipio) === target);
   return loc ? Number(loc.id_ibge7) : null;
 });
 
@@ -202,43 +197,34 @@ const mapData = computed(() => {
   if (!uf) return [];
   const fullGeo = geoStore.getMunicipiosGeoByUF(uf);
   if (!fullGeo) return [];
+  
   const ibge7s    = regiaoIbge7Set.value;
-  const hasFilter = selectedIbge7.value !== null;
+  const targetId  = props.selectedMunicipioId;
 
   return fullGeo.features
     .filter(f => ibge7s.has(Number(f.properties.id)))
     .map(f => {
-      const ibge7     = Number(f.properties.id);
-      const munData   = munDataByIbge7.value.get(ibge7);
+      const ibge7      = Number(f.properties.id);
+      const munData    = munDataByIbge7.value.get(ibge7);
       const isCurrent  = currentIbge7.value && ibge7 === currentIbge7.value;
-      const isSelected = hasFilter && ibge7 === selectedIbge7.value;
-      const isDimmed   = hasFilter && !isSelected;
-
-      let itemStyle = {};
-      if (isSelected) {
-        // areaColor é sobrescrito pelo visualMap — compensamos com borda forte + sombra
-        itemStyle = {
-          borderColor: themeStore.tokens.primary,
-          borderWidth: 4,
-          shadowColor: themeStore.tokens.primary,
-          shadowBlur:  12,
-          shadowOffsetX: 0,
-          shadowOffsetY: 0,
-        };
-      } else if (isCurrent && !hasFilter) {
-        itemStyle = { borderColor: themeStore.tokens.primary, borderWidth: 2 };
-      } else if (isDimmed) {
-        itemStyle = { opacity: 0.35 };
-      }
+      const mNome      = munData?.municipio ?? f.properties.name;
+      const isSelected = targetId && ibge7 === targetId;
+      const isDimmed   = targetId && !isSelected;
 
       return {
+        id:         ibge7,
+        ibge7:      ibge7,
         name:       f.properties.name,
         value:      munData?.percValSemComp ?? 0,
-        municipio:  munData?.municipio ?? f.properties.name,
+        municipio:  mNome,
         valSemComp: munData?.valSemComp ?? 0,
         totalMov:   munData?.totalMov ?? 0,
         cnpjs:      munData?.qtd_farmacias ?? 0,
-        ...(Object.keys(itemStyle).length ? { itemStyle } : {}),
+        isSelected,
+        isCurrent,
+        isDimmed,
+        itemStyle: isDimmed ? { opacity: 0.35, areaColor: 'transparent' } : 
+                   (isCurrent && !targetId) ? { borderColor: themeStore.tokens.primary, borderWidth: 2 } : {}
       };
     });
 });
@@ -318,20 +304,37 @@ const chartOption = computed(() => {
     geo: {
       map: mapName.value,
       nameProperty: 'name',
-      roam: true,
+      roam: false,
       zoom: 1,
       layoutSize: '95%',
       emphasis: {
         label: { show: false },
         itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
-      select: { disabled: true },
+      selectedMode: 'single',
+      select: {
+        label: { show: false },
+        itemStyle: {
+          borderColor: themeStore.tokens.primary,
+          borderWidth: 3,
+          areaColor: hoverColor.value,
+          shadowColor: themeStore.tokens.primary,
+          shadowBlur: 15,
+        }
+      },
       label: { show: false },
       itemStyle: {
         borderColor: mapBorderColor.value,
         borderWidth: 0.5,
         areaColor: mapAreaColor.value,
       },
+      regions: mapData.value
+        .filter(d => d.isCurrent && !props.selectedMunicipioId)
+        .map(d => ({
+          name: d.name,
+          itemStyle: d.itemStyle,
+          emphasis: { itemStyle: d.itemStyle }
+        })),
     },
     visualMap: {
       min: 0,
@@ -346,9 +349,17 @@ const chartOption = computed(() => {
         map: mapName.value,
         nameProperty: 'name',
         geoIndex: 0,
-        roam: true,
+        roam: false,
         emphasis: { label: { show: false } },
-        select: { disabled: true },
+        select: {
+          itemStyle: {
+            borderColor: themeStore.tokens.primary,
+            borderWidth: 3,
+            areaColor: hoverColor.value,
+            shadowColor: themeStore.tokens.primary,
+            shadowBlur: 15,
+          }
+        },
         label: { show: false },
         data: mapData.value,
       },
@@ -373,13 +384,39 @@ const chartOption = computed(() => {
   };
 });
 
-// ── Interação ────────────────────────────────────────────────────────────────
+// ── Interação e Sincronização ───────────────────────────────────────────────
 const chartRef = ref(null);
+
+watch(
+  () => [props.selectedMunicipioId, mapKey.value],
+  async ([ibgeId]) => {
+    await nextTick();
+    const chart = chartRef.value?.chart;
+    if (!chart) return;
+
+    if (!ibgeId) {
+      chart.dispatchAction({ type: 'unselect', seriesIndex: 0 });
+      return;
+    }
+
+    const match = mapData.value.find(d => Number(d.id) === ibgeId || Number(d.ibge7) === ibgeId);
+    
+    if (match) {
+      chart.dispatchAction({ type: 'select', seriesIndex: 0, name: match.name });
+    }
+  },
+  { immediate: true }
+);
 
 const onClick = (params) => {
   if (params.seriesType === 'scatter') return; // Ignora clique nos pontos
-  const municipio = params.data?.municipio ?? params.name;
-  if (municipio) emit('select-municipio', municipio);
+  const data = params.data;
+  if (data?.id) {
+    emit('select-municipio', data.id, data.municipio);
+  } else {
+    const match = mapData.value.find(d => d.name === params.name);
+    if (match) emit('select-municipio', match.id, match.municipio);
+  }
 };
 </script>
 
@@ -398,7 +435,6 @@ const onClick = (params) => {
         :option="chartOption"
         autoresize
         @click="onClick"
-        @georoam="onGeoRoam"
       />
     </div>
   </div>

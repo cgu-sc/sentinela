@@ -32,7 +32,7 @@ function rowClass(data) {
 }
 
 function onRowClick(event) {
-  emits('select-municipio', event.data.municipio);
+  emits('select-municipio', event.data.id_ibge7, event.data.municipio);
 }
 
 const totals = computed(() => {
@@ -55,7 +55,7 @@ const totals = computed(() => {
           <h3 class="section-title-text">MUNICÍPIOS DA REGIÃO {{ regiaoNome?.toUpperCase() }} - {{ ufAtual }}</h3>
           <div v-if="selectedFilter" class="active-filter-tag">
             <span class="filter-label">Filtro:</span>
-            <span class="filter-value">{{ selectedFilter.toUpperCase() }}</span>
+            <span class="filter-value">{{ municipios.find(m => m.id_ibge7 === selectedFilter)?.municipio?.toUpperCase() || 'FILTRO ATIVO' }}</span>
             <button 
               class="filter-clear-btn" 
               title="Limpar Filtro"

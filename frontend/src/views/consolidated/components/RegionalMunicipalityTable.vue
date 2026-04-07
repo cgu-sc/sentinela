@@ -15,6 +15,7 @@ const props = defineProps({
   municipios: { type: Array, default: () => [] },
   municipioAtual: { type: String, default: null },
   ufAtual: { type: String, default: null },
+  regiaoNome: { type: String, default: '' },
   selectedFilter: { type: String, default: null },
 });
 
@@ -51,7 +52,7 @@ const totals = computed(() => {
       <i class="pi pi-map-marker section-icon"></i>
       <div class="header-text-box">
         <div class="title-with-filter">
-          <h3 class="section-title-text">MUNICÍPIOS DA REGIÃO</h3>
+          <h3 class="section-title-text">MUNICÍPIOS DA REGIÃO {{ regiaoNome?.toUpperCase() }} - {{ ufAtual }}</h3>
           <div v-if="selectedFilter" class="active-filter-tag">
             <span class="filter-label">Filtro:</span>
             <span class="filter-value">{{ selectedFilter.toUpperCase() }}</span>
@@ -72,13 +73,14 @@ const totals = computed(() => {
       :value="municipios"
       size="small"
       removableSort
+      paginator
+      :rows="14"
       sortField="valSemComp"
       :sortOrder="-1"
       :row-class="rowClass"
       class="custom-table enterprise-table clickable-rows"
       @row-click="onRowClick"
     >
-      <Column field="uf" header="UF" sortable style="width: 6%" />
 
       <Column field="municipio" header="Município" sortable style="width: 30%; text-transform: none">
         <template #footer>
@@ -104,14 +106,6 @@ const totals = computed(() => {
         </template>
       </Column>
 
-      <Column field="densidade" header="Hab./Farm." sortable style="width: 10%">
-        <template #body="{ data }">
-          {{ (data.densidade || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) }}
-        </template>
-        <template #footer>
-          {{ totals.dens.toLocaleString('pt-BR') }}
-        </template>
-      </Column>
 
       <Column field="totalMov" header="Total Vendas" sortable style="width: 14%">
         <template #body="{ data }">
@@ -358,6 +352,13 @@ const totals = computed(() => {
 /* Padroniza todos os headers para o novo padrão Clean */
 :deep(.p-datatable-thead th) {
   padding: 0.75rem 1rem !important;
+}
+
+:deep(.p-datatable-wrapper) {
+  border-radius: 0 0 12px 12px;
+  /* Altura FIXA para 14 linhas (modo small) sem ativar scrollbar */
+  height: 640px;
+  overflow-y: hidden !important;
 }
 
 :deep(.p-datatable-tbody td),

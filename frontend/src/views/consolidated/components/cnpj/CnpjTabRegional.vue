@@ -114,13 +114,30 @@ watch(
 
     <!-- Conteúdo principal -->
     <template v-else>
-      <RegionalMunicipalityTable 
-        :municipios="regionalData.municipios"
-        :municipio-atual="filterMunicipio || geoData.no_municipio"
-        :uf-atual="geoData.sg_uf"
-        :selected-filter="filterMunicipio"
-        @select-municipio="toggleMunicipioFilter"
-      />
+      <div class="regional-top-row">
+        <div class="table-wrapper-col">
+          <RegionalMunicipalityTable 
+            :municipios="regionalData.municipios"
+            :municipio-atual="filterMunicipio || geoData.no_municipio"
+            :uf-atual="geoData.sg_uf"
+            :regiao-nome="geoData.no_regiao_saude"
+            :selected-filter="filterMunicipio"
+            @select-municipio="toggleMunicipioFilter"
+          />
+        </div>
+        <div class="map-wrapper-col">
+          <div class="map-placeholder-card">
+             <div class="placeholder-header">
+                <i class="pi pi-map"></i>
+                <span>Mapa da Região</span>
+             </div>
+             <div class="placeholder-content">
+                <i class="pi pi-compass placeholder-main-icon"></i>
+                <p>Visualização Geográfica da Região de Saúde</p>
+             </div>
+          </div>
+        </div>
+      </div>
 
       <RegionalPharmacyTable
         :farmacias="filteredFarmacias"
@@ -138,6 +155,66 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.regional-top-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.table-wrapper-col {
+  flex: 3;
+}
+
+.map-wrapper-col {
+  flex: 2;
+  display: flex;
+}
+
+.map-placeholder-card {
+  flex: 1;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.placeholder-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--tabs-border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.placeholder-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--text-muted);
+  background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+}
+
+.placeholder-main-icon {
+  font-size: 3rem;
+  opacity: 0.2;
+}
+
+.placeholder-content p {
+  font-size: 0.85rem;
+  opacity: 0.5;
 }
 
 .tab-placeholder {

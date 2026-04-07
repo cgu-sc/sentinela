@@ -666,7 +666,7 @@ defineExpose({
 .content-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   width: 100%;
   align-items: stretch;
 }
@@ -701,7 +701,7 @@ defineExpose({
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 0;
 }
 
 .alert-kpi-card {

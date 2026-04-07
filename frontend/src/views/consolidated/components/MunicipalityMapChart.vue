@@ -48,15 +48,32 @@ const pointBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.
 // ── Zoom tracking ───────────────────────────────────────────────────────────
 let _currentZoom = 1;
 
+function getSymbolSize(data, zoom) {
+  const count = data.count ?? 1;
+  const z = Math.max(zoom, 1);
+  
+  if (count === 1) {
+    const multiplier = Math.min(Math.pow(z, 0.35), 2.5);
+    return 7 * multiplier;
+  }
+  
+  // Para clusters, o crescimento é bem mais contido para não poluir
+  const clusterMultiplier = Math.min(Math.pow(z, 0.15), 1.5);
+  return Math.min((10 + Math.sqrt(count) * 3) * clusterMultiplier, 40);
+}
+
 const onGeoRoam = () => {
   const chart = chartRef.value?.chart;
   if (!chart) return;
   const opt = chart.getOption();
   _currentZoom = opt?.geo?.[0]?.zoom ?? 1;
   
-  // Atualiza apenas a série scatter sem re-renderizar o mapa inteiro
+  // Atualiza série scatter com novo cluster e novo tamanho baseado no zoom
   chart.setOption({
-    series: [{}, { data: clusterPoints(scatterData.value, _currentZoom) }],
+    series: [{}, { 
+      data: clusterPoints(scatterData.value, _currentZoom),
+      symbolSize: (v, params) => getSymbolSize(params.data, _currentZoom)
+    }],
   });
 };
 
@@ -77,7 +94,9 @@ function highestRiskColor(group) {
 }
 
 function clusterPoints(rawPoints, zoom) {
-  const threshold = 0.08 / Math.max(zoom, 1);
+  if (zoom > 14) return rawPoints; // Se der zoom suficiente, mostra tudo separado
+
+  const threshold = 0.015 / Math.max(zoom * 0.8, 1); // Grade dinâmica
   const grid = new Map();
 
   for (const p of rawPoints) {
@@ -102,9 +121,9 @@ function clusterPoints(rawPoints, zoom) {
         label: {
           show: true,
           formatter: String(count),
-          color: '#fff',
+          color: 'rgba(15, 23, 42, 0.9)', // Texto escuro (Carbon) no cluster
           fontSize: 10,
-          fontWeight: 'bold',
+          fontWeight: '900',
         },
       });
     }
@@ -379,13 +398,10 @@ const chartOption = computed(() => {
         coordinateSystem: 'geo',
         geoIndex: 0,
         data: clusterPoints(scatterData.value, _currentZoom),
-        symbolSize: (_, params) => {
-          const count = params.data.count ?? 1;
-          return count === 1 ? 6 : Math.min(10 + Math.sqrt(count) * 4, 36);
-        },
+        symbolSize: (_, params) => getSymbolSize(params.data, _currentZoom),
         itemStyle: {
-          borderColor: pointBorderColor.value,
-          borderWidth: 0.8,
+          borderColor: 'rgba(15, 23, 42, 0.7)', // Borda escura sólida ao invés de branca
+          borderWidth: 1.2,
           opacity: 0.85,
         },
         emphasis: {

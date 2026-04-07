@@ -182,31 +182,36 @@ const formattedFullAddress = computed(() => {
             <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
             <span>{{ farmaciaLists.isInteresse(cnpj) ? 'Interesse' : 'Interesse' }}</span>
           </button>
-          <button
-            class="list-btn"
-            :class="farmaciaLists.isBlacklisted(cnpj) ? 'list-btn--black-active' : 'list-btn--black'"
-            @click="farmaciaLists.toggleBlacklist(cnpj, cnpjData.razao_social)"
-            v-tooltip.bottom="farmaciaLists.isBlacklisted(cnpj) ? 'Remover da Blacklist' : 'Adicionar à Blacklist'"
-          >
-            <i class="pi pi-ban" />
-            <span>Blacklist</span>
-          </button>
         </div>
         <div class="header-kpis-new">
-          <div
-            class="kpi-card"
+          <!-- Bloco Unificado de Risco -->
+          <div 
+            class="kpi-pill-group"
             :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >
-            <span class="kpi-card-label">% Sem Comprovação</span>
-            <span class="kpi-card-value">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
+            <div class="pill-item">
+              <span class="pill-label">% Sem Comprovação</span>
+              <span class="pill-value">
+                {{ cnpjData.percValSemComp?.toFixed(2) }}%
+              </span>
+            </div>
+
+            <div class="pill-divider"></div>
+
+            <div class="pill-item">
+              <span class="pill-label">Valor sem Comprovação</span>
+              <span class="pill-value currency">
+                {{ formatCurrencyFull(cnpjData.valSemComp) }}
+              </span>
+            </div>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-card-label">Valor sem Comprovação</span>
-            <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-card-label">Total Vendas</span>
-            <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
+
+          <!-- Bloco Neutro -->
+          <div class="kpi-card-neutral">
+            <span class="pill-label">Total Movimentado</span>
+            <span class="pill-value total">
+              {{ formatCurrencyFull(cnpjData.totalMov) }}
+            </span>
           </div>
         </div>
       </div>
@@ -382,24 +387,7 @@ const formattedFullAddress = computed(() => {
   border-color: #a16207;
 }
 
-.list-btn--black {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.08);
-}
-.list-btn--black:hover {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: #ef4444;
-}
-.list-btn--black-active {
-  color: #fff;
-  border-color: #dc2626;
-  background: #dc2626;
-}
-.list-btn--black-active:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
-}
+
 
 
 .risk-chip {
@@ -572,46 +560,107 @@ const formattedFullAddress = computed(() => {
 
 .header-kpis-new {
   display: flex;
-  align-items: stretch;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem; /* Reduzido de 1.25rem */
 }
 
-.kpi-card {
+/* Cápsula Unificada de Risco */
+.kpi-pill-group {
+  display: flex;
+  align-items: center;
+  padding: 0.3rem 0.45rem; /* Compacto em todas as dimensões */
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; /* Arredondamento um pouco menor para a pill menor */
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+/* Cores dinâmicas da cápsula */
+.kpi-pill-group.risk-high {
+  background: color-mix(in srgb, var(--risk-high) 8%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 20%, transparent);
+  --accent: var(--risk-high);
+}
+.kpi-pill-group.risk-critical {
+  background: color-mix(in srgb, var(--risk-critical) 8%, transparent);
+  border-color: color-mix(in srgb, var(--risk-critical) 20%, transparent);
+  --accent: var(--risk-critical);
+}
+.kpi-pill-group.risk-medium {
+  background: color-mix(in srgb, var(--risk-medium) 8%, transparent);
+  border-color: color-mix(in srgb, var(--risk-medium) 20%, transparent);
+  --accent: var(--risk-medium);
+}
+.kpi-pill-group.risk-low {
+  background: color-mix(in srgb, var(--risk-low) 8%, transparent);
+  border-color: color-mix(in srgb, var(--risk-low) 20%, transparent);
+  --accent: var(--risk-low);
+}
+
+.pill-item {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.15rem;
-  padding: 0.5rem 1rem;
-  border-left: 3px solid rgba(255, 255, 255, 0.1);
-  background: none;
+  padding: 0.15rem 0.5rem; /* Padding horizontal reduzido pela metade */
 }
 
-.kpi-card-label {
-  font-size: 0.65rem;
+.pill-label {
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--establishment-header-text);
-  opacity: 0.5;
-  white-space: nowrap;
+  opacity: 0.7; /* Aumentado para melhor legibilidade */
+  margin-bottom: 0.15rem;
 }
 
-.kpi-card-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--establishment-header-text);
+.pill-value {
+  font-size: 1.25rem;
+  font-weight: 800;
   font-family: 'Inter', sans-serif;
-  line-height: 1.2;
-  white-space: nowrap;
+  color: var(--accent, var(--establishment-header-text));
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-.kpi-card.risk-high .kpi-card-value   { color: var(--risk-high); }
+.pill-value.currency {
+  font-size: 1.15rem;
+  opacity: 0.9;
+}
+
+.pill-divider {
+  width: 1px;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Card Neutro */
+.kpi-card-neutral {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0.75rem; /* Reduzido de 1.25rem */
+  border-left: 1px solid rgba(255, 255, 255, 0.1); /* Linha sutil separadora */
+}
+
+.pill-value.total {
+  font-size: 1.15rem;
+  opacity: 0.85; /* Reforçado para melhor leitura */
+}
+
+.kpi-card.risk-high .kpi-card-value, 
+.kpi-card.risk-high .kpi-badge-value   { color: var(--risk-high); }
 .kpi-card.risk-high                   { border-left-color: var(--risk-high); }
-.kpi-card.risk-critical .kpi-card-value { color: var(--risk-critical); }
+
+.kpi-card.risk-critical .kpi-card-value,
+.kpi-card.risk-critical .kpi-badge-value { color: var(--risk-critical); }
 .kpi-card.risk-critical               { border-left-color: var(--risk-critical); }
-.kpi-card.risk-medium .kpi-card-value  { color: var(--risk-medium); }
+
+.kpi-card.risk-medium .kpi-card-value,
+.kpi-card.risk-medium .kpi-badge-value { color: var(--risk-medium); }
 .kpi-card.risk-medium                  { border-left-color: var(--risk-medium); }
-.kpi-card.risk-low .kpi-card-value     { color: var(--risk-low); }
+
+.kpi-card.risk-low .kpi-card-value,
+.kpi-card.risk-low .kpi-badge-value     { color: var(--risk-low); }
 .kpi-card.risk-low                     { border-left-color: var(--risk-low); }
 
 /* ── RANKING PANEL ── */
@@ -683,7 +732,7 @@ const formattedFullAddress = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   color: var(--establishment-header-text);
-  opacity: 0.7;
+  opacity: 0.5; /* Ajustado para 0.5 conforme solicitado */
   letter-spacing: 0.05em;
 }
 

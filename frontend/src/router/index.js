@@ -27,7 +27,7 @@ const routes = [
       // Detalhamento de CNPJ
       { path: 'estabelecimento/:cnpj', name: 'CnpjDetail', component: () => import('@/views/consolidated/CnpjDetailView.vue') },
 
-      // Farmácias Monitoradas (Interesse + Blacklist)
+      // Farmácias Monitoradas (Lista de Interesse)
       { path: 'listas', name: 'FarmaciaLists', component: () => import('@/views/lists/FarmaciaListsView.vue') },
 
       // Rotas do Módulo de Alvos

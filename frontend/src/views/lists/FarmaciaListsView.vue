@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFormatting } from "@/composables/useFormatting";
@@ -7,8 +7,6 @@ import { useFormatting } from "@/composables/useFormatting";
 const router = useRouter();
 const farmaciaLists = useFarmaciaListsStore();
 const { formatarData } = useFormatting();
-
-const activeTab = ref("interesse");
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -24,20 +22,10 @@ const formatDate = (iso) => {
   });
 };
 
-const currentList = computed(() =>
-  activeTab.value === "interesse" ? farmaciaLists.interesse : farmaciaLists.blacklist,
-);
-
-const totalBadge = computed(
-  () => farmaciaLists.interesse.length + farmaciaLists.blacklist.length,
-);
+const totalBadge = computed(() => farmaciaLists.interesse.length);
 
 function remover(cnpj) {
-  if (activeTab.value === "interesse") {
-    farmaciaLists.toggleInteresse(cnpj, "");
-  } else {
-    farmaciaLists.toggleBlacklist(cnpj, "");
-  }
+  farmaciaLists.toggleInteresse(cnpj, "");
 }
 
 function abrirEstabelecimento(cnpj) {
@@ -54,40 +42,15 @@ function abrirEstabelecimento(cnpj) {
         <span class="total-badge" v-if="totalBadge > 0">{{ totalBadge }}</span>
       </div>
       <p class="lists-subtitle">
-        CNPJs adicionados manualmente para acompanhamento. Salvo localmente neste navegador.
+        CNPJs adicionados à Lista de Interesse para acompanhamento manual.
       </p>
     </div>
 
-    <div class="lists-tabs">
-      <button
-        class="list-tab"
-        :class="{ active: activeTab === 'interesse' }"
-        @click="activeTab = 'interesse'"
-      >
-        <i class="pi pi-star" />
-        Lista de Interesse
-        <span class="tab-count" v-if="farmaciaLists.interesse.length">
-          {{ farmaciaLists.interesse.length }}
-        </span>
-      </button>
-      <button
-        class="list-tab"
-        :class="{ active: activeTab === 'blacklist' }"
-        @click="activeTab = 'blacklist'"
-      >
-        <i class="pi pi-ban" />
-        Blacklist
-        <span class="tab-count blacklist" v-if="farmaciaLists.blacklist.length">
-          {{ farmaciaLists.blacklist.length }}
-        </span>
-      </button>
-    </div>
-
     <div class="lists-content">
-      <div v-if="currentList.length === 0" class="empty-state">
-        <i :class="activeTab === 'interesse' ? 'pi pi-star' : 'pi pi-ban'" class="empty-icon" />
-        <p>Nenhuma farmácia na {{ activeTab === 'interesse' ? 'Lista de Interesse' : 'Blacklist' }}.</p>
-        <span>Acesse o detalhe de um estabelecimento e clique no botão correspondente.</span>
+      <div v-if="farmaciaLists.interesse.length === 0" class="empty-state">
+        <i class="pi pi-star empty-icon" />
+        <p>Nenhuma farmácia na Lista de Interesse.</p>
+        <span>Acesse o detalhe de um estabelecimento e clique no ícone de estrela.</span>
       </div>
 
       <table v-else class="lists-table">
@@ -101,7 +64,7 @@ function abrirEstabelecimento(cnpj) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in currentList" :key="item.cnpj">
+          <tr v-for="(item, i) in farmaciaLists.interesse" :key="item.cnpj">
             <td class="col-num">{{ i + 1 }}</td>
             <td class="col-cnpj font-mono">{{ formatCnpj(item.cnpj) }}</td>
             <td class="col-razao">{{ item.razaoSocial || "—" }}</td>
@@ -144,6 +107,8 @@ function abrirEstabelecimento(cnpj) {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  border-bottom: 1px solid var(--tabs-border);
+  padding-bottom: 1.5rem;
 }
 
 .lists-title {
@@ -181,60 +146,12 @@ function abrirEstabelecimento(cnpj) {
   margin: 0;
 }
 
-.lists-tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--tabs-border);
-  padding-bottom: 0;
-}
-
-.list-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-color);
-  opacity: 0.5;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.list-tab:hover {
-  opacity: 0.8;
-}
-
-.list-tab.active {
-  opacity: 1;
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
-}
-
-.tab-count {
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  color: var(--primary-color);
-}
-
-.tab-count.blacklist {
-  background: color-mix(in srgb, var(--risk-critical) 12%, transparent);
-  color: var(--risk-critical);
-}
-
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 6rem 2rem;
   gap: 0.75rem;
   color: var(--text-color);
   opacity: 0.4;

@@ -5,6 +5,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
+import { MAP_VISUAL_SCALE } from '@/config/colors';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -66,12 +67,8 @@ const chartOption = computed(() => {
       },
     },
     visualMap: {
-      min: 0,
-      max: 40,
       show: false,
-      inRange: {
-        color: ['#fef9c3', '#fde68a', '#fca5a5', '#ef4444', '#7f1d1d'],
-      },
+      pieces: MAP_VISUAL_SCALE,
     },
     series: [{
       type: 'map',

@@ -51,13 +51,22 @@ export const CHART_SERIES = {
 
 // ── Escala de cor do mapa de risco (VisualMap ECharts + PDF) ─────────────────
 // Fonte única de verdade: 0% → amarelo claro, 100% → vermelho escuro.
-// Usada tanto no visualMap do ECharts quanto na interpolação do PDF.
+// Formato `pieces` do ECharts — breakpoints explícitos e precisos.
+// Cada entrada define um intervalo [min, max[ com sua cor correspondente.
+// 0–20%: laranja claro → laranja. Vermelho apenas a partir de 20%.
 export const MAP_VISUAL_SCALE = [
-  '#fef9c3', // 0%   yellow-100
-  '#fde68a', // 25%  yellow-200
-  '#fca5a5', // 50%  red-300
-  '#ef4444', // 75%  red-500
-  '#7f1d1d', // 100% red-900
+  { max:  8,              color: '#ffedd5' }, // 0–8%    Laranja pastel claro
+  { min:  8,  max: 12,   color: '#fed7aa' }, // 8–12%   Laranja claro
+  { min: 12,  max: 16,   color: '#fdba74' }, // 12–16%  Laranja médio claro
+  { min: 16,  max: 20,   color: '#fb923c' }, // 16–20%  Laranja (sem vermelho)
+  { min: 20,  max: 25,   color: '#fca5a5' }, // 20–25%  Rosa claro (início da atenção)
+  { min: 25,  max: 32,   color: '#f87171' }, // 25–32%  Vermelho rosado
+  { min: 32,  max: 42,   color: '#ef4444' }, // 32–42%  Vermelho
+  { min: 42,  max: 56,   color: '#dc2626' }, // 42–56%  Vermelho médio
+  { min: 56,  max: 68,   color: '#c81e1e' }, // 56–68%  Vermelho forte
+  { min: 68,  max: 78,   color: '#b91c1c' }, // 68–78%  Vermelho escuro
+  { min: 78,  max: 89,   color: '#991b1b' }, // 78–89%  Vermelho muito escuro
+  { min: 89,             color: '#7f1d1d' }, // 89–100% Crítico
 ];
 
 // ── Constantes de tooltip ECharts ─────────────────────────────────────────────

@@ -108,84 +108,23 @@ function hexToRgb(hex) {
 }
 
 /**
- * Interpola ao longo da mesma escala de cores do ECharts visualMap.
- * Retorna [r, g, b] para qualquer valor entre min e max.
+ * Retorna [r, g, b] para um percentual usando os mesmos breakpoints do ECharts visualMap.
+ * Usa a estrutura `pieces` de MAP_VISUAL_SCALE para garantir consistência total com os mapas.
  */
 function getRiskRgbByPerc(perc) {
   if (perc == null) return RISK_COLORS_RGB.NONE;
-  const t = Math.max(0, Math.min(1, perc / 100));
-  const stops = MAP_VISUAL_SCALE;
-  const seg = Math.min(Math.floor(t * (stops.length - 1)), stops.length - 2);
-  const segT = t * (stops.length - 1) - seg;
-  const c0 = hexToRgb(stops[seg]);
-  const c1 = hexToRgb(stops[seg + 1]);
-  return [
-    Math.round(c0[0] + (c1[0] - c0[0]) * segT),
-    Math.round(c0[1] + (c1[1] - c0[1]) * segT),
-    Math.round(c0[2] + (c1[2] - c0[2]) * segT),
-  ];
-}
-
-/**
- * Desenha círculos sobre os mapas representando os estabelecimentos.
- * Aplica um pequeno deslocamento (jitter) para farmácias que compartilham a mesma coordenada.
- */
-function drawEstablishmentPoints(pdf, establishments, project, targetCnpj) {
-  if (!establishments?.length) return;
-  pdf.setLineJoin('round');
-
-  // Identifica duplicatas de coordenadas para espalhar (jitter)
-  const coordMap = new Map();
-  for (const e of establishments) {
-    if (!e.lat || !e.lon) continue;
-    const key = `${e.lat.toFixed(5)},${e.lon.toFixed(5)}`;
-    if (!coordMap.has(key)) coordMap.set(key, []);
-    coordMap.get(key).push(e);
-  }
-
-  for (const [key, group] of coordMap.entries()) {
-    const isMulti = group.length > 1;
-    
-    // Desenha as farmácias daquela coordenada específica
-    group.forEach((e, i) => {
-      let [lon, lat] = [e.lon, e.lat];
-
-      if (isMulti) {
-        // Se houver mais de uma na mesma coordenada, desloca ligeiramente em círculo (jitter)
-        // Isso permite ver as 4 farmácias separadas mesmo que o banco de dados dê a mesma lat/lon
-        const angle = (i * 2 * Math.PI) / group.length;
-        const jitterDist = 0.00035; // Aprox 35-40 metros de raio para a "flor" de pontos
-        lon += Math.cos(angle) * jitterDist;
-        lat += Math.sin(angle) * jitterDist;
-      }
-
-      const [px, py] = project([lon, lat]);
-      const rgb = getRiskRgbByPerc(e.percValSemComp);
-      const isTarget = e.cnpj === targetCnpj;
-      
-      pdf.setFillColor(...rgb);
-      pdf.setDrawColor(30, 41, 59);
-      pdf.setLineWidth(isTarget ? 0.25 : 0.08);
-      
-      // Tamanhos reduzidos para maior precisão visual no PDF
-      const radius = isTarget ? 0.9 : 0.55; 
-      pdf.circle(px, py, radius, 'FD');
-    });
-  }
+  const piece = MAP_VISUAL_SCALE.find(p => {
+    const aboveMin = p.min == null || perc >= p.min;
+    const belowMax = p.max == null || perc < p.max;
+    return aboveMin && belowMax;
+  }) ?? MAP_VISUAL_SCALE[MAP_VISUAL_SCALE.length - 1];
+  return hexToRgb(piece.color);
 }
 
 /**
  * Desenha o mapa de todos os municípios de uma região de saúde, coloridos por risco.
- * @param {jsPDF} pdf
- * @param {object} geoJson - GeoJSON FeatureCollection da UF
- * @param {Array}  regionIds - array de id_ibge7 dos municípios da região
- * @param {string|number} targetIbge7 - id_ibge7 do município da farmácia (destaque)
- * @param {Array}  resultadoMunicipios - dados de risco por município [{id_ibge7, percValSemComp}]
- * @param {object} geoStore - store com estabelecimentos
- * @param {string} targetCnpj - CNPJ da farmácia em foco
- * @param {number} x, y, w, h - caixa de desenho (mm)
  */
-function drawRegionMap(pdf, geoJson, regionIds, targetIbge7, resultadoMunicipios, geoStore, targetCnpj, x, y, w, h) {
+function drawRegionMap(pdf, geoJson, regionIds, targetIbge7, resultadoMunicipios, x, y, w, h) {
   if (!geoJson?.features || !regionIds?.length) return;
 
   // Mapeia id_ibge7 → percValSemComp
@@ -270,31 +209,12 @@ function drawRegionMap(pdf, geoJson, regionIds, targetIbge7, resultadoMunicipios
     drawFeature(f);
   }
   if (targetFeature) drawFeature(targetFeature);
-
-  // Desenha os pontos (estabelecimento individuais)
-  if (geoStore?.estabelecimentosPorIbge7) {
-    for (const ibge7 of regionIds) {
-      const estabs = geoStore.estabelecimentosPorIbge7.get(Number(ibge7));
-      drawEstablishmentPoints(pdf, estabs, project, targetCnpj);
-    }
-  }
 }
 
 /**
  * Desenha o polígono de um único município diretamente no PDF (vetor).
- * @param {jsPDF} pdf
- * @param {object} geoJson - GeoJSON FeatureCollection da UF
- * @param {string|number} targetIbge7 - id_ibge7 do município
- * @param {number} x - posição X da caixa
- * @param {number} y - posição Y da caixa
- * @param {number} w - largura da caixa (mm)
- * @param {number} h - altura da caixa (mm)
- * @param {number[]} fillRgb - cor de preenchimento [r,g,b]
- * @param {number[]} strokeRgb - cor da borda [r,g,b]
- * @param {object} geoStore - store com estabelecimentos
- * @param {string} targetCnpj - CNPJ em foco
  */
-function drawMunicipalityPolygon(pdf, geoJson, targetIbge7, x, y, w, h, fillRgb, strokeRgb, geoStore, targetCnpj) {
+function drawMunicipalityPolygon(pdf, geoJson, targetIbge7, x, y, w, h, fillRgb, strokeRgb) {
   if (!geoJson?.features) return;
   const feature = geoJson.features.find(f => String(f.properties.id) === String(targetIbge7));
   if (!feature) return;
@@ -338,18 +258,11 @@ function drawMunicipalityPolygon(pdf, geoJson, targetIbge7, x, y, w, h, fillRgb,
 
   for (const ring of rings) {
     const pts = ring.map(project);
-    // Monta deltas relativos para pdf.lines()
     const lines = [];
     for (let i = 1; i < pts.length; i++) {
       lines.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
     }
     pdf.lines(lines, pts[0][0], pts[0][1], [1, 1], 'FD', true);
-  }
-
-  // Desenha os pontos (estabelecimento individuais) deste município
-  if (geoStore?.estabelecimentosPorIbge7) {
-    const estabs = geoStore.estabelecimentosPorIbge7.get(Number(targetIbge7));
-    drawEstablishmentPoints(pdf, estabs, project, targetCnpj);
   }
 }
 
@@ -766,18 +679,13 @@ export function usePdfExport() {
             // Mapa
             if (card.type === 'region') {
               drawRegionMap(pdf, geoJson, regionIds, geoData.id_ibge7, resultadoMunicipios,
-                geoStore, cnpj, // novos params
                 card.x + 3, y + 9, mapCardW - 6, mapCardH - 13);
             } else {
-              // Sincroniza a cor com a escala visual real (0-100%) do componente de mapa
-              const polyFill = getRiskRgbByPerc(capPerc);
+              const polyFill   = getRiskRgbByPerc(capPerc);
               const polyStroke = polyFill.map(c => Math.max(0, c - 40));
-
               drawMunicipalityPolygon(pdf, geoJson, geoData.id_ibge7,
                 card.x + 3, y + 9, mapCardW - 6, mapCardH - 13,
-                polyFill, polyStroke,
-                geoStore, cnpj // novos params
-              );
+                polyFill, polyStroke);
             }
           }
         }

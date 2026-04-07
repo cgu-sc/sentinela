@@ -16,7 +16,7 @@ const props = defineProps({
   municipioAtual: { type: String, default: null },
   ufAtual: { type: String, default: null },
   regiaoNome: { type: String, default: '' },
-  selectedFilter: { type: String, default: null },
+  selectedFilter: { type: [String, Number], default: null },
 });
 
 const emits = defineEmits(['select-municipio']);
@@ -52,10 +52,25 @@ const totals = computed(() => {
   const perc     = totalMov > 0 ? (valSem / totalMov) * 100 : 0;
   return { pop, far, dens: Math.round(dens), totalMov, valSem, perc };
 });
+import { useFilterStore } from '@/stores/filters';
+const filterStore = useFilterStore();
+
+let _lastHoveredRow = null;
+const onTableHover = (e) => {
+  const row = e.target.closest('.p-datatable-tbody > tr');
+  if (row === _lastHoveredRow) return;
+  _lastHoveredRow = row;
+  const cell = row?.cells[0]; // Primeira coluna é o Nome do Município
+  filterStore.hoveredMunicipioName = cell ? cell.textContent?.trim() : null;
+};
+const onTableLeave = () => {
+  _lastHoveredRow = null;
+  filterStore.hoveredMunicipioName = null;
+};
 </script>
 
 <template>
-  <div class="table-section">
+  <div class="table-section" @mouseover="onTableHover" @mouseleave="onTableLeave">
     <div class="section-header">
       <i class="pi pi-map-marker section-icon"></i>
       <div class="header-text-box">

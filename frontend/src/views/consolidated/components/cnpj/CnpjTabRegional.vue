@@ -17,10 +17,11 @@ const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegi
 const filterMunicipioId = ref(null);
 
 function toggleMunicipioFilter(ibge7) {
-  if (filterMunicipioId.value === ibge7) {
+  const id = ibge7 ? Number(ibge7) : null;
+  if (filterMunicipioId.value === id) {
     filterMunicipioId.value = null;
   } else {
-    filterMunicipioId.value = ibge7;
+    filterMunicipioId.value = id;
   }
 }
 

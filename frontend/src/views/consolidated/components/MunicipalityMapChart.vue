@@ -31,7 +31,7 @@ const hoverColor     = computed(() => {
 });
 const hoverBorder    = computed(() => {
   const hex = themeStore.tokens.primary;
-  return `${hex}B3`; // 70% opacidade
+  return `${hex}B3`;
 });
 
 // ── Cor por classificação de risco ────────────────────────────────────────────
@@ -397,7 +397,7 @@ const chartOption = computed(() => {
         type: 'scatter',
         coordinateSystem: 'geo',
         geoIndex: 0,
-        data: clusterPoints(scatterData.value, _currentZoom),
+        data: filterStore.showMapaPoints ? clusterPoints(scatterData.value, _currentZoom) : [],
         symbolSize: (_, params) => getSymbolSize(params.data, _currentZoom),
         itemStyle: {
           borderColor: 'rgba(15, 23, 42, 0.7)', // Borda escura sólida ao invés de branca
@@ -448,6 +448,17 @@ const onClick = (params) => {
       <i class="pi pi-map"></i>
       <h3>MAPA DE RISCO — {{ filterStore.selectedUF }}</h3>
       <div class="spacer"></div>
+      <div class="header-actions">
+        <button 
+          class="toggle-btn" 
+          :class="{ 'is-active': filterStore.showMapaPoints }"
+          title="Alternar visibilidade dos CNPJs"
+          @click="filterStore.showMapaPoints = !filterStore.showMapaPoints"
+        >
+          <i :class="filterStore.showMapaPoints ? 'pi pi-eye' : 'pi pi-eye-slash'" />
+          <span>{{ filterStore.showMapaPoints ? 'Ocultar' : 'Exibir' }} CNPJs</span>
+        </button>
+      </div>
     </div>
     <div class="chart-wrapper">
       <VChart
@@ -493,6 +504,54 @@ const onClick = (params) => {
 }
 
 .spacer { flex: 1; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  color: var(--primary-color);
+  padding: 0.28rem 0.8rem;
+  border-radius: 100px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.toggle-btn i {
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 15%, transparent);
+}
+
+.toggle-btn:hover i {
+  transform: scale(1.1);
+}
+
+.toggle-btn:not(.is-active) {
+  opacity: 0.65;
+  filter: grayscale(0.4);
+}
+
+.toggle-btn:not(.is-active):hover {
+  opacity: 1;
+  filter: none;
+}
 
 .is-refreshing {
   opacity: 0.5;

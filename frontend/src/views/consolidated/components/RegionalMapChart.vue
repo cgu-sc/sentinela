@@ -1,9 +1,11 @@
 <script setup>
-import { computed, watch, ref } from 'vue';
+import { computed, watch, ref, nextTick, onMounted } from 'vue';
+import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
+import { useFilterStore as useGlobalFilterStore } from '@/stores/filters';
 import { MAP_VISUAL_SCALE, RISK_COLORS } from '@/config/colors.js';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -24,8 +26,9 @@ const props = defineProps({
 
 const emit = defineEmits(['select-municipio']);
 
-const geoStore   = useGeoStore();
-const themeStore = useThemeStore();
+const geoStore     = useGeoStore();
+const themeStore   = useThemeStore();
+const filterStore  = useGlobalFilterStore();
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 
@@ -208,7 +211,7 @@ const mapData = computed(() => {
       const munData    = munDataByIbge7.value.get(ibge7);
       const isCurrent  = currentIbge7.value && ibge7 === currentIbge7.value;
       const mNome      = munData?.municipio ?? f.properties.name;
-      const isSelected = targetId && ibge7 === targetId;
+      const isSelected = targetId && Number(ibge7) === Number(targetId);
       const isDimmed   = targetId && !isSelected;
 
       return {
@@ -223,8 +226,9 @@ const mapData = computed(() => {
         isSelected,
         isCurrent,
         isDimmed,
-        itemStyle: isDimmed ? { opacity: 0.35, areaColor: 'transparent' } : 
-                   (isCurrent && !targetId) ? { borderColor: themeStore.tokens.primary, borderWidth: 2 } : {}
+        // Se estiver selecionado, garantimos uma borda primária fina. Se esmaecido, cor de fundo.
+        itemStyle: isSelected ? { borderColor: themeStore.tokens.primary, borderWidth: 1 } :
+                   isDimmed   ? { areaColor: mapAreaColor.value } : {}
       };
     });
 });
@@ -311,17 +315,7 @@ const chartOption = computed(() => {
         label: { show: false },
         itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
-      selectedMode: 'single',
-      select: {
-        label: { show: false },
-        itemStyle: {
-          borderColor: themeStore.tokens.primary,
-          borderWidth: 3,
-          areaColor: hoverColor.value,
-          shadowColor: themeStore.tokens.primary,
-          shadowBlur: 15,
-        }
-      },
+      select: { disabled: true },
       label: { show: false },
       itemStyle: {
         borderColor: mapBorderColor.value,
@@ -332,15 +326,18 @@ const chartOption = computed(() => {
         .filter(d => d.isCurrent && !props.selectedMunicipioId)
         .map(d => ({
           name: d.name,
-          itemStyle: d.itemStyle,
-          emphasis: { itemStyle: d.itemStyle }
+          itemStyle: { borderColor: themeStore.tokens.primary, borderWidth: 2 },
+          emphasis: { itemStyle: { borderColor: themeStore.tokens.primary, borderWidth: 2 } }
         })),
     },
     visualMap: {
       min: 0,
       max: 100,
       show: false,
-      inRange: { color: MAP_VISUAL_SCALE },
+      inRange: { 
+        color: MAP_VISUAL_SCALE,
+        opacity: 1 
+      },
       seriesIndex: 0,
     },
     series: [
@@ -351,15 +348,7 @@ const chartOption = computed(() => {
         geoIndex: 0,
         roam: false,
         emphasis: { label: { show: false } },
-        select: {
-          itemStyle: {
-            borderColor: themeStore.tokens.primary,
-            borderWidth: 3,
-            areaColor: hoverColor.value,
-            shadowColor: themeStore.tokens.primary,
-            shadowBlur: 15,
-          }
-        },
+        select: { disabled: true },
         label: { show: false },
         data: mapData.value,
       },
@@ -367,7 +356,7 @@ const chartOption = computed(() => {
         type: 'scatter',
         coordinateSystem: 'geo',
         geoIndex: 0,
-        data: clusterPoints(scatterData.value, _currentZoom),
+        data: filterStore.showMapaPoints ? clusterPoints(scatterData.value, _currentZoom) : [],
         symbolSize: (_, params) => getSymbolSize(params.data, _currentZoom),
         itemStyle: {
           borderColor: 'rgba(15, 23, 42, 0.7)',
@@ -384,9 +373,12 @@ const chartOption = computed(() => {
   };
 });
 
-// ── Interação e Sincronização ───────────────────────────────────────────────
+// ── Sincronização: Tabela -> Mapa (Seleção e Hover) ───────────────────
 const chartRef = ref(null);
+let _prevSelectedName = null;
+let _prevHoveredName  = null;
 
+// Sincroniza a Seleção (Click na Tabela)
 watch(
   () => [props.selectedMunicipioId, mapKey.value],
   async ([ibgeId]) => {
@@ -394,18 +386,47 @@ watch(
     const chart = chartRef.value?.chart;
     if (!chart) return;
 
-    if (!ibgeId) {
-      chart.dispatchAction({ type: 'unselect', seriesIndex: 0 });
-      return;
+    // Limpa estado anterior (Highligh/Hover persistente)
+    if (_prevSelectedName) {
+      chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: _prevSelectedName });
+      _prevSelectedName = null;
     }
 
-    const match = mapData.value.find(d => Number(d.id) === ibgeId || Number(d.ibge7) === ibgeId);
-    
-    if (match) {
-      chart.dispatchAction({ type: 'select', seriesIndex: 0, name: match.name });
+    if (!ibgeId) return;
+
+    const match = mapData.value.find(d => Number(d.id) === Number(ibgeId) || Number(d.ibge7) === Number(ibgeId));
+    if (match?.name) {
+      _prevSelectedName = match.name;
+      chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: match.name });
     }
   },
   { immediate: true }
+);
+
+// Sincroniza o Hover (Passar mouse na Tabela)
+watch(
+  () => filterStore.hoveredMunicipioName,
+  async (municipioName) => {
+    await nextTick();
+    const chart = chartRef.value?.chart;
+    if (!chart) return;
+
+    if (_prevHoveredName) {
+      chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: _prevHoveredName });
+      _prevHoveredName = null;
+    }
+
+    if (municipioName) {
+      // Normalização robusta para bater com os nomes da tabela (que podem vir com espaços/acentos)
+      const target = municipioName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const match = mapData.value.find(d => d.municipio?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === target);
+      
+      if (match?.name) {
+        _prevHoveredName = match.name;
+        chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: match.name });
+      }
+    }
+  }
 );
 
 const onClick = (params) => {
@@ -426,6 +447,17 @@ const onClick = (params) => {
       <i class="pi pi-map"></i>
       <span>Mapa da Região</span>
       <span class="region-name">{{ geoData?.no_regiao_saude }}</span>
+      <div class="header-actions">
+        <button 
+          class="toggle-btn" 
+          :class="{ 'is-active': filterStore.showMapaPoints }"
+          title="Alternar visibilidade dos CNPJs"
+          @click="filterStore.showMapaPoints = !filterStore.showMapaPoints"
+        >
+          <i :class="filterStore.showMapaPoints ? 'pi pi-eye' : 'pi pi-eye-slash'" />
+          <span>{{ filterStore.showMapaPoints ? 'Ocultar' : 'Exibir' }} CNPJs</span>
+        </button>
+      </div>
     </div>
     <div class="map-body">
       <VChart
@@ -451,6 +483,49 @@ const onClick = (params) => {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  color: var(--primary-color);
+  padding: 0.28rem 0.8rem;
+  border-radius: 100px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.toggle-btn i {
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 15%, transparent);
+}
+
+.toggle-btn:hover i {
+  transform: scale(1.1);
+}
+
+.toggle-btn:not(.is-active) {
+  opacity: 0.65;
+  filter: grayscale(0.4);
+}
+
+.toggle-btn:not(.is-active):hover {
+  opacity: 1;
+  filter: none;
 }
 
 .map-header {

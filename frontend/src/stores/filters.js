@@ -47,7 +47,8 @@ export const useFilterStore = defineStore('filters', () => {
   const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
   const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS);
   const rfaSelection = ref(saved?.rfaSelection ?? FILTER_DEFAULTS.RFA);
-  const searchTarget = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
+  const searchTarget       = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
+  const showMapaPoints      = ref(saved?.showMapaPoints ?? true);
 
   // 4. INTELIGÊNCIA DE DADOS (CASCATA REVERSA)
   watch(selectedUF, (newUF) => {
@@ -114,6 +115,7 @@ export const useFilterStore = defineStore('filters', () => {
         statusSelection: statusSelection.value,
         rfaSelection: rfaSelection.value,
         searchTarget: searchTarget.value,
+        showMapaPoints: showMapaPoints.value,
       }));
     }, TIMING.FILTER_DEBOUNCE);
   };
@@ -122,7 +124,7 @@ export const useFilterStore = defineStore('filters', () => {
     [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
-     clusterSelection, statusSelection, rfaSelection, searchTarget],
+     clusterSelection, statusSelection, rfaSelection, searchTarget, showMapaPoints],
     saveToStorage,
     { deep: true }
   );
@@ -147,6 +149,7 @@ export const useFilterStore = defineStore('filters', () => {
     statusSelection.value = FILTER_ALL_VALUE;
     rfaSelection.value = FILTER_ALL_VALUE;
     searchTarget.value = '';
+    showMapaPoints.value = true;
     localStorage.removeItem(STORAGE_KEY);
   }
 
@@ -170,6 +173,7 @@ export const useFilterStore = defineStore('filters', () => {
     rfaSelection,
     searchTarget,
     hoveredMunicipioName,
+    showMapaPoints,
     resetFilters
   };
 });

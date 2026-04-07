@@ -1,13 +1,12 @@
 <script setup>
-import { useRouter } from "vue-router";
-import { ref, computed, watchEffect } from "vue";
+import { ref, computed } from "vue";
 
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useGeoStore } from "@/stores/geo";
-import Button from "primevue/button";
+
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -17,7 +16,6 @@ const qtdMunicipiosRegiao = computed(() =>
   geoStore.qtdMunicipiosPorRegiao(props.geoData?.no_regiao_saude),
 );
 
-const router = useRouter();
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
 
@@ -40,12 +38,6 @@ const emit = defineEmits(['export']);
 
 
 
-// --- DEBUG ENDEREÇO ---
-watchEffect(() => {
-  console.log("🔍 DEBUG [Header Cadastro]:", props.cadastro);
-  console.log("🔍 DEBUG [Endereço Formato]:", formattedFullAddress.value);
-});
-
 const copied = ref(false);
 const copyCnpj = () => {
   if (navigator.clipboard) {
@@ -60,6 +52,16 @@ const copyCnpj = () => {
 
 
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
+
+const razaoSocialDisplay = computed(() => {
+  const nome = props.cnpjData?.razao_social;
+  if (!nome) return "—";
+  return nome.length > 40 ? nome.slice(0, 40) + "..." : nome;
+});
+const razaoSocialTooltip = computed(() => {
+  const nome = props.cnpjData?.razao_social;
+  return nome && nome.length > 40 ? nome : null;
+});
 
 const formatRank = (rank) => {
   if (rank == null) return "—";
@@ -81,6 +83,7 @@ const formattedFullAddress = computed(() => {
   const c = props.cadastro;
   if (!c || !c.logradouro) return null;
 
+
   // 1. Parte Principal: Tipo + Logradouro + Número
   let main = [c.tipo_logradouro, c.logradouro].filter(Boolean).join(" ");
   if (c.numero && c.numero !== "None") main += `, ${c.numero}`;
@@ -97,59 +100,21 @@ const formattedFullAddress = computed(() => {
 
   return parts.filter(Boolean).join(" · ");
 });
+
+
 </script>
 
 <template>
   <div class="detail-header-new shadow-sm">
-    <!-- Linha superior: Navegação e Identidade Base -->
-    <div class="header-top-bar">
-      <Button
-        icon="pi pi-arrow-left"
-        text
-        severity="secondary"
-        class="back-btn-new"
-        @click="router.back()"
-        v-tooltip.right="'Voltar para a lista'"
-      />
-
-      <div class="list-actions" v-if="cnpjData">
-        <button
-          class="list-btn list-btn--export"
-          @click="emit('export')"
-          :disabled="isExporting"
-          v-tooltip.bottom="'Exportar relatório PDF'"
-        >
-          <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
-          <span>{{ isExporting ? 'Gerando...' : 'Exportar PDF' }}</span>
-        </button>
-        <button
-          class="list-btn"
-          :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
-          @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
-          v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
-        >
-          <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
-          <span>{{ farmaciaLists.isInteresse(cnpj) ? 'Interesse' : 'Interesse' }}</span>
-        </button>
-        <button
-          class="list-btn"
-          :class="farmaciaLists.isBlacklisted(cnpj) ? 'list-btn--black-active' : 'list-btn--black'"
-          @click="farmaciaLists.toggleBlacklist(cnpj, cnpjData.razao_social)"
-          v-tooltip.bottom="farmaciaLists.isBlacklisted(cnpj) ? 'Remover da Blacklist' : 'Adicionar à Blacklist'"
-        >
-          <i class="pi pi-ban" />
-          <span>Blacklist</span>
-        </button>
-      </div>
-
-    </div>
-
     <!-- Área Central: Razão Social e Localização -->
     <div class="header-main-info" v-if="cnpjData">
       <div class="title-group">
         <div class="razao-social-row">
-          <h1 class="razao-social-new">
-            {{ cnpjData.razao_social ?? "—" }}
+          <h1
+            class="razao-social-new"
+            v-tooltip.bottom="razaoSocialTooltip"
+          >
+            {{ razaoSocialDisplay }}
           </h1>
           <div
             class="cnpj-copy-wrap-new"
@@ -197,21 +162,52 @@ const formattedFullAddress = computed(() => {
         </div>
       </div>
 
-      <div class="header-kpis-new">
-        <div
-          class="kpi-card"
-          :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-        >
-          <span class="kpi-card-label">% Sem Comprovação</span>
-          <span class="kpi-card-value">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
+      <div class="header-right-col">
+        <div class="list-actions">
+          <button
+            class="list-btn list-btn--export"
+            @click="emit('export')"
+            :disabled="isExporting"
+            v-tooltip.bottom="'Exportar relatório PDF'"
+          >
+            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+            <span>{{ isExporting ? 'Gerando...' : 'Exportar PDF' }}</span>
+          </button>
+          <button
+            class="list-btn"
+            :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
+            @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
+            v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
+          >
+            <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
+            <span>{{ farmaciaLists.isInteresse(cnpj) ? 'Interesse' : 'Interesse' }}</span>
+          </button>
+          <button
+            class="list-btn"
+            :class="farmaciaLists.isBlacklisted(cnpj) ? 'list-btn--black-active' : 'list-btn--black'"
+            @click="farmaciaLists.toggleBlacklist(cnpj, cnpjData.razao_social)"
+            v-tooltip.bottom="farmaciaLists.isBlacklisted(cnpj) ? 'Remover da Blacklist' : 'Adicionar à Blacklist'"
+          >
+            <i class="pi pi-ban" />
+            <span>Blacklist</span>
+          </button>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-card-label">Valor sem Comprovação</span>
-          <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-card-label">Total Vendas</span>
-          <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
+        <div class="header-kpis-new">
+          <div
+            class="kpi-card"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+          >
+            <span class="kpi-card-label">% Sem Comprovação</span>
+            <span class="kpi-card-value">{{ cnpjData.percValSemComp?.toFixed(2) }}%</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-card-label">Valor sem Comprovação</span>
+            <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.valSemComp) }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-card-label">Total Vendas</span>
+            <span class="kpi-card-value">{{ formatCurrencyFull(cnpjData.totalMov) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -323,17 +319,19 @@ const formattedFullAddress = computed(() => {
   opacity: 0.3;
 }
 
-.header-top-bar {
+.header-right-col {
   display: flex;
-  align-items: center;
-  gap: 1.5rem;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .list-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-left: auto;
 }
 
 .list-btn {
@@ -403,10 +401,6 @@ const formattedFullAddress = computed(() => {
   border-color: #b91c1c;
 }
 
-.back-btn-new {
-  width: 36px !important;
-  height: 36px !important;
-}
 
 .risk-chip {
   font-weight: 700;
@@ -478,8 +472,9 @@ const formattedFullAddress = computed(() => {
 .header-main-info {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 2rem;
+  min-width: 0;
 }
 
 .title-group {
@@ -487,12 +482,14 @@ const formattedFullAddress = computed(() => {
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
+  flex: 1;
 }
 
 .razao-social-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: nowrap;
 }
 
 .razao-social-new {
@@ -503,8 +500,7 @@ const formattedFullAddress = computed(() => {
   letter-spacing: -0.02em;
   color: var(--establishment-header-text);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .location-chips {
@@ -531,17 +527,16 @@ const formattedFullAddress = computed(() => {
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  margin: 0.15rem 0 0.4rem 0;
 }
 
 .address-text {
   font-size: 0.82rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-color);
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .address-text i {

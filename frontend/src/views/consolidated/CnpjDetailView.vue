@@ -77,6 +77,7 @@ const handleExport = async () => {
   exportCnpjPdf({
     cnpjData: cnpjData.value,
     geoData: geoData.value,
+    cadastro: dadosCadastro.value,
     cnpj: cnpj.value,
     qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
     evolutionTabRef,
@@ -181,6 +182,14 @@ const formatCnpj = (v) => {
   <div class="cnpj-detail-page">
     <!-- BREADCRUMB -->
     <div class="breadcrumb">
+      <Button
+        icon="pi pi-arrow-left"
+        text
+        severity="secondary"
+        class="back-btn"
+        @click="router.back()"
+        v-tooltip.right="'Voltar para a lista'"
+      />
       <span class="breadcrumb-link" @click="router.push('/cnpj')">
         <i class="pi pi-briefcase" />
         Análise CNPJ
@@ -257,6 +266,13 @@ const formatCnpj = (v) => {
   gap: 0.5rem;
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.back-btn {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  flex-shrink: 0;
 }
 
 .breadcrumb-link {

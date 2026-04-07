@@ -292,7 +292,7 @@ export function usePdfExport() {
   const isExporting = ref(false);
 
   async function exportCnpjPdf({
-    cnpjData, geoData, cnpj, qtdMunicipiosRegiao,
+    cnpjData, geoData, cadastro, cnpj, qtdMunicipiosRegiao,
     evolutionTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
     cnpjNavStore, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
@@ -452,11 +452,25 @@ export function usePdfExport() {
         geoData?.sg_uf ?? cnpjData?.uf,
         geoData?.no_regiao_saude ? `Região de Saúde ${geoData.no_regiao_saude}` : null,
       ].filter(Boolean).join('  ·  ');
+      const capAddress = cadastro?.logradouro
+        ? [
+            [cadastro.tipo_logradouro, cadastro.logradouro].filter(Boolean).join(' '),
+            cadastro.numero && cadastro.numero !== 'None' ? cadastro.numero : null,
+          ].filter(Boolean).join(', ') +
+          (cadastro.bairro && cadastro.bairro !== 'None' ? ` · ${cadastro.bairro}` : '') +
+          (cadastro.cep && cadastro.cep !== 'None' ? ` · CEP ${cadastro.cep}` : '')
+        : null;
+
       pdf.setFontSize(8.5);
       pdf.setFont(F, 'normal');
       pdf.setTextColor(148, 163, 184);
       pdf.text(`CNPJ ${cnpjFormatted}`, cardX + 8, currentCY + 26);
       pdf.text(capLocal, cardX + 8, currentCY + 33);
+      if (capAddress) {
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(capAddress, cardX + 8, currentCY + 40);
+      }
 
       // Score + Classificação no canto direito
       if (cnpjData.score_risco_final != null) {
@@ -526,6 +540,21 @@ export function usePdfExport() {
         geoData?.no_regiao_saude ? `Região de Saúde: ${geoData.no_regiao_saude}` : null,
       ].filter(Boolean).join('  ·  ');
       pdf.text(locLine, margin, 36);
+
+      const address = cadastro?.logradouro
+        ? [
+            [cadastro.tipo_logradouro, cadastro.logradouro].filter(Boolean).join(' '),
+            cadastro.numero && cadastro.numero !== 'None' ? cadastro.numero : null,
+          ].filter(Boolean).join(', ') +
+          (cadastro.bairro && cadastro.bairro !== 'None' ? ` · ${cadastro.bairro}` : '') +
+          (cadastro.cep && cadastro.cep !== 'None' ? ` · CEP ${cadastro.cep}` : '')
+        : null;
+      if (address) {
+        pdf.setFontSize(7.5);
+        pdf.setFont(F, 'normal');
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(address, margin, 44);
+      }
 
       // Badge de score (canto inferior direito do banner)
       if (cnpjData.score_risco_final != null) {

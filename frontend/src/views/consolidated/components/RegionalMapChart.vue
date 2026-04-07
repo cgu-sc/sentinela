@@ -92,11 +92,13 @@ const mapData = computed(() => {
   const fullGeo = geoStore.getMunicipiosGeoByUF(uf);
   if (!fullGeo) return [];
 
-  const ibge7s   = regiaoIbge7Set.value;
-  const targetId = props.selectedMunicipioId;
+  const ibge7s = regiaoIbge7Set.value;
 
-  const normalize    = (s) => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() || '';
-  const targetMun    = props.regionalData?.municipios?.find(m => Number(m.id_ibge7) === Number(targetId))?.municipio;
+  // Sem filtro ativo, usa o município sede como seleção padrão
+  const effectiveId = props.selectedMunicipioId ?? currentIbge7.value;
+
+  const normalize     = (s) => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() || '';
+  const targetMun     = props.regionalData?.municipios?.find(m => Number(m.id_ibge7) === Number(effectiveId))?.municipio;
   const targetMunNorm = targetMun ? normalize(targetMun) : null;
 
   return fullGeo.features
@@ -108,8 +110,8 @@ const mapData = computed(() => {
       const mNome     = munData?.municipio ?? f.properties.name;
       const mNomeNorm = normalize(mNome);
 
-      const isSelected = targetId && (
-        Number(ibge7) === Number(targetId) ||
+      const isSelected = !!effectiveId && (
+        Number(ibge7) === Number(effectiveId) ||
         (targetMunNorm && mNomeNorm === targetMunNorm)
       );
 
@@ -124,6 +126,7 @@ const mapData = computed(() => {
         valSemComp: munData?.valSemComp ?? 0,
         totalMov:   munData?.totalMov ?? 0,
         cnpjs:      munData?.qtd_farmacias ?? 0,
+        selected:   isSelected,  // pré-seleção declarativa no ECharts
         isSelected,
         isCurrent,
         select: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6 } },
@@ -210,9 +213,10 @@ let _prevSelectedName = null;
 let _prevHoveredName  = null;
 
 watch(
-  () => [props.selectedMunicipioId, mapKey.value],
+  () => [props.selectedMunicipioId, currentIbge7.value, mapKey.value],
   async ([ibgeId]) => {
     await nextTick();
+    await nextTick(); // segundo tick garante que o VChart recriado já está montado
     const chart = chartRef.value?.chart;
     if (!chart) return;
 
@@ -221,9 +225,10 @@ watch(
       _prevSelectedName = null;
     }
 
-    if (!ibgeId) return;
+    const effectiveId = ibgeId ?? currentIbge7.value;
+    if (!effectiveId) return;
 
-    const match = mapData.value.find(d => Number(d.ibge7) === Number(ibgeId));
+    const match = mapData.value.find(d => Number(d.ibge7) === Number(effectiveId));
     if (match?.name) {
       _prevSelectedName = match.name;
       chart.dispatchAction({ type: 'select', seriesIndex: 0, name: match.name });

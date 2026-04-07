@@ -4,7 +4,7 @@
  * Exibe o resumo dos municípios da Região de Saúde selecionada:
  * população, quantidade de farmácias e densidade (hab/farmácia).
  */
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import DataTable from 'primevue/datatable';
@@ -23,6 +23,22 @@ const emits = defineEmits(['select-municipio']);
 
 const { formatBRL, formatPercent } = useFormatting();
 const { getRiskClass } = useRiskMetrics();
+
+const ROWS_PER_PAGE = 14;
+const first = ref(0);
+
+// Replica a ordenação padrão da tabela para calcular em qual página o município selecionado está
+const sortedMunicipios = computed(() =>
+  [...props.municipios].sort((a, b) => (b.valSemComp || 0) - (a.valSemComp || 0))
+);
+
+watch(() => props.selectedFilter, (newVal) => {
+  if (!newVal) return;
+  const idx = sortedMunicipios.value.findIndex(m => Number(m.id_ibge7) === Number(newVal));
+  if (idx >= 0) {
+    first.value = Math.floor(idx / ROWS_PER_PAGE) * ROWS_PER_PAGE;
+  }
+});
 
 function rowClass(data) {
   // 1. Prioridade total para a Seleção Ativa (Filtro Cruzado)
@@ -98,7 +114,8 @@ const onTableLeave = () => {
       size="small"
       removableSort
       paginator
-      :rows="14"
+      :rows="ROWS_PER_PAGE"
+      v-model:first="first"
       sortField="valSemComp"
       :sortOrder="-1"
       :row-class="rowClass"

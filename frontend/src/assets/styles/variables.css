@@ -43,14 +43,6 @@
   /* Cor de erro vibrante — ícones e títulos de alerta */
   --color-error: #ef4444;
 
-  /* Badges de risco — text colors (light: escuros p/ contraste no branco) */
-  --risk-low: #059669;      /* Esmeralda Premium — idêntico ao status-success  */
-  --risk-medium: #f97316;   /* Laranja vibrante — Orange 500 */
-  --risk-high: #ef4444;      /* Red 500 — vibrante e autoritário (Alerta Puro) */
-  /* Unificado com High */
-  --risk-critical: #ef4444;
-  /* Cor de borda/bg baseada no Red 500 */
-
   /* Badges de status */
   --status-info: #3b82f6; /* Blue Ocean - Vibrante (Light) */
   --status-secondary: #475569;
@@ -93,14 +85,6 @@
 
   /* Cor Primária Sentinela */
   --primary-color: #6366f1;
-
-  /* Badges de risco — text colors (dark: claros p/ contraste no escuro) */
-  --risk-low: #34d399;
-  --risk-medium: #fbbf24;
-  --risk-high: rgba(248, 113, 113, 0.85);
-  /* Red 400 @ 85% — suave mas presente */
-  --risk-critical: rgba(248, 113, 113, 0.85);
-  /* Unificado com High */
 
   /* Badges de status */
   --status-info: #60a5fa;

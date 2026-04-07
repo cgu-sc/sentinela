@@ -202,7 +202,7 @@ const {
     <aside class="admin-sidebar">
       <div class="sidebar-header" title="Projeto Sentinela">
         <div class="brand">
-          <img src="/logo_sentinela.png" alt="Sentinela V3" class="logo-img" />
+          <img src="/img/logo_sentinela_transparente.png" alt="Sentinela V3" class="logo-img" />
           <div class="brand-text">
             <span class="brand-name">SENTINELA</span>
             <span class="brand-version">AUDITORIA NO FARMÁCIA POPULAR</span>

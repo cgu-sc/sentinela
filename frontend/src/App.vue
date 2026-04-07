@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
   <div v-if="isAppLoading" class="app-boot-overlay">
      <div class="loader-container">
         <div class="sentinela-brand">
-           <img src="/logo_sentinela.png" alt="Sentinela" class="boot-logo" />
+           <img src="/img/logo_sentinela_transparente.png" alt="Sentinela" class="boot-logo" />
            <span class="boot-brand-text">SENTINELA</span>
         </div>
         <div class="spinner-orbit">

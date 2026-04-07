@@ -1,6 +1,8 @@
 /**
- * CORES DE SUPERFÍCIE (Backgrounds, Cards, Borders e Textos)
+ * CORES DE SUPERFÍCIE (Backgrounds, Cards, Borders, Textos e Risco)
  * Centralizadas para garantir consistência entre CSS e JavaScript (Gráficos).
+ * As cores de risco variam por modo (light/dark) para garantir contraste adequado.
+ * Fonte de verdade: colors.js (PALETTE) — os hex abaixo devem referenciar aquela paleta.
  */
 export const SURFACE_COLORS = {
   azul: {
@@ -29,6 +31,11 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#f1f5f9",
       "table-hover": "rgba(37, 99, 235, 0.06)",
       "table-stripe": "#f8fafc",
+      // Risco — tons saturados, legíveis sobre fundo claro
+      "risk-low": "#faa716", // emerald-500
+      "risk-medium": "#faa716", // amber-500
+      "risk-high": "#e11d48", // rose-600
+      "risk-critical": "#991b1b", // red-800
     },
     dark: {
       "bg-color": "#0d1117",
@@ -56,6 +63,11 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#1c2128",
       "table-hover": "#1f2937",
       "table-stripe": "#131920",
+      // Risco — tons luminosos, para furar o fundo escuro
+      "risk-low": "#34d399", // emerald-400
+      "risk-medium": "#fbbf24", // amber-400
+      "risk-high": "#f87171", // red-400
+      "risk-critical": "#fca5a5", // red-300 — mais claro que HIGH para se destacar
     },
   },
   carbon: {
@@ -84,6 +96,11 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#f5f5f4",
       "table-hover": "rgba(245, 158, 11, 0.08)",
       "table-stripe": "#fafaf9",
+      // Risco — idêntico ao azul.light (semântica independe da paleta primária)
+      "risk-low": "#10b981", // emerald-500
+      "risk-medium": "#f59e0b", // amber-500
+      "risk-high": "#e11d48", // rose-600
+      "risk-critical": "#991b1b", // red-800
     },
     dark: {
       "bg-color": "#0d1117",
@@ -111,6 +128,11 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#1c2128",
       "table-hover": "#1f2937",
       "table-stripe": "#131920",
+      // Risco — idêntico ao azul.dark
+      "risk-low": "#34d399", // emerald-400
+      "risk-medium": "#fbbf24", // amber-400
+      "risk-high": "#f87171", // red-400
+      "risk-critical": "#fca5a5", // red-300
     },
   },
 };

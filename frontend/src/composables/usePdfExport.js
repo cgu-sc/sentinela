@@ -559,12 +559,12 @@ export function usePdfExport() {
       const cardH = 24;
       const kpiCards = [
         { label: '% SEM COMPROVAÇÃO',    value: `${cnpjData.percValSemComp?.toFixed(2) ?? '—'}%`, accent: riskRgb,        valueColor: riskRgb      },
-        { label: 'VALOR SEM COMPROVAÇÃO', value: formatCurrencyFull(cnpjData.valSemComp),          accent: [99, 102, 241], valueColor: [15, 23, 42] },
-        { label: 'TOTAL VENDAS',          value: formatCurrencyFull(cnpjData.totalMov),            accent: [71, 85, 105],  valueColor: [15, 23, 42] },
         { label: 'SCORE DE RISCO',
           value:    cnpjData.score_risco_final != null ? cnpjData.score_risco_final.toFixed(1) : '—',
           sublabel: cnpjData.classificacao_risco ?? '',
           accent:   riskRgb, valueColor: riskRgb },
+        { label: 'VALOR SEM COMPROVAÇÃO', value: formatCurrencyFull(cnpjData.valSemComp),          accent: [99, 102, 241], valueColor: [15, 23, 42] },
+        { label: 'TOTAL VENDAS',          value: formatCurrencyFull(cnpjData.totalMov),            accent: [71, 85, 105],  valueColor: [15, 23, 42] },
       ];
       kpiCards.forEach((card, i) => {
         const x = margin + i * (cardW + 4);

@@ -25,10 +25,18 @@ const { formatBRL, formatPercent } = useFormatting();
 const { getRiskClass } = useRiskMetrics();
 
 function rowClass(data) {
-  const isCurrent = props.municipioAtual &&
-                    data.municipio?.toUpperCase() === props.municipioAtual?.toUpperCase() &&
-                    data.uf?.toUpperCase() === props.ufAtual?.toUpperCase();
-  return isCurrent ? 'row-highlight' : '';
+  // 1. Prioridade total para a Seleção Ativa (Filtro Cruzado)
+  const isSelected = props.selectedFilter && Number(data.id_ibge7) === Number(props.selectedFilter);
+  if (isSelected) return 'row-selected';
+
+  // 2. Destaque do Município Sede apenas se não houver filtro ativo
+  const isHome = !props.selectedFilter && 
+                 props.municipioAtual &&
+                 data.municipio?.toUpperCase() === props.municipioAtual?.toUpperCase() &&
+                 data.uf?.toUpperCase() === props.ufAtual?.toUpperCase();
+
+  if (isHome) return 'row-highlight';
+  return '';
 }
 
 function onRowClick(event) {
@@ -316,17 +324,28 @@ const totals = computed(() => {
   background: var(--card-bg) !important;
 }
 
-/* Padroniza o destaque do município analisado (Estilo Hover Persistente) */
+/* Destaque do Município da Farmácia Atual (Home) - Apenas quando sem filtro */
 :deep(.p-datatable-tbody > tr.row-highlight > td) {
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
+  background-color: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
+  color: var(--primary-color) !important;
 }
 
-:deep(.p-datatable .p-datatable-tbody > tr.row-highlight > td:first-child) {
+:deep(.p-datatable-tbody > tr.row-highlight > td:first-child) {
+  border-left: 4px solid color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
+}
+
+/* Destaque da Seleção Ativa (Filtro Cruzado) */
+:deep(.p-datatable-tbody > tr.row-selected > td) {
+  background-color: color-mix(in srgb, var(--primary-color) 16%, var(--card-bg)) !important;
+  color: var(--primary-color) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-selected > td:first-child) {
   border-left: 4px solid var(--primary-color) !important;
 }
 
-:deep(.enterprise-table .p-datatable-tbody > tr.row-highlight td:first-child) {
-  border-left: 4px solid var(--primary-color) !important;
+:deep(.p-datatable-tbody > tr.row-selected td) {
+  font-weight: 700;
 }
 
 /* Força o alinhamento dos cabeçalhos numéricos */

@@ -1,11 +1,11 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, watch, ref, nextTick, onMounted } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
-import { MAP_VISUAL_SCALE } from '@/config/colors';
+import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -16,15 +16,18 @@ import VChart from 'vue-echarts';
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
 const analyticsStore = useAnalyticsStore();
-const filterStore = useFilterStore();
-const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
+const filterStore    = useFilterStore();
+const { resultadoSentinelaUFNacional, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
+
 const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
 const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
-const hoverColor     = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
+const hoverColor     = computed(() => `${themeStore.tokens.primary}4D`);
+const hoverBorder    = computed(() => `${themeStore.tokens.primary}B3`);
 
+// ── GeoJSON do Brasil ────────────────────────────────────────────────────────
 const mapReady = ref(false);
 
 onMounted(async () => {
@@ -33,16 +36,31 @@ onMounted(async () => {
   mapReady.value = true;
 });
 
+// ── mapData ──────────────────────────────────────────────────────────────────
 const mapData = computed(() =>
-  resultadoSentinelaUF.value.map(d => ({
-    name: d.uf,
-    value: d.percValSemComp ?? 0,
-    valSemComp: d.valSemComp ?? 0,
-    cnpjs: d.cnpjs ?? 0,
-  }))
+  resultadoSentinelaUFNacional.value.map(d => {
+    const perc  = d.percValSemComp ?? 0;
+    const piece = getRiskPiece(perc);
+    return {
+      name:       d.uf,
+      value:      perc,
+      valSemComp: d.valSemComp ?? 0,
+      cnpjs:      d.cnpjs ?? 0,
+      select:     { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6 } },
+      unselected: { itemStyle: { areaColor: piece.color, opacity: 1 } },
+    };
+  })
 );
 
+// ── Escala ativa conforme tema ────────────────────────────────────────────────
+const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
 
+const getRiskPiece = (perc) =>
+  activeScale.value.find(p =>
+    (p.min == null || perc >= p.min) && (p.max == null || perc < p.max)
+  ) ?? activeScale.value[activeScale.value.length - 1];
+
+// ── chart option ─────────────────────────────────────────────────────────────
 const chartOption = computed(() => {
   const c = chartTheme.value;
   return {
@@ -55,7 +73,9 @@ const chartOption = computed(() => {
       padding: [12, 16],
       textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
-        if (!params.data) return params.name;
+        if (!params.data) return `
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
+          <div style="font-size:11px;opacity:0.6;">Sem dados</div>`;
         const d = params.data;
         return `
           <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${params.name}</div>
@@ -68,7 +88,8 @@ const chartOption = computed(() => {
     },
     visualMap: {
       show: false,
-      pieces: MAP_VISUAL_SCALE,
+      pieces: activeScale.value,
+      seriesIndex: 0,
     },
     series: [{
       type: 'map',
@@ -78,18 +99,14 @@ const chartOption = computed(() => {
       layoutCenter: ['50%', '45%'],
       layoutSize: '95%',
       aspectScale: 1,
+      selectedMode: 'single',
       emphasis: {
-        label: { show: true, fontSize: 10, fontWeight: 700, color: '#fff' },
-        itemStyle: { areaColor: hoverColor.value, borderColor: themeStore.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)', borderWidth: 1.5 },
+        label: { show: true, fontSize: 10, fontWeight: 700, color: c.text },
+        itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
-      select: { disabled: true },
-      label: {
-        show: true,
-        fontSize: 9,
-        fontWeight: 600,
-        color: c.text,
-        fontFamily: 'Inter, sans-serif',
-      },
+      select:     { label: { show: true } },
+      unselected: { label: { show: true, color: c.text }, itemStyle: { areaColor: mapAreaColor.value, opacity: 1 } },
+      label: { show: true, fontSize: 9, fontWeight: 600, color: c.text, fontFamily: 'Inter, sans-serif' },
       itemStyle: {
         borderColor: mapBorderColor.value,
         borderWidth: 1,
@@ -100,10 +117,31 @@ const chartOption = computed(() => {
   };
 });
 
-const onClick = (params) => {
-  if (params.data?.name) {
-    filterStore.selectedUF = params.data.name;
+// ── Sincronização: filterStore → Mapa ────────────────────────────────────────
+const chartRef = ref(null);
+let _prevSelectedName = null;
+
+watch(
+  () => filterStore.selectedUF,
+  async (uf) => {
+    await nextTick();
+    const chart = chartRef.value?.chart;
+    if (!chart) return;
+
+    if (_prevSelectedName) {
+      chart.dispatchAction({ type: 'unselect', seriesIndex: 0, name: _prevSelectedName });
+      _prevSelectedName = null;
+    }
+
+    if (!uf) return;
+
+    _prevSelectedName = uf;
+    chart.dispatchAction({ type: 'select', seriesIndex: 0, name: uf });
   }
+);
+
+const onClick = (params) => {
+  filterStore.selectedUF = params.data?.name ?? params.name;
 };
 </script>
 
@@ -117,6 +155,7 @@ const onClick = (params) => {
     <div class="chart-wrapper">
       <VChart
         v-if="mapReady"
+        ref="chartRef"
         class="echart"
         :option="chartOption"
         autoresize

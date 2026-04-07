@@ -50,24 +50,46 @@ export const CHART_SERIES = {
 };
 
 // ── Escala de cor do mapa de risco (VisualMap ECharts + PDF) ─────────────────
-// Fonte única de verdade: 0% → amarelo claro, 100% → vermelho escuro.
-// Formato `pieces` do ECharts — breakpoints explícitos e precisos.
-// Cada entrada define um intervalo [min, max[ com sua cor correspondente.
-// 0–20%: laranja claro → laranja. Vermelho apenas a partir de 20%.
-export const MAP_VISUAL_SCALE = [
-  { max:  8,              color: '#ffedd5' }, // 0–8%    Laranja pastel claro
-  { min:  8,  max: 12,   color: '#fed7aa' }, // 8–12%   Laranja claro
-  { min: 12,  max: 16,   color: '#fdba74' }, // 12–16%  Laranja médio claro
-  { min: 16,  max: 20,   color: '#fb923c' }, // 16–20%  Laranja (sem vermelho)
-  { min: 20,  max: 25,   color: '#fca5a5' }, // 20–25%  Rosa claro (início da atenção)
-  { min: 25,  max: 32,   color: '#f87171' }, // 25–32%  Vermelho rosado
-  { min: 32,  max: 42,   color: '#ef4444' }, // 32–42%  Vermelho
-  { min: 42,  max: 56,   color: '#dc2626' }, // 42–56%  Vermelho médio
-  { min: 56,  max: 68,   color: '#c81e1e' }, // 56–68%  Vermelho forte
-  { min: 68,  max: 78,   color: '#b91c1c' }, // 68–78%  Vermelho escuro
-  { min: 78,  max: 89,   color: '#991b1b' }, // 78–89%  Vermelho muito escuro
-  { min: 89,             color: '#7f1d1d' }, // 89–100% Crítico
-];
+// Fonte única de verdade. Formato `pieces` do ECharts — breakpoints explícitos.
+// `color`: fill do município. `borderColor`: borda ao selecionar.
+// Dois temas: `light` usa tons suaves (fundo branco aguenta); `dark` usa tons mais
+// saturados/luminosos para furar o fundo escuro.
+// Regra de contraste:
+//   Light — borda 2 tons mais escura que o fill até 55%; pivot para mais clara em 56%+
+//           (fills muito escuros absorvem bordas escuras — precisam de contraste inverso)
+//   Dark  — 0–31%: borda escura (mesmo princípio do light)
+//            32%+: borda luminosa/brilhante — fill escuro sobre fundo escuro do mapa
+//            56%+: orange-glow intencional nos fills críticos (efeito premium de perigo)
+export const MAP_VISUAL_SCALE = {
+  light: [
+    { max:  8,            color: '#ffedd5', borderColor: '#fb923c' }, // 0–8%
+    { min:  8, max: 12,  color: '#fed7aa', borderColor: '#f97316' }, // 8–12%
+    { min: 12, max: 16,  color: '#fdba74', borderColor: '#ea580c' }, // 12–16%
+    { min: 16, max: 20,  color: '#fb923c', borderColor: '#c2410c' }, // 16–20%
+    { min: 20, max: 25,  color: '#fca5a5', borderColor: '#dc2626' }, // 20–25%
+    { min: 25, max: 32,  color: '#f87171', borderColor: '#b91c1c' }, // 25–32%
+    { min: 32, max: 42,  color: '#ef4444', borderColor: '#991b1b' }, // 32–42%
+    { min: 42, max: 56,  color: '#dc2626', borderColor: '#7f1d1d' }, // 42–56%
+    { min: 56, max: 68,  color: '#c81e1e', borderColor: '#ef4444' }, // 56–68%  ← pivot: borda mais clara
+    { min: 68, max: 78,  color: '#b91c1c', borderColor: '#ef4444' }, // 68–78%
+    { min: 78, max: 89,  color: '#991b1b', borderColor: '#f87171' }, // 78–89%
+    { min: 89,           color: '#7f1d1d', borderColor: '#f87171' }, // 89–100%
+  ],
+  dark: [
+    { max:  8,            color: '#fed7aa', borderColor: '#ea580c' }, // 0–8%
+    { min:  8, max: 12,  color: '#fdba74', borderColor: '#c2410c' }, // 8–12%
+    { min: 12, max: 16,  color: '#fb923c', borderColor: '#9a3412' }, // 12–16%
+    { min: 16, max: 20,  color: '#f97316', borderColor: '#7c2d12' }, // 16–20%
+    { min: 20, max: 25,  color: '#f87171', borderColor: '#dc2626' }, // 20–25%
+    { min: 25, max: 32,  color: '#ef4444', borderColor: '#991b1b' }, // 25–32%
+    { min: 32, max: 42,  color: '#dc2626', borderColor: '#f87171' }, // 32–42%  ← pivot: borda luminosa
+    { min: 42, max: 56,  color: '#c81e1e', borderColor: '#f87171' }, // 42–56%
+    { min: 56, max: 68,  color: '#b91c1c', borderColor: '#f97316' }, // 56–68%  ← orange-glow
+    { min: 68, max: 78,  color: '#991b1b', borderColor: '#f97316' }, // 68–78%
+    { min: 78, max: 89,  color: '#7f1d1d', borderColor: '#fb923c' }, // 78–89%  ← glow mais forte
+    { min: 89,           color: '#450a0a', borderColor: '#fb923c' }, // 89–100%
+  ],
+};
 
 // ── Constantes de tooltip ECharts ─────────────────────────────────────────────
 // Sombra do axisPointer — usada em todos os gráficos ECharts do projeto.

@@ -113,11 +113,12 @@ function hexToRgb(hex) {
  */
 function getRiskRgbByPerc(perc) {
   if (perc == null) return RISK_COLORS_RGB.NONE;
-  const piece = MAP_VISUAL_SCALE.find(p => {
+  const scale = MAP_VISUAL_SCALE.light; // PDF é sempre modo claro
+  const piece = scale.find(p => {
     const aboveMin = p.min == null || perc >= p.min;
     const belowMax = p.max == null || perc < p.max;
     return aboveMin && belowMax;
-  }) ?? MAP_VISUAL_SCALE[MAP_VISUAL_SCALE.length - 1];
+  }) ?? scale[scale.length - 1];
   return hexToRgb(piece.color);
 }
 

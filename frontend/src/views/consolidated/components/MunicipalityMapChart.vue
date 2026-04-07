@@ -170,7 +170,7 @@ const chartOption = computed(() => {
     },
     visualMap: {
       show: false,
-      pieces: MAP_VISUAL_SCALE,
+      pieces: MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light'],
       seriesIndex: 0,
     },
     series: [{

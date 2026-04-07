@@ -113,7 +113,8 @@ const mapData = computed(() => {
         (targetMunNorm && mNomeNorm === targetMunNorm)
       );
 
-      const perc = munData?.percValSemComp ?? 0;
+      const perc  = munData?.percValSemComp ?? 0;
+      const piece = getRiskPiece(perc);
       return {
         id:         ibge7,
         ibge7:      ibge7,
@@ -125,18 +126,18 @@ const mapData = computed(() => {
         cnpjs:      munData?.qtd_farmacias ?? 0,
         isSelected,
         isCurrent,
-        select: { itemStyle: { areaColor: getRiskColor(perc) } },
+        select: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6 } },
       };
     });
 });
 
-// ── Cor do risco por percentual (espelha o visualMap) ────────────────────────
-const getRiskColor = (perc) => {
-  const piece = MAP_VISUAL_SCALE.find(p =>
+// ── Escala ativa conforme tema ────────────────────────────────────────────────
+const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
+
+const getRiskPiece = (perc) =>
+  activeScale.value.find(p =>
     (p.min == null || perc >= p.min) && (p.max == null || perc < p.max)
-  ) ?? MAP_VISUAL_SCALE[MAP_VISUAL_SCALE.length - 1];
-  return piece.color;
-};
+  ) ?? activeScale.value[activeScale.value.length - 1];
 
 // ── chart option ─────────────────────────────────────────────────────────────
 const chartOption = computed(() => {
@@ -166,7 +167,7 @@ const chartOption = computed(() => {
     },
     visualMap: {
       show: false,
-      pieces: MAP_VISUAL_SCALE,
+      pieces: activeScale.value,
       seriesIndex: 0,
     },
     series: [{
@@ -182,16 +183,8 @@ const chartOption = computed(() => {
         label: { show: false },
         itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
       },
-      select: {
-        label: { show: false },
-        itemStyle: {
-          areaColor: 'inherit',
-          borderColor: themeStore.tokens.primary,
-          borderWidth: 3,
-          shadowColor: themeStore.tokens.primary,
-          shadowBlur: 15,
-        },
-      },
+      select:     { label: { show: false } },
+      unselected: { label: { show: false }, itemStyle: { opacity: 1 } },
       label: { show: false },
       itemStyle: {
         borderColor: mapBorderColor.value,

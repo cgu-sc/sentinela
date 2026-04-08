@@ -140,7 +140,7 @@ const formattedFullAddress = computed(() => {
             {{ geoData?.sg_uf ?? cnpjData.uf }}
           </span>
           <span class="loc-separator">·</span>
-          <span class="loc-text">Região de Saúde: {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
+          <span class="loc-text">Região {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
           <span class="loc-separator">·</span>
 
           <div
@@ -614,7 +614,7 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-label {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;

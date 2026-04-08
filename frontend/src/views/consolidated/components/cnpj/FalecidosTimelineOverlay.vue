@@ -2,6 +2,7 @@
 import { computed, ref, defineExpose } from 'vue';
 import { useMultiCnpjTimeline } from '@/composables/useMultiCnpjTimeline';
 import { useFormatting } from '@/composables/useFormatting';
+import { useThemeStore } from '@/stores/theme';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { ScatterChart } from 'echarts/charts';
@@ -20,6 +21,7 @@ const props = defineProps({
 
 const { timelineData, timelineLoading, fetchTimeline } = useMultiCnpjTimeline();
 const { formatCurrencyFull } = useFormatting();
+const themeStore = useThemeStore();
 
 const opMultiCnpj = ref(null);
 const selectedMultiCpf = ref(null);
@@ -78,14 +80,23 @@ const timelineChartOption = computed(() => {
   const minTs = Math.min(...allTs) - pad;
   const maxTs = Math.max(...allTs) + pad;
 
+  const isDark = themeStore.isDark;
+  const textColor = themeStore.tokens.textColor;
+  const mutedColor = themeStore.tokens.mutedColor;
+  const axisLineColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
+  const splitLineColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.97)';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+  const tooltipText = isDark ? '#fff' : '#1e293b';
+
   return {
     backgroundColor: 'transparent',
-    grid: { top: 16, left: 210, right: 30, bottom: 40, containLabel: false },
+    grid: { top: 16, left: 230, right: 30, bottom: 40, containLabel: false },
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      borderColor: 'rgba(255,255,255,0.15)',
-      textStyle: { color: '#fff', fontSize: 11 },
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText, fontSize: 11 },
       formatter: (params) => {
         const [ts, yIdx, valor, numAut] = params.value;
         const estLabel = yLabels[yIdx] ?? `CNPJ ${yIdx}`;
@@ -102,15 +113,12 @@ const timelineChartOption = computed(() => {
       type: 'time',
       min: minTs,
       max: maxTs,
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.06)', type: 'dashed' } },
+      axisLine: { lineStyle: { color: axisLineColor } },
+      splitLine: { show: true, lineStyle: { color: splitLineColor, type: 'dashed' } },
       axisLabel: {
-        color: 'rgba(255,255,255,0.5)',
+        color: mutedColor,
         fontSize: 9,
-        formatter: (v) => {
-          const date = new Date(v);
-          return date.getFullYear().toString();
-        }
+        formatter: (v) => new Date(v).getFullYear().toString()
       },
       splitNumber: 2,
     },
@@ -121,13 +129,13 @@ const timelineChartOption = computed(() => {
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
-        color: 'rgba(255,255,255,0.75)',
-        fontSize: 9,
+        color: textColor,
+        fontSize: 12,
         fontWeight: 700,
-        width: 160,
+        width: 180,
         overflow: 'truncate'
       },
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.07)' } }
+      splitLine: { show: true, lineStyle: { color: splitLineColor } }
     },
     series: [{
       type: 'scatter',
@@ -165,6 +173,9 @@ defineExpose({ open });
         <i class="pi pi-share-alt" />
         <span>Mapa de Relacionamento Temporal</span>
         <i v-if="timelineLoading" class="pi pi-spin pi-spinner" style="margin-left:auto;font-size:0.8rem;opacity:0.6;" />
+        <button class="multi-close-btn" @click="opMultiCnpj.hide()" v-tooltip.left="'Fechar'">
+          <i class="pi pi-times" />
+        </button>
       </header>
 
       <div class="multi-cpf-meta">
@@ -202,7 +213,7 @@ defineExpose({ open });
         </div>
         <ul class="multi-list">
           <li v-for="(c, i) in outrosCnpjList" :key="c" class="multi-item">
-            <span class="multi-idx">{{ i + 1 }}</span>
+            <span class="multi-idx">#{{ i + 1 }}</span>
             <a :href="`/estabelecimento/${c}`" target="_blank" class="multi-cnpj-link">
               {{ formatCnpj(c) }}
               <i class="pi pi-external-link" style="font-size: 0.6rem; margin-left: 0.3rem; opacity: 0.5;" />
@@ -236,7 +247,7 @@ defineExpose({ open });
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.7rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--risk-medium);
@@ -245,8 +256,29 @@ defineExpose({ open });
   border-bottom: 1px solid var(--sidebar-border);
 }
 
-.multi-desc {
+.multi-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
   font-size: 0.75rem;
+}
+
+.multi-close-btn:hover {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-color);
+}
+
+.multi-desc {
+  font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.4;
   margin-bottom: 0.75rem;
@@ -266,10 +298,10 @@ defineExpose({ open });
   align-items: center;
   gap: 0.4rem;
   padding: 0.25rem 0.6rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--text-color) 4%, transparent);
+  border: 1px solid var(--card-border);
   border-radius: 4px;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
@@ -277,7 +309,7 @@ defineExpose({ open });
   font-family: monospace;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: var(--primary-color);
+  color: var(--text-color);
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s;
@@ -295,26 +327,26 @@ defineExpose({ open });
   flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   margin-bottom: 0.5rem;
   padding: 0.4rem 0.6rem;
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text-color) 4%, transparent);
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--card-border);
 }
 
-.multi-cpf-label { color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; font-size: 0.63rem; }
-.multi-cpf-val   { font-family: monospace; font-weight: 700; color: rgba(255,255,255,0.9); letter-spacing: 0.05em; }
-.multi-cpf-sep   { color: rgba(255,255,255,0.25); }
-.multi-cpf-name  { font-weight: 600; color: rgba(255,255,255,0.75); }
-.multi-cpf-obito { font-size: 0.68rem; color: rgba(255,165,0,0.8); font-weight: 600; }
+.multi-cpf-label { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; }
+.multi-cpf-val   { font-family: monospace; font-weight: 700; color: var(--text-color); letter-spacing: 0.05em; }
+.multi-cpf-sep   { color: var(--text-muted); opacity: 0.5; }
+.multi-cpf-name  { font-weight: 600; color: var(--text-color); opacity: 0.8; }
+.multi-cpf-obito { font-size: 0.82rem; color: var(--risk-high); font-weight: 600; }
 
 .multi-legend {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.5);
+  font-size: 0.82rem;
+  color: var(--text-muted);
   margin-bottom: 0.4rem;
 }
 
@@ -329,11 +361,11 @@ defineExpose({ open });
 .timeline-chart-wrap {
   width: 100%;
   height: 400px;
-  background: rgba(0,0,0,0.15);
+  background: transparent;
   border-radius: 8px;
   margin: 0.25rem 0 0.5rem;
   padding: 0.25rem;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid var(--card-border);
   position: relative;
 }
 
@@ -347,19 +379,20 @@ defineExpose({ open });
   justify-content: center;
   gap: 0.5rem;
   font-size: 0.75rem;
-  color: rgba(255,255,255,0.4);
+  color: var(--text-muted);
 }
 
 .timeline-loading i,
 .timeline-empty i {
   font-size: 1.2rem;
-  color: rgba(255,255,255,0.3);
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .multi-cnpj-list-section {
   margin-top: 0.5rem;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: color-mix(in srgb, var(--text-color) 2%, transparent);
+  border: 1px solid var(--card-border);
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 0.5rem;
@@ -374,22 +407,28 @@ defineExpose({ open });
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255,165,0,0.8);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,165,0,0.06);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--card-border);
+  background: var(--tabs-bg);
+}
+
+.multi-cnpj-list-title i {
+  color: var(--primary-color);
+  font-size: 1.1rem;
 }
 
 .multi-idx {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(245,158,11,0.2);
-  color: #f59e0b;
-  font-size: 0.65rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+  color: var(--text-muted);
+  font-size: 0.7rem;
   font-weight: 800;
+  font-family: monospace;
   flex-shrink: 0;
 }
 </style>

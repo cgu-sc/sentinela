@@ -102,7 +102,7 @@ export const SURFACE_COLORS = {
   },
   carbon: {
     light: {
-      "bg-color": "#ffffff",
+      "bg-color": "#d32b2bff",
       "bg-gradient": "linear-gradient(to bottom, #ffffff 0%, #f5f5f4 100%)",
       "text-color": "#1c1917",
       "text-muted": "#78716c",

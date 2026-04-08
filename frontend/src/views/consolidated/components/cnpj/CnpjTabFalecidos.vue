@@ -137,6 +137,19 @@ const visibleRanking = computed(() => {
   return r.slice(0, 3);
 });
 
+const filteredRankingCnpj = ref(null);
+
+const toggleRankingFilter = (cleanCnpj) => {
+  filteredRankingCnpj.value = filteredRankingCnpj.value === cleanCnpj ? null : cleanCnpj;
+};
+
+const falecidosAgrupadosFiltrados = computed(() => {
+  if (!filteredRankingCnpj.value) return falecidosAgrupados.value;
+  return falecidosAgrupados.value.filter(
+    (g) => g.outros_cnpj && g.outros_cnpj.includes(filteredRankingCnpj.value)
+  );
+});
+
 </script>
 
 <template>
@@ -197,12 +210,10 @@ const visibleRanking = computed(() => {
         </div>
         
         <div class="pro-ranking-list">
-          <div 
-             v-for="(r, index) in visibleRanking" 
-             :key="r.estabelecimento" 
+          <div
+             v-for="(r, index) in visibleRanking"
+             :key="r.estabelecimento"
              class="pro-ranking-item"
-             @click="openEstablishment(r.estabelecimento)"
-             v-tooltip.top="'Analisar CNPJ Conectado'"
           >
             <div class="rank-badge" :class="`rank-${index + 1}`">#{{ index + 1 }}</div>
             
@@ -229,7 +240,22 @@ const visibleRanking = computed(() => {
             </div>
 
              <div class="rank-action">
-                <i class="pi pi-chevron-right"></i>
+                <button
+                  class="rank-filter-btn"
+                  :class="{ active: filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj }"
+                  @click.stop="toggleRankingFilter(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj)"
+                >
+                  <i :class="filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj ? 'pi pi-filter-slash' : 'pi pi-filter'" />
+                  <span>{{ filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj ? 'Limpar' : 'Ver na tabela' }}</span>
+                </button>
+                <button
+                  class="rank-filter-btn rank-open-btn"
+                  v-tooltip.top="'Analisar CNPJ conectado'"
+                  @click.stop="openEstablishment(r.estabelecimento)"
+                >
+                  <i class="pi pi-external-link" />
+                  <span>Analisar</span>
+                </button>
              </div>
           </div>
         </div>
@@ -249,6 +275,20 @@ const visibleRanking = computed(() => {
         <div class="section-title">
           <i class="pi pi-list" />
           <span>Detalhamento de Transações (Agrupado por CPF)</span>
+        </div>
+        <div v-if="filteredRankingCnpj" class="filter-active-banner">
+          <i class="pi pi-filter" />
+          <span>
+            Exibindo apenas CPFs em comum com
+            <strong>{{ formatCnpj(filteredRankingCnpj) }}</strong>
+            <template v-if="getEstabelecimentoInfo(falecidosData?.ranking?.find(r => getEstabelecimentoInfo(r.estabelecimento).cleanCnpj === filteredRankingCnpj)?.estabelecimento)?.name">
+              — {{ getEstabelecimentoInfo(falecidosData?.ranking?.find(r => getEstabelecimentoInfo(r.estabelecimento).cleanCnpj === filteredRankingCnpj)?.estabelecimento)?.name }}
+            </template>
+            · <strong>{{ falecidosAgrupadosFiltrados.length }}</strong> CPF(s)
+          </span>
+          <button class="filter-clear-btn" @click="filteredRankingCnpj = null">
+            <i class="pi pi-times" /> Limpar filtro
+          </button>
         </div>
         <div class="f-table-wrap">
           <table class="f-table">
@@ -279,10 +319,11 @@ const visibleRanking = computed(() => {
               </tr>
             </thead>
             <tbody>
-              <template v-for="grupo in falecidosAgrupados" :key="grupo.cpf">
+              <template v-for="grupo in falecidosAgrupadosFiltrados" :key="grupo.cpf">
                 <tr class="f-group-header">
                   <td colspan="10">
                     <span class="f-group-cpf">{{ grupo.cpf }}</span>
+                    <span class="f-group-sep">|</span>
                     <span class="f-group-nome">{{ grupo.nome }}</span>
                     <span class="f-group-sep">—</span>
                     <span class="f-group-meta">{{ grupo.transacoes.length }} autorização(ões)</span>
@@ -294,7 +335,7 @@ const visibleRanking = computed(() => {
                       v-if="grupo.outros_cnpj" 
                       icon="pi pi-share-alt" 
                       value="MULTI-CNPJ" 
-                      class="f-multi-tag risk-medium clickable-badge" 
+                      class="f-multi-tag status-info clickable-badge"
                       @click="(e) => toggleMultiCnpj(e, grupo)"
                       style="margin-left: 0.75rem;" 
                     />
@@ -500,7 +541,6 @@ const visibleRanking = computed(() => {
   margin-top: 0.1rem;
   height: auto;
   padding: 0.1rem 0.5rem;
-  background: transparent;
   border-radius: 99px;
 }
 
@@ -663,16 +703,9 @@ const visibleRanking = computed(() => {
   background: color-mix(in srgb, var(--text-color) 2%, transparent);
   border: 1px solid color-mix(in srgb, var(--text-color) 6%, transparent);
   border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none;
 }
 
-.pro-ranking-item:hover {
-  background: color-mix(in srgb, var(--primary-color) 4%, transparent);
-  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-}
 
 .rank-badge {
   display: flex;
@@ -807,15 +840,92 @@ const visibleRanking = computed(() => {
 }
 
 .rank-action {
-  color: var(--primary-color);
-  opacity: 0.3;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-left: 0.5rem;
-  transition: opacity 0.2s, transform 0.2s;
 }
 
-.pro-ranking-item:hover .rank-action {
-  opacity: 1;
-  transform: translateX(2px);
+
+.rank-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rank-filter-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
+  border-color: var(--primary-color);
+}
+
+.rank-filter-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.rank-open-btn {
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--text-muted) 25%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+}
+
+.rank-open-btn:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  border-color: var(--text-muted);
+}
+
+.filter-active-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent);
+  font-size: 0.82rem;
+  color: var(--text-color);
+  opacity: 0.9;
+  margin-bottom: 0.75rem;
+}
+
+.filter-active-banner i {
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.filter-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: transparent;
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-clear-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .tab-placeholder {

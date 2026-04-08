@@ -227,20 +227,8 @@ defineExpose({ open });
 
 <style scoped>
 /* ── MULTI-CNPJ OVERLAY ────────────────────────────── */
-.multi-cnpj-panel {
-  background: color-mix(in srgb, var(--card-bg) 85%, transparent) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--sidebar-border) !important;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.4) !important;
-  border-radius: 12px !important;
-}
-
 .multi-cnpj-content {
   padding: 0.5rem 0.25rem;
-}
-
-.multi-cnpj-panel::before, .multi-cnpj-panel::after {
-  display: none !important;
 }
 
 .multi-header {

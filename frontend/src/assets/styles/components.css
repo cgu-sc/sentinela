@@ -189,6 +189,19 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
 }
 
+.multi-cnpj-panel.p-overlaypanel,
+.multi-cnpj-panel .p-overlaypanel-content {
+  background: var(--tabs-bg) !important;
+  border: 2px solid var(--card-border) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 12px !important;
+}
+
+.multi-cnpj-panel.p-overlaypanel::before,
+.multi-cnpj-panel.p-overlaypanel::after {
+  display: none !important;
+}
+
 .p-dialog-header,
 .p-dialog-content,
 .p-dialog-footer,

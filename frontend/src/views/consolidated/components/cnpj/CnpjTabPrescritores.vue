@@ -379,7 +379,7 @@ defineExpose({
             <div class="alert-kpi-body">
               <span class="alert-kpi-val">{{ qtdMultiFarmacia }}</span>
               <span class="alert-kpi-hint"
-                >CRMs com registro em > 70 farmácias distintas</span
+                >CRMs em > 70 farmácias distintas</span
               >
             </div>
           </div>
@@ -388,7 +388,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              totalIrregularesCfm > 0 ? 'highlight-red' : '',
+              totalIrregularesCfm > 0 ? 'highlight-red highlight-fraude' : '',
               activeKpiFilter === 'fraude_crm' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('fraude_crm')"
@@ -425,7 +425,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdAcima400km > 0 ? 'highlight-yellow' : '',
+              qtdAcima400km > 0 ? 'highlight-orange' : '',
               activeKpiFilter === 'distancia' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('distancia')"
@@ -504,28 +504,22 @@ defineExpose({
           <table class="ind-table premium-table row-hover">
             <thead class="sticky-thead">
               <tr>
-                <th>CRM do<br />Médico</th>
-                <th>Status e Alertas de Auditoria</th>
-                <th class="col-right">Qtd. Total Autorizada</th>
-                <th class="col-right">Volume Total (R$) CRM</th>
-                <th class="col-center">% Vendas CRM</th>
-                <th class="col-center">% Vendas Acumulado</th>
-                <th class="col-center">Network / Rede (Farm.)</th>
-                <th class="col-center">Presc/Dia Neste CNPJ</th>
-                <th class="col-center">Presc/Dia em todo o Brasil</th>
-                <th class="col-center">% Exclusividade CRM Neste CNPJ</th>
+                <th>CRM / Médico</th>
+                <th>Status / Alertas</th>
+                <th class="col-right">Qtd. Total</th>
+                <th class="col-right">Valor Total</th>
+                <th class="col-center">% Vendas</th>
+                <th class="col-center">% Acum.</th>
+                <th class="col-center">Rede (Network)</th>
+                <th class="col-center">Presc/Dia (Local)</th>
+                <th class="col-center">Presc/Dia (Brasil)</th>
+                <th class="col-center">% Exclusividade</th>
               </tr>
             </thead>
             <tbody>
               <tr
                 v-for="(m, i) in filteredTop20"
                 :key="i"
-                :class="{
-                  'severe-row':
-                    m.flag_robo > 0 ||
-                    m.flag_crm_invalido > 0 ||
-                    m.flag_prescricao_antes_registro > 0,
-                }"
               >
                 <td>
                   <div class="med-id">{{ m.id_medico }}</div>
@@ -540,39 +534,27 @@ defineExpose({
                 </td>
                 <td class="flags-cell">
                   <div class="tags-container">
-                    <span v-if="m.flag_robo" class="issue-tag red"
-                      ><i class="pi pi-history"></i> >30 PRESCRIÇÕES/DIA NESTE
-                      CNPJ</span
-                    >
-                    <span
-                      v-if="m.flag_robo_oculto && !m.flag_robo"
-                      class="issue-tag orange"
-                      ><i class="pi pi-globe"></i> >30 PRESCRIÇÕES/DIA
-                      BRASIL</span
-                    >
-                    <span
-                      v-if="m.alerta2_tempo_concentrado || m.alerta2"
-                      class="issue-tag red"
-                      ><i class="pi pi-stopwatch"></i> Lançamento
-                      Sequencial</span
-                    >
-                    <span v-if="m.flag_crm_invalido" class="issue-tag dark-red"
-                      ><i class="pi pi-ban"></i> CRM Inexistente</span
-                    >
-                    <span
-                      v-if="m.flag_prescricao_antes_registro"
-                      class="issue-tag dark-red"
-                      v-tooltip.top="'Venda anterior ao Registro'"
-                      ><i class="pi pi-calendar-times"></i> CRM Irregular</span
-                    >
-                    <span
-                      v-if="m.qtd_estabelecimentos_atua === 1"
-                      class="issue-tag purple"
-                      ><i class="pi pi-lock"></i> Exclusivo neste CNPJ</span
-                    >
-                    <span v-if="m.alerta5_geografico" class="issue-tag yellow"
-                      ><i class="pi pi-map-marker"></i> >400km</span
-                    >
+                    <span v-if="m.flag_robo" class="issue-tag red" v-tooltip.top="'>30 Prescrições/dia neste CNPJ'">
+                      <i class="pi pi-history"></i> >30 Presc/dia (Local)
+                    </span>
+                    <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="'>30 Prescrições/dia em todo o Brasil (Robô Oculto)'">
+                      <i class="pi pi-globe"></i> >30 Presc/dia BR
+                    </span>
+                    <span v-if="m.alerta2_tempo_concentrado || m.alerta2" class="issue-tag red" v-tooltip.top="'Lançamentos em sequência (anomalia temporal)'">
+                      <i class="pi pi-stopwatch"></i> Sequencial
+                    </span>
+                    <span v-if="m.flag_crm_invalido" class="issue-tag dark-red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
+                      <i class="pi pi-ban"></i> CRM Inexistente
+                    </span>
+                    <span v-if="m.flag_prescricao_antes_registro" class="issue-tag dark-red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
+                      <i class="pi pi-calendar-times"></i> CRM Irregular
+                    </span>
+                    <span v-if="m.qtd_estabelecimentos_atua === 1" class="issue-tag orange" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no período'">
+                      <i class="pi pi-lock"></i> CNPJ Exclusivo
+                    </span>
+                    <span v-if="m.alerta5_geografico" class="issue-tag orange" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
+                      <i class="pi pi-map-marker"></i> >400km
+                    </span>
                     <span
                       v-if="
                         !m.flag_robo &&
@@ -622,7 +604,7 @@ defineExpose({
                 <td class="col-center font-mono">
                   <span
                     :class="{
-                      'text-purple font-bold': m.qtd_estabelecimentos_atua > 50,
+                      'text-purple': m.qtd_estabelecimentos_atua > 50,
                     }"
                     >{{ m.qtd_estabelecimentos_atua }}</span
                   >
@@ -630,26 +612,24 @@ defineExpose({
                 </td>
                 <td class="col-center font-mono">
                   <span
-                    :class="{ 'text-red font-bold': m.nu_prescricoes_dia > 30 }"
+                    :class="{ 'text-red': m.nu_prescricoes_dia > 30 }"
                     >{{ formatNumberFull(m.nu_prescricoes_dia) }}</span
-                  >
-                  / dia
+                  >/dia
                 </td>
                 <td class="col-center font-mono">
                   <span
                     :class="{
-                      'text-red font-bold': m.prescricoes_dia_total_brasil > 30,
+                      'text-red': m.prescricoes_dia_total_brasil > 30,
                     }"
                     >{{
                       formatNumberFull(m.prescricoes_dia_total_brasil)
                     }}</span
-                  >
-                  / dia
+                  >/dia
                 </td>
                 <td class="col-center">
                   <span
                     :class="{
-                      'text-purple font-bold': m.pct_volume_aqui_vs_total > 90,
+                      'text-purple': m.pct_volume_aqui_vs_total > 90,
                     }"
                     >{{ formatPct(m.pct_volume_aqui_vs_total) }}</span
                   >
@@ -851,17 +831,15 @@ defineExpose({
   font-weight: 400;
 }
 
-/* Semafórica de Risco nos Cards */
-.highlight-red .alert-kpi-val {
-  color: var(--risk-high);
-}
+/* Semafórica de Risco nos Cards (Apenas Borda) */
 .highlight-red {
   border-left: 3px solid var(--risk-high) !important;
 }
 
-.highlight-orange .alert-kpi-val {
-  color: var(--risk-medium);
+.highlight-fraude {
+  background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)) !important;
 }
+
 .highlight-orange {
   border-left: 3px solid var(--risk-medium) !important;
 }
@@ -923,11 +901,8 @@ input:checked + .toggle-slider:before {
   letter-spacing: normal;
 }
 
-.highlight-yellow .alert-kpi-val {
-  color: var(--risk-medium);
-}
 .highlight-yellow {
-  border-left: 3px solid var(--risk-medium) !important;
+  border-left: 3px solid var(--risk-low) !important;
 }
 
 .text-red {
@@ -983,26 +958,31 @@ input:checked + .toggle-slider:before {
 }
 
 .premium-table th {
-  background-color: transparent !important;
-  color: var(--table-header-text);
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-  padding: 0.75rem 0.4rem;
-  letter-spacing: 0.06em;
-  border-bottom: 1px solid var(--tabs-border);
-  white-space: normal;
-  line-height: 1.2;
-  text-align: left;
-  vertical-align: bottom;
-  opacity: 1 !important;
+  padding: 0.65rem 0.5rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  border-bottom: 2px solid var(--tabs-border);
+  text-align: center;
 }
 
+.premium-table th:first-child { text-align: left; }
+
 .premium-table td {
-  padding: 0.6rem 0.4rem; /* Reduzido padding lateral */
+  padding: 0.65rem 0.5rem;
   border-bottom: 1px solid var(--tabs-border);
+  vertical-align: middle;
   color: var(--text-color);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+}
+
+/* Coluna de Status mais larga */
+.premium-table th:nth-child(2),
+.premium-table td:nth-child(2) {
+  min-width: 320px;
+  text-align: left;
 }
 
 .premium-table tbody tr:last-child td {
@@ -1036,17 +1016,19 @@ input:checked + .toggle-slider:before {
   background: color-mix(
     in srgb,
     var(--risk-critical) 4%,
-    var(--tabs-bg)
+    var(--bg-color)
   ) !important;
 }
 
 .med-id {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--text-color);
 }
 .med-sub {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
+  font-weight: 400;
 }
 
 .mt-1 {
@@ -1065,17 +1047,20 @@ input:checked + .toggle-slider:before {
   gap: 0.25rem;
 }
 .issue-tag {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  justify-content: center;
+  gap: 0.3rem;
   white-space: nowrap;
+  min-width: 85px;
+  letter-spacing: normal;
 }
 .issue-tag i {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 .issue-tag.red {
   background: color-mix(in srgb, var(--risk-high) 10%, var(--tabs-bg));
@@ -1094,9 +1079,9 @@ input:checked + .toggle-slider:before {
   border: 1px solid color-mix(in srgb, var(--risk-medium) 20%, transparent);
 }
 .issue-tag.yellow {
-  background: color-mix(in srgb, var(--risk-medium) 10%, var(--tabs-bg));
-  color: var(--risk-medium);
-  border: 1px solid color-mix(in srgb, var(--risk-medium) 20%, transparent);
+  background: color-mix(in srgb, var(--risk-low) 10%, var(--tabs-bg));
+  color: var(--risk-low);
+  border: 1px solid color-mix(in srgb, var(--risk-low) 20%, transparent);
 }
 .issue-tag.purple {
   background: color-mix(in srgb, var(--primary-color) 10%, var(--tabs-bg));
@@ -1130,8 +1115,9 @@ input:checked + .toggle-slider:before {
   z-index: 1;
   width: 100%;
   text-align: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--text-color);
+  text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color);
 }
 </style>

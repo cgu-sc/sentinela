@@ -175,7 +175,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
           <span class="f-kpi-label">Núm. Autorizações</span>
           <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.valor_total > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="falecidosData.summary.valor_total > 0 ? 'highlight-red highlight-prejuizo' : ''">
           <span class="f-kpi-label">Prejuízo Estimado</span>
           <div class="f-kpi-val-container">
             <span class="f-kpi-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
@@ -459,17 +459,18 @@ const falecidosAgrupadosFiltrados = computed(() => {
 .highlight-red {
   border-left: 3px solid var(--risk-high) !important;
 }
-.highlight-red .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
+
+.highlight-prejuizo {
+  background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)) !important;
+}
 
 .highlight-orange {
-  border-left: 3px solid var(--risk-high) !important;
+  border-left: 3px solid var(--risk-medium) !important;
 }
-.highlight-orange .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
 .highlight-yellow {
-  border-left: 3px solid var(--risk-high) !important;
+  border-left: 3px solid var(--risk-low) !important;
 }
-.highlight-yellow .f-kpi-val { color: var(--risk-high) !important; font-weight: 700; }
 
 .falecidos-list-container {
   background: var(--card-bg);
@@ -582,7 +583,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 /* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa (Neutro Ultra-Suave) ── */
 .f-group-header td {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--tabs-bg)) !important;
+  background: color-mix(in srgb, var(--text-color) 4%, var(--bg-color)) !important;
   border-top: 1px solid var(--tabs-border) !important;
   border-bottom: 1px solid var(--tabs-border) !important;
   padding: 0.6rem 1rem !important;
@@ -637,7 +638,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 /* ── Total geral (tfoot) ── */
 .f-grand-total td {
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--bg-color) 95%, var(--text-color) 5%);
   border-top: 2px solid var(--tabs-border);
   padding: 0.75rem 1rem;
   font-size: 0.78rem;

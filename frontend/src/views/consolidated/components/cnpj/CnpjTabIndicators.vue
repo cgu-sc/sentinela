@@ -363,20 +363,19 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 /* Resumo de auditoria */
 /* Novo Card de Auditoria Premiun */
 .audit-card-new {
-  background: color-mix(in srgb, var(--risk-indicator-critical) 12%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 25%, transparent);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 0.75rem 1rem;
   margin-bottom: 0.4rem;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.08); /* Sombra um pouco mais forte para destaque */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .audit-card-new.is-collapsed {
-  background: color-mix(in srgb, var(--risk-indicator-critical) 8%, var(--card-bg));
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 
 .audit-card-new::before {
@@ -431,7 +430,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 .audit-shield-icon {
   font-size: 1.1rem;
   color: var(--risk-indicator-critical);
-  background: color-mix(in srgb, var(--risk-indicator-critical) 18%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 10%, transparent);
   padding: 0.4rem;
   border-radius: 8px;
 }
@@ -460,15 +459,19 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0.8rem;
-  background: color-mix(in srgb, var(--risk-indicator-critical) 8%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 15%, transparent);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--tabs-border);
+  border-radius: 0;
   transition: all 0.2s ease;
 }
 
+.audit-row-new:last-child {
+  border-bottom: none;
+}
+
 .audit-row-new:hover {
-  background: rgba(239, 68, 68, 0.05);
-  border-color: rgba(239, 68, 68, 0.2);
+  background: var(--table-hover);
   transform: translateX(4px);
 }
 
@@ -491,7 +494,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 }
 
 .audit-badge-val {
-  background: color-mix(in srgb, var(--risk-indicator-critical) 22%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 12%, transparent);
   color: var(--risk-indicator-critical);
   font-size: 0.7rem;
   font-weight: 800;

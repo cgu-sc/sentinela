@@ -558,7 +558,7 @@ defineExpose({
                     <span v-if="m.qtd_estabelecimentos_atua >= 70" class="issue-tag blue-network" v-tooltip.top="'Médico com atuação em rede ampla (mais de 70 farmácias distintas)'">
                       <i class="pi pi-share-alt"></i> Multi-Farmácia
                     </span>
-                    <span
+                    <i
                       v-if="
                         !m.flag_robo &&
                         !m.flag_robo_oculto &&
@@ -568,9 +568,10 @@ defineExpose({
                         !m.alerta5_geografico &&
                         m.qtd_estabelecimentos_atua < 70
                       "
-                      class="text-muted text-xs"
-                      >Regular</span
-                    >
+                      class="pi pi-check-circle"
+                      style="color: var(--text-muted); font-size: 0.85rem;"
+                      v-tooltip.top="'Sem ocorrências identificadas'"
+                    />
                   </div>
                 </td>
                 <td class="col-right">
@@ -869,9 +870,6 @@ defineExpose({
   border-left: 3px solid var(--risk-high) !important;
 }
 
-.highlight-fraude {
-  background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)) !important;
-}
 
 .highlight-orange {
   border-left: 3px solid var(--risk-medium) !important;

@@ -43,7 +43,14 @@ export const useFilterStore = defineStore('filters', () => {
   const periodo = ref(saved?.periodo ?? FILTER_DEFAULTS.DATE_RANGE);
   const sliderValue = ref(saved?.sliderValue ?? FILTER_DEFAULTS.SLIDER_INDEX_RANGE);
 
-  // 3. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
+  // 3. CONTROLE DE CONTEXTO
+  const filtersLocked = ref(false);
+  const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
+  watch(sidebarCollapsed, (val) => {
+    localStorage.setItem('sentinela_sidebar_collapsed', String(val));
+  });
+
+  // 4. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
   const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
   const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS);
   const rfaSelection = ref(saved?.rfaSelection ?? FILTER_DEFAULTS.RFA);
@@ -171,6 +178,8 @@ export const useFilterStore = defineStore('filters', () => {
     rfaSelection,
     searchTarget,
     hoveredMunicipioName,
+    filtersLocked,
+    sidebarCollapsed,
     resetFilters
   };
 });

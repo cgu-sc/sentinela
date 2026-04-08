@@ -1,6 +1,6 @@
 <script setup>
 import { useRoute, useRouter } from "vue-router";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
@@ -50,6 +50,10 @@ const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
 
 const cnpjNav = useCnpjNavStore();
+
+const filterStore = useFilterStore();
+onMounted(() => { filterStore.filtersLocked = true; });
+onUnmounted(() => { filterStore.filtersLocked = false; });
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();

@@ -28,6 +28,7 @@ import SelectButton from "primevue/selectbutton";
 
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
+const filtersLocked = computed(() => filterStore.filtersLocked);
 const geoStore = useGeoStore();
 const farmaciaLists = useFarmaciaListsStore();
 const totalListas = computed(() => farmaciaLists.interesse.length);
@@ -152,13 +153,15 @@ const {
   dismissError,
 } = useSyncManager();
 
-// Controle de Menu
-const isCollapsed = ref(
-  localStorage.getItem("sentinela_sidebar_collapsed") === "true",
-);
+// Controle de Menu — sincronizado com a store para sobreviver a trocas de rota
+const isCollapsed = computed({
+  get: () => filterStore.sidebarCollapsed,
+  set: (val) => { filterStore.sidebarCollapsed = val; },
+});
 
-watch(isCollapsed, (val) => {
-  localStorage.setItem("sentinela_sidebar_collapsed", String(val));
+// Fecha ao entrar na análise por CNPJ, abre ao sair
+watch(() => filterStore.filtersLocked, (locked) => {
+  filterStore.sidebarCollapsed = locked;
 });
 
 const limparFiltros = () => {
@@ -280,9 +283,15 @@ const {
         <!-- Botão interno removido em favor da alça unificada -->
       </div>
 
-      <div class="sidebar-content" v-show="!isCollapsed">
+      <div class="sidebar-content">
+        <!-- BANNER DE FILTROS BLOQUEADOS -->
+        <div v-if="filtersLocked" class="filters-locked-banner">
+          <i class="pi pi-lock" />
+          <span>Filtros indisponíveis durante a análise de um CNPJ</span>
+        </div>
+
         <!-- 1. FILTROS GLOBAIS (SEMPRE PRESENTES) -->
-        <div class="filter-section">
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">
             UF
             <button
@@ -304,7 +313,7 @@ const {
           />
         </div>
 
-        <div class="filter-section">
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">
             Região de Saúde
             <button
@@ -332,7 +341,7 @@ const {
           />
         </div>
 
-        <div class="filter-section">
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">
             Município
             <button
@@ -362,7 +371,7 @@ const {
           />
         </div>
 
-        <div class="grid-filters">
+        <div class="grid-filters" :class="{ 'filter-locked': filtersLocked }">
           <div class="filter-section">
             <label class="filter-label">Situação RF</label>
             <Dropdown
@@ -385,7 +394,7 @@ const {
           </div>
         </div>
 
-        <div class="grid-filters">
+        <div class="grid-filters" :class="{ 'filter-locked': filtersLocked }">
           <div class="filter-section">
             <label class="filter-label">Porte CNPJ</label>
             <Dropdown
@@ -408,7 +417,7 @@ const {
           </div>
         </div>
 
-        <div class="filter-section">
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">
             CNPJ
             <i
@@ -441,7 +450,7 @@ const {
           />
         </div>
 
-        <div class="filter-section">
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">% de não comprovação</label>
           <div
             class="slider-container"
@@ -537,7 +546,7 @@ const {
           </div>
         </div>
 
-        <div class="filter-section" style="margin-top: 1.8rem">
+        <div class="filter-section" style="margin-top: 1.8rem" :class="{ 'filter-locked': filtersLocked }">
           <label class="filter-label">Valor mínimo sem comprovação</label>
           <div
             class="slider-container"
@@ -560,7 +569,7 @@ const {
         <hr class="sidebar-divider my-4" />
 
         <!-- 2. FILTROS CONTEXTUAIS (DENTRO DO LAYOUT PARA GARANTIR RENDERIZAÇÃO) -->
-        <div class="dynamic-filters-box">
+        <div class="dynamic-filters-box" :class="{ 'filter-locked': filtersLocked }">
           <div class="filter-header">
             <i class="pi pi-filter"></i>
             <span>Filtros da Página</span>
@@ -628,7 +637,7 @@ const {
         <div class="sidebar-spacer"></div>
       </div>
 
-      <div class="sidebar-footer" v-show="!isCollapsed">
+      <div class="sidebar-footer">
         <Button
           :label="
             activeFilterCount > 0
@@ -641,6 +650,7 @@ const {
           @click="limparFiltros"
           class="w-full clear-filters-btn"
           :class="{ 'filters-active': activeFilterCount > 0 }"
+          :disabled="filtersLocked"
         />
       </div>
     </aside>
@@ -900,21 +910,35 @@ const {
 /* SIDEBAR */
 .admin-sidebar {
   width: var(--sidebar-width);
-  /* MÁGICA: Sidebar integrada com fundo sólido do design system */
   background: var(--sidebar-bg) !important;
   color: var(--sidebar-text);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   height: 100vh;
   border-right: 1px solid var(--sidebar-border);
-  flex-shrink: 0; /* Impede que a sidebar seja espremida */
+  flex-shrink: 0;
   overflow: hidden;
 }
 
 .admin-layout.collapsed .admin-sidebar {
   width: var(--sidebar-width);
   border-right: none;
+}
+
+/* Conteúdo: esmaece rápido ao colapsar, aparece com delay ao expandir */
+.sidebar-content,
+.sidebar-footer {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.2s 0.25s ease; /* delay = sidebar já abriu */
+}
+
+.admin-layout.collapsed .sidebar-content,
+.admin-layout.collapsed .sidebar-footer {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease; /* rápido, sem delay — esmaece antes de encolher */
 }
 
 /* BOTÃO FLUTUANTE DE REABERTURA */
@@ -1005,6 +1029,32 @@ const {
 
 .filter-section {
   margin-bottom: 0.35rem;
+}
+
+/* Estado bloqueado — análise por CNPJ */
+.filter-locked {
+  pointer-events: none;
+  opacity: 0.38;
+  user-select: none;
+}
+
+.filters-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  margin-bottom: 0.75rem;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  opacity: 0.85;
+}
+
+.filters-locked-banner .pi {
+  font-size: 0.7rem;
 }
 
 .filter-label {

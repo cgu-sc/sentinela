@@ -1179,15 +1179,15 @@ const {
 
 :deep(.module-select-button .p-button:not(.p-highlight):hover) {
   background: transparent !important;
-  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
-  color: var(--primary-color) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: var(--navbar-text) !important;
 }
 
 :deep(.module-select-button .p-button.p-highlight) {
-  background: var(--navbar-active-bg) !important;
-  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
-  color: var(--primary-color) !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
+  background: rgba(255, 255, 255, 0.10) !important;
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  color: var(--navbar-text) !important;
+  box-shadow: none;
   font-weight: 700;
 }
 
@@ -1210,18 +1210,20 @@ const {
 }
 
 .nav-tab:hover {
-  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
-  color: var(--primary-color);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--navbar-text);
+  background: rgba(255, 255, 255, 0.06);
   opacity: 1;
 }
 
 .nav-tab.active {
-  background: var(--navbar-active-bg);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
-  color: var(--primary-color);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--navbar-text);
+  box-shadow: none;
   opacity: 1;
+  font-weight: 800;
 }
 
 .page-content {

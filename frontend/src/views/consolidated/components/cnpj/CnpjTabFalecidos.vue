@@ -15,6 +15,20 @@ const props = defineProps({
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
 
+// Função para mapear o risco em 10 níveis térmicos descritivos
+function getDayStepClass(days) {
+  if (days <= 7)   return 'd-risk-0-7d';
+  if (days <= 15)  return 'd-risk-8-15d';
+  if (days <= 30)  return 'd-risk-16-30d';
+  if (days <= 60)  return 'd-risk-31-60d';
+  if (days <= 120) return 'd-risk-61-120d';
+  if (days <= 240) return 'd-risk-121-240d';
+  if (days <= 365) return 'd-risk-241-1y';
+  if (days <= 730) return 'd-risk-1-2y';
+  if (days <= 1095) return 'd-risk-2-3y';
+  return 'd-risk-over-3y';
+}
+
 onMounted(() => {
   if (props.cnpj && !falecidosLoaded.value) {
     fetchFalecidos(props.cnpj);
@@ -226,11 +240,7 @@ const openEstablishment = (estabStr) => {
                   <td class="f-num">{{ t.qtd_itens_na_autorizacao }}</td>
                   <td class="f-val">{{ formatCurrencyFull(t.valor_total_autorizacao) }}</td>
                   <td class="txt-center">
-                    <span class="f-days-badge" :class="{
-                      'd-critical': t.dias_apos_obito > 365,
-                      'd-high': t.dias_apos_obito > 30 && t.dias_apos_obito <= 365,
-                      'd-medium': t.dias_apos_obito <= 30
-                    }">
+                    <span class="f-days-badge" :class="getDayStepClass(t.dias_apos_obito)">
                       {{ t.dias_apos_obito }} d
                     </span>
                   </td>
@@ -437,14 +447,17 @@ const openEstablishment = (estabStr) => {
   font-weight: 700;
 }
 
-.d-medium   { background: color-mix(in srgb, var(--risk-high)   15%, transparent); color: var(--risk-high);   border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); }
-.d-high     { background: color-mix(in srgb, var(--risk-high)   15%, transparent); color: var(--risk-high);   border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); }
-.d-critical { 
-  background: color-mix(in srgb, var(--risk-high) 15%, transparent); 
-  color: var(--risk-high); 
-  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent); 
-  font-weight: 800; 
-}
+/* 10 Degraus de Risco Térmico Descritivos (Dias após Óbito) */
+.d-risk-0-7d    { background: color-mix(in srgb, var(--risk-death-0-7d) 15%, transparent);    color: var(--risk-death-0-7d);    border: 1px solid color-mix(in srgb, var(--risk-death-0-7d) 30%, transparent); }
+.d-risk-8-15d   { background: color-mix(in srgb, var(--risk-death-8-15d) 15%, transparent);   color: var(--risk-death-8-15d);   border: 1px solid color-mix(in srgb, var(--risk-death-8-15d) 30%, transparent); }
+.d-risk-16-30d  { background: color-mix(in srgb, var(--risk-death-16-30d) 15%, transparent);  color: var(--risk-death-16-30d);  border: 1px solid color-mix(in srgb, var(--risk-death-16-30d) 30%, transparent); }
+.d-risk-31-60d  { background: color-mix(in srgb, var(--risk-death-31-60d) 15%, transparent);  color: var(--risk-death-31-60d);  border: 1px solid color-mix(in srgb, var(--risk-death-31-60d) 30%, transparent); }
+.d-risk-61-120d { background: color-mix(in srgb, var(--risk-death-61-120d) 15%, transparent); color: var(--risk-death-61-120d); border: 1px solid color-mix(in srgb, var(--risk-death-61-120d) 30%, transparent); }
+.d-risk-121-240d{ background: color-mix(in srgb, var(--risk-death-121-240d) 15%, transparent);color: var(--risk-death-121-240d);border: 1px solid color-mix(in srgb, var(--risk-death-121-240d) 30%, transparent); }
+.d-risk-241-1y  { background: color-mix(in srgb, var(--risk-death-241-1y) 15%, transparent);   color: var(--risk-death-241-1y);   border: 1px solid color-mix(in srgb, var(--risk-death-241-1y) 30%, transparent); }
+.d-risk-1-2y    { background: color-mix(in srgb, var(--risk-death-1-2y) 15%, transparent);    color: var(--risk-death-1-2y);    border: 1px solid color-mix(in srgb, var(--risk-death-1-2y) 30%, transparent); font-weight: 800; }
+.d-risk-2-3y    { background: color-mix(in srgb, var(--risk-death-2-3y) 15%, transparent);    color: var(--risk-death-2-3y);    border: 1px solid color-mix(in srgb, var(--risk-death-2-3y) 30%, transparent); font-weight: 800; }
+.d-risk-over-3y { background: color-mix(in srgb, var(--risk-death-over-3y) 20%, transparent);  color: var(--risk-death-over-3y);  border: 1px solid color-mix(in srgb, var(--risk-death-over-3y) 40%, transparent); font-weight: 900; }
 
 .f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); }
 .f-fonte { font-size: 0.72rem; color: var(--text-secondary); }

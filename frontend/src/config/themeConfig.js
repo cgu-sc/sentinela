@@ -40,6 +40,17 @@ export const SURFACE_COLORS = {
       "risk-indicator-normal": "#10b981", // emerald-500 (mesmo tom do gráfico)
       "risk-indicator-warning": "#d97706", // amber-600
       "risk-indicator-critical": "#be123c", // rose-700
+      // Escala Térmica de Óbito (Iniciando em Laranja Suave)
+      "risk-death-0-7d": "#fed7aa",
+      "risk-death-8-15d": "#fdba74",
+      "risk-death-16-30d": "#fb923c",
+      "risk-death-31-60d": "#f97316",
+      "risk-death-61-120d": "#ea580c",
+      "risk-death-121-240d": "#dc2626",
+      "risk-death-241-1y": "#b91c1c",
+      "risk-death-1-2y": "#991b1b",
+      "risk-death-2-3y": "#7f1d1d",
+      "risk-death-over-3y": "#450a0a",
     },
     dark: {
       "bg-color": "#0d1117",
@@ -76,6 +87,17 @@ export const SURFACE_COLORS = {
       "risk-indicator-normal": "#22c55e", // green-500 (mais brilhante para dark mode)
       "risk-indicator-warning": "#fbbf24", // amber-400
       "risk-indicator-critical": "#fb7185", // rose-400
+      // Escala Térmica de Óbito (Iniciando em Laranja Suave - Modo Escuro)
+      "risk-death-0-7d": "#fdba74",
+      "risk-death-8-15d": "#fb923c",
+      "risk-death-16-30d": "#f97316",
+      "risk-death-31-60d": "#f87171",
+      "risk-death-61-120d": "#ef4444",
+      "risk-death-121-240d": "#dc2626",
+      "risk-death-241-1y": "#b91c1c",
+      "risk-death-1-2y": "#991b1b",
+      "risk-death-2-3y": "#7f1d1d",
+      "risk-death-over-3y": "#450a0a",
     },
   },
   carbon: {
@@ -104,15 +126,26 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#f5f5f4",
       "table-hover": "rgba(245, 158, 11, 0.08)",
       "table-stripe": "#fafaf9",
-      // Risco — idêntico ao azul.light (semântica independe da paleta primária)
-      "risk-low": "#f59e0b", // original amber style
-      "risk-medium": "#f59e0b", // amber-500
+      // Risco — escala quente: amber claro → orange → rose → red
+      "risk-low": "#fbbf24", // amber-400 — tom suave, menos intenso que o médio
+      "risk-medium": "#f97316", // orange-500 — intermediário entre amber e vermelho
       "risk-high": "#e11d48", // rose-600
       "risk-critical": "#991b1b", // red-800
       "status-success": "#10b981", // emerald-500
       "risk-indicator-normal": "#10b981",
       "risk-indicator-warning": "#d97706",
       "risk-indicator-critical": "#be123c",
+      // Escala Térmica de Óbito (Iniciando em Laranja Suave)
+      "risk-death-0-7d": "#fed7aa",
+      "risk-death-8-15d": "#fdba74",
+      "risk-death-16-30d": "#fb923c",
+      "risk-death-31-60d": "#f97316",
+      "risk-death-61-120d": "#ea580c",
+      "risk-death-121-240d": "#dc2626",
+      "risk-death-241-1y": "#b91c1c",
+      "risk-death-1-2y": "#991b1b",
+      "risk-death-2-3y": "#7f1d1d",
+      "risk-death-over-3y": "#450a0a",
     },
     dark: {
       "bg-color": "#0d1117",
@@ -140,15 +173,26 @@ export const SURFACE_COLORS = {
       "table-footer-bg": "#1c2128",
       "table-hover": "#1f2937",
       "table-stripe": "#131920",
-      // Risco — idêntico ao azul.dark
-      "risk-low": "#fbbf24", // original amber style
-      "risk-medium": "#fbbf24", // amber-400
+      // Risco — escala quente: amber claro → orange → rose → red
+      "risk-low": "#fcd34d", // amber-300 — tom suave e legível no dark
+      "risk-medium": "#fb923c", // orange-400 — intermediário entre amber e vermelho
       "risk-high": "#f87171", // red-400
       "risk-critical": "#fca5a5", // red-300
       "status-success": "#34d399", // emerald-400
       "risk-indicator-normal": "#22c55e",
       "risk-indicator-warning": "#fbbf24",
       "risk-indicator-critical": "#fb7185",
+      // Escala Térmica de Óbito (Iniciando em Laranja Suave - Modo Escuro)
+      "risk-death-0-7d": "#fdba74",
+      "risk-death-8-15d": "#fb923c",
+      "risk-death-16-30d": "#f97316",
+      "risk-death-31-60d": "#f87171",
+      "risk-death-61-120d": "#ef4444",
+      "risk-death-121-240d": "#dc2626",
+      "risk-death-241-1y": "#b91c1c",
+      "risk-death-1-2y": "#991b1b",
+      "risk-death-2-3y": "#7f1d1d",
+      "risk-death-over-3y": "#450a0a",
     },
   },
 };

@@ -436,7 +436,7 @@ const formattedFullAddress = computed(() => {
 }
 
 .cnpj-copy-wrap-new {
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
   padding: 0.2rem 0.65rem;
   border-radius: 6px;
   cursor: pointer;
@@ -444,12 +444,12 @@ const formattedFullAddress = computed(() => {
   align-items: center;
   gap: 0.5rem;
   transition: all 0.2s ease-in-out;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent) !important;
 }
 
 .cnpj-copy-wrap-new:hover {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-  border-color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent) !important;
+  border-color: var(--text-muted) !important;
   transform: translateY(-1px);
 }
 
@@ -462,7 +462,7 @@ const formattedFullAddress = computed(() => {
 
 .cnpj-copy-wrap-new i {
   font-size: 0.7rem;
-  color: var(--primary-color);
+  color: var(--text-muted);
 }
 
 
@@ -614,7 +614,7 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-label {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;

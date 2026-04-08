@@ -51,9 +51,6 @@ const { localidades } = storeToRefs(geoStore);
 
 const cnpjNav = useCnpjNavStore();
 
-const filterStore = useFilterStore();
-onMounted(() => { filterStore.filtersLocked = true; });
-onUnmounted(() => { filterStore.filtersLocked = false; });
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();

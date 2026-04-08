@@ -437,7 +437,7 @@ const formattedFullAddress = computed(() => {
 
 .cnpj-copy-wrap-new {
   background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-  padding: 0.2rem 0.65rem;
+  padding: 0.4rem 0.85rem;
   border-radius: 6px;
   cursor: pointer;
   display: flex;

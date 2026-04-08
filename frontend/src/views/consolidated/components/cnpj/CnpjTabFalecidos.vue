@@ -3,6 +3,7 @@ import { computed, ref, watch, onMounted } from 'vue';
 import { useFalecidos } from '@/composables/useFalecidos';
 import { useFormatting } from '@/composables/useFormatting';
 import { useAnalyticsStore } from '@/stores/analytics';
+import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import FalecidosTimelineOverlay from './FalecidosTimelineOverlay.vue';
@@ -17,6 +18,7 @@ const props = defineProps({
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
 const analyticsStore = useAnalyticsStore();
+const farmaciaLists = useFarmaciaListsStore();
 
 // Mapa para busca O(1) de dados do CNPJ no Pinia Store para enriquecer o painel.
 const cnpjsDict = computed(() => {
@@ -244,17 +246,27 @@ const falecidosAgrupadosFiltrados = computed(() => {
                   class="rank-filter-btn"
                   :class="{ active: filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj }"
                   @click.stop="toggleRankingFilter(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj)"
+                  v-tooltip.top="'Filtrar a tabela de transações por este CNPJ'"
                 >
                   <i :class="filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj ? 'pi pi-filter-slash' : 'pi pi-filter'" />
-                  <span>{{ filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj ? 'Limpar' : 'Ver na tabela' }}</span>
+                  <span>Exibir</span>
+                </button>
+                <button
+                  class="rank-filter-btn"
+                  :class="{ active: farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) }"
+                  v-tooltip.top="farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) ? 'Remover da lista de interesse' : 'Salvar na lista de interesse para acompanhamento'"
+                  @click.stop="farmaciaLists.toggleInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj, getEstabelecimentoInfo(r.estabelecimento).name)"
+                >
+                  <i :class="farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
+                  <span>Interesse</span>
                 </button>
                 <button
                   class="rank-filter-btn rank-open-btn"
-                  v-tooltip.top="'Analisar CNPJ conectado'"
+                  v-tooltip.top="'Abrir análise completa deste CNPJ'"
                   @click.stop="openEstablishment(r.estabelecimento)"
                 >
                   <i class="pi pi-external-link" />
-                  <span>Analisar</span>
+                  <span>Analisar CNPJ</span>
                 </button>
              </div>
           </div>
@@ -847,41 +859,55 @@ const falecidosAgrupadosFiltrados = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.6rem;
-  height: 26px;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  height: 32px;
   border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--primary-color);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
+              0 2px 6px color-mix(in srgb, var(--primary-color) 10%, transparent);
 }
 
 .rank-filter-btn:hover {
-  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
-  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 25%, transparent),
+              0 4px 10px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .rank-filter-btn.active {
-  background: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 75%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-color: var(--primary-color);
   color: #fff;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+              0 4px 12px color-mix(in srgb, var(--primary-color) 35%, transparent);
 }
 
 .rank-open-btn {
-  color: var(--text-muted);
-  border-color: color-mix(in srgb, var(--text-muted) 25%, transparent);
-  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  color: var(--status-info);
+  border-color: color-mix(in srgb, var(--status-info) 35%, transparent);
+  background: color-mix(in srgb, var(--status-info) 10%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 15%, transparent),
+              0 2px 6px color-mix(in srgb, var(--status-info) 12%, transparent);
 }
 
 .rank-open-btn:hover {
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
-  border-color: var(--text-muted);
+  color: var(--status-info);
+  background: color-mix(in srgb, var(--status-info) 20%, transparent);
+  border-color: color-mix(in srgb, var(--status-info) 60%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
+              0 4px 10px color-mix(in srgb, var(--status-info) 20%, transparent);
 }
 
 .filter-active-banner {

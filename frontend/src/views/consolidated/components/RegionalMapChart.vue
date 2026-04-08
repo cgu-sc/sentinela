@@ -243,6 +243,16 @@ watch(
   { immediate: true }
 );
 
+// Força resize do mapa após a transição da sidebar (0.4s)
+watch(
+  () => filterStore.sidebarCollapsed,
+  () => {
+    setTimeout(() => {
+      chartRef.value?.chart?.resize();
+    }, 420);
+  }
+);
+
 watch(
   () => filterStore.hoveredMunicipioName,
   async (municipioName) => {

@@ -159,10 +159,15 @@ const isCollapsed = computed({
   set: (val) => { filterStore.sidebarCollapsed = val; },
 });
 
-// Fecha ao entrar na análise por CNPJ, abre ao sair
-watch(() => filterStore.filtersLocked, (locked) => {
+// Rotas que bloqueiam filtros e colapsam a sidebar
+const LOCKED_ROUTES = ['/estabelecimento/', '/listas'];
+const isLockedRoute = (path) => LOCKED_ROUTES.some(r => path.startsWith(r));
+
+watch(() => route.path, (path) => {
+  const locked = isLockedRoute(path);
+  filterStore.filtersLocked = locked;
   filterStore.sidebarCollapsed = locked;
-});
+}, { immediate: true });
 
 const limparFiltros = () => {
   filterStore.resetFilters();

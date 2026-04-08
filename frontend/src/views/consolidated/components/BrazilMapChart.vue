@@ -58,7 +58,7 @@ const mapData = computed(() => {
       itemStyle:  { areaColor: piece.color, opacity },
       select:     { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 8, opacity: 1 } },
       unselected: { itemStyle: { areaColor: piece.color, opacity } },
-      emphasis:   { itemStyle: { opacity: 1 } } // Volta a acender a opacidade no hover
+      emphasis:   { itemStyle: { areaColor: piece.color, opacity: 1 } } // Volta a acender na cor de risco no hover
     };
   });
 });

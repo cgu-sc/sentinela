@@ -294,9 +294,8 @@ defineExpose({ open });
 }
 
 .multi-cnpj-link {
-  font-family: monospace;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: normal;
   color: var(--text-color);
   text-decoration: none;
   cursor: pointer;
@@ -324,7 +323,7 @@ defineExpose({ open });
 }
 
 .multi-cpf-label { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; }
-.multi-cpf-val   { font-family: monospace; font-weight: 700; color: var(--text-color); letter-spacing: 0.05em; }
+.multi-cpf-val   { font-weight: 700; color: var(--text-color); }
 .multi-cpf-sep   { color: var(--text-muted); opacity: 0.5; }
 .multi-cpf-name  { font-weight: 600; color: var(--text-color); opacity: 0.8; }
 .multi-cpf-obito { font-size: 0.82rem; color: var(--risk-high); font-weight: 600; }
@@ -416,7 +415,6 @@ defineExpose({ open });
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 800;
-  font-family: monospace;
   flex-shrink: 0;
 }
 </style>

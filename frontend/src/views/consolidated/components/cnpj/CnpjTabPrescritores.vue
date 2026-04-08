@@ -286,7 +286,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdLancamentosAgrupados > 0 ? 'highlight-red' : '',
+              qtdLancamentosAgrupados > 0 ? 'highlight-green' : '',
               activeKpiFilter === 'agrupamento' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('agrupamento')"
@@ -312,7 +312,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdPrescrIntensivaLocal > 0 ? 'highlight-orange' : '',
+              qtdPrescrIntensivaLocal > 0 ? 'highlight-red' : '',
               activeKpiFilter === 'intensiva_local' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('intensiva_local')"
@@ -362,7 +362,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdMultiFarmacia > 0 ? 'highlight-orange' : '',
+              qtdMultiFarmacia > 0 ? 'highlight-purple' : '',
               activeKpiFilter === 'multi_farmacia' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('multi_farmacia')"
@@ -425,7 +425,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdAcima400km > 0 ? 'highlight-orange' : '',
+              qtdAcima400km > 0 ? 'highlight-purple-geo' : '',
               activeKpiFilter === 'distancia' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('distancia')"
@@ -540,7 +540,7 @@ defineExpose({
                     <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="'>30 Prescrições/dia em todo o Brasil (Robô Oculto)'">
                       <i class="pi pi-globe"></i> >30 Presc/dia BR
                     </span>
-                    <span v-if="m.alerta2_tempo_concentrado || m.alerta2" class="issue-tag red" v-tooltip.top="'Lançamentos em sequência (anomalia temporal)'">
+                    <span v-if="m.alerta2_tempo_concentrado || m.alerta2" class="issue-tag green-ok" v-tooltip.top="'Lançamentos em sequência (anomalia temporal)'">
                       <i class="pi pi-stopwatch"></i> Sequencial
                     </span>
                     <span v-if="m.flag_crm_invalido" class="issue-tag dark-red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
@@ -552,8 +552,11 @@ defineExpose({
                     <span v-if="m.qtd_estabelecimentos_atua === 1" class="issue-tag orange" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no período'">
                       <i class="pi pi-lock"></i> CNPJ Exclusivo
                     </span>
-                    <span v-if="m.alerta5_geografico" class="issue-tag orange" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
+                    <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
                       <i class="pi pi-map-marker"></i> >400km
+                    </span>
+                    <span v-if="m.qtd_estabelecimentos_atua >= 70" class="issue-tag blue-network" v-tooltip.top="'Médico com atuação em rede ampla (mais de 70 farmácias distintas)'">
+                      <i class="pi pi-share-alt"></i> Multi-Farmácia
                     </span>
                     <span
                       v-if="
@@ -562,17 +565,18 @@ defineExpose({
                         !m.flag_crm_invalido &&
                         !m.flag_prescricao_antes_registro &&
                         m.pct_volume_aqui_vs_total <= 90 &&
-                        !m.alerta5_geografico
+                        !m.alerta5_geografico &&
+                        m.qtd_estabelecimentos_atua < 70
                       "
                       class="text-muted text-xs"
                       >Regular</span
                     >
                   </div>
                 </td>
-                <td class="col-right font-mono">
+                <td class="col-right">
                   {{ formatNumberFull(m.nu_prescricoes) }}
                 </td>
-                <td class="col-right font-mono text-primary font-bold">
+                <td class="col-right text-primary">
                   {{ formatCurrencyFull(m.vl_total_prescricoes) }}
                 </td>
                 <td class="col-center">
@@ -730,12 +734,41 @@ defineExpose({
 
 .alert-kpi-card:hover {
   transform: translateY(-2px);
-  background: color-mix(in srgb, var(--text-color) 4%, var(--card-bg));
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
+/* Hovers específicos por categoria */
+.alert-kpi-card.highlight-red:hover { background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)); }
+.alert-kpi-card.highlight-orange:hover { background: color-mix(in srgb, var(--risk-medium) 4%, var(--card-bg)); }
+.alert-kpi-card.highlight-green:hover { background: color-mix(in srgb, var(--risk-indicator-normal) 4%, var(--card-bg)); }
+.alert-kpi-card.highlight-purple:hover { background: color-mix(in srgb, #3b82f6 4%, var(--card-bg)); }
+.alert-kpi-card.highlight-purple-geo:hover { background: color-mix(in srgb, #8b5cf6 4%, var(--card-bg)); }
+
+/* Estado ativo (Clicado) — Sincronizado com a cor da categoria */
 .alert-kpi-card.kpi-active {
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.alert-kpi-card.highlight-red.kpi-active {
+  background: color-mix(in srgb, var(--risk-high) 10%, var(--card-bg));
+  border-color: var(--risk-high) !important;
+}
+.alert-kpi-card.highlight-orange.kpi-active {
+  background: color-mix(in srgb, var(--risk-medium) 10%, var(--card-bg));
+  border-color: var(--risk-medium) !important;
+}
+.alert-kpi-card.highlight-green.kpi-active {
+  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--card-bg));
+  border-color: var(--risk-indicator-normal) !important;
+}
+.alert-kpi-card.highlight-purple.kpi-active {
+  background: color-mix(in srgb, #3b82f6 10%, var(--card-bg));
+  border-color: #3b82f6 !important;
+}
+.alert-kpi-card.highlight-purple-geo.kpi-active {
+  background: color-mix(in srgb, #8b5cf6 10%, var(--card-bg));
+  border-color: #8b5cf6 !important;
 }
 
 .filter-badge {
@@ -842,6 +875,18 @@ defineExpose({
 
 .highlight-orange {
   border-left: 3px solid var(--risk-medium) !important;
+}
+
+.highlight-purple {
+  border-left: 3px solid #3b82f6 !important;
+}
+
+.highlight-purple-geo {
+  border-left: 3px solid #8b5cf6 !important;
+}
+
+.highlight-green {
+  border-left: 3px solid var(--risk-indicator-normal) !important;
 }
 
 /* Filtro Estilizado */
@@ -961,9 +1006,10 @@ input:checked + .toggle-slider:before {
   padding: 0.65rem 0.5rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 500;
-  letter-spacing: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   border-bottom: 2px solid var(--tabs-border);
   text-align: center;
 }
@@ -1067,9 +1113,9 @@ input:checked + .toggle-slider:before {
   border: 1px solid color-mix(in srgb, var(--risk-high) 20%, transparent);
 }
 .issue-tag.dark-red {
-  background: color-mix(in srgb, var(--risk-high) 15%, var(--tabs-bg));
-  color: var(--risk-high);
-  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 4%, var(--tabs-bg));
+  color: color-mix(in srgb, var(--risk-high) 60%, var(--text-muted));
+  border: 1px solid color-mix(in srgb, var(--risk-high) 10%, transparent);
   font-weight: 700;
 }
 .issue-tag.orange {
@@ -1082,10 +1128,20 @@ input:checked + .toggle-slider:before {
   color: var(--risk-low);
   border: 1px solid color-mix(in srgb, var(--risk-low) 20%, transparent);
 }
-.issue-tag.purple {
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--tabs-bg));
-  color: var(--primary-color);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+.issue-tag.blue-network {
+  background: color-mix(in srgb, #3b82f6 8%, var(--tabs-bg));
+  color: #3b82f6;
+  border: 1px solid color-mix(in srgb, #3b82f6 20%, transparent);
+}
+.issue-tag.purple-geo {
+  background: color-mix(in srgb, #8b5cf6 8%, var(--tabs-bg));
+  color: #8b5cf6;
+  border: 1px solid color-mix(in srgb, #8b5cf6 20%, transparent);
+}
+.issue-tag.green-ok {
+  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--tabs-bg));
+  color: var(--risk-indicator-normal);
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 20%, transparent);
 }
 
 .bar-container {

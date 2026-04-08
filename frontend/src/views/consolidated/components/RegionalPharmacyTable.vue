@@ -252,7 +252,6 @@ const totals = computed(() => {
 }
 
 .cnpj-text {
-  font-family: monospace;
   font-size: 0.75rem;
   letter-spacing: 0.2px;
 }

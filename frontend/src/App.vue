@@ -241,7 +241,6 @@ onBeforeUnmount(() => {
 
 .error-detail-box code {
   color: #fca5a5 !important;
-  font-family: 'Consolas', 'Monaco', monospace;
   font-size: 0.85rem;
   letter-spacing: 0.5px;
   overflow-wrap: break-word;

@@ -578,7 +578,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 .d-risk-2-3y    { background: color-mix(in srgb, var(--risk-death-2-3y) 15%, transparent);    color: var(--risk-death-2-3y);    border: 1px solid color-mix(in srgb, var(--risk-death-2-3y) 30%, transparent); font-weight: 800; }
 .d-risk-over-3y { background: color-mix(in srgb, var(--risk-death-over-3y) 20%, transparent);  color: var(--risk-death-over-3y);  border: 1px solid color-mix(in srgb, var(--risk-death-over-3y) 40%, transparent); font-weight: 900; }
 
-.f-cpf-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); }
+.f-cpf-cell { font-size: 0.75rem; color: var(--text-secondary); }
 .f-fonte { font-size: 0.72rem; color: var(--text-secondary); }
 
 /* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa (Neutro Ultra-Suave) ── */
@@ -593,7 +593,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .f-group-cpf {
-  font-family: monospace;
   font-weight: 700;
   margin-right: 0.75rem;
   color: var(--text-color);
@@ -719,7 +718,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
   font-weight: 800;
   font-size: 0.75rem;
   border-radius: 6px;
-  font-family: monospace;
 }
 
 /* Podium Colors (Contrast-safe for both Light & Dark modes) */
@@ -742,7 +740,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .rank-cnpj {
-  font-family: monospace;
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-color);
@@ -760,7 +757,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
 .ranking-expand-action .p-button {
   font-size: 0.72rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.7;
   transition: opacity 0.2s;
@@ -837,7 +833,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-secondary);
-  font-family: monospace;
 }
 
 .rank-action {

@@ -75,16 +75,27 @@ const initializeApp = async () => {
 
     // 2. Carga padrão dos dados do dashboard (só ocorre após cache pronto)
     statusMessage.value = "Sincronizando Dashboard...";
-    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio } = getApiParams();
+    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz } = getApiParams();
 
-    await Promise.allSettled([
+    const fetchList = [
       resultadoStore.fetchResultados(),
-      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
-      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio),
+      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz),
+      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
-    ]);
+    ];
+
+    // Se houver filtros geográficos ativos, o fetchDashboardSummary NÃO popula
+    // resultadoSentinelaUFNacional (por design). Forçamos a busca nacional aqui
+    // para garantir que o mapa do Brasil sempre seja exibido corretamente.
+    if (uf || regiaoSaude || municipio) {
+      fetchList.push(
+        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede)
+      );
+    }
+
+    await Promise.allSettled(fetchList);
 
     if (!hasError.value) {
       _bootTimer = setTimeout(() => {

@@ -6,6 +6,7 @@ import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
 import { useFilterStore } from '@/stores/filters';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
+import { FILTER_ALL_VALUE } from '@/config/constants';
 import { storeToRefs } from 'pinia';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -37,20 +38,30 @@ onMounted(async () => {
 });
 
 // ── mapData ──────────────────────────────────────────────────────────────────
-const mapData = computed(() =>
-  resultadoSentinelaUFNacional.value.map(d => {
+const mapData = computed(() => {
+  const hasSelection = filterStore.selectedUF && filterStore.selectedUF !== FILTER_ALL_VALUE;
+
+  return resultadoSentinelaUFNacional.value.map(d => {
     const perc  = d.percValSemComp ?? 0;
     const piece = getRiskPiece(perc);
+    const isSelected = hasSelection && d.uf === filterStore.selectedUF;
+    
+    // Efeito Spotlight: Se temos uma UF ativa e não é esta, apaga a luz (esmaece)
+    const opacity = hasSelection && !isSelected ? 0.5 : 1;
+
     return {
       name:       d.uf,
       value:      perc,
       valSemComp: d.valSemComp ?? 0,
       cnpjs:      d.cnpjs ?? 0,
-      select:     { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6 } },
-      unselected: { itemStyle: { areaColor: piece.color, opacity: 1 } },
+      selected:   isSelected,
+      itemStyle:  { areaColor: piece.color, opacity },
+      select:     { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 8, opacity: 1 } },
+      unselected: { itemStyle: { areaColor: piece.color, opacity } },
+      emphasis:   { itemStyle: { opacity: 1 } } // Volta a acender a opacidade no hover
     };
-  })
-);
+  });
+});
 
 // ── Escala ativa conforme tema ────────────────────────────────────────────────
 const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
@@ -122,9 +133,12 @@ const chartRef = ref(null);
 let _prevSelectedName = null;
 
 watch(
-  () => filterStore.selectedUF,
-  async (uf) => {
+  () => [filterStore.selectedUF, mapReady.value, mapData.value],
+  async ([uf, isReady]) => {
+    if (!isReady) return;
+
     await nextTick();
+    await nextTick(); // Garantindo montagem após v-if do chart
     const chart = chartRef.value?.chart;
     if (!chart) return;
 
@@ -133,11 +147,12 @@ watch(
       _prevSelectedName = null;
     }
 
-    if (!uf) return;
+    if (!uf || uf === FILTER_ALL_VALUE) return;
 
     _prevSelectedName = uf;
     chart.dispatchAction({ type: 'select', seriesIndex: 0, name: uf });
-  }
+  },
+  { immediate: true }
 );
 
 const onClick = (params) => {

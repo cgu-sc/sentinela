@@ -596,12 +596,12 @@ defineExpose({
                         width: Math.min(m.pct_acumulado, 100) + '%',
                       }"
                     ></div>
-                    <span class="bar-text text-sm font-mono">{{
+                    <span class="bar-text text-sm">{{
                       formatPct(m.pct_acumulado)
                     }}</span>
                   </div>
                 </td>
-                <td class="col-center font-mono">
+                <td class="col-center">
                   <span
                     :class="{
                       'text-purple': m.qtd_estabelecimentos_atua > 50,
@@ -610,13 +610,13 @@ defineExpose({
                   >
                   farm.
                 </td>
-                <td class="col-center font-mono">
+                <td class="col-center">
                   <span
                     :class="{ 'text-red': m.nu_prescricoes_dia > 30 }"
                     >{{ formatNumberFull(m.nu_prescricoes_dia) }}</span
                   >/dia
                 </td>
-                <td class="col-center font-mono">
+                <td class="col-center">
                   <span
                     :class="{
                       'text-red': m.prescricoes_dia_total_brasil > 30,
@@ -976,6 +976,7 @@ input:checked + .toggle-slider:before {
   vertical-align: middle;
   color: var(--text-color);
   font-size: 0.78rem;
+  text-transform: none !important;
 }
 
 /* Coluna de Status mais larga */
@@ -1006,9 +1007,6 @@ input:checked + .toggle-slider:before {
 }
 .col-right {
   text-align: right;
-}
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* Table Specific Components */
@@ -1058,6 +1056,7 @@ input:checked + .toggle-slider:before {
   white-space: nowrap;
   min-width: 85px;
   letter-spacing: normal;
+  text-transform: none !important;
 }
 .issue-tag i {
   font-size: 0.7rem;

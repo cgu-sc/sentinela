@@ -13,18 +13,27 @@
     z-index: 9999;
   }
   
-  .loader-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2rem;
-    color: white;
-  }
-  
-  .sentinela-brand {
+  /* Logo fixada — não se move quando o conteúdo dinâmico muda */
+  .boot-brand-anchor {
+    position: absolute;
+    top: 28%;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 1.25rem;
+    color: white;
+    white-space: nowrap;
+  }
+
+  /* Conteúdo dinâmico (spinner ou erro) centralizado abaixo da logo */
+  .boot-dynamic-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    color: white;
+    margin-top: 120px; /* empurra para abaixo da logo sem encostar */
   }
   
   .boot-logo {

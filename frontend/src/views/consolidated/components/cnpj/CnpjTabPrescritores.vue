@@ -98,7 +98,8 @@ const qtdAcima400km = computed(
   () => top20.value.filter((m) => m.alerta5_geografico).length,
 );
 
-const formatPct = (val) => (val != null ? `${Number(val).toFixed(2)}%` : "0.00%");
+const formatPct = (val) =>
+  val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 const filterOnlyIssues = ref(false);
 const activeKpiFilter = ref(null);
 
@@ -109,7 +110,8 @@ const kpiFilters = {
   intensiva_local: (m) => m.flag_robo > 0,
   intensiva_brasil: (m) => m.flag_robo_oculto > 0,
   multi_farmacia: (m) => m.qtd_estabelecimentos_atua > 70,
-  fraude_crm: (m) => m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
+  fraude_crm: (m) =>
+    m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia: (m) => !!m.alerta5_geografico,
 };
 
@@ -172,9 +174,12 @@ defineExpose({
     qtdPrescrAntesRegistro: qtdPrescrAntesRegistro.value,
     valorTop1: valorTop1.value,
     valorTop5: valorTop5.value,
-    medianaTop5Reg: summary.value.mediana_concentracao_top5_reg ?? summary.value.mediana_concentracao_top5_br ?? 40,
+    medianaTop5Reg:
+      summary.value.mediana_concentracao_top5_reg ??
+      summary.value.mediana_concentracao_top5_br ??
+      40,
     qtdAcima400km: qtdAcima400km.value,
-  })
+  }),
 });
 </script>
 
@@ -204,7 +209,11 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              concentracaoTop1 > 40 ? 'highlight-red' : concentracaoTop1 > 20 ? 'highlight-orange' : '',
+              concentracaoTop1 > 40
+                ? 'highlight-red'
+                : concentracaoTop1 > 20
+                  ? 'highlight-orange'
+                  : '',
               activeKpiFilter === 'top1' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('top1')"
@@ -224,7 +233,9 @@ defineExpose({
               }}</span>
               <span class="alert-kpi-hint">
                 CRM: {{ summary.id_top1_prescritor || "ND" }}
-                <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(valorTop1) }}</strong>
+                <strong style="color: var(--text-color)">
+                  · {{ formatCurrencyFull(valorTop1) }}</strong
+                >
               </span>
             </div>
           </div>
@@ -233,7 +244,11 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              concentracaoTop5 > 70 ? 'highlight-red' : concentracaoTop5 > 50 ? 'highlight-orange' : '',
+              concentracaoTop5 > 70
+                ? 'highlight-red'
+                : concentracaoTop5 > 50
+                  ? 'highlight-orange'
+                  : '',
               activeKpiFilter === 'top5' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('top5')"
@@ -252,8 +267,17 @@ defineExpose({
                 formatPct(concentracaoTop5)
               }}</span>
               <span class="alert-kpi-hint">
-                Mediana Região: {{ formatPct(summary.mediana_concentracao_top5_reg || summary.mediana_concentracao_top5_br || 40) }}
-                <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(valorTop5) }}</strong>
+                Mediana Região:
+                {{
+                  formatPct(
+                    summary.mediana_concentracao_top5_reg ||
+                      summary.mediana_concentracao_top5_br ||
+                      40,
+                  )
+                }}
+                <strong style="color: var(--text-color)">
+                  · {{ formatCurrencyFull(valorTop5) }}</strong
+                >
               </span>
             </div>
           </div>
@@ -381,11 +405,16 @@ defineExpose({
             <div class="alert-kpi-body">
               <div class="alert-kpi-val-row">
                 <span class="alert-kpi-val">{{ totalIrregularesCfm }}</span>
-                <span class="alert-kpi-val-sub">{{ qtdCrmInvalido }} Inexistentes | {{ qtdPrescrAntesRegistro }} Irregulares</span>
+                <span class="alert-kpi-val-sub"
+                  >{{ qtdCrmInvalido }} Inexistentes |
+                  {{ qtdPrescrAntesRegistro }} Irregulares</span
+                >
               </div>
               <span class="alert-kpi-hint">
                 <strong style="color: var(--risk-high)">
-                  {{ formatCurrencyFull(valorFraudeCrm) }} ({{ formatPct(pctFraudeCrm) }})
+                  {{ formatCurrencyFull(valorFraudeCrm) }} ({{
+                    formatPct(pctFraudeCrm)
+                  }})
                 </strong>
                 da produção
               </span>
@@ -455,7 +484,8 @@ defineExpose({
           unidade, ordenados pelo financeiro.
           <span v-if="activeKpiFilter" class="filter-badge">
             <i class="pi pi-filter-fill"></i>
-            {{ kpiFilterLabels[activeKpiFilter] }} — {{ filteredTop20.length }} de {{ top20.length }}
+            {{ kpiFilterLabels[activeKpiFilter] }} —
+            {{ filteredTop20.length }} de {{ top20.length }}
             <button class="clear-filter-btn" @click.stop="clearFilters">
               <i class="pi pi-times"></i> Limpar filtro
             </button>
@@ -725,10 +755,7 @@ defineExpose({
 }
 
 .alert-kpi-card.kpi-active {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 1px;
   background: color-mix(in srgb, var(--primary-color) 8%, var(--tabs-bg));
-  border-left: 3px solid var(--primary-color) !important;
 }
 
 .filter-badge {
@@ -960,7 +987,7 @@ input:checked + .toggle-slider:before {
   color: var(--table-header-text);
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.70rem;
+  font-size: 0.7rem;
   padding: 0.75rem 0.4rem;
   letter-spacing: 0.06em;
   border-bottom: 1px solid var(--tabs-border);

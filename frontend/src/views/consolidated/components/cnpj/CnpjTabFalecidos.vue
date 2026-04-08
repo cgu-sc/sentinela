@@ -133,35 +133,47 @@ const openEstablishment = (estabStr) => {
         </div>
       </div>
 
-      <!-- PAINEL MULTI-CNPJ -->
+      <!-- PAINEL MULTI-CNPJ (REDE DE COINCIDÊNCIA) -->
       <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
-        <div class="section-title">
-          <i class="pi pi-share-alt" />
-          <span>Rank de Coincidência em Outros Estabelecimentos</span>
+        <div class="ranking-header-flex">
+          <div class="title-wrap">
+            <i class="pi pi-sitemap" />
+            <span>Rede de Coincidência (Cross-CNPJ)</span>
+          </div>
+          <p class="ranking-subtitle">Outras farmácias monitoradas que aprovaram medicamentos para os mesmos falecidos identificados nesta unidade.</p>
         </div>
-        <div class="ranking-grid">
-          <div v-for="r in falecidosData.ranking" :key="r.estabelecimento" class="ranking-card" @click="openEstablishment(r.estabelecimento)" v-tooltip.top="'Clique para abrir detalhamento desta farmácia'">
-            <div class="r-card-header">
-              <div class="r-icon-box">
-                <i class="pi pi-building" />
-              </div>
-              <div class="r-info">
-                <span class="r-name" :title="r.estabelecimento">{{ r.estabelecimento.split(' - ')[1]?.split(' | ')[0] || r.estabelecimento }}</span>
-                <span class="r-meta">{{ formatCnpj(r.estabelecimento.split(' - ')[0]) }}</span>
-              </div>
+        
+        <div class="pro-ranking-list">
+          <div 
+             v-for="(r, index) in falecidosData.ranking" 
+             :key="r.estabelecimento" 
+             class="pro-ranking-item"
+             @click="openEstablishment(r.estabelecimento)"
+             v-tooltip.top="'Analisar CNPJ Conectado'"
+          >
+            <div class="rank-badge" :class="`rank-${index + 1}`">{{ String(index + 1).padStart(2, '0') }}</div>
+            
+            <div class="rank-info">
+               <div class="rank-info-top">
+                   <span class="rank-cnpj">{{ formatCnpj(r.estabelecimento.split(' - ')[0]) }}</span>
+                   <span class="rank-name">{{ r.estabelecimento.split(' - ')[1]?.split(' | ')[0] || r.estabelecimento }}</span>
+               </div>
+               <div class="rank-bar-wrapper">
+                   <div class="rank-bar-bg">
+                      <div class="rank-bar-fill" :style="{ width: (r.pct_total * 100) + '%' }"></div>
+                   </div>
+               </div>
             </div>
-            <div class="r-card-body">
-              <div class="r-stats">
-                <span class="r-qty">{{ r.qtd_cpfs }}</span>
-                <span class="r-label">CPFs Concomitantes</span>
-              </div>
-              <div class="r-progress-wrap">
-                <div class="r-progress-bg">
-                  <div class="r-progress-fill" :style="{ width: (r.pct_total * 100) + '%' }"></div>
-                </div>
-                <span class="r-pct">{{ Math.round(r.pct_total * 100) }}%</span>
-              </div>
+
+            <div class="rank-metrics">
+               <span class="metric-val">{{ r.qtd_cpfs }}</span>
+               <span class="metric-lbl">CPFs em Comum</span>
+               <span class="metric-pct">({{ Math.round(r.pct_total * 100) }}%)</span>
             </div>
+
+             <div class="rank-action">
+                <i class="pi pi-chevron-right"></i>
+             </div>
           </div>
         </div>
       </div>
@@ -532,138 +544,175 @@ const openEstablishment = (estabStr) => {
   font-size: 0.88rem;
 }
 
-/* Ranking Panel */
+/* Ranking Panel - PRO Design */
 .falecidos-ranking-panel {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 1.5rem;
   margin-top: 1.5rem;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
-.ranking-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+.ranking-header-flex {
+  margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--tabs-border);
+  padding-bottom: 0.8rem;
 }
 
-.ranking-card {
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-
-.ranking-card:hover {
-  background: rgba(255,255,255,0.05);
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.r-card-header {
+.ranking-header-flex .title-wrap {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-color);
+  letter-spacing: 0.05em;
 }
 
-.r-icon-box {
-  width: 28px;
-  height: 28px;
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  border-radius: 6px;
+.title-wrap i {
+  color: var(--primary-color);
+  font-size: 1.1rem;
+}
+
+.ranking-subtitle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+  margin-left: 1.7rem;
+}
+
+.pro-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pro-ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--text-color) 2%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-color) 6%, transparent);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pro-ranking-item:hover {
+  background: color-mix(in srgb, var(--primary-color) 4%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.rank-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--primary-color);
-  font-size: 0.8rem;
+  width: 32px;
+  height: 32px;
+  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+  color: var(--text-secondary);
+  font-weight: 800;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  font-family: monospace;
 }
 
-.r-info {
+/* Podium Colors (Contrast-safe for both Light & Dark modes) */
+.rank-1 { background: color-mix(in srgb, #D4AF37 12%, transparent); color: #D4AF37; border: 1px solid color-mix(in srgb, #D4AF37 40%, transparent); }
+.rank-2 { background: color-mix(in srgb, #9E9E9E 12%, transparent); color: #9E9E9E; border: 1px solid color-mix(in srgb, #9E9E9E 40%, transparent); }
+.rank-3 { background: color-mix(in srgb, #B08D57 12%, transparent); color: #B08D57; border: 1px solid color-mix(in srgb, #B08D57 40%, transparent); }
+
+.rank-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  min-width: 0; 
-  flex: 1;
+  gap: 0.4rem;
 }
 
-.r-name {
-  font-size: 0.72rem;
+.rank-info-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.rank-cnpj {
+  font-family: monospace;
+  font-size: 0.75rem;
   font-weight: 700;
+  color: var(--text-color);
+}
+
+.rank-name {
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rank-bar-wrapper {
   width: 100%;
+  max-width: 300px;
 }
 
-.r-meta {
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  font-family: monospace;
-}
-
-.r-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.r-stats {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.r-qty {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--primary-color);
-}
-
-.r-label {
-  font-size: 0.62rem;
-  color: var(--text-secondary);
-}
-
-.r-progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.r-progress-bg {
-  flex: 1;
+.rank-bar-bg {
   height: 4px;
-  background: rgba(0,0,0,0.05);
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
   border-radius: 2px;
   overflow: hidden;
 }
 
-:global(.dark-mode) .r-progress-bg {
-  background: rgba(255,255,255,0.05);
-}
-
-.r-progress-fill {
+.rank-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 70%, white));
+  background: linear-gradient(90deg, var(--risk-medium), var(--risk-high));
   border-radius: 2px;
 }
 
-.r-pct {
+.rank-metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  text-align: right;
+  min-width: 130px;
+  justify-content: flex-end;
+}
+
+.metric-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--risk-high);
+}
+
+.metric-lbl {
   font-size: 0.65rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-pct {
+  font-size: 0.75rem;
   font-weight: 700;
-  min-width: 25px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.rank-action {
+  color: var(--primary-color);
+  opacity: 0.3;
+  margin-left: 0.5rem;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.pro-ranking-item:hover .rank-action {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 .tab-placeholder {

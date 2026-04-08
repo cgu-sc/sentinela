@@ -117,6 +117,9 @@ const mapData = computed(() => {
 
       const perc  = munData?.percValSemComp ?? 0;
       const piece = getRiskPiece(perc);
+      
+      const opacity = !!effectiveId && !isSelected ? 0.5 : 1;
+
       return {
         id:         ibge7,
         ibge7:      ibge7,
@@ -129,7 +132,10 @@ const mapData = computed(() => {
         selected:   isSelected,  // pré-seleção declarativa no ECharts
         isSelected,
         isCurrent,
-        select: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6 } },
+        itemStyle:  { areaColor: piece.color, opacity },
+        select:     { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 8, opacity: 1 } },
+        unselected: { itemStyle: { areaColor: piece.color, opacity } },
+        emphasis:   { itemStyle: { opacity: 1 } }
       };
     });
 });

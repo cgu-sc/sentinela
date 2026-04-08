@@ -50,7 +50,7 @@ export const SURFACE_COLORS = {
       "risk-death-241-1y": "#b91c1c",
       "risk-death-1-2y": "#991b1b",
       "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#450a0a",
+      "risk-death-over-3y": "#7f1d1d",
     },
     dark: {
       "bg-color": "#0d1117",
@@ -97,7 +97,7 @@ export const SURFACE_COLORS = {
       "risk-death-241-1y": "#b91c1c",
       "risk-death-1-2y": "#991b1b",
       "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#450a0a",
+      "risk-death-over-3y": "#7f1d1d",
     },
   },
   carbon: {
@@ -145,7 +145,7 @@ export const SURFACE_COLORS = {
       "risk-death-241-1y": "#b91c1c",
       "risk-death-1-2y": "#991b1b",
       "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#450a0a",
+      "risk-death-over-3y": "#7f1d1d",
     },
     dark: {
       "bg-color": "#0d1117",
@@ -192,7 +192,7 @@ export const SURFACE_COLORS = {
       "risk-death-241-1y": "#b91c1c",
       "risk-death-1-2y": "#991b1b",
       "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#450a0a",
+      "risk-death-over-3y": "#7f1d1d",
     },
   },
 };

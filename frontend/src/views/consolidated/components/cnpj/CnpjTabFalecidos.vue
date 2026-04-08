@@ -2,7 +2,9 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import { useFalecidos } from '@/composables/useFalecidos';
 import { useFormatting } from '@/composables/useFormatting';
+import { useAnalyticsStore } from '@/stores/analytics';
 import Tag from 'primevue/tag';
+import Button from 'primevue/button';
 import FalecidosTimelineOverlay from './FalecidosTimelineOverlay.vue';
 
 const props = defineProps({
@@ -14,6 +16,50 @@ const props = defineProps({
 
 const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
+const analyticsStore = useAnalyticsStore();
+
+// Mapa para busca O(1) de dados do CNPJ no Pinia Store para enriquecer o painel.
+const cnpjsDict = computed(() => {
+  const dict = {};
+  if (analyticsStore.resultadoCnpjs) {
+    for (const c of analyticsStore.resultadoCnpjs) {
+      dict[c.cnpj] = c;
+    }
+  }
+  return dict;
+});
+
+const getEstabelecimentoInfo = (estabStr) => {
+  if (!estabStr) return { cnpj: '', name: '', geo: '' };
+  const rawCnpj = estabStr.split(' - ')[0]?.trim() || '';
+  const cleanCnpj = rawCnpj.replace(/\D/g, '');
+  
+  // Tenta puxar dados otimizados da store do Pinia
+  const cnpjData = cnpjsDict.value[cleanCnpj];
+  
+  let name = estabStr.split(' - ')[1]?.split(' | ')[0]?.trim() || estabStr;
+  let cityUF = estabStr.split(' | ')[1]?.trim() || '';
+  let regiao = estabStr.split(' | ')[2]?.trim() || '';
+  
+  // Se existir no Pinia Store, prioriza dados consistentes e mais completos
+  if (cnpjData) {
+    if (cnpjData.razao_social) name = cnpjData.razao_social;
+    if (cnpjData.municipio && cnpjData.uf) cityUF = `${cnpjData.municipio} - ${cnpjData.uf}`;
+    if (cnpjData.regiao_saude) regiao = cnpjData.regiao_saude;
+  }
+
+  let geo = cityUF;
+  if (regiao) {
+     geo += ` • ${regiao}`;
+  }
+
+  return { 
+    cnpj: rawCnpj,
+    cleanCnpj: cleanCnpj,
+    name: name,
+    geo: geo
+  };
+};
 
 // Função para mapear o risco em 10 níveis térmicos descritivos
 function getDayStepClass(days) {
@@ -80,9 +126,16 @@ const toggleMultiCnpj = (event, grupo) => {
 
 const openEstablishment = (estabStr) => {
   if (!estabStr) return;
-  const targetCnpj = estabStr.split(' - ')[0];
+  const targetCnpj = estabStr.split(' - ')[0].replace(/\D/g, '');
   window.open(`/estabelecimento/${targetCnpj}`, '_blank');
 };
+
+const isRankingExpanded = ref(false);
+const visibleRanking = computed(() => {
+  const r = falecidosData.value?.ranking || [];
+  if (isRankingExpanded.value || r.length <= 3) return r;
+  return r.slice(0, 3);
+});
 
 </script>
 
@@ -145,18 +198,22 @@ const openEstablishment = (estabStr) => {
         
         <div class="pro-ranking-list">
           <div 
-             v-for="(r, index) in falecidosData.ranking" 
+             v-for="(r, index) in visibleRanking" 
              :key="r.estabelecimento" 
              class="pro-ranking-item"
              @click="openEstablishment(r.estabelecimento)"
              v-tooltip.top="'Analisar CNPJ Conectado'"
           >
-            <div class="rank-badge" :class="`rank-${index + 1}`">{{ String(index + 1).padStart(2, '0') }}</div>
+            <div class="rank-badge" :class="`rank-${index + 1}`">#{{ index + 1 }}</div>
             
             <div class="rank-info">
                <div class="rank-info-top">
-                   <span class="rank-cnpj">{{ formatCnpj(r.estabelecimento.split(' - ')[0]) }}</span>
-                   <span class="rank-name">{{ r.estabelecimento.split(' - ')[1]?.split(' | ')[0] || r.estabelecimento }}</span>
+                   <span class="rank-cnpj">{{ formatCnpj(getEstabelecimentoInfo(r.estabelecimento).cnpj) }}</span>
+                   <span class="rank-name">{{ getEstabelecimentoInfo(r.estabelecimento).name }}</span>
+               </div>
+               <div class="rank-geo" v-if="getEstabelecimentoInfo(r.estabelecimento).geo">
+                   <i class="pi pi-map-marker"></i>
+                   <span>{{ getEstabelecimentoInfo(r.estabelecimento).geo }}</span>
                </div>
                <div class="rank-bar-wrapper">
                    <div class="rank-bar-bg">
@@ -175,6 +232,15 @@ const openEstablishment = (estabStr) => {
                 <i class="pi pi-chevron-right"></i>
              </div>
           </div>
+        </div>
+
+        <div v-if="falecidosData.ranking?.length > 3" class="ranking-expand-action">
+           <Button 
+              :icon="isRankingExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" 
+              :label="isRankingExpanded ? 'Recolher Lista' : `Ver Mais ${falecidosData.ranking.length - 3} Farmácias Conectadas`" 
+              class="p-button-text p-button-sm p-button-secondary"
+              @click="isRankingExpanded = !isRankingExpanded" 
+           />
         </div>
       </div>
 
@@ -648,12 +714,49 @@ const openEstablishment = (estabStr) => {
   color: var(--text-color);
 }
 
+.ranking-expand-action {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--tabs-border);
+}
+
+.ranking-expand-action .p-button {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.ranking-expand-action .p-button:hover {
+  opacity: 1;
+}
+
 .rank-name {
   font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rank-geo {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: -0.1rem;
+  opacity: 0.85;
+}
+
+.rank-geo i {
+  font-size: 0.6rem;
+  color: var(--primary-color);
 }
 
 .rank-bar-wrapper {

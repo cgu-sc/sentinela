@@ -1,10 +1,11 @@
 <script setup>
 import { useRoute, useRouter } from "vue-router";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
+import { useRecentCnpjStore } from "@/stores/recentCnpj";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
@@ -104,8 +105,6 @@ const cnpjData = computed(
   () => resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ?? null,
 );
 
-import { watch } from "vue";
-
 // Ativa o mount de CnpjTabRegional na primeira vez que a aba for aberta
 watch(() => cnpjNav.activeTabIndex, (idx) => {
   if (idx === TAB_INDEX.REGIAO) regionalTabMounted.value = true;
@@ -149,6 +148,15 @@ watch(
   { immediate: true },
 );
 
+
+const recentCnpjStore = useRecentCnpjStore();
+
+// Registra o CNPJ atual como recente assim que os dados estiverem disponíveis
+watch(cnpjData, (data) => {
+  if (data?.razao_social) {
+    recentCnpjStore.set(cnpj.value, data.razao_social);
+  }
+}, { immediate: true });
 
 onMounted(() => {
   // Evolução Financeira agora é carregada de forma autônoma pelo componente filho

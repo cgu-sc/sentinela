@@ -11,6 +11,7 @@ import {
 } from "@/config/constants";
 import { useThemeStore } from "@/stores/theme";
 import { useFilterStore } from "@/stores/filters";
+import { useRecentCnpjStore } from "@/stores/recentCnpj";
 import { useGeoStore } from "@/stores/geo";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFormatting } from "@/composables/useFormatting";
@@ -29,6 +30,8 @@ import SelectButton from "primevue/selectbutton";
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const filtersLocked = computed(() => filterStore.filtersLocked);
+const recentCnpjStore = useRecentCnpjStore();
+const recentCnpj = computed(() => recentCnpjStore.recent);
 const geoStore = useGeoStore();
 const farmaciaLists = useFarmaciaListsStore();
 const totalListas = computed(() => farmaciaLists.interesse.length);
@@ -696,15 +699,21 @@ const {
               :key="tab.path"
               :to="tab.path"
               class="nav-tab"
-              :class="{
-                active:
-                  route.path === tab.path ||
-                  (tab.path === '/cnpj' &&
-                    route.path.startsWith('/estabelecimento')),
-              }"
+              :class="{ active: route.path === tab.path }"
             >
               {{ tab.label }}
             </router-link>
+
+            <!-- Atalho: último CNPJ analisado -->
+            <div v-if="recentCnpj" class="nav-recent-cnpj" :class="{ active: route.path.startsWith('/estabelecimento') }" v-tooltip.bottom="recentCnpj.razaoSocial">
+              <i class="pi pi-history" />
+              <router-link :to="`/estabelecimento/${recentCnpj.cnpj}`" class="nav-recent-link">
+                {{ recentCnpj.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') }}
+              </router-link>
+              <button class="nav-recent-clear" @click.prevent="recentCnpjStore.clear()" v-tooltip.bottom="'Limpar atalho'">
+                <i class="pi pi-times" />
+              </button>
+            </div>
           </div>
         </div>
         <div class="nav-actions">
@@ -1613,6 +1622,76 @@ const {
   box-shadow: none;
   opacity: 1;
   font-weight: 800;
+}
+
+/* Atalho do último CNPJ analisado */
+.nav-recent-cnpj {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--navbar-text);
+  opacity: 0.75;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.nav-recent-cnpj::before {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  margin-right: 0.25rem;
+}
+
+.nav-recent-cnpj:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.nav-recent-cnpj.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  font-weight: 800;
+}
+
+.nav-recent-cnpj .pi-history {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.nav-recent-link {
+  text-decoration: none;
+  color: inherit;
+  letter-spacing: 0.3px;
+}
+
+.nav-recent-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.15s;
+}
+
+.nav-recent-clear:hover {
+  opacity: 1;
+}
+
+.nav-recent-clear .pi {
+  font-size: 0.6rem;
 }
 
 .page-content {

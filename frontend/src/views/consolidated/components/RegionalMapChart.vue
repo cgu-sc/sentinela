@@ -32,7 +32,7 @@ const mapAreaColor = computed(() =>
   themeStore.isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)",
 );
 const mapBorderColor = computed(() =>
-  themeStore.isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)",
+  themeStore.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
 );
 const hoverColor = computed(() => `${themeStore.tokens.primary}4D`);
 const hoverBorder = computed(() => `${themeStore.tokens.primary}B3`);
@@ -169,17 +169,17 @@ const mapData = computed(() => {
           areaColor: baseColor, 
           opacity,
         },
-        select: {
-          itemStyle: {
-            areaColor: baseColor,
-            borderColor: bColor,
-            borderWidth: 2,
-            shadowColor: bColor,
-            shadowBlur: 14,
-            opacity: 1,
-          },
-        },
-        unselected: { itemStyle: { areaColor: baseColor, opacity } },
+        select: hasData
+          ? {
+              itemStyle: {
+                areaColor: piece.color,
+                borderColor: piece.borderColor,
+                borderWidth: 2,
+                shadowColor: piece.borderColor,
+                shadowBlur: 14,
+              },
+            }
+          : { itemStyle: { opacity: 1 } },
         emphasis: { itemStyle: { areaColor: hasData ? piece.color : baseColor, opacity: 1 } },
       };
     });
@@ -248,7 +248,7 @@ const chartOption = computed(() => {
             borderWidth: 1.5,
           },
         },
-        unselected: { label: { show: false }, itemStyle: { opacity: 1 } },
+        unselected: { label: { show: false } },
         label: { show: false },
         itemStyle: {
           borderColor: mapBorderColor.value,
@@ -373,6 +373,14 @@ watch(
 
 const onClick = (params) => {
   const data = params.data;
+  if (!data?.hasData) {
+    chartRef.value?.chart?.dispatchAction({
+      type: "unselect",
+      seriesIndex: 0,
+      name: params.name,
+    });
+    return;
+  }
   if (data?.id) {
     emit("select-municipio", data.id, data.municipio);
   } else {

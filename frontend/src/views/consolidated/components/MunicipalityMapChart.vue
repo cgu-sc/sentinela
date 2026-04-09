@@ -42,7 +42,7 @@ const mapAreaColor = computed(() =>
   themeStore.isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)",
 );
 const mapBorderColor = computed(() =>
-  themeStore.isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)",
+  themeStore.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
 );
 const hoverColor = computed(() => `${themeStore.tokens.primary}4D`);
 const hoverBorder = computed(() => `${themeStore.tokens.primary}B3`);
@@ -214,17 +214,17 @@ const mapData = computed(() => {
         areaColor: baseColor,
         opacity,
       },
-      select: {
-        itemStyle: {
-          areaColor: baseColor,
-          borderColor: bColor,
-          borderWidth: 2,
-          shadowColor: bColor,
-          shadowBlur: 14,
-          opacity: 1,
-        },
-      },
-      unselected: { itemStyle: { areaColor: baseColor, opacity } },
+      select: hasData
+        ? {
+            itemStyle: {
+              areaColor: piece.color,
+              borderColor: piece.borderColor,
+              borderWidth: 2,
+              shadowColor: piece.borderColor,
+              shadowBlur: 14,
+            },
+          }
+        : { itemStyle: { opacity: 1 } },
       emphasis: { itemStyle: { areaColor: hasData ? piece.color : baseColor, opacity: 1 } },
       silent: false,
     };
@@ -338,7 +338,16 @@ watch(
 // ── Click ─────────────────────────────────────────────────────────────────────
 const onClick = (params) => {
   const ibge7 = params.data?.ibge7;
-  if (!ibge7) return;
+  const hasData = params.data?.hasData;
+
+  if (!ibge7 || !hasData) {
+    chartRef.value?.chart?.dispatchAction({
+      type: "unselect",
+      seriesIndex: 0,
+      name: params.name,
+    });
+    return;
+  }
 
   if (Number(ibge7) === Number(selectedIbge7.value)) {
     selectedIbge7.value = null;

@@ -23,7 +23,7 @@ const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
 
 const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
-const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
+const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
 
 // ── GeoJSON do Brasil ────────────────────────────────────────────────────────
 const mapReady = ref(false);
@@ -155,7 +155,12 @@ watch(
 );
 
 const onClick = (params) => {
-  filterStore.selectedUF = params.data?.name ?? params.name;
+  const name = params.data?.name ?? params.name;
+  if (name === filterStore.selectedUF) {
+    filterStore.selectedUF = 'Todos';
+  } else {
+    filterStore.selectedUF = name;
+  }
 };
 </script>
 

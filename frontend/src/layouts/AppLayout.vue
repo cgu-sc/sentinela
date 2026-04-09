@@ -1143,7 +1143,6 @@ const {
   text-transform: uppercase;
   margin-bottom: 0.25rem;
   color: var(--sidebar-text);
-  opacity: 0.85;
   letter-spacing: 0.5px;
 }
 
@@ -1230,7 +1229,7 @@ const {
   font-size: 0.65rem;
   font-weight: 700;
   margin-bottom: 0.4rem;
-  color: var(--text-color);
+  color: var(--sidebar-text);
 }
 
 .slider-values.period {
@@ -1445,7 +1444,7 @@ const {
 
 :deep(.p-slider-handle) {
   border: 2px solid var(--primary-color) !important;
-  background: var(--card-bg) !important;
+  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent) !important;
   width: 14px !important;
   height: 14px !important;
   margin-top: -6px !important;

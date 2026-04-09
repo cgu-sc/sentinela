@@ -4,7 +4,7 @@ import { THEME_PALETTES as palettes, SURFACE_COLORS } from '@/config/themeConfig
 
 export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true);
-  const currentPalette = ref('azul'); // 'azul' | 'carbon'
+  const currentPalette = ref('azul'); // 'azul' | 'azul_dark' | 'carbon'
 
   // Escalas de cor para cada paleta (shades do PrimeVue lara)
 
@@ -17,8 +17,9 @@ export const useThemeStore = defineStore('theme', () => {
     document.body.classList.toggle('dark-mode', isDark.value);
 
     // Paleta
-    html.classList.toggle('palette-azul',   currentPalette.value === 'azul');
-    html.classList.toggle('palette-carbon', currentPalette.value === 'carbon');
+    html.classList.toggle('palette-azul',      currentPalette.value === 'azul');
+    html.classList.toggle('palette-azul-dark', currentPalette.value === 'azul_dark');
+    html.classList.toggle('palette-carbon',    currentPalette.value === 'carbon');
 
     // Sobrescreve as variáveis primárias do PrimeVue lara para os componentes
     // Todos os elementos (PrimeVue + CSS customizado) lêem --primary-color automaticamente
@@ -39,7 +40,7 @@ export const useThemeStore = defineStore('theme', () => {
     html.style.setProperty('--primary-color-text', p.text);
 
     // 3. Aplicar Cores de Superfície (Backgrounds/Cards/Textos) para consistência absoluta
-    const themeKey = currentPalette.value === 'carbon' ? 'carbon' : 'azul';
+    const themeKey = ['carbon', 'azul_dark'].includes(currentPalette.value) ? currentPalette.value : 'azul';
     const surface = SURFACE_COLORS[themeKey][isDark.value ? 'dark' : 'light'];
     
     Object.keys(surface).forEach(key => {
@@ -87,7 +88,7 @@ export const useThemeStore = defineStore('theme', () => {
    * Permite que você peça a cor de um card ou texto no JS sem hardcodar o HEX.
    */
   const tokens = computed(() => {
-    const themeKey = currentPalette.value === 'carbon' ? 'carbon' : 'azul';
+    const themeKey = ['carbon', 'azul_dark'].includes(currentPalette.value) ? currentPalette.value : 'azul';
     const palette = palettes[themeKey] ?? palettes.azul;
     const isDarkMode = isDark.value;
     const surface = SURFACE_COLORS[themeKey][isDarkMode ? 'dark' : 'light'];

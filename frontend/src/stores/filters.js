@@ -46,8 +46,12 @@ export const useFilterStore = defineStore('filters', () => {
   // 3. CONTROLE DE CONTEXTO
   const filtersLocked = ref(false);
   const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
+  const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
   watch(sidebarCollapsed, (val) => {
     localStorage.setItem('sentinela_sidebar_collapsed', String(val));
+  });
+  watch(sidebarLocked, (val) => {
+    localStorage.setItem('sentinela_sidebar_locked', String(val));
   });
 
   // 4. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
@@ -180,6 +184,7 @@ export const useFilterStore = defineStore('filters', () => {
     hoveredMunicipioName,
     filtersLocked,
     sidebarCollapsed,
+    sidebarLocked,
     resetFilters
   };
 });

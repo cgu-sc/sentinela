@@ -726,7 +726,7 @@ defineExpose({
   padding: 1.25rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-left: 3px solid transparent;
+  border-left: 3px solid var(--card-border);
   border-radius: 12px;
   transition: all 0.2s ease;
   cursor: pointer;

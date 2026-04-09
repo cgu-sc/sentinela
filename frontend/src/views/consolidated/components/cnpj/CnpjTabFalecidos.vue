@@ -667,15 +667,15 @@ const falecidosAgrupadosFiltrados = computed(() => {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 1.5rem;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .ranking-header-flex {
-  margin-bottom: 1.2rem;
+  margin-bottom: 0.6rem;
   border-bottom: 1px solid var(--tabs-border);
-  padding-bottom: 0.8rem;
+  padding-bottom: 0.5rem;
 }
 
 .ranking-header-flex .title-wrap {
@@ -711,7 +711,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: color-mix(in srgb, var(--text-color) 2%, transparent);
   border: 1px solid color-mix(in srgb, var(--text-color) 6%, transparent);
   border-radius: 8px;

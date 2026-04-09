@@ -44,12 +44,11 @@ const activeModule = ref("consolidado");
 const tabs = computed(() => {
   if (activeModule.value === "consolidado") {
     return [
-      { label: "Análise UF", path: "/" },
-      { label: "Análise Município", path: "/municipio" },
-      { label: "Análise CNPJ", path: "/cnpj" },
-      { label: "Análise Indicadores", path: "/indicadores" },
+      { label: "Nacional", path: "/" },
+      { label: "Municípios", path: "/municipio" },
+      { label: "Farmácias", path: "/cnpj" },
+      { label: "Indicadores", path: "/indicadores" },
       { label: "Dispersão Benefício", path: "/dispersao-beneficio" },
-      { label: "Região de Saúde", path: "/regional" },
     ];
   } else {
     return [
@@ -162,6 +161,15 @@ const isCollapsed = computed({
   set: (val) => { filterStore.sidebarCollapsed = val; },
 });
 
+const isSidebarLocked = computed({
+  get: () => filterStore.sidebarLocked,
+  set: (val) => { filterStore.sidebarLocked = val; },
+});
+
+const toggleSidebarLock = () => {
+  isSidebarLocked.value = !isSidebarLocked.value;
+};
+
 // Rotas que bloqueiam filtros e colapsam a sidebar
 const LOCKED_ROUTES = ['/estabelecimento/', '/listas'];
 const isLockedRoute = (path) => LOCKED_ROUTES.some(r => path.startsWith(r));
@@ -169,7 +177,10 @@ const isLockedRoute = (path) => LOCKED_ROUTES.some(r => path.startsWith(r));
 watch(() => route.path, (path) => {
   const locked = isLockedRoute(path);
   filterStore.filtersLocked = locked;
-  filterStore.sidebarCollapsed = locked;
+  // Respeita o lock do usuário: só altera sidebarCollapsed se não estiver travado
+  if (!filterStore.sidebarLocked) {
+    filterStore.sidebarCollapsed = locked;
+  }
 }, { immediate: true });
 
 const limparFiltros = () => {
@@ -272,6 +283,17 @@ const {
       :title="isCollapsed ? 'Abrir painel' : 'Fechar painel'"
     >
       <i :class="isCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+    </button>
+
+    <!-- BOTÃO DE CADEADO — visível apenas quando colapsado -->
+    <button
+      v-if="isCollapsed"
+      class="sidebar-lock-btn"
+      :class="{ locked: isSidebarLocked }"
+      @click="toggleSidebarLock"
+      :title="isSidebarLocked ? 'Sidebar travada — clique para destravar' : 'Travar sidebar colapsada'"
+    >
+      <i :class="isSidebarLocked ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
     </button>
 
     <!-- BARRA LATERAL DE FILTROS & MÓDULOS -->
@@ -988,6 +1010,46 @@ const {
   font-size: 0.8rem;
 }
 
+/* BOTÃO DE CADEADO */
+.sidebar-lock-btn {
+  position: fixed;
+  top: calc(50% + 28px); /* logo abaixo do float-btn */
+  left: var(--sidebar-width);
+  z-index: 300;
+  width: 20px;
+  height: 36px;
+  background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
+  border: 1px solid var(--sidebar-border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+  opacity: 0.85;
+}
+
+.sidebar-lock-btn:hover {
+  width: 28px;
+  opacity: 1;
+  background: var(--card-bg);
+  color: var(--primary-color);
+  box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-lock-btn.locked {
+  opacity: 1;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-bg));
+}
+
+.sidebar-lock-btn i {
+  font-size: 0.8rem;
+}
+
 .sidebar-header {
   padding: 1.5rem;
   display: flex;
@@ -1526,20 +1588,16 @@ const {
 }
 
 .top-navbar {
-  height: 64px;
-  min-height: 64px;
-  max-height: 64px;
-  flex-shrink: 0; /* IMPEDE QUE A NAVBAR ESTIQUE OU ENCOLHA */
-
-  /* Glassmorphism translúcido usando a opacidade do tema */
-  background: color-mix(
-    in srgb,
-    var(--navbar-bg) calc(var(--navbar-glass-opacity) * 100%),
-    transparent
-  ) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--navbar-border);
+  height: 56px;
+  min-height: 56px;
+  max-height: 56px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--navbar-bg) 75%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid color-mix(in srgb, var(--navbar-border) 60%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-color) 6%, transparent),
+              inset 0 -1px 0 color-mix(in srgb, var(--navbar-border) 40%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1547,20 +1605,21 @@ const {
   position: sticky;
   top: 0;
   z-index: 100;
-  transition: background-color 0.3s ease;
-  overflow: hidden; /* PROTEÇÃO EXTRA CONTRA VAZAMENTO DE ALTURA */
+  transition: background 0.3s ease, border-color 0.3s ease;
+  overflow: hidden;
 }
 
 .nav-left {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .nav-divider {
   width: 1px;
-  height: 32px;
-  background-color: var(--navbar-border);
+  height: 20px;
+  background: color-mix(in srgb, var(--text-muted) 30%, transparent);
+  flex-shrink: 0;
 }
 
 :deep(.module-select-button) {
@@ -1569,118 +1628,161 @@ const {
 }
 
 :deep(.module-select-button .p-button) {
-  background: var(--card-bg);
-  border-color: var(--navbar-border);
-  color: var(--navbar-text);
-  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
+  transition: all 0.2s;
 }
 
 :deep(.module-select-button .p-button:not(.p-highlight):hover) {
-  background: transparent !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  color: var(--navbar-text) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
+  color: var(--primary-color) !important;
 }
 
 :deep(.module-select-button .p-button.p-highlight) {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  color: var(--navbar-text) !important;
-  box-shadow: none;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
+  color: var(--primary-color) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--primary-color) 20%, transparent);
   font-weight: 700;
 }
 
+/* Abas de navegação — estilo underline moderno */
 .nav-tabs {
   display: flex;
-  gap: 0.5rem;
+  align-items: stretch;
+  gap: 0;
 }
 
 .nav-tab {
-  padding: 0.4rem 0.75rem;
+  position: relative;
+  padding: 0 0.85rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  color: var(--navbar-text);
-  font-size: 0.75rem;
-  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  border: 1px solid transparent;
-  transition: all 0.2s;
-  border-radius: 8px;
+  letter-spacing: 0.05em;
+  border: none;
+  background: transparent;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary-color);
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
 }
 
 .nav-tab:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: var(--navbar-text);
-  background: rgba(255, 255, 255, 0.06);
-  opacity: 1;
+  color: var(--text-color);
+}
+
+.nav-tab:hover::after {
+  transform: scaleX(0.5);
+  opacity: 0.4;
 }
 
 .nav-tab.active {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  color: var(--navbar-text);
-  box-shadow: none;
-  opacity: 1;
-  font-weight: 800;
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+.nav-tab.active::after {
+  transform: scaleX(1);
 }
 
 /* Atalho do último CNPJ analisado */
 .nav-recent-cnpj {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--navbar-text);
-  opacity: 0.75;
-  transition: all 0.2s;
-  position: relative;
+  padding: 0 0.85rem;
+  height: 56px;
+  border: none;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+  margin-left: 0.25rem;
 }
 
+/* Separador antes do atalho */
 .nav-recent-cnpj::before {
   content: '';
-  display: block;
+  position: absolute;
+  left: 0;
   width: 1px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.2);
-  margin-right: 0.25rem;
+  background: color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+
+/* Underline igual às abas */
+.nav-recent-cnpj::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 1.1rem;
+  right: 0.85rem;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary-color);
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
 }
 
 .nav-recent-cnpj:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-color);
+}
+
+.nav-recent-cnpj:hover::after {
+  transform: scaleX(0.5);
+  opacity: 0.4;
 }
 
 .nav-recent-cnpj.active {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
-  font-weight: 800;
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+.nav-recent-cnpj.active::after {
+  transform: scaleX(1);
 }
 
 .nav-recent-cnpj .pi-history {
-  font-size: 0.7rem;
-  opacity: 0.7;
+  font-size: 0.65rem;
+  opacity: 0.6;
 }
 
 .nav-recent-link {
   text-decoration: none;
   color: inherit;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.02em;
 }
 
 .nav-recent-clear {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
-  color: inherit;
-  opacity: 0.5;
+  padding: 0.1rem;
+  color: var(--text-muted);
+  opacity: 0.4;
   display: flex;
   align-items: center;
   transition: opacity 0.15s;
@@ -1691,7 +1793,7 @@ const {
 }
 
 .nav-recent-clear .pi {
-  font-size: 0.6rem;
+  font-size: 0.55rem;
 }
 
 .page-content {

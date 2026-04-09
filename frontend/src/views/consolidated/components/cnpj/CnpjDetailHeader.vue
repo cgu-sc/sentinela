@@ -577,35 +577,32 @@ const formattedFullAddress = computed(() => {
 .kpi-pill-group {
   display: flex;
   align-items: center;
-  padding: 0.3rem 0.45rem; /* Compacto em todas as dimensões */
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px; /* Arredondamento um pouco menor para a pill menor */
+  padding: 0.3rem 0.45rem;
+  background: var(--establishment-header-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
   position: relative;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
-/* Cores dinâmicas da cápsula */
-.kpi-pill-group.risk-high {
-  background: color-mix(in srgb, var(--risk-high) 8%, transparent);
-  border-color: color-mix(in srgb, var(--risk-high) 20%, transparent);
-  --accent: var(--risk-high);
+/* Barra de acento no topo */
+.kpi-pill-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent, transparent);
+  border-radius: 12px 12px 0 0;
 }
-.kpi-pill-group.risk-critical {
-  background: color-mix(in srgb, var(--risk-critical) 8%, transparent);
-  border-color: color-mix(in srgb, var(--risk-critical) 20%, transparent);
-  --accent: var(--risk-critical);
-}
-.kpi-pill-group.risk-medium {
-  background: color-mix(in srgb, var(--risk-medium) 8%, transparent);
-  border-color: color-mix(in srgb, var(--risk-medium) 20%, transparent);
-  --accent: var(--risk-medium);
-}
-.kpi-pill-group.risk-low {
-  background: color-mix(in srgb, var(--risk-low) 8%, transparent);
-  border-color: color-mix(in srgb, var(--risk-low) 20%, transparent);
-  --accent: var(--risk-low);
-}
+
+/* Cores dinâmicas — só o acento muda, fundo neutro sobrescreve o global */
+.kpi-pill-group.risk-high   { --accent: var(--risk-high);    background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
+.kpi-pill-group.risk-critical { --accent: var(--risk-critical); background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
+.kpi-pill-group.risk-medium { --accent: var(--risk-medium);  background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
+.kpi-pill-group.risk-low    { --accent: var(--risk-low);     background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
 
 .pill-item {
   display: flex;
@@ -624,10 +621,10 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-value {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
-  color: var(--accent, var(--establishment-header-text));
+  color: var(--establishment-header-text);
   line-height: 1.1;
   letter-spacing: -0.02em;
 }

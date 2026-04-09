@@ -29,6 +29,12 @@ const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18
 const hoverColor     = computed(() => `${themeStore.tokens.primary}4D`);
 const hoverBorder    = computed(() => `${themeStore.tokens.primary}B3`);
 
+const activeScale  = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
+const getRiskPiece = (perc) =>
+  activeScale.value.find(p =>
+    (p.min == null || perc >= p.min) && (p.max == null || perc < p.max)
+  ) ?? activeScale.value[activeScale.value.length - 1];
+
 // ── Mapa de nomes GeoJSON ─────────────────────────────────────────────────────
 const mapKey = ref(0);
 
@@ -66,17 +72,34 @@ const selectedMunicipioNome = computed(() => {
   return sel.split('|')[0].toLowerCase();
 });
 
-const mapData = computed(() =>
-  resultadoMunicipios.value
+const mapData = computed(() => {
+  const withData = new Set();
+
+  const items = resultadoMunicipios.value
     .filter(d => d.id_ibge7 && idToGeoName.value[String(d.id_ibge7)])
-    .map(d => ({
-      name:       idToGeoName.value[String(d.id_ibge7)],
-      value:      d.percValSemComp ?? 0,
-      municipio:  d.municipio,
-      valSemComp: d.valSemComp ?? 0,
-      cnpjs:      d.cnpjs ?? 0,
-    }))
-);
+    .map(d => {
+      const perc     = d.percValSemComp ?? 0;
+      const piece    = getRiskPiece(perc);
+      const geoName  = idToGeoName.value[String(d.id_ibge7)];
+      withData.add(geoName);
+      return {
+        name:       geoName,
+        value:      perc,
+        municipio:  d.municipio,
+        valSemComp: d.valSemComp ?? 0,
+        cnpjs:      d.cnpjs ?? 0,
+        itemStyle:  { areaColor: piece.color },
+        emphasis:   { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6, opacity: 1 } },
+      };
+    });
+
+  // Municípios sem dados: desabilita hover, tooltip e seleção
+  const silent = Object.values(idToGeoName.value)
+    .filter(name => !withData.has(name))
+    .map(name => ({ name, silent: true, emphasis: { disabled: true } }));
+
+  return [...items, ...silent];
+});
 
 // ── Zoom automático no município/região selecionada ───────────────────────────
 function featureCoords(feature) {
@@ -155,9 +178,7 @@ const chartOption = computed(() => {
       padding: [12, 16],
       textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
-        if (!params.data?.municipio) return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
-          <div style="font-size:11px;opacity:0.6;">Sem Estabelecimentos</div>`;
+        if (!params.data?.municipio) return null;
         const d = params.data;
         return `
           <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>

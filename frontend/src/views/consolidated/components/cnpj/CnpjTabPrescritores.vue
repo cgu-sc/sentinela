@@ -705,6 +705,7 @@ defineExpose({
   border-bottom: 1px solid var(--tabs-border);
   padding-bottom: 0.5rem;
   width: 100%;
+  opacity: 0.85;
 }
 
 .section-title i {
@@ -815,11 +816,11 @@ defineExpose({
 
 .alert-kpi-label {
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .kpi-info-icon {
@@ -847,16 +848,16 @@ defineExpose({
 
 .alert-kpi-val {
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 500;
   color: var(--text-color);
   line-height: 1;
 }
 
 .alert-kpi-val-sub {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-color);
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .alert-kpi-hint {
@@ -1001,13 +1002,13 @@ input:checked + .toggle-slider:before {
 }
 
 .premium-table th {
-  padding: 0.65rem 0.5rem;
+  padding: 0.6rem 0.5rem;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--text-secondary) 85%, transparent);
+  font-size: 0.68rem;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   border-bottom: 2px solid var(--tabs-border);
   text-align: center;
 }
@@ -1015,11 +1016,11 @@ input:checked + .toggle-slider:before {
 .premium-table th:first-child { text-align: left; }
 
 .premium-table td {
-  padding: 0.65rem 0.5rem;
+  padding: 0.55rem 0.5rem;
   border-bottom: 1px solid var(--tabs-border);
   vertical-align: middle;
-  color: var(--text-color);
-  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  font-size: 0.8rem;
   text-transform: none !important;
 }
 
@@ -1114,7 +1115,7 @@ input:checked + .toggle-slider:before {
   background: color-mix(in srgb, var(--risk-high) 4%, var(--tabs-bg));
   color: color-mix(in srgb, var(--risk-high) 60%, var(--text-muted));
   border: 1px solid color-mix(in srgb, var(--risk-high) 10%, transparent);
-  font-weight: 700;
+  font-weight: 500;
 }
 .issue-tag.orange {
   background: color-mix(in srgb, var(--risk-medium) 10%, var(--tabs-bg));

@@ -443,7 +443,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .f-kpi-val-container {
@@ -453,7 +453,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 .f-kpi-val {
   font-size: 1.1rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
@@ -504,6 +504,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--tabs-border);
   padding-bottom: 0.5rem;
+  opacity: 0.85;
 }
 
 .section-title i {
@@ -524,21 +525,21 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 .f-table th {
   text-align: left;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   background: transparent;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text-secondary) 85%, transparent);
   border-bottom: 2px solid var(--tabs-border);
 }
 
 .f-table td {
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 1rem;
   border-bottom: 1px solid var(--tabs-border);
   font-size: 0.8rem;
-  color: var(--text-color);
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
   transition: background 0.15s ease;
 }
 
@@ -595,13 +596,15 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 /* ── Linha de cabeçalho do grupo (por falecido) - Estilo Relatório de Mesa (Neutro Ultra-Suave) ── */
 .f-group-header td {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--bg-color)) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)) !important;
   border-top: 1px solid var(--tabs-border) !important;
   border-bottom: 1px solid var(--tabs-border) !important;
-  padding: 0.6rem 1rem !important;
+  padding: 0.5rem 1rem !important;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  color: var(--text-color) !important;
+  font-weight: 500;
 }
 
 .f-group-cpf {
@@ -635,7 +638,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 .f-subtotal-label {
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: none !important;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
@@ -643,7 +646,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .f-subtotal-val {
-  font-weight: 700 !important;
+  font-weight: 500 !important;
   color: var(--text-secondary) !important;
 }
 
@@ -653,7 +656,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   border-top: 2px solid var(--tabs-border);
   padding: 0.75rem 1rem;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-color);
 }
 
@@ -687,6 +690,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   text-transform: uppercase;
   color: var(--text-color);
   letter-spacing: 0.05em;
+  opacity: 0.85;
 }
 
 .title-wrap i {
@@ -754,7 +758,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 .rank-cnpj {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--text-color);
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
 }
 
 .ranking-expand-action {

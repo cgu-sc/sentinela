@@ -123,7 +123,7 @@ const onTableLeave = () => {
       @row-click="onRowClick"
     >
 
-      <Column field="municipio" header="Município" sortable style="width: 30%; text-transform: none">
+      <Column field="municipio" header="Município" sortable style="width: 25%; text-transform: none">
         <template #footer>
           {{ municipios.length }} Municípios
         </template>
@@ -138,7 +138,7 @@ const onTableLeave = () => {
         </template>
       </Column>
 
-      <Column field="qtd_farmacias" header="Farmácias" sortable style="width: 8%" class="align-center">
+      <Column field="qtd_farmacias" header="Farm." sortable style="width: 7%" class="align-center">
         <template #body="{ data }">
           <span class="badge-count">{{ data.qtd_farmacias }}</span>
         </template>
@@ -148,7 +148,7 @@ const onTableLeave = () => {
       </Column>
 
 
-      <Column field="totalMov" header="Total Vendas" sortable style="width: 14%">
+      <Column field="totalMov" header="Vendas" sortable style="width: 15%">
         <template #body="{ data }">
           {{ formatBRL(data.totalMov) }}
         </template>
@@ -157,7 +157,7 @@ const onTableLeave = () => {
         </template>
       </Column>
 
-      <Column field="valSemComp" header="Valor s/ Comp." sortable style="width: 14%">
+      <Column field="valSemComp" header="Valor s/ C." sortable style="width: 15%">
         <template #body="{ data }">
           {{ formatBRL(data.valSemComp) }}
         </template>
@@ -166,7 +166,7 @@ const onTableLeave = () => {
         </template>
       </Column>
 
-      <Column field="percValSemComp" header="% s/ Comp." sortable style="width: 10%">
+      <Column field="percValSemComp" header="% s/ C." sortable style="width: 12%">
         <template #body="{ data }">
           <Tag :value="formatPercent(data.percValSemComp)" :class="getRiskClass(data.percValSemComp)" />
         </template>
@@ -225,6 +225,7 @@ const onTableLeave = () => {
   letter-spacing: 0.05em;
   color: var(--text-color);
   line-height: 1.2;
+  opacity: 0.85;
 }
 
 .title-with-filter {
@@ -323,18 +324,21 @@ const onTableLeave = () => {
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
   color: var(--text-secondary) !important;
-  font-size: 0.72rem !important;
+  font-size: 0.68rem !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
+  letter-spacing: 0.02em !important;
   border-bottom: 2px solid var(--tabs-border) !important;
-  padding: 0.75rem 1rem !important;
+  padding: 0.6rem 0.5rem !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr > td) {
   cursor: pointer;
   border-bottom: 1px solid var(--tabs-border) !important;
   transition: background-color 0.15s ease;
+  font-size: 0.8rem !important;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  padding: 0.55rem 0.5rem !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
@@ -346,7 +350,7 @@ const onTableLeave = () => {
   background: var(--table-footer-bg) !important;
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
-  color: var(--text-color) !important;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
   padding: 0.75rem 1rem !important;
 }
 

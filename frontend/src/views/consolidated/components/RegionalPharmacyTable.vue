@@ -244,6 +244,7 @@ const totals = computed(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-color);
+  opacity: 0.85;
 }
 
 .subtitle {
@@ -327,18 +328,20 @@ const totals = computed(() => {
 
 :deep(.p-datatable .p-datatable-thead > tr > th) {
   color: var(--text-secondary) !important;
-  font-size: 0.72rem !important;
+  font-size: 0.68rem !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.04em !important;
+  letter-spacing: 0.02em !important;
   border-bottom: 2px solid var(--tabs-border) !important;
-  padding: 0.65rem 0.5rem !important;
+  padding: 0.6rem 0.5rem !important;
   line-height: 1.1 !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr > td) {
   border-bottom: 1px solid var(--tabs-border) !important;
-  font-size: 0.75rem !important;
+  font-size: 0.8rem !important;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  padding: 0.55rem 0.5rem !important;
 }
 
 :deep(.p-datatable .p-datatable-tbody > tr:hover > td) {
@@ -358,7 +361,7 @@ const totals = computed(() => {
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
   font-size: 0.75rem !important;
-  color: var(--text-color) !important;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
   padding: 0.65rem 1rem !important;
 }
 

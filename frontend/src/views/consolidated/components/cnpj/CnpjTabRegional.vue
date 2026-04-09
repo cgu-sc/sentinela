@@ -174,21 +174,25 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
 }
 
 .regional-top-row {
   display: flex;
   gap: 1.5rem;
   align-items: stretch;
+  width: 100%;
 }
 
 .table-wrapper-col {
-  flex: 3;
+  flex: 60;
+  min-width: 0; /* Permite que a coluna encolha/cresça ignorendo largura interna da tabela */
 }
 
 .map-wrapper-col {
-  flex: 2;
+  flex: 40;
   display: flex;
+  min-width: 0;
 }
 
 

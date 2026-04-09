@@ -405,14 +405,6 @@ const onBackClick = () => {
       >
         <i class="pi pi-arrow-left" /> UF
       </button>
-      <button
-        v-else-if="selectedIbge7 && embeddedMode"
-        class="back-btn"
-        @click="onBackClick"
-        title="Ver todos os municípios da região"
-      >
-        <i class="pi pi-arrow-left" /> Região
-      </button>
     </div>
     <div class="chart-wrapper">
       <VChart
@@ -434,6 +426,7 @@ const onBackClick = () => {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
+  width: 100%;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.04);
@@ -444,12 +437,28 @@ const onBackClick = () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--tabs-border);
   flex-shrink: 0;
 }
 
+.chart-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.chart-header i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
 .chart-wrapper {
-  height: 35vh;
+  flex: 1;
   min-height: 400px;
 }
 

@@ -1,266 +1,409 @@
 <script setup>
-import { computed, watch, ref, nextTick } from 'vue';
-import { useAnalyticsStore } from '@/stores/analytics';
-import { useGeoStore } from '@/stores/geo';
-import { useFilterStore } from '@/stores/filters';
-import { useFormatting } from '@/composables/useFormatting';
-import { useChartTheme } from '@/config/chartTheme';
-import { useThemeStore } from '@/stores/theme';
-import { MAP_VISUAL_SCALE } from '@/config/colors.js';
-import { storeToRefs } from 'pinia';
-import { use, registerMap } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { MapChart } from 'echarts/charts';
-import { TooltipComponent, VisualMapComponent } from 'echarts/components';
-import VChart from 'vue-echarts';
+import { computed, watch, ref } from "vue";
+import { useAnalyticsStore } from "@/stores/analytics";
+import { useGeoStore } from "@/stores/geo";
+import { useFilterStore } from "@/stores/filters";
+import { useFormatting } from "@/composables/useFormatting";
+import { useChartTheme } from "@/config/chartTheme";
+import { useThemeStore } from "@/stores/theme";
+import { MAP_VISUAL_SCALE } from "@/config/colors.js";
+import { storeToRefs } from "pinia";
+import { use, registerMap } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { MapChart } from "echarts/charts";
+import { TooltipComponent, VisualMapComponent } from "echarts/components";
+import VChart from "vue-echarts";
 
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
+// ── Props (modo embutido — ex: CnpjTabRegional) ───────────────────────────────
+// Quando propUf é fornecido, o componente opera em modo embutido:
+// usa as props em vez do filterStore e emite eventos em vez de escrever no store.
+const props = defineProps({
+  propUf: { type: String, default: null },
+  propRegiao: { type: String, default: null },
+  propMunicipioIbge7: { type: Number, default: null }, // ibge7 pré-selecionado
+  propMunicipiosData: { type: Array, default: null }, // substitui resultadoMunicipios
+});
+
+const emit = defineEmits(["select-municipio"]);
+
+const embeddedMode = computed(() => !!props.propUf);
+
 const analyticsStore = useAnalyticsStore();
-const geoStore       = useGeoStore();
-const filterStore    = useFilterStore();
+const geoStore = useGeoStore();
+const filterStore = useFilterStore();
 const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
-const themeStore     = useThemeStore();
+const themeStore = useThemeStore();
 
-const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
-const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)');
-const hoverColor     = computed(() => `${themeStore.tokens.primary}4D`);
-const hoverBorder    = computed(() => `${themeStore.tokens.primary}B3`);
+const mapAreaColor = computed(() =>
+  themeStore.isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)",
+);
+const mapBorderColor = computed(() =>
+  themeStore.isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)",
+);
+const hoverColor = computed(() => `${themeStore.tokens.primary}4D`);
+const hoverBorder = computed(() => `${themeStore.tokens.primary}B3`);
 
-const activeScale  = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
+const activeScale = computed(
+  () => MAP_VISUAL_SCALE[themeStore.isDark ? "dark" : "light"],
+);
 const getRiskPiece = (perc) =>
-  activeScale.value.find(p =>
-    (p.min == null || perc >= p.min) && (p.max == null || perc < p.max)
+  activeScale.value.find(
+    (p) => (p.min == null || perc >= p.min) && (p.max == null || perc < p.max),
   ) ?? activeScale.value[activeScale.value.length - 1];
 
-// ── Mapa de nomes GeoJSON ─────────────────────────────────────────────────────
+const norm = (s) =>
+  (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+// UF ativa: prop ou filterStore
+const activeUf = computed(() => props.propUf ?? filterStore.selectedUF);
+
+// ── Estado interno de seleção ─────────────────────────────────────────────────
+const selectedIbge7 = ref(props.propMunicipioIbge7 ?? null);
+
+// Sync com a prop quando muda externamente (ex: usuário muda CNPJ)
+watch(
+  () => props.propMunicipioIbge7,
+  (val) => {
+    selectedIbge7.value = val ?? null;
+  },
+);
+
+// Região do município selecionado via clique
+const selectedRegiao = computed(() => {
+  if (!selectedIbge7.value) return null;
+  const loc = geoStore.localidades.find(
+    (l) =>
+      Number(l.id_ibge7) === Number(selectedIbge7.value) &&
+      (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
+  );
+  return loc?.no_regiao_saude ?? null;
+});
+
+// Região efetiva: prop > clique > filterStore
+const effectiveRegiao = computed(
+  () =>
+    props.propRegiao ||
+    selectedRegiao.value ||
+    (filterStore.selectedRegiaoSaude !== "Todos"
+      ? filterStore.selectedRegiaoSaude
+      : null),
+);
+
+// ── Registro de mapas GeoJSON ─────────────────────────────────────────────────
 const mapKey = ref(0);
 
 watch(
-  () => filterStore.selectedUF,
+  () => activeUf.value,
   (uf) => {
-    if (!uf || uf === 'Todos') return;
+    if (!uf || uf === "Todos") return;
     const geo = geoStore.getMunicipiosGeoByUF(uf);
     if (geo) {
       registerMap(`municipios-${uf}`, geo);
       mapKey.value++;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
-  () => [filterStore.selectedMunicipio, filterStore.selectedRegiaoSaude],
-  () => { mapKey.value++; }
+  [selectedIbge7, effectiveRegiao],
+  ([ibge7, regiao]) => {
+    if (!regiao) return;
+    const geo = geoStore.getMunicipiosGeoByUF(activeUf.value);
+    if (!geo) return;
+    const ibge7sRegiao = new Set(
+      geoStore.localidades
+        .filter(
+          (l) =>
+            l.no_regiao_saude === regiao &&
+            (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
+        )
+        .map((l) => Number(l.id_ibge7)),
+    );
+    const features = geo.features.filter((f) =>
+      ibge7sRegiao.has(Number(f.properties.id)),
+    );
+    if (!features.length) return;
+    const key = ibge7 ? `regiao-drill-${ibge7}` : `regiao-filter-${regiao}`;
+    registerMap(key, { type: "FeatureCollection", features });
+    mapKey.value++;
+  },
+  { immediate: true },
 );
 
-const mapName = computed(() => `municipios-${filterStore.selectedUF}`);
+const mapName = computed(() => {
+  if (selectedIbge7.value) return `regiao-drill-${selectedIbge7.value}`;
+  if (effectiveRegiao.value) return `regiao-filter-${effectiveRegiao.value}`;
+  return `municipios-${activeUf.value}`;
+});
 
-const idToGeoName = computed(() => {
-  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
-  if (!geo) return {};
-  const map = {};
-  geo.features.forEach(f => { map[String(f.properties.id)] = f.properties.name; });
+// ── Dados por ibge7 ───────────────────────────────────────────────────────────
+const munDataByIbge7 = computed(() => {
+  const source = props.propMunicipiosData ?? resultadoMunicipios.value;
+  const map = new Map();
+  for (const m of source) {
+    if (m.id_ibge7) map.set(Number(m.id_ibge7), m);
+  }
   return map;
 });
 
-const selectedMunicipioNome = computed(() => {
-  const sel = filterStore.selectedMunicipio;
-  if (!sel || sel === 'Todos') return null;
-  return sel.split('|')[0].toLowerCase();
+// Snapshot dos dados da região (modo standalone):
+// evita que re-fetch filtrado por município apague as cores dos demais.
+// Em modo embutido os dados são estáticos (prop), snapshot desnecessário.
+// Snapshot local (vive enquanto o componente existe).
+// filterStore.regionMapData é o fallback persistente entre desmontagens.
+const regionSnapshot = ref(filterStore.regionMapData ?? null);
+const mapMunData = computed(() => {
+  if (embeddedMode.value) return munDataByIbge7.value;
+  return (
+    regionSnapshot.value ?? filterStore.regionMapData ?? munDataByIbge7.value
+  );
 });
 
+// ── mapData ───────────────────────────────────────────────────────────────────
 const mapData = computed(() => {
-  const withData = new Set();
+  const geo = geoStore.getMunicipiosGeoByUF(activeUf.value);
+  if (!geo) return [];
 
-  const items = resultadoMunicipios.value
-    .filter(d => d.id_ibge7 && idToGeoName.value[String(d.id_ibge7)])
-    .map(d => {
-      const perc     = d.percValSemComp ?? 0;
-      const piece    = getRiskPiece(perc);
-      const geoName  = idToGeoName.value[String(d.id_ibge7)];
-      withData.add(geoName);
-      return {
-        name:       geoName,
-        value:      perc,
-        municipio:  d.municipio,
-        valSemComp: d.valSemComp ?? 0,
-        cnpjs:      d.cnpjs ?? 0,
-        itemStyle:  { areaColor: piece.color },
-        emphasis:   { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, shadowColor: piece.borderColor, shadowBlur: 6, opacity: 1 } },
-      };
-    });
+  let features = geo.features;
+  if (effectiveRegiao.value) {
+    const ibge7sRegiao = new Set(
+      geoStore.localidades
+        .filter(
+          (l) =>
+            l.no_regiao_saude === effectiveRegiao.value &&
+            (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
+        )
+        .map((l) => Number(l.id_ibge7)),
+    );
+    features = features.filter((f) =>
+      ibge7sRegiao.has(Number(f.properties.id)),
+    );
+  }
 
-  // Municípios sem dados: desabilita hover, tooltip e seleção
-  const silent = Object.values(idToGeoName.value)
-    .filter(name => !withData.has(name))
-    .map(name => ({ name, silent: true, emphasis: { disabled: true } }));
+  return features.map((f) => {
+    const ibge7 = Number(f.properties.id);
+    const munData = mapMunData.value.get(ibge7);
+    const hasData = !!munData;
+    const isSelected =
+      !!selectedIbge7.value && ibge7 === Number(selectedIbge7.value);
+    const dimmed = !!selectedIbge7.value && !isSelected;
+    const opacity = dimmed ? 0.85 : 1;
+    const perc = hasData ? (munData.percValSemComp ?? 0) : 0;
+    const piece = getRiskPiece(perc);
+    const baseColor = hasData ? piece.color : chartTheme.value.bg;
+    const bColor = hasData ? piece.borderColor : (themeStore.isDark ? '#555555' : '#aaaaaa');
 
-  return [...items, ...silent];
-});
-
-// ── Zoom automático no município/região selecionada ───────────────────────────
-function featureCoords(feature) {
-  if (feature.geometry.type === 'Polygon') return feature.geometry.coordinates[0];
-  if (feature.geometry.type === 'MultiPolygon')
-    return feature.geometry.coordinates.reduce((a, b) => a[0].length >= b[0].length ? a : b)[0];
-  return [];
-}
-
-function bboxToView(lons, lats) {
-  if (!lons.length) return null;
-  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const span = Math.max(maxLon - minLon, maxLat - minLat);
-  const zoom = span > 3 ? 4 : span > 1.5 ? 5 : span > 0.7 ? 7 : span > 0.3 ? 9 : span > 0.1 ? 12 : 15;
-  return { center: [(minLon + maxLon) / 2, (minLat + maxLat) / 2], zoom };
-}
-
-function getFeatureView(geoName) {
-  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
-  if (!geo) return null;
-  const feature = geo.features.find(f => f.properties.name === geoName);
-  if (!feature) return null;
-  const coords = featureCoords(feature);
-  return bboxToView(coords.map(c => c[0]), coords.map(c => c[1]));
-}
-
-function getRegiaoView(regiao) {
-  const geo = geoStore.getMunicipiosGeoByUF(filterStore.selectedUF);
-  if (!geo) return null;
-  const normalize = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const munNomes = geoStore.localidades
-    .filter(l => l.no_regiao_saude === regiao && (filterStore.selectedUF === 'Todos' || l.sg_uf === filterStore.selectedUF))
-    .map(l => normalize(l.no_municipio));
-  const features = geo.features.filter(f => munNomes.includes(normalize(f.properties.name)));
-  if (!features.length) return null;
-  const allLons = [], allLats = [];
-  features.forEach(f => {
-    featureCoords(f).forEach(c => { allLons.push(c[0]); allLats.push(c[1]); });
+    return {
+      name: f.properties.name,
+      ibge7,
+      value: hasData ? perc : null,
+      municipio: munData?.municipio ?? f.properties.name,
+      valSemComp: munData?.valSemComp ?? 0,
+      hasData,
+      selected: isSelected,
+      itemStyle: {
+        areaColor: baseColor,
+        opacity,
+      },
+      select: {
+        itemStyle: {
+          areaColor: baseColor,
+          borderColor: bColor,
+          borderWidth: 2,
+          shadowColor: bColor,
+          shadowBlur: 14,
+          opacity: 1,
+        },
+      },
+      unselected: { itemStyle: { areaColor: baseColor, opacity } },
+      emphasis: { itemStyle: { areaColor: hasData ? piece.color : baseColor, opacity: 1 } },
+      silent: false,
+    };
   });
-  const result = bboxToView(allLons, allLats);
-  if (!result) return null;
-  return { ...result, zoom: Math.max(result.zoom - 2, 4) };
-}
-
-const selectedGeoName = computed(() => {
-  const sel = filterStore.selectedMunicipio;
-  if (!sel || sel === 'Todos') return null;
-  const nome = sel.split('|')[0];
-  const match = mapData.value.find(d => d.municipio?.toLowerCase() === nome.toLowerCase());
-  return match?.name ?? null;
 });
 
-const mapView = computed(() => {
-  if (selectedGeoName.value) {
-    const view = getFeatureView(selectedGeoName.value);
-    if (view) return { center: view.center, zoom: view.zoom };
-  }
-  if (filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos') {
-    const view = getRegiaoView(filterStore.selectedRegiaoSaude);
-    if (view) return { center: view.center, zoom: view.zoom };
-  }
-  return {};
-});
-
-// ── Chart option ─────────────────────────────────────────────────────────────
+// ── Chart option ──────────────────────────────────────────────────────────────
 const chartOption = computed(() => {
   const c = chartTheme.value;
   return {
     backgroundColor: c.bg,
     tooltip: {
-      trigger: 'item',
+      trigger: "item",
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: {
+        color: c.text,
+        fontFamily: "Inter, sans-serif",
+        fontSize: 12,
+      },
       formatter: (params) => {
-        if (!params.data?.municipio) return null;
         const d = params.data;
+        if (!d) return '';
+        if (!d.hasData || d.cnpjs === 0) {
+          return `
+            <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>
+            <div style="font-size:12px;opacity:0.8;"><strong>0 estabelecimentos</strong></div>`;
+        }
         return `
           <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>
           <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
             <div>% s/ Comp: <strong>${formatPercent(d.value)}</strong></div>
             <div>Valor s/ Comp: <strong>${formatBRL(d.valSemComp)}</strong></div>
-            <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString('pt-BR')}</strong></div>
+            <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString("pt-BR")}</strong></div>
           </div>`;
       },
     },
-    visualMap: {
-      show: false,
-      pieces: MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light'],
-      seriesIndex: 0,
-    },
-    series: [{
-      type: 'map',
-      map: mapName.value,
-      nameProperty: 'name',
-      roam: true,
-      ...mapView.value,
-      layoutSize: '95%',
-      selectedMode: 'single',
-      emphasis: {
-        label: { show: false },
-        itemStyle: { areaColor: hoverColor.value, borderColor: hoverBorder.value, borderWidth: 1.5 },
-      },
-      select: {
+    series: [
+      {
+        type: "map",
+        map: mapName.value,
+        nameProperty: "name",
+        roam: true,
+        scaleLimit: { min: 0.8, max: 15 },
+        layoutSize: "95%",
+        selectedMode: "single",
+        select: { label: { show: false } },
+        emphasis: {
+          label: { show: false },
+          itemStyle: {
+            areaColor: hoverColor.value,
+            borderColor: hoverBorder.value,
+            borderWidth: 1.5,
+          },
+        },
         label: { show: false },
         itemStyle: {
-          borderColor: themeStore.tokens.primary,
-          borderWidth: 3,
-          shadowColor: themeStore.tokens.primary,
-          shadowBlur: 15,
+          borderColor: mapBorderColor.value,
+          borderWidth: 0.5,
+          areaColor: mapAreaColor.value,
         },
+        data: mapData.value,
       },
-      label: { show: false },
-      itemStyle: {
-        borderColor: mapBorderColor.value,
-        borderWidth: 0.5,
-        areaColor: mapAreaColor.value,
-      },
-      data: mapData.value,
-    }],
+    ],
   };
 });
 
-// ── Interação ─────────────────────────────────────────────────────────────────
 const chartRef = ref(null);
-let _prevGeoName = null;
 
-watch(() => filterStore.hoveredMunicipioName, async (municipioName) => {
-  await nextTick();
-  const chart = chartRef.value?.chart;
-  if (!chart) return;
-
-  if (_prevGeoName) {
-    chart.dispatchAction({ type: 'downplay', seriesIndex: 0, name: _prevGeoName });
-    _prevGeoName = null;
-  }
-
-  if (municipioName) {
-    const match = mapData.value.find(d => d.municipio?.toLowerCase() === municipioName.toLowerCase());
-    if (match?.name) {
-      _prevGeoName = match.name;
-      chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: match.name });
+// ── Watches do store (apenas modo standalone) ────────────────────────────────
+watch(
+  () => filterStore.selectedRegiaoSaude,
+  (regiao) => {
+    if (embeddedMode.value) return;
+    if (!regiao || regiao === "Todos") {
+      selectedIbge7.value = null;
+      regionSnapshot.value = null;
+      filterStore.regionMapData = null;
     }
-  }
-});
+  },
+);
 
+watch(
+  () => filterStore.selectedMunicipio,
+  (sel) => {
+    if (embeddedMode.value) return;
+    if (!sel || sel === "Todos") {
+      selectedIbge7.value = null;
+      return;
+    }
+    const nome = sel.split("|")[0];
+    const loc = geoStore.localidades.find(
+      (l) =>
+        norm(l.no_municipio) === norm(nome) &&
+        (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
+    );
+    selectedIbge7.value = loc ? Number(loc.id_ibge7) : null;
+  },
+  { immediate: true },
+);
+
+watch(
+  () => filterStore.sidebarCollapsed,
+  () => {
+    setTimeout(() => chartRef.value?.chart?.resize(), 420);
+  },
+);
+
+// ── Click ─────────────────────────────────────────────────────────────────────
 const onClick = (params) => {
-  if (!params.data?.municipio) return;
-  filterStore.selectedMunicipio = `${params.data.municipio}|${filterStore.selectedUF}`;
+  const ibge7 = params.data?.ibge7;
+  if (!ibge7) return;
+
+  if (Number(ibge7) === Number(selectedIbge7.value)) {
+    selectedIbge7.value = null;
+    if (!embeddedMode.value) filterStore.selectedMunicipio = "Todos";
+    emit("select-municipio", null);
+    return;
+  }
+
+  if (!embeddedMode.value && !regionSnapshot.value) {
+    const snap = new Map(munDataByIbge7.value);
+    regionSnapshot.value = snap;
+    filterStore.regionMapData = snap; // persiste entre desmontagens
+  }
+
+  selectedIbge7.value = Number(ibge7);
+
+  const munData = mapMunData.value.get(Number(ibge7));
+
+  if (!embeddedMode.value) {
+    if (selectedRegiao.value)
+      filterStore.selectedRegiaoSaude = selectedRegiao.value;
+    if (munData?.municipio)
+      filterStore.selectedMunicipio = `${munData.municipio}|${activeUf.value}`;
+  }
+
+  emit("select-municipio", Number(ibge7), munData?.municipio);
+};
+
+const onBackClick = () => {
+  selectedIbge7.value = null;
+  regionSnapshot.value = null;
+  filterStore.regionMapData = null;
+  if (!embeddedMode.value) {
+    filterStore.selectedMunicipio = "Todos";
+    filterStore.selectedRegiaoSaude = "Todos";
+  }
+  emit("select-municipio", null);
 };
 </script>
 
 <template>
-  <div class="chart-section" :class="{ 'is-refreshing': isLoading }">
+  <div
+    class="chart-section"
+    :class="{ 'is-refreshing': isLoading && !embeddedMode }"
+  >
     <div class="chart-header">
       <i class="pi pi-map"></i>
-      <h3>MAPA DE RISCO — {{ filterStore.selectedUF }}</h3>
+      <h3>MAPA DE RISCO — {{ effectiveRegiao ?? activeUf }}</h3>
       <div class="spacer"></div>
+      <button
+        v-if="effectiveRegiao && !embeddedMode"
+        class="back-btn"
+        @click="onBackClick"
+        title="Voltar à visão da UF"
+      >
+        <i class="pi pi-arrow-left" /> UF
+      </button>
+      <button
+        v-else-if="selectedIbge7 && embeddedMode"
+        class="back-btn"
+        @click="onBackClick"
+        title="Ver todos os municípios da região"
+      >
+        <i class="pi pi-arrow-left" /> Região
+      </button>
     </div>
     <div class="chart-wrapper">
       <VChart
@@ -282,7 +425,9 @@ const onClick = (params) => {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
 
@@ -291,6 +436,7 @@ const onClick = (params) => {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
+  flex-shrink: 0;
 }
 
 .chart-wrapper {
@@ -304,7 +450,33 @@ const onClick = (params) => {
   cursor: pointer;
 }
 
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.back-btn:hover {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.back-btn i {
+  font-size: 0.65rem;
+}
 
 .is-refreshing {
   opacity: 0.5;

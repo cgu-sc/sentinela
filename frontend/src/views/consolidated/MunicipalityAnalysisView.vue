@@ -3,6 +3,7 @@ import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
 import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
 import MunicipalityMapChart from './components/MunicipalityMapChart.vue';
+import UfDrillMapChart from './components/UfDrillMapChart.vue';
 import MunicipalityAnalysisTable from './components/MunicipalityAnalysisTable.vue';
 import { useFilterStore } from '@/stores/filters';
 
@@ -13,9 +14,10 @@ useFetchAnalytics({ includeFatorRisco: true });
 <template>
   <div class="dashboard-container">
     <KpiSection />
-    <div class="charts-row" :class="{ 'has-map': filterStore.selectedUF !== 'Todos' }">
+    <div class="charts-row has-map">
       <RiskAnalysisChart />
-      <MunicipalityMapChart v-if="filterStore.selectedUF !== 'Todos'" />
+      <UfDrillMapChart v-if="filterStore.selectedUF === 'Todos'" />
+      <MunicipalityMapChart v-else />
     </div>
     <MunicipalityAnalysisTable />
   </div>

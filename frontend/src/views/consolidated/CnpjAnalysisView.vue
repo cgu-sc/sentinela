@@ -4,6 +4,7 @@ import { useFilterStore } from '@/stores/filters';
 import KpiSection from './components/KpiSection.vue';
 import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
 import MunicipalityMapChart from './components/MunicipalityMapChart.vue';
+import UfDrillMapChart from './components/UfDrillMapChart.vue';
 import CnpjAnalysisTable from './components/CnpjAnalysisTable.vue';
 
 const filterStore = useFilterStore();
@@ -13,9 +14,10 @@ useFetchAnalytics({ includeFatorRisco: true });
 <template>
   <div class="dashboard-container">
     <KpiSection />
-    <div class="charts-row" :class="{ 'has-map': filterStore.selectedMunicipio && filterStore.selectedMunicipio !== 'Todos' }">
+    <div class="charts-row has-map">
       <RiskAnalysisChart />
-      <MunicipalityMapChart v-if="filterStore.selectedMunicipio && filterStore.selectedMunicipio !== 'Todos'" />
+      <UfDrillMapChart v-if="filterStore.selectedUF === 'Todos'" />
+      <MunicipalityMapChart v-else />
     </div>
     <CnpjAnalysisTable />
   </div>

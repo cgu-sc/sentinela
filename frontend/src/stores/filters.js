@@ -45,6 +45,13 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 3. CONTROLE DE CONTEXTO
   const filtersLocked = ref(false);
+  // Cache dos dados da região para o mapa (Map<ibge7, munData>).
+  // Persiste entre desmontagens do MunicipalityMapChart para que as cores
+  // da região não se percam após navegação com filtro de município ativo.
+  const regionMapData = ref(null);
+  watch(selectedRegiaoSaude, (val) => {
+    if (!val || val === FILTER_ALL_VALUE) regionMapData.value = null;
+  });
   const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
   const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
   watch(sidebarCollapsed, (val) => {
@@ -183,6 +190,7 @@ export const useFilterStore = defineStore('filters', () => {
     searchTarget,
     hoveredMunicipioName,
     filtersLocked,
+    regionMapData,
     sidebarCollapsed,
     sidebarLocked,
     resetFilters

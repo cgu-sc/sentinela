@@ -2,9 +2,10 @@
 import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
+import { useGeoStore } from '@/stores/geo';
 import RegionalMunicipalityTable from '../RegionalMunicipalityTable.vue';
 import RegionalPharmacyTable from '../RegionalPharmacyTable.vue';
-import RegionalMapChart from '../RegionalMapChart.vue';
+import MunicipalityMapChart from '../MunicipalityMapChart.vue';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -12,13 +13,24 @@ const props = defineProps({
 });
 
 const cnpjNav = useCnpjNavStore();
+const geoStore = useGeoStore();
 const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
+
+// ibge7 do município atual do CNPJ (para pré-selecionar no mapa)
+const norm = s => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const currentIbge7 = computed(() => {
+  if (!props.geoData?.no_municipio || !props.geoData?.sg_uf) return null;
+  const target = norm(props.geoData.no_municipio);
+  const loc = geoStore.localidades.find(l =>
+    norm(l.no_municipio) === target && l.sg_uf === props.geoData.sg_uf
+  );
+  return loc ? Number(loc.id_ibge7) : null;
+});
 
 const filterMunicipioId = ref(null);
 
 function toggleMunicipioFilter(ibge7) {
   const id = ibge7 ? Number(ibge7) : null;
-  console.log('[Parent] CnpjTabRegional - Toggle Filtro ID:', id);
   if (filterMunicipioId.value === id) {
     filterMunicipioId.value = null;
   } else {
@@ -136,11 +148,12 @@ watch(
           />
         </div>
         <div class="map-wrapper-col">
-          <RegionalMapChart
-            :regional-data="regionalData"
-            :geo-data="geoData"
-            :selected-municipio-id="filterMunicipioId"
-            @select-municipio="toggleMunicipioFilter"
+          <MunicipalityMapChart
+            :prop-uf="geoData.sg_uf"
+            :prop-regiao="geoData.no_regiao_saude"
+            :prop-municipio-ibge7="filterMunicipioId ?? currentIbge7"
+            :prop-municipios-data="regionalData.municipios"
+            @select-municipio="(ibge7) => toggleMunicipioFilter(ibge7)"
           />
         </div>
       </div>

@@ -303,7 +303,7 @@ body.dark-mode .p-tabview .p-tabview-panel {
 body.dark-mode .p-tabview .p-tabview-nav,
 body.dark-mode .p-tabview .p-tabview-nav-content {
   background: var(--tabs-bg) !important;
-  border-color: var(--sidebar-border) !important;
+  border-color: var(--tabs-border) !important;
 }
 
 body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {

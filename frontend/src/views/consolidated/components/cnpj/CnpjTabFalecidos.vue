@@ -497,7 +497,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   color: var(--text-color);
   margin-bottom: 1rem;
@@ -686,7 +686,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   align-items: center;
   gap: 0.6rem;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   color: var(--text-color);
   letter-spacing: 0.05em;

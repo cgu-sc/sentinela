@@ -611,17 +611,17 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-label {
-  font-size: 0.65rem;
-  font-weight: 700;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--establishment-header-text);
-  opacity: 0.7; /* Aumentado para melhor legibilidade */
+  opacity: 0.85;
   margin-bottom: 0.15rem;
 }
 
 .pill-value {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   color: var(--establishment-header-text);
@@ -630,7 +630,6 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-value.currency {
-  font-size: 1.15rem;
   opacity: 0.9;
 }
 
@@ -649,7 +648,6 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-value.total {
-  font-size: 1.15rem;
   opacity: 0.85; /* Reforçado para melhor leitura */
 }
 
@@ -735,10 +733,10 @@ const formattedFullAddress = computed(() => {
 
 .rank-label {
   font-size: 0.6rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   color: var(--establishment-header-text);
-  opacity: 0.5; /* Ajustado para 0.5 conforme solicitado */
+  opacity: 0.85;
   letter-spacing: 0.05em;
 }
 

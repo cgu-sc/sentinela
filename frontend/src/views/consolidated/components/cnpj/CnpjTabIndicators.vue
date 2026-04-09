@@ -301,31 +301,35 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 .title-main span {
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-color);
+  opacity: 0.85;
 }
 
 .risk-toggle-pill {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.75rem;
-  background: var(--bg-color);
+  padding: 0.35rem 0.85rem;
+  background: var(--card-bg);
   border: 1px solid var(--tabs-border);
   border-radius: 99px;
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .risk-toggle-pill:hover {
-  border-color: var(--risk-indicator-warning);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
   color: var(--text-color);
+  transform: translateY(-1px);
 }
 
 .risk-toggle-pill.active {
@@ -437,14 +441,15 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
 .audit-title-text h3 {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.0rem;
+  font-weight: 600;
   color: var(--text-color);
+  opacity: 0.85;
 }
 
 .audit-title-text p {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
 }
 
@@ -598,10 +603,11 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 .ind-group-row td {
   padding: 1rem 1rem 0.35rem 1rem;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--primary-color);
+  opacity: 0.85;
   background: transparent !important;
   border-top: 2px solid var(--primary-color) !important;
   border-bottom: none !important;

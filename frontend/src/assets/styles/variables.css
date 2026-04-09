@@ -12,6 +12,8 @@
   --text-muted: #64748b;
   --card-bg: #f8fafc;
   --card-border: #e2e8f0;
+  --tabs-bg: #f8fafc;
+  --tabs-border: #e2e8f0;
   --sidebar-bg: #212120;
   --sidebar-text: #A1A1AA;
   --sidebar-border: rgba(255, 255, 255, 0.1);
@@ -58,6 +60,8 @@
   --text-muted: #9aa4ae;
   --card-bg: #161b22;
   --card-border: #30363d;
+  --tabs-bg: #161b22;
+  --tabs-border: #30363d;
   --sidebar-bg: #0d1117;
   --sidebar-text: #e6edf3;
   --sidebar-border: #30363d;

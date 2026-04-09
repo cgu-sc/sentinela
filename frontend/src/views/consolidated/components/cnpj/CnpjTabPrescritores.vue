@@ -697,7 +697,7 @@ defineExpose({
   align-items: center;
   gap: 0.75rem;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   color: var(--text-color);
   margin-bottom: 1rem;
@@ -727,7 +727,7 @@ defineExpose({
   padding: 1.25rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-left: 3px solid var(--card-border);
+  border-left: 4px solid var(--card-border);
   border-radius: 12px;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -816,7 +816,7 @@ defineExpose({
 
 .alert-kpi-label {
   font-size: 0.7rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;

@@ -308,10 +308,11 @@ const chartOption = computed(() => {
   border-bottom: 1px solid var(--tabs-border);
   margin-bottom: 1rem;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-color);
+  opacity: 0.85;
 }
 
 .evolucao-card-header i { font-size: 1rem; color: var(--primary-color); }
@@ -330,6 +331,7 @@ const chartOption = computed(() => {
   text-transform: uppercase; 
   letter-spacing: 0.05em; 
   border-bottom: 2px solid var(--tabs-border); 
+  opacity: 0.85;
 }
 .evolucao-table th:first-child, .evolucao-table td:first-child { text-align: left; }
 .evolucao-table td { 
@@ -364,7 +366,7 @@ const chartOption = computed(() => {
 .pct-medium   { color: var(--risk-medium); }
 .pct-low      { color: var(--risk-low); }
 
-.trend-cell { text-align: center; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.trend-cell { text-align: center; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .trend-up      { color: var(--risk-high); }
 .trend-down    { color: var(--risk-low); }
 .trend-neutral { color: var(--text-muted); font-weight: 400; }

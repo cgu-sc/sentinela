@@ -1,5 +1,5 @@
 <script setup>
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useGeoStore } from "@/stores/geo";
@@ -21,7 +21,6 @@ import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
 import { storeToRefs } from "pinia";
 import TabView from "primevue/tabview";
 import TabPanel from "primevue/tabpanel";
-import Button from "primevue/button";
 import Tag from "primevue/tag";
 import Chip from "primevue/chip";
 
@@ -36,7 +35,6 @@ const TAB_INDEX = {
 };
 
 const route = useRoute();
-const router = useRouter();
 const cnpj = computed(() => route.params.cnpj);
 
 // Só monta CnpjTabRegional quando a aba for ativada pela primeira vez,
@@ -199,24 +197,6 @@ const formatCnpj = (v) => {
 
 <template>
   <div class="cnpj-detail-page">
-    <!-- BREADCRUMB -->
-    <div class="breadcrumb">
-      <Button
-        icon="pi pi-arrow-left"
-        text
-        severity="secondary"
-        class="back-btn"
-        @click="router.back()"
-        v-tooltip.right="'Voltar para a lista'"
-      />
-      <span class="breadcrumb-link" @click="router.push('/cnpj')">
-        <i class="pi pi-briefcase" />
-        Análise CNPJ
-      </span>
-      <i class="pi pi-angle-right breadcrumb-sep" />
-      <span class="breadcrumb-current">{{ cnpjData?.razao_social ?? cnpj }}</span>
-    </div>
-
     <!-- HEADER (COMPONENTE ISOLADO) -->
     <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :cadastro="dadosCadastro" :is-exporting="isExporting" @export="handleExport" />
 
@@ -279,44 +259,6 @@ const formatCnpj = (v) => {
 </template>
 
 <style scoped>
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-.back-btn {
-  width: 28px !important;
-  height: 28px !important;
-  padding: 0 !important;
-  flex-shrink: 0;
-}
-
-.breadcrumb-link {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  color: var(--primary-color);
-  font-weight: 600;
-  transition: opacity 0.15s ease;
-}
-.breadcrumb-link:hover { opacity: 0.75; }
-.breadcrumb-link i { font-size: 0.75rem; }
-
-.breadcrumb-sep { font-size: 0.65rem; opacity: 0.5; }
-
-.breadcrumb-current {
-  color: var(--text-muted);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 400px;
-}
-
 .cnpj-detail-page {
   display: flex;
   flex-direction: column;

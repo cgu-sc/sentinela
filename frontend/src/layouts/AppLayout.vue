@@ -287,7 +287,6 @@ const {
 
     <!-- BOTÃO DE CADEADO — visível apenas quando colapsado -->
     <button
-      v-if="isCollapsed"
       class="sidebar-lock-btn"
       :class="{ locked: isSidebarLocked }"
       @click="toggleSidebarLock"
@@ -727,9 +726,14 @@ const {
             </router-link>
 
             <!-- Atalho: último CNPJ analisado -->
-            <div v-if="recentCnpj" class="nav-recent-cnpj" :class="{ active: route.path.startsWith('/estabelecimento') }" v-tooltip.bottom="recentCnpj.razaoSocial">
-              <i class="pi pi-history" />
-              <router-link :to="`/estabelecimento/${recentCnpj.cnpj}`" class="nav-recent-link">
+            <div v-if="recentCnpj" class="nav-recent-wrapper">
+              <router-link
+                :to="`/estabelecimento/${recentCnpj.cnpj}`"
+                class="nav-tab nav-recent-cnpj"
+                :class="{ active: route.path.startsWith('/estabelecimento') }"
+                v-tooltip.bottom="recentCnpj.razaoSocial"
+              >
+                <i class="pi pi-history" />
                 {{ recentCnpj.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') }}
               </router-link>
               <button class="nav-recent-clear" @click.prevent="recentCnpjStore.clear()" v-tooltip.bottom="'Limpar atalho'">
@@ -948,7 +952,8 @@ const {
   width: var(--sidebar-width);
   background: var(--sidebar-bg) !important;
   color: var(--sidebar-text);
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -984,6 +989,7 @@ const {
   left: var(--sidebar-width); /* MÁGICA: O botão persegue a borda da sidebar */
   transform: translateY(-50%);
   z-index: 300;
+  will-change: left;
   width: 20px;
   height: 48px;
   background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
@@ -1001,8 +1007,6 @@ const {
 
 .sidebar-float-btn:hover {
   width: 28px;
-  background: var(--card-bg);
-  color: var(--primary-color);
   box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
 }
 
@@ -1016,6 +1020,7 @@ const {
   top: calc(50% + 28px); /* logo abaixo do float-btn */
   left: var(--sidebar-width);
   z-index: 300;
+  will-change: left;
   width: 20px;
   height: 36px;
   background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
@@ -1029,14 +1034,10 @@ const {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
-  opacity: 0.85;
 }
 
 .sidebar-lock-btn:hover {
   width: 28px;
-  opacity: 1;
-  background: var(--card-bg);
-  color: var(--primary-color);
   box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
 }
 
@@ -1666,7 +1667,7 @@ const {
   text-decoration: none;
   color: var(--text-muted);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border: none;
@@ -1699,7 +1700,6 @@ const {
 
 .nav-tab.active {
   color: var(--primary-color);
-  font-weight: 700;
 }
 
 .nav-tab.active::after {
@@ -1707,20 +1707,16 @@ const {
 }
 
 /* Atalho do último CNPJ analisado */
-.nav-recent-cnpj {
+.nav-recent-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+/* Extensão do nav-tab para o atalho de CNPJ */
+.nav-recent-cnpj {
   gap: 0.4rem;
-  padding: 0 0.85rem;
-  height: 56px;
-  border: none;
-  background: transparent;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  transition: color 0.2s ease;
-  margin-left: 0.25rem;
+  padding-right: 1.4rem; /* espaço para o clear button */
 }
 
 /* Separador antes do atalho */
@@ -1733,54 +1729,20 @@ const {
   background: color-mix(in srgb, var(--text-muted) 25%, transparent);
 }
 
-/* Underline igual às abas */
-.nav-recent-cnpj::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 1.1rem;
-  right: 0.85rem;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--primary-color);
-  transform: scaleX(0);
-  transition: transform 0.2s ease;
-}
-
-.nav-recent-cnpj:hover {
-  color: var(--text-color);
-}
-
-.nav-recent-cnpj:hover::after {
-  transform: scaleX(0.5);
-  opacity: 0.4;
-}
-
-.nav-recent-cnpj.active {
-  color: var(--primary-color);
-  font-weight: 700;
-}
-
-.nav-recent-cnpj.active::after {
-  transform: scaleX(1);
-}
-
 .nav-recent-cnpj .pi-history {
   font-size: 0.65rem;
   opacity: 0.6;
 }
 
-.nav-recent-link {
-  text-decoration: none;
-  color: inherit;
-  letter-spacing: 0.02em;
-}
-
 .nav-recent-clear {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.1rem;
+  padding: 0.2rem;
   color: var(--text-muted);
   opacity: 0.4;
   display: flex;

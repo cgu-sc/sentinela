@@ -5,7 +5,6 @@ import { useAnalyticsStore } from '@/stores/analytics';
 import { storeToRefs } from 'pinia';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
-import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
 
 import VChart from 'vue-echarts';
@@ -71,7 +70,7 @@ const chartOption = computed(() => {
 
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,

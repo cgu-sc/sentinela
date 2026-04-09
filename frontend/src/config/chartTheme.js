@@ -13,20 +13,22 @@ export function useChartTheme() {
   /** Cores de interface do gráfico (texto, grid, tooltip, fundo). */
   const chartTheme = computed(() => themeStore.isDark
     ? {
-        text:    '#e2e8f0',
-        muted:   '#94a3b8',
-        grid:    '#ffffff0f',
-        bg:      'transparent',
-        tooltip: '#1e293b',
-        border:  '#334155',
+        text:        '#e2e8f0',
+        muted:       '#94a3b8',
+        grid:        '#ffffff0f',
+        bg:          'transparent',
+        tooltip:     '#1e293b',
+        border:      '#334155',
+        axisShadow:  'rgba(255, 255, 255, 0.06)',
       }
     : {
-        text:    '#1e293b',
-        muted:   '#64748b',
-        grid:    '#0000000d',
-        bg:      'transparent',
-        tooltip: '#ffffff',
-        border:  '#e2e8f0',
+        text:        '#1e293b',
+        muted:       '#64748b',
+        grid:        '#0000000d',
+        bg:          'transparent',
+        tooltip:     '#ffffff',
+        border:      '#e2e8f0',
+        axisShadow:  'rgba(0, 0, 0, 0.06)',
       }
   );
 

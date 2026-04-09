@@ -246,7 +246,7 @@ export const SURFACE_COLORS = {
       "text-muted": "#8b949e",
       "card-bg": "#161b22",
       "sidebar-bg": "#0d1117",
-      "sidebar-text": "#e6edf3",
+      "sidebar-text": "#9ca3af",
       "sidebar-border": "rgba(255, 255, 255, 0.08)",
       "sidebar-input-bg": "#161b22",
       "navbar-bg": "#0d1117",

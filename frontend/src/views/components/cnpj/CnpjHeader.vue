@@ -189,26 +189,6 @@ const formattedFullAddress = computed(() => {
         <div class="status-chips-row">
           <div class="status-group">
             <div
-              v-if="cnpjData.score_risco_final != null"
-              class="loc-chip risk-chip"
-              :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-              v-tooltip.bottom="'Score de Risco Consolidado'"
-            >
-              Score {{ cnpjData.score_risco_final.toFixed(1) }}
-            </div>
-            <div
-              v-if="cnpjData.classificacao_risco"
-              class="loc-chip risk-chip"
-              :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-            >
-              {{ cnpjData.classificacao_risco }}
-            </div>
-          </div>
-
-          <div class="status-group-divider" />
-
-          <div class="status-group">
-            <div
               class="loc-chip status-chip chip-neutral"
               v-tooltip.bottom="'Tipo de estabelecimento'"
             >
@@ -218,21 +198,49 @@ const formattedFullAddress = computed(() => {
 
             <div class="status-group-divider" />
 
-            <div
-              class="loc-chip status-chip"
-              :class="conexaoMsClass"
-              v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
-            >
-              <i class="pi pi-link" />
-              MS: {{ cnpjData.conexao_ms ?? '—' }}
+            <div v-if="cnpjData.score_risco_final != null" class="status-labeled">
+              <span class="status-label-text">Score de Risco:</span>
+              <div
+                class="loc-chip risk-chip status-chip"
+                :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+                v-tooltip.bottom="'Score de Risco Consolidado'"
+              >
+                {{ cnpjData.score_risco_final.toFixed(1) }}
+              </div>
             </div>
-            <div
-              class="loc-chip status-chip"
-              :class="situacaoRfClass"
-              v-tooltip.bottom="'Situação na Receita Federal'"
-            >
-              <i class="pi pi-id-card" />
-              RF: {{ cnpjData.situacao_rf ?? '—' }}
+            <div v-if="cnpjData.classificacao_risco" class="status-labeled">
+              <span class="status-label-text">Risco:</span>
+              <div
+                class="loc-chip risk-chip status-chip"
+                :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+              >
+                {{ cnpjData.classificacao_risco.replace('RISCO ', '') }}
+              </div>
+            </div>
+          </div>
+
+          <div class="status-group-divider" />
+
+          <div class="status-group">
+            <div class="status-labeled">
+              <span class="status-label-text">Ministério da Saúde:</span>
+              <div
+                class="loc-chip status-chip"
+                :class="conexaoMsClass"
+                v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
+              >
+                {{ cnpjData.conexao_ms ?? '—' }}
+              </div>
+            </div>
+            <div class="status-labeled">
+              <span class="status-label-text">Receita Federal:</span>
+              <div
+                class="loc-chip status-chip"
+                :class="situacaoRfClass"
+                v-tooltip.bottom="'Situação na Receita Federal'"
+              >
+                {{ cnpjData.situacao_rf ?? '—' }}
+              </div>
             </div>
           </div>
         </div>
@@ -877,6 +885,20 @@ const formattedFullAddress = computed(() => {
   height: 1.2rem;
   background: var(--card-border);
   flex-shrink: 0;
+}
+
+/* ── STATUS LABELED ── */
+.status-labeled {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.status-label-text {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* ── STATUS CHIPS (Conexão MS / Situação RF) ── */

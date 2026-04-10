@@ -203,12 +203,12 @@ class AnalyticsService:
                     pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
                     pl.col("situacao_rf").first().alias("situacao_rf"),
                     pl.col("conexao_ms").first().alias("conexao_ms"),
+                    (pl.col("is_matriz").cast(pl.Boolean).first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
                 ])
                 .with_columns([
                     (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
                     (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
                     (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf"),
-                    pl.col("is_matriz").cast(pl.Boolean).fill_null(False),
                 ])
                 .sort("percValSemComp", descending=True, nulls_last=True)
             )

@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
-from database import get_db
+from database import get_db, engine
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse,
-    DadosFarmaciaSchema
+    DadosFarmaciaSchema, MovimentacaoResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -109,3 +109,18 @@ def get_regional(
 def get_prescritores(cnpj: str):
     """Retorna os dados detalhados e KPIs de prescritores (CRMs) atuantes no CNPJ."""
     return AnalyticsService.get_prescritores_data(cnpj)
+
+@router.get("/cnpj/{cnpj}/movimentacao", response_model=MovimentacaoResponse)
+def get_movimentacao(
+    cnpj: str,
+    check_cache: bool = Query(False, description="Se True, retorna vazio caso não exista cache no servidor.")
+):
+    """
+    Retorna a Memória de Cálculo processada (Movimentação por GTIN) de um CNPJ.
+
+    - **Primeira chamada**: busca do SQL Server (`memoria_calculo_consolidada`),
+      processa a lógica de linhas e salva cache Parquet.
+    - **Chamadas subsequentes**: carrega do cache Parquet local (< 1s).
+    - **Parâmetro check_cache**: permite carregar apenas se já existir cache, sem disparar processamento.
+    """
+    return AnalyticsService.get_movimentacao_data(cnpj, engine, check_cache=check_cache)

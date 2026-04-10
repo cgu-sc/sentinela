@@ -36,6 +36,10 @@ export const useAnalyticsStore = defineStore('analytics', {
     fatorRisco: [],
     evolucaoFinanceira: null,
     dadosCadastro: null,
+    // Movimentação (aba de memória de cálculo — carregada sob demanda)
+    movimentacaoData: null,
+    movimentacaoLoading: false,
+    movimentacaoLoaded: false,
     // CNPJs abertos fora do fluxo de filtros (ex: URL direta, /listas)
     // Separado de resultadoCnpjs para não contaminar o estado dos filtros globais.
     cnpjsAvulsos: new Map(),
@@ -181,7 +185,44 @@ export const useAnalyticsStore = defineStore('analytics', {
     resetDadosCadastro() {
       this.dadosCadastro = null;
       this.dadosCadastroLoading = false;
-    }
+    },
+
+    /**
+     * Carrega a Memória de Cálculo (Movimentação por GTIN) para um CNPJ.
+     * O backend gerencia o cache Parquet automaticamente.
+     * @param {string} cnpj - CNPJ de 14 dígitos
+     * @param {boolean} checkCache - Se true, só carrega se já existir cache pronto.
+     */
+    async fetchMovimentacao(cnpj, checkCache = false) {
+      if (!cnpj) return;
+      this.movimentacaoLoading = true;
+      try {
+        const url = API_ENDPOINTS.analyticsMovimentacao(cnpj);
+        const { data } = await axios.get(url, {
+          params: { check_cache: checkCache }
+        });
+        
+        // Se pediu checkCache e veio vazio (rows.length === 0), não marca as loaded
+        // para o usuário ainda ver o botão "Processar".
+        if (checkCache && (!data.rows || data.rows.length === 0)) {
+          this.movimentacaoData = null;
+          this.movimentacaoLoaded = false;
+        } else {
+          this.movimentacaoData = data;
+          this.movimentacaoLoaded = true;
+        }
+      } catch (e) {
+        console.error('Erro ao buscar movimentação:', e);
+      } finally {
+        this.movimentacaoLoading = false;
+      }
+    },
+
+    resetMovimentacao() {
+      this.movimentacaoData = null;
+      this.movimentacaoLoaded = false;
+      this.movimentacaoLoading = false;
+    },
   },
 
   getters: {

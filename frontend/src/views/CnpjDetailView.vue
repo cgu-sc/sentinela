@@ -15,6 +15,7 @@ import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
 import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import CRMTab from "./components/cnpj/CRMTab.vue";
+import MovimentacaoTab from "./components/cnpj/MovimentacaoTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -118,6 +119,7 @@ watch(
     if (newCnpj !== oldCnpj) {
       analyticsStore.resetEvolucaoFinanceira();
       analyticsStore.resetDadosCadastro();
+      analyticsStore.resetMovimentacao();
       cnpjNav.reset(TAB_INDEX.EVOLUCAO);
     }
     if (newCnpj) {
@@ -192,10 +194,7 @@ const formatCnpj = (v) => {
         <template #header
           ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
         >
-        <div class="tab-content tab-placeholder">
-          <i class="pi pi-inbox placeholder-icon" />
-          <p>Dados de movimentação serão exibidos aqui.</p>
-        </div>
+        <MovimentacaoTab :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

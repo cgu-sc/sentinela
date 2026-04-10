@@ -237,3 +237,47 @@ class DadosFarmaciaSchema(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+
+# ── Memória de Cálculo — Movimentação por GTIN ──────────
+class MovimentacaoRowSchema(BaseModel):
+    """
+    Representa uma linha processada da Memória de Cálculo.
+    O campo `tipo_linha` define como a linha deve ser renderizada no frontend:
+      - 'header_medicamento'  : Cabeçalho do GTIN (fundo cinza escuro)
+      - 'header_colunas'      : Sub-cabeçalho de colunas (fundo cinza claro)
+      - 'venda_normal'        : Venda com comprovação total (fundo verde claro)
+      - 'venda_irregular'     : Venda SEM comprovação (fundo vermelho claro)
+      - 'resumo_parcial'      : Linha de subtotal do GTIN (negrito)
+      - 'total_geral'         : Linha de total geral do CNPJ (azul escuro)
+    """
+    tipo_linha: str
+    gtin: Optional[str] = None
+    medicamento: Optional[str] = None
+    periodo_inicial: Optional[str] = None
+    periodo_inicio_irregular: Optional[str] = None
+    periodo_final: Optional[str] = None
+    estoque_inicial: Optional[int] = None
+    estoque_final: Optional[int] = None
+    vendas: Optional[int] = None
+    vendas_irregular: Optional[int] = None
+    valor: Optional[float] = None
+    valor_irregular: Optional[float] = None
+    notas: Optional[str] = None
+
+
+class MovimentacaoSummarySchema(BaseModel):
+    """Totalizadores do processamento da Memória de Cálculo."""
+    total_vendas: int = 0
+    total_vendas_irregular: int = 0
+    valor_total: float = 0.0
+    valor_irregular: float = 0.0
+    pct_irregular: float = 0.0
+    from_cache: bool = False  # True se foi carregado do cache Parquet local
+
+
+class MovimentacaoResponse(BaseModel):
+    """Payload completo da aba Movimentação."""
+    cnpj: str
+    summary: MovimentacaoSummarySchema
+    rows: List[MovimentacaoRowSchema]
+

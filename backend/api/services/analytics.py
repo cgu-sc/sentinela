@@ -3,6 +3,11 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import os
+import zlib
+import json
+import copy
+from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_crms_detalhado, get_df_top20_crms
 from ..schemas.analytics import (
     AnalyticsKPISchema,
@@ -29,6 +34,9 @@ from ..schemas.analytics import (
     RegionalResponse,
     PrescritoresResponse,
     DadosFarmaciaSchema,
+    MovimentacaoRowSchema,
+    MovimentacaoSummarySchema,
+    MovimentacaoResponse,
 )
 
 class AnalyticsService:
@@ -951,3 +959,321 @@ class AnalyticsService:
         except Exception as e:
             print(f"⚠️ Erro ao buscar dados cadastrais da farmácia {cnpj}: {e}")
             return DadosFarmaciaSchema(cnpj=cnpj)
+
+    @staticmethod
+    def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> MovimentacaoResponse:
+        """
+        Retorna a memória de cálculo processada (Movimentação por GTIN) de um CNPJ.
+
+        Estratégia de cache em 2 camadas:
+          1. Se existir `sentinela_cache/mov_cache_{cnpj}.parquet`, carrega direto (< 1s).
+          2. Se não existir, busca `memoria_calculo_consolidada` do SQL Server,
+             descompacta via zlib, processa a lógica de linhas e salva o Parquet.
+
+        Args:
+            cnpj: CNPJ de 14 dígitos (sem formatação).
+            engine: Instância SQLAlchemy Engine para conexão ao banco.
+        """
+        import traceback
+        from pathlib import Path
+
+        # ── Localização do cache ────────────────────────────────────────────
+        # analytics.py está em backend/api/services/ — precisa de 4 níveis
+        # para chegar na raiz do projeto onde fica sentinela_cache/
+        try:
+            if getattr(__import__('sys'), 'frozen', False):
+                BASE_DIR = os.path.dirname(__import__('sys').executable)
+            else:
+                # __file__ = .../sentinela/backend/api/services/analytics.py
+                # dirname x4  = .../sentinela/
+                BASE_DIR = os.path.dirname(
+                    os.path.dirname(
+                        os.path.dirname(
+                            os.path.dirname(os.path.abspath(__file__))
+                        )
+                    )
+                )
+        except Exception:
+            BASE_DIR = os.getcwd()
+
+        CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        CACHE_PATH = os.path.join(CACHE_DIR, f"mov_cache_{cnpj}.parquet")
+
+        empty_summary = MovimentacaoSummarySchema()
+
+        def _build_response_from_df(df: pl.DataFrame, from_cache: bool) -> MovimentacaoResponse:
+            """Converte DataFrame Polars para o schema de resposta."""
+            rows = [
+                MovimentacaoRowSchema(
+                    tipo_linha=r["tipo_linha"],
+                    gtin=r.get("gtin"),
+                    medicamento=r.get("medicamento"),
+                    periodo_inicial=r.get("periodo_inicial"),
+                    periodo_inicio_irregular=r.get("periodo_inicio_irregular"),
+                    periodo_final=r.get("periodo_final"),
+                    estoque_inicial=int(r["estoque_inicial"]) if r.get("estoque_inicial") is not None else None,
+                    estoque_final=int(r["estoque_final"]) if r.get("estoque_final") is not None else None,
+                    vendas=int(r["vendas"]) if r.get("vendas") is not None else None,
+                    vendas_irregular=int(r["vendas_irregular"]) if r.get("vendas_irregular") is not None else None,
+                    valor=float(r["valor"]) if r.get("valor") is not None else None,
+                    valor_irregular=float(r["valor_irregular"]) if r.get("valor_irregular") is not None else None,
+                    notas=r.get("notas"),
+                )
+                for r in df.iter_rows(named=True)
+            ]
+
+            # Calcula totalizadores a partir das linhas de venda
+            vendas_rows = [r for r in rows if r.tipo_linha in ("venda_normal", "venda_irregular")]
+            tv  = sum(r.vendas or 0 for r in vendas_rows)
+            tvi = sum(r.vendas_irregular or 0 for r in vendas_rows)
+            vv  = sum(r.valor or 0.0 for r in vendas_rows)
+            vvi = sum(r.valor_irregular or 0.0 for r in vendas_rows)
+            pct = (vvi / vv * 100) if vv else 0.0
+
+            return MovimentacaoResponse(
+                cnpj=cnpj,
+                summary=MovimentacaoSummarySchema(
+                    total_vendas=tv,
+                    total_vendas_irregular=tvi,
+                    valor_total=round(vv, 2),
+                    valor_irregular=round(vvi, 2),
+                    pct_irregular=round(pct, 2),
+                    from_cache=from_cache,
+                ),
+                rows=rows,
+            )
+
+        # ── 1. Tenta carregar do cache Parquet ─────────────────────────────
+        if os.path.exists(CACHE_PATH):
+            try:
+                df_cached = pl.read_parquet(CACHE_PATH)
+                print(f"⚡ Movimentação carregada do cache Parquet: {cnpj}")
+                return _build_response_from_df(df_cached, from_cache=True)
+            except Exception as e:
+                print(f"⚠️ Cache corrompido para {cnpj}, recalculando. Erro: {e}")
+
+        # ── 1b. Se for apenas check_cache e não existia/corrompeu, retorna vazio
+        if check_cache:
+            return MovimentacaoResponse(cnpj=cnpj, summary=MovimentacaoSummarySchema(), rows=[])
+
+        # ── 2. Busca e processa a memória de cálculo do SQL Server ─────────
+        try:
+            with engine.connect() as conn:
+                # 2a. Busca dados comprimidos
+                result = conn.execute(text("""
+                    SELECT TOP 1 dados_comprimidos, id_processamento
+                    FROM temp_CGUSC.fp.memoria_calculo_consolidada
+                    WHERE cnpj = :cnpj
+                    ORDER BY id_processamento DESC
+                """), {"cnpj": cnpj}).fetchone()
+
+                if not result or not result[0]:
+                    print(f"⚠️ Nenhum dado de memória de cálculo para CNPJ {cnpj}")
+                    return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
+
+                dados_comprimidos = result[0]
+
+                # 2b. Busca nomes dos princípios ativos (GTIN → Nome)
+                med_rows = conn.execute(text("""
+                    SELECT codigo_barra, principio_ativo
+                    FROM temp_CGUSC.fp.medicamentos_patologia
+                """)).fetchall()
+                medicamentos_map = {float(r[0]): r[1] for r in med_rows if r[0]}
+
+            # 2c. Descompacta e desserializa
+            json_str = zlib.decompress(dados_comprimidos).decode("utf-8")
+            dados = json.loads(json_str)
+
+            # 2d. Converte dates e Decimals (espelhando gerar_relatorio.py)
+            for item in dados:
+                for key in ["periodo_inicial", "periodo_final", "periodo_inicial_nao_comprovacao",
+                            "data_aquis_dev_estoq", "data_estoque_inicial", "data_aquisicao", "data_devolucao"]:
+                    if key in item and item[key] and isinstance(item[key], str):
+                        try:
+                            from datetime import datetime as _dt
+                            if "T" in item[key]:
+                                item[key] = _dt.fromisoformat(item[key]).date()
+                            else:
+                                item[key] = _dt.strptime(item[key], "%Y-%m-%d").date()
+                        except Exception:
+                            pass
+                for key in ["valor_movimentado", "valor_sem_comprovacao"]:
+                    if key in item and item[key] is not None:
+                        item[key] = Decimal(str(item[key]))
+
+        except Exception as e:
+            print(f"❌ ERRO ao buscar memória de cálculo para {cnpj}: {e}")
+            print(traceback.format_exc())
+            return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
+
+        # ── 3. Processa linhas (lógica espelhada de gerar_relatorio.py) ──────
+        results = copy.deepcopy(dados)
+
+        # Passo A: Enriquece vendas com lista de NFs (campo 'notas')
+        contador = 0
+        for i, j in enumerate(results):
+            if j["tipo"] in ("c", "d"):
+                contador += 1
+            if j["tipo"] in ("s", "h"):
+                contador = 0
+            if j["tipo"] == "v":
+                lista_nfs = []
+                for idx in range(1, contador + 1):
+                    item_ant = results[i - idx]
+                    if item_ant["tipo"] == "c":
+                        dt = item_ant["data_aquis_dev_estoq"].strftime("%d/%m/%Y") if item_ant.get("data_aquis_dev_estoq") else ""
+                        qtd = int(item_ant["qnt_aquis_dev"]) if item_ant.get("qnt_aquis_dev") else 0
+                        lista_nfs.append(f"NF Aquisição: {item_ant.get('numero_nfe', '')} - {dt} | Qtde: {qtd}")
+                    elif item_ant["tipo"] == "d":
+                        dt = item_ant["data_aquis_dev_estoq"].strftime("%d/%m/%Y") if item_ant.get("data_aquis_dev_estoq") else ""
+                        qtd = int(item_ant["qnt_aquis_dev"]) if item_ant.get("qnt_aquis_dev") else 0
+                        lista_nfs.append(f"NF Transferência: {item_ant.get('numero_nfe', '')} - {dt} | Qtde: {qtd}")
+                    elif item_ant["tipo"] == "e":
+                        est = int(item_ant.get("estoque_inicial", 0))
+                        lista_nfs.append(f"Estoque Inicial Estimado: {est} - 01/07/2015")
+                if not lista_nfs:
+                    for idx in range(i - 1, -1, -1):
+                        if results[idx]["tipo"] == "e":
+                            est = int(results[idx].get("estoque_inicial", 0))
+                            lista_nfs.append(f"Estoque Inicial Estimado: {est} - 01/07/2015")
+                            break
+                        elif results[idx]["tipo"] == "h":
+                            break
+                results[i]["notas"] = "; ".join(lista_nfs)
+                contador = 0
+
+        # Passo B: Estrutura linhas tipadas (tipo_linha)
+        _FMT_DATE = lambda d: d.strftime("%d/%m/%Y") if d else "-"
+
+        lista_linhas: list[dict] = []
+        lista_parcial: list[dict] = []
+        numero_vendas_gtin = 0
+        ultimo_estoque_valido = 0
+        gtin_atual: str | None = None
+        medicamento_atual: str | None = None
+
+        for i, j in enumerate(results):
+            tipo = j["tipo"]
+
+            if tipo == "h":
+                numero_vendas_gtin = 0
+                cod = int(j["codigo_barra"])
+                gtin_atual = str(cod)
+                principio = medicamentos_map.get(float(cod), "DESCONHECIDO")
+                medicamento_atual = principio
+                est = j.get("estoque_inicial", 0) or 0
+                ultimo_estoque_valido = est
+
+                lista_parcial.append({
+                    "tipo_linha": "header_medicamento",
+                    "gtin": gtin_atual,
+                    "medicamento": f"{medicamento_atual} (Estoque Inicial: {int(est)} un.)",
+                })
+                lista_parcial.append({"tipo_linha": "header_colunas"})
+
+            elif tipo == "e":
+                ultimo_estoque_valido = j.get("estoque_inicial", 0) or 0
+
+            elif tipo == "v":
+                ultimo_estoque_valido = j.get("estoque_final", 0) or 0
+                tem_irregular = (j.get("valor_sem_comprovacao") or Decimal(0)) > 0
+                numero_vendas_gtin += 1
+
+                dt_nc = j.get("periodo_inicial_nao_comprovacao")
+                dt_nc_fmt = "-" if (dt_nc is None or str(dt_nc) == "9999-01-01") else _FMT_DATE(dt_nc)
+
+                lista_parcial.append({
+                    "tipo_linha": "venda_irregular" if tem_irregular else "venda_normal",
+                    "gtin": gtin_atual,
+                    "medicamento": medicamento_atual,
+                    "periodo_inicial": _FMT_DATE(j.get("periodo_inicial")),
+                    "periodo_inicio_irregular": dt_nc_fmt,
+                    "periodo_final": _FMT_DATE(j.get("periodo_final")),
+                    "estoque_inicial": int(j.get("estoque_inicial") or 0),
+                    "estoque_final": int(j.get("estoque_final") or 0),
+                    "vendas": int(j.get("vendas_periodo") or 0),
+                    "vendas_irregular": int(j.get("vendas_sem_comprovacao") or 0),
+                    "valor": float(Decimal(str(j.get("valor_movimentado") or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                    "valor_irregular": float(Decimal(str(j.get("valor_sem_comprovacao") or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                    "notas": j.get("notas", ""),
+                })
+
+            elif tipo in ("c", "d"):
+                ultimo_estoque_valido = j.get("estoque_final", 0) or 0
+
+            elif tipo == "s":
+                # Resumo Parcial do GTIN — só inclui o GTIN se tiver ao menos 1 venda
+                estoque_visual = int(ultimo_estoque_valido)
+                for item_rev in reversed(lista_parcial):
+                    if item_rev.get("estoque_final") is not None:
+                        estoque_visual = item_rev["estoque_final"]
+                        break
+
+                lista_parcial.append({
+                    "tipo_linha": "resumo_parcial",
+                    "gtin": gtin_atual,
+                    "medicamento": medicamento_atual,
+                    "periodo_inicial": "Resumo Parcial",
+                    "estoque_final": estoque_visual,
+                    "vendas": int(j.get("vendas_periodo") or 0),
+                    "vendas_irregular": int(j.get("vendas_sem_comprovacao") or 0),
+                    "valor": float(Decimal(str(j.get("valor_movimentado") or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                    "valor_irregular": float(Decimal(str(j.get("valor_sem_comprovacao") or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                })
+
+                if numero_vendas_gtin > 0:
+                    lista_linhas.extend(copy.deepcopy(lista_parcial))
+
+                lista_parcial.clear()
+                numero_vendas_gtin = 0
+
+        # ── 4. Converte para Polars e salva Parquet ───────────────────────
+        SCHEMA_COLS = [
+            "tipo_linha", "gtin", "medicamento",
+            "periodo_inicial", "periodo_inicio_irregular", "periodo_final",
+            "estoque_inicial", "estoque_final",
+            "vendas", "vendas_irregular",
+            "valor", "valor_irregular",
+            "notas",
+        ]
+
+        # Garante que todas as colunas estejam presentes em cada dict
+        for row in lista_linhas:
+            for col in SCHEMA_COLS:
+                row.setdefault(col, None)
+
+        if lista_linhas:
+            # Cria o DataFrame com todas as colunas como Utf8 (safe),
+            # então faz cast explícito das colunas numéricas.
+            # Isso evita erros de schema em linhas de cabeçalho que têm None
+            # misturado com int/float nas linhas de venda.
+            try:
+                df_result = (
+                    pl.DataFrame(lista_linhas)
+                    .select(SCHEMA_COLS)
+                    .with_columns([
+                        pl.col("estoque_inicial").cast(pl.Int64, strict=False),
+                        pl.col("estoque_final").cast(pl.Int64, strict=False),
+                        pl.col("vendas").cast(pl.Int64, strict=False),
+                        pl.col("vendas_irregular").cast(pl.Int64, strict=False),
+                        pl.col("valor").cast(pl.Float64, strict=False),
+                        pl.col("valor_irregular").cast(pl.Float64, strict=False),
+                    ])
+                )
+                df_result.write_parquet(CACHE_PATH, compression="lz4")
+                print(f"✅ Cache Parquet salvo: {CACHE_PATH}")
+            except Exception as e:
+                print(f"⚠️ Erro ao criar/salvar Parquet para {cnpj}: {e}")
+                print(traceback.format_exc())
+                # Fallback sem persistir: entrega os dados sem cache
+                try:
+                    df_result = pl.DataFrame(lista_linhas).select(SCHEMA_COLS)
+                except Exception:
+                    df_result = pl.DataFrame([])
+        else:
+            df_result = pl.DataFrame([])
+
+        return _build_response_from_df(df_result, from_cache=False)
+
+

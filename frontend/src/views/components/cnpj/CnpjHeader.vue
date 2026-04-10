@@ -436,7 +436,7 @@ const formattedFullAddress = computed(() => {
 }
 
 .cnpj-copy-wrap-new {
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+  background: var(--establishment-header-bg);
   padding: 0.4rem 0.85rem;
   border-radius: 6px;
   cursor: pointer;
@@ -444,11 +444,11 @@ const formattedFullAddress = computed(() => {
   align-items: center;
   gap: 0.5rem;
   transition: all 0.2s ease-in-out;
-  border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent) !important;
+  border: 1px solid var(--establishment-header-border) !important;
 }
 
 .cnpj-copy-wrap-new:hover {
-  background: color-mix(in srgb, var(--text-muted) 15%, transparent) !important;
+  background: var(--establishment-header-bg) !important;
   border-color: var(--text-muted) !important;
   transform: translateY(-1px);
 }

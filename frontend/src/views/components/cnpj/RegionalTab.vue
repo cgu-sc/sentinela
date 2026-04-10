@@ -3,9 +3,9 @@ import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
 import { useGeoStore } from '@/stores/geo';
-import RegionalMunicipalityTable from '../RegionalMunicipalityTable.vue';
-import RegionalPharmacyTable from '../RegionalPharmacyTable.vue';
-import MunicipalityMapChart from '../MunicipalityMapChart.vue';
+import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
+import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
+import MunicipalMap from '../maps/MunicipalMap.vue';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -52,7 +52,7 @@ const filteredFarmacias = computed(() => {
 });
 
 const loadData = () => {
-    if (props.geoData?.no_regiao_saude && !regionalLoaded.value) {
+    if (props.geoData?.no_regiao_saude) {
         fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf);
     }
 }
@@ -138,7 +138,7 @@ watch(
     <template v-else>
       <div class="regional-top-row">
         <div class="table-wrapper-col">
-          <RegionalMunicipalityTable 
+          <RegionalMunicipalTable
             :municipios="regionalData.municipios"
             :municipio-atual="geoData.no_municipio"
             :uf-atual="geoData.sg_uf"
@@ -148,7 +148,7 @@ watch(
           />
         </div>
         <div class="map-wrapper-col">
-          <MunicipalityMapChart
+          <MunicipalMap
             :prop-uf="geoData.sg_uf"
             :prop-regiao="geoData.no_regiao_saude"
             :prop-municipio-ibge7="filterMunicipioId ?? currentIbge7"

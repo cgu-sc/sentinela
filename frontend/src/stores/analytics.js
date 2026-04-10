@@ -36,6 +36,9 @@ export const useAnalyticsStore = defineStore('analytics', {
     fatorRisco: [],
     evolucaoFinanceira: null,
     dadosCadastro: null,
+    // CNPJs abertos fora do fluxo de filtros (ex: URL direta, /listas)
+    // Separado de resultadoCnpjs para não contaminar o estado dos filtros globais.
+    cnpjsAvulsos: new Map(),
     // Cache de municípios por região — carregado lazily no detalhe do CNPJ
     municipiosRegiao: [],
     municipiosRegiaoKey: null,   // 'UF|regiao' da última carga
@@ -147,6 +150,25 @@ export const useAnalyticsStore = defineStore('analytics', {
         console.error('Erro ao buscar municípios da região:', err);
       } finally {
         this.municipiosRegiaoLoading = false;
+      }
+    },
+
+    /**
+     * Carrega um CNPJ avulso (fora do fluxo de filtros) em `cnpjsAvulsos`.
+     * Nunca toca em resultadoCnpjs, resultadoMunicipios ou kpis.
+     * @param {string} cnpj
+     * @param {string|null} inicio
+     * @param {string|null} fim
+     */
+    async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
+      if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
+      try {
+        const params = buildAnalyticsParams(inicio, fim, null, null, null, null, null, null, null, null, null, null, cnpj);
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        const found = (response.data.resultado_cnpjs || []).find(c => c.cnpj === cnpj);
+        if (found) this.cnpjsAvulsos.set(cnpj, found);
+      } catch (err) {
+        console.error('Erro ao carregar CNPJ avulso:', err);
       }
     },
 

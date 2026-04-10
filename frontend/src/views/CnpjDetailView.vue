@@ -9,12 +9,12 @@ import { useRecentCnpjStore } from "@/stores/recentCnpj";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
-import CnpjDetailHeader from "./components/cnpj/CnpjDetailHeader.vue";
-import CnpjTabFinancialEvolution from "./components/cnpj/CnpjTabFinancialEvolution.vue";
-import CnpjTabIndicators from "./components/cnpj/CnpjTabIndicators.vue";
-import CnpjTabFalecidos from "./components/cnpj/CnpjTabFalecidos.vue";
-import CnpjTabRegional from "./components/cnpj/CnpjTabRegional.vue";
-import CnpjTabPrescritores from "./components/cnpj/CnpjTabPrescritores.vue";
+import CnpjHeader from "./components/cnpj/CnpjHeader.vue";
+import EvolutionTab from "./components/cnpj/EvolutionTab.vue";
+import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
+import MortalityTab from "./components/cnpj/MortalityTab.vue";
+import RegionalTab from "./components/cnpj/RegionalTab.vue";
+import CRMTab from "./components/cnpj/CRMTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -43,7 +43,7 @@ const regionalTabMounted = ref(false);
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
-const { resultadoCnpjs, dadosCadastro } = storeToRefs(analyticsStore);
+const { resultadoCnpjs, cnpjsAvulsos, dadosCadastro } = storeToRefs(analyticsStore);
 
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
@@ -100,7 +100,10 @@ const handleExport = async () => {
 
 // ── Dados do CNPJ ─────────────────────────────────────────
 const cnpjData = computed(
-  () => resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ?? null,
+  () =>
+    resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ??
+    cnpjsAvulsos.value?.get(cnpj.value) ??
+    null,
 );
 
 // Ativa o mount de CnpjTabRegional na primeira vez que a aba for aberta
@@ -121,25 +124,8 @@ watch(
       analyticsStore.fetchDadosCadastro(newCnpj);
       if (!cnpjData.value) {
         const p = getApiParams();
-        try {
-          await analyticsStore.fetchDashboardSummary(
-            p.inicio,
-            p.fim,
-            p.percMin,
-            p.percMax,
-            p.valMin,
-            "Todos",
-            "Todos",
-            "Todos",
-            "Todos",
-            "Todos",
-            "Todos",
-            "Todos",
-            newCnpj,
-          );
-        } catch (e) {
-          console.error("Erro ao hidratar CNPJ direto:", e);
-        }
+        // Carrega avulso: isola do estado dos filtros globais.
+        await analyticsStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
       }
     }
   },
@@ -198,7 +184,7 @@ const formatCnpj = (v) => {
 <template>
   <div class="cnpj-detail-page">
     <!-- HEADER (COMPONENTE ISOLADO) -->
-    <CnpjDetailHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :cadastro="dadosCadastro" :is-exporting="isExporting" @export="handleExport" />
+    <CnpjHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :cadastro="dadosCadastro" :is-exporting="isExporting" @export="handleExport" />
 
     <!-- TABS -->
     <TabView class="detail-tabs" :activeIndex="cnpjNav.activeTabIndex" @tab-change="cnpjNav.activeTabIndex = $event.index">
@@ -218,14 +204,14 @@ const formatCnpj = (v) => {
             >Evolução Financeira</span
           ></template
         >
-        <CnpjTabFinancialEvolution ref="evolutionTabRef" class="tab-content" />
+        <EvolutionTab ref="evolutionTabRef" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
         <template #header
           ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
         >
-        <CnpjTabIndicators ref="indicatorsTabRef" class="tab-content" />
+        <IndicatorsTab ref="indicatorsTabRef" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -234,7 +220,7 @@ const formatCnpj = (v) => {
             >Análise de CRMs</span
           ></template
         >
-        <CnpjTabPrescritores ref="crmsTabRef" :cnpj="cnpj" class="tab-content" />
+        <CRMTab ref="crmsTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -243,7 +229,7 @@ const formatCnpj = (v) => {
             >Falecidos</span
           ></template
         >
-        <CnpjTabFalecidos ref="falecidosTabRef" :cnpj="cnpj" class="tab-content" />
+        <MortalityTab ref="falecidosTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -252,7 +238,7 @@ const formatCnpj = (v) => {
             >Região de Saúde</span
           ></template
         >
-        <CnpjTabRegional v-if="regionalTabMounted" :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
+        <RegionalTab v-if="regionalTabMounted" :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
       </TabPanel>
     </TabView>
   </div>

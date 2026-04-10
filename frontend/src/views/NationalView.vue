@@ -1,9 +1,9 @@
 <script setup>
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
-import RiskAnalysisChart from './components/RiskAnalysisChart.vue';
-import BrazilMapChart from './components/BrazilMapChart.vue';
-import UfAnalysisTable from './components/UfAnalysisTable.vue';
+import RiskChart from './components/charts/RiskChart.vue';
+import BrazilMap from './components/maps/BrazilMap.vue';
+import UFTable from './components/tables/UFTable.vue';
 useFetchAnalytics({ includeFatorRisco: true });
 </script>
 
@@ -11,10 +11,10 @@ useFetchAnalytics({ includeFatorRisco: true });
   <div class="dashboard-container">
     <KpiSection />
     <div class="charts-row">
-      <RiskAnalysisChart />
-      <BrazilMapChart />
+      <RiskChart />
+      <BrazilMap />
     </div>
-    <UfAnalysisTable />
+    <UFTable />
   </div>
 </template>
 

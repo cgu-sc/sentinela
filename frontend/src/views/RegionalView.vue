@@ -15,8 +15,8 @@ import { ref, watch, computed } from 'vue';
 import { useFilterStore } from '@/stores/filters';
 import { FILTER_ALL_VALUE } from '@/config/constants';
 import { API_ENDPOINTS } from '@/config/api';
-import RegionalMunicipalityTable from './components/RegionalMunicipalityTable.vue';
-import RegionalPharmacyTable from './components/RegionalPharmacyTable.vue';
+import RegionalMunicipalTable from './components/tables/RegionalMunicipalTable.vue';
+import RegionalPharmacyTable from './components/tables/RegionalPharmacyTable.vue';
 import ProgressBar from 'primevue/progressbar';
 
 const filterStore = useFilterStore();
@@ -125,7 +125,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
       </div>
 
       <!-- Tabela de municípios -->
-      <RegionalMunicipalityTable :municipios="regionalData.municipios" />
+      <RegionalMunicipalTable :municipios="regionalData.municipios" />
 
       <!-- Ranking de farmácias -->
       <RegionalPharmacyTable :farmacias="regionalData.farmacias" />

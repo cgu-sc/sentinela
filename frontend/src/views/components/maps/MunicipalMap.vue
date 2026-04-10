@@ -160,7 +160,8 @@ const munDataByIbge7 = computed(() => {
 // Em modo embutido os dados são estáticos (prop), snapshot desnecessário.
 // Snapshot local (vive enquanto o componente existe).
 // filterStore.regionMapData é o fallback persistente entre desmontagens.
-const regionSnapshot = ref(filterStore.regionMapData ?? null);
+// Em modo embutido não usa o snapshot do filterStore (que pode conter dados de outra UF)
+const regionSnapshot = ref(props.propUf ? null : (filterStore.regionMapData ?? null));
 const mapMunData = computed(() => {
   if (embeddedMode.value) return munDataByIbge7.value;
   return (

@@ -29,13 +29,13 @@ export const SURFACE_COLORS = {
       "tabs-border": "#e2e8f0",
       "card-border": "#e2e8f0",
       "table-footer-bg": "#f1f5f9",
-      "table-hover": "rgba(37, 99, 235, 0.06)",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#f8fafc",
       // Risco — tons saturados, legíveis sobre fundo claro
       "risk-low": "#faa716", // original amber style
       "risk-medium": "#faa716", // amber-500
-      "risk-high": "#e11d48", // rose-600
-      "risk-critical": "#991b1b", // red-800
+      "risk-high": "#f43f5e", // rose-500
+      "risk-critical": "#be123c", // rose-700
       "status-success": "#10b981", // emerald-500
       "risk-indicator-normal": "#10b981", // emerald-500 (mesmo tom do gráfico)
       "risk-indicator-warning": "#d97706", // amber-600
@@ -76,7 +76,7 @@ export const SURFACE_COLORS = {
       "tabs-border": "rgba(255, 255, 255, 0.1)",
       "card-border": "#444c56",
       "table-footer-bg": "#1c2128",
-      "table-hover": "#1f2937",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#131920",
       "risk-low": "#fbbf24",
       "risk-medium": "#fbbf24",
@@ -123,12 +123,12 @@ export const SURFACE_COLORS = {
       "tabs-border": "#e2e8f0",
       "card-border": "#e2e8f0",
       "table-footer-bg": "#f1f5f9",
-      "table-hover": "rgba(37, 99, 235, 0.06)",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#f8fafc",
       "risk-low": "#faa716",
       "risk-medium": "#faa716",
-      "risk-high": "#e11d48",
-      "risk-critical": "#991b1b",
+      "risk-high": "#f43f5e",
+      "risk-critical": "#be123c",
       "status-success": "#10b981",
       "risk-indicator-normal": "#10b981",
       "risk-indicator-warning": "#d97706",
@@ -169,7 +169,7 @@ export const SURFACE_COLORS = {
       "tabs-border": "rgba(59, 130, 246, 0.15)",
       "card-border": "rgba(59, 130, 246, 0.15)",
       "table-footer-bg": "#071020",
-      "table-hover": "rgba(59, 130, 246, 0.08)",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#071020",
       // Risco — tons luminosos sobre fundo azul escuro
       "risk-low": "#fbbf24",
@@ -216,13 +216,13 @@ export const SURFACE_COLORS = {
       "tabs-border": "#e7e5e4",
       "card-border": "#e7e5e4",
       "table-footer-bg": "#f5f5f4",
-      "table-hover": "rgba(245, 158, 11, 0.08)",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#fafaf9",
       // Risco — escala quente: amber claro → orange → rose → red
       "risk-low": "#fbbf24", // amber-400 — tom suave, menos intenso que o médio
       "risk-medium": "#f97316", // orange-500 — intermediário entre amber e vermelho
-      "risk-high": "#e11d48", // rose-600
-      "risk-critical": "#991b1b", // red-800
+      "risk-high": "#f43f5e", // rose-500
+      "risk-critical": "#be123c", // rose-700
       "status-success": "#10b981", // emerald-500
       "risk-indicator-normal": "#10b981",
       "risk-indicator-warning": "#d97706",
@@ -262,7 +262,7 @@ export const SURFACE_COLORS = {
       "tabs-border": "#303030",
       "card-border": "#3d3d3d",
       "table-footer-bg": "#1c2128",
-      "table-hover": "#1f2937",
+      "table-hover": "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#131920",
       // Risco — escala quente: amber claro → orange → rose → red
       "risk-low": "#fcd34d", // amber-300 — tom suave e legível no dark

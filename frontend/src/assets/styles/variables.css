@@ -28,7 +28,7 @@
   --table-header-bg: transparent;
   --table-header-text: #64748b;
   --table-footer-bg: #f1f5f9;
-  --table-hover: #f1f5f9;
+  --table-hover: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
   --table-stripe: #f8fafc;
 
   /* Scrollbar */
@@ -72,7 +72,7 @@
   --table-header-bg: transparent;
   --table-header-text: #8b949e;
   --table-footer-bg: #1c2128;
-  --table-hover: #1f2937;
+  --table-hover: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
   --table-stripe: #131920;
 
   /* PRIME VUE INTERNAL SURFACES */

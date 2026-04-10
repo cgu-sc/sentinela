@@ -6,7 +6,7 @@ import { useAnalyticsStore } from '@/stores/analytics';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import Tag from 'primevue/tag';
 import Button from 'primevue/button';
-import FalecidosTimelineOverlay from './FalecidosTimelineOverlay.vue';
+import MortalityTimelineOverlay from './MortalityTimelineOverlay.vue';
 
 const props = defineProps({
   cnpj: {
@@ -402,7 +402,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
       <p>Clique na aba para processar a análise de óbitos.</p>
     </div>
 
-    <FalecidosTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
+    <MortalityTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
   </div>
 </template>
 
@@ -544,7 +544,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .f-row:hover td {
-  background: var(--table-hover) !important;
+  background: var(--table-stripe) !important;
 }
 
 .f-nome { font-weight: 400; font-size: 0.82rem; text-transform: none !important; }

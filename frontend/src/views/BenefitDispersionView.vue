@@ -1,7 +1,7 @@
 <script setup>
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import KpiSection from './components/KpiSection.vue';
-import UfAnalysisChart from './components/UfAnalysisChart.vue';
+import UFChart from './components/charts/UFChart.vue';
 
 useFetchAnalytics();
 </script>
@@ -10,7 +10,7 @@ useFetchAnalytics();
   <div class="dashboard-container">
     <KpiSection />
     <div class="scatter-wrapper">
-      <UfAnalysisChart grow />
+      <UFChart grow />
     </div>
   </div>
 </template>

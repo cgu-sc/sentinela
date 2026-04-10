@@ -1,7 +1,8 @@
 <script setup>
 import { useRoute } from "vue-router";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
+import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
@@ -43,14 +44,15 @@ const cnpj = computed(() => route.params.cnpj);
 const regionalTabMounted = ref(false);
 
 // ── Stores ────────────────────────────────────────────────
-const analyticsStore = useAnalyticsStore();
-const { resultadoCnpjs, cnpjsAvulsos, dadosCadastro } = storeToRefs(analyticsStore);
+const analyticsStore  = useAnalyticsStore();
+const cnpjDetailStore = useCnpjDetailStore();
+const { resultadoCnpjs } = storeToRefs(analyticsStore);
+const { dadosCadastro } = storeToRefs(cnpjDetailStore);
 
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
 
 const cnpjNav = useCnpjNavStore();
-
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
@@ -76,7 +78,7 @@ const handleExport = async () => {
   const geo = geoData.value;
   if (geo?.sg_uf && geo?.no_regiao_saude) {
     const p = getApiParams();
-    await analyticsStore.fetchMunicipiosRegiao(geo.sg_uf, geo.no_regiao_saude, p.inicio, p.fim);
+    await cnpjDetailStore.fetchMunicipiosRegiao(geo.sg_uf, geo.no_regiao_saude, p.inicio, p.fim);
   }
 
   exportCnpjPdf({
@@ -91,7 +93,7 @@ const handleExport = async () => {
     falecidosTabRef,
     cnpjNavStore: cnpjNav,
     geoStore,
-    resultadoMunicipios: analyticsStore.municipiosRegiao,
+    resultadoMunicipios: cnpjDetailStore.municipiosRegiao,
     formatCurrencyFull,
     formatNumberFull,
     formatarData,
@@ -103,7 +105,7 @@ const handleExport = async () => {
 const cnpjData = computed(
   () =>
     resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ??
-    cnpjsAvulsos.value?.get(cnpj.value) ??
+    cnpjDetailStore.cnpjsAvulsos.get(cnpj.value) ??
     null,
 );
 
@@ -115,19 +117,22 @@ watch(() => cnpjNav.activeTabIndex, (idx) => {
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
-    // Ao trocar de CNPJ, reseta navegação e limpa a evolução financeira
+    // Ao trocar de CNPJ, reseta tudo e dispara todos os fetches em paralelo
     if (newCnpj !== oldCnpj) {
-      analyticsStore.resetEvolucaoFinanceira();
-      analyticsStore.resetDadosCadastro();
-      analyticsStore.resetMovimentacao();
+      cnpjDetailStore.resetAll();
       cnpjNav.reset(TAB_INDEX.EVOLUCAO);
     }
     if (newCnpj) {
-      analyticsStore.fetchDadosCadastro(newCnpj);
+      // Eager load: dispara todos os fetches ao carregar a página
+      cnpjDetailStore.fetchDadosCadastro(newCnpj);
+      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj);
+      cnpjDetailStore.fetchMovimentacao(newCnpj);
+      cnpjDetailStore.fetchIndicadores(newCnpj);
+      cnpjDetailStore.fetchFalecidos(newCnpj);
+      cnpjDetailStore.fetchPrescritores(newCnpj);
       if (!cnpjData.value) {
         const p = getApiParams();
-        // Carrega avulso: isola do estado dos filtros globais.
-        await analyticsStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
+        await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
       }
     }
   },
@@ -364,5 +369,17 @@ const formatCnpj = (v) => {
 }
 .tab-placeholder p {
   font-size: 0.875rem;
+}
+</style>
+
+<style>
+/* Estado de erro nos tabs — não-scoped para alcançar componentes filhos */
+.tab-placeholder--error .placeholder-icon,
+.tab-placeholder--error i {
+  color: var(--red-400, #f87171) !important;
+}
+.tab-placeholder--error p {
+  color: var(--text-color);
+  opacity: 0.75;
 }
 </style>

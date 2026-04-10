@@ -1,6 +1,7 @@
 <script setup>
-import { computed, watch, ref } from "vue";
-import { usePrescritores } from "@/composables/usePrescritores";
+import { computed, ref } from "vue";
+import { storeToRefs } from 'pinia';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from "@/composables/useFormatting";
 
 const props = defineProps({
@@ -10,19 +11,8 @@ const props = defineProps({
   },
 });
 
-const { prescritoresData, prescritoresLoading, fetchPrescritores } =
-  usePrescritores();
+const { prescritoresData, prescritoresLoading, prescritoresError } = storeToRefs(useCnpjDetailStore());
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
-
-watch(
-  () => props.cnpj,
-  (newCnpj) => {
-    if (newCnpj) {
-      fetchPrescritores(newCnpj);
-    }
-  },
-  { immediate: true },
-);
 
 // --- CÁLCULOS DOS KPIs ---
 const summary = computed(() => prescritoresData.value?.summary || {});
@@ -188,6 +178,11 @@ defineExpose({
     <div v-if="prescritoresLoading" class="loading-state">
       <i class="pi pi-spinner pi-spin"></i>
       <p>Carregando análise de prescritores...</p>
+    </div>
+
+    <div v-else-if="prescritoresError" class="loading-state tab-placeholder--error">
+      <i class="pi pi-exclamation-circle" style="font-size: 2rem"></i>
+      <p>{{ prescritoresError }}</p>
     </div>
 
     <div

@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue';
-import { useFalecidos } from '@/composables/useFalecidos';
+import { computed, ref } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from '@/composables/useFormatting';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
@@ -15,7 +16,7 @@ const props = defineProps({
   }
 });
 
-const { falecidosData, falecidosLoading, falecidosLoaded, fetchFalecidos } = useFalecidos();
+const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
 const analyticsStore = useAnalyticsStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -77,15 +78,6 @@ function getDayStepClass(days) {
   return 'd-risk-over-3y';
 }
 
-onMounted(() => {
-  if (props.cnpj && !falecidosLoaded.value) {
-    fetchFalecidos(props.cnpj);
-  }
-});
-
-watch(() => props.cnpj, (newCnpj) => {
-  if (newCnpj) fetchFalecidos(newCnpj);
-});
 
 const falecidosAgrupados = computed(() => {
   const transacoes = falecidosData.value?.transacoes ?? [];
@@ -159,6 +151,11 @@ const falecidosAgrupadosFiltrados = computed(() => {
     <div v-if="falecidosLoading" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Analisando base de óbitos...</p>
+    </div>
+
+    <div v-else-if="falecidosError" class="tab-placeholder tab-placeholder--error">
+      <i class="pi pi-exclamation-circle placeholder-icon" />
+      <p>{{ falecidosError }}</p>
     </div>
 
     <div v-else-if="falecidosLoaded && !falecidosData?.transacoes?.length" class="tab-placeholder">

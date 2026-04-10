@@ -3,6 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from fastapi import HTTPException
 import os
 import zlib
 import json
@@ -1105,7 +1106,10 @@ class AnalyticsService:
         except Exception as e:
             print(f"❌ ERRO ao buscar memória de cálculo para {cnpj}: {e}")
             print(traceback.format_exc())
-            return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
+            raise HTTPException(
+                status_code=503,
+                detail="Não foi possível conectar ao banco de dados. Verifique a conexão com a rede."
+            )
 
         # ── 3. Processa linhas (lógica espelhada de gerar_relatorio.py) ──────
         results = copy.deepcopy(dados)

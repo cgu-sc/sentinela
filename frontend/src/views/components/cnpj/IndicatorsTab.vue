@@ -1,17 +1,14 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
-import { useIndicadores } from '@/composables/useIndicadores';
+import { computed, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+
 import { useFormatting } from '@/composables/useFormatting';
 import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 
-const route = useRoute();
-const cnpj = computed(() => route.params.cnpj);
-
 const { formatCurrencyFull } = useFormatting();
-const { indicadoresData, indicadoresLoading, indicadoresLoaded, fetchIndicadores } = useIndicadores();
-const isAuditExpanded = ref(false); // Começa recolhido por padrão para dar destaque
-
+const cnpjDetailStore = useCnpjDetailStore();
+const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
 // Inicializa o filtro a partir do localStorage (persistência)
 const showOnlyHighRisk = ref(localStorage.getItem('sentinela_indicators_filter_only_risky') === 'true');
 
@@ -20,9 +17,6 @@ watch(showOnlyHighRisk, (newVal) => {
   localStorage.setItem('sentinela_indicators_filter_only_risky', newVal);
 });
 
-onMounted(() => {
-  if (cnpj.value) fetchIndicadores(cnpj.value);
-});
 
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
@@ -116,53 +110,17 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
       <p>Carregando indicadores...</p>
     </div>
 
+    <div v-else-if="indicadoresError" class="tab-placeholder tab-placeholder--error">
+      <i class="pi pi-exclamation-circle placeholder-icon" />
+      <p>{{ indicadoresError }}</p>
+    </div>
+
     <div v-else-if="indicadoresLoaded && !Object.keys(indicadoresData?.indicadores ?? {}).length" class="tab-placeholder">
       <i class="pi pi-inbox placeholder-icon" />
       <p>Nenhum indicador encontrado para este CNPJ.</p>
     </div>
 
     <template v-else-if="indicadoresLoaded">
-
-      <!-- RESUMO DE AUDITORIA (CARD DE PONTOS CRÍTICOS) -->
-      <div v-if="pontosCriticos.length" class="audit-card-new" :class="{ 'is-collapsed': !isAuditExpanded }">
-        <div class="audit-card-header" @click="isAuditExpanded = !isAuditExpanded" style="cursor: pointer;">
-          <div class="audit-title-wrap">
-            <i class="pi pi-shield audit-shield-icon" />
-            <div class="audit-title-text">
-              <h3>Resumo para Auditoria</h3>
-              <p>Identificados {{ pontosCriticos.length }} indicador(es) em nível crítico</p>
-            </div>
-          </div>
-          <div class="audit-header-actions">
-            <span class="audit-expand-label">{{ isAuditExpanded ? 'Recolher detalhes' : 'Ver detalhes' }}</span>
-            <i class="pi" :class="isAuditExpanded ? 'pi-chevron-up' : 'pi-chevron-down'" />
-          </div>
-        </div>
-        
-        <transition name="audit-slide">
-          <div v-show="isAuditExpanded" class="audit-card-body">
-            <div v-for="p in pontosCriticos" :key="p.label" class="audit-row-new">
-              <div class="audit-item-main">
-                <span class="audit-item-label">{{ p.label }}</span>
-                <div class="audit-item-data">
-                  <span class="audit-badge-val">{{ p.riscoReg.toFixed(1) }}x</span>
-                  <span class="audit-item-desc">acima da mediana regional</span>
-                </div>
-              </div>
-              <div class="audit-item-stats">
-                <div class="stat-mini">
-                  <span class="s-label">Farmácia</span>
-                  <span class="s-val">{{ formatIndicadorValue(p.valor, p.formato) }}</span>
-                </div>
-                <div class="stat-mini">
-                  <span class="s-label">Regional</span>
-                  <span class="s-val">{{ formatIndicadorValue(p.medReg, p.formato) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </transition>
-      </div>
 
       <div class="ind-section">
         <div class="ind-card">

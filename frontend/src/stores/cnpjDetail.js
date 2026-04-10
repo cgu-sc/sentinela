@@ -1,0 +1,225 @@
+import { defineStore } from 'pinia';
+import axios from 'axios';
+import { API_ENDPOINTS } from '@/config/api';
+
+const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
+
+export const useCnpjDetailStore = defineStore('cnpjDetail', {
+  state: () => ({
+    // ── Cadastro ──────────────────────────────────────────────────────────────
+    dadosCadastro:        null,
+    dadosCadastroLoading: false,
+
+    // ── Evolução Financeira ───────────────────────────────────────────────────
+    evolucaoFinanceira: null,
+    evolucaoLoading:    false,
+    evolucaoLoaded:     false,
+    evolucaoError:      null,
+
+    // ── Movimentação (Memória de Cálculo) ─────────────────────────────────────
+    movimentacaoData:    null,
+    movimentacaoLoading: false,
+    movimentacaoLoaded:  false,
+    movimentacaoError:   null,
+
+    // ── Indicadores de Risco ──────────────────────────────────────────────────
+    indicadoresData:    null,
+    indicadoresLoading: false,
+    indicadoresLoaded:  false,
+    indicadoresError:   null,
+
+    // ── Falecidos ─────────────────────────────────────────────────────────────
+    falecidosData:    null,
+    falecidosLoading: false,
+    falecidosLoaded:  false,
+    falecidosError:   null,
+
+    // ── Prescritores / CRMs ───────────────────────────────────────────────────
+    prescritoresData:    null,
+    prescritoresLoading: false,
+    prescritoresLoaded:  false,
+    prescritoresError:   null,
+
+    // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
+    cnpjsAvulsos: new Map(),
+
+    // ── Municípios da região do CNPJ (para RegionalTab) ──────────────────────
+    municipiosRegiao:        [],
+    municipiosRegiaoKey:     null,
+    municipiosRegiaoLoading: false,
+  }),
+
+  actions: {
+    // ── Cadastro ──────────────────────────────────────────────────────────────
+    async fetchDadosCadastro(cnpj) {
+      if (!cnpj) return;
+      this.dadosCadastroLoading = true;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCadastro(cnpj));
+        this.dadosCadastro = data;
+      } catch (e) {
+        console.error('Erro ao buscar dados cadastrais:', e);
+      } finally {
+        this.dadosCadastroLoading = false;
+      }
+    },
+
+    // ── Evolução Financeira ───────────────────────────────────────────────────
+    async fetchEvolucaoFinanceira(cnpj) {
+      if (this.evolucaoLoaded) return;
+      this.evolucaoLoading = true;
+      this.evolucaoError   = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj));
+        this.evolucaoFinanceira = data;
+        this.evolucaoLoaded     = true;
+      } catch (e) {
+        console.error('Erro ao buscar evolução financeira:', e);
+        this.evolucaoError = ERROR_MSG;
+      } finally {
+        this.evolucaoLoading = false;
+      }
+    },
+
+    // ── Movimentação ──────────────────────────────────────────────────────────
+    async fetchMovimentacao(cnpj) {
+      if (!cnpj) return;
+      this.movimentacaoLoading = true;
+      this.movimentacaoError   = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
+        this.movimentacaoData   = data;
+        this.movimentacaoLoaded = true;
+      } catch (e) {
+        console.error('Erro ao buscar movimentação:', e);
+        this.movimentacaoError = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
+      } finally {
+        this.movimentacaoLoading = false;
+      }
+    },
+
+    // ── Indicadores ───────────────────────────────────────────────────────────
+    async fetchIndicadores(cnpj) {
+      if (this.indicadoresLoaded) return;
+      this.indicadoresLoading = true;
+      this.indicadoresError   = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(cnpj));
+        this.indicadoresData   = data;
+        this.indicadoresLoaded = true;
+      } catch (e) {
+        console.error('Erro ao buscar indicadores:', e);
+        this.indicadoresError = ERROR_MSG;
+      } finally {
+        this.indicadoresLoading = false;
+      }
+    },
+
+    // ── Falecidos ─────────────────────────────────────────────────────────────
+    async fetchFalecidos(cnpj) {
+      if (this.falecidosLoaded) return;
+      this.falecidosLoading = true;
+      this.falecidosError   = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj));
+        this.falecidosData   = data;
+        this.falecidosLoaded = true;
+      } catch (e) {
+        console.error('Erro ao buscar dados de falecidos:', e);
+        this.falecidosError = ERROR_MSG;
+      } finally {
+        this.falecidosLoading = false;
+      }
+    },
+
+    // ── Prescritores ──────────────────────────────────────────────────────────
+    async fetchPrescritores(cnpj) {
+      if (this.prescritoresLoaded) return;
+      this.prescritoresLoading = true;
+      this.prescritoresError   = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsPrescritores(cnpj));
+        this.prescritoresData   = data;
+        this.prescritoresLoaded = true;
+      } catch (e) {
+        console.error('Erro ao buscar dados de prescritores:', e);
+        this.prescritoresError = ERROR_MSG;
+      } finally {
+        this.prescritoresLoading = false;
+      }
+    },
+
+    // ── CNPJs Avulsos ─────────────────────────────────────────────────────────
+    async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
+      if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        params.cnpj_raiz = cnpj;
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        const found = (response.data.resultado_cnpjs || []).find(c => c.cnpj === cnpj);
+        if (found) this.cnpjsAvulsos.set(cnpj, found);
+      } catch (err) {
+        console.error('Erro ao carregar CNPJ avulso:', err);
+      }
+    },
+
+    // ── Municípios da Região ──────────────────────────────────────────────────
+    async fetchMunicipiosRegiao(uf, regiao, inicio = null, fim = null) {
+      if (!uf || !regiao) return;
+      const key = `${uf}|${regiao}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.municipiosRegiaoKey === key) return;
+      this.municipiosRegiaoLoading = true;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        params.uf           = uf;
+        params.regiao_saude = regiao;
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        this.municipiosRegiao    = response.data.resultado_municipios || [];
+        this.municipiosRegiaoKey = key;
+      } catch (err) {
+        console.error('Erro ao buscar municípios da região:', err);
+      } finally {
+        this.municipiosRegiaoLoading = false;
+      }
+    },
+
+    // ── Reset completo ao trocar de CNPJ ──────────────────────────────────────
+    resetAll() {
+      this.dadosCadastro        = null;
+      this.dadosCadastroLoading = false;
+
+      this.evolucaoFinanceira = null;
+      this.evolucaoLoading    = false;
+      this.evolucaoLoaded     = false;
+      this.evolucaoError      = null;
+
+      this.movimentacaoData    = null;
+      this.movimentacaoLoading = false;
+      this.movimentacaoLoaded  = false;
+      this.movimentacaoError   = null;
+
+      this.indicadoresData    = null;
+      this.indicadoresLoading = false;
+      this.indicadoresLoaded  = false;
+      this.indicadoresError   = null;
+
+      this.falecidosData    = null;
+      this.falecidosLoading = false;
+      this.falecidosLoaded  = false;
+      this.falecidosError   = null;
+
+      this.prescritoresData    = null;
+      this.prescritoresLoading = false;
+      this.prescritoresLoaded  = false;
+      this.prescritoresError   = null;
+
+      this.municipiosRegiao        = [];
+      this.municipiosRegiaoKey     = null;
+      this.municipiosRegiaoLoading = false;
+    },
+  },
+});

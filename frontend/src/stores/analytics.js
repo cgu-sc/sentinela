@@ -34,24 +34,8 @@ export const useAnalyticsStore = defineStore('analytics', {
     resultadoMunicipios: [],
     resultadoCnpjs: [],
     fatorRisco: [],
-    evolucaoFinanceira: null,
-    dadosCadastro: null,
-    // Movimentação (aba de memória de cálculo — carregada sob demanda)
-    movimentacaoData: null,
-    movimentacaoLoading: false,
-    movimentacaoLoaded: false,
-    // CNPJs abertos fora do fluxo de filtros (ex: URL direta, /listas)
-    // Separado de resultadoCnpjs para não contaminar o estado dos filtros globais.
-    cnpjsAvulsos: new Map(),
-    // Cache de municípios por região — carregado lazily no detalhe do CNPJ
-    municipiosRegiao: [],
-    municipiosRegiaoKey: null,   // 'UF|regiao' da última carga
-    municipiosRegiaoLoading: false,
     isLoading: false,
     fatorRiscoLoading: false,
-    evolucaoLoading: false,
-    evolucaoLoaded: false,
-    dadosCadastroLoading: false,
     error: null,
     lastSync: null
   }),
@@ -109,120 +93,6 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    async fetchEvolucaoFinanceira(cnpj) {
-      if (this.evolucaoLoaded) return;
-      this.evolucaoLoading = true;
-      try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj));
-        this.evolucaoFinanceira = data;
-        this.evolucaoLoaded = true;
-      } catch (e) {
-        console.error('Erro ao buscar evolução financeira:', e);
-      } finally {
-        this.evolucaoLoading = false;
-      }
-    },
-    
-    async fetchDadosCadastro(cnpj) {
-      if (!cnpj) return;
-      this.dadosCadastroLoading = true;
-      try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCadastro(cnpj));
-        this.dadosCadastro = data;
-      } catch (e) {
-        console.error('Erro ao buscar dados cadastrais:', e);
-      } finally {
-        this.dadosCadastroLoading = false;
-      }
-    },
-
-    /**
-     * Busca os municípios de uma região de saúde com seus % de não-comprovação,
-     * respeitando o período atual (inicio/fim). Usa cache por região.
-     */
-    async fetchMunicipiosRegiao(uf, regiao, inicio = null, fim = null) {
-      if (!uf || !regiao) return;
-      const key = `${uf}|${regiao}|${inicio ?? ''}|${fim ?? ''}`;
-      if (this.municipiosRegiaoKey === key) return; // já carregado para esta combinação
-      this.municipiosRegiaoLoading = true;
-      try {
-        const params = buildAnalyticsParams(inicio, fim, null, null, null, uf, regiao, null, null, null, null, null, null);
-        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
-        this.municipiosRegiao    = response.data.resultado_municipios || [];
-        this.municipiosRegiaoKey = key;
-      } catch (err) {
-        console.error('Erro ao buscar municípios da região:', err);
-      } finally {
-        this.municipiosRegiaoLoading = false;
-      }
-    },
-
-    /**
-     * Carrega um CNPJ avulso (fora do fluxo de filtros) em `cnpjsAvulsos`.
-     * Nunca toca em resultadoCnpjs, resultadoMunicipios ou kpis.
-     * @param {string} cnpj
-     * @param {string|null} inicio
-     * @param {string|null} fim
-     */
-    async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
-      if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
-      try {
-        const params = buildAnalyticsParams(inicio, fim, null, null, null, null, null, null, null, null, null, null, cnpj);
-        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
-        const found = (response.data.resultado_cnpjs || []).find(c => c.cnpj === cnpj);
-        if (found) this.cnpjsAvulsos.set(cnpj, found);
-      } catch (err) {
-        console.error('Erro ao carregar CNPJ avulso:', err);
-      }
-    },
-
-    resetEvolucaoFinanceira() {
-      this.evolucaoFinanceira = null;
-      this.evolucaoLoaded = false;
-      this.evolucaoLoading = false;
-    },
-
-    resetDadosCadastro() {
-      this.dadosCadastro = null;
-      this.dadosCadastroLoading = false;
-    },
-
-    /**
-     * Carrega a Memória de Cálculo (Movimentação por GTIN) para um CNPJ.
-     * O backend gerencia o cache Parquet automaticamente.
-     * @param {string} cnpj - CNPJ de 14 dígitos
-     * @param {boolean} checkCache - Se true, só carrega se já existir cache pronto.
-     */
-    async fetchMovimentacao(cnpj, checkCache = false) {
-      if (!cnpj) return;
-      this.movimentacaoLoading = true;
-      try {
-        const url = API_ENDPOINTS.analyticsMovimentacao(cnpj);
-        const { data } = await axios.get(url, {
-          params: { check_cache: checkCache }
-        });
-        
-        // Se pediu checkCache e veio vazio (rows.length === 0), não marca as loaded
-        // para o usuário ainda ver o botão "Processar".
-        if (checkCache && (!data.rows || data.rows.length === 0)) {
-          this.movimentacaoData = null;
-          this.movimentacaoLoaded = false;
-        } else {
-          this.movimentacaoData = data;
-          this.movimentacaoLoaded = true;
-        }
-      } catch (e) {
-        console.error('Erro ao buscar movimentação:', e);
-      } finally {
-        this.movimentacaoLoading = false;
-      }
-    },
-
-    resetMovimentacao() {
-      this.movimentacaoData = null;
-      this.movimentacaoLoaded = false;
-      this.movimentacaoLoading = false;
-    },
   },
 
   getters: {

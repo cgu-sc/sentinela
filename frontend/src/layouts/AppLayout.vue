@@ -155,6 +155,17 @@ const {
   dismissError,
 } = useSyncManager();
 
+// ── Navbar: busca rápida por CNPJ completo ────────────────────────────────────
+const navCnpjInput = ref('');
+
+watch(navCnpjInput, (val) => {
+  const digits = val.replace(/\D/g, '');
+  if (digits.length === 14) {
+    navCnpjInput.value = '';
+    router.push(`/estabelecimento/${digits}`);
+  }
+});
+
 // ── Dialog: CNPJ completo detectado ──────────────────────────────────────────
 const showCnpjDialog    = ref(false);
 const cnpjCompletoDetectado = ref('');
@@ -780,6 +791,15 @@ const {
           </div>
         </div>
         <div class="nav-actions">
+          <div class="nav-cnpj-search">
+            <i class="pi pi-search nav-cnpj-icon" />
+            <InputText
+              v-model="navCnpjInput"
+              placeholder="CNPJ (14 dígitos)"
+              class="nav-cnpj-input"
+              maxlength="18"
+            />
+          </div>
           <ThemeSelector />
           <div
             class="lists-nav-btn"
@@ -1661,7 +1681,13 @@ const {
   top: 0;
   z-index: 100;
   transition: background 0.3s ease, border-color 0.3s ease;
-  overflow: hidden;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .nav-left {
@@ -1810,6 +1836,48 @@ const {
 
 .nav-recent-clear .pi {
   font-size: 0.55rem;
+}
+
+/* Busca rápida de CNPJ na navbar */
+.nav-cnpj-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-cnpj-icon {
+  position: absolute;
+  left: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nav-cnpj-input {
+  padding: 0.3rem 0.7rem 0.3rem 1.8rem !important;
+  height: 30px !important;
+  font-size: 0.72rem !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+  width: 170px !important;
+  background: color-mix(in srgb, var(--card-bg) 80%, transparent) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 6px !important;
+  color: var(--text-color) !important;
+  letter-spacing: 0.03em;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.nav-cnpj-input:focus {
+  border-color: color-mix(in srgb, var(--primary-color) 60%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  outline: none !important;
+}
+
+.nav-cnpj-input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.6;
 }
 
 .page-content {

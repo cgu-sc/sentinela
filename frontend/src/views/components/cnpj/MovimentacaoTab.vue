@@ -1,23 +1,23 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue';
-import { useAnalyticsStore } from '@/stores/analytics';
+import { computed, ref, watch } from 'vue';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from '@/composables/useFormatting';
-import Button from 'primevue/button';
 
 const props = defineProps({
   cnpj: { type: String, required: true }
 });
 
-const analyticsStore = useAnalyticsStore();
+const cnpjDetailStore = useCnpjDetailStore();
 const { formatCurrencyFull: _fmt } = useFormatting();
 
 // Wrapper null-safe
 const fmt = (val) => (val === null || val === undefined) ? '—' : _fmt(val);
 const fmtPct = (val) => (val === null || val === undefined) ? '—' : val.toFixed(2) + '%';
 
-const loading = computed(() => analyticsStore.movimentacaoLoading);
-const loaded  = computed(() => analyticsStore.movimentacaoLoaded);
-const data    = computed(() => analyticsStore.movimentacaoData);
+const loading = computed(() => cnpjDetailStore.movimentacaoLoading);
+const loaded  = computed(() => cnpjDetailStore.movimentacaoLoaded);
+const error   = computed(() => cnpjDetailStore.movimentacaoError);
+const data    = computed(() => cnpjDetailStore.movimentacaoData);
 const rows    = computed(() => data.value?.rows ?? []);
 const summary = computed(() => data.value?.summary ?? null);
 
@@ -63,14 +63,8 @@ function toggle(gtin) {
 function expandAll()   { _expanded.value = new Set(sections.value.map(s => s.gtin)); }
 function collapseAll() { _expanded.value = new Set(); }
 
-const processarMovimentacao = () => { analyticsStore.fetchMovimentacao(props.cnpj); };
+const processarMovimentacao = () => { cnpjDetailStore.fetchMovimentacao(props.cnpj); };
 
-// Tenta carregar automaticamente se já existir cache no servidor
-onMounted(() => {
-  if (!loaded.value && !loading.value) {
-    analyticsStore.fetchMovimentacao(props.cnpj, true);
-  }
-});
 
 // ── Filtro: exibir apenas linhas irregulares ─────────────────────────────────
 const showOnlyIrregular = ref(true);
@@ -99,26 +93,25 @@ const pctIrregular = (section) => {
 <template>
   <div class="mov-tab">
 
-    <!-- ── ESTADO: Trigger ────────────────────────────────────────────────── -->
-    <div v-if="!loaded && !loading" class="mov-trigger-card">
-      <div class="trigger-inner">
-        <div class="trigger-icon-wrap">
-          <i class="pi pi-file-import" />
-        </div>
-        <h3 class="trigger-title">Memória de Cálculo</h3>
-        <p class="trigger-desc">
-          Detalha a auditoria financeira por medicamento (GTIN), períodos de irregularidade e estoques.
-        </p>
-        <div class="trigger-note">
+    <!-- ── ESTADO: Erro ──────────────────────────────────────────────────── -->
+    <div v-if="error" class="mov-loading-state tab-placeholder--error">
+      <div class="loading-inner">
+        <i class="pi pi-exclamation-circle loading-icon" style="color: var(--red-400)" />
+        <p class="loading-title">Falha ao carregar</p>
+        <p style="font-size: 0.85rem; opacity: 0.7; margin: 0;">{{ error }}</p>
+        <div class="mov-workspace-note">
           <i class="pi pi-info-circle" />
-          <span>Primeira consulta processa dados do CGUDATA e salva cache local.</span>
+          <span>O acesso à Memória de Cálculo requer conexão à rede da CGU via <strong>WorkSpace</strong>.</span>
         </div>
-        <Button label="Processar Movimentação" icon="pi pi-play-circle" class="trigger-btn" @click="processarMovimentacao" />
+        <button class="retry-btn" @click="processarMovimentacao">
+          <i class="pi pi-refresh" />
+          Tentar novamente
+        </button>
       </div>
     </div>
 
-    <!-- ── ESTADO: Carregando ─────────────────────────────────────────────── -->
-    <div v-else-if="loading" class="mov-loading-state">
+    <!-- ── ESTADO: Carregando (inclui aguardando início do fetch) ───────────── -->
+    <div v-else-if="loading || (!loaded && !error)" class="mov-loading-state">
       <div class="loading-inner">
         <i class="pi pi-spin pi-spinner loading-icon" />
         <p class="loading-title">Processando…</p>
@@ -247,14 +240,50 @@ const pctIrregular = (section) => {
 
 <style scoped>
 .mov-tab { padding: 0; display: flex; flex-direction: column; gap: 0.75rem; min-height: 300px; }
-.mov-trigger-card { flex: 1; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
-.trigger-inner { max-width: 560px; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
-.trigger-icon-wrap { width: 72px; height: 72px; border-radius: 20px; background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg)); border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent); display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--primary-color); box-shadow: 0 0 24px -4px color-mix(in srgb, var(--primary-color) 30%, transparent); }
-.trigger-title { font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0; }
-.trigger-desc { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; max-width: 440px; margin: 0; }
-.trigger-note { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.65rem 1rem; background: color-mix(in srgb, var(--risk-low) 8%, var(--card-bg)); border: 1px solid color-mix(in srgb, var(--risk-low) 20%, transparent); border-radius: 8px; font-size: 0.75rem; color: var(--text-secondary); text-align: left; line-height: 1.5; }
-.trigger-note i { color: var(--risk-medium); margin-top: 0.1rem; flex-shrink: 0; }
-.trigger-btn { font-size: 0.85rem; font-weight: 700; padding: 0.65rem 2rem; border-radius: 8px; }
+.mov-workspace-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text-color);
+  opacity: 0.85;
+  text-align: left;
+  line-height: 1.5;
+  max-width: 360px;
+}
+.mov-workspace-note i {
+  color: var(--primary-color);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem 1.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.retry-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
 .mov-loading-state { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4rem 2rem; }
 .loading-inner { display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 400px; text-align: center; }
 .loading-icon { font-size: 2.5rem; color: var(--primary-color); opacity: 0.8; }

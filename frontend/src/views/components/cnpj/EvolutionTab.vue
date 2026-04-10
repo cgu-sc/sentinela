@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { useAnalyticsStore } from '@/stores/analytics';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
@@ -21,12 +21,8 @@ const cnpj = computed(() => route.params.cnpj);
 const { formatCurrencyFull } = useFormatting();
 const { chartTheme, chartDataColors } = useChartTheme();
 
-const analyticsStore = useAnalyticsStore();
-const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded } = storeToRefs(analyticsStore);
-
-onMounted(() => {
-  if (cnpj.value) analyticsStore.fetchEvolucaoFinanceira(cnpj.value);
-});
+const cnpjDetailStore = useCnpjDetailStore();
+const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError } = storeToRefs(cnpjDetailStore);
 
 const chartRef = ref(null);
 
@@ -161,6 +157,11 @@ const chartOption = computed(() => {
     <div v-if="evolucaoLoading" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Carregando dados...</p>
+    </div>
+
+    <div v-else-if="evolucaoError" class="tab-placeholder tab-placeholder--error">
+      <i class="pi pi-exclamation-circle placeholder-icon" />
+      <p>{{ evolucaoError }}</p>
     </div>
 
     <div v-else-if="evolucaoLoaded && !evolucaoData?.semestres?.length" class="tab-placeholder">

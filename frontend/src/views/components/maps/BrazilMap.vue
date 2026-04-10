@@ -72,7 +72,7 @@ const mapData = computed(() => {
         },
       },
       unselected: { itemStyle: { areaColor: piece.color, opacity } },
-      emphasis: { itemStyle: { areaColor: piece.color, opacity: 1 } }, // Volta a acender na cor de risco no hover
+      emphasis: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 1.5, opacity: 1 } },
     };
   });
 });

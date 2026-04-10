@@ -180,7 +180,14 @@ const mapData = computed(() => {
               },
             }
           : { itemStyle: { opacity: 1 } },
-        emphasis: { itemStyle: { areaColor: hasData ? piece.color : baseColor, opacity: 1 } },
+        emphasis: {
+          itemStyle: {
+            areaColor: hasData ? piece.color : baseColor,
+            borderColor: hasData ? piece.borderColor : hoverBorder.value,
+            borderWidth: 1.5,
+            opacity: 1,
+          },
+        },
       };
     });
 });

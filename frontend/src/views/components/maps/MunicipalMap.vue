@@ -209,6 +209,7 @@ const mapData = computed(() => {
       value: hasData ? perc : null,
       municipio: munData?.municipio ?? f.properties.name,
       valSemComp: munData?.valSemComp ?? 0,
+      cnpjs: munData?.cnpjs ?? 0,
       hasData,
       selected: isSelected,
       itemStyle: {
@@ -226,7 +227,14 @@ const mapData = computed(() => {
             },
           }
         : { itemStyle: { opacity: 1 } },
-      emphasis: { itemStyle: { areaColor: hasData ? piece.color : baseColor, opacity: 1 } },
+      emphasis: {
+        itemStyle: {
+          areaColor: hasData ? piece.color : baseColor,
+          borderColor: hasData ? piece.borderColor : hoverBorder.value,
+          borderWidth: 1.5,
+          opacity: 1,
+        },
+      },
       silent: false,
     };
   });

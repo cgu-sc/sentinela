@@ -208,7 +208,7 @@ class AnalyticsService:
                     (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
                     (pl.col("qtdeSemComp") / pl.when(pl.col("totalQtde") > 0).then(pl.col("totalQtde")).otherwise(None) * 100).alias("percQtdeSemComp"),
                     (pl.col("municipio") + " / " + pl.col("uf")).alias("municipio_uf"),
-                    (pl.col("cnpj").str.slice(8, 4) == "0001").alias("is_matriz"),
+                    pl.col("is_matriz").cast(pl.Boolean).fill_null(False),
                 ])
                 .sort("percValSemComp", descending=True, nulls_last=True)
             )

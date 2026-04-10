@@ -209,6 +209,16 @@ const formattedFullAddress = computed(() => {
 
           <div class="status-group">
             <div
+              class="loc-chip status-chip chip-neutral"
+              v-tooltip.bottom="'Tipo de estabelecimento'"
+            >
+              <i :class="cnpjData.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
+              {{ cnpjData.is_matriz ? 'Matriz' : 'Filial' }}
+            </div>
+
+            <div class="status-group-divider" />
+
+            <div
               class="loc-chip status-chip"
               :class="conexaoMsClass"
               v-tooltip.bottom="'Conexão com o Ministério da Saúde'"

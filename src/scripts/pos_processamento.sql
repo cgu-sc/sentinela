@@ -171,7 +171,8 @@ SELECT
 
     -- GRANDES REDES: vem direto da rede_estabelecimentos (fonte da verdade)
     R.qtd_estabelecimentos_rede,
-    R.flag_grandes_redes
+    R.flag_grandes_redes,
+    R.is_matriz 
 
 INTO fp.perfil_consolidado_estabelecimento
 FROM fp.dados_farmacia DF

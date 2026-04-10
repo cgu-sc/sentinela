@@ -231,7 +231,8 @@ def _sync_movimentacao(engine, progress_callback):
                P.conexao_ms,
                P.porte_empresa,
                P.flag_grandes_redes,
-               P.qtd_estabelecimentos_rede
+               P.qtd_estabelecimentos_rede,
+               P.is_matriz
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
     """

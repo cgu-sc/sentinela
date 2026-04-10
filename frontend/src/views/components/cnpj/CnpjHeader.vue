@@ -68,14 +68,29 @@ const situacaoRfClass = computed(() => {
   return 'chip-neutral';
 });
 
-const razaoSocialDisplay = computed(() => {
-  const nome = props.cnpjData?.razao_social;
+const nomeFantasia = computed(() => props.cadastro?.nome_fantasia ?? null);
+const razaoSocial  = computed(() => props.cadastro?.razao_social ?? props.cnpjData?.razao_social ?? null);
+
+const tituloDisplay = computed(() => {
+  const nome = nomeFantasia.value ?? razaoSocial.value;
   if (!nome) return "—";
-  return nome.length > 40 ? nome.slice(0, 40) + "..." : nome;
+  return nome.length > 50 ? nome.slice(0, 50) + "..." : nome;
 });
-const razaoSocialTooltip = computed(() => {
-  const nome = props.cnpjData?.razao_social;
-  return nome && nome.length > 40 ? nome : null;
+const tituloTooltip = computed(() => {
+  const nome = nomeFantasia.value ?? razaoSocial.value;
+  return nome && nome.length > 50 ? nome : null;
+});
+
+const subtituloDisplay = computed(() => {
+  if (!nomeFantasia.value) return null; // sem fantasia, título já é a razão social
+  const nome = razaoSocial.value;
+  if (!nome) return null;
+  return nome.length > 60 ? nome.slice(0, 60) + "..." : nome;
+});
+const subtituloTooltip = computed(() => {
+  if (!nomeFantasia.value) return null;
+  const nome = razaoSocial.value;
+  return nome && nome.length > 60 ? nome : null;
 });
 
 const formatRank = (rank) => {
@@ -125,19 +140,30 @@ const formattedFullAddress = computed(() => {
     <div class="header-main-info" v-if="cnpjData">
       <div class="title-group">
         <div class="razao-social-row">
-          <h1
-            class="razao-social-new"
-            v-tooltip.bottom="razaoSocialTooltip"
-          >
-            {{ razaoSocialDisplay }}
-          </h1>
-          <div
-            class="cnpj-copy-wrap-new"
-            v-tooltip.bottom="'Copiar CNPJ'"
-            @click="copyCnpj"
-          >
-            <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
-            <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
+          <div class="titulo-group">
+            <div class="titulo-row">
+              <h1
+                class="razao-social-new"
+                v-tooltip.bottom="tituloTooltip"
+              >
+                {{ tituloDisplay }}
+              </h1>
+              <div
+                class="cnpj-copy-wrap-new"
+                v-tooltip.bottom="'Copiar CNPJ'"
+                @click="copyCnpj"
+              >
+                <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
+                <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
+              </div>
+            </div>
+            <span
+              v-if="subtituloDisplay"
+              class="razao-social-sub"
+              v-tooltip.bottom="subtituloTooltip"
+            >
+              {{ subtituloDisplay }}
+            </span>
           </div>
         </div>
         <!-- NOVO: Linha de Endereço e Geolocalização -->
@@ -148,6 +174,7 @@ const formattedFullAddress = computed(() => {
           </span>
         </div>
 
+        <!-- Linha 1: Localização -->
         <div class="location-chips">
           <span class="loc-text">
             <i class="pi pi-map-marker" />
@@ -156,43 +183,47 @@ const formattedFullAddress = computed(() => {
           </span>
           <span class="loc-separator">·</span>
           <span class="loc-text">Região {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
-          <span class="loc-separator">·</span>
+        </div>
 
-          <div
-            v-if="cnpjData.score_risco_final != null"
-            class="loc-chip risk-chip"
-            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-            v-tooltip.bottom="'Score de Risco Consolidado'"
-          >
-            Score {{ cnpjData.score_risco_final.toFixed(1) }}
+        <!-- Linha 2: Risco | Status Cadastral -->
+        <div class="status-chips-row">
+          <div class="status-group">
+            <div
+              v-if="cnpjData.score_risco_final != null"
+              class="loc-chip risk-chip"
+              :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+              v-tooltip.bottom="'Score de Risco Consolidado'"
+            >
+              Score {{ cnpjData.score_risco_final.toFixed(1) }}
+            </div>
+            <div
+              v-if="cnpjData.classificacao_risco"
+              class="loc-chip risk-chip"
+              :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+            >
+              {{ cnpjData.classificacao_risco }}
+            </div>
           </div>
 
-          <div
-            v-if="cnpjData.classificacao_risco"
-            class="loc-chip risk-chip"
-            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-          >
-            {{ cnpjData.classificacao_risco }}
-          </div>
+          <div class="status-group-divider" />
 
-          <span class="loc-separator">·</span>
-
-          <div
-            class="loc-chip status-chip"
-            :class="conexaoMsClass"
-            v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
-          >
-            <i class="pi pi-link" />
-            MS: {{ cnpjData.conexao_ms ?? '—' }}
-          </div>
-
-          <div
-            class="loc-chip status-chip"
-            :class="situacaoRfClass"
-            v-tooltip.bottom="'Situação na Receita Federal'"
-          >
-            <i class="pi pi-id-card" />
-            RF: {{ cnpjData.situacao_rf ?? '—' }}
+          <div class="status-group">
+            <div
+              class="loc-chip status-chip"
+              :class="conexaoMsClass"
+              v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
+            >
+              <i class="pi pi-link" />
+              MS: {{ cnpjData.conexao_ms ?? '—' }}
+            </div>
+            <div
+              class="loc-chip status-chip"
+              :class="situacaoRfClass"
+              v-tooltip.bottom="'Situação na Receita Federal'"
+            >
+              <i class="pi pi-id-card" />
+              RF: {{ cnpjData.situacao_rf ?? '—' }}
+            </div>
           </div>
         </div>
       </div>
@@ -490,8 +521,8 @@ const formattedFullAddress = computed(() => {
 
 .cnpj-text {
   font-family: 'Inter', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
@@ -522,6 +553,28 @@ const formattedFullAddress = computed(() => {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: nowrap;
+}
+
+.titulo-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.titulo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.razao-social-sub {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .razao-social-new {
@@ -671,7 +724,7 @@ const formattedFullAddress = computed(() => {
 .pill-divider {
   width: 1px;
   height: 2rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--card-border);
 }
 
 /* Card Neutro */
@@ -679,7 +732,7 @@ const formattedFullAddress = computed(() => {
   display: flex;
   flex-direction: column;
   padding-left: 0.75rem; /* Reduzido de 1.25rem */
-  border-left: 1px solid rgba(255, 255, 255, 0.1); /* Linha sutil separadora */
+  border-left: 1px solid var(--card-border);
 }
 
 .pill-value.total {
@@ -709,7 +762,7 @@ const formattedFullAddress = computed(() => {
   justify-content: space-between;
   gap: 2rem;
   padding-top: 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--card-border);
 }
 
 .ranking-grid-new {
@@ -794,6 +847,26 @@ const formattedFullAddress = computed(() => {
 
 .pi-users-group {
   color: var(--text-muted);
+}
+
+/* ── LINHA DE STATUS ── */
+.status-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.status-group-divider {
+  width: 1px;
+  height: 1.2rem;
+  background: var(--card-border);
+  flex-shrink: 0;
 }
 
 /* ── STATUS CHIPS (Conexão MS / Situação RF) ── */

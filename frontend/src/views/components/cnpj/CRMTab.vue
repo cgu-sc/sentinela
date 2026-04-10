@@ -719,7 +719,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1.25rem;
+  padding: 0.9rem 1.1rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-left: 4px solid var(--card-border);
@@ -857,8 +857,8 @@ defineExpose({
 }
 
 .alert-kpi-val {
-  font-size: 1.5rem;
-  font-weight: 500;
+  font-size: 1.15rem;
+  font-weight: 600;
   color: var(--text-color);
   line-height: 1;
 }

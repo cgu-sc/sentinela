@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
+import { useStatusClass } from "@/composables/useStatusClass";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useGeoStore } from "@/stores/geo";
@@ -18,6 +19,7 @@ const qtdMunicipiosRegiao = computed(() =>
 
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
+const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
 const formatPopulacao = (n) => {
   if (n == null) return "—";
@@ -53,20 +55,9 @@ const copyCnpj = () => {
 
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
 
-const conexaoMsClass = computed(() => {
-  const v = props.cnpjData?.conexao_ms;
-  if (v === 'Ativa') return 'chip-success';
-  return 'chip-neutral';
-});
-
-const situacaoRfClass = computed(() => {
-  const v = props.cnpjData?.situacao_rf;
-  if (!v || v === 'ND') return 'chip-neutral';
-  if (v === 'Ativa') return 'chip-success';
-  if (v === 'Baixada' || v === 'Suspensa') return 'chip-warning';
-  if (v === 'Inapta') return 'chip-danger';
-  return 'chip-neutral';
-});
+// Classificação de badges — delegada ao composable useStatusClass
+const conexaoMsClassComp = computed(() => conexaoMsClass(props.cnpjData?.conexao_ms));
+const situacaoRfClassComp = computed(() => situacaoRfClass(props.cnpjData?.situacao_rf));
 
 const nomeFantasia = computed(() => props.cadastro?.nome_fantasia ?? null);
 const razaoSocial  = computed(() => props.cadastro?.razao_social ?? props.cnpjData?.razao_social ?? null);
@@ -226,7 +217,7 @@ const formattedFullAddress = computed(() => {
               <span class="status-label-text">Ministério da Saúde:</span>
               <div
                 class="loc-chip status-chip"
-                :class="conexaoMsClass"
+                :class="conexaoMsClassComp"
                 v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
               >
                 {{ cnpjData.conexao_ms ?? '—' }}
@@ -236,7 +227,7 @@ const formattedFullAddress = computed(() => {
               <span class="status-label-text">Receita Federal:</span>
               <div
                 class="loc-chip status-chip"
-                :class="situacaoRfClass"
+                :class="situacaoRfClassComp"
                 v-tooltip.bottom="'Situação na Receita Federal'"
               >
                 {{ cnpjData.situacao_rf ?? '—' }}
@@ -692,23 +683,23 @@ const formattedFullAddress = computed(() => {
   transition: all 0.3s ease;
 }
 
-/* Barra de acento no topo */
+/* Barra de acento no rodapé (Opção 2 — Bottom-up) */
 .kpi-pill-group::before {
   content: '';
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
   height: 3px;
-  background: var(--accent, transparent);
-  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--accent, transparent) 55%, transparent);
+  border-radius: 0 0 12px 12px;
 }
 
-/* Cores dinâmicas — só o acento muda, fundo neutro sobrescreve o global */
-.kpi-pill-group.risk-high   { --accent: var(--risk-high);    background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
-.kpi-pill-group.risk-critical { --accent: var(--risk-critical); background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
-.kpi-pill-group.risk-medium { --accent: var(--risk-medium);  background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
-.kpi-pill-group.risk-low    { --accent: var(--risk-low);     background: var(--establishment-header-bg) !important; border-color: var(--card-border) !important; color: inherit !important; }
+/* Cores dinâmicas — acento + gradiente Bottom-up por nível de risco */
+.kpi-pill-group.risk-high   { --accent: var(--risk-high);    background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-high) 20%, var(--card-border)) !important; color: inherit !important; }
+.kpi-pill-group.risk-critical { --accent: var(--risk-critical); background: linear-gradient(to top, color-mix(in srgb, var(--risk-critical) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-critical) 20%, var(--card-border)) !important; color: inherit !important; }
+.kpi-pill-group.risk-medium { --accent: var(--risk-medium);  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-medium) 20%, var(--card-border)) !important; color: inherit !important; }
+.kpi-pill-group.risk-low    { --accent: var(--risk-low);     background: linear-gradient(to top, color-mix(in srgb, var(--risk-low) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-low) 20%, var(--card-border)) !important; color: inherit !important; }
 
 .pill-item {
   display: flex;
@@ -910,29 +901,7 @@ const formattedFullAddress = computed(() => {
   gap: 0.3rem;
 }
 
-.status-chip.chip-success {
-  color: #34d399;
-  border-color: rgba(52, 211, 153, 0.3);
-  background: rgba(52, 211, 153, 0.08);
-}
-
-.status-chip.chip-warning {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.3);
-  background: rgba(251, 191, 36, 0.08);
-}
-
-.status-chip.chip-danger {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.08);
-}
-
-.status-chip.chip-neutral {
-  color: var(--text-muted);
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(148, 163, 184, 0.05);
-}
+/* chip-* removido — usa classes globais status-* de components.css */
 
 .status-chip i {
   font-size: 13px;

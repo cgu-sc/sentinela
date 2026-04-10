@@ -36,7 +36,7 @@ export const RISK_COLORS = {
   CRITICAL: PALETTE.red[800], // Conservando o Dark/Seriedade
   HIGH: PALETTE.rose[600], // '#e11d48' - O seu novo vermelho Premium
   MEDIUM: PALETTE.amber[500], // '#f59e0b'
-  LOW: PALETTE.emerald[500], // '#10b981'
+  LOW: PALETTE.amber[500],
 };
 
 // ── Séries de dados — light / dark ────────────────────────────────────────────

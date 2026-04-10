@@ -23,7 +23,11 @@ const { chartDataColors } = useChartTheme();
       <div 
         v-for="kpi in enrichedKpis" 
         :key="kpi.label" 
-        class="kpi-card" 
+        class="kpi-card"
+        :style="{
+          borderBottom: `3px solid color-mix(in srgb, ${kpi.color} 50%, transparent)`,
+          background: `linear-gradient(to top, color-mix(in srgb, ${kpi.color} 6%, var(--card-bg)) 0%, var(--card-bg) 60%)`
+        }"
       >
         <div class="kpi-body">
           <div class="kpi-icon-bg" :style="{ backgroundColor: kpi.color + '20', color: kpi.color }">
@@ -58,7 +62,6 @@ const { chartDataColors } = useChartTheme();
   border-radius: 12px;
   padding: 0.8rem 1rem;
   border: 1px solid color-mix(in srgb, var(--primary-color) 15%, var(--sidebar-border));
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary-color) 30%, transparent);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 0;
   display: flex;
@@ -66,8 +69,7 @@ const { chartDataColors } = useChartTheme();
 }
 
 .kpi-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--primary-color) 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--primary-color) 20%, transparent);
   border-color: color-mix(in srgb, var(--primary-color) 55%, var(--sidebar-border));
 }
 

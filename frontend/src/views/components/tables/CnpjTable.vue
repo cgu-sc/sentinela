@@ -10,6 +10,7 @@ import { storeToRefs } from 'pinia';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import { extractCnpjRaiz } from '@/composables/useParsing';
 import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
+import { useStatusClass } from '@/composables/useStatusClass';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -26,6 +27,7 @@ const goToDetail = (event) => {
 const { resultadoCnpjs, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatPercent } = useFormatting();
+const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
 // Agregação de rodapé
 const { totals } = useTableAggregation(resultadoCnpjs, {
@@ -56,6 +58,9 @@ function applyFilter(field, value) {
   if (field === 'situacaoRF') filterStore.selectedSituacao   = normalizeToOption(FILTER_OPTIONS.situacao,   value);
   if (field === 'conexaoMS')  filterStore.selectedMS         = normalizeToOption(FILTER_OPTIONS.ms,         value);
 }
+
+// Classificação de cor — delegada ao composable useStatusClass
+// (situacaoRfClass e conexaoMsClass importados acima)
 
 // Helper para exibir a localização formatada adequadamente
 const filteredLocation = computed(() => {
@@ -185,7 +190,7 @@ const filteredLocation = computed(() => {
             <template #body="slotProps">
                 <Tag
                   :value="slotProps.data.situacao_rf"
-                  :class="[slotProps.data.situacao_rf?.toUpperCase()?.startsWith('ATIV') ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  :class="[situacaoRfClass(slotProps.data.situacao_rf), 'clickable-badge']"
                   v-tooltip.top="'Filtrar por Situação RF: ' + slotProps.data.situacao_rf"
                   @click="applyFilter('situacaoRF', slotProps.data.situacao_rf)"
                 />
@@ -196,7 +201,7 @@ const filteredLocation = computed(() => {
             <template #body="slotProps">
                 <Tag
                   :value="slotProps.data.conexao_ms"
-                  :class="[slotProps.data.conexao_ms?.toUpperCase()?.startsWith('ATIV') ? 'status-success' : 'status-danger', 'clickable-badge']"
+                  :class="[conexaoMsClass(slotProps.data.conexao_ms), 'clickable-badge']"
                   v-tooltip.top="'Filtrar por Conexão MS: ' + slotProps.data.conexao_ms"
                   @click="applyFilter('conexaoMS', slotProps.data.conexao_ms)"
                 />

@@ -3,6 +3,8 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
 import { FILTER_ALL_VALUE, KPI_LABEL_MAP, KPI_PRIORITY_ORDER } from '@/config/constants';
+import { RISK_COLORS } from '@/config/colors';
+import { RISK_THRESHOLDS } from '@/config/riskConfig';
 
 /**
  * Constrói o objeto de parâmetros para as APIs de analytics.
@@ -105,11 +107,28 @@ export const useAnalyticsStore = defineStore('analytics', {
         const labelKey = Object.keys(KPI_CONFIGS).find(key => key.toUpperCase() === label);
         const config = KPI_CONFIGS[labelKey] || DEFAULT_KPI_STYLE;
 
+        let finalColor = kpi.color || config.color;
+
+        // Regra Dinâmica Estrita para o KPI: % SEM COMPROVAÇÃO
+        if (label === '% SEM COMPROVAÇÃO' && kpi.value !== undefined) {
+          const valStr = String(kpi.value).replace('%', '').replace(/\s/g, '').replace(',', '.');
+          const percent = parseFloat(valStr);
+          if (!isNaN(percent)) {
+            if (percent <= RISK_THRESHOLDS.MEDIUM) {
+               finalColor = RISK_COLORS.LOW;     // Verde (Seguro)
+            } else if (percent <= RISK_THRESHOLDS.HIGH) {
+               finalColor = RISK_COLORS.MEDIUM;  // Laranja/Alerta
+            } else {
+               finalColor = RISK_COLORS.HIGH;    // Vermelho/Crítico
+            }
+          }
+        }
+
         return {
           ...kpi,
           label,
           icon: kpi.icon || config.icon,
-          color: kpi.color || config.color
+          color: finalColor
         };
       });
 

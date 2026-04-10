@@ -737,23 +737,23 @@ defineExpose({
 /* Hovers específicos por categoria */
 .alert-kpi-card.highlight-red:hover {
   border-color: color-mix(in srgb, var(--risk-high) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-high) 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--risk-high) 20%, transparent);
 }
 .alert-kpi-card.highlight-orange:hover {
   border-color: color-mix(in srgb, var(--risk-medium) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-medium) 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--risk-medium) 20%, transparent);
 }
 .alert-kpi-card.highlight-green:hover {
   border-color: color-mix(in srgb, var(--risk-indicator-normal) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-indicator-normal) 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--risk-indicator-normal) 20%, transparent);
 }
 .alert-kpi-card.highlight-purple:hover {
   border-color: color-mix(in srgb, #3b82f6 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, #3b82f6 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, #3b82f6 20%, transparent);
 }
 .alert-kpi-card.highlight-purple-geo:hover {
   border-color: color-mix(in srgb, #8b5cf6 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, #8b5cf6 45%, transparent);
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, #8b5cf6 20%, transparent);
 }
 
 /* Estado ativo (Clicado) — Sincronizado com a cor da categoria */
@@ -763,24 +763,24 @@ defineExpose({
 }
 
 .alert-kpi-card.highlight-red.kpi-active {
-  background: color-mix(in srgb, var(--risk-high) 10%, var(--card-bg));
-  border-color: var(--risk-high) !important;
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-high) 5%, var(--card-bg)) 100%);
+  border-color: color-mix(in srgb, var(--risk-high) 50%, transparent) !important;
 }
 .alert-kpi-card.highlight-orange.kpi-active {
-  background: color-mix(in srgb, var(--risk-medium) 10%, var(--card-bg));
-  border-color: var(--risk-medium) !important;
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-medium) 5%, var(--card-bg)) 100%);
+  border-color: color-mix(in srgb, var(--risk-medium) 50%, transparent) !important;
 }
 .alert-kpi-card.highlight-green.kpi-active {
-  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--card-bg));
-  border-color: var(--risk-indicator-normal) !important;
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-indicator-normal) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-indicator-normal) 5%, var(--card-bg)) 100%);
+  border-color: color-mix(in srgb, var(--risk-indicator-normal) 50%, transparent) !important;
 }
 .alert-kpi-card.highlight-purple.kpi-active {
-  background: color-mix(in srgb, #3b82f6 10%, var(--card-bg));
-  border-color: #3b82f6 !important;
+  background: linear-gradient(to top, color-mix(in srgb, #3b82f6 25%, var(--card-bg)) 0%, color-mix(in srgb, #3b82f6 5%, var(--card-bg)) 100%);
+  border-color: color-mix(in srgb, #3b82f6 50%, transparent) !important;
 }
 .alert-kpi-card.highlight-purple-geo.kpi-active {
-  background: color-mix(in srgb, #8b5cf6 10%, var(--card-bg));
-  border-color: #8b5cf6 !important;
+  background: linear-gradient(to top, color-mix(in srgb, #8b5cf6 25%, var(--card-bg)) 0%, color-mix(in srgb, #8b5cf6 5%, var(--card-bg)) 100%);
+  border-color: color-mix(in srgb, #8b5cf6 50%, transparent) !important;
 }
 
 .filter-badge {
@@ -878,33 +878,38 @@ defineExpose({
 
 /* Semafórica de Risco nos Cards */
 .highlight-red {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-high) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-high) 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-high) 65%, transparent) !important;
 }
 
 .highlight-orange {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-medium) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-medium) 65%, transparent) !important;
 }
 
 .highlight-purple {
+  background: linear-gradient(to top, color-mix(in srgb, #3b82f6 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, #3b82f6 15%, var(--card-border));
-  border-left: 3px solid #3b82f6 !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, #3b82f6 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, #3b82f6 65%, transparent) !important;
 }
 
 .highlight-purple-geo {
+  background: linear-gradient(to top, color-mix(in srgb, #8b5cf6 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, #8b5cf6 15%, var(--card-border));
-  border-left: 3px solid #8b5cf6 !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, #8b5cf6 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, #8b5cf6 65%, transparent) !important;
 }
 
 .highlight-green {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-indicator-normal) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-indicator-normal) 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-indicator-normal) 65%, transparent) !important;
 }
 
 /* Filtro Estilizado */

@@ -430,23 +430,23 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .f-kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  /* Efeito de destaque puramente visual, sem movimento gravitacional pois não é clicável */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
 }
 
 .f-kpi-card.highlight-red:hover {
-  border-color: color-mix(in srgb, var(--risk-high) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-high) 45%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 60%, var(--card-border));
+  box-shadow: 0 4px 15px -4px color-mix(in srgb, var(--risk-high) 20%, transparent);
 }
 
 .f-kpi-card.highlight-orange:hover {
-  border-color: color-mix(in srgb, var(--risk-medium) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-medium) 45%, transparent);
+  border-color: color-mix(in srgb, var(--risk-medium) 60%, var(--card-border));
+  box-shadow: 0 4px 15px -4px color-mix(in srgb, var(--risk-medium) 20%, transparent);
 }
 
 .f-kpi-card.highlight-yellow:hover {
-  border-color: color-mix(in srgb, var(--risk-low) 45%, var(--card-border));
-  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-low) 45%, transparent);
+  border-color: color-mix(in srgb, var(--risk-low) 60%, var(--card-border));
+  box-shadow: 0 4px 15px -4px color-mix(in srgb, var(--risk-low) 20%, transparent);
 }
 
 .f-kpi-label {
@@ -481,25 +481,24 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .highlight-red {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-high) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-high) 30%, transparent);
-}
-
-.highlight-prejuizo {
-  background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)) !important;
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-high) 65%, transparent) !important;
 }
 
 .highlight-orange {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-medium) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-medium) 65%, transparent) !important;
 }
 
 .highlight-yellow {
+  background: linear-gradient(to top, color-mix(in srgb, var(--risk-low) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-low) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-low) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-low) 30%, transparent);
+  border-left: none;
+  border-bottom: 3px solid color-mix(in srgb, var(--risk-low) 65%, transparent) !important;
 }
 
 .falecidos-list-container {

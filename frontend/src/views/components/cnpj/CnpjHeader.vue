@@ -53,6 +53,21 @@ const copyCnpj = () => {
 
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
 
+const conexaoMsClass = computed(() => {
+  const v = props.cnpjData?.conexao_ms;
+  if (v === 'Ativa') return 'chip-success';
+  return 'chip-neutral';
+});
+
+const situacaoRfClass = computed(() => {
+  const v = props.cnpjData?.situacao_rf;
+  if (!v || v === 'ND') return 'chip-neutral';
+  if (v === 'Ativa') return 'chip-success';
+  if (v === 'Baixada' || v === 'Suspensa') return 'chip-warning';
+  if (v === 'Inapta') return 'chip-danger';
+  return 'chip-neutral';
+});
+
 const razaoSocialDisplay = computed(() => {
   const nome = props.cnpjData?.razao_social;
   if (!nome) return "—";
@@ -158,6 +173,26 @@ const formattedFullAddress = computed(() => {
             :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >
             {{ cnpjData.classificacao_risco }}
+          </div>
+
+          <span class="loc-separator">·</span>
+
+          <div
+            class="loc-chip status-chip"
+            :class="conexaoMsClass"
+            v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
+          >
+            <i class="pi pi-link" />
+            MS: {{ cnpjData.conexao_ms ?? '—' }}
+          </div>
+
+          <div
+            class="loc-chip status-chip"
+            :class="situacaoRfClass"
+            v-tooltip.bottom="'Situação na Receita Federal'"
+          >
+            <i class="pi pi-id-card" />
+            RF: {{ cnpjData.situacao_rf ?? '—' }}
           </div>
         </div>
       </div>
@@ -760,4 +795,43 @@ const formattedFullAddress = computed(() => {
 .pi-users-group {
   color: var(--text-muted);
 }
+
+/* ── STATUS CHIPS (Conexão MS / Situação RF) ── */
+.status-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  gap: 0.3rem;
+}
+
+.status-chip.chip-success {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.status-chip.chip-warning {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.status-chip.chip-danger {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.status-chip.chip-neutral {
+  color: var(--text-muted);
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.status-chip i {
+  font-size: 13px;
+  line-height: 1;
+}
+
 </style>

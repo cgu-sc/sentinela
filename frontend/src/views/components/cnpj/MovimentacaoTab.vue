@@ -196,12 +196,6 @@ const filterBySubstance = (substancia) => {
     selectedSubstance.value = null; // Remove o filtro
   } else {
     selectedSubstance.value = substancia;
-    
-    // Pequeno delay para garantir que a renderização Vue mudou os IDs antes do scroll
-    setTimeout(() => {
-      const el = document.getElementById('detalhamento-card');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
   }
 };
 
@@ -302,34 +296,38 @@ const pctItensIrregulares = computed(() => {
         <div class="mov-kpi" :class="sections.filter(hasIrregular).length > 0 ? 'kpi-danger' : 'kpi-ok'"
              v-tooltip.top="'Total de códigos de barras (GTINs) que apresentaram venda sem comprovação no período.'">
           <span class="kpi-label">GTINs Irregulares</span>
-          <span class="kpi-val">{{ sections.filter(hasIrregular).length }} <small>de {{ sections.length }} GTINs</small></span>
+          <span class="kpi-val">{{ sections.filter(hasIrregular).length }}</span>
+          <span class="kpi-sub">de {{ sections.length }} analisados</span>
         </div>
 
         <div class="mov-kpi" :class="kpiTopSubstance ? 'kpi-danger' : ''">
-          <span class="kpi-label">Principal Foco de Prejuízo</span>
-          <span class="kpi-val" v-tooltip.top="kpiTopSubstance ? `Substância que concentra o maior valor financeiro de irregularidades: ${kpiTopSubstance.name}` : ''">
-            {{ kpiTopSubstance ? (kpiTopSubstance.name.length > 20 ? kpiTopSubstance.name.slice(0, 18) + '...' : kpiTopSubstance.name) : 'Nenhum' }}
-            <small v-if="kpiTopSubstance" style="font-size: 0.75rem; opacity: 0.8; display: block; margin-top: -2px;">
-              ({{ kpiTopSubstance.gtinCount }} {{ kpiTopSubstance.gtinCount > 1 ? 'GTINs' : 'GTIN' }} · {{ concentrationTop1.toFixed(1) }}% do prejuízo)
-            </small>
+          <span class="kpi-label">Principal Foco</span>
+          <span class="kpi-val" v-tooltip.top="kpiTopSubstance ? `Substância com maior valor financeiro irregular: ${kpiTopSubstance.name}` : ''">
+            {{ kpiTopSubstance ? (kpiTopSubstance.name.length > 22 ? kpiTopSubstance.name.slice(0, 20) + '...' : kpiTopSubstance.name) : 'Nenhum' }}
+          </span>
+          <span class="kpi-sub" v-if="kpiTopSubstance">
+            {{ kpiTopSubstance.gtinCount }} {{ kpiTopSubstance.gtinCount > 1 ? 'GTINs' : 'GTIN' }} · {{ concentrationTop1.toFixed(1) }}% do prejuízo
           </span>
         </div>
 
         <div class="mov-kpi" :class="totalItensIrregulares > 0 ? 'kpi-danger' : ''"
              v-tooltip.top="'Quantidade física total (unidades) de medicamentos vendidos sem comprovação fiscal.'">
-          <span class="kpi-label">Itens Irregulares (Qtd)</span>
-          <span class="kpi-val">{{ totalItensIrregulares.toLocaleString('pt-BR') }} <small>unid.</small></span>
+          <span class="kpi-label">Volume Irregular (Físico)</span>
+          <span class="kpi-val">{{ totalItensIrregulares.toLocaleString('pt-BR') }} <span class="kpi-val-unit">unid.</span></span>
+          <span class="kpi-sub">vendidas sem comprovação</span>
         </div>
 
         <div class="mov-kpi" :class="pctItensIrregulares > 5 ? 'kpi-warning' : ''"
              v-tooltip.top="'Percentual físico de itens irregulares em relação ao volume total movimentado pela farmácia.'">
-          <span class="kpi-label">% Volume Irregular</span>
-          <span class="kpi-val">{{ pctItensIrregulares.toFixed(2) }}% <small>do total</small></span>
+          <span class="kpi-label">Representatividade</span>
+          <span class="kpi-val">{{ pctItensIrregulares.toFixed(2) }}%</span>
+          <span class="kpi-sub">do fluxo ({{ totalItensGeral.toLocaleString('pt-BR') }} unid)</span>
         </div>
-
+        
         <div class="mov-kpi" v-tooltip.top="'Volume total de unidades físicas (Regulares + Irregulares) movimentadas no período analisado.'">
           <span class="kpi-label">Total Movimentado</span>
-          <span class="kpi-val">{{ totalItensGeral.toLocaleString('pt-BR') }} <small>unid.</small></span>
+          <span class="kpi-val">{{ totalItensGeral.toLocaleString('pt-BR') }} <span class="kpi-val-unit">unid.</span></span>
+          <span class="kpi-sub">na amostra analisada</span>
         </div>
       </div>
       
@@ -368,7 +366,7 @@ const pctItensIrregulares = computed(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in visibleRanking" :key="item.substancia">
+              <tr v-for="item in visibleRanking" :key="item.substancia" :class="{'active-row': selectedSubstance === item.substancia}">
                 <td>
                   <div class="rank-med-cell">
                     <span class="rank-nome">{{ item.substancia }}</span>
@@ -430,7 +428,12 @@ const pctItensIrregulares = computed(() => {
           <div class="mch-left">
             <i class="pi pi-list" />
             <span class="mch-title">Detalhamento por GTIN</span>
-            <span class="mch-count" v-if="selectedSubstance">Filtrado: {{ visibleSections.length }} itens de {{ selectedSubstance }}</span>
+            <div class="mch-filter-tag" v-if="selectedSubstance">
+              <span>Filtrado: {{ visibleSections.length }} itens de <strong>{{ selectedSubstance }}</strong></span>
+              <button class="clear-filter-btn" @click="selectedSubstance = null" v-tooltip.top="'Limpar filtro e exibir tudo'">
+                <i class="pi pi-times" />
+              </button>
+            </div>
             <span class="mch-count" v-else>{{ visibleSections.length }} de {{ sections.length }} itens</span>
           </div>
           
@@ -472,10 +475,8 @@ const pctItensIrregulares = computed(() => {
               <div class="gcol gcol-date">Última Venda</div>
               <div class="gcol gcol-num">Est. Ini.</div>
               <div class="gcol gcol-num">Est. Fin.</div>
-              <div class="gcol gcol-num">Vendas</div>
-              <div class="gcol gcol-num">Irreg.</div>
-              <div class="gcol gcol-cur">Total</div>
-              <div class="gcol gcol-cur gcol-irreg-hdr">Irreg.</div>
+              <div class="gcol gcol-num">Vendas (Tot/Irr)</div>
+              <div class="gcol gcol-cur">Valor (Tot/Irr)</div>
               <div class="gcol gcol-nf">Notas Fiscais</div>
             </div>
 
@@ -485,14 +486,37 @@ const pctItensIrregulares = computed(() => {
               <div class="gcol gcol-date">{{ row.periodo_final ?? '—' }}</div>
               <div class="gcol gcol-num">{{ row.estoque_inicial?.toLocaleString('pt-BR') ?? '—' }}</div>
               <div class="gcol gcol-num">{{ row.estoque_final?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-num">{{ row.vendas?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-num" :class="(row.vendas_irregular ?? 0) > 0 ? 'cell-irreg-num' : ''">{{ row.vendas_irregular?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-cur">{{ fmt(row.valor) }}</div>
-              <div class="gcol gcol-cur" :class="(row.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(row.valor_irregular) }}</div>
+              <div class="gcol gcol-num">
+                <span class="r-val-tot">{{ row.vendas?.toLocaleString('pt-BR') ?? '—' }}</span>
+                <span class="r-sep">/</span>
+                <span :class="(row.vendas_irregular ?? 0) > 0 ? 'cell-irreg-num' : ''">{{ row.vendas_irregular?.toLocaleString('pt-BR') ?? '—' }}</span>
+              </div>
+              <div class="gcol gcol-cur">
+                <span class="r-val-tot">{{ fmt(row.valor) }}</span>
+                <span class="r-sep">/</span>
+                <span :class="(row.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(row.valor_irregular) }}</span>
+              </div>
               <div class="gcol gcol-nf" v-tooltip.top="row.notas"><span class="nf-text">{{ row.notas || '—' }}</span></div>
             </div>
 
-            <!-- Botão Exibir Mais / Recolher -->
+            <div v-if="section.subtotal" class="gtin-subtotal">
+              <div class="gcol gcol-date sub-label">Resumo Parcial</div>
+              <div class="gcol gcol-date"></div><div class="gcol gcol-date"></div><div class="gcol gcol-num"></div>
+              <div class="gcol gcol-num">{{ section.subtotal.estoque_final?.toLocaleString('pt-BR') ?? '—' }}</div>
+              <div class="gcol gcol-num">
+                <span class="r-val-tot">{{ section.subtotal.vendas?.toLocaleString('pt-BR') ?? '—' }}</span>
+                <span class="r-sep">/</span>
+                <span :class="(section.subtotal.vendas_irregular ?? 0) > 0 ? 'cell-irreg-num' : ''">{{ section.subtotal.vendas_irregular?.toLocaleString('pt-BR') ?? '—' }}</span>
+              </div>
+              <div class="gcol gcol-cur">
+                <span class="r-val-tot">{{ fmt(section.subtotal.valor) }}</span>
+                <span class="r-sep">/</span>
+                <span :class="(section.subtotal.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(section.subtotal.valor_irregular) }}</span>
+              </div>
+              <div class="gcol gcol-nf"></div>
+            </div>
+
+            <!-- Botão Exibir Mais / Recolher (Movido para DEPOIS do footer do gtin-subtotal) -->
             <div v-if="filteredRows(section.rows).length > 2" class="rows-pagination-row">
               <button class="rows-pagination-btn" @click="toggleRowsExpanded(section.gtin)">
                 <template v-if="!isRowsExpanded(section.gtin)">
@@ -504,17 +528,6 @@ const pctItensIrregulares = computed(() => {
                   Recolher registros
                 </template>
               </button>
-            </div>
-
-            <div v-if="section.subtotal" class="gtin-subtotal">
-              <div class="gcol gcol-date sub-label">Resumo Parcial</div>
-              <div class="gcol gcol-date"></div><div class="gcol gcol-date"></div><div class="gcol gcol-num"></div>
-              <div class="gcol gcol-num">{{ section.subtotal.estoque_final?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-num">{{ section.subtotal.vendas?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-num" :class="(section.subtotal.vendas_irregular ?? 0) > 0 ? 'cell-irreg-num' : ''">{{ section.subtotal.vendas_irregular?.toLocaleString('pt-BR') ?? '—' }}</div>
-              <div class="gcol gcol-cur">{{ fmt(section.subtotal.valor) }}</div>
-              <div class="gcol gcol-cur" :class="(section.subtotal.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(section.subtotal.valor_irregular) }}</div>
-              <div class="gcol gcol-nf"></div>
             </div>
           </div>
         </div>
@@ -629,20 +642,31 @@ const pctItensIrregulares = computed(() => {
   box-shadow: 0 8px 18px -10px color-mix(in srgb, #22c55e 30%, transparent);
 }
 .kpi-label {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--text-secondary);
-  opacity: 0.85;
+  opacity: 0.9;
+  margin-bottom: 0.15rem;
 }
 .kpi-val {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.kpi-val-unit { font-size: 0.8rem; opacity: 0.7; font-weight: 400; margin-left: 0.15rem; }
+.kpi-sub {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 0.05rem;
+  letter-spacing: 0.02em;
 }
 /* ── MAIN CARD & TOOLBAR REESTRUTURADA ─────────────────────────────────── */
 .mov-main-card {
@@ -671,6 +695,34 @@ const pctItensIrregulares = computed(() => {
   opacity: 0.85;
 }
 .mch-count { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-left: 0.5rem; }
+
+.mch-filter-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  padding: 0.15rem 0.5rem 0.15rem 0.6rem;
+  border-radius: 12px;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.mch-filter-tag strong { font-weight: 700; color: var(--primary-color); }
+.clear-filter-btn {
+  background: none;
+  border: none;
+  color: color-mix(in srgb, var(--primary-color) 80%, transparent);
+  cursor: pointer;
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.clear-filter-btn:hover { background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); transform: scale(1.1); }
 
 .mch-actions { display: flex; align-items: center; gap: 0.6rem; }
 .mch-divider { width: 1px; height: 16px; background: var(--tabs-border); margin: 0 0.2rem; }
@@ -708,6 +760,7 @@ const pctItensIrregulares = computed(() => {
   display: flex; 
   flex-direction: column; 
   gap: 1rem; 
+  min-height: 50vh;
 }
 .gtin-accordion { 
   border: 1px solid var(--card-border); 
@@ -758,37 +811,37 @@ const pctItensIrregulares = computed(() => {
 .hk-badge-irreg { padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; background: color-mix(in srgb, var(--risk-high) 12%, transparent); color: color-mix(in srgb, var(--risk-high) 80%, transparent); border: 1px solid color-mix(in srgb, var(--risk-high) 25%, transparent); }
 .hk-badge-ok { padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; background: color-mix(in srgb, #22c55e 10%, transparent); color: #16a34a; border: 1px solid color-mix(in srgb, #22c55e 25%, transparent); }
 .gtin-content { overflow-x: auto; }
-.gtin-col-headers, .gtin-row, .gtin-subtotal { display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1fr 1fr 0.8fr 0.8fr 1.4fr 1.4fr 4fr; min-width: 700px; align-items: center; }
+.gtin-col-headers, .gtin-row, .gtin-subtotal { display: grid; grid-template-columns: 1.1fr 1.1fr 1.1fr 0.9fr 0.9fr 1.6fr 2fr 3.5fr; min-width: 700px; align-items: center; }
 .gtin-col-headers { background: var(--card-bg); border-bottom: 1px solid var(--card-border); }
-.gcol { padding: 0.38rem 0.55rem; font-size: 0.71rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid color-mix(in srgb, var(--card-border) 45%, transparent); }
-.gtin-col-headers .gcol { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.6rem; color: var(--text-secondary); opacity: 0.8; }
-.gcol-num, .gcol-cur { text-align: right; font-variant-numeric: tabular-nums; }
-.gcol-irreg-hdr { color: var(--risk-high) !important; }
+.gcol { padding: 0.38rem 0.55rem; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid color-mix(in srgb, var(--card-border) 45%, transparent); }
+.gtin-col-headers .gcol { font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; color: var(--text-secondary); opacity: 0.9; }
+.gcol-num, .gcol-cur { text-align: right; }
+.gcol-irreg-hdr { color: var(--risk-high) !important; font-weight: 600 !important; }
 .gtin-row { border-bottom: 1px solid color-mix(in srgb, var(--card-border) 50%, transparent); transition: background 0.12s; }
 .row-normal:hover { background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); }
 .row-irregular { background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg)); }
 .cell-irreg-date, .cell-irreg-num, .cell-irreg-cur { color: var(--text-primary); font-weight: 600; }
-.nf-text { font-size: 0.67rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.nf-text { font-size: 0.76rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .gtin-subtotal { background: var(--card-bg); border-top: 1px dashed color-mix(in srgb, var(--primary-color) 40%, transparent); }
-.gtin-subtotal .gcol { font-size: 0.73rem; font-weight: 600; color: var(--text-secondary); padding: 0.45rem 0.55rem; }
-.sub-label { font-weight: 700; opacity: 1; font-size: 0.7rem !important; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); }
+.gtin-subtotal .gcol { font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); padding: 0.45rem 0.55rem; }
+.sub-label { font-weight: 500; opacity: 1; font-size: 0.75rem !important; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); }
 .gtin-grand-total { 
   display: flex; 
   align-items: center; 
   flex-wrap: wrap; 
   gap: 0.6rem; 
   padding: 0.85rem 1.2rem; 
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg)); 
+  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); 
   border: 1px solid var(--card-border); 
   border-radius: 12px; 
   font-size: 0.78rem; 
 }
-.grand-label { font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary-color); }
+.grand-label { font-weight: 500; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-primary); }
 .grand-sep { color: var(--text-muted); opacity: 0.4; }
 .grand-item { display: flex; align-items: center; gap: 0.35rem; }
 .grand-sub { font-size: 0.66rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
-.grand-val { font-weight: 700; color: var(--text-primary); }
-.grand-irreg { color: var(--risk-high) !important; font-weight: 800; }
+.grand-val { font-weight: 500; color: var(--text-primary); }
+.grand-irreg { color: var(--risk-high) !important; font-weight: 600; }
 
 .rows-pagination-row {
   background: var(--card-bg);
@@ -801,7 +854,7 @@ const pctItensIrregulares = computed(() => {
   background: none;
   border: none;
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--primary-color);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -878,6 +931,12 @@ const pctItensIrregulares = computed(() => {
   font-weight: 700;
   color: var(--text-primary);
 }
+.ranking-table tr.active-row {
+  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg));
+}
+.ranking-table tr.active-row td {
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 10%, var(--tabs-border));
+}
 .ranking-table .text-right { text-align: right !important; }
 .ranking-table .text-center { text-align: center !important; }
 
@@ -899,8 +958,8 @@ const pctItensIrregulares = computed(() => {
   background: color-mix(in srgb, var(--text-color) 5%, var(--card-bg)); 
   border: 1px solid color-mix(in srgb, var(--text-color) 15%, transparent); 
   color: color-mix(in srgb, var(--text-color) 70%, transparent); 
-  width: 24px; 
-  height: 24px; 
+  width: 26px; 
+  height: 26px; 
   border-radius: 6px; 
   cursor: pointer; 
   display: inline-flex; 
@@ -908,7 +967,8 @@ const pctItensIrregulares = computed(() => {
   justify-content: center; 
   transition: all 0.2s; 
 }
-.rank-goto-btn:hover { background: var(--primary-color); color: white; transform: translateY(2px); border-color: var(--primary-color); }
+.rank-goto-btn:hover { background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 30%, transparent); }
+.rank-goto-btn.is-active { background: var(--primary-color) !important; color: var(--card-bg) !important; border-color: var(--primary-color) !important; }
 
 .ranking-footer { padding: 0.7rem; display: flex; justify-content: center; background: color-mix(in srgb, var(--text-color) 1%, var(--card-bg)); }
 .ranking-more-btn { 

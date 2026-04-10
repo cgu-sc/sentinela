@@ -111,6 +111,7 @@ NUNCA utilize valores fixos nos componentes. Consulte sempre o arquivo correspon
 
 ## 4. UI/UX e Design System
 - **Variáveis CSS**: Use `var(--bg-color)`, `var(--text-color)`, `var(--primary-color)`. Não use hexadecimais no CSS dos componentes.
+- **RESTRIÇÕES DE FONTE**: NUNCA utilize fontes BOLD (`font-weight: 700`, `font-weight: 800`, `bold`). O peso máximo permitido é Semi-Bold (`600`) ou Medium (`500`). NUNCA utilize fontes do tipo MONO ou monospaced (ex: `font-variant-numeric: tabular-nums`, `font-family: monospace`), a não ser que explicitamente exigido para código puro.
 - **Arbflow Design**: Mantenha a estética de glassmorphism, bordas suaves e as animações definidas em `animations.css`.
 - **Feedback**: Utilize `ToastService` para mensagens do sistema e estados de loading durante requisições de API.
 

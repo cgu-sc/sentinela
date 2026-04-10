@@ -102,6 +102,14 @@ const filteredRows = (sectionRows) => {
 // ── Filtro de Substância Ativa via Tabela de Risco ──────────────────────────
 const selectedSubstance = ref(null);
 
+const totalItensGeral = computed(() => {
+  return sections.value.reduce((acc, s) => acc + (s.subtotal?.vendas ?? 0), 0);
+});
+
+const totalItensIrregulares = computed(() => {
+  return sections.value.reduce((acc, s) => acc + (s.subtotal?.vendas_irregular ?? 0), 0);
+});
+
 const visibleSections = computed(() => {
   let filtered = sections.value;
   
@@ -131,14 +139,15 @@ const getVisibleRows = (section) => {
   return fRows.slice(0, 2);
 };
 
-// ── Ranking de Substâncias Irregulares (Top Focos) ───────────────────────
 const showMoreRanking = ref(false);
+const searchRanking = ref('');
+
 const rankingData = computed(() => {
   const groups = {};
   
   sections.value.forEach(s => {
     const st = s.subtotal;
-    if (!st || (st.valor_irregular ?? 0) <= 0) return;
+    if (!st) return;
     
     // Heurística de limpeza: pegar o nome até o primeiro número (dosagem)
     // Se houver um campo substancia no futuro, trocar aqui.
@@ -148,23 +157,23 @@ const rankingData = computed(() => {
     if (!groups[cleanName]) {
       groups[cleanName] = {
         substancia: cleanName,
+        valor_total: 0,
         prejuizo: 0,
         qtd_total: 0,
         qtd_irreg: 0,
         gtins: new Set(),
         firstGtin: s.gtin, // Para o link de scroll (primeiro da lista)
         minStart: null,
-        maxEnd: null,
-        tickets: []
+        maxEnd: null
       };
     }
     
     const g = groups[cleanName];
-    g.prejuizo += st.valor_irregular;
+    g.valor_total += st.valor;
+    g.prejuizo += (st.valor_irregular || 0);
     g.qtd_total += st.vendas;
-    g.qtd_irreg += st.vendas_irregular;
+    g.qtd_irreg += (st.vendas_irregular || 0);
     g.gtins.add(s.gtin);
-    g.tickets.push(st.valor_irregular / (st.vendas_irregular || 1));
     
     const irrRows = s.rows.filter(r => r.tipo_linha === 'venda_irregular');
     if (irrRows.length) {
@@ -178,17 +187,28 @@ const rankingData = computed(() => {
   return Object.values(groups)
     .map(g => ({
       ...g,
-      periodo: `${g.minStart || '—'} a ${g.maxEnd || '—'}`,
+      periodo: (g.minStart && g.maxEnd) ? `${g.minStart} a ${g.maxEnd}` : '—',
       gtinCount: g.gtins.size,
-      ticket: g.tickets.reduce((a, b) => a + b, 0) / g.tickets.length,
+      ticket: g.qtd_total > 0 ? (g.valor_total / g.qtd_total) : 0,
       peso: (g.prejuizo / (summary.value?.valor_irregular || 1)) * 100
     }))
     .sort((a, b) => b.prejuizo - a.prejuizo);
 });
 
+const filteredRankingData = computed(() => {
+  const query = searchRanking.value.trim().toLowerCase();
+  if (!query) return rankingData.value;
+  
+  return rankingData.value.filter(item => {
+    const matchName = item.substancia.toLowerCase().includes(query);
+    const matchGtin = Array.from(item.gtins).some(gtin => String(gtin).includes(query));
+    return matchName || matchGtin;
+  });
+});
+
 const visibleRanking = computed(() => {
-  if (showMoreRanking.value) return rankingData.value;
-  return rankingData.value.slice(0, 5);
+  if (showMoreRanking.value) return filteredRankingData.value;
+  return filteredRankingData.value.slice(0, 5);
 });
 
 const filterBySubstance = (substancia) => {
@@ -205,53 +225,7 @@ const pctIrregular = (section) => {
   return ((st.valor_irregular ?? 0) / st.valor * 100);
 };
 
-// ── Novos KPIs Sugeridos ───────────────────────────────────────────────────
-const kpiTopSubstance = computed(() => {
-  if (!sections.value.length) return null;
-  
-  const groups = {};
-  sections.value.forEach(s => {
-    // Usamos o nome limpo (Substância) para agrupar
-    const name = s.medicamento;
-    if (!name) return;
-    
-    if (!groups[name]) {
-      groups[name] = { name, valorIrregular: 0, gtinCount: 0 };
-    }
-    groups[name].valorIrregular += (s.subtotal?.valor_irregular ?? 0);
-    groups[name].gtinCount += 1;
-  });
 
-  const sorted = Object.values(groups).sort((a, b) => b.valorIrregular - a.valorIrregular);
-  const top = sorted[0];
-  
-  if (!top || top.valorIrregular === 0) return null;
-  return top;
-});
-
-const totalItensIrregulares = computed(() => {
-  return sections.value.reduce((acc, s) => acc + (s.subtotal?.vendas_irregular ?? 0), 0);
-});
-
-const totalValorIrregularGeral = computed(() => {
-  return sections.value.reduce((acc, s) => acc + (s.subtotal?.valor_irregular ?? 0), 0);
-});
-
-const concentrationTop1 = computed(() => {
-  const total = totalValorIrregularGeral.value;
-  if (!total || !kpiTopSubstance.value) return 0;
-  return (kpiTopSubstance.value.valorIrregular / total) * 100;
-});
-
-const totalItensGeral = computed(() => {
-  return sections.value.reduce((acc, s) => acc + (s.subtotal?.vendas ?? 0), 0);
-});
-
-const pctItensIrregulares = computed(() => {
-  const total = totalItensGeral.value;
-  if (!total) return 0;
-  return (totalItensIrregulares.value / total) * 100;
-});
 </script>
 
 <template>
@@ -291,46 +265,7 @@ const pctItensIrregulares = computed(() => {
     <!-- ── ESTADO: Dados carregados ───────────────────────────────────────── -->
     <template v-else-if="loaded && rows.length">
 
-      <!-- KPI Strip -->
-      <div class="mov-kpi-strip" v-if="summary">
-        <div class="mov-kpi" :class="sections.filter(hasIrregular).length > 0 ? 'kpi-danger' : 'kpi-ok'"
-             v-tooltip.top="'Total de códigos de barras (GTINs) que apresentaram venda sem comprovação no período.'">
-          <span class="kpi-label">GTINs Irregulares</span>
-          <span class="kpi-val">{{ sections.filter(hasIrregular).length }}</span>
-          <span class="kpi-sub">de {{ sections.length }} analisados</span>
-        </div>
 
-        <div class="mov-kpi" :class="kpiTopSubstance ? 'kpi-danger' : ''">
-          <span class="kpi-label">Principal Foco</span>
-          <span class="kpi-val" v-tooltip.top="kpiTopSubstance ? `Substância com maior valor financeiro irregular: ${kpiTopSubstance.name}` : ''">
-            {{ kpiTopSubstance ? (kpiTopSubstance.name.length > 22 ? kpiTopSubstance.name.slice(0, 20) + '...' : kpiTopSubstance.name) : 'Nenhum' }}
-          </span>
-          <span class="kpi-sub" v-if="kpiTopSubstance">
-            {{ kpiTopSubstance.gtinCount }} {{ kpiTopSubstance.gtinCount > 1 ? 'GTINs' : 'GTIN' }} · {{ concentrationTop1.toFixed(1) }}% do prejuízo
-          </span>
-        </div>
-
-        <div class="mov-kpi" :class="totalItensIrregulares > 0 ? 'kpi-danger' : ''"
-             v-tooltip.top="'Quantidade física total (unidades) de medicamentos vendidos sem comprovação fiscal.'">
-          <span class="kpi-label">Volume Irregular (Físico)</span>
-          <span class="kpi-val">{{ totalItensIrregulares.toLocaleString('pt-BR') }} <span class="kpi-val-unit">unid.</span></span>
-          <span class="kpi-sub">vendidas sem comprovação</span>
-        </div>
-
-        <div class="mov-kpi" :class="pctItensIrregulares > 5 ? 'kpi-warning' : ''"
-             v-tooltip.top="'Percentual físico de itens irregulares em relação ao volume total movimentado pela farmácia.'">
-          <span class="kpi-label">Representatividade</span>
-          <span class="kpi-val">{{ pctItensIrregulares.toFixed(2) }}%</span>
-          <span class="kpi-sub">do fluxo ({{ totalItensGeral.toLocaleString('pt-BR') }} unid)</span>
-        </div>
-        
-        <div class="mov-kpi" v-tooltip.top="'Volume total de unidades físicas (Regulares + Irregulares) movimentadas no período analisado.'">
-          <span class="kpi-label">Total Movimentado</span>
-          <span class="kpi-val">{{ totalItensGeral.toLocaleString('pt-BR') }} <span class="kpi-val-unit">unid.</span></span>
-          <span class="kpi-sub">na amostra analisada</span>
-        </div>
-      </div>
-      
       <!-- Card de Ranking de Substâncias -->
       <div class="mov-ranking-card" v-if="rankingData.length">
         <div class="ranking-header">
@@ -338,6 +273,12 @@ const pctItensIrregulares = computed(() => {
             <i class="pi pi-chart-bar" />
             <span class="rh-title">Análise de Risco por Princípio Ativo</span>
             <span class="rh-sub">Somatório de valores sem comprovação fiscal</span>
+          </div>
+          <div class="rh-right">
+             <div class="rank-search-wrapper">
+                <i class="pi pi-search" />
+                <input type="text" v-model="searchRanking" class="rank-search-input" placeholder="Buscar princípio ativo ou GTIN..." />
+             </div>
           </div>
         </div>
         
@@ -357,7 +298,7 @@ const pctItensIrregulares = computed(() => {
                   <th>Princípio Ativo</th>
                   <th>Período sem Comprovação</th>
                   <th class="text-right">Vendas (Total/Irregular)</th>
-                  <th class="text-right">Valor sem Comprovação</th>
+                  <th class="text-right">Valor (Total/Irregular)</th>
                   <th class="text-right">Ticket Médio</th>
                   <th class="text-right" v-tooltip.top="'Percentual que o valor não comprovado desta substância representa em relação ao valor total sem comprovação de todos os itens do CNPJ.'">
                     Representatividade
@@ -379,7 +320,11 @@ const pctItensIrregulares = computed(() => {
                   <span class="r-sep">/</span> 
                   <span class="r-val-irreg">{{ item.qtd_irreg }}</span>
                 </td>
-                <td class="text-right rank-prejuizo">{{ fmt(item.prejuizo) }}</td>
+                <td class="text-right">
+                  <span class="r-val-tot">{{ fmt(item.valor_total) }}</span>
+                  <span class="r-sep">/</span>
+                  <span class="r-val-irreg">{{ fmt(item.prejuizo) }}</span>
+                </td>
                 <td class="text-right">{{ fmt(item.ticket) }}</td>
                 <td class="text-right">
                   <div class="rank-peso-container">
@@ -395,18 +340,32 @@ const pctItensIrregulares = computed(() => {
                   </button>
                 </td>
               </tr>
+              <!-- Linhas vazias de preenchimento para evitar Layout Shift -->
+              <tr v-for="i in Math.max(0, (!showMoreRanking ? 5 : 0) - visibleRanking.length)" :key="'empty-' + i" class="empty-rank-row">
+                <td>
+                  <div class="rank-med-cell">
+                    <span class="rank-nome">&nbsp;</span>
+                    <span class="rank-gtin">&nbsp;</span>
+                  </div>
+                </td>
+                <td></td><td></td><td></td><td></td><td></td><td></td>
+              </tr>
             </tbody>
             <tfoot>
               <tr>
-                <td>TOTAL</td>
+                <td>{{ searchRanking ? 'TOTAL (FILTRADO)' : 'TOTAL GERAL' }}</td>
                 <td></td>
                 <td class="text-right">
-                  <span class="r-val-tot">{{ rankingData.reduce((a, item) => a + item.qtd_total, 0).toLocaleString('pt-BR') }}</span> 
+                  <span class="r-val-tot">{{ searchRanking ? filteredRankingData.reduce((a, item) => a + item.qtd_total, 0).toLocaleString('pt-BR') : totalItensGeral.toLocaleString('pt-BR') }}</span> 
                   <span class="r-sep">/</span> 
-                  <span class="r-val-irreg">{{ rankingData.reduce((a, item) => a + item.qtd_irreg, 0).toLocaleString('pt-BR') }}</span>
+                  <span class="r-val-irreg">{{ searchRanking ? filteredRankingData.reduce((a, item) => a + item.qtd_irreg, 0).toLocaleString('pt-BR') : totalItensIrregulares.toLocaleString('pt-BR') }}</span>
                 </td>
-                <td class="text-right rank-prejuizo">{{ fmt(rankingData.reduce((a, item) => a + item.prejuizo, 0)) }}</td>
-                <td class="text-right">{{ fmt((rankingData.reduce((a, item) => a + item.prejuizo, 0) / rankingData.reduce((a, item) => a + item.qtd_irreg, 0)) || 0) }}</td>
+                <td class="text-right">
+                  <span class="r-val-tot">{{ searchRanking ? fmt(filteredRankingData.reduce((a, item) => a + item.valor_total, 0)) : fmt(summary?.valor_total) }}</span>
+                  <span class="r-sep">/</span>
+                  <span class="r-val-irreg">{{ searchRanking ? fmt(filteredRankingData.reduce((a, item) => a + item.prejuizo, 0)) : fmt(summary?.valor_irregular) }}</span>
+                </td>
+                <td class="text-right">{{ searchRanking ? fmt((filteredRankingData.reduce((a, item) => a + item.valor_total, 0) / (filteredRankingData.reduce((a, item) => a + item.qtd_total, 0) || 1))) : fmt((summary?.valor_total / (totalItensGeral || 1)) || 0) }}</td>
                 <td class="text-right"><span class="rank-peso-txt">100.0%</span></td>
                 <td></td>
               </tr>
@@ -414,9 +373,9 @@ const pctItensIrregulares = computed(() => {
           </table>
         </div>
 
-        <div v-if="rankingData.length > 5" class="ranking-footer">
-          <button class="ranking-more-btn" @click="showMoreRanking = !showMoreRanking">
-            {{ showMoreRanking ? 'Recolher Ranking' : `Ver todos os ${rankingData.length} medicamentos críticos` }}
+        <div class="ranking-footer">
+          <button class="ranking-more-btn" :style="{ visibility: filteredRankingData.length > 5 ? 'visible' : 'hidden' }" @click="showMoreRanking = !showMoreRanking">
+            {{ showMoreRanking ? 'Recolher Ranking' : (searchRanking ? `Ver todos os ${filteredRankingData.length} resultados` : `Ver todos os ${filteredRankingData.length} medicamentos críticos`) }}
             <i class="pi" :class="showMoreRanking ? 'pi-angle-up' : 'pi-angle-down'" />
           </button>
         </div>
@@ -600,74 +559,7 @@ const pctItensIrregulares = computed(() => {
 .mov-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--text-muted); opacity: 0.5; padding: 3rem; }
 .placeholder-icon { font-size: 3rem; }
 .mov-empty-state p { font-size: 0.875rem; margin: 0; }
-.mov-kpi-strip {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
-  padding: 0;
-}
-.mov-kpi {
-  flex: 1;
-  min-width: 110px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-left: 4px solid var(--card-border);
-  border-radius: 12px;
-  padding: 0.8rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-.mov-kpi:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-}
-.mov-kpi.kpi-danger .kpi-val { color: var(--text-primary); }
-.mov-kpi.kpi-danger .kpi-label { color: var(--text-secondary); opacity: 0.85; }
-.mov-kpi.kpi-danger {
-  border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
-  border-left: 3px solid color-mix(in srgb, var(--risk-high) 60%, transparent) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-high) 30%, transparent);
-}
-.mov-kpi.kpi-warning {
-  border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
-  border-left: 3px solid var(--risk-medium) !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-medium) 30%, transparent);
-}
-.mov-kpi.kpi-ok {
-  border: 1px solid color-mix(in srgb, #22c55e 15%, var(--card-border));
-  border-left: 3px solid #22c55e !important;
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, #22c55e 30%, transparent);
-}
-.kpi-label {
-  font-size: 0.72rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  opacity: 0.9;
-  margin-bottom: 0.15rem;
-}
-.kpi-val {
-  font-size: 1.2rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.kpi-val-unit { font-size: 0.8rem; opacity: 0.7; font-weight: 400; margin-left: 0.15rem; }
-.kpi-sub {
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-top: 0.05rem;
-  letter-spacing: 0.02em;
-}
+
 /* ── MAIN CARD & TOOLBAR REESTRUTURADA ─────────────────────────────────── */
 .mov-main-card {
   background: var(--card-bg);
@@ -877,6 +769,11 @@ const pctItensIrregulares = computed(() => {
 }
 
 /* ── ESTILOS DO RANKING ─────────────────────────────────────────────────── */
+.rank-peso-txt { font-size: 0.65rem; color: var(--text-muted); min-width: 32px; font-weight: 500;}
+
+.empty-rank-row { pointer-events: none; }
+
+/* ── BOTÕES ────────────────────────────────────────────────────────────── */
 .mov-stats-grid { display: flex; flex-direction: column; gap: 1.5rem; }
 
 .mov-ranking-card {
@@ -886,13 +783,54 @@ const pctItensIrregulares = computed(() => {
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
-.ranking-header { 
-  padding: 0.85rem 1.25rem 0.75rem; 
-  border-bottom: 1px solid var(--tabs-border); 
-  display: flex; 
-  align-items: center; 
+.ranking-header {
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
-.rh-left { display: flex; align-items: center; gap: 0.75rem; }
+.rh-left { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.rh-right {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+
+.rank-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.rank-search-wrapper i {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+.rank-search-input {
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color));
+  border: 1px solid color-mix(in srgb, var(--card-border) 80%, transparent);
+  color: var(--text-primary);
+  border-radius: 20px;
+  padding: 0.5rem 1rem 0.5rem 2.4rem;
+  font-size: 0.8rem;
+  width: 280px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  outline: none;
+}
+.rank-search-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color), 0 4px 12px rgba(0,0,0,0.05);
+  background: var(--card-bg);
+  width: 320px;
+}
 .rh-left i { font-size: 1rem; color: var(--primary-color); }
 .rh-title { 
   font-size: 0.85rem; 
@@ -976,7 +914,7 @@ const pctItensIrregulares = computed(() => {
   border: none; 
   color: color-mix(in srgb, var(--text-color) 60%, transparent); 
   font-size: 0.68rem; 
-  font-weight: 800; 
+  font-weight: 500; 
   text-transform: uppercase; 
   display: flex; 
   align-items: center; 

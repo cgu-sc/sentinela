@@ -740,11 +740,26 @@ defineExpose({
 }
 
 /* Hovers específicos por categoria */
-.alert-kpi-card.highlight-red:hover { background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)); }
-.alert-kpi-card.highlight-orange:hover { background: color-mix(in srgb, var(--risk-medium) 4%, var(--card-bg)); }
-.alert-kpi-card.highlight-green:hover { background: color-mix(in srgb, var(--risk-indicator-normal) 4%, var(--card-bg)); }
-.alert-kpi-card.highlight-purple:hover { background: color-mix(in srgb, #3b82f6 4%, var(--card-bg)); }
-.alert-kpi-card.highlight-purple-geo:hover { background: color-mix(in srgb, #8b5cf6 4%, var(--card-bg)); }
+.alert-kpi-card.highlight-red:hover {
+  border-color: color-mix(in srgb, var(--risk-high) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-high) 45%, transparent);
+}
+.alert-kpi-card.highlight-orange:hover {
+  border-color: color-mix(in srgb, var(--risk-medium) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-medium) 45%, transparent);
+}
+.alert-kpi-card.highlight-green:hover {
+  border-color: color-mix(in srgb, var(--risk-indicator-normal) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-indicator-normal) 45%, transparent);
+}
+.alert-kpi-card.highlight-purple:hover {
+  border-color: color-mix(in srgb, #3b82f6 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, #3b82f6 45%, transparent);
+}
+.alert-kpi-card.highlight-purple-geo:hover {
+  border-color: color-mix(in srgb, #8b5cf6 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, #8b5cf6 45%, transparent);
+}
 
 /* Estado ativo (Clicado) — Sincronizado com a cor da categoria */
 .alert-kpi-card.kpi-active {
@@ -866,26 +881,35 @@ defineExpose({
   font-weight: 400;
 }
 
-/* Semafórica de Risco nos Cards (Apenas Borda) */
+/* Semafórica de Risco nos Cards */
 .highlight-red {
+  border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
   border-left: 3px solid var(--risk-high) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-high) 30%, transparent);
 }
 
-
 .highlight-orange {
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
   border-left: 3px solid var(--risk-medium) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-medium) 30%, transparent);
 }
 
 .highlight-purple {
+  border: 1px solid color-mix(in srgb, #3b82f6 15%, var(--card-border));
   border-left: 3px solid #3b82f6 !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, #3b82f6 30%, transparent);
 }
 
 .highlight-purple-geo {
+  border: 1px solid color-mix(in srgb, #8b5cf6 15%, var(--card-border));
   border-left: 3px solid #8b5cf6 !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, #8b5cf6 30%, transparent);
 }
 
 .highlight-green {
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-border));
   border-left: 3px solid var(--risk-indicator-normal) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-indicator-normal) 30%, transparent);
 }
 
 /* Filtro Estilizado */

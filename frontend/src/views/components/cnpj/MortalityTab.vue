@@ -437,6 +437,21 @@ const falecidosAgrupadosFiltrados = computed(() => {
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
+.f-kpi-card.highlight-red:hover {
+  border-color: color-mix(in srgb, var(--risk-high) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-high) 45%, transparent);
+}
+
+.f-kpi-card.highlight-orange:hover {
+  border-color: color-mix(in srgb, var(--risk-medium) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-medium) 45%, transparent);
+}
+
+.f-kpi-card.highlight-yellow:hover {
+  border-color: color-mix(in srgb, var(--risk-low) 45%, var(--card-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--risk-low) 45%, transparent);
+}
+
 .f-kpi-label {
   font-size: 0.65rem;
   font-weight: 600;
@@ -469,7 +484,9 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .highlight-red {
+  border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
   border-left: 3px solid var(--risk-high) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-high) 30%, transparent);
 }
 
 .highlight-prejuizo {
@@ -477,11 +494,15 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .highlight-orange {
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
   border-left: 3px solid var(--risk-medium) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-medium) 30%, transparent);
 }
 
 .highlight-yellow {
+  border: 1px solid color-mix(in srgb, var(--risk-low) 15%, var(--card-border));
   border-left: 3px solid var(--risk-low) !important;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--risk-low) 30%, transparent);
 }
 
 .falecidos-list-container {

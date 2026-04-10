@@ -54,23 +54,21 @@ const { chartDataColors } = useChartTheme();
 }
 
 .kpi-card {
-  /* MÁGICA BALANCEADA: Gradiente interno e borda com visibilidade ideal */
   background: var(--card-bg);
   border-radius: 12px;
-  padding: 0.8rem 1rem; /* MEDIDA DO USUÁRIO */
-  border: 1px solid var(--card-border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 15%, var(--sidebar-border));
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary-color) 30%, transparent);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 0; /* TRAVA VERTICAL */
+  min-height: 0;
   display: flex;
   align-items: center;
 }
 
-.kpi-card:hover { 
+.kpi-card:hover {
   transform: translateY(-3px);
-  /* Sombra elegante e visível acompanhando o tema */
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary-color) 30%, transparent);
-  border-color: color-mix(in srgb, var(--primary-color) 30%, var(--sidebar-border));
+  box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--primary-color) 45%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--sidebar-border));
 }
 
 .kpi-body {

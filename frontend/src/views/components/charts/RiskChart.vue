@@ -172,10 +172,9 @@ const chartOption = computed(() => {
       <i class="pi pi-chart-bar"></i>
       <h3>FATOR RISCO X QTD ESTAB</h3>
       <div class="spacer"></div>
-      <Button
-        icon="pi pi-info-circle"
+      <i
+        class="pi pi-info-circle info-icon"
         v-tooltip.top="'Este gráfico segmenta os estabelecimentos por faixas de não-comprovação...'"
-        text severity="secondary" rounded
       />
     </div>
     <div class="chart-wrapper">
@@ -199,7 +198,34 @@ const chartOption = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--tabs-border);
+  flex-shrink: 0;
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.chart-header i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.info-icon {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: default;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .chart-wrapper {

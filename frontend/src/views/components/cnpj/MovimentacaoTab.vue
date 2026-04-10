@@ -74,7 +74,15 @@ const processarMovimentacao = () => { cnpjDetailStore.fetchMovimentacao(props.cn
 const copyToClipboard = (text) => {
   if (!text) return;
   navigator.clipboard.writeText(text);
-  // Feedback visual simples ou via store se houvesse Toast global acessível aqui
+};
+
+// ── Expansão local de linhas (Exibir mais) ───────────────────────────────────
+const _rowsExpanded = ref(new Set());
+const isRowsExpanded = (gtin) => _rowsExpanded.value.has(gtin);
+const toggleRowsExpanded = (gtin) => {
+  const next = new Set(_rowsExpanded.value);
+  next.has(gtin) ? next.delete(gtin) : next.add(gtin);
+  _rowsExpanded.value = next;
 };
 
 
@@ -86,14 +94,94 @@ const hasIrregular = (section) =>
   section.rows.some(r => r.tipo_linha === 'venda_irregular');
 
 const filteredRows = (sectionRows) => {
-  if (!showOnlyIrregular.value) return sectionRows;
-  return sectionRows.filter(r => r.tipo_linha === 'venda_irregular');
+  // Agora não filtramos as linhas individualmente. 
+  // O filtro "Apenas Irregulares" agora atua no nível do GRUPO (GTIN).
+  return sectionRows;
 };
 
 const visibleSections = computed(() => {
   if (!showOnlyIrregular.value) return sections.value;
+  // Filtra apenas os grupos que possuem ao menos uma irregularidade
   return sections.value.filter(s => hasIrregular(s));
 });
+
+const getVisibleRows = (section) => {
+  const fRows = filteredRows(section.rows);
+  if (isRowsExpanded(section.gtin)) return fRows;
+  return fRows.slice(0, 2);
+};
+
+// ── Ranking de Substâncias Irregulares (Top Focos) ───────────────────────
+const showMoreRanking = ref(false);
+const rankingData = computed(() => {
+  const groups = {};
+  
+  sections.value.forEach(s => {
+    const st = s.subtotal;
+    if (!st || (st.valor_irregular ?? 0) <= 0) return;
+    
+    // Heurística de limpeza: pegar o nome até o primeiro número (dosagem)
+    // Se houver um campo substancia no futuro, trocar aqui.
+    const rawName = s.medicamento || 'SUBSTÂNCIA NÃO IDENTIFICADA';
+    const cleanName = rawName.split(/\s\d/)[0].trim(); 
+    
+    if (!groups[cleanName]) {
+      groups[cleanName] = {
+        substancia: cleanName,
+        prejuizo: 0,
+        qtd_total: 0,
+        qtd_irreg: 0,
+        gtins: new Set(),
+        firstGtin: s.gtin, // Para o link de scroll (primeiro da lista)
+        minStart: null,
+        maxEnd: null,
+        tickets: []
+      };
+    }
+    
+    const g = groups[cleanName];
+    g.prejuizo += st.valor_irregular;
+    g.qtd_total += st.vendas;
+    g.qtd_irreg += st.vendas_irregular;
+    g.gtins.add(s.gtin);
+    g.tickets.push(st.valor_irregular / (st.vendas_irregular || 1));
+    
+    const irrRows = s.rows.filter(r => r.tipo_linha === 'venda_irregular');
+    if (irrRows.length) {
+      const start = irrRows[0].periodo_inicio_irregular;
+      const end   = irrRows[irrRows.length - 1].periodo_final;
+      if (!g.minStart || start < g.minStart) g.minStart = start;
+      if (!g.maxEnd || end > g.maxEnd) g.maxEnd = end;
+    }
+  });
+
+  return Object.values(groups)
+    .map(g => ({
+      ...g,
+      periodo: `${g.minStart || '—'} a ${g.maxEnd || '—'}`,
+      gtinCount: g.gtins.size,
+      ticket: g.tickets.reduce((a, b) => a + b, 0) / g.tickets.length,
+      peso: (g.prejuizo / (summary.value?.valor_irregular || 1)) * 100
+    }))
+    .sort((a, b) => b.prejuizo - a.prejuizo);
+});
+
+const visibleRanking = computed(() => {
+  if (showMoreRanking.value) return rankingData.value;
+  return rankingData.value.slice(0, 5);
+});
+
+const scrollToGtin = (gtin) => {
+  toggleRowsExpanded(gtin); // Garante que as linhas do gtin estão expandidas se houver muitas
+  const next = new Set(_expanded.value);
+  next.add(gtin);
+  _expanded.value = next;
+  
+  setTimeout(() => {
+    const el = document.getElementById(`gtin-${gtin}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+};
 
 const pctIrregular = (section) => {
   const st = section.subtotal;
@@ -222,6 +310,75 @@ const pctItensIrregulares = computed(() => {
           <span class="kpi-val">{{ totalItensGeral.toLocaleString('pt-BR') }} <small>unid.</small></span>
         </div>
       </div>
+      
+      <!-- Ranking de Maior Impacto -->
+      <div class="mov-ranking-card" v-if="rankingData.length">
+        <div class="ranking-header">
+          <span class="rh-title">💊 Ranking de Substâncias (Foco de Prejuízo)</span>
+          <span class="rh-sub" v-if="rankingData.length > 5 && !showMoreRanking">Exibindo Top 5 de {{ rankingData.length }} substâncias críticas</span>
+        </div>
+        
+        <div class="ranking-table-wrapper">
+          <table class="ranking-table">
+            <colgroup>
+              <col style="width: 35%;">
+              <col style="width: 18%;">
+              <col style="width: 12%;">
+              <col style="width: 12%;">
+              <col style="width: 9%;">
+              <col style="width: 9%;">
+              <col style="width: 5%;">
+            </colgroup>
+            <thead>
+              <tr>
+                  <th>Princípio Ativo</th>
+                  <th>Período de Irregularidade</th>
+                  <th class="text-right">Vendas (Tot/Irr)</th>
+                  <th class="text-right">Prejuízo (R$)</th>
+                  <th class="text-right">Ticket Médio</th>
+                  <th class="text-right">Peso %</th>
+                  <th class="text-center">Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in visibleRanking" :key="item.substancia">
+                <td>
+                  <div class="rank-med-cell">
+                    <span class="rank-nome">{{ item.substancia }}</span>
+                    <span class="rank-gtin">{{ item.gtinCount }} apresentações (GTINs)</span>
+                  </div>
+                </td>
+                <td class="rank-periodo">{{ item.periodo }}</td>
+                <td class="text-right">
+                  <span class="r-val-tot">{{ item.qtd_total }}</span> 
+                  <span class="r-sep">/</span> 
+                  <span class="r-val-irreg">{{ item.qtd_irreg }}</span>
+                </td>
+                <td class="text-right rank-prejuizo">{{ fmt(item.prejuizo) }}</td>
+                <td class="text-right">{{ fmt(item.ticket) }}</td>
+                <td class="text-right">
+                  <div class="rank-peso-container">
+                    <div class="rank-peso-bar" :style="{ width: item.peso + '%' }"></div>
+                    <span class="rank-peso-txt">{{ item.peso.toFixed(1) }}%</span>
+                  </div>
+                </td>
+                <td class="text-center">
+                  <button class="rank-goto-btn" @click="scrollToGtin(item.firstGtin)" v-tooltip.top="'Ir para o primeiro GTIN desta substância'">
+                    <i class="pi pi-arrow-down" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="rankingData.length > 5" class="ranking-footer">
+          <button class="ranking-more-btn" @click="showMoreRanking = !showMoreRanking">
+            {{ showMoreRanking ? 'Recolher Ranking' : `Ver todos os ${rankingData.length} medicamentos críticos` }}
+            <i class="pi" :class="showMoreRanking ? 'pi-angle-up' : 'pi-angle-down'" />
+          </button>
+        </div>
+      </div>
 
       <!-- Toolbar -->
       <div class="mov-toolbar">
@@ -229,7 +386,7 @@ const pctItensIrregulares = computed(() => {
           Exibindo {{ visibleSections.length }} de {{ sections.length }} medicamentos
         </span>
         <div class="toolbar-actions">
-          <button class="tb-btn" :class="{ 'tb-btn-active': showOnlyIrregular }" @click="showOnlyIrregular = !showOnlyIrregular">
+          <button class="tb-btn" :class="{ 'tb-btn-active': showOnlyIrregular }" @click="showOnlyIrregular = !showOnlyIrregular" v-tooltip.top="'Exibe o histórico completo apenas de medicamentos com irregularidades'">
             <i :class="showOnlyIrregular ? 'pi pi-filter-fill' : 'pi pi-filter'" />
             {{ showOnlyIrregular ? 'Apenas Irregulares' : 'Todas as Linhas' }}
           </button>
@@ -240,11 +397,11 @@ const pctItensIrregulares = computed(() => {
       </div>
 
       <div class="mov-body">
-        <div v-for="section in visibleSections" :key="section.gtin" class="gtin-accordion" :class="{ 'is-expanded': expanded.has(section.gtin), 'has-irregular': hasIrregular(section) }">
+        <div v-for="section in visibleSections" :key="section.gtin" :id="'gtin-' + section.gtin" class="gtin-accordion" :class="{ 'is-expanded': expanded.has(section.gtin), 'has-irregular': hasIrregular(section) }">
 
           <button class="gtin-header" @click="toggle(section.gtin)">
             <i class="pi header-chevron" :class="expanded.has(section.gtin) ? 'pi-chevron-down' : 'pi-chevron-right'" />
-            <span class="gtin-badge" @click.stop="copyToClipboard(section.gtin)" title="Clique para copiar o GTIN">
+            <span class="gtin-badge" @click.stop="copyToClipboard(section.gtin)" v-tooltip.top="'Clique para copiar o GTIN'">
               {{ section.gtin }}
               <i class="pi pi-copy gtin-copy-icon" />
             </span>
@@ -273,7 +430,7 @@ const pctItensIrregulares = computed(() => {
               <div class="gcol gcol-nf">Notas Fiscais</div>
             </div>
 
-            <div v-for="(row, ri) in filteredRows(section.rows)" :key="ri" class="gtin-row" :class="{ 'row-irregular': row.tipo_linha === 'venda_irregular', 'row-normal': row.tipo_linha === 'venda_normal' }">
+            <div v-for="(row, ri) in getVisibleRows(section)" :key="ri" class="gtin-row" :class="{ 'row-irregular': row.tipo_linha === 'venda_irregular', 'row-normal': row.tipo_linha === 'venda_normal' }">
               <div class="gcol gcol-date">{{ row.periodo_inicial ?? '—' }}</div>
               <div class="gcol gcol-date">{{ row.periodo_inicio_irregular ?? '—' }}</div>
               <div class="gcol gcol-date">{{ row.periodo_final ?? '—' }}</div>
@@ -283,7 +440,21 @@ const pctItensIrregulares = computed(() => {
               <div class="gcol gcol-num" :class="(row.vendas_irregular ?? 0) > 0 ? 'cell-irreg-num' : ''">{{ row.vendas_irregular?.toLocaleString('pt-BR') ?? '—' }}</div>
               <div class="gcol gcol-cur">{{ fmt(row.valor) }}</div>
               <div class="gcol gcol-cur" :class="(row.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(row.valor_irregular) }}</div>
-              <div class="gcol gcol-nf" :title="row.notas"><span class="nf-text">{{ row.notas || '—' }}</span></div>
+              <div class="gcol gcol-nf" v-tooltip.top="row.notas"><span class="nf-text">{{ row.notas || '—' }}</span></div>
+            </div>
+
+            <!-- Botão Exibir Mais / Recolher -->
+            <div v-if="filteredRows(section.rows).length > 2" class="rows-pagination-row">
+              <button class="rows-pagination-btn" @click="toggleRowsExpanded(section.gtin)">
+                <template v-if="!isRowsExpanded(section.gtin)">
+                  <i class="pi pi-angle-double-down" /> 
+                  Exibir mais {{ filteredRows(section.rows).length - 2 }} registros
+                </template>
+                <template v-else>
+                  <i class="pi pi-angle-double-up" /> 
+                  Recolher registros
+                </template>
+              </button>
             </div>
 
             <div v-if="section.subtotal" class="gtin-subtotal">
@@ -505,19 +676,19 @@ const pctItensIrregulares = computed(() => {
 .gcol-irreg-hdr { color: var(--risk-high) !important; }
 .gtin-row { border-bottom: 1px solid color-mix(in srgb, var(--card-border) 50%, transparent); transition: background 0.12s; }
 .row-normal:hover { background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); }
-.row-irregular { background: color-mix(in srgb, var(--risk-high) 4%, var(--card-bg)); }
+.row-irregular { background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg)); }
 .cell-irreg-date, .cell-irreg-num, .cell-irreg-cur { color: var(--risk-high) !important; font-weight: 600; }
 .nf-text { font-size: 0.67rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.gtin-subtotal { background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg)); border-top: 2px solid var(--card-border); }
+.gtin-subtotal { background: var(--card-bg); border-top: 1px dashed color-mix(in srgb, var(--primary-color) 40%, transparent); }
 .gtin-subtotal .gcol { font-size: 0.73rem; font-weight: 600; color: var(--text-secondary); padding: 0.45rem 0.55rem; }
-.sub-label { font-style: italic; opacity: 0.7; font-size: 0.65rem !important; }
+.sub-label { font-weight: 700; opacity: 1; font-size: 0.7rem !important; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); }
 .gtin-grand-total { 
   display: flex; 
   align-items: center; 
   flex-wrap: wrap; 
   gap: 0.6rem; 
   padding: 0.85rem 1.2rem; 
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg)); 
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg)); 
   border: 1px solid var(--card-border); 
   border-radius: 12px; 
   font-size: 0.78rem; 
@@ -528,4 +699,124 @@ const pctItensIrregulares = computed(() => {
 .grand-sub { font-size: 0.66rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .grand-val { font-weight: 700; color: var(--text-primary); }
 .grand-irreg { color: var(--risk-critical) !important; font-weight: 800; }
+
+.rows-pagination-row {
+  background: color-mix(in srgb, var(--text-color) 2%, var(--card-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0;
+}
+.rows-pagination-btn {
+  background: none;
+  border: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 1rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+  opacity: 0.85;
+}
+.rows-pagination-btn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  letter-spacing: 0.08em;
+}
+.rows-pagination-btn i {
+  font-size: 0.7rem;
+}
+
+/* ── ESTILOS DO RANKING ─────────────────────────────────────────────────── */
+.mov-stats-grid { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.mov-ranking-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+.ranking-header { padding: 1rem 1.2rem; border-bottom: 1px solid var(--card-border); display: flex; align-items: baseline; gap: 1rem; }
+.rh-title { font-size: 0.85rem; font-weight: 800; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.02em; }
+.rh-sub { font-size: 0.68rem; color: var(--text-muted); }
+
+.ranking-table-wrapper { overflow-x: auto; }
+.ranking-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ranking-table th { 
+  background: color-mix(in srgb, var(--text-color) 2%, var(--card-bg)); 
+  padding: 0.7rem 1rem; 
+  font-size: 0.62rem; 
+  text-transform: uppercase; 
+  color: var(--text-muted); 
+  text-align: left; 
+  border-bottom: 1px solid var(--card-border);
+}
+.ranking-table td { 
+  padding: 0.7rem 1rem; 
+  font-size: 0.75rem; 
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 40%, transparent); 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  white-space: nowrap; 
+}
+.ranking-table .text-right { text-align: right !important; }
+.ranking-table .text-center { text-align: center !important; }
+
+.rank-med-cell { display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; }
+.rank-gtin { font-size: 0.6rem; color: var(--text-muted); font-weight: 700; }
+.rank-nome { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-periodo { font-size: 0.68rem; color: var(--text-secondary); }
+.rank-prejuizo { color: var(--risk-high) !important; font-weight: 800; font-variant-numeric: tabular-nums; }
+.r-val-tot { color: var(--text-muted); }
+.r-sep { margin: 0 0.2rem; opacity: 0.3; }
+.r-val-irreg { font-weight: 700; color: var(--text-primary); }
+
+.rank-peso-container { display: flex; align-items: center; gap: 0.6rem; justify-content: flex-end; }
+.rank-peso-bar { height: 4px; background: color-mix(in srgb, var(--primary-color) 60%, transparent); border-radius: 2px; }
+.rank-peso-txt { font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); min-width: 35px; }
+
+.rank-goto-btn { 
+  background: color-mix(in srgb, var(--text-color) 5%, var(--card-bg)); 
+  border: 1px solid color-mix(in srgb, var(--text-color) 15%, transparent); 
+  color: color-mix(in srgb, var(--text-color) 70%, transparent); 
+  width: 24px; 
+  height: 24px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  transition: all 0.2s; 
+}
+.rank-goto-btn:hover { background: var(--primary-color); color: white; transform: translateY(2px); border-color: var(--primary-color); }
+
+.ranking-footer { padding: 0.7rem; display: flex; justify-content: center; background: color-mix(in srgb, var(--text-color) 1%, var(--card-bg)); }
+.ranking-more-btn { 
+  background: none; 
+  border: none; 
+  color: color-mix(in srgb, var(--text-color) 60%, transparent); 
+  font-size: 0.68rem; 
+  font-weight: 800; 
+  text-transform: uppercase; 
+  display: flex; 
+  align-items: center; 
+  gap: 0.5rem; 
+  cursor: pointer;
+  padding: 0.3rem 1.5rem;
+  border-radius: 20px;
+  transition: all 0.2s;
+}
+.ranking-more-btn:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 5%, transparent); letter-spacing: 0.02em; }
+
+@media (max-width: 1200px) {
+  .ranking-table th:nth-child(2), .ranking-table td:nth-child(2) { display: none; }
+  .ranking-table th:nth-child(3), .ranking-table td:nth-child(3) { display: none; }
+}
 </style>

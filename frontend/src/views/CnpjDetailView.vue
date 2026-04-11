@@ -28,8 +28,8 @@ import Chip from "primevue/chip";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
-  MOVEMENT: 0,
-  EVOLUTION: 1,
+  EVOLUTION: 0,
+  MOVEMENT: 1,
   INDICATORS: 2,
   CRMS: 3,
   MORTALITY: 4,
@@ -208,18 +208,18 @@ const formatCnpj = (v) => {
     >
       <TabPanel>
         <template #header
-          ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
-        >
-        <MovementTab :cnpj="cnpj" class="tab-content" />
-      </TabPanel>
-
-      <TabPanel>
-        <template #header
           ><i class="pi pi-chart-line tab-icon" /><span
             >Evolução Financeira</span
           ></template
         >
         <EvolutionTab ref="evolutionTabRef" class="tab-content" />
+      </TabPanel>
+
+      <TabPanel>
+        <template #header
+          ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
+        >
+        <MovementTab :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

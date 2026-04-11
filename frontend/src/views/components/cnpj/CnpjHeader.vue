@@ -6,7 +6,10 @@ import { useFormatting } from "@/composables/useFormatting";
 import { useStatusClass } from "@/composables/useStatusClass";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
+import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
+import { useRouter } from "vue-router";
+import { extractCnpjRaiz } from "@/composables/useParsing";
 
 
 const cnpjNav = useCnpjNavStore();
@@ -122,6 +125,16 @@ const formattedFullAddress = computed(() => {
   return parts.filter(Boolean).join(" · ");
 });
 
+const filterStore = useFilterStore();
+const router = useRouter();
+
+const filterNetwork = () => {
+  if (props.cnpjData?.qtd_estabelecimentos_rede > 1) {
+    filterStore.selectedCnpjRaiz = extractCnpjRaiz(props.cnpj);
+    router.push("/cnpj");
+  }
+};
+
 
 </script>
 
@@ -186,6 +199,23 @@ const formattedFullAddress = computed(() => {
           >
             <span class="institution-label">Estabelecimento</span>
             <span class="institution-value">{{ cnpjData.is_matriz ? 'Matriz' : 'Filial' }}</span>
+          </div>
+
+          <!-- Grande Rede -->
+          <div
+            class="institution-chip"
+            :class="[
+              cnpjData.is_grande_rede ? 'status-info' : 'status-secondary',
+              cnpjData.qtd_estabelecimentos_rede > 1 ? 'clickable-badge' : ''
+            ]"
+            v-tooltip.bottom="cnpjData.qtd_estabelecimentos_rede > 1 ? 'Clique para ver todos os estabelecimentos desta rede' : 'Estabelecimento Individual'"
+            @click="filterNetwork"
+          >
+            <span class="institution-label">Grande Rede</span>
+            <span class="institution-value">
+              {{ cnpjData.is_grande_rede ? 'Sim' : 'Não' }}
+              <small class="ml-1 opacity-70">({{ cnpjData.qtd_estabelecimentos_rede }})</small>
+            </span>
           </div>
 
           <!-- Score + Classificação unificados -->

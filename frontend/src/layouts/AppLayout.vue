@@ -88,10 +88,14 @@ const ufOptions = computed(() => geoStore.ufs);
 const regiaoSaudeOptions = computed(() =>
   geoStore.regioesPorUF(filterStore.selectedUF),
 );
+const unidadePfOptions = computed(() =>
+  geoStore.jurisdicoesPorFiltro(filterStore.selectedUF, filterStore.selectedRegiaoSaude),
+);
 const municipioOptions = computed(() =>
   geoStore.municipiosPorFiltro(
     filterStore.selectedUF,
     filterStore.selectedRegiaoSaude,
+    filterStore.selectedUnidadePf,
   ),
 );
 
@@ -104,9 +108,15 @@ watch(
       filterStore.selectedRegiaoSaude = "Todos";
     }
 
+    const unidadesDisponiveis = geoStore.jurisdicoesPorUF(newUF);
+    if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
+      filterStore.selectedUnidadePf = "Todos";
+    }
+
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
       newUF,
       filterStore.selectedRegiaoSaude,
+      filterStore.selectedUnidadePf,
     );
     // Muda de .includes() para .some() ou .find() pois agora é uma lista de objetos { label, value }
     if (
@@ -125,6 +135,25 @@ watch(
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
       filterStore.selectedUF,
       newRegiao,
+      filterStore.selectedUnidadePf,
+    );
+    if (
+      !municipiosDisponiveis.some(
+        (m) => m.value === filterStore.selectedMunicipio,
+      )
+    ) {
+      filterStore.selectedMunicipio = "Todos";
+    }
+  },
+);
+
+watch(
+  () => filterStore.selectedUnidadePf,
+  (newUnidade) => {
+    const municipiosDisponiveis = geoStore.municipiosPorFiltro(
+      filterStore.selectedUF,
+      filterStore.selectedRegiaoSaude,
+      newUnidade,
     );
     if (
       !municipiosDisponiveis.some(
@@ -641,6 +670,28 @@ const {
               @slideend="applyValorMinSemComp"
             />
           </div>
+        </div>
+
+        <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+          <label class="filter-label">
+            Jurisdição PF
+            <button
+              v-if="isFilterActive('selectedUnidadePf')"
+              class="filter-clear-btn"
+              @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE"
+              v-tooltip.right="'Limpar filtro'"
+            >
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
+          <Dropdown
+            v-model="filterStore.selectedUnidadePf"
+            :options="unidadePfOptions"
+            placeholder="Delegacia / Unidade PF"
+            class="w-full filter-input"
+            panelClass="sidebar-panel"
+            :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"
+          />
         </div>
 
         <hr class="sidebar-divider my-4" />

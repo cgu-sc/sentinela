@@ -35,9 +35,10 @@ def get_analytics_summary(
     porte_empresa: Optional[str] = Query(None),
     grande_rede: Optional[str] = Query(None),
     cnpj_raiz: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -58,9 +59,10 @@ def get_resultado_faixas_risco(
     porte_empresa: Optional[str] = Query(None),
     grande_rede: Optional[str] = Query(None),
     cnpj_raiz: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(cnpj: str):

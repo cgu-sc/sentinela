@@ -32,6 +32,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedMS = ref(saved?.selectedMS ?? FILTER_DEFAULTS.MS);
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
+  const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
   const hoveredMunicipioName = ref(null);
 
@@ -72,7 +73,27 @@ export const useFilterStore = defineStore('filters', () => {
   watch(selectedUF, (newUF) => {
     if (newUF === FILTER_ALL_VALUE) {
       selectedRegiaoSaude.value = FILTER_ALL_VALUE;
+      selectedUnidadePf.value = FILTER_ALL_VALUE;
       selectedMunicipio.value = FILTER_ALL_VALUE;
+    }
+  });
+
+  watch(selectedUnidadePf, (newUnidade) => {
+    if (newUnidade === FILTER_ALL_VALUE) {
+      // Se limpou a jurisdição, não precisa necessariamente limpar o município 
+      // (a menos que o objetivo seja resetar tudo abaixo)
+      return;
+    }
+    
+    // INTELIGÊNCIA REVERSA: Se selecionei uma Jurisdição, a UF deve ser marcada automaticamente
+    if (geoStore.localidades.length > 0) {
+      const found = geoStore.localidades.find(l => 
+        l.unidade_pf === newUnidade &&
+        (selectedUF.value === FILTER_ALL_VALUE || l.sg_uf === selectedUF.value)
+      );
+      if (found && selectedUF.value !== found.sg_uf) {
+        selectedUF.value = found.sg_uf;
+      }
     }
   });
 
@@ -104,6 +125,7 @@ export const useFilterStore = defineStore('filters', () => {
       if (found) {
         if (selectedUF.value !== found.sg_uf) selectedUF.value = found.sg_uf;
         if (selectedRegiaoSaude.value !== found.no_regiao_saude) selectedRegiaoSaude.value = found.no_regiao_saude;
+        if (selectedUnidadePf.value !== found.unidade_pf) selectedUnidadePf.value = found.unidade_pf;
       }
     }
   });
@@ -122,6 +144,7 @@ export const useFilterStore = defineStore('filters', () => {
         selectedMS: selectedMS.value,
         selectedPorte: selectedPorte.value,
         selectedGrandeRede: selectedGrandeRede.value,
+        selectedUnidadePf: selectedUnidadePf.value,
         selectedCnpjRaiz: selectedCnpjRaiz.value,
         percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
         percentualNaoComprovacaoFilter: percentualNaoComprovacaoFilter.value,
@@ -138,7 +161,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedCnpjRaiz,
+    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -155,6 +178,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS.value = FILTER_ALL_VALUE;
     selectedPorte.value = FILTER_ALL_VALUE;
     selectedGrandeRede.value = FILTER_ALL_VALUE;
+    selectedUnidadePf.value = FILTER_ALL_VALUE;
     selectedCnpjRaiz.value = '';
     percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
     percentualNaoComprovacaoFilter.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
@@ -177,6 +201,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS,
     selectedPorte,
     selectedGrandeRede,
+    selectedUnidadePf,
     selectedCnpjRaiz,
     percentualNaoComprovacaoRange,
     percentualNaoComprovacaoFilter,

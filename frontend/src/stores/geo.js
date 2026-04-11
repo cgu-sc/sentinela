@@ -89,6 +89,17 @@ export const useGeoStore = defineStore('geo', () => {
     return ['Todos', ...Array.from(set).sort()];
   }
 
+  // Unidades da PF filtradas por UF e/ou Região de Saúde
+  function jurisdicoesPorFiltro(uf, regiao) {
+    let filtradas = localidades.value;
+    if (uf && uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
+    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+    
+    // Filtra nulos e vazios
+    const set = new Set(filtradas.map(l => l.unidade_pf).filter(Boolean));
+    return ['Todos', ...Array.from(set).sort()];
+  }
+
   // Municípios filtrados por UF e/ou Região de Saúde (Com tratamento de homônimos)
   function qtdMunicipiosPorRegiao(regiao) {
     if (!regiao) return null;
@@ -100,10 +111,11 @@ export const useGeoStore = defineStore('geo', () => {
     return municipios.size || null;
   }
 
-  function municipiosPorFiltro(uf, regiao) {
+  function municipiosPorFiltro(uf, regiao, unidade) {
     let filtradas = localidades.value;
-    if (uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
-    if (regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+    if (uf && uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
+    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+    if (unidade && unidade !== 'Todos') filtradas = filtradas.filter(l => l.unidade_pf === unidade);
     
     // Gera lista de objetos únicos { label, value }
     // O valor é sempre 'Nome|UF' para garantir unicidade total
@@ -127,6 +139,7 @@ export const useGeoStore = defineStore('geo', () => {
     fetchLocalidades,
     ufs,
     regioesPorUF,
+    jurisdicoesPorFiltro,
     municipiosPorFiltro,
     qtdMunicipiosPorRegiao,
     municipiosGeoJson,

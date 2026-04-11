@@ -161,6 +161,7 @@ SELECT
     DF.situacaoReceita           AS situacao_rf,
     DF.dataSituacaoCadastral     AS data_situacao_rf,
     DF.data_processamento        AS data_ultimo_processamento,
+    J.nome_unidade_PF            AS unidade_pf,
 
     -- LÓGICA CONEXÃO MS (Ativa se vendeu nos últimos 30 dias em relação ao limite da base)
     CAST(CASE
@@ -175,7 +176,12 @@ SELECT
 
 INTO fp.perfil_consolidado_estabelecimento
 FROM fp.dados_farmacia DF
-INNER JOIN fp.rede_estabelecimentos R ON R.cnpj = DF.cnpj;
+INNER JOIN fp.rede_estabelecimentos R ON R.cnpj = DF.cnpj
+LEFT JOIN (
+    SELECT codIBGE, MIN(nome_unidade_PF) as nome_unidade_PF 
+    FROM fp.jurisdicoes_pf 
+    GROUP BY codIBGE
+) J ON J.codIBGE = DF.codibge;
 
 CREATE UNIQUE CLUSTERED INDEX IX_perfil_cnpj ON fp.perfil_consolidado_estabelecimento (cnpj);
 GO

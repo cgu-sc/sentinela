@@ -46,7 +46,17 @@ def _sync_localidades(engine, progress_callback=None):
     """Tarefa 1: Sincroniza dados geográficos (IBGE)."""
     global _df_localidades
     print("Sincronizando Localidades (IBGE)...")
-    sql = "SELECT sg_uf, no_regiao_saude, id_regiao_saude, no_municipio, id_ibge7, nu_populacao FROM [temp_CGUSC].[fp].[dados_ibge] ORDER BY sg_uf, no_regiao_saude, no_municipio"
+    sql = """
+        SELECT I.sg_uf, I.no_regiao_saude, I.id_regiao_saude, I.no_municipio, I.id_ibge7, I.nu_populacao,
+               J.unidade_pf
+        FROM [temp_CGUSC].[fp].[dados_ibge] I
+        LEFT JOIN (
+            SELECT codIBGE, MIN(nome_unidade_PF) as unidade_pf 
+            FROM [temp_CGUSC].[fp].[jurisdicoes_pf] 
+            GROUP BY codIBGE
+        ) J ON J.codIBGE = I.id_ibge7
+        ORDER BY I.sg_uf, I.no_regiao_saude, I.no_municipio
+    """
     pdf = pd.read_sql(sql, engine)
     print(f"   -> Localidades carregadas: {len(pdf):,} registros.")
     if progress_callback: progress_callback(100)
@@ -54,6 +64,7 @@ def _sync_localidades(engine, progress_callback=None):
         pl.col("sg_uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
         pl.col("no_municipio").cast(pl.Categorical),
+        pl.col("unidade_pf").cast(pl.Categorical),
     ])
     _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="lz4")
 
@@ -232,7 +243,8 @@ def _sync_movimentacao(engine, progress_callback):
                P.porte_empresa,
                P.is_grande_rede,
                P.qtd_estabelecimentos_rede,
-               P.is_matriz
+               P.is_matriz,
+               P.unidade_pf
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
     """
@@ -268,6 +280,7 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("is_grande_rede").cast(pl.Boolean),
         pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
+        pl.col("unidade_pf").cast(pl.Categorical),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 

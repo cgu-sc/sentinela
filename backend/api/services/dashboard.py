@@ -15,7 +15,7 @@ from ..schemas.dashboard import (
 
 class DashboardService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> DashboardResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None) -> DashboardResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -75,6 +75,8 @@ class DashboardService:
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':
                 mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+            if unidade_pf and unidade_pf != 'Todos':
+                mask = mask & (pl.col("unidade_pf") == unidade_pf)
 
             period_df = df.filter(mask)
 
@@ -159,7 +161,7 @@ class DashboardService:
             print(traceback.format_exc())
             return []
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None) -> FatorRiscoResponseSchema:
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None) -> FatorRiscoResponseSchema:
         """
         Calcula as faixas de risco (Buckets de 10%) via Polars in-memory.
         """
@@ -184,6 +186,8 @@ class DashboardService:
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':
                 mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+            if unidade_pf and unidade_pf != 'Todos':
+                mask = mask & (pl.col("unidade_pf") == unidade_pf)
 
             # Agrega por CNPJ no período e calcula %
             cnpj_agg = (

@@ -39,10 +39,8 @@ const TAB_INDEX = {
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 
-
-
 // ── Stores ────────────────────────────────────────────────
-const analyticsStore  = useAnalyticsStore();
+const analyticsStore = useAnalyticsStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { resultadoCnpjs } = storeToRefs(analyticsStore);
 const { dadosCadastro } = storeToRefs(cnpjDetailStore);
@@ -59,7 +57,7 @@ const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 
-import { usePdfExport } from '@/composables/usePdfExport';
+import { usePdfExport } from "@/composables/usePdfExport";
 const { isExporting, exportCnpjPdf } = usePdfExport();
 
 const evolutionTabRef = ref(null);
@@ -67,8 +65,9 @@ const indicatorsTabRef = ref(null);
 const crmsTabRef = ref(null);
 const falecidosTabRef = ref(null);
 
-const qtdMunicipiosRegiao = computed(() =>
-  geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
+const qtdMunicipiosRegiao = computed(
+  () =>
+    geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
 );
 
 const handleExport = async () => {
@@ -76,7 +75,12 @@ const handleExport = async () => {
   const geo = geoData.value;
   if (geo?.sg_uf && geo?.no_regiao_saude) {
     const p = getApiParams();
-    await cnpjDetailStore.fetchMunicipiosRegiao(geo.sg_uf, geo.no_regiao_saude, p.inicio, p.fim);
+    await cnpjDetailStore.fetchMunicipiosRegiao(
+      geo.sg_uf,
+      geo.no_regiao_saude,
+      p.inicio,
+      p.fim,
+    );
   }
 
   exportCnpjPdf({
@@ -107,8 +111,6 @@ const cnpjData = computed(
     null,
 );
 
-
-
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
@@ -134,15 +136,18 @@ watch(
   { immediate: true },
 );
 
-
 const recentCnpjStore = useRecentCnpjStore();
 
 // Registra o CNPJ atual como recente assim que os dados estiverem disponíveis
-watch(cnpjData, (data) => {
-  if (data?.razao_social) {
-    recentCnpjStore.set(cnpj.value, data.razao_social);
-  }
-}, { immediate: true });
+watch(
+  cnpjData,
+  (data) => {
+    if (data?.razao_social) {
+      recentCnpjStore.set(cnpj.value, data.razao_social);
+    }
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   // Evolução Financeira agora é carregada de forma autônoma pelo componente filho
@@ -186,10 +191,21 @@ const formatCnpj = (v) => {
 <template>
   <div class="cnpj-detail-page">
     <!-- HEADER (COMPONENTE ISOLADO) -->
-    <CnpjHeader :cnpj="cnpj" :cnpj-data="cnpjData" :geo-data="geoData" :cadastro="dadosCadastro" :is-exporting="isExporting" @export="handleExport" />
+    <CnpjHeader
+      :cnpj="cnpj"
+      :cnpj-data="cnpjData"
+      :geo-data="geoData"
+      :cadastro="dadosCadastro"
+      :is-exporting="isExporting"
+      @export="handleExport"
+    />
 
     <!-- TABS -->
-    <TabView class="detail-tabs" :activeIndex="cnpjNav.activeTabIndex" @tab-change="cnpjNav.activeTabIndex = $event.index">
+    <TabView
+      class="detail-tabs"
+      :activeIndex="cnpjNav.activeTabIndex"
+      @tab-change="cnpjNav.activeTabIndex = $event.index"
+    >
       <TabPanel>
         <template #header
           ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
@@ -308,50 +324,71 @@ const formatCnpj = (v) => {
 }
 
 :deep(.p-tabview-nav) {
-  background: var(--tabs-bg) !important;
-  border-top: 3px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border)); /* Acento com cor do tema */
+  background: var(--establishment-header-bg) !important;
+  border-top: 3px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
   border-bottom: 1px solid var(--tabs-border);
-  padding: 0.0rem 1.25rem 0;
+  padding: 0.75rem 1.25rem 0;
+}
+
+/* Reset de indicadores padrão do PrimeVue */
+:deep(.p-tabview-ink-bar) {
+  display: none !important;
+}
+
+:deep(.p-tabview-nav li) {
+  border: none !important;
+  background: transparent !important;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
-  background: var(--tabs-bg) !important;
+  background: transparent !important;
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.7rem 1.1rem !important; /* Padding fixo e aumentado para respiro */
+  padding: 0.7rem 1.1rem !important;
   gap: 0.5rem;
-  transition: all 0.2s;
+  /* Transição cirúrgica: apenas no que importa, sem animar bordas (evita o flash) */
+  transition: color 0.2s, background-color 0.2s;
   color: var(--text-secondary) !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em;
-  border-bottom: 3px solid transparent !important; /* Espaço reservado para a "pílula" */
-  margin-bottom: -1px; /* Compensa o border-bottom do nav */
+  border: none !important;
+  border-bottom: 3px solid transparent !important;
+  margin-bottom: -1px !important;
 }
 
-:deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {
+/* Estado Ativo Cirúrgico (Sem Linha Dupla e Sem Flash) */
+:deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link),
+:deep(.p-tabview-nav li .p-tabview-nav-link[aria-selected="true"]) {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important;
+  color: var(--primary-color) !important;
+  position: relative;
+  border: 0 !important;
+  border-bottom: 3px solid transparent !important;
+  border-width: 0 !important;
   box-shadow: none !important;
   outline: none !important;
-  color: var(--primary-color) !important;
-  font-weight: 700;
-  background: color-mix(
-    in srgb,
-    var(--primary-color) 12%,
-    transparent
-  ) !important;
-  position: relative;
-  border-bottom-color: transparent !important; /* Mantém o border mas transparente */
+  border-radius: 8px 8px 0 0;
+  /* Garante que a transição de borda seja instantânea */
+  transition: none !important;
 }
 
-/* O DESIGN FINAL DA CÁPSULA CARBON GOLD */
+:deep(.p-tabview-nav li .p-tabview-nav-link:focus),
+:deep(.p-tabview-nav li .p-tabview-nav-link:active) {
+  box-shadow: none !important;
+  outline: none !important;
+  border-bottom-color: transparent !important;
+}
+
+/* O INDICADOR: Pílula flutuante centralizada */
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link::after) {
   content: "";
   position: absolute;
-  bottom: 0;
-  left: 20%; /* Centralizado e curto */
+  bottom: 0px;
+  left: 20%;
   width: 60%;
   height: 4px;
   background: var(--primary-color) !important;
-  border-radius: 99px; /* Formato Pílula/Cápsula */
+  border-radius: 99px;
   box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color) 50%, transparent);
   transition: all 0.3s ease;
 }

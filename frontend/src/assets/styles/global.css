@@ -11,10 +11,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color) !important;
   color: var(--text-color) !important;
-  transition: background-color 0.3s ease;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
+
+
 
 :root.dark-mode {
   color-scheme: dark !important;

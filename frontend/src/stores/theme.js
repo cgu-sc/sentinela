@@ -9,6 +9,22 @@ export const useThemeStore = defineStore('theme', () => {
   // Escalas de cor para cada paleta (shades do PrimeVue lara)
 
   const applyTheme = () => {
+    // 1. Para evitar 'piscadas' ou contrastes ruins durante a mudança de tema,
+    // desabilitamos temporariamente todas as transições na página.
+    const css = document.createElement('style');
+    css.appendChild(
+      document.createTextNode(
+        `* {
+          -webkit-transition: none !important;
+          -moz-transition: none !important;
+          -o-transition: none !important;
+          -ms-transition: none !important;
+          transition: none !important;
+        }`
+      )
+    );
+    document.head.appendChild(css);
+
     const html = document.documentElement;
 
     // Modo
@@ -22,9 +38,7 @@ export const useThemeStore = defineStore('theme', () => {
     html.classList.toggle('palette-carbon',    currentPalette.value === 'carbon');
 
     // Sobrescreve as variáveis primárias do PrimeVue lara para os componentes
-    // Todos os elementos (PrimeVue + CSS customizado) lêem --primary-color automaticamente
     const palette = palettes[currentPalette.value] ?? palettes.azul;
-    // (Dropdown, Slider, Calendar, Button, InputText focus, etc.)
     const p = palette.primary;
     html.style.setProperty('--primary-50',         p[50]);
     html.style.setProperty('--primary-100',        p[100]);
@@ -46,6 +60,15 @@ export const useThemeStore = defineStore('theme', () => {
     Object.keys(surface).forEach(key => {
       html.style.setProperty(`--${key}`, surface[key]);
     });
+
+    // 4. Forçamos o navegador a renderizar as mudanças instantaneamente
+    // antes de devolvermos as transições, evitando a "piscada".
+    void document.documentElement.offsetHeight; // Força reflow
+
+    // 5. Removemos o bloqueio de transição para interações futuras
+    setTimeout(() => {
+      document.head.removeChild(css);
+    }, 10);
   };
 
   const setMode = (mode) => {

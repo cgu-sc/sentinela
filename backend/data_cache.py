@@ -228,9 +228,10 @@ def _sync_movimentacao(engine, progress_callback):
                CAST(M.total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao,
                P.razao_social,
                P.situacao_rf,
-               P.conexao_ms,
+               P.situacao_rf,
+               P.is_conexao_ativa,
                P.porte_empresa,
-               P.flag_grandes_redes,
+               P.is_grande_rede,
                P.qtd_estabelecimentos_rede,
                P.is_matriz
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
@@ -263,9 +264,10 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
         pl.col("razao_social").cast(pl.String),
         pl.col("situacao_rf").cast(pl.Categorical),
-        pl.col("conexao_ms").cast(pl.Categorical),
+        pl.col("is_conexao_ativa").cast(pl.Boolean),
         pl.col("porte_empresa").cast(pl.Categorical),
-        pl.col("flag_grandes_redes").cast(pl.Categorical),
+        pl.col("is_grande_rede").cast(pl.Boolean),
+        pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")

@@ -325,7 +325,7 @@ const formatCnpj = (v) => {
 
 :deep(.p-tabview-nav) {
   background: var(--establishment-header-bg) !important;
-  border-top: 3px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
+  border-top: 2px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
   border-bottom: 1px solid var(--tabs-border);
   padding: 0.75rem 1.25rem 0;
 }

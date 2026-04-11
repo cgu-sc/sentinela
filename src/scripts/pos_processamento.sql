@@ -129,9 +129,9 @@ SELECT
     DF.razaoSocial                                                AS razao_social,
     DF.uf,
     DF.municipio,
-    CASE WHEN SUBSTRING(DF.cnpj, 9, 4) = '0001' THEN 1 ELSE 0 END AS is_matriz,
+    CAST(CASE WHEN SUBSTRING(DF.cnpj, 9, 4) = '0001' THEN 1 ELSE 0 END AS BIT) AS is_matriz,
     R.qtd_estabelecimentos_rede,
-    CASE WHEN R.qtd_estabelecimentos_rede >= @MinFiliais THEN 'Sim' ELSE 'Não' END AS flag_grandes_redes
+    CAST(CASE WHEN R.qtd_estabelecimentos_rede >= @MinFiliais THEN 1 ELSE 0 END AS BIT) AS is_grande_rede
 INTO fp.rede_estabelecimentos
 FROM fp.dados_farmacia DF
 INNER JOIN cnpjs_ativos M ON M.cnpj = DF.cnpj
@@ -158,20 +158,19 @@ SELECT
     DF.uf,
     DF.municipio,
     DF.ds_porte_empresa          AS porte_empresa,
-    DF.outrasSociedades          AS flag_outras_sociedades,
     DF.situacaoReceita           AS situacao_rf,
     DF.dataSituacaoCadastral     AS data_situacao_rf,
     DF.data_processamento        AS data_ultimo_processamento,
 
     -- LÓGICA CONEXÃO MS (Ativa se vendeu nos últimos 30 dias em relação ao limite da base)
-    CASE
+    CAST(CASE
         WHEN DF.dataFinalDadosMovimentacao >= DATEADD(DAY, -30, @MaxPeriodo)
-        THEN 'Ativa' ELSE 'Inativa'
-    END AS conexao_ms,
+        THEN 1 ELSE 0
+    END AS BIT) AS is_conexao_ativa,
 
     -- GRANDES REDES: vem direto da rede_estabelecimentos (fonte da verdade)
     R.qtd_estabelecimentos_rede,
-    R.flag_grandes_redes,
+    R.is_grande_rede,
     R.is_matriz 
 
 INTO fp.perfil_consolidado_estabelecimento

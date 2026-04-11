@@ -228,7 +228,6 @@ def _sync_movimentacao(engine, progress_callback):
                CAST(M.total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao,
                P.razao_social,
                P.situacao_rf,
-               P.situacao_rf,
                P.is_conexao_ativa,
                P.porte_empresa,
                P.is_grande_rede,

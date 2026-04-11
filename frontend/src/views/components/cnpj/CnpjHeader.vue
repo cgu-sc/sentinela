@@ -56,7 +56,7 @@ const copyCnpj = () => {
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
 
 // Classificação de badges — delegada ao composable useStatusClass
-const conexaoMsClassComp = computed(() => conexaoMsClass(props.cnpjData?.conexao_ms));
+const conexaoMsClassComp = computed(() => conexaoMsClass(props.cnpjData?.is_conexao_ativa));
 const situacaoRfClassComp = computed(() => situacaoRfClass(props.cnpjData?.situacao_rf));
 
 const nomeFantasia = computed(() => props.cadastro?.nome_fantasia ?? null);
@@ -212,7 +212,7 @@ const formattedFullAddress = computed(() => {
             v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
           >
             <span class="institution-label">Ministério da Saúde</span>
-            <span class="institution-value">{{ cnpjData.conexao_ms ?? '—' }}</span>
+            <span class="institution-value">{{ props.cnpjData?.is_conexao_ativa ? 'Ativa' : 'Inativa' }}</span>
           </div>
 
           <!-- Receita Federal -->

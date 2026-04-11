@@ -54,7 +54,9 @@ function formatClassifLabel(v) {
 
 /** Classe CSS para a coluna Conexão MS. */
 function conexaoClass(v) {
-  return v?.toUpperCase() === 'ATIVA' ? 'status-success' : 'status-danger';
+  if (v === true || v?.toUpperCase?.() === 'ATIVA') return 'status-success';
+  if (v === false || v?.toUpperCase?.() === 'INATIVA') return 'status-danger';
+  return 'status-secondary';
 }
 
 /** Row class para destacar apenas o CNPJ em análise (Forte). */
@@ -189,9 +191,9 @@ const totals = computed(() => {
           <span v-else class="text-muted">—</span>
         </template>
       </Column>
-      <Column field="conexao_ms" header="Conexão MS" sortable style="width: 8%" bodyStyle="text-align:center">
+      <Column field="is_conexao_ativa" header="Conexão MS" sortable style="width: 8%" bodyStyle="text-align:center">
         <template #body="{ data }">
-          <Tag :value="data.conexao_ms ?? '—'" :class="conexaoClass(data.conexao_ms)" />
+          <Tag :value="data.is_conexao_ativa ? 'Ativa' : 'Inativa'" :class="conexaoClass(data.is_conexao_ativa)" />
         </template>
       </Column>
     </DataTable>

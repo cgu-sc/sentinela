@@ -98,9 +98,11 @@ class AnalyticsService:
             if regiao_saude and regiao_saude != 'Todos':  mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
             if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
             if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
-            if conexao_ms and conexao_ms != 'Todos':      mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if conexao_ms and conexao_ms != 'Todos':
+                mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
-            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+            if grande_rede and grande_rede != 'Todos':
+                mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
             if cnpj_raiz:
                 if len(cnpj_raiz) == 14:
                     mask = mask & (pl.col("cnpj") == cnpj_raiz)
@@ -208,10 +210,10 @@ class AnalyticsService:
                     pl.sum("total_sem_comprovacao").alias("valSemComp"),
                     pl.sum("total_qnt_vendas").alias("totalQtde"),
                     pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
-                    pl.col("flag_grandes_redes").first().alias("flag_grandes_redes"),
+                    pl.col("is_grande_rede").first().alias("is_grande_rede"),
                     pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
                     pl.col("situacao_rf").first().alias("situacao_rf"),
-                    pl.col("conexao_ms").first().alias("conexao_ms"),
+                    pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
                     (pl.col("is_matriz").cast(pl.Boolean).first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
                 ])
                 .with_columns([
@@ -670,9 +672,11 @@ class AnalyticsService:
             if regiao_saude:                              mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
             if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
             if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
-            if conexao_ms and conexao_ms != 'Todos':       mask = mask & (pl.col("conexao_ms") == conexao_ms)
+            if conexao_ms and conexao_ms != 'Todos':
+                mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
             if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
-            if grande_rede and grande_rede != 'Todos':     mask = mask & (pl.col("flag_grandes_redes") == grande_rede)
+            if grande_rede and grande_rede != 'Todos':
+                mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
             if cnpj_raiz:
                 if len(cnpj_raiz) == 14:
                     mask = mask & (pl.col("cnpj") == cnpj_raiz)
@@ -833,7 +837,7 @@ class AnalyticsService:
                     pl.col("no_municipio").first().alias("municipio"),
                     pl.col("uf").first().alias("uf"),
                     pl.col("razao_social").first().alias("razao_social"),
-                    pl.col("conexao_ms").first().alias("conexao_ms"),
+                    pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
                     pl.sum("total_vendas").alias("totalMov"),
                     pl.sum("total_sem_comprovacao").alias("valSemComp"),
                     pl.col("periodo").max().alias("data_ultima_venda"),
@@ -885,7 +889,7 @@ class AnalyticsService:
                     valSemComp=float(r.get("valSemComp") or 0.0),
                     totalMov=float(r.get("totalMov") or 0.0),
                     percValSemComp=float(r.get("percValSemComp") or 0.0),
-                    conexao_ms=r.get("conexao_ms"),
+                    is_conexao_ativa=r.get("is_conexao_ativa"),
                     data_ultima_venda=r.get("data_ultima_venda"),
                     rank=i,
                 ))

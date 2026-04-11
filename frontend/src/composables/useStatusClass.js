@@ -26,8 +26,8 @@ export function useStatusClass() {
    * @returns {string} classe CSS
    */
   function conexaoMsClass(v) {
-    if (v === 'Ativa')   return 'status-success';
-    if (v === 'Inativa') return 'status-danger';
+    if (v === true || v === 'Ativa')   return 'status-success';
+    if (v === false || v === 'Inativa') return 'status-danger';
     return 'status-secondary';
   }
 

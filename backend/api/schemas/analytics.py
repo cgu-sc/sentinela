@@ -58,10 +58,10 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     valSemComp: float = 0.0
     percValSemComp: Optional[float] = 0.0
     percQtdeSemComp: Optional[float] = 0.0
-    flag_grandes_redes: Optional[str] = "Não"
+    is_grande_rede: Optional[bool] = False
     qtd_estabelecimentos_rede: Optional[int] = 0
     situacao_rf: Optional[str] = "ND"
-    conexao_ms: Optional[str] = "Inativa"
+    is_conexao_ativa: Optional[bool] = False
     is_matriz: Optional[bool] = False
     id_ibge7: Optional[int] = None
     score_risco_final: Optional[float] = None
@@ -86,7 +86,7 @@ class RedeEstabelecimentoSchema(BaseModel):
     municipio: Optional[str] = None
     is_matriz: bool = False
     qtd_estabelecimentos_rede: Optional[int] = 0
-    flag_grandes_redes: Optional[str] = "Não"
+    is_grande_rede: Optional[bool] = False
 
 class AnalyticsResponse(BaseModel):
     kpis: List[AnalyticsKPISchema]
@@ -119,7 +119,7 @@ class RegionalFarmaciaSchema(BaseModel):
     valSemComp: Optional[float] = 0.0
     totalMov: Optional[float] = 0.0
     percValSemComp: Optional[float] = 0.0
-    conexao_ms: Optional[str] = "Inativa"
+    is_conexao_ativa: Optional[bool] = False
     data_ultima_venda: Optional[date] = None
     rank: Optional[int] = None
 

@@ -75,7 +75,7 @@ def _sync_rede(engine, progress_callback=None):
         pl.col("municipio").cast(pl.String),
         pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
-        pl.col("flag_grandes_redes").cast(pl.Categorical),
+        pl.col("is_grande_rede").cast(pl.Boolean),
     ])
     _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="lz4")
 

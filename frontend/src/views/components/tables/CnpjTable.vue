@@ -54,9 +54,15 @@ function normalizeToOption(options, raw) {
 
 // Filtros clicáveis nos badges
 function applyFilter(field, value) {
-  if (field === 'grandeRede')  filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, value);
+  if (field === 'grandeRede') {
+    const valStr = typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : value;
+    filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, valStr);
+  }
   if (field === 'situacaoRF') filterStore.selectedSituacao   = normalizeToOption(FILTER_OPTIONS.situacao,   value);
-  if (field === 'conexaoMS')  filterStore.selectedMS         = normalizeToOption(FILTER_OPTIONS.ms,         value);
+  if (field === 'conexaoMS') {
+    const valStr = typeof value === 'boolean' ? (value ? 'Ativa' : 'Inativa') : value;
+    filterStore.selectedMS = normalizeToOption(FILTER_OPTIONS.ms, valStr);
+  }
 }
 
 // Classificação de cor — delegada ao composable useStatusClass
@@ -158,13 +164,13 @@ const filteredLocation = computed(() => {
              <template #footer>{{ tableFooter.percValSemComp }}</template>
           </Column>
 
-          <Column field="flag_grandes_redes" header="Grande Rede" sortable style="width: 7%">
+          <Column field="is_grande_rede" header="Grande Rede" sortable style="width: 7%">
             <template #body="slotProps">
                 <Tag
-                  :value="slotProps.data.flag_grandes_redes"
-                  :class="[slotProps.data.flag_grandes_redes === 'Sim' ? 'status-info' : 'status-secondary', 'clickable-badge']"
-                  v-tooltip.top="'Filtrar por Grande Rede: ' + slotProps.data.flag_grandes_redes"
-                  @click="applyFilter('grandeRede', slotProps.data.flag_grandes_redes)"
+                  :value="slotProps.data.is_grande_rede ? 'Sim' : 'Não'"
+                  :class="[slotProps.data.is_grande_rede ? 'status-info' : 'status-secondary', 'clickable-badge']"
+                  v-tooltip.top="'Filtrar por Grande Rede: ' + (slotProps.data.is_grande_rede ? 'Sim' : 'Não')"
+                  @click="applyFilter('grandeRede', slotProps.data.is_grande_rede)"
                 />
             </template>
           </Column>
@@ -197,13 +203,13 @@ const filteredLocation = computed(() => {
             </template>
           </Column>
 
-          <Column field="conexao_ms" header="Conexão MS" sortable style="width: 7%">
+          <Column field="is_conexao_ativa" header="Conexão MS" sortable style="width: 7%">
             <template #body="slotProps">
                 <Tag
-                  :value="slotProps.data.conexao_ms"
-                  :class="[conexaoMsClass(slotProps.data.conexao_ms), 'clickable-badge']"
-                  v-tooltip.top="'Filtrar por Conexão MS: ' + slotProps.data.conexao_ms"
-                  @click="applyFilter('conexaoMS', slotProps.data.conexao_ms)"
+                  :value="slotProps.data.is_conexao_ativa ? 'Ativa' : 'Inativa'"
+                  :class="[conexaoMsClass(slotProps.data.is_conexao_ativa), 'clickable-badge']"
+                  v-tooltip.top="'Filtrar por Conexão MS: ' + (slotProps.data.is_conexao_ativa ? 'Ativa' : 'Inativa')"
+                  @click="applyFilter('conexaoMS', slotProps.data.is_conexao_ativa)"
                 />
             </template>
           </Column>

@@ -202,7 +202,7 @@ export const SURFACE_COLORS = {
       "bg-gradient": "linear-gradient(to bottom, #ffffff 0%, #f5f5f4 100%)",
       "text-color": "#1c1917",
       "text-muted": "#78716c",
-      "card-bg": "#fefefe",
+      "card-bg": "#fdfdfc",
       "sidebar-bg": "#212120",
       "sidebar-text": "#A1A1AA",
       "sidebar-border": "rgba(255, 255, 255, 0.1)",

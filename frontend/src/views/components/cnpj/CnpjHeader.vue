@@ -218,22 +218,7 @@ const filterNetwork = () => {
             </span>
           </div>
 
-          <!-- Score + Classificação unificados -->
-          <div
-            v-if="cnpjData.score_risco_final != null"
-            class="compound-chip"
-            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-            v-tooltip.bottom="'Score de Risco Consolidado'"
-          >
-            <span class="compound-label">Score de Risco</span>
-            <div class="compound-values">
-              <span class="compound-score">{{ cnpjData.score_risco_final.toFixed(1) }}</span>
-              <span class="compound-sep">·</span>
-              <span class="compound-class">{{ cnpjData.classificacao_risco?.replace('RISCO ', '') ?? '' }}</span>
-            </div>
-          </div>
 
-          <div class="status-group-divider" />
 
           <!-- Ministério da Saúde -->
           <div
@@ -283,19 +268,21 @@ const filterNetwork = () => {
             class="kpi-pill-group"
             :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
           >
-            <div class="pill-item">
-              <span class="pill-label">% Sem Comprovação</span>
+            <div class="pill-item" v-if="cnpjData.score_risco_final != null" v-tooltip.bottom="'Score de Risco Consolidado'">
+              <span class="pill-label">Score de Risco</span>
               <span class="pill-value">
-                {{ cnpjData.percValSemComp?.toFixed(2) }}%
+                {{ cnpjData.score_risco_final.toFixed(1) }}
+                <small style="color: var(--text-color); opacity: 0.8; font-size: 0.75em; font-weight: 600; padding-left: 3px;">· {{ cnpjData.classificacao_risco?.replace('RISCO ', '') ?? '' }}</small>
               </span>
             </div>
 
-            <div class="pill-divider"></div>
+            <div class="pill-divider" v-if="cnpjData.score_risco_final != null"></div>
 
             <div class="pill-item">
               <span class="pill-label">Valor sem Comprovação</span>
               <span class="pill-value currency">
                 {{ formatCurrencyFull(cnpjData.valSemComp) }}
+                <small style="color: var(--text-color); opacity: 0.8; font-size: 0.8em; font-weight: 600; padding-left: 4px;">({{ cnpjData.percValSemComp?.toFixed(2) }}%)</small>
               </span>
             </div>
           </div>
@@ -756,24 +743,24 @@ const filterNetwork = () => {
   font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--establishment-header-text);
-  opacity: 0.85;
+  letter-spacing: 0.05em;
+  color: var(--text-color);
+  opacity: 0.75;
   margin-bottom: 0.15rem;
 }
 
 .pill-value {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   font-family: 'Inter', sans-serif;
-  color: var(--establishment-header-text);
+  color: var(--text-color);
   line-height: 1.1;
   letter-spacing: -0.02em;
-  opacity: 0.85; /* Padronizado */
+  opacity: 0.85;
 }
 
 .pill-value.currency {
-  opacity: 0.85;
+  /* Inherits 0.95 from .pill-value now */
 }
 
 .pill-divider {
@@ -791,7 +778,7 @@ const filterNetwork = () => {
 }
 
 .pill-value.total {
-  opacity: 0.85; 
+  /* Inherits 0.95 from .pill-value now */
 }
 
 .kpi-card.risk-high .kpi-card-value, 
@@ -988,6 +975,12 @@ const filterNetwork = () => {
 .institution-label i {
   font-size: 0.58rem; /* icon alinhado com o texto da label */
   line-height: 1;
+}
+
+/* ── OVERRIDE STATUS-SECONDARY PARA SOLIDIFICAR CONTRA O HEADER ── */
+.institution-chip.status-secondary {
+  background: color-mix(in srgb, var(--text-muted) 14%, var(--establishment-header-bg)) !important;
+  border-color: color-mix(in srgb, var(--text-muted) 25%, var(--establishment-header-bg)) !important;
 }
 
 /* ── VALORES INTERNOS (linha de baixo) ── */

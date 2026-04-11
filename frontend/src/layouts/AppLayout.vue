@@ -226,7 +226,7 @@ onMounted(() => themeStore.initTheme());
   color: var(--color-on-primary) !important;
 }
 
-:global(.p-dropdown-item)       { font-size: 0.75rem !important; padding: 0.5rem 0.75rem !important; }
+:global(.p-dropdown-item)       { font-size: 0.75rem !important; padding: 0.5rem 0.75rem !important; white-space: normal !important; word-break: break-word !important; }
 :global(.dark-mode .p-dropdown-item) { color: var(--text-color) !important; }
 
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover),

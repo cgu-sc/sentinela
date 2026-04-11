@@ -416,6 +416,9 @@ const formattedFullAddress = computed(() => {
   transition: all 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  backdrop-filter: blur(8px); /* Efeito Vidro Central */
+  position: relative;
+  overflow: hidden;
 }
 
 .list-btn--icon-only {
@@ -430,13 +433,15 @@ const formattedFullAddress = computed(() => {
 }
 
 .list-btn--export {
-  color: #6366f1;
-  border-color: rgba(99, 102, 241, 0.3);
-  background: rgba(99, 102, 241, 0.08);
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .list-btn--export:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: #6366f1;
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 .list-btn--export:disabled {
   opacity: 0.6;
@@ -444,22 +449,26 @@ const formattedFullAddress = computed(() => {
 }
 
 .list-btn--interesse {
-  color: #ca8a04;
-  border-color: rgba(202, 138, 4, 0.3);
-  background: rgba(202, 138, 4, 0.08);
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .list-btn--interesse:hover {
-  background: rgba(202, 138, 4, 0.18);
-  border-color: #ca8a04;
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 .list-btn--interesse-active {
   color: #fff;
-  border-color: #ca8a04;
-  background: #ca8a04;
+  border-color: var(--primary-color);
+  background: var(--primary-color); /* Sólido para destaque conforme padrão do tema */
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
+  font-weight: 700;
 }
 .list-btn--interesse-active:hover {
-  background: #a16207;
-  border-color: #a16207;
+  background: color-mix(in srgb, var(--primary-color) 85%, black);
+  border-color: color-mix(in srgb, var(--primary-color) 85%, black);
 }
 
 
@@ -709,16 +718,17 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-value {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   color: var(--establishment-header-text);
   line-height: 1.1;
   letter-spacing: -0.02em;
+  opacity: 0.85; /* Padronizado */
 }
 
 .pill-value.currency {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 .pill-divider {
@@ -920,7 +930,7 @@ const formattedFullAddress = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  opacity: 0.65;
+  opacity: 0.8;
   line-height: 1;
   display: flex;
   align-items: center;

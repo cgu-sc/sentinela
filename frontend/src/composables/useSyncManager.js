@@ -1,6 +1,10 @@
 /**
  * Gerencia o fluxo de sincronização/re-cache do servidor.
  * Encapsula polling, tratamento de erros e cleanup do interval.
+ *
+ * Estado elevado ao nível de módulo (singleton) para que múltiplos
+ * componentes (botão na navbar + dialog de progresso) compartilhem
+ * os mesmos refs sem prop drilling.
  */
 import { ref, onBeforeUnmount } from 'vue';
 import axios from 'axios';
@@ -8,16 +12,18 @@ import { useFilterStore } from '@/stores/filters';
 import { API_ENDPOINTS } from '@/config/api';
 import { TIMING } from '@/config/constants';
 
+// ── Estado compartilhado (módulo-level) ──────────────────────────────────────
+const isSyncing        = ref(false);
+const showConfirmSync  = ref(false);
+const syncProgress     = ref(0);
+const syncStatus       = ref('');
+const syncError        = ref(false);
+const syncErrorMessage = ref('');
+let _pollTimer         = null;
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function useSyncManager() {
   const filterStore = useFilterStore();
-
-  const isSyncing        = ref(false);
-  const showConfirmSync  = ref(false);
-  const syncProgress     = ref(0);
-  const syncStatus       = ref('');
-  const syncError        = ref(false);
-  const syncErrorMessage = ref('');
-  let _pollTimer         = null;
 
   const _stopPolling = () => {
     if (_pollTimer) {

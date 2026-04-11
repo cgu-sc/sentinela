@@ -39,6 +39,7 @@ _df_dados_farmacia: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
+_cache_error_message: str = ""
 
 # --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
 
@@ -287,42 +288,43 @@ def _sync_movimentacao(engine, progress_callback):
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_crms_detalhado, _df_top20_crms, _df_dados_farmacia, _cache_progress, _cache_status
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_crms_detalhado, _df_top20_crms, _df_dados_farmacia, _cache_progress, _cache_status, _cache_error_message
     import time
 
-    # 1. Boot Rápido (Se os arquivos já existem)
+    # 1. Boot Rápido (carrega cada Parquet individualmente)
     if not force_refresh:
-        try:
-            all_exist = (
-                os.path.exists(_PARQUET_PATH) and
-                os.path.exists(_LOCALIDADES_PARQUET_PATH) and
-                os.path.exists(_REDE_PARQUET_PATH) and
-                os.path.exists(_MATRIZ_PARQUET_PATH) and
-                os.path.exists(_FALECIDOS_PARQUET_PATH) and
-                os.path.exists(_CRMS_DETALHADO_PARQUET_PATH) and
-                os.path.exists(_TOP20_CRMS_PARQUET_PATH) and
-                os.path.exists(_DADOS_FARMACIA_PARQUET_PATH)
-            )
-            if all_exist:
-                _cache_status = "loading_parquet"
-                _df_movimentacao   = pl.read_parquet(_PARQUET_PATH)
-                _df_localidades    = pl.read_parquet(_LOCALIDADES_PARQUET_PATH)
-                _df_rede           = pl.read_parquet(_REDE_PARQUET_PATH)
-                _df_matriz_risco   = pl.read_parquet(_MATRIZ_PARQUET_PATH)
-                _df_falecidos      = pl.read_parquet(_FALECIDOS_PARQUET_PATH)
-                _df_crms_detalhado = pl.read_parquet(_CRMS_DETALHADO_PARQUET_PATH)
-                _df_top20_crms     = pl.read_parquet(_TOP20_CRMS_PARQUET_PATH)
-                _df_dados_farmacia = pl.read_parquet(_DADOS_FARMACIA_PARQUET_PATH)
-                _cache_progress = 100
-                _cache_status = "ready"
-                print("🚀 Caches carregados via Parquet.")
-                return
-        except Exception as e:
-            print(f"⚠️ Erro ao carregar Parquets: {e}")
+        _cache_status = "loading_parquet"
+        missing = []
 
-    if not force_refresh:
-        _cache_status = "idle"
-        _cache_progress = 0
+        def _try_load(name, path):
+            if not os.path.exists(path):
+                missing.append(name)
+                return None
+            try:
+                return pl.read_parquet(path)
+            except Exception as e:
+                print(f"⚠️  Erro ao ler parquet '{name}': {e}")
+                missing.append(name)
+                return None
+
+        _df_movimentacao   = _try_load("movimentacao",   _PARQUET_PATH)
+        _df_localidades    = _try_load("localidades",    _LOCALIDADES_PARQUET_PATH)
+        _df_rede           = _try_load("rede",           _REDE_PARQUET_PATH)
+        _df_matriz_risco   = _try_load("matriz_risco",   _MATRIZ_PARQUET_PATH)
+        _df_falecidos      = _try_load("falecidos",      _FALECIDOS_PARQUET_PATH)
+        _df_crms_detalhado = _try_load("crms_detalhado", _CRMS_DETALHADO_PARQUET_PATH)
+        _df_top20_crms     = _try_load("top20_crms",     _TOP20_CRMS_PARQUET_PATH)
+        _df_dados_farmacia = _try_load("dados_farmacia", _DADOS_FARMACIA_PARQUET_PATH)
+
+        if missing:
+            print(f"⚠️  Cache incompleto — módulos ausentes: {', '.join(missing)}")
+            print("ℹ️  Sistema iniciado em modo degradado. Sincronize pela interface para carregar os dados.")
+            _cache_status = "idle"
+            _cache_progress = 0
+        else:
+            _cache_progress = 100
+            _cache_status = "ready"
+            print(f"🚀 Caches carregados via Parquet.")
         return
 
     # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
@@ -362,10 +364,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
     except Exception as e:
         _cache_status = "error"
         _cache_progress = 0
+        _cache_error_message = str(e)
         import traceback
         print(f"❌ Erro Crítico na Sincronização: {e}")
         print(traceback.format_exc())
-        raise e
 
 def refresh_cache(engine) -> None:
     """Força re-leitura do SQL e regera os Parquets."""
@@ -413,17 +415,25 @@ def get_df_dados_farmacia() -> pl.DataFrame:
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
+    modules = {
+        "movimentacao":   {"label": "Movimentação Mensal",     "path": _PARQUET_PATH,             "loaded": _df_movimentacao is not None},
+        "localidades":    {"label": "Localidades (IBGE)",      "path": _LOCALIDADES_PARQUET_PATH, "loaded": _df_localidades is not None},
+        "rede":           {"label": "Rede de Estabelecimentos","path": _REDE_PARQUET_PATH,        "loaded": _df_rede is not None},
+        "matriz_risco":   {"label": "Matriz de Risco",         "path": _MATRIZ_PARQUET_PATH,      "loaded": _df_matriz_risco is not None},
+        "falecidos":      {"label": "Falecidos por Farmácia",  "path": _FALECIDOS_PARQUET_PATH,   "loaded": _df_falecidos is not None},
+        "crms_detalhado": {"label": "CRMs Detalhado",          "path": _CRMS_DETALHADO_PARQUET_PATH, "loaded": _df_crms_detalhado is not None},
+        "top20_crms":     {"label": "Top 20 CRMs",             "path": _TOP20_CRMS_PARQUET_PATH,  "loaded": _df_top20_crms is not None},
+        "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH, "loaded": _df_dados_farmacia is not None},
+    }
+    modules_status = {
+        key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}
+        for key, v in modules.items()
+    }
+    is_ready = all(v["loaded"] for v in modules_status.values())
     return {
         "progress": _cache_progress,
         "status": _cache_status,
-        "is_ready": (
-            _df_movimentacao is not None and 
-            _df_localidades is not None and 
-            _df_rede is not None and
-            _df_matriz_risco is not None and
-            _df_falecidos is not None and
-            _df_crms_detalhado is not None and
-            _df_top20_crms is not None and
-            _df_dados_farmacia is not None
-        )
+        "is_ready": is_ready,
+        "error_message": _cache_error_message if _cache_status == "error" else "",
+        "modules": modules_status,
     }

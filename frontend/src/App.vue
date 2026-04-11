@@ -30,7 +30,11 @@ const pollSyncStatus = async () => {
     if (status === 'ready' && progress === 100) {
       clearInterval(_pollTimer);
       statusMessage.value = "Finalizando Carga...";
-      return true; // Finalizado
+      return true;
+    } else if (status === 'error' || status === 'idle') {
+      // Sync falhou ou foi abortada — não fica em loop, deixa o app subir
+      clearInterval(_pollTimer);
+      return true;
     } else if (status === 'fetching') {
       statusMessage.value = `Baixando dados do CGUData... (${progress}%)`;
     } else if (status === 'processing') {
@@ -55,16 +59,12 @@ const initializeApp = async () => {
     const statusResp = await axios.get(API_ENDPOINTS.cacheStatus);
     const { is_ready, status } = statusResp.data;
 
-    // Se NÃO estiver pronto, precisamos esperar (e talvez disparar a carga)
-    if (!is_ready) {
-      if (status === 'idle') {
-        statusMessage.value = "Iniciando carga via CGUData...";
-        await axios.post(API_ENDPOINTS.cacheRefresh);
-      } else {
-        statusMessage.value = "Sincronização em andamento no servidor...";
-      }
-      
-      // Trava o boot até que o status seja 'ready'
+    // Se uma sincronização já estiver em andamento (iniciada externamente),
+    // aguarda ela terminar antes de carregar o dashboard.
+    // Se o cache estiver ausente mas nenhuma sync estiver rodando (idle/error),
+    // o app inicializa normalmente — o DataIntegrityBanner informa o usuário.
+    if (!is_ready && (status === 'fetching' || status === 'processing')) {
+      statusMessage.value = "Sincronização em andamento no servidor...";
       await new Promise((resolve) => {
         _pollTimer = setInterval(async () => {
           const finished = await pollSyncStatus();
@@ -73,7 +73,15 @@ const initializeApp = async () => {
       });
     }
 
-    // 2. Carga padrão dos dados do dashboard (só ocorre após cache pronto)
+    // 2. Carga padrão dos dados do dashboard (só ocorre quando cache estiver pronto)
+    // Re-lê o status após eventual wait de sync acima
+    const currentStatus = await axios.get(API_ENDPOINTS.cacheStatus);
+    if (!currentStatus.data.is_ready) {
+      // Cache ausente — sobe o app sem dados; DataIntegrityBanner informa o usuário
+      isAppLoading.value = false;
+      return;
+    }
+
     statusMessage.value = "Sincronizando Dashboard...";
     const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf } = getApiParams();
 

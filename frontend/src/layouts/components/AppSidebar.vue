@@ -16,6 +16,7 @@ import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
 import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
+import DataIntegrityBanner from '@/layouts/components/DataIntegrityBanner.vue';
 
 const props = defineProps({
   activeModule: { type: String, required: true },
@@ -233,6 +234,8 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
     </div>
+
+    <DataIntegrityBanner />
 
     <div class="sidebar-content">
       <!-- BANNER DE FILTROS BLOQUEADOS -->

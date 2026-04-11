@@ -77,9 +77,9 @@ const initializeApp = async () => {
     // Re-lê o status após eventual wait de sync acima
     const currentStatus = await axios.get(API_ENDPOINTS.cacheStatus);
     if (!currentStatus.data.is_ready) {
-      // Cache ausente — sobe o app sem dados; DataIntegrityBanner informa o usuário
-      isAppLoading.value = false;
-      return;
+      // Sistema subirá em "modo degradado". 
+      // Não fazemos mais 'return;' aqui, permitindo que a UI carregue o que existir na mémoria.
+      console.warn("Alguns caches estão ausentes. Iniciando em Modo Degradado.");
     }
 
     statusMessage.value = "Sincronizando Dashboard...";

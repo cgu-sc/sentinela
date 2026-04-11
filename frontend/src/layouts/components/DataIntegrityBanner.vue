@@ -53,9 +53,7 @@ onMounted(async () => {
           </li>
         </ul>
 
-        <p class="banner-hint">
-          Sincronize para carregar os dados necessários.
-        </p>
+
       </div>
 
       <button class="banner-sync-btn" @click="showConfirmSync = true">

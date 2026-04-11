@@ -1007,7 +1007,7 @@ class AnalyticsService:
 
         CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
         os.makedirs(CACHE_DIR, exist_ok=True)
-        CACHE_PATH = os.path.join(CACHE_DIR, f"mov_cache_{cnpj}.parquet")
+        CACHE_PATH = os.path.join(CACHE_DIR, f"{cnpj}.parquet")
 
         empty_summary = MovimentacaoSummarySchema()
 

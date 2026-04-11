@@ -14,14 +14,14 @@ else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
-_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_movimentacao.parquet")
-_LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_localidades.parquet")
-_REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_rede_estabelecimentos.parquet")
-_MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_matriz_risco.parquet")
-_FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_falecidos.parquet")
-_CRMS_DETALHADO_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_crms_detalhado.parquet")
-_TOP20_CRMS_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_top20_crms.parquet")
-_DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "cache_dados_farmacia.parquet")
+_PARQUET_PATH = os.path.join(_CACHE_DIR, "movimentacao.parquet")
+_LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "localidades.parquet")
+_REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "redes_farmaceuticas.parquet")
+_MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "matriz_risco.parquet")
+_FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "falecidos.parquet")
+_CRMS_DETALHADO_PARQUET_PATH = os.path.join(_CACHE_DIR, "crms_detalhes.parquet")
+_TOP20_CRMS_PARQUET_PATH = os.path.join(_CACHE_DIR, "crms_interesse.parquet")
+_DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
 
 
 if not os.path.exists(_CACHE_DIR):
@@ -422,7 +422,7 @@ def get_cache_status() -> dict:
         "matriz_risco":   {"label": "Matriz de Risco",         "path": _MATRIZ_PARQUET_PATH,      "loaded": _df_matriz_risco is not None},
         "falecidos":      {"label": "Falecidos por Farmácia",  "path": _FALECIDOS_PARQUET_PATH,   "loaded": _df_falecidos is not None},
         "crms_detalhado": {"label": "CRMs Detalhado",          "path": _CRMS_DETALHADO_PARQUET_PATH, "loaded": _df_crms_detalhado is not None},
-        "top20_crms":     {"label": "Top 20 CRMs",             "path": _TOP20_CRMS_PARQUET_PATH,  "loaded": _df_top20_crms is not None},
+        "top20_crms":     {"label": "CRMs de Interesse",       "path": _TOP20_CRMS_PARQUET_PATH,  "loaded": _df_top20_crms is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH, "loaded": _df_dados_farmacia is not None},
     }
     modules_status = {

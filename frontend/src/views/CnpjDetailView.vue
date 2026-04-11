@@ -311,7 +311,7 @@ const formatCnpj = (v) => {
   background: var(--tabs-bg) !important;
   border-top: 3px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border)); /* Acento com cor do tema */
   border-bottom: 1px solid var(--tabs-border);
-  padding: 0.75rem 1.25rem 0;
+  padding: 0.0rem 1.25rem 0;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {

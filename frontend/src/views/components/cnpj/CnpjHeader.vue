@@ -178,62 +178,53 @@ const formattedFullAddress = computed(() => {
 
         <!-- Linha 2: Risco | Status Cadastral -->
         <div class="status-chips-row">
-          <div class="status-group">
-            <div
-              class="loc-chip status-chip chip-neutral"
-              v-tooltip.bottom="'Tipo de estabelecimento'"
-            >
-              <i :class="cnpjData.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
-              {{ cnpjData.is_matriz ? 'Matriz' : 'Filial' }}
-            </div>
 
-            <div class="status-group-divider" />
+          <!-- Tipo: Matriz / Filial -->
+          <div
+            class="institution-chip status-secondary"
+            v-tooltip.bottom="'Tipo de estabelecimento'"
+          >
+            <span class="institution-label">Estabelecimento</span>
+            <span class="institution-value">{{ cnpjData.is_matriz ? 'Matriz' : 'Filial' }}</span>
+          </div>
 
-            <div v-if="cnpjData.score_risco_final != null" class="status-labeled">
-              <span class="status-label-text">Score de Risco:</span>
-              <div
-                class="loc-chip risk-chip status-chip"
-                :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-                v-tooltip.bottom="'Score de Risco Consolidado'"
-              >
-                {{ cnpjData.score_risco_final.toFixed(1) }}
-              </div>
-            </div>
-            <div v-if="cnpjData.classificacao_risco" class="status-labeled">
-              <span class="status-label-text">Risco:</span>
-              <div
-                class="loc-chip risk-chip status-chip"
-                :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
-              >
-                {{ cnpjData.classificacao_risco.replace('RISCO ', '') }}
-              </div>
+          <!-- Score + Classificação unificados -->
+          <div
+            v-if="cnpjData.score_risco_final != null"
+            class="compound-chip"
+            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+            v-tooltip.bottom="'Score de Risco Consolidado'"
+          >
+            <span class="compound-label">Score de Risco</span>
+            <div class="compound-values">
+              <span class="compound-score">{{ cnpjData.score_risco_final.toFixed(1) }}</span>
+              <span class="compound-sep">·</span>
+              <span class="compound-class">{{ cnpjData.classificacao_risco?.replace('RISCO ', '') ?? '' }}</span>
             </div>
           </div>
 
           <div class="status-group-divider" />
 
-          <div class="status-group">
-            <div class="status-labeled">
-              <span class="status-label-text">Ministério da Saúde:</span>
-              <div
-                class="loc-chip status-chip"
-                :class="conexaoMsClassComp"
-                v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
-              >
-                {{ cnpjData.conexao_ms ?? '—' }}
-              </div>
-            </div>
-            <div class="status-labeled">
-              <span class="status-label-text">Receita Federal:</span>
-              <div
-                class="loc-chip status-chip"
-                :class="situacaoRfClassComp"
-                v-tooltip.bottom="'Situação na Receita Federal'"
-              >
-                {{ cnpjData.situacao_rf ?? '—' }}
-              </div>
-            </div>
+          <!-- Ministério da Saúde -->
+          <div
+            class="institution-chip"
+            :class="conexaoMsClassComp"
+            v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
+          >
+            <span class="institution-label">Ministério da Saúde</span>
+            <span class="institution-value">{{ cnpjData.conexao_ms ?? '—' }}</span>
           </div>
+
+          <!-- Receita Federal -->
+          <div
+            class="institution-chip"
+            :class="situacaoRfClassComp"
+            v-tooltip.bottom="'Situação na Receita Federal'"
+          >
+            <span class="institution-label">Receita Federal</span>
+            <span class="institution-value">{{ cnpjData.situacao_rf ?? '—' }}</span>
+          </div>
+
         </div>
       </div>
 
@@ -905,6 +896,79 @@ const formattedFullAddress = computed(() => {
 
 .status-chip i {
   font-size: 13px;
+  line-height: 1;
+}
+
+/* ── CHIPS COMPOSTOS (estrutura compartilhada) ── */
+.compound-chip,
+.institution-chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: default;
+  min-height: 2.4rem; /* altura uniforme para todos os chips */
+}
+
+/* ── LABELS INTERNOS (linha de cima — microtype) ── */
+.compound-label,
+.institution-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.65;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.compound-label i,
+.institution-label i {
+  font-size: 0.58rem; /* icon alinhado com o texto da label */
+  line-height: 1;
+}
+
+/* ── VALORES INTERNOS (linha de baixo) ── */
+.institution-value {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── SCORE COMPOSTO ── */
+.compound-values {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  line-height: 1;
+}
+
+.compound-score {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.compound-sep {
+  opacity: 0.35;
+  font-size: 0.7rem;
+}
+
+.compound-class {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   line-height: 1;
 }
 

@@ -63,6 +63,7 @@ export const FILTER_DEFAULTS = {
     UF:               FILTER_ALL_VALUE,
     REGIAO:           FILTER_ALL_VALUE,
     MUNICIPIO:        FILTER_ALL_VALUE,
+    UNIDADE_PF:       FILTER_ALL_VALUE,
     SITUACAO:         FILTER_ALL_VALUE,
     MS:               FILTER_ALL_VALUE,
     PORTE:            FILTER_ALL_VALUE,

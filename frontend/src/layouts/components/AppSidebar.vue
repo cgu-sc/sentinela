@@ -156,6 +156,7 @@ const isFilterActive = (field) => {
     selectedUF:                    FILTER_DEFAULTS.UF,
     selectedRegiaoSaude:           FILTER_DEFAULTS.REGIAO,
     selectedMunicipio:             FILTER_DEFAULTS.MUNICIPIO,
+    selectedUnidadePf:             FILTER_DEFAULTS.UNIDADE_PF,
     selectedSituacao:              FILTER_DEFAULTS.SITUACAO,
     selectedMS:                    FILTER_DEFAULTS.MS,
     selectedPorte:                 FILTER_DEFAULTS.PORTE,
@@ -175,7 +176,7 @@ const isFilterActive = (field) => {
 
 const activeFilterCount = computed(() => {
   const fields = [
-    'selectedUF', 'selectedRegiaoSaude', 'selectedMunicipio',
+    'selectedUF', 'selectedRegiaoSaude', 'selectedMunicipio', 'selectedUnidadePf',
     'selectedSituacao', 'selectedMS', 'selectedPorte', 'selectedGrandeRede',
     'selectedCnpjRaiz', 'percentualNaoComprovacaoRange', 'valorMinSemComp',
     'sliderValue', 'clusterSelection', 'rfaSelection', 'searchTarget',
@@ -667,9 +668,9 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 :global(.admin-sidebar .p-inputtext:not(.p-dropdown-label):focus),
 :global(.admin-sidebar .filter-active.p-dropdown),
 :global(.admin-sidebar .filter-active.p-inputtext:not(.p-dropdown-label)) {
-  border: 2px solid color-mix(in srgb, var(--primary-color) 85%, transparent) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
+  border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
   outline: none !important;
 }
 

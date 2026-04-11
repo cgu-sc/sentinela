@@ -16,7 +16,7 @@ import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
 import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import CRMTab from "./components/cnpj/CRMTab.vue";
-import MovimentacaoTab from "./components/cnpj/MovimentacaoTab.vue";
+import MovementTab from "./components/cnpj/MovementTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -28,12 +28,12 @@ import Chip from "primevue/chip";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
-  MOVIMENTACAO: 0,
-  EVOLUCAO: 1,
-  INDICADORES: 2,
+  MOVEMENT: 0,
+  EVOLUTION: 1,
+  INDICATORS: 2,
   CRMS: 3,
-  FALECIDOS: 4,
-  REGIAO: 5,
+  MORTALITY: 4,
+  REGIONAL: 5,
 };
 
 const route = useRoute();
@@ -111,7 +111,7 @@ const cnpjData = computed(
 
 // Ativa o mount de CnpjTabRegional na primeira vez que a aba for aberta
 watch(() => cnpjNav.activeTabIndex, (idx) => {
-  if (idx === TAB_INDEX.REGIAO) regionalTabMounted.value = true;
+  if (idx === TAB_INDEX.REGIONAL) regionalTabMounted.value = true;
 }, { immediate: true });
 
 watch(
@@ -120,7 +120,7 @@ watch(
     // Ao trocar de CNPJ, reseta tudo e dispara todos os fetches em paralelo
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
-      cnpjNav.reset(TAB_INDEX.EVOLUCAO);
+      cnpjNav.reset(TAB_INDEX.EVOLUTION);
     }
     if (newCnpj) {
       // Eager load: dispara todos os fetches ao carregar a página
@@ -199,7 +199,7 @@ const formatCnpj = (v) => {
         <template #header
           ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
         >
-        <MovimentacaoTab :cnpj="cnpj" class="tab-content" />
+        <MovementTab :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -289,13 +289,28 @@ const formatCnpj = (v) => {
 
 :deep(.p-tabview-panels) {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden !important; /* Estabiliza o container para evitar flashes de scroll do pai */
   padding: 0;
   background: transparent !important;
 }
 
+/* ── ANIMAÇÃO DE ENTRADA DO CONTEÚDO (PADRÃO PREMIUM) ── */
 :deep(.p-tabview-panel) {
+  height: 100%;
+  overflow-y: auto; /* Cada aba agora gerencia seu próprio scroll de forma isolada */
   background: transparent !important;
+  animation: tabContentEntry 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tabContentEntry {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 :deep(.p-tabview-nav) {
@@ -306,18 +321,19 @@ const formatCnpj = (v) => {
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
   background: var(--tabs-bg) !important;
-  font-size: 0.82rem; /* Leve redução para maior equilíbrio */
+  font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.55rem 1.1rem; /* Mais compacto também no respiro horizontal */
+  padding: 0.7rem 1.1rem !important; /* Padding fixo e aumentado para respiro */
   gap: 0.5rem;
   transition: all 0.2s;
   color: var(--text-secondary) !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em;
+  border-bottom: 3px solid transparent !important; /* Espaço reservado para a "pílula" */
+  margin-bottom: -1px; /* Compensa o border-bottom do nav */
 }
 
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link) {
-  border: none !important;
   box-shadow: none !important;
   outline: none !important;
   color: var(--primary-color) !important;
@@ -328,6 +344,7 @@ const formatCnpj = (v) => {
     transparent
   ) !important;
   position: relative;
+  border-bottom-color: transparent !important; /* Mantém o border mas transparente */
 }
 
 /* O DESIGN FINAL DA CÁPSULA CARBON GOLD */

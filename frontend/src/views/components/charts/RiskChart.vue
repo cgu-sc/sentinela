@@ -229,7 +229,7 @@ const chartOption = computed(() => {
 }
 
 .chart-wrapper {
-  height: 35vh;
+  height: 40vh;
   min-height: 400px;
 }
 

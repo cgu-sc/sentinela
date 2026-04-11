@@ -75,12 +75,12 @@ const initializeApp = async () => {
 
     // 2. Carga padrão dos dados do dashboard (só ocorre após cache pronto)
     statusMessage.value = "Sincronizando Dashboard...";
-    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz } = getApiParams();
+    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf } = getApiParams();
 
     const fetchList = [
       resultadoStore.fetchResultados(),
-      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz),
-      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz),
+      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf),
+      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
@@ -89,9 +89,9 @@ const initializeApp = async () => {
     // Se houver filtros geográficos ativos, o fetchDashboardSummary NÃO popula
     // resultadoSentinelaUFNacional (por design). Forçamos a busca nacional aqui
     // para garantir que o mapa do Brasil sempre seja exibido corretamente.
-    if (uf || regiaoSaude || municipio) {
+    if (uf || regiaoSaude || municipio || unidadePf) {
       fetchList.push(
-        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede)
+        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede, unidadePf)
       );
     }
 

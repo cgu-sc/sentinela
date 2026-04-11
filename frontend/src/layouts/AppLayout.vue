@@ -108,7 +108,7 @@ watch(
       filterStore.selectedRegiaoSaude = "Todos";
     }
 
-    const unidadesDisponiveis = geoStore.jurisdicoesPorUF(newUF);
+    const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(newUF, 'Todos');
     if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
       filterStore.selectedUnidadePf = "Todos";
     }
@@ -688,6 +688,12 @@ const {
             v-model="filterStore.selectedUnidadePf"
             :options="unidadePfOptions"
             placeholder="Delegacia / Unidade PF"
+            filter
+            reset-filter-on-hide
+            auto-option-focus
+            filter-match-mode="contains"
+            @show="onDropdownShow"
+            :virtualScrollerOptions="{ itemSize: 32 }"
             class="w-full filter-input"
             panelClass="sidebar-panel"
             :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"

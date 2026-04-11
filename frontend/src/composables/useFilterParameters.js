@@ -29,8 +29,9 @@ export function useFilterParameters() {
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;
     const grandeRede   = filterStore.selectedGrandeRede !== FILTER_ALL_VALUE ? filterStore.selectedGrandeRede : null;
     const cnpjRaiz     = extractCnpjFilter(filterStore.selectedCnpjRaiz);
+    const unidadePf    = filterStore.selectedUnidadePf !== FILTER_ALL_VALUE ? filterStore.selectedUnidadePf : null;
 
-    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz };
+    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf };
   }
 
   function isPeriodoValido() {

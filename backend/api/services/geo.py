@@ -22,8 +22,9 @@ class GeoService:
                     id_regiao_saude=r["id_regiao_saude"],
                     no_municipio=r["no_municipio"],
                     id_ibge7=r["id_ibge7"],
-                    nu_populacao=r["nu_populacao"]
-                ) 
+                    nu_populacao=r["nu_populacao"],
+                    unidade_pf=r.get("unidade_pf")
+                )
                 for r in df.iter_rows(named=True)
             ]
             

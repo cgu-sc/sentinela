@@ -20,7 +20,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
     const args = [
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
-      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz,
+      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf,
     ];
 
     analyticsStore.fetchDashboardSummary(...args);
@@ -33,7 +33,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
     const p = getApiParams();
     analyticsStore.fetchSentinelaUFNacional(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede,
+      p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede, p.unidadePf,
     );
   };
 
@@ -49,6 +49,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedMS,
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
+      filterStore.selectedUnidadePf,
     ],
     () => { if (isPeriodoValido()) fetchAll(); },
     { deep: true, immediate: false }

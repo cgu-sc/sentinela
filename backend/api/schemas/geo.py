@@ -8,6 +8,7 @@ class LocalidadeSchema(BaseModel):
     no_municipio: Optional[str] = None
     id_ibge7: Optional[int] = None
     nu_populacao: Optional[int] = None
+    unidade_pf: Optional[str] = None
 
     class Config:
         from_attributes = True

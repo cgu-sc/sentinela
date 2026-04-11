@@ -270,12 +270,14 @@ const formattedFullAddress = computed(() => {
             </div>
           </div>
 
-          <!-- Bloco Neutro -->
-          <div class="kpi-card-neutral">
-            <span class="pill-label">Total Movimentado</span>
-            <span class="pill-value total">
-              {{ formatCurrencyFull(cnpjData.totalMov) }}
-            </span>
+          <!-- Bloco Neutro - Agora em formato Pill -->
+          <div class="kpi-pill-group kpi-pill-group--neutral">
+            <div class="pill-item">
+              <span class="pill-label">Total Movimentado</span>
+              <span class="pill-value total">
+                {{ formatCurrencyFull(cnpjData.totalMov) }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -701,6 +703,18 @@ const formattedFullAddress = computed(() => {
 .kpi-pill-group.risk-medium { --accent: var(--risk-medium);  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-medium) 20%, var(--card-border)) !important; color: inherit !important; }
 .kpi-pill-group.risk-low    { --accent: var(--risk-low);     background: linear-gradient(to top, color-mix(in srgb, var(--risk-low) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-low) 20%, var(--card-border)) !important; color: inherit !important; }
 
+/* Variante Neutra para Dados de Contexto */
+.kpi-pill-group--neutral {
+   --accent: var(--primary-color);
+   background: linear-gradient(to top, color-mix(in srgb, var(--primary-color) 8%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important;
+   border-color: color-mix(in srgb, var(--primary-color) 15%, var(--card-border)) !important;
+   backdrop-filter: blur(4px);
+}
+
+.kpi-pill-group--neutral::before {
+  opacity: 0.4; /* Barra inferior mais discreta */
+}
+
 .pill-item {
   display: flex;
   flex-direction: column;
@@ -746,7 +760,7 @@ const formattedFullAddress = computed(() => {
 }
 
 .pill-value.total {
-  opacity: 0.85; /* Reforçado para melhor leitura */
+  opacity: 0.85; 
 }
 
 .kpi-card.risk-high .kpi-card-value, 

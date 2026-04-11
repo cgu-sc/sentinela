@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted, nextTick } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
 import { useGeoStore } from '@/stores/geo';

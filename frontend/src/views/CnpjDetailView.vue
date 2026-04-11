@@ -249,7 +249,7 @@ const formatCnpj = (v) => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  gap: 0.75rem; /* Ajustado para equilíbrio visual ideal */
+  gap: 0; /* Unificado: header + tabs formam um card único */
   background: transparent;
 }
 
@@ -259,11 +259,10 @@ const formatCnpj = (v) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(
-    --tabs-bg
-  ); /* O conteúdo técnico agora vive dentro deste grande card */
+  background: var(--tabs-bg);
   border: 1px solid var(--tabs-border);
-  border-radius: 12px;
+  border-top: none; /* Fundido com o header acima */
+  border-radius: 0 0 12px 12px; /* Apenas cantos inferiores */
   box-shadow: none;
   margin-bottom: 2rem;
 }
@@ -310,8 +309,9 @@ const formatCnpj = (v) => {
 
 :deep(.p-tabview-nav) {
   background: var(--tabs-bg) !important;
+  border-top: 3px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border)); /* Acento com cor do tema */
   border-bottom: 1px solid var(--tabs-border);
-  padding: 0 1.25rem;
+  padding: 0.75rem 1.25rem 0;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {

@@ -366,9 +366,10 @@ const formattedFullAddress = computed(() => {
 /* ── CABEÇALHO RESUMO (SOLTO) ────────────────── */
 .detail-header-new {
   background: var(--establishment-header-bg);
-  padding: 1.25rem 2rem;
+  padding: 1.25rem 2rem 1.25rem;
   border: 1px solid var(--establishment-header-border);
-  border-radius: 12px;
+  border-bottom: none; /* Fundido com o TabView abaixo */
+  border-radius: 12px 12px 0 0; /* Apenas cantos superiores */
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -786,6 +787,7 @@ const formattedFullAddress = computed(() => {
   justify-content: space-between;
   gap: 2rem;
   padding-top: 1.25rem;
+  padding-bottom: 0.5rem;
   border-top: 1px solid var(--card-border);
 }
 

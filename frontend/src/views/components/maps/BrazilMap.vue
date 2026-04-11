@@ -94,6 +94,7 @@ const chartOption = computed(() => {
     backgroundColor: c.bg,
     tooltip: {
       trigger: "item",
+      confine: true,
       backgroundColor: c.tooltip,
       borderColor: c.border,
       borderWidth: 1,
@@ -112,8 +113,8 @@ const chartOption = computed(() => {
         return `
           <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${params.name}</div>
           <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-            <div>% s/ Comp: <strong>${formatPercent(d.value)}</strong></div>
-            <div>Valor s/ Comp: <strong>${formatBRL(d.valSemComp)}</strong></div>
+            <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
+            <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
             <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString("pt-BR")}</strong></div>
           </div>`;
       },

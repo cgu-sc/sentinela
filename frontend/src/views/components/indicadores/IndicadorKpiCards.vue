@@ -1,29 +1,16 @@
 <script setup>
 import { computed } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
-import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 const props = defineProps({
   /** Objeto kpis retornado pelo endpoint (total_critico, total_atencao, etc.) */
   kpis: { type: Object, default: null },
-  /** Chave do indicador selecionado (para mostrar o nome) */
-  indicadorKey: { type: String, default: null },
   /** Formato de exibição do valor mediano ('pct' | 'val' | 'dec' | 'pct3') */
   formato: { type: String, default: 'dec' },
   isLoading: { type: Boolean, default: false },
 });
 
-const { formatCurrencyFull, formatPercent } = useFormatting();
-
-// Encontra o label do indicador a partir da chave
-const indicadorLabel = computed(() => {
-  if (!props.indicadorKey) return null;
-  for (const grupo of INDICATOR_GROUPS) {
-    const ind = grupo.indicators.find(i => i.key === props.indicadorKey);
-    if (ind) return ind.label;
-  }
-  return props.indicadorKey;
-});
+const { formatCurrencyFull } = useFormatting();
 
 function formatMediana(value) {
   if (value == null) return '—';
@@ -62,13 +49,6 @@ const cards = computed(() => {
       icon: 'pi pi-check-circle',
     },
     {
-      label: 'Sem Dados',
-      value: k.total_sem_dados ?? 0,
-      sub: null,
-      color: 'var(--text-muted)',
-      icon: 'pi pi-minus-circle',
-    },
-    {
       label: 'Mediana Regional',
       value: formatMediana(k.mediana_reg),
       sub: 'benchmark do escopo',
@@ -104,7 +84,7 @@ const cards = computed(() => {
         <div class="ind-kpi-content">
           <span class="ind-kpi-label">{{ card.label }}</span>
           <span class="ind-kpi-value">{{ card.value }}</span>
-          <span v-if="card.sub" class="ind-kpi-sub">{{ card.sub }}</span>
+          <span v-if="card.sub" class="ind-kpi-sub" :title="card.sub">{{ card.sub }}</span>
         </div>
       </div>
     </div>
@@ -114,7 +94,7 @@ const cards = computed(() => {
 <style scoped>
 .ind-kpi-section {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1rem;
   width: 100%;
   transition: opacity 0.3s ease;

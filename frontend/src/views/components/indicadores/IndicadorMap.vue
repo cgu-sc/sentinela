@@ -29,7 +29,11 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   /** Label do indicador para o título */
   indicadorLabel: { type: String, default: 'Indicador' },
+  /** ibge7 do município selecionado (controlado pelo pai) */
+  selectedIbge7: { type: Number, default: null },
 });
+
+const emit = defineEmits(['select-municipio']);
 
 const geoStore = useGeoStore();
 const { chartTheme } = useChartTheme();
@@ -136,12 +140,17 @@ const echartsMapData = computed(() => {
   const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
   if (!geo) return [];
 
+  const sel = props.selectedIbge7;
+  const hasSel = sel != null;
+
   return geo.features.map(f => {
     const ibge7 = Number(f.properties.id);
     const d = dataByIbge7.value.get(ibge7);
     const hasData = !!d && d.total_cnpjs > 0;
     const perc = hasData ? (d.pct_critico ?? 0) : 0;
     const piece = getRiskPiece(perc);
+    const isSelected = hasSel && ibge7 === sel;
+    const dimmed = hasSel && !isSelected;
     const baseColor = hasData ? piece.color : mapAreaColor.value;
 
     return {
@@ -152,12 +161,18 @@ const echartsMapData = computed(() => {
       total_cnpjs: d?.total_cnpjs ?? 0,
       total_critico: d?.total_critico ?? 0,
       hasData,
-      itemStyle: { areaColor: baseColor },
+      itemStyle: {
+        areaColor: baseColor,
+        opacity: dimmed ? 0.35 : 1,
+        borderColor: isSelected ? themeStore.tokens.primary : mapBorderColor.value,
+        borderWidth: isSelected ? 2.5 : 0.5,
+      },
       emphasis: {
         itemStyle: {
           areaColor: hasData ? piece.color : baseColor,
           borderColor: hasData ? piece.borderColor : hoverBorder.value,
           borderWidth: 1.5,
+          opacity: 1,
         },
       },
     };
@@ -203,6 +218,7 @@ const chartOption = computed(() => {
       layoutSize: '95%',
       selectedMode: false,
       label: { show: false },
+      emphasis: { label: { show: false } },
       itemStyle: { borderColor: mapBorderColor.value, borderWidth: 0.5, areaColor: mapAreaColor.value },
       data: echartsMapData.value,
     }],
@@ -210,13 +226,26 @@ const chartOption = computed(() => {
 });
 
 watch(() => themeStore.isDark, () => mapKey.value++);
+
+// ── Clique no mapa ────────────────────────────────────────────────────────────
+function onMapClick(params) {
+  if (!params?.data) return;
+  const d = params.data;
+  // No modo UF clicamos em municípios; no modo nacional não há seleção de município
+  if (isNational.value) return;
+  const ibge7 = d.ibge7 ?? null;
+  if (!ibge7) return;
+  // Toggle: clicar no mesmo município desmarca
+  const next = ibge7 === props.selectedIbge7 ? null : ibge7;
+  emit('select-municipio', next, d.municipio ?? d.name ?? null);
+}
 </script>
 
 <template>
   <div class="ind-map-card" :class="{ 'is-refreshing': isLoading }">
     <div class="map-header">
       <i class="pi pi-map" />
-      <h3>CONCENTRAÇÃO CRÍTICA — {{ indicadorLabel?.toUpperCase() }}</h3>
+      <h3>{{ indicadorLabel?.toUpperCase() }}</h3>
       <span class="map-subtitle">% de farmácias CRÍTICAS por {{ isNational ? 'UF' : 'município' }}</span>
     </div>
 
@@ -228,6 +257,7 @@ watch(() => themeStore.isDark, () => mapKey.value++);
         class="echart"
         :option="chartOption"
         autoresize
+        @click="onMapClick"
       />
     </div>
     <div v-show="isNational && !nationalMapReady" class="map-loading">
@@ -290,7 +320,7 @@ watch(() => themeStore.isDark, () => mapKey.value++);
 }
 
 .map-wrapper {
-  height: 400px;
+  height: 40vh;
 }
 
 .echart {
@@ -299,7 +329,7 @@ watch(() => themeStore.isDark, () => mapKey.value++);
 }
 
 .map-loading {
-  height: 400px;
+  height: 40vh;
   display: flex;
   align-items: center;
   justify-content: center;

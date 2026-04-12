@@ -4,6 +4,11 @@ import { storeToRefs } from 'pinia';
 import { useIndicadoresStore } from '@/stores/indicadores';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
+const props = defineProps({
+  /** Metadados do indicador ativo { label, metodologia } */
+  activeIndicadorMeta: { type: Object, default: null },
+});
+
 const emit = defineEmits(['select']);
 
 const indicadoresStore = useIndicadoresStore();
@@ -52,6 +57,14 @@ function selectIndicador(key) {
         </button>
       </div>
     </div>
+
+    <!-- Info do indicador ativo -->
+    <Transition name="ind-info">
+      <div v-if="activeIndicadorMeta" class="ind-info-box">
+        <div class="ind-info-label">{{ activeIndicadorMeta.label }}</div>
+        <p class="ind-info-metodologia">{{ activeIndicadorMeta.metodologia }}</p>
+      </div>
+    </Transition>
   </aside>
 </template>
 
@@ -180,5 +193,42 @@ function selectIndicador(key) {
   font-size: 0.7rem;
   color: var(--primary-color);
   opacity: 0.7;
+}
+
+/* ── Info do indicador ativo ── */
+.ind-info-box {
+  margin: 0.5rem 0.75rem 0.75rem;
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ind-info-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  line-height: 1.3;
+}
+
+.ind-info-metodologia {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Transição suave ao aparecer/desaparecer */
+.ind-info-enter-active,
+.ind-info-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.ind-info-enter-from,
+.ind-info-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>

@@ -4,17 +4,17 @@ import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
-import { INDICATOR_THRESHOLDS } from '@/config/riskConfig';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
+import Tag from 'primevue/tag';
 
 const props = defineProps({
   /** Array de IndicadorCnpjRowSchema */
   cnpjs: { type: Array, default: () => [] },
   /** Formato de valor: 'pct' | 'pct3' | 'val' | 'dec' */
   formato: { type: String, default: 'dec' },
-  /** Chave do indicador (para obter threshold correto) */
+  /** Chave do indicador */
   indicadorKey: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
   indicadorLabel: { type: String, default: 'Indicador' },
@@ -34,24 +34,22 @@ function formatValue(valor) {
   return valor.toFixed(2);
 }
 
-// Estilo da pill de risco (mesma lógica de IndicatorsTab.vue)
-function getStatusColor(status) {
+function statusClass(status) {
   switch (status) {
-    case 'CRÍTICO':  return 'var(--risk-indicator-critical)';
-    case 'ATENÇÃO':  return 'var(--risk-indicator-warning)';
-    case 'NORMAL':   return 'var(--risk-indicator-normal)';
-    default:         return 'var(--text-muted)';
+    case 'CRÍTICO': return 'status-danger';
+    case 'ATENÇÃO':  return 'status-warn';
+    case 'NORMAL':   return 'status-success';
+    default:         return 'status-secondary';
   }
 }
 
-function riscoPillStyle(status) {
-  const c = getStatusColor(status);
-  return { background: `color-mix(in srgb, ${c} 15%, transparent)`, color: c };
+function goToDetail(event) {
+  if (event.originalEvent?.target?.closest('.clickable-badge, .copy-btn')) return;
+  router.push({ name: 'CnpjDetail', params: { cnpj: event.data.cnpj } });
 }
 
-function goToDetail(event) {
-  if (event.originalEvent?.target?.closest('.clickable-badge')) return;
-  router.push({ name: 'CnpjDetail', params: { cnpj: event.data.cnpj } });
+async function copyCnpj(cnpj) {
+  await navigator.clipboard.writeText(cnpj);
 }
 
 function normalizeToOption(options, raw) {
@@ -59,10 +57,6 @@ function normalizeToOption(options, raw) {
 }
 
 function applyFilter(field, value) {
-  if (field === 'grandeRede') {
-    const valStr = typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : value;
-    filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, valStr);
-  }
   if (field === 'situacaoRF') filterStore.selectedSituacao = normalizeToOption(FILTER_OPTIONS.situacao, value);
   if (field === 'conexaoMS') {
     const valStr = typeof value === 'boolean' ? (value ? 'Ativa' : 'Inativa') : value;
@@ -75,7 +69,7 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
 
 <template>
   <div class="ind-table-card" :class="{ 'is-refreshing': isLoading }">
-    <div class="table-header">
+    <div class="section-header">
       <div class="header-icon-box">
         <i class="pi pi-list-check" />
       </div>
@@ -83,7 +77,7 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
         <h3>Farmácias por Indicador</h3>
         <span class="subtitle">
           {{ indicadorLabel }} — {{ cnpjs.length }} estabelecimentos
-          <span v-if="totalCritico > 0" class="critico-badge">{{ totalCritico }} CRÍTICO</span>
+          <Tag v-if="totalCritico > 0" :value="`${totalCritico} CRÍTICO`" class="status-danger" />
         </span>
       </div>
     </div>
@@ -97,55 +91,82 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       :rows="20"
       sortField="risco_reg"
       :sortOrder="-1"
-      class="custom-table ind-cnpj-table clickable-rows"
+      class="enterprise-table ind-cnpj-table clickable-rows"
       @row-click="goToDetail"
     >
-      <!-- CNPJ -->
-      <Column field="cnpj" header="CNPJ" sortable style="width:11%">
+      <!-- Razão Social + CNPJ -->
+      <Column field="razao_social" header="Razão Social" sortable style="width:15%">
         <template #body="{ data }">
-          <span class="cnpj-cell">{{ data.cnpj }}</span>
-        </template>
-      </Column>
-
-      <!-- Razão Social -->
-      <Column field="razao_social" header="Razão Social" sortable style="width:22%">
-        <template #body="{ data }">
-          <span class="razao-cell" :title="data.razao_social">{{ data.razao_social ?? '—' }}</span>
+          <div class="razao-block">
+            <span
+              class="razao-social-cell"
+              v-tooltip.top="data.razao_social"
+            >{{ data.razao_social ?? '—' }}</span>
+            <span class="cnpj-row">
+              <span class="cnpj-text">{{ data.cnpj }}</span>
+              <button
+                class="copy-btn"
+                v-tooltip.top="'Copiar CNPJ'"
+                @click.stop="copyCnpj(data.cnpj)"
+              ><i class="pi pi-copy" /></button>
+            </span>
+          </div>
         </template>
       </Column>
 
       <!-- UF + Município -->
-      <Column field="municipio" header="Localização" sortable style="width:14%">
+      <Column field="municipio" header="Localização" sortable style="width:12%">
         <template #body="{ data }">
-          <span class="loc-cell">
+          <div class="loc-block">
+            <span
+              class="municipio-text"
+              v-tooltip.top="data.municipio"
+            >{{ data.municipio ?? '—' }}</span>
             <span class="uf-tag">{{ data.uf }}</span>
-            {{ data.municipio ?? '—' }}
-          </span>
+          </div>
         </template>
       </Column>
 
       <!-- Valor do indicador -->
-      <Column field="valor" header="Valor" sortable style="width:9%; text-align:center">
+      <Column field="valor" header="Valor" sortable style="width:8%; text-align:right">
         <template #body="{ data }">
           <span class="val-cell">{{ formatValue(data.valor) }}</span>
         </template>
       </Column>
 
       <!-- Mediana regional -->
-      <Column field="med_reg" header="Mediana Reg." sortable style="width:10%; text-align:center">
+      <Column field="med_reg" header="Mediana Reg." sortable style="width:10%; text-align:right">
         <template #body="{ data }">
           <span class="val-cell muted">{{ formatValue(data.med_reg) }}</span>
+        </template>
+      </Column>
+
+      <!-- % Não Comprovação -->
+      <Column field="perc_val_sem_comp" header="% Não Comp." sortable style="width:9%; text-align:right">
+        <template #body="{ data }">
+          <span class="val-cell" :class="{ muted: data.perc_val_sem_comp == null }">
+            {{ data.perc_val_sem_comp != null ? data.perc_val_sem_comp.toFixed(1) + '%' : '—' }}
+          </span>
+        </template>
+      </Column>
+
+      <!-- Valor Não Comprovação -->
+      <Column field="val_sem_comp" header="Vlr. Não Comp." sortable style="width:10%; text-align:right">
+        <template #body="{ data }">
+          <span class="val-cell" :class="{ muted: data.val_sem_comp == null }">
+            {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
+          </span>
         </template>
       </Column>
 
       <!-- Risco Região -->
       <Column field="risco_reg" header="Risco Reg." sortable style="width:9%; text-align:center">
         <template #body="{ data }">
-          <span
+          <Tag
             v-if="data.risco_reg != null"
-            class="risco-pill"
-            :style="riscoPillStyle(data.status)"
-          >{{ data.risco_reg.toFixed(1) }}x</span>
+            :value="data.risco_reg.toFixed(1) + 'x'"
+            :class="statusClass(data.status)"
+          />
           <span v-else class="muted">—</span>
         </template>
       </Column>
@@ -153,31 +174,32 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       <!-- Status -->
       <Column field="status" header="Status" sortable style="width:9%; text-align:center">
         <template #body="{ data }">
-          <span class="status-pill" :style="riscoPillStyle(data.status)">{{ data.status }}</span>
+          <Tag :value="data.status" :class="statusClass(data.status)" />
         </template>
       </Column>
 
-      <!-- Grande Rede -->
-      <Column field="is_grande_rede" header="Rede" sortable style="width:7%; text-align:center">
+      <!-- Conexão MS -->
+      <Column field="is_conexao_ativa" header="Conex. MS" sortable style="width:8%; text-align:center">
         <template #body="{ data }">
-          <span
-            v-if="data.is_grande_rede"
-            class="clickable-badge badge-rede"
-            @click.stop="applyFilter('grandeRede', data.is_grande_rede)"
-          >Rede</span>
-          <span v-else class="muted">—</span>
+          <Tag
+            :value="data.is_conexao_ativa ? 'Ativa' : 'Inativa'"
+            :class="[conexaoMsClass(data.is_conexao_ativa), 'clickable-badge']"
+            v-tooltip.top="'Filtrar por Conexão MS: ' + (data.is_conexao_ativa ? 'Ativa' : 'Inativa')"
+            @click.stop="applyFilter('conexaoMS', data.is_conexao_ativa)"
+          />
         </template>
       </Column>
 
       <!-- Situação RF -->
       <Column field="situacao_rf" header="Sit. RF" sortable style="width:8%; text-align:center">
         <template #body="{ data }">
-          <span
+          <Tag
             v-if="data.situacao_rf"
-            class="clickable-badge"
-            :class="situacaoRfClass(data.situacao_rf)"
+            :value="data.situacao_rf"
+            :class="[situacaoRfClass(data.situacao_rf), 'clickable-badge']"
+            v-tooltip.top="'Filtrar por Situação RF: ' + data.situacao_rf"
             @click.stop="applyFilter('situacaoRF', data.situacao_rf)"
-          >{{ data.situacao_rf }}</span>
+          />
           <span v-else class="muted">—</span>
         </template>
       </Column>
@@ -200,142 +222,195 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
   pointer-events: none;
 }
 
-.table-header {
+.section-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1.25rem;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--tabs-border);
 }
 
 .header-icon-box {
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
   color: var(--primary-color);
-  font-size: 0.9rem;
+  border-radius: 10px;
+  font-size: 1.1rem;
   flex-shrink: 0;
 }
 
 .header-text-box h3 {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-color);
-  opacity: 0.85;
 }
 
 .subtitle {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.critico-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.45rem;
-  background: color-mix(in srgb, var(--risk-indicator-critical) 15%, transparent);
-  color: var(--risk-indicator-critical);
-  border-radius: 99px;
-  font-size: 0.65rem;
-  font-weight: 600;
+.razao-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.cnpj-cell {
-  font-size: 0.78rem;
-  font-family: inherit;
-  color: var(--text-color);
-}
-
-.razao-cell {
-  font-size: 0.8rem;
-  display: block;
+.razao-social-cell {
+  cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  display: block;
+  max-width: 100%;
+  font-size: 0.78rem;
 }
 
-.loc-cell {
+.cnpj-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+}
+
+.cnpj-text {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+:deep(tr:hover) .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--primary-color);
+}
+
+.loc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.municipio-text {
   font-size: 0.78rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
 }
 
 .uf-tag {
   display: inline-block;
+  align-self: flex-start;
   padding: 0.05rem 0.3rem;
   background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
   color: var(--primary-color);
   border-radius: 4px;
   font-size: 0.65rem;
   font-weight: 600;
-  flex-shrink: 0;
 }
 
 .val-cell {
-  font-size: 0.8rem;
   display: block;
-  text-align: center;
+  text-align: right;
 }
 
 .muted {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
-.risco-pill {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
-  border-radius: 99px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  min-width: 3rem;
-  text-align: center;
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 0.2rem 0.5rem;
-  border-radius: 99px;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-.clickable-badge {
-  cursor: pointer;
-  display: inline-block;
-  padding: 0.15rem 0.45rem;
-  border-radius: 99px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  transition: opacity 0.15s ease;
-  white-space: nowrap;
-}
-
-.clickable-badge:hover {
-  opacity: 0.8;
-}
-
-.badge-rede {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  color: var(--primary-color);
-}
-
-/* Herda os estilos globais de DataTable do projeto */
+/* ── Deep overrides (padrão CnpjTable) ── */
 :deep(.clickable-rows .p-datatable-tbody > tr) {
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+:deep(.ind-cnpj-table.p-datatable .p-datatable-tbody > tr) {
+  font-size: 0.75rem;
+}
+
+:deep(.ind-cnpj-table .p-datatable-table) {
+  table-layout: fixed;
+  width: 100%;
+}
+
+:deep(.ind-cnpj-table .p-datatable-tbody > tr > td) {
+  overflow: hidden;
+}
+
+:deep(.ind-cnpj-table .p-datatable-thead > tr > th) {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:deep(.p-datatable-thead) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+:deep(.p-datatable-wrapper) {
+  border-radius: 0 0 12px 12px;
+  min-height: calc(10 * 2.625rem);
+}
+
+:deep(.p-tag) {
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.65rem;
+  border: 1px solid transparent;
+}
+
+:deep(.clickable-badge) {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:deep(.clickable-badge:hover) {
+  opacity: 1;
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+:deep(.p-datatable-tbody td) {
+  text-transform: none !important;
+  font-variant: normal !important;
+}
+
+:deep(.p-tag-value),
+:deep(.p-tag) {
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em;
 }
 </style>

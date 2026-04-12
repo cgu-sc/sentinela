@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFilterStore } from '@/stores/filters';
 import { useIndicadoresStore } from '@/stores/indicadores';
@@ -28,7 +28,28 @@ const activeIndicadorMeta = computed(() => {
 
 const activeUf = computed(() => filterStore.selectedUF);
 
+// ── Seleção de município no mapa ──────────────────────────────────────────────
+const selectedMunicipioIbge7 = ref(null);
+const selectedMunicipioNome = ref(null);
+
+function onSelectMunicipio(ibge7, nome) {
+  selectedMunicipioIbge7.value = ibge7;
+  selectedMunicipioNome.value = nome;
+}
+
+function clearMunicipioFilter() {
+  selectedMunicipioIbge7.value = null;
+  selectedMunicipioNome.value = null;
+}
+
+// CNPJs filtrados pelo município selecionado (se houver)
+const filteredCnpjs = computed(() => {
+  if (!selectedMunicipioIbge7.value) return cnpjs.value;
+  return cnpjs.value.filter(c => c.id_ibge7 === selectedMunicipioIbge7.value);
+});
+
 function onIndicadorSelect(key) {
+  clearMunicipioFilter();
   localStorage.setItem('sentinela_indicadores_selected', key);
   fetchForIndicador(key);
 }
@@ -45,9 +66,6 @@ onMounted(() => {
 <template>
   <div class="indicadores-layout">
 
-    <!-- Painel lateral de seleção de indicadores -->
-    <IndicatorSelector @select="onIndicadorSelect" />
-
     <!-- Painel principal de análise -->
     <div class="analysis-panel">
 
@@ -58,7 +76,7 @@ onMounted(() => {
         </div>
         <h2 class="empty-title">Selecione um Indicador</h2>
         <p class="empty-desc">
-          Escolha um dos 18 indicadores de risco no painel à esquerda para visualizar
+          Escolha um dos 18 indicadores de risco no painel à direita para visualizar
           o desempenho das farmácias no escopo atual dos filtros.
         </p>
         <div class="empty-groups">
@@ -77,19 +95,9 @@ onMounted(() => {
       <!-- Conteúdo (carregado ou carregando) -->
       <template v-else>
 
-        <!-- Cabeçalho do indicador ativo -->
-        <div v-if="activeIndicadorMeta || isLoading" class="analysis-header">
-          <i class="pi pi-chart-scatter analysis-icon" />
-          <div class="analysis-title-block">
-            <h2 class="analysis-title">{{ activeIndicadorMeta?.label ?? '...' }}</h2>
-            <p class="analysis-metodologia">{{ activeIndicadorMeta?.metodologia }}</p>
-          </div>
-        </div>
-
         <!-- KPI Cards -->
         <IndicadorKpiCards
           :kpis="kpis"
-          :indicador-key="selectedIndicador"
           :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :is-loading="isLoading"
         />
@@ -100,11 +108,22 @@ onMounted(() => {
           :active-uf="activeUf"
           :is-loading="isLoading"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
+          :selected-ibge7="selectedMunicipioIbge7"
+          @select-municipio="onSelectMunicipio"
         />
+
+        <!-- Filtro de município ativo -->
+        <div v-if="selectedMunicipioNome" class="municipio-filter-chip">
+          <i class="pi pi-map-marker" />
+          <span>Filtrando: <strong>{{ selectedMunicipioNome }}</strong></span>
+          <button class="chip-clear" @click="clearMunicipioFilter" title="Limpar filtro">
+            <i class="pi pi-times" />
+          </button>
+        </div>
 
         <!-- Tabela ranqueada de CNPJs -->
         <IndicadorCnpjTable
-          :cnpjs="cnpjs"
+          :cnpjs="filteredCnpjs"
           :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :indicador-key="selectedIndicador"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
@@ -113,6 +132,9 @@ onMounted(() => {
 
       </template>
     </div>
+
+    <!-- Painel lateral de seleção de indicadores (direita) -->
+    <IndicatorSelector :active-indicador-meta="activeIndicadorMeta" @select="onIndicadorSelect" />
 
   </div>
 </template>
@@ -130,7 +152,7 @@ onMounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 /* ── Estado vazio ── */
@@ -217,43 +239,42 @@ onMounted(() => {
   opacity: 0.7;
 }
 
-/* ── Cabeçalho do indicador ativo ── */
-.analysis-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.85rem 1.25rem;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
-  border-left: 4px solid var(--primary-color);
-}
 
-.analysis-icon {
-  font-size: 1.1rem;
-  color: var(--primary-color);
-  margin-top: 0.2rem;
-  flex-shrink: 0;
-}
-
-.analysis-title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.analysis-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-color);
-  opacity: 0.9;
-}
-
-.analysis-metodologia {
-  margin: 0;
+/* ── Chip de filtro de município ── */
+.municipio-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border-radius: 99px;
   font-size: 0.78rem;
+  color: var(--text-color);
+  align-self: flex-start;
+}
+
+.municipio-filter-chip i.pi-map-marker {
+  color: var(--primary-color);
+  font-size: 0.75rem;
+}
+
+.chip-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem;
   color: var(--text-muted);
-  line-height: 1.5;
+  font-size: 0.65rem;
+  margin-left: 0.15rem;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.chip-clear:hover {
+  opacity: 1;
 }
 </style>

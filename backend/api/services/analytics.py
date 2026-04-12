@@ -522,6 +522,13 @@ class AnalyticsService:
                 pl.col("is_conexao_ativa").last().alias("is_conexao_ativa"),
                 pl.col("porte_empresa").last().alias("porte_empresa"),
                 pl.col("unidade_pf").last().alias("unidade_pf"),
+                pl.col("total_vendas").sum().alias("total_vendas"),
+                pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
+            ]).with_columns([
+                pl.when(pl.col("total_vendas") > 0)
+                  .then((pl.col("total_sem_comprovacao") / pl.col("total_vendas") * 100).round(2))
+                  .otherwise(pl.lit(None))
+                  .alias("perc_val_sem_comp")
             ])
 
             # ── 2. Filtros geográficos e cadastrais ──
@@ -625,6 +632,8 @@ class AnalyticsService:
                     situacao_rf=row.get("situacao_rf"),
                     is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
                     score_risco_final=_f(row.get(score_col)) if score_col in (risco_cols_available) else None,
+                    val_sem_comp=_f(row.get("total_sem_comprovacao")),
+                    perc_val_sem_comp=_f(row.get("perc_val_sem_comp")),
                 ))
 
             # ── 8. Agregação por município para o mapa ──

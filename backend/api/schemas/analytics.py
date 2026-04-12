@@ -309,6 +309,8 @@ class IndicadorCnpjRowSchema(BaseModel):
     situacao_rf: Optional[str] = None
     is_conexao_ativa: Optional[bool] = False
     score_risco_final: Optional[float] = None
+    val_sem_comp: Optional[float] = None
+    perc_val_sem_comp: Optional[float] = None
 
 
 class IndicadorMunicipioRowSchema(BaseModel):

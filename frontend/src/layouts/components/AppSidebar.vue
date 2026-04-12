@@ -433,6 +433,10 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 <style scoped>
 /* SIDEBAR */
 .admin-sidebar {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  z-index: 200;
   width: var(--sidebar-width);
   background: var(--sidebar-bg) !important;
   color: var(--sidebar-text);
@@ -440,19 +444,18 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
   will-change: width;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 56px);
   border-right: 1px solid var(--sidebar-border);
-  flex-shrink: 0;
   overflow: hidden;
 }
 
 /* BOTÃO FLUTUANTE DE REABERTURA */
 .sidebar-float-btn {
   position: fixed;
-  top: 50%;
+  top: calc(50% + 28px);
   left: var(--sidebar-width);
   transform: translateY(-50%);
-  z-index: 300;
+  z-index: 250;
   will-change: left;
   width: 20px;
   height: 48px;
@@ -479,7 +482,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 /* BOTÃO DE CADEADO */
 .sidebar-lock-btn {
   position: fixed;
-  top: calc(50% + 28px);
+  top: calc(50% + 60px);
   left: var(--sidebar-width);
   z-index: 300;
   will-change: left;

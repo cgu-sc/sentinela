@@ -174,9 +174,11 @@ watch(navCnpjInput, (val) => {
   justify-content: space-between;
   align-items: center;
   padding: 0 1.5rem;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 100;
+  left: 0;
+  right: 0;
+  z-index: 300;
   transition: background 0.3s ease, border-color 0.3s ease;
 }
 

@@ -16,10 +16,10 @@ onMounted(() => themeStore.initTheme());
 
 <template>
   <div class="admin-layout" :class="{ collapsed: filterStore.sidebarCollapsed }">
+    <AppNavbar v-model="activeModule" />
     <AppSidebar :active-module="activeModule" />
 
     <main class="main-container">
-      <AppNavbar v-model="activeModule" />
       <CnpjDialog />
       <SyncDialog />
       <div class="page-content">
@@ -36,7 +36,7 @@ onMounted(() => themeStore.initTheme());
 <style scoped>
 .admin-layout {
   --sidebar-width: 280px;
-  display: flex !important;
+  display: block !important;
   height: 100vh !important;
   width: 100vw;
   overflow: hidden;
@@ -70,13 +70,14 @@ onMounted(() => themeStore.initTheme());
 }
 
 .main-container {
-  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  min-width: 0;
+  margin-left: var(--sidebar-width);
+  padding-top: 56px;
+  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent !important;
 }
 

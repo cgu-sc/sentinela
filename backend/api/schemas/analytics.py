@@ -281,3 +281,50 @@ class MovimentacaoResponse(BaseModel):
     summary: MovimentacaoSummarySchema
     rows: List[MovimentacaoRowSchema]
 
+
+# ── Análise de Indicadores (Vista /indicadores) ──────────────────────────────
+
+class IndicadorKpiSummarySchema(BaseModel):
+    """Contadores de status para um indicador no escopo atual."""
+    total_critico: int = 0
+    total_atencao: int = 0
+    total_normal: int = 0
+    total_sem_dados: int = 0
+    mediana_reg: Optional[float] = None
+    pct_acima_limiar: Optional[float] = None  # % de CNPJs com risco_reg >= atencao
+
+
+class IndicadorCnpjRowSchema(BaseModel):
+    """Uma linha na tabela ranqueada de CNPJs por indicador."""
+    cnpj: str
+    razao_social: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+    id_ibge7: Optional[int] = None
+    valor: Optional[float] = None
+    med_reg: Optional[float] = None
+    risco_reg: Optional[float] = None
+    status: str = "SEM DADOS"          # "CRÍTICO" | "ATENÇÃO" | "NORMAL" | "SEM DADOS"
+    is_grande_rede: Optional[bool] = False
+    situacao_rf: Optional[str] = None
+    is_conexao_ativa: Optional[bool] = False
+    score_risco_final: Optional[float] = None
+
+
+class IndicadorMunicipioRowSchema(BaseModel):
+    """Agregação municipal para o mapa coroplético de um indicador."""
+    municipio: str
+    uf: Optional[str] = None
+    id_ibge7: Optional[int] = None
+    total_cnpjs: int = 0
+    total_critico: int = 0
+    pct_critico: float = 0.0           # campo usado para colorir o mapa
+
+
+class IndicadorAnaliseResponse(BaseModel):
+    """Payload completo da análise cruzada de um indicador."""
+    indicador: str
+    kpis: IndicadorKpiSummarySchema
+    municipios: List[IndicadorMunicipioRowSchema]
+    cnpjs: List[IndicadorCnpjRowSchema]
+

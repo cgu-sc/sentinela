@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
+  analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,
 };

@@ -7,7 +7,7 @@ from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse,
-    DadosFarmaciaSchema, MovimentacaoResponse
+    DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -111,6 +111,29 @@ def get_regional(
 def get_prescritores(cnpj: str):
     """Retorna os dados detalhados e KPIs de prescritores (CRMs) atuantes no CNPJ."""
     return AnalyticsService.get_prescritores_data(cnpj)
+
+@router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
+def get_indicadores_analise(
+    indicador: str = Query(..., description="Chave do indicador (ex: 'auditado', 'teto', 'vendas_rapidas')"),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
+):
+    """
+    Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
+    Filtros de período/percentual não se aplicam — opera sobre snapshot da matriz_risco.
+    """
+    return AnalyticsService.get_indicadores_analise(
+        indicador, uf, regiao_saude, municipio,
+        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf
+    )
+
 
 @router.get("/cnpj/{cnpj}/movimentacao", response_model=MovimentacaoResponse)
 def get_movimentacao(

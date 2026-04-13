@@ -31,7 +31,11 @@ const route = useRoute();
 const ufOptions = computed(() => geoStore.ufs);
 const regiaoSaudeOptions = computed(() => geoStore.regioesPorUF(filterStore.selectedUF));
 const unidadePfOptions = computed(() =>
-  geoStore.jurisdicoesPorFiltro(filterStore.selectedUF, filterStore.selectedRegiaoSaude),
+  geoStore.jurisdicoesPorFiltro(
+    filterStore.selectedUF,
+    filterStore.selectedRegiaoSaude,
+    filterStore.selectedMunicipio,
+  ),
 );
 const municipioOptions = computed(() =>
   geoStore.municipiosPorFiltro(
@@ -49,7 +53,9 @@ watch(
     if (!regioesDisponiveis.includes(filterStore.selectedRegiaoSaude)) {
       filterStore.selectedRegiaoSaude = 'Todos';
     }
-    const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(newUF, 'Todos');
+    const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
+      newUF, filterStore.selectedRegiaoSaude, filterStore.selectedMunicipio,
+    );
     if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
       filterStore.selectedUnidadePf = 'Todos';
     }
@@ -65,11 +71,29 @@ watch(
 watch(
   () => filterStore.selectedRegiaoSaude,
   (newRegiao) => {
+    const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
+      filterStore.selectedUF, newRegiao, filterStore.selectedMunicipio,
+    );
+    if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
+      filterStore.selectedUnidadePf = 'Todos';
+    }
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
       filterStore.selectedUF, newRegiao, filterStore.selectedUnidadePf,
     );
     if (!municipiosDisponiveis.some((m) => m.value === filterStore.selectedMunicipio)) {
       filterStore.selectedMunicipio = 'Todos';
+    }
+  },
+);
+
+watch(
+  () => filterStore.selectedMunicipio,
+  (newMun) => {
+    const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
+      filterStore.selectedUF, filterStore.selectedRegiaoSaude, newMun,
+    );
+    if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
+      filterStore.selectedUnidadePf = 'Todos';
     }
   },
 );

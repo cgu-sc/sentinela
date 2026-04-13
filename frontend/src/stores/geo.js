@@ -89,12 +89,17 @@ export const useGeoStore = defineStore('geo', () => {
     return ['Todos', ...Array.from(set).sort()];
   }
 
-  // Unidades da PF filtradas por UF e/ou Região de Saúde
-  function jurisdicoesPorFiltro(uf, regiao) {
+  // Unidades da PF filtradas por UF, Região de Saúde e/ou Município
+  function jurisdicoesPorFiltro(uf, regiao, municipioValue) {
     let filtradas = localidades.value;
     if (uf && uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
     if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
     
+    if (municipioValue && municipioValue !== 'Todos') {
+      const [nome, munUf] = municipioValue.split('|');
+      filtradas = filtradas.filter(l => l.no_municipio === nome && l.sg_uf === munUf);
+    }
+
     // Filtra nulos e vazios
     const set = new Set(filtradas.map(l => l.unidade_pf).filter(Boolean));
     return ['Todos', ...Array.from(set).sort()];

@@ -125,7 +125,6 @@ export const useFilterStore = defineStore('filters', () => {
       if (found) {
         if (selectedUF.value !== found.sg_uf) selectedUF.value = found.sg_uf;
         if (selectedRegiaoSaude.value !== found.no_regiao_saude) selectedRegiaoSaude.value = found.no_regiao_saude;
-        if (selectedUnidadePf.value !== found.unidade_pf) selectedUnidadePf.value = found.unidade_pf;
       }
     }
   });

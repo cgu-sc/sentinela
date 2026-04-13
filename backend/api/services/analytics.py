@@ -46,42 +46,100 @@ from ..schemas.analytics import (
 
 # ── Mapeamento de indicadores: chave → (col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br) ──
 INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
-    'auditado':              ('pct_auditado',              'med_auditado_reg',             'med_auditado_uf',             'med_auditado_br',             'risco_auditado_reg',             'risco_auditado_uf',             'risco_auditado_br'),
-    'falecidos':             ('pct_falecidos',             'med_falecidos_reg',            'med_falecidos_uf',            'med_falecidos_br',            'risco_falecidos_reg',            'risco_falecidos_uf',            'risco_falecidos_br'),
-    'clinico':               ('pct_clinico',               'med_clinico_reg',              'med_clinico_uf',              'med_clinico_br',              'risco_clinico_reg',              'risco_clinico_uf',              'risco_clinico_br'),
+    'percentual_nao_comprovacao': ('pct_auditado',              'med_auditado_reg',             'med_auditado_uf',             'med_auditado_br',             'risco_auditado_reg',             'risco_auditado_uf',             'risco_auditado_br'),
+    'falecidos':                   ('pct_falecidos',             'med_falecidos_reg',            'med_falecidos_uf',            'med_falecidos_br',            'risco_falecidos_reg',            'risco_falecidos_uf',            'risco_falecidos_br'),
+    'incompatibilidade_patologica':('pct_clinico',               'med_clinico_reg',              'med_clinico_uf',              'med_clinico_br',              'risco_clinico_reg',              'risco_clinico_uf',              'risco_clinico_br'),
     'teto':                  ('pct_teto',                  'med_teto_reg',                 'med_teto_uf',                 'med_teto_br',                 'risco_teto_reg',                 'risco_teto_uf',                 'risco_teto_br'),
     'polimedicamento':       ('pct_polimedicamento',       'med_polimedicamento_reg',      'med_polimedicamento_uf',      'med_polimedicamento_br',      'risco_polimedicamento_reg',      'risco_polimedicamento_uf',      'risco_polimedicamento_br'),
     'media_itens':           ('val_media_itens',           'med_media_itens_reg',          'med_media_itens_uf',          'med_media_itens_br',          'risco_media_itens_reg',          'risco_media_itens_uf',          'risco_media_itens_br'),
-    'ticket':                ('val_ticket_medio',          'med_ticket_reg',               'med_ticket_uf',               'med_ticket_br',               'risco_ticket_reg',               'risco_ticket_uf',               'risco_ticket_br'),
+    'ticket_medio':               ('val_ticket_medio',          'med_ticket_reg',               'med_ticket_uf',               'med_ticket_br',               'risco_ticket_reg',               'risco_ticket_uf',               'risco_ticket_br'),
     'receita_paciente':      ('val_receita_paciente',      'med_receita_paciente_reg',     'med_receita_paciente_uf',     'med_receita_paciente_br',     'risco_receita_paciente_reg',     'risco_receita_paciente_uf',     'risco_receita_paciente_br'),
     'per_capita':            ('val_per_capita',            'med_per_capita_reg',           'med_per_capita_uf',           'med_per_capita_br',           'risco_per_capita_reg',           'risco_per_capita_uf',           'risco_per_capita_br'),
     'alto_custo':            ('pct_alto_custo',            'med_alto_custo_reg',           'med_alto_custo_uf',           'med_alto_custo_br',           'risco_alto_custo_reg',           'risco_alto_custo_uf',           'risco_alto_custo_br'),
     'vendas_rapidas':        ('pct_vendas_rapidas',        'med_vendas_rapidas_reg',       'med_vendas_rapidas_uf',       'med_vendas_rapidas_br',       'risco_vendas_rapidas_reg',       'risco_vendas_rapidas_uf',       'risco_vendas_rapidas_br'),
     'volume_atipico':        ('val_volume_atipico',        'med_volume_atipico_reg',       'med_volume_atipico_uf',       'med_volume_atipico_br',       'risco_volume_atipico_reg',       'risco_volume_atipico_uf',       'risco_volume_atipico_br'),
     'recorrencia_sistemica': ('pct_recorrencia_sistemica', 'med_recorrencia_sistemica_reg','med_recorrencia_sistemica_uf','med_recorrencia_sistemica_br','risco_recorrencia_sistemica_reg','risco_recorrencia_sistemica_uf','risco_recorrencia_sistemica_br'),
-    'pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
-    'geografico':            ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
+    'dias_pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
+    'dispersao_geografica':       ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
     'pacientes_unicos':      ('pct_pacientes_unicos',      'med_pacientes_unicos_reg',     'med_pacientes_unicos_uf',     'med_pacientes_unicos_br',     'risco_pacientes_unicos_reg',     'risco_pacientes_unicos_uf',     'risco_pacientes_unicos_br'),
     'hhi_crm':               ('val_hhi_crm',               'avg_hhi_crm_reg',              'avg_hhi_crm_uf',              'avg_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
     'exclusividade_crm':     ('pct_exclusividade_crm',     'med_exclusividade_crm_reg',    'med_exclusividade_crm_uf',    'med_exclusividade_crm_br',    'risco_exclusividade_crm_reg',    'risco_exclusividade_crm_uf',    'risco_exclusividade_crm_br'),
     'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
 }
 
+# Caminho para persistência de configurações customizadas
+CONFIG_FILE = "data/thresholds_config.json"
+
 # Limiares de risco por indicador (ratio = valor_farmacia / mediana_regional).
-# Espelha frontend/src/config/riskConfig.js → INDICATOR_THRESHOLDS.
+# Cada indicador possui sua própria entrada. Espelha riskConfig.js → INDICATOR_THRESHOLDS.
 _INDICATOR_THRESHOLDS: dict[str, tuple[float, float]] = {
-    'default':               (2.0, 3.0),
-    'teto':                  (1.2, 1.3),
-    'alto_custo':            (1.4, 1.7),
-    'pico':                  (1.4, 1.7),
-    'pacientes_unicos':      (1.4, 1.7),
-    'recorrencia_sistemica': (1.4, 1.7),
-}
-_INDICATOR_THRESHOLD_KEY: dict[str, str] = {
-    k: k for k in ('teto', 'alto_custo', 'pico', 'pacientes_unicos', 'recorrencia_sistemica')
+    # 1. Auditoria Financeira
+    'percentual_nao_comprovacao':   (2.0, 4.0),
+    # 2. Elegibilidade & Clínica
+    'falecidos':                    (2.0, 3.0),
+    'incompatibilidade_patologica': (2.0, 3.0),
+    # 3. Padrões de Quantidade
+    'teto':                   (1.2, 1.39),
+    'polimedicamento':        (2.0, 3.0),
+    'media_itens':            (1.3, 1.5),
+    # 4. Padrões Financeiros
+    'ticket_medio':                (2.0, 3.0),
+    'receita_paciente':       (2.0, 3.0),
+    'per_capita':             (2.0, 3.0),
+    'alto_custo':             (1.4, 1.7),
+    # 5. Automação & Geografia
+    'vendas_rapidas':         (2.0, 3.0),
+    'volume_atipico':         (2.0, 3.0),
+    'recorrencia_sistemica':  (1.4, 1.7),
+    'dias_pico':                   (1.4, 1.7),
+    'dispersao_geografica':        (2.0, 3.0),
+    'pacientes_unicos':       (1.4, 1.7),
+    # 6. Integridade Médica
+    'hhi_crm':                (2.0, 3.0),
+    'exclusividade_crm':      (2.0, 3.0),
+    'crms_irregulares':       (2.0, 3.0),
 }
 
+# Tenta carregar configurações customizadas do disco
+if os.path.exists(CONFIG_FILE):
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            custom = json.load(f)
+            # Converte as listas do JSON de volta para tuplas de floats
+            for k, v in custom.items():
+                if isinstance(v, list) and len(v) == 2:
+                    _INDICATOR_THRESHOLDS[k] = (float(v[0]), float(v[1]))
+        print(f"✅ Configurações de limiares carregadas do disco: {CONFIG_FILE}")
+    except Exception as e:
+        print(f"⚠️ Erro ao carregar {CONFIG_FILE}: {e}")
+
 class AnalyticsService:
+    @staticmethod
+    def get_config_thresholds():
+        """Retorna o dicionário mestre de limiares (Source of Truth)."""
+        return _INDICATOR_THRESHOLDS
+
+    @staticmethod
+    def save_config_thresholds(edited_data: dict):
+        """Salva novos limiares na memória e no disco."""
+        global _INDICATOR_THRESHOLDS
+        
+        # 1. Atualiza memória
+        for k, v in edited_data.items():
+            if isinstance(v, dict) and 'atencao' in v and 'critico' in v:
+                _INDICATOR_THRESHOLDS[k] = (float(v['atencao']), float(v['critico']))
+        
+        # 2. Persiste no disco
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                # Salva como lista simples para ser compatível com JSON
+                json.dump(_INDICATOR_THRESHOLDS, f, indent=4)
+            return True
+        except Exception as e:
+            print(f"❌ Erro ao salvar configurações no disco: {e}")
+            return False
+
     @staticmethod
     def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None) -> AnalyticsResponse:
         """
@@ -507,8 +565,7 @@ class AnalyticsService:
 
         try:
             c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
-            t_key = _INDICATOR_THRESHOLD_KEY.get(indicador, 'default')
-            atencao, critico = _INDICATOR_THRESHOLDS[t_key]
+            atencao, critico = _INDICATOR_THRESHOLDS[indicador]
 
             # ── 1. Snapshot geográfico por CNPJ (última ocorrência de cada campo cadastral) ──
             df_mov = get_df()
@@ -692,7 +749,6 @@ class AnalyticsService:
                 context_mask = context_mask & (pl.col("no_regiao_saude") == ref_regiao)
 
             # Buscamos a mediana e MAD do indicador para o contexto regional completo
-            # (risco_reg representa o valor em múltiplos da mediana, o que é ideal para o Z-Score)
             mediana_reg = None
             mad_reg = None
             # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
@@ -701,14 +757,19 @@ class AnalyticsService:
                 pl.col("no_regiao_saude").last().alias("no_regiao_saude")
             ]).filter(context_mask)
             
-            df_context = df_context_geo.join(df_risco.select(["cnpj", c_rr]), on="cnpj", how="inner")
+            df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, c_rr]), on="cnpj", how="inner")
             
             if not df_context.is_empty():
+                s_valores = df_context.select(c_val).drop_nulls().to_series().sort()
                 s_riscos = df_context.select(c_rr).drop_nulls().to_series().sort()
+                
+                if not s_valores.is_empty():
+                    mediana_reg = float(s_valores.median() or 0)
+                
                 if not s_riscos.is_empty():
-                    mediana_reg = float(s_riscos.median() or 0)
-                    # MAD = Mediana(|x - Mediana|)
-                    mad_reg = float((s_riscos - mediana_reg).abs().median() or 0.0001)
+                    # Para o MAD/Z-Score, usamos os scores (ratios) onde a mediana teórica é 1.0
+                    m_r = float(s_riscos.median() or 1.0)
+                    mad_reg = float((s_riscos - m_r).abs().median() or 0.0001)
 
             kpis = IndicadorKpiSummarySchema(
                 total_critico=counts.get("CRÍTICO", 0),

@@ -133,11 +133,6 @@ watch(
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
       }
-
-      // ── NOVO: Eager load da distribuição da UF para os gráficos de contexto ──
-      if (cnpjData.value?.uf) {
-        cnpjDetailStore.fetchUfDistribution(cnpjData.value.uf);
-      }
     }
   },
   { immediate: true },

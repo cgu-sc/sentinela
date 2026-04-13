@@ -3,6 +3,7 @@ import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useResultadoStore } from '@/stores/resultados';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
+import { useConfigStore } from '@/stores/config';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
@@ -11,6 +12,7 @@ import { TIMING } from '@/config/constants';
 const resultadoStore = useResultadoStore();
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
+const configStore = useConfigStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
 const syncProgress = ref(0);
@@ -92,6 +94,7 @@ const initializeApp = async () => {
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
+      configStore.fetchThresholds(),
     ];
 
     // Se houver filtros geográficos ativos, o fetchDashboardSummary NÃO popula

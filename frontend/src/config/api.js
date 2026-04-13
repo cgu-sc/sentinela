@@ -15,7 +15,8 @@ export const API_ENDPOINTS = {
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsScorePercentiles: `${BASE_URL}/api/v1/analytics/score-percentiles`,
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
-  analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
+   analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
+  analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,
 };

@@ -102,10 +102,10 @@ const riskRankBadge = computed(() => {
                   :regiao-nome="geoData.no_regiao_saude"
                 />
                 <!-- AJUDA CONTEXTUAL CARD 1 -->
-                <div class="diagnosis-card-help">
+                    <div class="diagnosis-card-help">
                    <i class="pi pi-info-circle" />
                    <div class="help-text">
-                      <b>Contexto Regional:</b> Confronta o score deste CNPJ com os CNPJs da mesma região de saúde. Permite detectar se o estabelecimento é um "ponto fora da curva".
+                      <b>Contexto Regional:</b> Confronta o score deste CNPJ com os CNPJs da mesma região de saúde. Permite detectar se o estabelecimento é um "ponto fora da curva". Quanto mais ao topo e à direita do gráfico, pior e mais anômalo é o cenário avaliado.
                    </div>
                 </div>
              </template>
@@ -154,7 +154,7 @@ const riskRankBadge = computed(() => {
             <div class="diagnosis-card-help">
                <i class="pi pi-chart-line" />
                <div class="help-text">
-                  <b>Diagnóstico Comparativo de Estabelecimentos:</b> Mapeia onde este alvo se encontra frente ao universo de estabelecimentos analisados. O deslocamento para a direita indica que este CNPJ possui um score superior à grande maioria dos estabelecimentos comparados.
+                  <b>Comparativo:</b> Mapeia onde este CNPJ se encontra frente ao universo de estabelecimentos analisados. O deslocamento para a direita indica que este CNPJ possui um score superior à grande maioria dos estabelecimentos.
                </div>
             </div>
           </div>
@@ -282,11 +282,12 @@ const riskRankBadge = computed(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  padding: 0.85rem 1.25rem;
+  padding: 0.85rem 1rem;
   background: color-mix(in srgb, var(--primary-color) 4%, transparent);
   border-left: 4px solid var(--primary-color);
-  margin-top: auto; /* Garante que fique no rodapé do card */
-  border-top: 1px solid var(--card-border);
+  border-radius: 6px;
+  margin: 1.5rem 1.25rem 1.25rem 1.25rem; /* Descola o texto das bordas e do gráfico */
+  margin-top: auto; /* Garante que fique no rodapé da coluna */
 }
 
 .diagnosis-card-help i {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue';
 import { useChartTheme } from '@/config/chartTheme';
-import { INDICATOR_THRESHOLDS } from '@/config/riskConfig';
+import { useConfigStore } from '@/stores/config';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -34,24 +34,29 @@ use([
 const props = defineProps({
   /** Array de CNPJs { cnpj, risco_reg, status, ... } */
   cnpjs: { type: Array, default: () => [] },
-  /** Chave do indicador de threshold (default, teto, etc.) */
-  thresholdKey: { type: String, default: 'default' },
+  /** Chave do indicador de threshold (ex: 'percentual_nao_comprovacao', 'teto', etc.) */
+  thresholdKey: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
   /** Benchmarking Regional (MAD e Mediana vindos do contexto superior) */
   regionalMedian: { type: Number, default: null },
   regionalMad: { type: Number, default: null },
+  /** Limiares customizados para previsualização (vão ignorar o store) */
+  customThresholds: { type: Object, default: null }
 });
 
 const { chartTheme, chartUFAccents } = useChartTheme();
+const configStore = useConfigStore();
 
-// Limiares ativos (baseado na config global)
+// Limiares ativos — prioriza customThresholds (previsualização) > store > null
 const thresholds = computed(() => {
-  return INDICATOR_THRESHOLDS[props.thresholdKey] || INDICATOR_THRESHOLDS.default;
+  if (props.customThresholds) return props.customThresholds;
+  if (!props.thresholdKey) return null;
+  return configStore.thresholds[props.thresholdKey] ?? null;
 });
 
 // Processamento dos dados para a Curva Acumulada (CDF)
 const distributionData = computed(() => {
-  if (!props.cnpjs.length) return { axis: [], values: [] };
+  if (!props.cnpjs.length || !thresholds.value) return { axis: [], values: [] };
 
   const risks = props.cnpjs
     .map(c => c.risco_reg)
@@ -158,16 +163,16 @@ const chartOption = computed(() => {
         return `
           <div style="padding: 4px; min-width: 140px; color: ${c.tooltipText}">
             <div style="opacity: 0.7; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Limiar Geográfico:</div>
-            <div style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">${p.name}</div>
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">${p.name}</div>
             
             <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 2px;">
               <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">Cobertura:</span>
-              <span style="font-weight: 700;">${p.value}%</span>
+              <span style="font-weight: 600;">${p.value}%</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; gap: 15px;">
               <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">Alvos:</span>
-              <span style="font-weight: 800; color: ${RISK_COLORS.critical}">${rem}</span>
+              <span style="font-weight: 600; color: ${RISK_COLORS.critical}">${rem}</span>
             </div>
           </div>
         `;
@@ -224,7 +229,7 @@ const chartOption = computed(() => {
             show: true,
             position: 'end',
             fontSize: 10,
-            fontWeight: 700,
+            fontWeight: 600,
             backgroundColor: c.tooltipBg,
             padding: [4, 8],
             borderRadius: 4,
@@ -266,7 +271,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="ind-dist-card" :class="{ 'is-loading': isLoading }">
+  <div v-if="thresholds" class="ind-dist-card" :class="{ 'is-loading': isLoading }">
     <div class="dist-header">
       <div class="dist-title-wrap">
         <i class="pi pi-chart-line dist-icon" />
@@ -316,20 +321,8 @@ const chartOption = computed(() => {
     </div>
 
     <div class="dist-footer">
-      <div class="footer-grid">
-        <div class="info-alert info" :class="{ 'is-regional': distributionData.isRegional }">
-          <i :class="distributionData.isRegional ? 'pi pi-compass' : 'pi pi-info-circle'" />
-          <span v-if="distributionData.isRegional">
-            <strong>Benchmarking Regional Ativo</strong>. Calibragem baseada na <strong>Região de Saúde</strong>. 
-            Amostra municipal integrada ao contexto regional para maior precisão.
-          </span>
-          <span v-else>
-            Esta análise utiliza a <strong>Mediana Local</strong> como base. 
-            O valor de 1.0x representa o comportamento padrão da seleção atual. 
-          </span>
-        </div>
-
-        <div v-if="distributionData.suggestion" class="info-alert suggestion">
+      <div v-if="distributionData.suggestion" class="footer-full-width">
+        <div class="info-alert suggestion">
           <i class="pi pi-sparkles" />
           <span>
             <strong>Sugestão Matemática: {{ distributionData.suggestion }}x</strong>. 
@@ -438,7 +431,7 @@ const chartOption = computed(() => {
 
 .impact-value {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   margin-top: 0.2rem;
 }
@@ -508,39 +501,43 @@ const chartOption = computed(() => {
 
 .footer-grid {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
 
 .info-alert {
   display: flex;
-  gap: 0.6rem;
-  padding: 0.65rem 0.85rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  color: var(--text-color);
-  line-height: 1.4;
-}
-
-.info-alert.info.is-regional {
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
-  opacity: 1;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  font-size: 0.68rem; /* Igual ao IndInfoBox selecionado pelo usuário */
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .info-alert.suggestion {
-  background: color-mix(in srgb, var(--risk-indicator-warning) 8%, var(--card-bg));
-  border: 1px dashed color-mix(in srgb, var(--risk-indicator-warning) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-warning) 7%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--risk-indicator-warning) 20%, transparent);
 }
 
 .info-alert.info i { color: var(--primary-color); }
 .info-alert.suggestion i { color: var(--risk-indicator-warning); }
 
 .info-alert i {
+  font-size: 0.9rem;
   margin-top: 2px;
 }
 
 .info-alert strong {
+  display: block;
   font-weight: 600;
+  margin-bottom: 2px;
+  color: var(--primary-color); /* Título em destaque colorido */
+}
+
+.info-alert.suggestion strong {
+  color: var(--risk-indicator-warning);
 }
 </style>

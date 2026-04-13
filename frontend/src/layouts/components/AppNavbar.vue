@@ -138,6 +138,15 @@ watch(navCnpjInput, (val) => {
         />
       </div>
       <ThemeSelector />
+      <Button
+        icon="pi pi-cog"
+        text
+        rounded
+        severity="secondary"
+        v-tooltip.bottom="'Configurações do Sistema'"
+        @click="router.push('/configuracoes')"
+        :class="{ 'active-nav-btn': $route.path === '/configuracoes' }"
+      />
       <div
         class="lists-nav-btn"
         @click="router.push('/listas')"

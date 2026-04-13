@@ -13,6 +13,19 @@ from ..services.analytics import AnalyticsService
 
 router = APIRouter()
 
+@router.get("/config/thresholds")
+def get_threshold_config():
+    """Retorna os limiares de risco configurados no backend (Source of Truth)."""
+    return AnalyticsService.get_config_thresholds()
+
+@router.post("/config/thresholds")
+def update_threshold_config(edited: dict):
+    """Atualiza e persiste os limiares de risco no servidor."""
+    success = AnalyticsService.save_config_thresholds(edited)
+    if not success:
+        raise HTTPException(status_code=500, detail="Erro ao salvar configurações no servidor.")
+    return {"status": "success", "message": "Configurações persistidas."}
+
 
 
 @router.get("/cnpj/{cnpj}/cadastro", response_model=DadosFarmaciaSchema)

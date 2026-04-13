@@ -11,24 +11,39 @@ import { CHART_SERIES, CHART_RISK_ACCENTS, CHART_UF_ACCENTS } from './colors.js'
 export function useChartTheme() {
   const themeStore = useThemeStore();
 
+  function hexToRgba(hex, alpha) {
+    if (!hex) return `rgba(255, 255, 255, ${alpha})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   /** Cores de interface do gráfico (texto, grid, tooltip, fundo). */
   const chartTheme = computed(() => {
     const tokens = themeStore.tokens;
     const currentThemeKey = ['carbon', 'azul_dark'].includes(themeStore.currentPalette) ? themeStore.currentPalette : 'azul';
+    
+    // Cores de fundo extraídas nativamente do tema
     const darkTooltipBg = SURFACE_COLORS[currentThemeKey].dark['card-bg'];
     const darkTooltipBorder = SURFACE_COLORS[currentThemeKey].dark['card-border'];
 
-    // Menos transparência no modo Light para evitar "lavagem" da cor escura contra fundo branco
-    const opacityHex = themeStore.isDark ? 'cc' : 'e6'; // 80% dark, 90% light
+    // Opacidade dinâmica conforme solicitado: 90% Light, 80% Dark
+    const alpha = themeStore.isDark ? 0.8 : 0.9;
+    const tooltipBg = themeStore.isDark ? hexToRgba(darkTooltipBg, alpha) : `rgba(255, 255, 255, ${alpha})`;
+    
+    const tooltipTextColor = themeStore.isDark ? '#ffffff' : tokens.textColor;
+    const tooltipBorderColor = themeStore.isDark ? darkTooltipBorder : tokens.borderColor;
 
     return {
       text:        tokens.textColor,
       muted:       tokens.mutedColor,
       grid:        themeStore.isDark ? '#ffffff0f' : '#0000000d',
       bg:          'transparent',
-      tooltip:     darkTooltipBg + opacityHex, // Opacidade inteligente acoplada ao hex
-      tooltipText: '#ffffff',
-      tooltipBorder: darkTooltipBorder,
+      tooltip:     tooltipBg,
+      tooltipSolid: themeStore.isDark ? darkTooltipBg : '#ffffff', 
+      tooltipText: tooltipTextColor,
+      tooltipBorder: tooltipBorderColor,
       border:      tokens.borderColor,
       axisShadow:  themeStore.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
     };

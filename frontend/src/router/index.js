@@ -24,6 +24,7 @@ const routes = [
       { path: 'indicadores', component: () => import('@/views/IndicatorsView.vue') },
       { path: 'regional', component: () => import('@/views/RegionalView.vue') },
       { path: 'listas', name: 'FarmaciaLists', component: () => import('@/views/lists/WatchlistView.vue') },
+      { path: 'configuracoes', name: 'Settings', component: () => import('@/views/SettingsView.vue'), meta: { hideSidebar: true } },
     ]
   }
 ]

@@ -2,12 +2,13 @@
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-
+import { useConfigStore } from '@/stores/config';
 import { useFormatting } from '@/composables/useFormatting';
-import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS } from '@/config/riskConfig';
+import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 const { formatCurrencyFull } = useFormatting();
 const cnpjDetailStore = useCnpjDetailStore();
+const configStore = useConfigStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
 // Inicializa o filtro a partir do localStorage (persistência)
 const showOnlyHighRisk = ref(localStorage.getItem('sentinela_indicators_filter_only_risky') === 'true');
@@ -19,13 +20,13 @@ watch(showOnlyHighRisk, (newVal) => {
 
 
 // ── Helpers de indicadores ────────────────────────────────
-function getIndicadorStatus(riscoUf, thresholdKey = 'default') {
-  const t = INDICATOR_THRESHOLDS[thresholdKey] ?? INDICATOR_THRESHOLDS.default;
+function getIndicadorStatus(riscoUf, thresholdKey) {
+  const t = configStore.thresholds[thresholdKey];
   const r = riscoUf != null ? Math.round(riscoUf * 10) / 10 : null;
-  if (r == null)     return { label: 'SEM DADOS', color: 'var(--text-muted)',  severity: 'secondary' };
-  if (r >= t.critico) return { label: 'CRÍTICO',  color: 'var(--risk-indicator-critical)', severity: 'danger'    };
-  if (r >= t.atencao) return { label: 'ATENÇÃO',  color: 'var(--risk-indicator-warning)',  severity: 'warning'   };
-  return              { label: 'NORMAL',   color: 'var(--risk-indicator-normal)',   severity: 'success'   };
+  if (r == null || !t) return { label: 'SEM DADOS', color: 'var(--text-muted)',  severity: 'secondary' };
+  if (r >= t.critico)  return { label: 'CRÍTICO',  color: 'var(--risk-indicator-critical)', severity: 'danger'    };
+  if (r >= t.atencao)  return { label: 'ATENÇÃO',  color: 'var(--risk-indicator-warning)',  severity: 'warning'   };
+  return               { label: 'NORMAL',   color: 'var(--risk-indicator-normal)',   severity: 'success'   };
 }
 
 function formatIndicadorValue(valor, formato) {
@@ -44,7 +45,8 @@ const pontosCriticos = computed(() => {
     for (const ind of grupo.indicators) {
       const d = indicadoresData.value.indicadores[ind.key];
       if (!d || d.valor == null) continue;
-      const t = INDICATOR_THRESHOLDS[ind.thresholdKey] ?? INDICATOR_THRESHOLDS.default;
+      const t = configStore.thresholds[ind.thresholdKey];
+      if (!t) continue;
       const riscoReg = d.risco_reg != null ? Math.round(d.risco_reg * 10) / 10 : null;
       const isCriticoReg = riscoReg != null && riscoReg >= t.critico;
 
@@ -61,8 +63,8 @@ const pontosCriticos = computed(() => {
     }
   }
   return result.sort((a, b) => {
-    if (a.key === 'auditado') return -1;
-    if (b.key === 'auditado') return 1;
+    if (a.key === 'percentual_nao_comprovacao') return -1;
+    if (b.key === 'percentual_nao_comprovacao') return 1;
     return (b.riscoReg ?? 0) - (a.riscoReg ?? 0);
   });
 });

@@ -113,24 +113,25 @@ const chartOption = computed(() => {
             show: true,
             position: 'end',
             formatter: () => `{title|ESTABELECIMENTO ATUAL}\n{score|Score: ${props.currentScore?.toFixed(2) || '—'}}`,
-            backgroundColor: '#0f172a', // Deep Navy Sóbrio
-            color: '#ffffff',
-            borderColor: '#3b82f6', // Acento sutil na cor da marca
+            backgroundColor: c.tooltip, // Retorno da transparência exata agora que não tem mais conflito de opacidade do Echarts
+            borderColor: c.tooltipBorder,
+            color: c.tooltipText,
             borderWidth: 1,
-            padding: [6, 12],
-            borderRadius: 4,
+            padding: [8, 12],
+            borderRadius: 6,
             align: 'center',
+            shadowBlur: 8,
+            shadowColor: 'rgba(0,0,0,0.15)',
             rich: {
-              title: { fontWeight: 700, fontSize: 10, color: '#ffffff', padding: [0, 0, 4, 0] },
-              score: { fontWeight: 800, fontSize: 11, color: '#3b82f6' }
+              title: { fontWeight: 500, fontSize: 11, color: c.tooltipText, padding: [0, 0, 4, 0] },
+              score: { fontWeight: 700, fontSize: 13, color: c.tooltipText }
             },
-            distance: 12
+            distance: 6
           },
           lineStyle: {
-            color: '#94a3b8', // Cinza aço sóbrio
+            color: 'rgba(148, 163, 184, 0.6)', // Cor rgba em vez de opacidade global para não contaminar a Label
             type: 'dashed',
-            width: 1.5,
-            opacity: 0.6
+            width: 1.5
           },
           data: [{ xAxis: markerXIndex }]
         }

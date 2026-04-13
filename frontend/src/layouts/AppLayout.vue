@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
+import { useRoute } from "vue-router";
 import { useThemeStore } from "@/stores/theme";
 import { useFilterStore } from "@/stores/filters";
 import AppNavbar from "@/layouts/components/AppNavbar.vue";
@@ -7,17 +8,27 @@ import AppSidebar from "@/layouts/components/AppSidebar.vue";
 import CnpjDialog from "@/layouts/components/dialogs/CnpjDialog.vue";
 import SyncDialog from "@/layouts/components/dialogs/SyncDialog.vue";
 
+const route = useRoute();
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
 const activeModule = ref("consolidado");
+
+// Lógica Profissional: Esconde a sidebar se a rota atual pedir via meta: { hideSidebar: true }
+const isSidebarHidden = computed(() => !!route.meta?.hideSidebar);
 
 onMounted(() => themeStore.initTheme());
 </script>
 
 <template>
-  <div class="admin-layout" :class="{ collapsed: filterStore.sidebarCollapsed }">
+  <div 
+    class="admin-layout" 
+    :class="{ 
+      collapsed: filterStore.sidebarCollapsed,
+      'no-sidebar': isSidebarHidden 
+    }"
+  >
     <AppNavbar v-model="activeModule" />
-    <AppSidebar :active-module="activeModule" />
+    <AppSidebar v-if="!isSidebarHidden" :active-module="activeModule" />
 
     <main class="main-container">
       <CnpjDialog />
@@ -47,6 +58,14 @@ onMounted(() => themeStore.initTheme());
 
 .admin-layout.collapsed {
   --sidebar-width: 0px;
+}
+
+.admin-layout.no-sidebar {
+  --sidebar-width: 0px;
+}
+
+.admin-layout.no-sidebar .main-container {
+  margin-left: 0;
 }
 
 /* Oculta conteúdo da sidebar ao colapsar — usa :deep() para cruzar o componente */
@@ -225,6 +244,7 @@ onMounted(() => themeStore.initTheme());
 :global(.dark-mode) .p-yearpicker .p-yearpicker-year.p-highlight {
   background: var(--primary-color) !important;
   color: var(--color-on-primary) !important;
+  border-color: var(--primary-color) !important;
 }
 
 :global(.p-dropdown-item)       { font-size: 0.75rem !important; padding: 0.5rem 0.75rem !important; white-space: normal !important; word-break: break-word !important; }

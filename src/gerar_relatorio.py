@@ -892,17 +892,57 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
             # Centraliza a lógica de limiares para evitar divergência entre checklist e tabela
             def get_limiares_indicador(nome):
-                # Limiares Padrão
-                at_lim, cr_lim = (2.0, 3.0)
-                
-                # Exceção para o Teto Máximo
-                if nome == "Dispensação em Teto Máximo":
-                    at_lim, cr_lim = (1.2, 1.3)
-                # Exceções para indicadores concentrados (Alto Custo, Pico, etc)
-                elif nome in ["Medicamentos de Alto Custo", "Concentração em Dias de Pico", "Pacientes Únicos", "Recorrência Sistêmica"]:
-                    at_lim, cr_lim = (1.4, 1.7)
-                
-                return at_lim, cr_lim
+                """
+                Limiares de classificação de risco por indicador (ratio = valor / mediana).
+                Um registro por indicador — sem fallback implícito.
+                DEVE estar sincronizado com: riskConfig.js → INDICATOR_THRESHOLDS
+                                         e: analytics.py  → _INDICATOR_THRESHOLDS
+                """
+            def get_limiares_indicador(nome):
+                """
+                Busca os limiares dinamicamente do AnalyticsService (Single Source of Truth).
+                Mapeia os nomes amigáveis do relatório para as chaves do dicionário mestre.
+                """
+                # Tenta importar os limiares do backend. Se falhar (ex: rodando isolado), usa fallback.
+                try:
+                    import sys
+                    import os
+                    # Adiciona a raiz do projeto ao path para achar o backend
+                    projeto_raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    backend_path = os.path.join(projeto_raiz, 'backend')
+                    if backend_path not in sys.path:
+                        sys.path.append(backend_path)
+                    
+                    from api.services.analytics import _INDICATOR_THRESHOLDS
+                except Exception:
+                    # Fallback de segurança caso o ambiente python não consiga importar o backend
+                    return (2.0, 3.0)
+
+                # Mapeamento de Nome do Relatório -> Chave Técnica do Backend
+                _MAPA_CHAVES = {
+                    "Percentual de Não Comprovação":        "percentual_nao_comprovacao",
+                    "Vendas p/ Falecidos":                  "falecidos",
+                    "Incompatibilidade Patológica":         "incompatibilidade_patologica",
+                    "Dispensação em Teto Máximo":           "teto",
+                    "4+ Itens por Autorização":             "polimedicamento",
+                    "Itens por Autorização":                "media_itens",
+                    "Valor do Ticket Médio":                "ticket_medio",
+                    "Faturamento Médio Mensal por Cliente": "receita_paciente",
+                    "Venda Per Capita Mensal Municipal":    "per_capita",
+                    "Medicamentos de Alto Custo":           "alto_custo",
+                    "Vendas Rápidas (<60s)":                "vendas_rapidas",
+                    "Volume Atípico":                       "volume_atipico",
+                    "Recorrência Sistêmica":                "recorrencia_sistemica",
+                    "Concentração em Dias de Pico":         "dias_pico",
+                    "Dispersão Geográfica Interestadual":   "dispersao_geografica",
+                    "Pacientes Únicos":                     "pacientes_unicos",
+                    "Concentração de CRMs (HHI)":           "hhi_crm",
+                    "Exclusividade de CRMs":                "exclusividade_crm",
+                    "Irregularidade de CRMs":               "crms_irregulares",
+                }
+
+                chave = _MAPA_CHAVES.get(nome)
+                return _INDICATOR_THRESHOLDS.get(chave, (2.0, 3.0))
             
             # --- DEFINIÇÃO ÚNICA DOS GRUPOS DE INDICADORES ---
             # Formato: (Nome amigável, col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br, tipo_fmt)

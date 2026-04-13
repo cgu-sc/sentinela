@@ -141,6 +141,18 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
         </template>
       </Column>
 
+      <!-- Risco Região (MOVIDO PARA CÁ) -->
+      <Column field="risco_reg" header="Risco Reg." sortable style="width:9%; text-align:center">
+        <template #body="{ data }">
+          <Tag
+            v-if="data.risco_reg != null"
+            :value="data.risco_reg.toFixed(1) + 'x'"
+            :class="statusClass(data.status)"
+          />
+          <span v-else class="muted">—</span>
+        </template>
+      </Column>
+
       <!-- % Não Comprovação -->
       <Column field="perc_val_sem_comp" header="% Não Comp." sortable style="width:9%; text-align:right">
         <template #body="{ data }">
@@ -156,18 +168,6 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
           <span class="val-cell" :class="{ muted: data.val_sem_comp == null }">
             {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
           </span>
-        </template>
-      </Column>
-
-      <!-- Risco Região -->
-      <Column field="risco_reg" header="Risco Reg." sortable style="width:9%; text-align:center">
-        <template #body="{ data }">
-          <Tag
-            v-if="data.risco_reg != null"
-            :value="data.risco_reg.toFixed(1) + 'x'"
-            :class="statusClass(data.status)"
-          />
-          <span v-else class="muted">—</span>
         </template>
       </Column>
 

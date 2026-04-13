@@ -72,7 +72,14 @@ const mapData = computed(() => {
         },
       },
       unselected: { itemStyle: { areaColor: piece.color, opacity } },
-      emphasis: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 1.5, opacity: 1 } },
+      emphasis: {
+        itemStyle: {
+          areaColor: piece.color,
+          borderColor: piece.borderColor,
+          borderWidth: 1.5,
+          opacity: 1,
+        },
+      },
     };
   });
 });
@@ -139,7 +146,7 @@ const chartOption = computed(() => {
           itemStyle: {
             areaColor: hoverColor.value,
             borderColor: hoverBorder.value,
-            borderWidth: 1.5,
+            borderWidth: 2,
           },
         },
         select: { label: { show: true } },
@@ -156,7 +163,7 @@ const chartOption = computed(() => {
         },
         itemStyle: {
           borderColor: mapBorderColor.value,
-          borderWidth: 1,
+          borderWidth: 2,
           areaColor: mapAreaColor.value,
         },
         data: mapData.value,

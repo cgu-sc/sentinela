@@ -8,7 +8,7 @@
  * Diferente de MunicipalMap.vue, este componente é inteiramente prop-based
  * e não lê dados do analyticsStore.
  */
-import { computed, watch, ref, onMounted, nextTick } from 'vue';
+import { computed, watch, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useGeoStore } from '@/stores/geo';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
@@ -33,7 +33,7 @@ const props = defineProps({
   selectedIbge7: { type: Number, default: null },
 });
 
-const emit = defineEmits(['select-municipio']);
+const emit = defineEmits(['select-municipio', 'select-uf']);
 
 const geoStore = useGeoStore();
 const { chartTheme } = useChartTheme();
@@ -57,6 +57,12 @@ const isNational = computed(() => !props.activeUf || props.activeUf === 'Todos')
 const nationalMapReady = ref(false);
 const chartRef = ref(null);
 
+// ── Dimensões reais do container (ResizeObserver) ────────────────────────────
+const containerRef = ref(null);
+const containerWidth = ref(800);
+const containerHeight = ref(400);
+let _resizeObserver = null;
+
 onMounted(async () => {
   if (!window.__brasilUfRegistered) {
     const geo = await fetch('/geo/brasil-uf.json').then(r => r.json());
@@ -64,10 +70,27 @@ onMounted(async () => {
     window.__brasilUfRegistered = true;
   }
   nationalMapReady.value = true;
-  // Aguarda o DOM atualizar e força resize para que ECharts meça as dimensões corretas
+
+  // Observa mudanças no tamanho do container para recalcular o layoutSize
+  if (containerRef.value) {
+    _resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        containerWidth.value = entry.contentRect.width;
+        containerHeight.value = entry.contentRect.height;
+      }
+    });
+    _resizeObserver.observe(containerRef.value);
+    containerWidth.value = containerRef.value.clientWidth;
+    containerHeight.value = containerRef.value.clientHeight;
+  }
+
   await nextTick();
   chartRef.value?.chart?.resize();
   mapKey.value++;
+});
+
+onBeforeUnmount(() => {
+  _resizeObserver?.disconnect();
 });
 
 // ── GeoJSON municipal (para modo UF) ─────────────────────────────────────────
@@ -75,7 +98,10 @@ const mapKey = ref(0);
 watch(
   () => props.activeUf,
   (uf) => {
-    if (!uf || uf === 'Todos') return;
+    if (!uf || uf === 'Todos') {
+      mapKey.value++;
+      return;
+    }
     const geo = geoStore.getMunicipiosGeoByUF(uf);
     if (geo) {
       registerMap(`municipios-${uf}`, geo);
@@ -131,7 +157,7 @@ const echartsMapData = computed(() => {
         total_critico: d.total_critico,
         hasData: d.total_cnpjs > 0,
         itemStyle: { areaColor: d.total_cnpjs > 0 ? piece.color : mapAreaColor.value },
-        emphasis: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 1.5 } },
+        emphasis: { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2 } },
       };
     });
   }
@@ -171,12 +197,62 @@ const echartsMapData = computed(() => {
         itemStyle: {
           areaColor: hasData ? piece.color : baseColor,
           borderColor: hasData ? piece.borderColor : hoverBorder.value,
-          borderWidth: 1.5,
+          borderWidth: 2,
           opacity: 1,
         },
       },
     };
   });
+});
+
+// ── Bounding box geográfico do mapa ativo ─────────────────────────────────────
+// Calcula a proporção real (largura/altura em graus) do GeoJSON da UF ou do Brasil.
+// Isso permite calcular o layoutSize ideal: o maior possível sem deformar nem cortar.
+const geoAspectRatio = computed(() => {
+  if (isNational.value) {
+    // Brasil: proporção conhecida (aproximada pelos limites do território)
+    return 4500 / 3800; // ~leste-oeste vs norte-sul em km
+  }
+  const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
+  if (!geo || !geo.features.length) return 1.5;
+
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const feature of geo.features) {
+    const coords = feature.geometry?.coordinates;
+    if (!coords) continue;
+    // Percorre todos os anéis de coordenadas (Polygon e MultiPolygon)
+    const rings = feature.geometry.type === 'MultiPolygon'
+      ? coords.flat(1)
+      : coords;
+    for (const ring of rings) {
+      for (const [lon, lat] of ring) {
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+    }
+  }
+  const geoW = maxLon - minLon;
+  const geoH = maxLat - minLat;
+  return geoH > 0 ? geoW / geoH : 1.5;
+});
+
+// Calcula o layoutSize ideal:
+// O ECharts dimensiona o mapa com base no MENOR lado do container × layoutSize.
+// Se o mapa é mais largo que o container, ele está limitado pela largura → precisamos
+// compensar: layoutSize = (containerAspect / geoAspect) * 100%.
+const optimalLayoutSize = computed(() => {
+  const containerAspect = containerWidth.value / containerHeight.value;
+  const geoAspect = geoAspectRatio.value;
+  if (geoAspect > containerAspect) {
+    // Mapa mais largo que container → limitado pela largura
+    // Aumenta o layoutSize para compensar: usa a largura como fator dominante
+    const factor = containerAspect / geoAspect;
+    return `${Math.round((1 / factor) * 96)}%`;
+  }
+  // Mapa mais alto que container → limitado pela altura → layoutSize padrão
+  return '96%';
 });
 
 // ── Chart option ──────────────────────────────────────────────────────────────
@@ -209,17 +285,24 @@ const chartOption = computed(() => {
           </div>`;
       },
     },
+    visualMap: {
+      show: false,
+      pieces: activeScale.value,
+      seriesIndex: 0,
+    },
     series: [{
       type: 'map',
       map: mapName.value,
-      nameProperty: 'name',
+      nameProperty: isNational.value ? 'UF' : 'name',
       roam: true,
-      scaleLimit: { min: 0.8, max: 15 },
-      layoutSize: '95%',
+      scaleLimit: { min: 1, max: 15 },
+      layoutCenter: ['50%', '50%'],
+      layoutSize: optimalLayoutSize.value,
+      aspectScale: 1,
       selectedMode: false,
       label: { show: false },
       emphasis: { label: { show: false } },
-      itemStyle: { borderColor: mapBorderColor.value, borderWidth: 0.5, areaColor: mapAreaColor.value },
+      itemStyle: { borderColor: mapBorderColor.value, borderWidth: 2, areaColor: mapAreaColor.value },
       data: echartsMapData.value,
     }],
   };
@@ -231,8 +314,14 @@ watch(() => themeStore.isDark, () => mapKey.value++);
 function onMapClick(params) {
   if (!params?.data) return;
   const d = params.data;
-  // No modo UF clicamos em municípios; no modo nacional não há seleção de município
-  if (isNational.value) return;
+
+  // No modo nacional, clicamos na UF para fazer drill-down
+  if (isNational.value) {
+    emit('select-uf', d.name);
+    return;
+  }
+
+  // No modo UF, clicamos em municípios para filtrar a tabela abaixo
   const ibge7 = d.ibge7 ?? null;
   if (!ibge7) return;
   // Toggle: clicar no mesmo município desmarca
@@ -250,7 +339,7 @@ function onMapClick(params) {
     </div>
 
     <!-- v-show em vez de v-if: mantém o elemento no DOM para ECharts medir dimensões -->
-    <div v-show="!isNational || nationalMapReady" class="map-wrapper">
+    <div v-show="!isNational || nationalMapReady" ref="containerRef" class="map-wrapper">
       <VChart
         ref="chartRef"
         :key="mapKey"
@@ -320,7 +409,7 @@ function onMapClick(params) {
 }
 
 .map-wrapper {
-  height: 40vh;
+  height: 45vh;
 }
 
 .echart {
@@ -329,7 +418,7 @@ function onMapClick(params) {
 }
 
 .map-loading {
-  height: 40vh;
+  height: 45vh;
   display: flex;
   align-items: center;
   justify-content: center;

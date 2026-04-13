@@ -64,14 +64,14 @@ const mapData = computed(() => {
         itemStyle: {
           areaColor: piece.color,
           borderColor: piece.borderColor,
-          borderWidth: 2,
+          borderWidth: 2.5,
           shadowColor: piece.borderColor,
           shadowBlur: 14,
           opacity: 1,
         },
       },
       unselected: { itemStyle: { areaColor: piece.color, opacity } },
-      emphasis:   { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 1.5, opacity: 1 } },
+      emphasis:   { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, opacity: 1 } },
     };
   });
 });

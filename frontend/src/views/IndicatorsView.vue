@@ -42,6 +42,11 @@ function clearMunicipioFilter() {
   selectedMunicipioNome.value = null;
 }
 
+function onSelectUf(uf) {
+  clearMunicipioFilter();
+  filterStore.selectedUF = uf;
+}
+
 // CNPJs filtrados pelo município selecionado (se houver)
 const filteredCnpjs = computed(() => {
   if (!selectedMunicipioIbge7.value) return cnpjs.value;
@@ -110,6 +115,7 @@ onMounted(() => {
           :indicador-label="activeIndicadorMeta?.label ?? ''"
           :selected-ibge7="selectedMunicipioIbge7"
           @select-municipio="onSelectMunicipio"
+          @select-uf="onSelectUf"
         />
 
         <!-- Filtro de município ativo -->

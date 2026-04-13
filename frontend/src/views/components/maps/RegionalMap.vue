@@ -174,7 +174,7 @@ const mapData = computed(() => {
               itemStyle: {
                 areaColor: piece.color,
                 borderColor: piece.borderColor,
-                borderWidth: 2,
+                borderWidth: 2.5,
                 shadowColor: piece.borderColor,
                 shadowBlur: 14,
               },
@@ -184,7 +184,7 @@ const mapData = computed(() => {
           itemStyle: {
             areaColor: hasData ? piece.color : baseColor,
             borderColor: hasData ? piece.borderColor : hoverBorder.value,
-            borderWidth: 1.5,
+            borderWidth: 2,
             opacity: 1,
           },
         },
@@ -253,7 +253,7 @@ const chartOption = computed(() => {
           itemStyle: {
             areaColor: hoverColor.value,
             borderColor: hoverBorder.value,
-            borderWidth: 1.5,
+            borderWidth: 2,
           },
         },
         unselected: { label: { show: false } },
@@ -270,14 +270,14 @@ const chartOption = computed(() => {
             name: d.name,
             itemStyle: {
               borderColor: themeStore.tokens.primary,
-              borderWidth: 2,
+              borderWidth: 2.5,
               shadowColor: themeStore.tokens.primary,
               shadowBlur: 8,
             },
             emphasis: {
               itemStyle: {
                 borderColor: themeStore.tokens.primary,
-                borderWidth: 2,
+                borderWidth: 2.5,
                 shadowColor: themeStore.tokens.primary,
                 shadowBlur: 8,
               },

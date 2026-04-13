@@ -1280,27 +1280,9 @@ class AnalyticsService:
         import traceback
         from pathlib import Path
 
-        # ── Localização do cache ────────────────────────────────────────────
-        # analytics.py está em backend/api/services/ — precisa de 4 níveis
-        # para chegar na raiz do projeto onde fica sentinela_cache/
-        try:
-            if getattr(__import__('sys'), 'frozen', False):
-                BASE_DIR = os.path.dirname(__import__('sys').executable)
-            else:
-                # __file__ = .../sentinela/backend/api/services/analytics.py
-                # dirname x4  = .../sentinela/
-                BASE_DIR = os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(
-                            os.path.dirname(os.path.abspath(__file__))
-                        )
-                    )
-                )
-        except Exception:
-            BASE_DIR = os.getcwd()
-
-        CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
-        os.makedirs(CACHE_DIR, exist_ok=True)
+        from data_cache import get_cache_dir
+        
+        CACHE_DIR = get_cache_dir()
         CACHE_PATH = os.path.join(CACHE_DIR, f"{cnpj}.parquet")
 
         empty_summary = MovimentacaoSummarySchema()
@@ -1351,10 +1333,10 @@ class AnalyticsService:
         if os.path.exists(CACHE_PATH):
             try:
                 df_cached = pl.read_parquet(CACHE_PATH)
-                print(f"⚡ Movimentação carregada do cache Parquet: {cnpj}")
                 return _build_response_from_df(df_cached, from_cache=True)
             except Exception as e:
-                print(f"⚠️ Cache corrompido para {cnpj}, recalculando. Erro: {e}")
+                import traceback
+                print(f"⚠️ Erro ao ler Parquet '{cnpj}': {e}")
 
         # ── 1b. Se for apenas check_cache e não existia/corrompeu, retorna vazio
         if check_cache:
@@ -1362,6 +1344,7 @@ class AnalyticsService:
 
         # ── 2. Busca e processa a memória de cálculo do SQL Server ─────────
         try:
+            from sqlalchemy.exc import InterfaceError as SQLAInterfaceError
             with engine.connect() as conn:
                 # 2a. Busca dados comprimidos
                 result = conn.execute(text("""
@@ -1372,7 +1355,7 @@ class AnalyticsService:
                 """), {"cnpj": cnpj}).fetchone()
 
                 if not result or not result[0]:
-                    print(f"⚠️ Nenhum dado de memória de cálculo para CNPJ {cnpj}")
+                    print(f"⚠️ Nenhum dado no banco para CNPJ {cnpj}")
                     return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
 
                 dados_comprimidos = result[0]
@@ -1388,7 +1371,7 @@ class AnalyticsService:
             json_str = zlib.decompress(dados_comprimidos).decode("utf-8")
             dados = json.loads(json_str)
 
-            # 2d. Converte dates e Decimals (espelhando gerar_relatorio.py)
+            # 2d. Converte dates e Decimals
             for item in dados:
                 for key in ["periodo_inicial", "periodo_final", "periodo_inicial_nao_comprovacao",
                             "data_aquis_dev_estoq", "data_estoque_inicial", "data_aquisicao", "data_devolucao"]:
@@ -1399,18 +1382,28 @@ class AnalyticsService:
                                 item[key] = _dt.fromisoformat(item[key]).date()
                             else:
                                 item[key] = _dt.strptime(item[key], "%Y-%m-%d").date()
-                        except Exception:
-                            pass
+                        except: pass
+                
+                # Formata campos decimais
                 for key in ["valor_movimentado", "valor_sem_comprovacao"]:
                     if key in item and item[key] is not None:
+                        from decimal import Decimal
                         item[key] = Decimal(str(item[key]))
-
-        except Exception as e:
-            print(f"❌ ERRO ao buscar memória de cálculo para {cnpj}: {e}")
+        
+        except (SQLAInterfaceError, Exception) as e:
+            msg = str(e)
+            if "IM002" in msg or "ODBC" in msg or "InterfaceError" in msg:
+                print(f"❌ [INFO] Driver ODBC não disponível. Consulta 'live' ignorada.")
+                return MovimentacaoResponse(
+                    cnpj=cnpj, summary=empty_summary, rows=[],
+                    error="Arquivo Parquet local não encontrado e Driver ODBC ausente."
+                )
+            
+            print(f"❌ ERRO ao buscar movimentação para {cnpj}: {e}")
             print(traceback.format_exc())
             raise HTTPException(
                 status_code=503,
-                detail="Não foi possível conectar ao banco de dados. Verifique a conexão com a rede."
+                detail="Erro interno ao processar dados de movimentação. Verifique os logs do servidor."
             )
 
         # ── 3. Processa linhas (lógica espelhada de gerar_relatorio.py) ──────

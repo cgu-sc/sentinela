@@ -6,6 +6,7 @@ import { useGeoStore } from '@/stores/geo';
 import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
 import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
 import MunicipalMap from '../maps/MunicipalMap.vue';
+import RegionalRankChart from '../charts/RegionalRankChart.vue';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -157,6 +158,14 @@ watch(
           />
         </div>
       </div>
+
+      <!-- NOVO: Gráfico de Posicionamento - Só renderiza se os dados existirem -->
+      <RegionalRankChart 
+        v-if="regionalData?.farmacias?.length"
+        :farmacias="regionalData.farmacias"
+        :cnpj-atual="cnpj"
+        :regiao-nome="geoData.no_regiao_saude"
+      />
 
       <RegionalPharmacyTable
         :farmacias="filteredFarmacias"

@@ -14,6 +14,19 @@ else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
+
+def get_cache_dir() -> str:
+    """Retorna o diretório de cache, priorizando o local onde os dados realmente existem."""
+    # Opção 1: Raiz do projeto (Padrão)
+    path_root = os.path.join(BASE_DIR, "sentinela_cache")
+    # Opção 2: Dentro da pasta backend (Caso de desenvolvimento específico)
+    path_backend = os.path.join(BASE_DIR, "backend", "sentinela_cache")
+    
+    if not os.path.exists(path_root) and os.path.exists(path_backend):
+        return path_backend
+    return path_root
+
+_CACHE_DIR = get_cache_dir()
 _PARQUET_PATH = os.path.join(_CACHE_DIR, "movimentacao.parquet")
 _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "localidades.parquet")
 _REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "redes_farmaceuticas.parquet")
@@ -22,7 +35,6 @@ _FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "falecidos.parquet")
 _CRMS_DETALHADO_PARQUET_PATH = os.path.join(_CACHE_DIR, "crms_detalhes.parquet")
 _TOP20_CRMS_PARQUET_PATH = os.path.join(_CACHE_DIR, "crms_interesse.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
-
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)

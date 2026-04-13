@@ -70,21 +70,26 @@ const displayedKpis = computed(() => {
   // Se não houver filtro geográfico extra, retorna o consolidado da UF (que veio da API)
   if ((!regiao || regiao === 'Todos') && !ibge7) return kpis.value;
   
-  // Caso contrário, somamos os dados a partir do array de municípios (que contém os totais por cidade)
-  const targetMunicipios = (municipios.value || []).filter(m => {
-    if (ibge7) return Number(m.id_ibge7) === ibge7;
-    if (regiao && regiao !== 'Todos') return geoStore.getRegiaoByIbge7(m.id_ibge7) === regiao;
-    return true;
-  });
+  // Caso contrário, calculamos os numéricos de status contando diretamente as farmácias já filtradas (Tabela)
+  // Isso garante precisão 100% igual ao que o usuário vê na lista.
+  const arr = displayedCnpjs.value;
+  const total_critico = arr.filter(c => c.status === 'CRÍTICO').length;
+  const total_atencao = arr.filter(c => c.status === 'ATENÇÃO').length;
+  const total_normal = arr.filter(c => c.status === 'NORMAL').length;
+  const total_sem_dados = arr.filter(c => c.status === 'SEM DADOS').length;
   
-  const total_cnpjs = targetMunicipios.reduce((acc, m) => acc + (m.total_cnpjs || 0), 0);
-  const total_critico = targetMunicipios.reduce((acc, m) => acc + (m.total_critico || 0), 0);
+  const total_com_dados = total_critico + total_atencao + total_normal;
+  const pct_acima_limiar = total_com_dados > 0 
+    ? ((total_critico + total_atencao) / total_com_dados) * 100 
+    : null;
   
   return {
-    ...kpis.value,
-    total_cnpjs,
+    ...kpis.value, // Mantemos a mediana regional, já que é o Benchmark de comparação
     total_critico,
-    pct_critico: total_cnpjs > 0 ? (total_critico / total_cnpjs) * 100 : 0
+    total_atencao,
+    total_normal,
+    total_sem_dados,
+    pct_acima_limiar
   };
 });
 

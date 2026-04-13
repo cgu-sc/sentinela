@@ -42,20 +42,24 @@ const chartOption = computed(() => {
 
   return {
     backgroundColor: 'transparent',
-    grid: { top: 30, right: 30, bottom: 40, left: 50 },
+    grid: { top: 60, right: 70, bottom: 40, left: 50 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      borderColor: 'rgba(255,255,255,0.1)',
+      axisPointer: {
+        type: 'line',
+        lineStyle: { color: c.grid, width: 1, type: 'dashed' }
+      },
+      backgroundColor: c.tooltip, // Transparência agora calculada dinamicamente pelo chartTheme
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
-      textStyle: { color: '#fff', fontSize: 12 },
+      textStyle: { color: c.tooltipText, fontSize: 12 },
       formatter: (params) => {
           const p = params[0];
           return `
-            <div style="padding: 4px;">
-              <div style="opacity: 0.7; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Percentil Populacional:</div>
+            <div style="padding: 4px; color: ${c.tooltipText}">
+              <div style="opacity: 0.7; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Percentil:</div>
               <div style="font-size: 14px; font-weight: 700;">${p.name}</div>
-              <hr style="margin: 8px 0; opacity: 0.1; border: 0; border-top: 1px solid #fff;"/>
+              <hr style="margin: 8px 0; opacity: 0.2; border: 0; border-top: 1px solid ${c.tooltipText};"/>
               <div style="opacity: 0.7; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Score de Risco:</div>
               <div style="font-size: 18px; font-weight: 800; color: #ef4444;">${p.value.toFixed(2)}</div>
             </div>
@@ -108,20 +112,25 @@ const chartOption = computed(() => {
           label: {
             show: true,
             position: 'end',
-            formatter: `VOCÊ (Score: ${props.currentScore.toFixed(2)})`,
-            backgroundColor: '#ef4444',
-            color: '#fff',
-            padding: [4, 8],
+            formatter: () => `{title|ESTABELECIMENTO ATUAL}\n{score|Score: ${props.currentScore?.toFixed(2) || '—'}}`,
+            backgroundColor: '#0f172a', // Deep Navy Sóbrio
+            color: '#ffffff',
+            borderColor: '#3b82f6', // Acento sutil na cor da marca
+            borderWidth: 1,
+            padding: [6, 12],
             borderRadius: 4,
-            fontWeight: 'bold',
-            fontSize: 10,
-            distance: 10
+            align: 'center',
+            rich: {
+              title: { fontWeight: 700, fontSize: 10, color: '#ffffff', padding: [0, 0, 4, 0] },
+              score: { fontWeight: 800, fontSize: 11, color: '#3b82f6' }
+            },
+            distance: 12
           },
           lineStyle: {
-            color: c.textColor,
+            color: '#94a3b8', // Cinza aço sóbrio
             type: 'dashed',
-            width: 2,
-            opacity: 0.7
+            width: 1.5,
+            opacity: 0.6
           },
           data: [{ xAxis: markerXIndex }]
         }

@@ -95,28 +95,30 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow', shadowStyle: { color: CHART_TOOLTIP_SHADOW } },
-      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-      borderColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
         const bar  = params.find(p => p.seriesIndex === 0);
         const area = params.find(p => p.seriesIndex === 1);
         const faixa = bar?.axisValue ?? '';
         return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${faixa}</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="width:10px;height:10px;border-radius:2px;background:${c.bar};display:inline-block;"></span>
-              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Qtd Estabelecimentos</span>
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${faixa}</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.bar};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Qtd Estabelecimentos</span>
+              </div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${formatNumberFull(bar?.value ?? 0)}</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.area};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Valor Sem Comprovação</span>
+              </div>
+              <div style="font-weight:700;font-size:14px;color:${c.area};">${formatCurrencyFull(area?.value ?? 0)}</div>
             </div>
-            <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${formatNumberFull(bar?.value ?? 0)}</div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="width:10px;height:10px;border-radius:2px;background:${c.area};display:inline-block;"></span>
-              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Valor Sem Comprovação</span>
-            </div>
-            <div style="font-weight:700;font-size:14px;color:${c.area};">${formatCurrencyFull(area?.value ?? 0)}</div>
           </div>`;
       },
     },

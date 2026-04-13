@@ -62,7 +62,7 @@ const riskRankBadge = computed(() => {
   const topPct = 101 - pct;
   if (topPct <= 5) return { label: 'Crítico', value: `TOP ${topPct}%`, color: '#ef4444' };
   if (topPct <= 15) return { label: 'Alerta', value: `TOP ${topPct}%`, color: '#f59e0b' };
-  return { label: 'Normal', value: 'Dentro da Média', color: '#10b981' };
+  return { label: 'Normal', value: `Percentil ${pct}%`, color: '#10b981' };
 });
 </script>
 
@@ -94,12 +94,21 @@ const riskRankBadge = computed(() => {
                 <i class="pi pi-spin pi-spinner" />
                 <span>Mapeando vizinhança...</span>
              </div>
-             <RegionalRankChart 
-                v-else-if="regionalData?.farmacias?.length"
-                :farmacias="regionalData.farmacias"
-                :cnpj-atual="cnpj"
-                :regiao-nome="geoData.no_regiao_saude"
-              />
+             <template v-else>
+               <RegionalRankChart 
+                  v-if="regionalData?.farmacias?.length"
+                  :farmacias="regionalData.farmacias"
+                  :cnpj-atual="cnpj"
+                  :regiao-nome="geoData.no_regiao_saude"
+                />
+                <!-- AJUDA CONTEXTUAL CARD 1 -->
+                <div class="diagnosis-card-help">
+                   <i class="pi pi-info-circle" />
+                   <div class="help-text">
+                      <b>Contexto Regional:</b> Confronta o score deste CNPJ com os CNPJs da mesma região de saúde. Permite detectar se o estabelecimento é um "ponto fora da curva".
+                   </div>
+                </div>
+             </template>
           </div>
         </div>
 
@@ -141,17 +150,16 @@ const riskRankBadge = computed(() => {
               :current-score="currentScore"
               :loading="cnpjDetailStore.scorePercentilesLoading"
             />
+            <!-- AJUDA CONTEXTUAL CARD 2 -->
+            <div class="diagnosis-card-help">
+               <i class="pi pi-chart-line" />
+               <div class="help-text">
+                  <b>Diagnóstico Comparativo de Estabelecimentos:</b> Mapeia onde este alvo se encontra frente ao universo de estabelecimentos analisados. O deslocamento para a direita indica que este CNPJ possui um score superior à grande maioria dos estabelecimentos comparados.
+               </div>
+            </div>
           </div>
         </div>
 
-      </div>
-
-      <div class="diagnosis-footer-info">
-        <i class="pi pi-info-circle" />
-        <p>
-          Este diagnóstico compara o score desta farmácia com o comportamento estatístico de toda a população de estabelecimentos do escopo selecionado. 
-          Resultados no topo da curva indicam atipicidade grave e prioridade de fiscalização.
-        </p>
       </div>
     </template>
 
@@ -163,6 +171,8 @@ const riskRankBadge = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-height: 100%;
+  flex: 1;
 }
 
 .diagnosis-grid {
@@ -170,6 +180,7 @@ const riskRankBadge = computed(() => {
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
   align-items: stretch;
+  flex: 1;
 }
 
 .diagnosis-card {
@@ -267,18 +278,31 @@ const riskRankBadge = computed(() => {
 
 .placeholder-card i { font-size: 2.5rem; opacity: 0.4; }
 
-.diagnosis-footer-info {
+.diagnosis-card-help {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+  gap: 0.85rem;
+  padding: 0.85rem 1.25rem;
+  background: color-mix(in srgb, var(--primary-color) 4%, transparent);
   border-left: 4px solid var(--primary-color);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  margin-top: auto; /* Garante que fique no rodapé do card */
+  border-top: 1px solid var(--card-border);
 }
 
-.diagnosis-footer-info i { color: var(--primary-color); font-size: 1.1rem; margin-top: 2px; }
+.diagnosis-card-help i {
+  color: var(--primary-color);
+  font-size: 1rem;
+  margin-top: 2px;
+}
+
+.help-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.help-text b {
+  color: var(--text-color);
+  font-weight: 700;
+}
 </style>

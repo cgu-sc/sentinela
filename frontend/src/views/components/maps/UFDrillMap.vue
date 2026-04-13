@@ -84,22 +84,26 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: 'item',
       confine: true,
-      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-      borderColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
         if (!params.data) return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
-          <div style="font-size:11px;opacity:0.6;">Sem dados</div>`;
+          <div style="color:${c.tooltipText};">
+            <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
+            <div style="font-size:11px;opacity:0.6;">Sem dados</div>
+          </div>`;
         const d = params.data;
         return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${params.name}</div>
-          <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-            <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
-            <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
-            <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString('pt-BR')}</strong></div>
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${params.name}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
+              <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
+              <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
+              <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString('pt-BR')}</strong></div>
+            </div>
           </div>`;
       },
     },

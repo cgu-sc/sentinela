@@ -210,12 +210,12 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: "item",
       confine: true,
-      backgroundColor: "rgba(15, 23, 42, 0.85)",
-      borderColor: "rgba(255, 255, 255, 0.1)",
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
       textStyle: {
-        color: "#fff",
+        color: c.tooltipText,
         fontFamily: "Inter, sans-serif",
         fontSize: 12,
       },
@@ -224,15 +224,19 @@ const chartOption = computed(() => {
         if (!d) return '';
         if (!d.hasData || d.cnpjs === 0) {
           return `
-            <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio || d.name}</div>
-            <div style="font-size:12px;opacity:0.8;"><strong>0 estabelecimentos</strong></div>`;
+            <div style="color:${c.tooltipText}">
+              <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio || d.name}</div>
+              <div style="font-size:12px;opacity:0.8;"><strong>0 estabelecimentos</strong></div>
+            </div>`;
         }
         return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>
-          <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-            <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
-            <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
-            <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString("pt-BR")}</strong></div>
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${d.municipio}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
+              <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
+              <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
+              <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString("pt-BR")}</strong></div>
+            </div>
           </div>`;
       },
     },

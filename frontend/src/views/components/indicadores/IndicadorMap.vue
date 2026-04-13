@@ -263,26 +263,47 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: 'item',
       confine: true,
-      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-      borderColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      shadowBlur: 10,
+      shadowColor: 'rgba(0,0,0,0.1)',
       formatter: (params) => {
         const d = params.data;
         if (!d) return '';
         const label = isNational.value ? (d.name ?? '—') : (d.municipio ?? d.name ?? '—');
+        
         if (!d.hasData || d.total_cnpjs === 0) {
-          return `<div style="font-weight:600;font-size:13px;margin-bottom:6px;">${label}</div>
-                  <div style="font-size:11px;opacity:0.7;">Sem dados para este indicador</div>`;
+          return `
+            <div style="padding: 2px; min-width: 140px; color: ${c.tooltipText}">
+              <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">${label}</div>
+              <div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Sem dados disponíveis</div>
+            </div>
+          `;
         }
+        
         const pctFmt = (d.value ?? 0).toFixed(1) + '%';
+        const color = (d.value ?? 0) > 15 ? '#ef4444' : c.tooltipText; // Agora usa o branco do tooltip escuro
+
         return `
-          <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${label}</div>
-          <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-            <div>% Farmácias Críticas: <strong>${pctFmt}</strong></div>
-            <div>Farmácias Críticas: <strong>${d.total_critico ?? 0}</strong> / ${d.total_cnpjs ?? 0}</div>
-          </div>`;
+          <div style="padding: 2px; min-width: 180px; color: ${c.tooltipText}">
+            <div style="font-weight: 700; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid ${c.tooltipBorder}; padding-bottom: 6px;">
+              ${label}
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; gap: 20px; margin-bottom: 4px; align-items: center;">
+              <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">% Críticas:</span>
+              <strong style="color: ${color}; font-size: 13px;">${pctFmt}</strong>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; gap: 20px; align-items: center;">
+              <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">Volume Crítico:</span>
+              <span style="font-weight: 600;">${d.total_critico ?? 0} <small style="opacity: 0.5; font-weight: normal;">/ ${d.total_cnpjs ?? 0}</small></span>
+            </div>
+          </div>
+        `;
       },
     },
     visualMap: {

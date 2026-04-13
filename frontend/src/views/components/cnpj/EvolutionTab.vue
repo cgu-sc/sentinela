@@ -68,28 +68,32 @@ const chartOption = computed(() => {
       trigger: 'axis',
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       backgroundColor: c.tooltip,
-      borderColor: c.border,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      shadowBlur: 10,
+      shadowColor: 'rgba(0,0,0,0.15)',
       formatter: (params) => {
         const idx = params[0]?.dataIndex ?? 0;
         const s   = semestres[idx];
         if (!s) return '';
         return `
-          <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${s.semestre}</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="width:10px;height:10px;border-radius:2px;background:${c.green};display:inline-block;"></span>
-              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Regulares</span>
+          <div style="color: ${c.tooltipText}">
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${s.semestre}</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.green};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Regulares</span>
+              </div>
+              <div style="font-weight:700;font-size:13px;margin-bottom:2px;">${formatCurrencyFull(s.regular)}</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:10px;height:10px;border-radius:2px;background:${c.red};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Irregulares</span>
+              </div>
+              <div style="font-weight:700;font-size:13px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(s.irregular)} <span style="opacity:.7">(${s.pct_irregular.toFixed(1)}%)</span></div>
+              <div style="border-top:1px solid ${c.tooltipBorder};padding-top:6px;margin-top:2px;font-weight:700;font-size:13px;">Total: ${formatCurrencyFull(s.total)}</div>
             </div>
-            <div style="font-weight:700;font-size:13px;margin-bottom:2px;">${formatCurrencyFull(s.regular)}</div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="width:10px;height:10px;border-radius:2px;background:${c.red};display:inline-block;"></span>
-              <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Irregulares</span>
-            </div>
-            <div style="font-weight:700;font-size:13px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(s.irregular)} <span style="opacity:.7">(${s.pct_irregular.toFixed(1)}%)</span></div>
-            <div style="border-top:1px solid ${c.border};padding-top:6px;font-weight:700;font-size:13px;">Total: ${formatCurrencyFull(s.total)}</div>
           </div>`;
       },
     },

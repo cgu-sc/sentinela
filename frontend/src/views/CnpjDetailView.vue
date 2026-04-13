@@ -429,9 +429,15 @@ const formatCnpj = (v) => {
 }
 
 /* ── PLACEHOLDER E CONTEÚDO ──────────────────────────── */
+:deep(.p-tabview-panels) {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
 .tab-content {
-  padding: 1.5rem 2rem;
-} /* Alinhado horizontalmente com o header */
+  padding: 2rem;
+  min-height: calc(100vh - 450px); /* Garante que a aba tenha uma altura mínima respeitável */
+}
 
 .tab-placeholder {
   display: flex;

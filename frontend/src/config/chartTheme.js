@@ -5,32 +5,34 @@
  */
 import { computed } from 'vue';
 import { useThemeStore } from '@/stores/theme';
+import { SURFACE_COLORS } from '@/config/themeConfig';
 import { CHART_SERIES, CHART_RISK_ACCENTS, CHART_UF_ACCENTS } from './colors.js';
 
 export function useChartTheme() {
   const themeStore = useThemeStore();
 
   /** Cores de interface do gráfico (texto, grid, tooltip, fundo). */
-  const chartTheme = computed(() => themeStore.isDark
-    ? {
-        text:        '#e2e8f0',
-        muted:       '#94a3b8',
-        grid:        '#ffffff0f',
-        bg:          'transparent',
-        tooltip:     '#1e293b',
-        border:      '#334155',
-        axisShadow:  'rgba(255, 255, 255, 0.06)',
-      }
-    : {
-        text:        '#1e293b',
-        muted:       '#64748b',
-        grid:        '#0000000d',
-        bg:          'transparent',
-        tooltip:     '#ffffff',
-        border:      '#e2e8f0',
-        axisShadow:  'rgba(0, 0, 0, 0.06)',
-      }
-  );
+  const chartTheme = computed(() => {
+    const tokens = themeStore.tokens;
+    const currentThemeKey = ['carbon', 'azul_dark'].includes(themeStore.currentPalette) ? themeStore.currentPalette : 'azul';
+    const darkTooltipBg = SURFACE_COLORS[currentThemeKey].dark['card-bg'];
+    const darkTooltipBorder = SURFACE_COLORS[currentThemeKey].dark['card-border'];
+
+    // Menos transparência no modo Light para evitar "lavagem" da cor escura contra fundo branco
+    const opacityHex = themeStore.isDark ? 'cc' : 'e6'; // 80% dark, 90% light
+
+    return {
+      text:        tokens.textColor,
+      muted:       tokens.mutedColor,
+      grid:        themeStore.isDark ? '#ffffff0f' : '#0000000d',
+      bg:          'transparent',
+      tooltip:     darkTooltipBg + opacityHex, // Opacidade inteligente acoplada ao hex
+      tooltipText: '#ffffff',
+      tooltipBorder: darkTooltipBorder,
+      border:      tokens.borderColor,
+      axisShadow:  themeStore.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+    };
+  });
 
   /** Par regular (verde) / irregular (vermelho) — Volume Financeiro e similares. */
   const chartDataColors = computed(() =>

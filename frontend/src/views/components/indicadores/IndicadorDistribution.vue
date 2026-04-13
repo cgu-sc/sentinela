@@ -145,29 +145,29 @@ const chartOption = computed(() => {
         type: 'line',
         lineStyle: { color: c.grid, width: 1, type: 'dashed' }
       },
-      backgroundColor: c.tooltipBg,
-      borderColor: c.borderColor,
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
       borderWidth: 1,
-      padding: [12, 16],
-      textStyle: { color: c.textColor, fontSize: 13 },
+      textStyle: { color: c.tooltipText, fontSize: 12 },
       shadowBlur: 10,
-      shadowColor: 'rgba(0,0,0,0.2)',
+      shadowColor: 'rgba(0,0,0,0.1)', // Sombra ajustada para temas claros tb aparecerem suaves
       formatter: (params) => {
         const p = params[0];
         const count = Math.round((p.value / 100) * total);
         const rem = total - count;
         return `
-          <div style="min-width: 180px;">
-            <div style="font-weight:700; font-size:14px; margin-bottom:10px; border-bottom: 1px solid ${c.borderColor}; padding-bottom: 6px; color: ${c.textColor}">
-              Limiar Geográfico: ${p.name}
+          <div style="padding: 4px; min-width: 140px; color: ${c.tooltipText}">
+            <div style="opacity: 0.7; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Limiar Geográfico:</div>
+            <div style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">${p.name}</div>
+            
+            <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 2px;">
+              <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">Cobertura:</span>
+              <span style="font-weight: 700;">${p.value}%</span>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
-              <span style="opacity: 0.7; font-size:11px; text-transform:uppercase;">Cobertura:</span>
-              <strong style="color:${acc.area}; font-size:14px;">${p.value}%</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; background: ${RISK_COLORS.critical}15; padding: 6px 8px; border-radius: 4px;">
-              <span style="font-weight: 500; font-size:11px; color: ${RISK_COLORS.critical}; text-transform:uppercase;">Alvos Detetados:</span>
-              <strong style="color:${RISK_COLORS.critical}; font-size:15px;">${rem}</strong>
+            
+            <div style="display: flex; justify-content: space-between; gap: 15px;">
+              <span style="opacity: 0.7; font-size: 10px; text-transform: uppercase;">Alvos:</span>
+              <span style="font-weight: 800; color: ${RISK_COLORS.critical}">${rem}</span>
             </div>
           </div>
         `;

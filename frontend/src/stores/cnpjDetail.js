@@ -47,6 +47,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     municipiosRegiao:        [],
     municipiosRegiaoKey:     null,
     municipiosRegiaoLoading: false,
+
+    // ── Curva de Percentis de Score (Contexto Regional/UF/Brasil) ─────────────
+    scorePercentiles:        null,
+    scorePercentilesLoading: false,
+    scorePercentilesLoaded:  false, // Guarda a chave do escopo atual
   }),
 
   actions: {
@@ -187,6 +192,24 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchScorePercentiles(scope, uf = null, regiao_id = null) {
+      const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}`;
+      if (this.scorePercentilesLoaded === key) return;
+      
+      this.scorePercentilesLoading = true;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsScorePercentiles, { 
+          params: { scope, uf, regiao_id } 
+        });
+        this.scorePercentiles = data || [];
+        this.scorePercentilesLoaded = key;
+      } catch (e) {
+        console.error('Erro ao buscar percentis de score:', e);
+      } finally {
+        this.scorePercentilesLoading = false;
+      }
+    },
+
     // ── Reset completo ao trocar de CNPJ ──────────────────────────────────────
     resetAll() {
       this.dadosCadastro        = null;
@@ -220,6 +243,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.municipiosRegiao        = [];
       this.municipiosRegiaoKey     = null;
       this.municipiosRegiaoLoading = false;
+
+      this.scorePercentiles        = null;
+      this.scorePercentilesLoading = false;
+      this.scorePercentilesLoaded  = false;
     },
   },
 });

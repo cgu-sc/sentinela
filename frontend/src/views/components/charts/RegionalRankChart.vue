@@ -123,7 +123,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="rank-chart-card shadow-card">
+  <div class="regional-rank-card">
     <div class="chart-header">
       <div class="header-left">
         <i class="pi pi-compass section-icon"></i>
@@ -149,9 +149,10 @@ const chartOption = computed(() => {
 </template>
 
 <style scoped>
-.rank-chart-card {
+.regional-rank-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   padding: 1.25rem;
   display: flex;
@@ -170,16 +171,16 @@ const chartOption = computed(() => {
 .dot.self { background: #f43f5e; }
 .dot.others { background: rgba(148, 163, 184, 0.6); }
 
-/* ALTURA FIXA PARA EVITAR ERRO DE DOM */
+/* ALTURA FIXA E FUNDO TRANSPARENTE */
 .chart-wrapper {
   width: 100%;
   height: 350px;
   position: relative;
-  border: 1px solid var(--card-border-light, #eee);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
 }
 
 .echart { width: 100%; height: 100%; }

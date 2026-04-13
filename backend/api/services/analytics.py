@@ -1576,3 +1576,49 @@ class AnalyticsService:
         return _build_response_from_df(df_result, from_cache=False)
 
 
+    @staticmethod
+    def get_score_percentiles(scope: str, uf: str = None, regiao_id: str = None) -> list[dict]:
+        """
+        Calcula a curva de percentis de score (1% a 100%) para diferentes escopos.
+        Escopos: 'brasil', 'uf', 'regiao'.
+        """
+        try:
+            from data_cache import get_df_matriz_risco
+            df = get_df_matriz_risco()
+            df = df.rename({c: c.lower() for c in df.columns})
+
+            # ── 1. Aplica o Filtro de Escopo ──────────────────────────────────
+            df_scoped = df
+            if scope == 'uf' and uf:
+                df_scoped = df.filter(pl.col("uf") == uf)
+            elif scope == 'regiao' and regiao_id:
+                # Usa o ID da região de saúde (mais preciso que o nome)
+                df_scoped = df.filter(pl.col("id_regiao_saude").cast(pl.Utf8) == str(regiao_id))
+            elif scope == 'brasil':
+                df_scoped = df  # Sem filtro
+            
+            if df_scoped.is_empty():
+                return []
+
+            # ── 2. Calcula 100 percentis (0.01 a 1.0) ─────────────────────────
+            # Usamos uma lista de 1 a 100 para representar os percentis
+            percentis_list = [i / 100.0 for i in range(1, 101)]
+            
+            # O Polars consegue calcular múltiplos quantis de uma vez
+            # mas vamos simplificar a iteração para garantir estabilidade
+            scores = df_scoped.select(pl.col("score_risco_final")).to_series().sort()
+            
+            res = []
+            for p in percentis_list:
+                # Quantile retorna o valor do score naquele percentil
+                val = scores.quantile(p)
+                res.append({
+                    "percentile": int(p * 100),
+                    "score": float(val or 0.0)
+                })
+
+            return res
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao calcular percentis de score: {e}")
+            return []

@@ -1,20 +1,22 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
 import { useGeoStore } from '@/stores/geo';
 import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
 import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
 import MunicipalMap from '../maps/MunicipalMap.vue';
-import RegionalRankChart from '../charts/RegionalRankChart.vue';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
-  geoData: { type: Object, default: null }
+  geoData: { type: Object, default: null },
+  cnpjData: { type: Object, default: null }
 });
 
 const cnpjNav = useCnpjNavStore();
 const geoStore = useGeoStore();
+const cnpjDetailStore = useCnpjDetailStore();
 const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
 
 // ibge7 do município atual do CNPJ (para pré-selecionar no mapa)
@@ -43,7 +45,6 @@ const filteredFarmacias = computed(() => {
   const farmacias = regionalData.value?.farmacias ?? [];
   if (!filterMunicipioId.value) return farmacias;
   
-  // Encontra o nome do município pelo ID para filtrar a lista de farmácias (que só tem o nome)
   const targetMun = regionalData.value?.municipios?.find(m => m.id_ibge7 === filterMunicipioId.value);
   if (!targetMun) return farmacias;
 
@@ -68,16 +69,13 @@ watch(() => props.geoData?.no_regiao_saude, (newVal) => {
     if (newVal) loadData();
 });
 
-// ── Consome o múnicipio pendente do store (navegação via header) ──────────
 watch(
   () => cnpjNav.pendingMunicipio,
   async (municipio) => {
     if (!municipio) return;
 
-    // Garante que os dados regionais estejam carregados primeiro
     if (!regionalLoaded.value) {
       loadData();
-      // Aguarda até os dados estarem prontos
       await new Promise((resolve) => {
         const stop = watch(regionalLoaded, (loaded) => {
           if (loaded) { stop(); resolve(); }
@@ -85,12 +83,10 @@ watch(
       });
     }
 
-    // Aplica o filtro e consome o estado
     await nextTick();
     if (municipio === '__RESET__') {
       filterMunicipioId.value = null;
     } else {
-      // Tenta encontrar o ID pelo nome fornecido pelo store
       const match = regionalData.value?.municipios?.find(m => 
         m.municipio?.toLowerCase() === municipio.toLowerCase()
       );
@@ -98,7 +94,6 @@ watch(
     }
     cnpjNav.consumePendingMunicipio();
 
-    // Scroll suave para a tabela de farmácias (Ranking)
     setTimeout(() => {
       const el = document.querySelector('.pharmacy-ranking-section');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -159,14 +154,7 @@ watch(
         </div>
       </div>
 
-      <!-- NOVO: Gráfico de Posicionamento - Só renderiza se os dados existirem -->
-      <RegionalRankChart 
-        v-if="regionalData?.farmacias?.length"
-        :farmacias="regionalData.farmacias"
-        :cnpj-atual="cnpj"
-        :regiao-nome="geoData.no_regiao_saude"
-      />
-
+      <!-- SEÇÃO DE GEOGRAFIA: Mapa + Detalhamento Municipal -->
       <RegionalPharmacyTable
         :farmacias="filteredFarmacias"
         :cnpj-atual="cnpj"
@@ -195,7 +183,7 @@ watch(
 
 .table-wrapper-col {
   flex: 60;
-  min-width: 0; /* Permite que a coluna encolha/cresça ignorendo largura interna da tabela */
+  min-width: 0;
 }
 
 .map-wrapper-col {
@@ -203,7 +191,6 @@ watch(
   display: flex;
   min-width: 0;
 }
-
 
 .tab-placeholder {
   display: flex;
@@ -226,25 +213,6 @@ watch(
 
 .tab-placeholder p {
   font-size: 0.875rem;
-}
-
-.filter-status-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
-  border: 1px dashed var(--sidebar-border);
-  border-radius: 8px;
-  margin: 1rem 0;
-}
-
-.filter-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 :deep(.municipio-chip) {

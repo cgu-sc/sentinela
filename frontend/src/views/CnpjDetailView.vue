@@ -17,6 +17,7 @@ import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import CRMTab from "./components/cnpj/CRMTab.vue";
 import MovementTab from "./components/cnpj/MovementTab.vue";
+import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -29,11 +30,12 @@ import Chip from "primevue/chip";
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
   EVOLUTION: 0,
-  MOVEMENT: 1,
-  INDICATORS: 2,
-  CRMS: 3,
-  MORTALITY: 4,
-  REGIONAL: 5,
+  DIAGNOSIS: 1,
+  MOVEMENT: 2,
+  INDICATORS: 3,
+  CRMS: 4,
+  MORTALITY: 5,
+  REGIONAL: 6,
 };
 
 const route = useRoute();
@@ -131,9 +133,24 @@ watch(
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
       }
+
+      // ── NOVO: Eager load da distribuição da UF para os gráficos de contexto ──
+      if (cnpjData.value?.uf) {
+        cnpjDetailStore.fetchUfDistribution(cnpjData.value.uf);
+      }
     }
   },
   { immediate: true },
+);
+
+// Watch auxilar para quando o cnpjData (e a UF) chegar via fetchCnpjAvulso
+watch(
+  () => cnpjData.value?.uf,
+  (val) => {
+    if (val) {
+      cnpjDetailStore.fetchScorePercentiles('uf', val);
+    }
+  }
 );
 
 const recentCnpjStore = useRecentCnpjStore();
@@ -217,6 +234,20 @@ const formatCnpj = (v) => {
 
       <TabPanel>
         <template #header
+          ><i class="pi pi-chart-bar tab-icon" /><span
+            >Diagnóstico de Risco</span
+          ></template
+        >
+        <RiskDiagnosisTab 
+          :cnpj="cnpj"
+          :cnpj-data="cnpjData"
+          :geo-data="geoData"
+          class="tab-content" 
+        />
+      </TabPanel>
+
+      <TabPanel>
+        <template #header
           ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
         >
         <MovementTab :cnpj="cnpj" class="tab-content" />
@@ -253,7 +284,7 @@ const formatCnpj = (v) => {
             >Região de Saúde</span
           ></template
         >
-        <RegionalTab :cnpj="cnpj" :geo-data="geoData" class="tab-content" />
+        <RegionalTab :cnpj="cnpj" :geo-data="geoData" :cnpj-data="cnpjData" class="tab-content" />
       </TabPanel>
     </TabView>
   </div>

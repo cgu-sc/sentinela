@@ -149,3 +149,11 @@ def get_movimentacao(
     - **Parâmetro check_cache**: permite carregar apenas se já existir cache, sem disparar processamento.
     """
     return AnalyticsService.get_movimentacao_data(cnpj, engine, check_cache=check_cache)
+@router.get("/score-percentiles")
+def get_score_percentiles(
+    scope: str = Query(..., description="Escopo: 'regiao', 'uf' ou 'brasil'"),
+    uf: Optional[str] = Query(None),
+    regiao_id: Optional[str] = Query(None)
+):
+    """Retorna os percentis de score de risco para o escopo selecionado."""
+    return AnalyticsService.get_score_percentiles(scope, uf, regiao_id)

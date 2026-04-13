@@ -116,10 +116,8 @@ export const useFilterStore = defineStore('filters', () => {
 
   watch(selectedMunicipio, (newMunVal) => {
     if (newMunVal !== FILTER_ALL_VALUE && geoStore.localidades.length > 0) {
-      // O valor vem formatado como "Nome|UF" (Garante unicidade)
-      const [nome, uf] = newMunVal.split('|');
       const found = geoStore.localidades.find(l => 
-        l.no_municipio === nome && l.sg_uf === uf
+        String(l.id_ibge7) === String(newMunVal)
       );
       
       if (found) {

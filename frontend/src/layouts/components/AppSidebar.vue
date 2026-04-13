@@ -198,6 +198,8 @@ const isFilterActive = (field) => {
   return value !== defaultValue;
 };
 
+const isIndicadoresRoute = computed(() => route.path.startsWith('/indicadores'));
+
 const activeFilterCount = computed(() => {
   const fields = [
     'selectedUF', 'selectedRegiaoSaude', 'selectedMunicipio', 'selectedUnidadePf',
@@ -355,16 +357,19 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
 
-      <div class="filter-section">
-        <label class="filter-label">Período de Análise</label>
-        <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('sliderValue') }">
+      <div class="filter-section" :class="{ 'filter-locked-alt': filtersLocked || isIndicadoresRoute }">
+        <label class="filter-label" style="pointer-events: auto;">
+          Período de Análise
+          <i v-if="isIndicadoresRoute" class="pi pi-info-circle" style="font-size: 0.75rem; margin-left: auto; color: var(--primary-color); cursor: help;" v-tooltip.right="'Indicadores utilizam snapshots consolidados da Matriz de Risco. O filtro de período não se aplica a esta tela.'" />
+        </label>
+        <div class="slider-container" :class="{ 'filter-locked': filtersLocked || isIndicadoresRoute, 'filter-active-box': isFilterActive('sliderValue') }">
           <div class="perc-chips" style="margin-bottom: 0.5rem">
             <button
               v-for="year in ANALYSIS_YEARS"
               :key="year"
               class="perc-chip"
               :class="{ 'perc-chip-active': isYearActive(year), 'perc-chip-disabled': isYearDisabled(year) }"
-              :disabled="isYearDisabled(year)"
+              :disabled="isYearDisabled(year) || isIndicadoresRoute"
               @click="toggleYear(year)"
             >
               {{ year }}
@@ -373,7 +378,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
           <div class="slider-wrapper relative pt-3 mt-0">
             <div class="slider-tip" :style="{ left: startPos + '%', transform: startTransform }">{{ startMonthLabel }}</div>
             <div class="slider-tip" :style="{ left: endPos + '%', transform: endTransform }">{{ endMonthLabel }}</div>
-            <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" @slideend="() => applySliderPeriod(timeSliderValue)" />
+            <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" :disabled="isIndicadoresRoute" @slideend="() => applySliderPeriod(timeSliderValue)" />
           </div>
         </div>
       </div>
@@ -596,6 +601,11 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 .filter-locked {
   pointer-events: none;
+  opacity: 0.38;
+  user-select: none;
+}
+
+.filter-locked-alt {
   opacity: 0.38;
   user-select: none;
 }

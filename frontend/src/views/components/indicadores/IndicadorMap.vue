@@ -197,7 +197,7 @@ const echartsMapData = computed(() => {
       hasData,
       itemStyle: {
         areaColor: baseColor,
-        opacity: dimmed ? 0.35 : 1,
+        opacity: dimmed ? 0.8 : 1,
         borderColor: isSelected ? themeStore.tokens.primary : mapBorderColor.value,
         borderWidth: isSelected ? 2.5 : 0.5,
       },

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFilterStore } from '@/stores/filters';
 import { useIndicadoresStore } from '@/stores/indicadores';
+import { useGeoStore } from '@/stores/geo';
 import { useFetchIndicadores } from '@/composables/useFetchIndicadores';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
@@ -13,6 +14,7 @@ import IndicadorCnpjTable from './components/indicadores/IndicadorCnpjTable.vue'
 
 const filterStore = useFilterStore();
 const indicadoresStore = useIndicadoresStore();
+const geoStore = useGeoStore();
 const { selectedIndicador, kpis, municipios, cnpjs, isLoading, error } = storeToRefs(indicadoresStore);
 const { fetchForIndicador } = useFetchIndicadores();
 
@@ -29,28 +31,79 @@ const activeIndicadorMeta = computed(() => {
 const activeUf = computed(() => filterStore.selectedUF);
 
 // ── Seleção de município no mapa ──────────────────────────────────────────────
-const selectedMunicipioIbge7 = ref(null);
-const selectedMunicipioNome = ref(null);
+// ── Seleção de município no mapa ──────────────────────────────────────────────
+// ── Seleção de município no mapa ──────────────────────────────────────────────
+const selectedMunicipioIbge7 = computed(() => {
+  const val = filterStore.selectedMunicipio;
+  return (val && val !== 'Todos') ? Number(val) : null;
+});
 
-function onSelectMunicipio(ibge7, nome) {
-  selectedMunicipioIbge7.value = ibge7;
-  selectedMunicipioNome.value = nome;
+function onSelectMunicipio(ibge7) {
+  if (!ibge7) {
+    filterStore.selectedMunicipio = 'Todos';
+    return;
+  }
+  
+  // Sincroniza apenas o ID do município. 
+  // NÃO atualizamos a Região de Saúde aqui para evitar que o mapa perca o contexto do resto do estado.
+  filterStore.selectedMunicipio = String(ibge7);
 }
 
 function clearMunicipioFilter() {
-  selectedMunicipioIbge7.value = null;
-  selectedMunicipioNome.value = null;
+  filterStore.selectedMunicipio = 'Todos';
 }
 
 function onSelectUf(uf) {
-  clearMunicipioFilter();
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
   filterStore.selectedUF = uf;
 }
 
-// CNPJs filtrados pelo município selecionado (se houver)
-const filteredCnpjs = computed(() => {
-  if (!selectedMunicipioIbge7.value) return cnpjs.value;
-  return cnpjs.value.filter(c => c.id_ibge7 === selectedMunicipioIbge7.value);
+// Em indicadores, o fetch traz a UF/Região inteira (para o mapa ficar colorido).
+// Filtramos localmente para que os KPIs e a Tabela reflitam apenas a seleção atual.
+const displayedKpis = computed(() => {
+  if (!kpis.value) return null;
+  const regiao = filterStore.selectedRegiaoSaude;
+  const ibge7 = selectedMunicipioIbge7.value;
+  
+  // Se não houver filtro geográfico extra, retorna o consolidado da UF (que veio da API)
+  if ((!regiao || regiao === 'Todos') && !ibge7) return kpis.value;
+  
+  // Caso contrário, somamos os dados a partir do array de municípios (que contém os totais por cidade)
+  const targetMunicipios = (municipios.value || []).filter(m => {
+    if (ibge7) return Number(m.id_ibge7) === ibge7;
+    if (regiao && regiao !== 'Todos') return geoStore.getRegiaoByIbge7(m.id_ibge7) === regiao;
+    return true;
+  });
+  
+  const total_cnpjs = targetMunicipios.reduce((acc, m) => acc + (m.total_cnpjs || 0), 0);
+  const total_critico = targetMunicipios.reduce((acc, m) => acc + (m.total_critico || 0), 0);
+  
+  return {
+    ...kpis.value,
+    total_cnpjs,
+    total_critico,
+    pct_critico: total_cnpjs > 0 ? (total_critico / total_cnpjs) * 100 : 0
+  };
+});
+
+const displayedCnpjs = computed(() => {
+  let list = cnpjs.value || [];
+  const ibge7 = selectedMunicipioIbge7.value;
+  const regiao = filterStore.selectedRegiaoSaude;
+
+  if (ibge7) {
+    list = list.filter(c => Number(c.id_ibge7) === ibge7);
+  } else if (regiao && regiao !== 'Todos') {
+    list = list.filter(c => geoStore.getRegiaoByIbge7(c.id_ibge7) === regiao);
+  }
+  return list;
+});
+
+const selectedMunicipioNome = computed(() => {
+  const code = filterStore.selectedMunicipio;
+  if (!code || code === 'Todos') return null;
+  return geoStore.getMunicipioNomeByIbge7(code);
 });
 
 function onIndicadorSelect(key) {
@@ -102,7 +155,7 @@ onMounted(() => {
 
         <!-- KPI Cards -->
         <IndicadorKpiCards
-          :kpis="kpis"
+          :kpis="displayedKpis"
           :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :is-loading="isLoading"
         />
@@ -130,11 +183,12 @@ onMounted(() => {
 
         <!-- Tabela ranqueada de CNPJs -->
         <IndicadorCnpjTable
-          :cnpjs="filteredCnpjs"
+          :cnpjs="displayedCnpjs"
           :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :indicador-key="selectedIndicador"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
           :is-loading="isLoading"
+          :limiar-critico="kpis?.limiar_critico"
         />
 
       </template>
@@ -283,5 +337,53 @@ onMounted(() => {
 
 .chip-clear:hover {
   opacity: 1;
+}
+
+/* ── Aviso de Snapshot ── */
+.snapshot-notice {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: color-mix(in srgb, var(--accent-indigo) 8%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--accent-indigo) 20%, transparent);
+  border-left: 4px solid var(--accent-indigo);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  animation: fadeInDown 0.4s ease-out;
+}
+
+.snapshot-notice i {
+  font-size: 1.25rem;
+  color: var(--accent-indigo);
+}
+
+.notice-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.notice-content strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--accent-indigo);
+}
+
+.notice-content span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.notice-content em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

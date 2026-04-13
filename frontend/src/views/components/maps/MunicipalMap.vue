@@ -210,7 +210,7 @@ const mapData = computed(() => {
     const isSelected =
       !!selectedIbge7.value && ibge7 === Number(selectedIbge7.value);
     const dimmed = !!selectedIbge7.value && !isSelected;
-    const opacity = dimmed ? 0.85 : 1;
+    const opacity = dimmed ? 0.8 : 1;
     const perc = hasData ? (munData.percValSemComp ?? 0) : 0;
     const piece = getRiskPiece(perc);
     const baseColor = hasData ? piece.color : chartTheme.value.bg;

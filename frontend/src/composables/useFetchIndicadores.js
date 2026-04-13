@@ -15,20 +15,34 @@ export function useFetchIndicadores() {
   const { getApiParams } = useFilterParameters();
 
   /**
-   * Extrai apenas os parâmetros aceitos pelo endpoint /indicadores-analise.
+   * Extrai os parâmetros aceitos pelo endpoint /indicadores-analise.
+   * Agora inclui filtros de percentual e valor acumulado.
    */
   function getIndicadorParams() {
-    const { uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf } = getApiParams();
+    const { 
+      uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf,
+      percMin, percMax, valMin 
+    } = getApiParams();
+
     const params = {};
-    if (uf)           params.uf = uf;
-    if (regiaoSaude)  params.regiao_saude = regiaoSaude;
-    if (municipio)    params.municipio = municipio;
+    if (uf) params.uf = uf;
+
+    // Comentados para que o mapa receba sempre a UF inteira e continue colorido.
+    // O destaque de Município/Região passa a ser puramente visual/local no frontend.
+    // if (regiaoSaude)  params.regiao_saude = regiaoSaude;
+    // if (municipio)    params.municipio = municipio;
     if (situacaoRf)   params.situacao_rf = situacaoRf;
     if (conexaoMs)    params.conexao_ms = conexaoMs;
     if (porteEmpresa) params.porte_empresa = porteEmpresa;
     if (grandeRede)   params.grande_rede = grandeRede;
     if (cnpjRaiz)     params.cnpj_raiz = cnpjRaiz;
     if (unidadePf)    params.unidade_pf = unidadePf;
+
+    // Novos: Filtros de Auditoria (Snapshot)
+    if (percMin !== null) params.perc_min = percMin;
+    if (percMax !== null) params.perc_max = percMax;
+    if (valMin !== null)  params.val_min  = valMin;
+
     return params;
   }
 
@@ -41,8 +55,8 @@ export function useFetchIndicadores() {
     indicadoresStore.fetchIndicadorAnalise(indicadorKey, getIndicadorParams());
   }
 
-  // Re-dispara automaticamente quando filtros geográficos/cadastrais mudam,
-  // mas apenas se um indicador já estiver selecionado.
+  // Re-dispara automaticamente quando filtros mudam.
+  // Inclui agora percentual e valor mínimo acumulado.
   watch(
     () => [
       filterStore.selectedUF,
@@ -54,12 +68,15 @@ export function useFetchIndicadores() {
       filterStore.selectedGrandeRede,
       filterStore.selectedUnidadePf,
       filterStore.selectedCnpjRaiz,
+      filterStore.percentualNaoComprovacaoFilter, // Reativo ao Slider de %
+      filterStore.valorMinSemCompFilter,          // Reativo ao Slider de Valor
     ],
     () => {
       if (indicadoresStore.selectedIndicador) {
         fetchForIndicador(indicadoresStore.selectedIndicador);
       }
     },
+    { immediate: true, deep: true }
   );
 
   return { fetchForIndicador };

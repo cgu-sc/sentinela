@@ -5,6 +5,7 @@ import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
+import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -18,6 +19,8 @@ const props = defineProps({
   indicadorKey: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
   indicadorLabel: { type: String, default: 'Indicador' },
+  /** Valor de referência para o status CRÍTICO */
+  limiarCritico: { type: Number, default: null },
 });
 
 const router = useRouter();
@@ -141,7 +144,6 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
         </template>
       </Column>
 
-      <!-- Risco Região (MOVIDO PARA CÁ) -->
       <Column field="risco_reg" header="Risco Reg." sortable style="width:9%; text-align:center">
         <template #body="{ data }">
           <Tag
@@ -149,6 +151,16 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
             :value="data.risco_reg.toFixed(1) + 'x'"
             :class="statusClass(data.status)"
           />
+          <span v-else class="muted">—</span>
+        </template>
+      </Column>
+
+      <!-- Limiar CRÍTICO -->
+      <Column header="Limiar Crítico" style="width:9%; text-align:center">
+        <template #body>
+          <span v-if="limiarCritico" class="val-cell-ref">
+            {{ limiarCritico.toFixed(1) }}x
+          </span>
           <span v-else class="muted">—</span>
         </template>
       </Column>
@@ -165,7 +177,13 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       <!-- Valor Não Comprovação -->
       <Column field="val_sem_comp" header="Vlr. Não Comp." sortable style="width:10%; text-align:right">
         <template #body="{ data }">
-          <span class="val-cell" :class="{ muted: data.val_sem_comp == null }">
+          <span
+            class="val-cell"
+            :class="{
+              'muted': data.val_sem_comp == null,
+              'high-value-audit': data.val_sem_comp >= AUDIT_THRESHOLDS.HIGH_VALUE
+            }"
+          >
             {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
           </span>
         </template>
@@ -412,5 +430,20 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
 :deep(.p-tag) {
   text-transform: uppercase !important;
   letter-spacing: 0.03em;
+}
+
+/* DESTAQUE DE ALTO VALOR (Sincronizado com CnpjTable) */
+.high-value-audit {
+  color: var(--risk-high);
+  font-weight: 700;
+  font-size: 0.75rem; /* Ajustado para caber na tabela densa de indicadores */
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.15rem 0.65rem;
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  border-radius: 0 6px 6px 0;
 }
 </style>

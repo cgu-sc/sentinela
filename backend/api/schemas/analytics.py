@@ -292,7 +292,9 @@ class IndicadorKpiSummarySchema(BaseModel):
     total_sem_dados: int = 0
     mediana_reg: Optional[float] = None
     mad_reg: Optional[float] = None
-    pct_acima_limiar: Optional[float] = None  # % de CNPJs com risco_reg >= atencao
+    pct_acima_limiar: Optional[float] = None
+    limiar_atencao: Optional[float] = None
+    limiar_critico: Optional[float] = None
 
 
 class IndicadorCnpjRowSchema(BaseModel):

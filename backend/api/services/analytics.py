@@ -514,8 +514,6 @@ class AnalyticsService:
             }
             return IndicadoresResponse(cnpj=cnpj, indicadores=indicadores)
         except Exception as e:
-            import traceback
-            print(f"❌ ERRO AO BUSCAR INDICADORES: {e}")
             print(traceback.format_exc())
             return IndicadoresResponse(cnpj=cnpj, indicadores={})
 
@@ -531,13 +529,17 @@ class AnalyticsService:
         grande_rede: str | None = None,
         cnpj_raiz: str | None = None,
         unidade_pf: str | None = None,
+        perc_min: float | None = None,
+        perc_max: float | None = None,
+        val_min: float | None = None,
     ) -> IndicadorAnaliseResponse:
         """
         Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
         e tabela de CNPJs ranqueados por risco, filtrados pelo escopo geográfico.
 
         Operação 100% em memória (Polars) sobre df_matriz_risco + df_movimentacao.
-        Não usa filtros de período ou percentual — a matriz_risco é um snapshot consolidado.
+        Não usa filtros de período — a matriz_risco é um snapshot consolidado.
+        Mas aceita filtros de percentual e valor mínimo acumulado.
 
         Args:
             indicador: Chave do indicador (ex: 'auditado', 'teto'). Deve existir em INDICATOR_MAPPING.
@@ -550,6 +552,9 @@ class AnalyticsService:
             grande_rede: 'Sim' | 'Não' | None.
             cnpj_raiz: 8 ou 14 dígitos ou None.
             unidade_pf: Nome da Unidade PF ou None.
+            perc_min: Limiar mínimo de não comprovação (%)
+            perc_max: Limiar máximo de não comprovação (%)
+            val_min: Valor bruto mínimo sem comprovação (R$)
 
         Returns:
             IndicadorAnaliseResponse com kpis, municipios e cnpjs.
@@ -614,6 +619,14 @@ class AnalyticsService:
                     mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
 
             df_geo = df_geo.filter(mask)
+
+            # ── 2A. Novos Filtros de Valor e Percentual (Snapshot) ──
+            if perc_min is not None:
+                df_geo = df_geo.filter(pl.col("perc_val_sem_comp") >= perc_min)
+            if perc_max is not None:
+                df_geo = df_geo.filter(pl.col("perc_val_sem_comp") <= perc_max)
+            if val_min is not None:
+                df_geo = df_geo.filter(pl.col("total_sem_comprovacao") >= val_min)
 
             if df_geo.is_empty():
                 empty_kpis = IndicadorKpiSummarySchema()
@@ -779,6 +792,8 @@ class AnalyticsService:
                 mediana_reg=mediana_reg,
                 mad_reg=mad_reg,
                 pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
+                limiar_atencao=float(atencao),
+                limiar_critico=float(critico)
             )
 
             return IndicadorAnaliseResponse(

@@ -137,14 +137,18 @@ def get_indicadores_analise(
     grande_rede: Optional[str] = Query(None),
     cnpj_raiz: Optional[str] = Query(None),
     unidade_pf: Optional[str] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
 ):
     """
     Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
-    Filtros de período/percentual não se aplicam — opera sobre snapshot da matriz_risco.
+    Filtros de período não se aplicam (snapshot) — mas limites de valor e percentual funcionam.
     """
     return AnalyticsService.get_indicadores_analise(
         indicador, uf, regiao_saude, municipio,
-        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf
+        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
+        perc_min, perc_max, val_min
     )
 
 

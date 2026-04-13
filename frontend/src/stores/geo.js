@@ -96,8 +96,7 @@ export const useGeoStore = defineStore('geo', () => {
     if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
     
     if (municipioValue && municipioValue !== 'Todos') {
-      const [nome, munUf] = municipioValue.split('|');
-      filtradas = filtradas.filter(l => l.no_municipio === nome && l.sg_uf === munUf);
+      filtradas = filtradas.filter(l => String(l.id_ibge7) === String(municipioValue));
     }
 
     // Filtra nulos e vazios
@@ -123,10 +122,9 @@ export const useGeoStore = defineStore('geo', () => {
     if (unidade && unidade !== 'Todos') filtradas = filtradas.filter(l => l.unidade_pf === unidade);
     
     // Gera lista de objetos únicos { label, value }
-    // O valor é sempre 'Nome|UF' para garantir unicidade total
     const list = filtradas.map(l => ({
         label: uf === 'Todos' ? `${l.no_municipio} - ${l.sg_uf}` : l.no_municipio,
-        value: `${l.no_municipio}|${l.sg_uf}`,
+        value: String(l.id_ibge7), // Agora usamos ID IBGE7 como PK profissional
         nome: l.no_municipio,
         uf: l.sg_uf
     }));
@@ -138,6 +136,25 @@ export const useGeoStore = defineStore('geo', () => {
     return [{ label: 'Todos', value: 'Todos' }, ...unique];
   }
 
+  // Auxiliares para tradução de IBGE7 para formato de Filtro (Nome|UF)
+  function getFilterValueByIbge7(ibge7) {
+    if (!ibge7 || ibge7 === 'Todos') return 'Todos';
+    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    return found ? `${found.no_municipio}|${found.sg_uf}` : 'Todos';
+  }
+
+  function getMunicipioNomeByIbge7(ibge7) {
+    if (!ibge7 || ibge7 === 'Todos') return null;
+    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    return found ? found.no_municipio : null;
+  }
+
+  function getRegiaoByIbge7(ibge7) {
+    if (!ibge7 || ibge7 === 'Todos') return 'Todos';
+    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    return found ? found.no_regiao_saude : 'Todos';
+  }
+
   return {
     localidades,
     isLoading,
@@ -147,6 +164,9 @@ export const useGeoStore = defineStore('geo', () => {
     jurisdicoesPorFiltro,
     municipiosPorFiltro,
     qtdMunicipiosPorRegiao,
+    getFilterValueByIbge7,
+    getMunicipioNomeByIbge7,
+    getRegiaoByIbge7,
     municipiosGeoJson,
     loadMunicipiosGeo,
     getMunicipiosGeoByUF,
@@ -154,4 +174,4 @@ export const useGeoStore = defineStore('geo', () => {
     fetchEstabelecimentos,
     estabelecimentosPorIbge7,
   };
-});
+})

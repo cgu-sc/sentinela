@@ -27,13 +27,13 @@ useFetchAnalytics({ includeFatorRisco: true });
 .dashboard-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .charts-row {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .charts-row.has-map {

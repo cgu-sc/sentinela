@@ -33,8 +33,8 @@ const tabs = computed(() => {
   if (activeModule.value === 'consolidado') {
     return [
       { label: 'Nacional',             path: '/' },
-      { label: 'Municípios',           path: '/municipio' },
-      { label: 'Farmácias',            path: '/cnpj' },
+      { label: 'Municípios',           path: '/municipios' },
+      { label: 'Estabelecimentos',     path: '/estabelecimentos' },
       { label: 'Indicadores',          path: '/indicadores' },
       { label: 'Dispersão Benefício',  path: '/dispersao-beneficio' },
     ];
@@ -59,7 +59,7 @@ onMounted(() => {
 watch(activeModule, (newVal) => {
   if (
     newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:dispersao-beneficio|dispersao|municipio|empresa|cnpj|$)/)
+    !route.path.match(/^\/(?:dispersao-beneficio|dispersao|municipios|empresa|estabelecimentos|$)/)
   ) {
     router.push('/');
   } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {
@@ -73,7 +73,7 @@ watch(navCnpjInput, (val) => {
   const digits = val.replace(/\D/g, '');
   if (digits.length === 14) {
     navCnpjInput.value = '';
-    router.push(`/estabelecimento/${digits}`);
+    router.push(`/estabelecimentos/${digits}`);
   }
 });
 </script>
@@ -112,9 +112,9 @@ watch(navCnpjInput, (val) => {
         <!-- Atalho: último CNPJ analisado -->
         <div v-if="recentCnpj" class="nav-recent-wrapper">
           <router-link
-            :to="`/estabelecimento/${recentCnpj.cnpj}`"
+            :to="`/estabelecimentos/${recentCnpj.cnpj}`"
             class="nav-tab nav-recent-cnpj"
-            :class="{ active: route.path.startsWith('/estabelecimento') }"
+            :class="{ active: route.path.startsWith('/estabelecimentos/') }"
             v-tooltip.bottom="recentCnpj.razaoSocial"
           >
             <i class="pi pi-history" />

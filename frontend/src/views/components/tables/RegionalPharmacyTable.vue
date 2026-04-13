@@ -31,7 +31,7 @@ const { formatBRL, formatPercent, formatTitleCase } = useFormatting();
 const goToDetail = (event) => {
   // Gera o link para o CNPJ clicado e abre em uma nova aba (mais prático para comparação)
   const routeDetail = router.resolve({ 
-    name: 'CnpjDetail', 
+    name: 'EstablishmentDetail', 
     params: { cnpj: event.data.cnpj } 
   });
   window.open(routeDetail.href, '_blank');

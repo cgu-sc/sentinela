@@ -84,11 +84,11 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: 'item',
       confine: true,
-      backgroundColor: c.tooltip,
-      borderColor: c.border,
+      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: c.text, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: { color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12 },
       formatter: (params) => {
         if (!params.data) return `
           <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>

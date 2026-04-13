@@ -12,11 +12,17 @@ const routes = [
       { path: '', name: 'Dashboard', component: NationalView },
       { path: 'dispersao', component: NationalView },
       { path: 'dispersao-beneficio', component: () => import('@/views/BenefitDispersionView.vue') },
-      { path: 'municipio', component: MunicipalView },
-      { path: 'cnpj', component: CnpjView },
+      { path: 'municipios', name: 'Municipalities', component: MunicipalView },
+      { path: 'estabelecimentos', name: 'Establishments', component: CnpjView },
+      { path: 'estabelecimentos/:cnpj', name: 'EstablishmentDetail', component: () => import('@/views/CnpjDetailView.vue') },
+      
+      // Redirecionamentos para legibilidade e retrocompatibilidade
+      { path: 'municipio', redirect: '/municipios' },
+      { path: 'cnpj', redirect: '/estabelecimentos' },
+      { path: 'estabelecimento/:cnpj', redirect: to => `/estabelecimentos/${to.params.cnpj}` },
+
       { path: 'indicadores', component: () => import('@/views/IndicatorsView.vue') },
       { path: 'regional', component: () => import('@/views/RegionalView.vue') },
-      { path: 'estabelecimento/:cnpj', name: 'CnpjDetail', component: () => import('@/views/CnpjDetailView.vue') },
       { path: 'listas', name: 'FarmaciaLists', component: () => import('@/views/lists/WatchlistView.vue') },
     ]
   }

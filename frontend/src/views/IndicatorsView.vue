@@ -8,6 +8,7 @@ import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 import IndicatorSelector from './components/indicadores/IndicatorSelector.vue';
 import IndicadorKpiCards from './components/indicadores/IndicadorKpiCards.vue';
+import IndicadorDistribution from './components/indicadores/IndicadorDistribution.vue';
 import IndicadorMap from './components/indicadores/IndicadorMap.vue';
 import IndicadorCnpjTable from './components/indicadores/IndicadorCnpjTable.vue';
 
@@ -107,6 +108,15 @@ onMounted(() => {
           :is-loading="isLoading"
         />
 
+        <!-- Distribuição/Calibração -->
+        <IndicadorDistribution
+          :cnpjs="cnpjs"
+          :threshold-key="activeIndicadorMeta?.thresholdKey"
+          :regional-median="kpis?.mediana_reg"
+          :regional-mad="kpis?.mad_reg"
+          :is-loading="isLoading"
+        />
+
         <!-- Mapa -->
         <IndicadorMap
           :map-data="municipios"
@@ -149,7 +159,7 @@ onMounted(() => {
 .indicadores-layout {
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
+  gap: 1rem;
   width: 100%;
 }
 

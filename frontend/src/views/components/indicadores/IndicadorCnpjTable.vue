@@ -45,7 +45,7 @@ function statusClass(status) {
 
 function goToDetail(event) {
   if (event.originalEvent?.target?.closest('.clickable-badge, .copy-btn')) return;
-  router.push({ name: 'CnpjDetail', params: { cnpj: event.data.cnpj } });
+  router.push({ name: 'EstablishmentDetail', params: { cnpj: event.data.cnpj } });
 }
 
 async function copyCnpj(cnpj) {

@@ -135,7 +135,7 @@ const toggleSidebarLock = () => {
 };
 
 // ── Rotas que bloqueiam filtros e colapsam a sidebar ─────────────────────────
-const LOCKED_ROUTES = ['/estabelecimento/', '/listas'];
+const LOCKED_ROUTES = ['/estabelecimentos/', '/listas'];
 const isLockedRoute = (path) => LOCKED_ROUTES.some((r) => path.startsWith(r));
 
 watch(

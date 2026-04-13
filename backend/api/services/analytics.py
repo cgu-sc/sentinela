@@ -666,7 +666,7 @@ class AnalyticsService:
                     pct_critico=float(row["pct_critico"] or 0.0),
                 ))
 
-            # ── 9. KPIs de resumo ──
+            # ── 9. KPIs de resumo com Contexto Regional de Benchmarking ──
             status_counts = df_joined["status"].value_counts().to_dicts()
             counts = {r["status"]: r["count"] for r in status_counts}
 
@@ -676,11 +676,39 @@ class AnalyticsService:
                 if total_com_dados > 0 else None
             )
 
-            mediana_reg: float | None = None
-            if c_mr in df_joined.columns:
-                raw_med = df_joined[c_mr].drop_nulls()
-                if raw_med.len() > 0:
-                    mediana_reg = float(raw_med.median() or 0)
+            # Identifica a Região de Saúde de referência (mesmo se filtro for municipal)
+            ref_regiao = regiao_saude
+            if (not ref_regiao or ref_regiao == 'Todos') and (municipio and municipio != 'Todos'):
+                # Busca a região de saúde desse município no dataframe original
+                sample = df_joined.select("no_regiao_saude").unique().limit(1)
+                if not sample.is_empty():
+                    ref_regiao = sample.item(0, 0)
+
+            # Cálculo de Mediana/MAD sobre o CONTEXTO (UF + opcionalmente Região de Saúde)
+            context_mask = pl.lit(True)
+            if uf and uf != 'Todos':
+                context_mask = context_mask & (pl.col("uf") == uf)
+            if ref_regiao and ref_regiao != 'Todos':
+                context_mask = context_mask & (pl.col("no_regiao_saude") == ref_regiao)
+
+            # Buscamos a mediana e MAD do indicador para o contexto regional completo
+            # (risco_reg representa o valor em múltiplos da mediana, o que é ideal para o Z-Score)
+            mediana_reg = None
+            mad_reg = None
+            # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
+            df_context_geo = df_mov.group_by("cnpj").agg([
+                pl.col("uf").last().alias("uf"),
+                pl.col("no_regiao_saude").last().alias("no_regiao_saude")
+            ]).filter(context_mask)
+            
+            df_context = df_context_geo.join(df_risco.select(["cnpj", c_rr]), on="cnpj", how="inner")
+            
+            if not df_context.is_empty():
+                s_riscos = df_context.select(c_rr).drop_nulls().to_series().sort()
+                if not s_riscos.is_empty():
+                    mediana_reg = float(s_riscos.median() or 0)
+                    # MAD = Mediana(|x - Mediana|)
+                    mad_reg = float((s_riscos - mediana_reg).abs().median() or 0.0001)
 
             kpis = IndicadorKpiSummarySchema(
                 total_critico=counts.get("CRÍTICO", 0),
@@ -688,6 +716,7 @@ class AnalyticsService:
                 total_normal=counts.get("NORMAL", 0),
                 total_sem_dados=counts.get("SEM DADOS", 0),
                 mediana_reg=mediana_reg,
+                mad_reg=mad_reg,
                 pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
             )
 

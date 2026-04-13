@@ -29,7 +29,7 @@ function remover(cnpj) {
 }
 
 function abrirEstabelecimento(cnpj) {
-  router.push(`/estabelecimento/${cnpj}`);
+  router.push(`/estabelecimentos/${cnpj}`);
 }
 </script>
 

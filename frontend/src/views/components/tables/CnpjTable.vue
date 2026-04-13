@@ -22,7 +22,7 @@ const filterStore = useFilterStore();
 const goToDetail = (event) => {
   // Ignora cliques em badges para não conflitar com os filtros
   if (event.originalEvent?.target?.closest('.clickable-badge')) return;
-  router.push({ name: 'CnpjDetail', params: { cnpj: event.data.cnpj } });
+  router.push({ name: 'EstablishmentDetail', params: { cnpj: event.data.cnpj } });
 };
 const { resultadoCnpjs, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();

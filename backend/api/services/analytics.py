@@ -128,7 +128,7 @@ class AnalyticsService:
         for k, v in edited_data.items():
             if isinstance(v, dict) and 'atencao' in v and 'critico' in v:
                 _INDICATOR_THRESHOLDS[k] = (float(v['atencao']), float(v['critico']))
-        
+
         # 2. Persiste no disco
         try:
             os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)

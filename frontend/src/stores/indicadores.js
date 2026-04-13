@@ -2,10 +2,12 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
+const STORAGE_KEY = 'sentinela_indicadores_selected';
+
 export const useIndicadoresStore = defineStore('indicadores', {
   state: () => ({
-    /** Chave do indicador selecionado (ex: 'auditado', 'teto'). null = nada selecionado. */
-    selectedIndicador: null,
+    /** Chave do indicador selecionado. Restaurado do storage para manter o foco do auditor. */
+    selectedIndicador: localStorage.getItem(STORAGE_KEY) || null,
     /** KPIs de resumo: total_critico, total_atencao, total_normal, total_sem_dados, mediana_reg, pct_acima_limiar */
     kpis: null,
     /** Array de { municipio, uf, id_ibge7, total_cnpjs, total_critico, pct_critico } */
@@ -17,21 +19,19 @@ export const useIndicadoresStore = defineStore('indicadores', {
   }),
 
   actions: {
-    /**
-     * Busca análise cruzada de um indicador de risco no escopo geográfico atual.
-     *
-     * @param {string} indicador - Chave do indicador (ex: 'auditado')
-     * @param {Object} params - Filtros geográficos e cadastrais (uf, regiao_saude, etc.)
-     */
     async fetchIndicadorAnalise(indicador, params = {}) {
       if (!indicador) return;
+      
+      this.selectedIndicador = indicador;
+      localStorage.setItem(STORAGE_KEY, indicador);
+      
       this.isLoading = true;
       this.error = null;
       try {
         const response = await axios.get(API_ENDPOINTS.analyticsIndicadoresAnalise, {
           params: { indicador, ...params },
         });
-        this.selectedIndicador = indicador;
+        
         this.kpis = response.data.kpis;
         this.municipios = response.data.municipios ?? [];
         this.cnpjs = response.data.cnpjs ?? [];
@@ -45,6 +45,7 @@ export const useIndicadoresStore = defineStore('indicadores', {
 
     reset() {
       this.selectedIndicador = null;
+      localStorage.removeItem(STORAGE_KEY);
       this.kpis = null;
       this.municipios = [];
       this.cnpjs = [];

@@ -74,13 +74,13 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
   <div class="ind-table-card" :class="{ 'is-refreshing': isLoading }">
     <div class="section-header">
       <div class="header-icon-box">
-        <i class="pi pi-list-check" />
+        <i class="pi pi-list" />
       </div>
       <div class="header-text-box">
         <h3>Farmácias por Indicador</h3>
         <span class="subtitle">
           {{ indicadorLabel }} — {{ cnpjs.length }} estabelecimentos
-          <Tag v-if="totalCritico > 0" :value="`${totalCritico} CRÍTICO`" class="status-danger" />
+          <Tag v-if="totalCritico > 0" icon="pi pi-exclamation-triangle" :value="`${totalCritico} CRÍTICOS`" class="status-danger p-ml-2" />
         </span>
       </div>
     </div>

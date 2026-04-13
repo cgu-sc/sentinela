@@ -60,7 +60,7 @@ const cards = computed(() => {
       value: k.pct_acima_limiar != null ? k.pct_acima_limiar.toFixed(1) + '%' : '—',
       sub: 'CRÍTICO + ATENÇÃO',
       color: 'var(--risk-indicator-warning)',
-      icon: 'pi pi-percentage',
+      icon: 'pi pi-chart-pie',
     },
   ];
 });

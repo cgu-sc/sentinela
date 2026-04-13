@@ -14,14 +14,25 @@ export const useConfigStore = defineStore('config', () => {
   const isLoading = ref(false);
   const hasLoaded = ref(false);
 
-  // 2. PERSISTÊNCIA AUTOMÁTICA (IGUAL À SIDEBAR)
+  // 2. PERSISTÊNCIA AUTOMÁTICA (LOCAL E SERVIDOR)
   let _saveTimer = null;
   watch(thresholds, (newThresholds) => {
     clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => {
+    _saveTimer = setTimeout(async () => {
+      // 1. Salva no navegador para velocidade
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newThresholds));
-      console.log('✅ Configurações de risco persistidas no LocalStorage (Autosave).');
-    }, 300); // 300ms de debounce
+      
+      // 2. Envia para o servidor para que o motor analítico (Polars) utilize os novos valores
+      try {
+        isLoading.value = true;
+        await axios.post(API_ENDPOINTS.analyticsConfigThresholds, newThresholds);
+        console.log('✅ Configurações persistidas no Backend (Autosave).');
+      } catch (err) {
+        console.error('⚠️ Falha ao salvar configurações no servidor:', err);
+      } finally {
+        isLoading.value = false;
+      }
+    }, 500); // 500ms de debounce para evitar spam na API enquanto digita
   }, { deep: true });
 
   // 3. ACTIONS

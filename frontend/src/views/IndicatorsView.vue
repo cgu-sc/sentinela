@@ -63,6 +63,7 @@ function onSelectUf(uf) {
 // Filtramos localmente para que os KPIs e a Tabela reflitam apenas a seleção atual.
 const displayedKpis = computed(() => {
   if (!kpis.value) return null;
+  
   const regiao = filterStore.selectedRegiaoSaude;
   const ibge7 = selectedMunicipioIbge7.value;
   
@@ -108,17 +109,10 @@ const selectedMunicipioNome = computed(() => {
 
 function onIndicadorSelect(key) {
   clearMunicipioFilter();
-  localStorage.setItem('sentinela_indicadores_selected', key);
   fetchForIndicador(key);
 }
 
-// Restaura o último indicador selecionado ao montar a view
-onMounted(() => {
-  const saved = localStorage.getItem('sentinela_indicadores_selected');
-  if (saved && !selectedIndicador.value) {
-    fetchForIndicador(saved);
-  }
-});
+// O fetch automático inicial agora é tratado pelo watch(immediate: true) no useFetchIndicadores.js
 </script>
 
 <template>
@@ -307,8 +301,8 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.85rem;
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 40%, transparent);
   border-radius: 99px;
   font-size: 0.78rem;
   color: var(--text-color);
@@ -316,7 +310,7 @@ onMounted(() => {
 }
 
 .municipio-filter-chip i.pi-map-marker {
-  color: var(--primary-color);
+  color: var(--risk-indicator-critical, #ef4444);
   font-size: 0.75rem;
 }
 

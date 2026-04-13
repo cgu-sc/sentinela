@@ -113,7 +113,6 @@ const selectedMunicipioNome = computed(() => {
 });
 
 function onIndicadorSelect(key) {
-  clearMunicipioFilter();
   fetchForIndicador(key);
 }
 

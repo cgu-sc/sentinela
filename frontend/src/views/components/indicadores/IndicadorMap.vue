@@ -61,7 +61,15 @@ const chartRef = ref(null);
 const containerRef = ref(null);
 const containerWidth = ref(800);
 const containerHeight = ref(400);
+const zoomLevel = ref(1);
 let _resizeObserver = null;
+
+function handleZoom(delta) {
+  const next = zoomLevel.value + delta;
+  if (next >= 1 && next <= 15) {
+    zoomLevel.value = Number(next.toFixed(1));
+  }
+}
 
 onMounted(async () => {
   if (!window.__brasilUfRegistered) {
@@ -315,7 +323,8 @@ const chartOption = computed(() => {
       type: 'map',
       map: mapName.value,
       nameProperty: isNational.value ? 'UF' : 'name',
-      roam: true,
+      roam: 'move',
+      zoom: zoomLevel.value,
       scaleLimit: { min: 1, max: 15 },
       layoutCenter: ['50%', '50%'],
       layoutSize: optimalLayoutSize.value,
@@ -369,6 +378,19 @@ function onMapClick(params) {
         autoresize
         @click="onMapClick"
       />
+
+      <!-- Controles de Zoom -->
+      <div class="map-controls">
+        <button class="zoom-btn" @click="handleZoom(0.5)" title="Aumentar Zoom">
+          <i class="pi pi-plus" />
+        </button>
+        <button class="zoom-btn" @click="handleZoom(-0.5)" title="Diminuir Zoom">
+          <i class="pi pi-minus" />
+        </button>
+        <button class="zoom-btn" @click="zoomLevel = 1" title="Resetar Zoom">
+          <i class="pi pi-refresh" />
+        </button>
+      </div>
     </div>
     <div v-show="isNational && !nationalMapReady" class="map-loading">
       <i class="pi pi-spin pi-spinner" />
@@ -431,6 +453,7 @@ function onMapClick(params) {
 
 .map-wrapper {
   height: 45vh;
+  position: relative;
 }
 
 .echart {
@@ -445,5 +468,47 @@ function onMapClick(params) {
   justify-content: center;
   color: var(--text-muted);
   font-size: 1.5rem;
+}
+
+/* ── CONTROLES DE ZOOM ── */
+.map-controls {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: var(--bg-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.zoom-btn i {
+  font-size: 0.75rem;
+}
+
+:global(.dark-mode) .zoom-btn {
+  background: rgba(45, 45, 45, 0.85);
+  backdrop-filter: blur(4px);
 }
 </style>

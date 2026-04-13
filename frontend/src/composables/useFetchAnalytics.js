@@ -52,7 +52,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedUnidadePf,
     ],
     () => { if (isPeriodoValido()) fetchAll(); },
-    { deep: true, immediate: false }
+    { deep: true, immediate: true }
   );
 
   // Watch separado para filtros que atualizam o mapa nacional quando UF está selecionada
@@ -67,7 +67,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedGrandeRede,
     ],
     fetchNacionalIfNeeded,
-    { deep: true, immediate: false }
+    { deep: true, immediate: true }
   );
 
   // Watch separado para cnpjRaiz — string primitiva, não precisa de deep

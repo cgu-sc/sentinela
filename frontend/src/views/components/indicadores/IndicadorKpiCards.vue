@@ -111,12 +111,7 @@ const cards = computed(() => {
   border-radius: 10px;
   padding: 0.85rem 1rem;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.ind-kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.2s ease;
 }
 
 .ind-kpi-body {

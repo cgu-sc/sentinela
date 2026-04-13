@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, ref } from "vue";
+import { computed, watch, ref, onMounted, nextTick } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
@@ -112,6 +112,19 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(async () => {
+  // Garante o registro inicial caso o watch immediate já tenha o dado
+  if (activeUf.value && activeUf.value !== "Todos") {
+    const geo = geoStore.getMunicipiosGeoByUF(activeUf.value);
+    if (geo) registerMap(`municipios-${activeUf.value}`, geo);
+  }
+  
+  // O autoresize do vue-echarts resolve a maioria dos problemas de tamanho,
+  // mas esperamos um tick para garantir que o contêiner grid está estável.
+  await nextTick();
+  chartRef.value?.chart?.resize();
+});
 
 watch(
   [selectedIbge7, effectiveRegiao],

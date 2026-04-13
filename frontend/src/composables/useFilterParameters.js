@@ -2,6 +2,7 @@ import { useFilterStore } from '../stores/filters';
 import { useFormatting } from './useFormatting';
 import { parseMunicipio, extractCnpjFilter } from './useParsing';
 import { FILTER_ALL_VALUE } from '@/config/constants';
+import { useGeoStore } from '@/stores/geo';
 
 /**
  * Converte os filtros do Pinia em parâmetros prontos para a API.
@@ -9,6 +10,7 @@ import { FILTER_ALL_VALUE } from '@/config/constants';
  */
 export function useFilterParameters() {
   const filterStore = useFilterStore();
+  const geoStore = useGeoStore();
   const { toLocalISO } = useFormatting();
 
   function getApiParams() {
@@ -22,8 +24,13 @@ export function useFilterParameters() {
 
     const uf = filterStore.selectedUF !== FILTER_ALL_VALUE ? filterStore.selectedUF : null;
     const regiaoSaude = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
+    
     const rawMunicipio = filterStore.selectedMunicipio !== FILTER_ALL_VALUE ? filterStore.selectedMunicipio : null;
-    const municipio = parseMunicipio(rawMunicipio);
+    let municipio = parseMunicipio(rawMunicipio);
+    if (rawMunicipio && !isNaN(rawMunicipio)) {
+      const loc = geoStore.localidades.find(l => Number(l.id_ibge7) === Number(rawMunicipio));
+      if (loc) municipio = loc.no_municipio;
+    }
     const situacaoRf = filterStore.selectedSituacao !== FILTER_ALL_VALUE ? filterStore.selectedSituacao : null;
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;

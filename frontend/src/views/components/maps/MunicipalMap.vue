@@ -344,13 +344,7 @@ watch(
       selectedIbge7.value = null;
       return;
     }
-    const nome = sel.split("|")[0];
-    const loc = geoStore.localidades.find(
-      (l) =>
-        norm(l.no_municipio) === norm(nome) &&
-        (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
-    );
-    selectedIbge7.value = loc ? Number(loc.id_ibge7) : null;
+    selectedIbge7.value = Number(sel);
   },
   { immediate: true },
 );
@@ -396,8 +390,7 @@ const onClick = (params) => {
   if (!embeddedMode.value) {
     if (selectedRegiao.value)
       filterStore.selectedRegiaoSaude = selectedRegiao.value;
-    if (munData?.municipio)
-      filterStore.selectedMunicipio = `${munData.municipio}|${activeUf.value}`;
+    filterStore.selectedMunicipio = String(ibge7);
   }
 
   emit("select-municipio", Number(ibge7), munData?.municipio);

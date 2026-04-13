@@ -12,6 +12,7 @@ import { CNPJ_RAIZ_LENGTH } from '@/config/constants';
  */
 export function parseMunicipio(value) {
     if (!value) return '';
+    if (typeof value === 'number') return String(value);
     return value.includes('|') ? value.split('|')[0] : value;
 }
 

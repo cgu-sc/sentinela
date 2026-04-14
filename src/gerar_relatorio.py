@@ -843,7 +843,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "4+ Itens por Autorização": "METODOLOGIA: Percentual de autorizações (cupons fiscais) que contêm 4 ou mais medicamentos distintos dispensados no mesmo ato.",
 
-                "Itens por Autorização": "METODOLOGIA: Cálculo simples da quantidade média de itens dispensados por cupom fiscal (Total de Caixas / Total de Autorizações).",
 
                 "Valor do Ticket Médio": "METODOLOGIA: Valor monetário médio de cada autorização de venda.",
 
@@ -925,7 +924,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     "Incompatibilidade Patológica":         "incompatibilidade_patologica",
                     "Dispensação em Teto Máximo":           "teto",
                     "4+ Itens por Autorização":             "polimedicamento",
-                    "Itens por Autorização":                "media_itens",
                     "Valor do Ticket Médio":                "ticket_medio",
                     "Faturamento Médio Mensal por Cliente": "receita_paciente",
                     "Venda Per Capita Mensal Municipal":    "per_capita",
@@ -957,7 +955,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 ("3. PADRÕES DE QUANTIDADE", [
                     ("Dispensação em Teto Máximo", "pct_teto", "med_teto_reg", "med_teto_uf", "med_teto_br", "risco_teto_reg", "risco_teto_uf", "risco_teto_br", "pct"),
                     ("4+ Itens por Autorização", "pct_polimedicamento", "med_polimedicamento_reg", "med_polimedicamento_uf", "med_polimedicamento_br", "risco_polimedicamento_reg", "risco_polimedicamento_uf", "risco_polimedicamento_br", "pct"),
-                    ("Itens por Autorização", "val_media_itens", "med_media_itens_reg", "med_media_itens_uf", "med_media_itens_br", "risco_media_itens_reg", "risco_media_itens_uf", "risco_media_itens_br", "dec"),
                 ]),
                 ("4. PADRÕES FINANCEIROS", [
                     ("Valor do Ticket Médio", "val_ticket_medio", "med_ticket_reg", "med_ticket_uf", "med_ticket_br", "risco_ticket_reg", "risco_ticket_uf", "risco_ticket_br", "val"),

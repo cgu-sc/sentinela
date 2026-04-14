@@ -33,7 +33,6 @@ DECLARE @PESO_EXCLUSIVIDADE_CRM              FLOAT = 0.5;
 DECLARE @PESO_CONCENTRACAO_CRM_HHI           FLOAT = 0.5; 
 DECLARE @PESO_CONCENTRACAO_PICO              FLOAT = 1.0; 
 DECLARE @PESO_VENDAS_CONSECUTIVAS_RAPIDAS    FLOAT = 2.0; 
-DECLARE @PESO_MEDIA_ITENS                    FLOAT = 1.0; 
 DECLARE @PESO_TICKET_MEDIO                   FLOAT = 1.0;
 
 -- 1. LIMPEZA DE AMBIENTE
@@ -74,7 +73,6 @@ IndicadoresPresenca AS (
         CASE WHEN I02.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_clinico,
         CASE WHEN I03.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_teto,
         CASE WHEN I04.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_polimedicamento,
-        CASE WHEN I05.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_media_itens,
         CASE WHEN I06.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_ticket,
         CASE WHEN I07.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_receita_paciente,
         CASE WHEN I08.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_per_capita,
@@ -113,11 +111,6 @@ IndicadoresPresenca AS (
         I04.municipio_media AS avg_polimedicamento_mun, I04.estado_media AS avg_polimedicamento_uf, I04.pais_media AS avg_polimedicamento_br, I04.regiao_saude_media AS avg_polimedicamento_reg,
         I04.municipio_mediana AS med_polimedicamento_mun, I04.estado_mediana AS med_polimedicamento_uf, I04.pais_mediana AS med_polimedicamento_br, I04.regiao_saude_mediana AS med_polimedicamento_reg,
         I04.risco_relativo_mun_mediana AS risco_polimedicamento_mun, I04.risco_relativo_uf_mediana AS risco_polimedicamento_uf, I04.risco_relativo_br_mediana AS risco_polimedicamento_br, I04.risco_relativo_reg_mediana AS risco_polimedicamento_reg,
-
-        I05.media_itens_autorizacao AS val_media_itens,
-        I05.municipio_media AS avg_media_itens_mun, I05.estado_media AS avg_media_itens_uf, I05.pais_media AS avg_media_itens_br, I05.regiao_saude_media AS avg_media_itens_reg,
-        I05.municipio_mediana AS med_media_itens_mun, I05.estado_mediana AS med_media_itens_uf, I05.pais_mediana AS med_media_itens_br, I05.regiao_saude_mediana AS med_media_itens_reg,
-        I05.risco_relativo_mun_mediana AS risco_media_itens_mun, I05.risco_relativo_uf_mediana AS risco_media_itens_uf, I05.risco_relativo_br_mediana AS risco_media_itens_br, I05.risco_relativo_reg_mediana AS risco_media_itens_reg,
 
         I06.valor_ticket_medio AS val_ticket_medio,
         I06.municipio_media AS avg_ticket_mun, I06.estado_media AS avg_ticket_uf, I06.pais_media AS avg_ticket_br, I06.regiao_saude_media AS avg_ticket_reg,
@@ -200,7 +193,6 @@ IndicadoresPresenca AS (
     LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado I02 ON I02.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_teto_detalhado I03 ON I03.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_polimedicamento_detalhado I04 ON I04.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_media_itens_detalhado I05 ON I05.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_ticket_medio_detalhado I06 ON I06.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_detalhado I07 ON I07.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_venda_per_capita_detalhado I08 ON I08.cnpj = F.cnpj
@@ -221,7 +213,7 @@ IndicadoresPresenca AS (
 RiscosAjustados AS (
     SELECT 
         *,
-        (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + tem_media_itens + 
+        (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + 
          tem_ticket + tem_receita_paciente + tem_per_capita + tem_vendas_rapidas + 
          tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
          tem_crm + tem_exclusividade_crm + tem_crms_irregulares + tem_recorrencia_sistemica + tem_auditado) AS qtd_indicadores_preenchidos,
@@ -264,14 +256,7 @@ RiscosAjustados AS (
         END AS risco_polimedicamento_ajustado,
         CASE WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
 
-        -- 5. MEDIA ITENS
-        CASE 
-            WHEN tem_media_itens=1 AND (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) >= 5 THEN (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) * 3
-            WHEN tem_media_itens=1 AND (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) >= 3 THEN (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) * 2
-            WHEN tem_media_itens=1 AND (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) >= 1.5 THEN (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) 
-        END AS risco_media_itens_ajustado,
-        CASE WHEN tem_media_itens=1 AND (CASE WHEN risco_media_itens_reg > 10 THEN 10 ELSE ISNULL(risco_media_itens_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_media_itens_critico,
+        CASE WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
 
         -- 6. TICKET
         CASE 
@@ -406,7 +391,7 @@ RiscosAjustados AS (
 ScoreCalculado AS (
     SELECT 
         *,
-        CAST(qtd_indicadores_preenchidos * 100.0 / 19.0 AS DECIMAL(5,2)) AS pct_completude,
+        CAST(qtd_indicadores_preenchidos * 100.0 / 18.0 AS DECIMAL(5,2)) AS pct_completude,
         
         -- SOMA PONDERADA: Multiplica cada risco ajustado pelo seu peso configurado no topo
         (
@@ -414,7 +399,6 @@ ScoreCalculado AS (
             (risco_clinico_ajustado * @PESO_INCONSISTENCIA_CLINICA) +
             (risco_teto_ajustado * @PESO_ESTOURO_TETO) +
             (risco_polimedicamento_ajustado * @PESO_POLIMEDICAMENTO) +
-            (risco_media_itens_ajustado * @PESO_MEDIA_ITENS) +
             (risco_ticket_ajustado * @PESO_TICKET_MEDIO) +
             (risco_receita_paciente_ajustado * @PESO_RECEITA_POR_PACIENTE) +
             (risco_per_capita_ajustado * @PESO_VALOR_PER_CAPITA) +
@@ -437,7 +421,6 @@ ScoreCalculado AS (
             (tem_clinico * @PESO_INCONSISTENCIA_CLINICA) +
             (tem_teto * @PESO_ESTOURO_TETO) +
             (tem_polimedicamento * @PESO_POLIMEDICAMENTO) +
-            (tem_media_itens * @PESO_MEDIA_ITENS) +
             (tem_ticket * @PESO_TICKET_MEDIO) +
             (tem_receita_paciente * @PESO_RECEITA_POR_PACIENTE) +
             (tem_per_capita * @PESO_VALOR_PER_CAPITA) +
@@ -456,7 +439,7 @@ ScoreCalculado AS (
         
         -- Contagem de flags críticos
         (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
-         flag_polimedicamento_critico + flag_media_itens_critico + flag_ticket_critico +
+         flag_polimedicamento_critico + flag_ticket_critico +
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
          flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico +
          flag_pico_critico + flag_pacientes_unicos_critico + flag_crm_critico +
@@ -494,7 +477,6 @@ ScoreCalculadoFim AS (
             CASE WHEN flag_clinico_critico = 1 THEN ', Clínico' ELSE '' END +
             CASE WHEN flag_teto_critico = 1 THEN ', Teto' ELSE '' END +
             CASE WHEN flag_polimedicamento_critico = 1 THEN ', Polimedicamento' ELSE '' END +
-            CASE WHEN flag_media_itens_critico = 1 THEN ', Média Itens' ELSE '' END +
             CASE WHEN flag_ticket_critico = 1 THEN ', Ticket Médio' ELSE '' END +
             CASE WHEN flag_receita_paciente_critico = 1 THEN ', Receita/Paciente' ELSE '' END +
             CASE WHEN flag_per_capita_critico = 1 THEN ', Per Capita' ELSE '' END +

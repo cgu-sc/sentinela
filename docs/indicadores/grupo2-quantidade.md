@@ -110,48 +110,13 @@ $$
 
 ---
 
-## 3. Média de Itens por Cupom
-
-### 3.1. Definição
-
-Calcula a **média de medicamentos** dispensados por autorização (cupom fiscal).
-
-### 3.2. Script
-
-```
-📄 Indicadores/media_itens.sql
-```
-
-### 3.3. Lógica de Cálculo
-
-#### Algoritmo
-
-1. **Contagem Total:** Conta todas as linhas de venda
-2. **Contagem de Cupons:** Conta autorizações únicas
-3. **Divisão:** Calcula a média
-
-### 3.4. Fórmula
-
-$$
-\text{Média de Itens} = \frac{\text{Total de Linhas de Venda}}{\text{Total de Autorizações Únicas}}
-$$
-
-### 3.5. Interpretação
-
-| Valor         | Interpretação                                          |
-| ------------- | ------------------------------------------------------ |
-| **1.0 - 2.5** | Normal (a maioria dos pacientes leva 1-2 medicamentos) |
-| **>2.5**      | Elevado - investigar                                   |
-
----
-
-## 4. Resumo do Grupo
+## 3. Resumo do Grupo
 
 | Indicador           | Métrica  | Fórmula                        | Alerta |
 | ------------------- | -------- | ------------------------------ | ------ |
 | Dispensação em Teto | % vendas | Vendas no teto / Total vendas  | > 65%  |
 | Polimedicamentos    | % cupons | Cupons ≥4 itens / Total cupons | > 10%  |
-| Média de Itens      | Média    | Total linhas / Total cupons    | > 2.5  |
+
 
 ---
 

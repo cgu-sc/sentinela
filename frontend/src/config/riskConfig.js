@@ -99,7 +99,6 @@ export const INDICATOR_THRESHOLDS = {
   // 3. Padrões de Quantidade
   teto:                   { atencao: 1.2, critico: 1.39 },
   polimedicamento:        { atencao: 2.0, critico: 3.0 },
-  media_itens:            { atencao: 1.3, critico: 1.5 },
 
   // 4. Padrões Financeiros
   ticket_medio:           { atencao: 2.0, critico: 3.0 },
@@ -156,8 +155,6 @@ export const INDICATOR_GROUPS = [
         metodologia: 'Percentual de dispensações onde a quantidade vendida atinge exatamente o limite máximo permitido por medicamento.' },
       { key: 'polimedicamento', label: '4+ Itens por Autorização', formato: 'pct', thresholdKey: 'polimedicamento',
         metodologia: 'Percentual de autorizações (cupons fiscais) que contêm 4 ou mais medicamentos distintos dispensados no mesmo ato.' },
-      { key: 'media_itens', label: 'Itens por Autorização', formato: 'dec', thresholdKey: 'media_itens',
-        metodologia: 'Quantidade média de itens dispensados por cupom fiscal (Total de Caixas / Total de Autorizações).' },
     ],
   },
   {

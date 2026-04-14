@@ -51,7 +51,6 @@ INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
     'incompatibilidade_patologica':('pct_clinico',               'med_clinico_reg',              'med_clinico_uf',              'med_clinico_br',              'risco_clinico_reg',              'risco_clinico_uf',              'risco_clinico_br'),
     'teto':                  ('pct_teto',                  'med_teto_reg',                 'med_teto_uf',                 'med_teto_br',                 'risco_teto_reg',                 'risco_teto_uf',                 'risco_teto_br'),
     'polimedicamento':       ('pct_polimedicamento',       'med_polimedicamento_reg',      'med_polimedicamento_uf',      'med_polimedicamento_br',      'risco_polimedicamento_reg',      'risco_polimedicamento_uf',      'risco_polimedicamento_br'),
-    'media_itens':           ('val_media_itens',           'med_media_itens_reg',          'med_media_itens_uf',          'med_media_itens_br',          'risco_media_itens_reg',          'risco_media_itens_uf',          'risco_media_itens_br'),
     'ticket_medio':               ('val_ticket_medio',          'med_ticket_reg',               'med_ticket_uf',               'med_ticket_br',               'risco_ticket_reg',               'risco_ticket_uf',               'risco_ticket_br'),
     'receita_paciente':      ('val_receita_paciente',      'med_receita_paciente_reg',     'med_receita_paciente_uf',     'med_receita_paciente_br',     'risco_receita_paciente_reg',     'risco_receita_paciente_uf',     'risco_receita_paciente_br'),
     'per_capita':            ('val_per_capita',            'med_per_capita_reg',           'med_per_capita_uf',           'med_per_capita_br',           'risco_per_capita_reg',           'risco_per_capita_uf',           'risco_per_capita_br'),
@@ -81,7 +80,6 @@ _INDICATOR_THRESHOLDS: dict[str, tuple[float, float]] = {
     # 3. Padrões de Quantidade
     'teto':                   (1.2, 1.39),
     'polimedicamento':        (2.0, 3.0),
-    'media_itens':            (1.3, 1.5),
     # 4. Padrões Financeiros
     'ticket_medio':                (2.0, 3.0),
     'receita_paciente':       (2.0, 3.0),

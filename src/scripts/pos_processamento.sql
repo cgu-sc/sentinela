@@ -435,10 +435,6 @@ SELECT DISTINCT
     ISNULL(MAX(I_POLI.risco_relativo_uf), 0) AS rr_polimedicamento_uf,
     ISNULL(MAX(I_POLI.risco_relativo_br), 0) AS rr_polimedicamento_br,
     
-    -- 7. MÉDIA ITENS
-    ISNULL(MAX(I_MEDIA_ITENS.media_itens_autorizacao), 0) AS val_media_itens,
-    ISNULL(MAX(I_MEDIA_ITENS.risco_relativo_uf), 0) AS rr_media_itens_uf,
-    ISNULL(MAX(I_MEDIA_ITENS.risco_relativo_br), 0) AS rr_media_itens_br,
 
     -- 8. VENDAS CONSECUTIVAS (ROBÔS)
     ISNULL(MAX(I_CONSEC.percentual_vendas_consecutivas), 0) AS pct_vendas_rapidas_60s,
@@ -492,7 +488,7 @@ LEFT JOIN temp_CGUSC.dbo.indicadorPacientesFantasma_Completo I_FANTASMA ON I_FAN
 LEFT JOIN temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo I_CLINICA ON I_CLINICA.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorTeto_Completo I_TETO ON I_TETO.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorPolimedicamento_Completo I_POLI ON I_POLI.cnpj = A.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorMediaItens_Completo I_MEDIA_ITENS ON I_MEDIA_ITENS.cnpj = A.cnpj
+
 LEFT JOIN temp_CGUSC.dbo.indicadorVendasConsecutivas_Completo I_CONSEC ON I_CONSEC.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorHorarioAtipico_Completo I_HORA ON I_HORA.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorConcentracaoPico_Completo I_PICO ON I_PICO.cnpj = A.cnpj

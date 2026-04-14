@@ -215,7 +215,7 @@ RiscosAjustados AS (
         *,
         (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + 
          tem_ticket + tem_receita_paciente + tem_per_capita + tem_vendas_rapidas + 
-         tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_fantasma + 
+         tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_compra_unica + 
          tem_crm + tem_exclusividade_crm + tem_crms_irregulares + tem_recorrencia_sistemica + tem_auditado) AS qtd_indicadores_preenchidos,
         
         -- LÓGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO CÁLCULO
@@ -254,8 +254,6 @@ RiscosAjustados AS (
             WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 1.5 THEN (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) * 1.5
             ELSE (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) 
         END AS risco_polimedicamento_ajustado,
-        CASE WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
-
         CASE WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
 
         -- 6. TICKET

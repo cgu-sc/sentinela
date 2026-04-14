@@ -415,10 +415,10 @@ SELECT DISTINCT
     ISNULL(MAX(I_FALECIDOS.risco_relativo_uf), 0) AS rr_falecidos_uf,
     ISNULL(MAX(I_FALECIDOS.risco_relativo_br), 0) AS rr_falecidos_br,
 
-    -- 3. PACIENTES FANTASMA
-    ISNULL(MAX(I_FANTASMA.percentual_fantasma), 0) AS pct_pacientes_fantasma,
-    ISNULL(MAX(I_FANTASMA.risco_relativo_uf), 0) AS rr_pacientes_fantasma_uf,
-    ISNULL(MAX(I_FANTASMA.risco_relativo_br), 0) AS rr_pacientes_fantasma_br,
+    -- 3. COMPRA ÚNICA
+    ISNULL(MAX(I_COMPRA_UNICA.pct_compra_unica), 0) AS pct_compra_unica,
+    ISNULL(MAX(I_COMPRA_UNICA.risco_relativo_uf_mediana), 0) AS rr_compra_unica_uf,
+    ISNULL(MAX(I_COMPRA_UNICA.risco_relativo_br_mediana), 0) AS rr_compra_unica_br,
     
     -- 4. INCONSISTÊNCIA CLÍNICA
     ISNULL(MAX(I_CLINICA.percentual_demografico), 0) AS pct_inconsistencia_clinica,
@@ -484,7 +484,7 @@ INNER JOIN #autorizacoes h ON h.cnpj = A.cnpj
 -- JOINS DOS NOVOS INDICADORES (Tabelas Permanentes)
 LEFT JOIN temp_CGUSC.dbo.Matriz_Risco_Final RISCO ON RISCO.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorFalecidos_Completo I_FALECIDOS ON I_FALECIDOS.cnpj = A.cnpj
-LEFT JOIN temp_CGUSC.dbo.indicadorPacientesFantasma_Completo I_FANTASMA ON I_FANTASMA.cnpj = A.cnpj
+LEFT JOIN temp_CGUSC.fp.indicador_compra_unica_detalhado I_COMPRA_UNICA ON I_COMPRA_UNICA.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorInconsistenciaClinica_Completo I_CLINICA ON I_CLINICA.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorTeto_Completo I_TETO ON I_TETO.cnpj = A.cnpj
 LEFT JOIN temp_CGUSC.dbo.indicadorPolimedicamento_Completo I_POLI ON I_POLI.cnpj = A.cnpj
@@ -885,7 +885,7 @@ SELECT DISTINCT
     ISNULL(MAX(I_FALECIDOS.risco_relativo_uf), 0) AS rr_falecidos_uf,
     ISNULL(MAX(I_FALECIDOS.risco_relativo_br), 0) AS rr_falecidos_br,
 
-    -- 3. PACIENTES FANTASMA
+    -- 3. COMPRA ÚNICA
     ISNULL(MAX(I_FANTASMA.percentual_fantasma), 0) AS pct_pacientes_fantasma,
     ISNULL(MAX(I_FANTASMA.risco_relativo_uf), 0) AS rr_pacientes_fantasma_uf,
     ISNULL(MAX(I_FANTASMA.risco_relativo_br), 0) AS rr_pacientes_fantasma_br,

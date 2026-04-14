@@ -862,7 +862,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "Concentração em Dias de Pico": "METODOLOGIA: Mede o percentual do faturamento mensal que ocorre concentrado nos 3 dias de maior movimento do mês. Farmácias normais diluem vendas.",
 
-                "Pacientes Únicos": "METODOLOGIA: Calcula a proporção de CPFs que realizaram apenas uma única compra durante todo o período analisado (2015-2024). Em um cenário legítimo de dispensação para doenças crônicas (diabetes, hipertensão, asma), espera-se recorrência natural dos pacientes ao longo dos anos.",
+                "Compra Única": "METODOLOGIA: Calcula a proporção de CPFs que realizaram apenas uma única compra durante todo o período analisado (2015-2024). Em um cenário legítimo de dispensação para doenças crônicas (diabetes, hipertensão, asma), espera-se recorrência natural dos pacientes ao longo dos anos.",
 
                 "Concentração de CRMs (HHI)": "METODOLOGIA: Utiliza o Índice Herfindahl-Hirschman (HHI) para medir a concentração de prescrições. Calcula a soma dos quadrados das participações de cada médico no faturamento da farmácia. O quadrado penaliza exponencialmente a concentração. Um HHI elevado indica que a farmácia depende excessivamente de poucos CRMs.",
 
@@ -933,7 +933,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     "Recorrência Sistêmica":                "recorrencia_sistemica",
                     "Concentração em Dias de Pico":         "dias_pico",
                     "Dispersão Geográfica Interestadual":   "dispersao_geografica",
-                    "Pacientes Únicos":                     "pacientes_unicos",
+                    "Compra Única":                     "compra_unica",
                     "Concentração de CRMs (HHI)":           "hhi_crm",
                     "Exclusividade de CRMs":                "exclusividade_crm",
                     "Irregularidade de CRMs":               "crms_irregulares",
@@ -968,7 +968,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ("Recorrência Sistêmica", "pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg", "med_recorrencia_sistemica_uf", "med_recorrencia_sistemica_br", "risco_recorrencia_sistemica_reg", "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br", "pct"),
                     ("Concentração em Dias de Pico", "pct_pico", "med_pico_reg", "med_pico_uf", "med_pico_br", "risco_pico_reg", "risco_pico_uf", "risco_pico_br", "pct"),
                     ("Dispersão Geográfica Interestadual", "pct_geografico", "med_geografico_reg", "med_geografico_uf", "med_geografico_br", "risco_geografico_reg", "risco_geografico_uf", "risco_geografico_br", "pct"),
-                    ("Pacientes Únicos", "pct_pacientes_unicos", "med_pacientes_unicos_reg", "med_pacientes_unicos_uf", "med_pacientes_unicos_br", "risco_pacientes_unicos_reg", "risco_pacientes_unicos_uf", "risco_pacientes_unicos_br", "pct"),
+                    ("Compra Única", "pct_compra_unica", "med_compra_unica_reg", "med_compra_unica_uf", "med_compra_unica_br", "risco_compra_unica_reg", "risco_compra_unica_uf", "risco_compra_unica_br", "pct"),
                 ]),
                 ("6. INTEGRIDADE MÉDICA", [
                     ("Concentração de CRMs (HHI)", "val_hhi_crm", "avg_hhi_crm_reg", "avg_hhi_crm_uf", "avg_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br", "dec"),

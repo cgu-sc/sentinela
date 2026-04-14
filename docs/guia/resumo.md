@@ -70,7 +70,7 @@ Cada relatório é composto por 4 abas:
 | ----------------------- | ------------------------------------- | ----------------------------------- |
 | **Movimentação**        | Fluxo cronológico de estoque por GTIN | Prova documental da irregularidade  |
 | **Evolução Financeira** | Gráficos semestrais de valores        | Identificar quando a fraude começou |
-| **Indicadores**         | 18 métricas de risco comparativas     | Contextualizar o comportamento      |
+| **Indicadores**         | 17 métricas de risco comparativas     | Contextualizar o comportamento      |
 | **Análise de CRMs**     | Detalhamento dos prescritores         | Investigar a "ponta da caneta"      |
 
 ---
@@ -186,7 +186,7 @@ graph LR
 | `horario_atipico.sql`                   | Vendas na madrugada                       |
 | `concentracao_dias_pico.sql`            | Concentração em dias de pico              |
 | `geografico.sql`                        | Dispersão geográfica                      |
-| `pacientes_unicos.sql`                  | Pacientes com compra única                |
+| `compra_unica.sql`                      | Compra Única (ex-Fantasma)                |
 | `crms.sql`                              | Concentração de prescritores (HHI)        |
 | `exclusividade_crm.sql`                 | CRMs exclusivos da farmácia               |
 | `crms_irregulares.sql`                  | CRMs inválidos ou retroativos             |
@@ -206,4 +206,4 @@ graph LR
 ---
 
 !!! info "Sobre esta documentação"
-Esta documentação reflete a versão 8.0 do sistema Sentinela, que inclui a Matriz de Risco completa com 18 indicadores e o módulo de análise de prescritores (CRMs).
+Esta documentação reflete a versão 8.0 do sistema Sentinela, que inclui a Matriz de Risco completa com 17 indicadores principais e o módulo de análise de prescritores (CRMs).

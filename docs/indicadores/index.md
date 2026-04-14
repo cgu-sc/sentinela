@@ -1,6 +1,6 @@
 # Indicadores de Risco e Fraude
 
-Esta seção detalha os **17 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
+Esta seção detalha os **16 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
 
 ---
 
@@ -78,7 +78,7 @@ Os indicadores são organizados em **5 grupos** temáticos:
 
 ---
 
-## Visão Geral dos 17 Indicadores
+## Visão Geral dos 16 Indicadores
 
 | #   | Indicador                 | Grupo         | O que mede                                     |
 | --- | ------------------------- | ------------- | ---------------------------------------------- |
@@ -86,19 +86,18 @@ Os indicadores são organizados em **5 grupos** temáticos:
 | 2   | Incompatibilidade Clínica | Elegibilidade | % de vendas com perfil idade/sexo incompatível |
 | 3   | Dispensação em Teto       | Quantidade    | % de vendas no limite máximo permitido         |
 | 4   | Polimedicamentos          | Quantidade    | % de cupons com 4+ medicamentos                |
-| 5   | Média de Itens            | Quantidade    | Média de itens por autorização                 |
-| 6   | Ticket Médio              | Financeiro    | Valor médio por autorização                    |
-| 7   | Receita por Paciente      | Financeiro    | Faturamento médio por CPF                      |
-| 8   | Venda Per Capita          | Financeiro    | Faturamento / população do município           |
-| 9   | Medicamentos Alto Custo   | Financeiro    | % de vendas de medicamentos caros              |
-| 10  | Vendas Rápidas            | Automação     | % de vendas consecutivas <60 segundos          |
-| 11  | Horário Atípico           | Automação     | % de vendas na madrugada (00h-06h)             |
-| 12  | Concentração em Pico      | Automação     | % de vendas nos 3 dias de maior movimento      |
-| 13  | Dispersão Geográfica      | Automação     | % de pacientes de outras UFs                   |
-| 14  | Pacientes Únicos          | Automação     | % de CPFs com apenas uma compra                |
-| 15  | Concentração HHI          | CRMs          | Índice de concentração de prescritores         |
-| 16  | Exclusividade CRM         | CRMs          | % de CRMs exclusivos da farmácia               |
-| 17  | Irregularidade CRM        | CRMs          | % de CRMs inválidos ou retroativos             |
+| 5   | Ticket Médio              | Financeiro    | Valor médio por autorização                    |
+| 6   | Receita por Paciente      | Financeiro    | Faturamento médio por CPF                      |
+| 7   | Venda Per Capita          | Financeiro    | Faturamento / população do município           |
+| 8   | Medicamentos Alto Custo   | Financeiro    | % de vendas de medicamentos caros              |
+| 9   | Vendas Rápidas            | Automação     | % de vendas consecutivas <60 segundos          |
+| 10  | Horário Atípico           | Automação     | % de vendas na madrugada (00h-06h)             |
+| 11  | Concentração em Pico      | Automação     | % de vendas nos 3 dias de maior movimento      |
+| 12  | Dispersão Geográfica      | Automação     | % de pacientes de outras UFs                   |
+| 13  | Compra Única              | Automação     | % de CPFs com apenas uma compra                |
+| 14  | Concentração HHI          | CRMs          | Índice de concentração de prescritores         |
+| 15  | Exclusividade CRM         | CRMs          | % de CRMs exclusivos da farmácia               |
+| 16  | Irregularidade CRM        | CRMs          | % de CRMs inválidos ou retroativos             |
 
 ---
 

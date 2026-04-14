@@ -19,7 +19,7 @@ PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V6.0 (PONDERADA)...';
 DECLARE @PESO_FALECIDOS                      FLOAT = 2.5; 
 DECLARE @PESO_AUDITORIA_NAO_COMPROVACAO      FLOAT = 5.0; -- Peso Máximo
 DECLARE @PESO_RECORRENCIA_HORARIOS_SISTEMICA FLOAT = 2.0; 
-DECLARE @PESO_PACIENTES_UNICOS_FANTASMA      FLOAT = 1.0; 
+DECLARE @PESO_COMPRA_UNICA                   FLOAT = 1.0; 
 DECLARE @PESO_CRMS_IRREGULARES               FLOAT = 0.5; 
 DECLARE @PESO_INCONSISTENCIA_CLINICA         FLOAT = 1.5; 
 DECLARE @PESO_POLIMEDICAMENTO                FLOAT = 1.5; 
@@ -81,7 +81,7 @@ IndicadoresPresenca AS (
         CASE WHEN I11.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_geografico,
         CASE WHEN I12.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_alto_custo,
         CASE WHEN I13.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_pico,
-        CASE WHEN I14.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_fantasma,
+        CASE WHEN I14.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_compra_unica,
         CASE WHEN I15.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crm,
         CASE WHEN I16.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_exclusividade_crm,
         CASE WHEN I17.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crms_irregulares,
@@ -152,10 +152,10 @@ IndicadoresPresenca AS (
         I13.municipio_mediana AS med_pico_mun, I13.estado_mediana AS med_pico_uf, I13.pais_mediana AS med_pico_br, I13.regiao_saude_mediana AS med_pico_reg,
         I13.risco_relativo_mun_mediana AS risco_pico_mun, I13.risco_relativo_uf_mediana AS risco_pico_uf, I13.risco_relativo_br_mediana AS risco_pico_br, I13.risco_relativo_reg_mediana AS risco_pico_reg,
 
-        I14.percentual_pacientes_unicos AS pct_pacientes_unicos,
-        I14.municipio_media AS avg_pacientes_unicos_mun, I14.estado_media AS avg_pacientes_unicos_uf, I14.pais_media AS avg_pacientes_unicos_br, I14.regiao_saude_media AS avg_pacientes_unicos_reg,
-        I14.municipio_mediana AS med_pacientes_unicos_mun, I14.estado_mediana AS med_pacientes_unicos_uf, I14.pais_mediana AS med_pacientes_unicos_br, I14.regiao_saude_mediana AS med_pacientes_unicos_reg,
-        I14.risco_relativo_mun_mediana AS risco_pacientes_unicos_mun, I14.risco_relativo_uf_mediana AS risco_pacientes_unicos_uf, I14.risco_relativo_br_mediana AS risco_pacientes_unicos_br, I14.risco_relativo_reg_mediana AS risco_pacientes_unicos_reg,
+        I14.pct_compra_unica AS pct_compra_unica,
+        I14.municipio_media AS avg_compra_unica_mun, I14.estado_media AS avg_compra_unica_uf, I14.pais_media AS avg_compra_unica_br, I14.regiao_saude_media AS avg_compra_unica_reg,
+        I14.municipio_mediana AS med_compra_unica_mun, I14.estado_mediana AS med_compra_unica_uf, I14.pais_mediana AS med_compra_unica_br, I14.regiao_saude_mediana AS med_compra_unica_reg,
+        I14.risco_relativo_mun_mediana AS risco_compra_unica_mun, I14.risco_relativo_uf_mediana AS risco_compra_unica_uf, I14.risco_relativo_br_mediana AS risco_compra_unica_br, I14.risco_relativo_reg_mediana AS risco_compra_unica_reg,
 
         CAST(I15.indice_hhi AS DECIMAL(18,2)) AS val_hhi_crm,
         CAST(I15.media_hhi_mun AS DECIMAL(18,2)) AS avg_hhi_crm_mun,
@@ -201,7 +201,7 @@ IndicadoresPresenca AS (
     LEFT JOIN temp_CGUSC.fp.indicador_geografico_detalhado I11 ON I11.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_pacientes_unicos_detalhado I14 ON I14.cnpj = F.cnpj
+    LEFT JOIN temp_CGUSC.fp.indicador_compra_unica_detalhado I14 ON I14.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.nu_cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_detalhado I16 ON I16.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
@@ -330,14 +330,14 @@ RiscosAjustados AS (
         END AS risco_pico_ajustado,
         CASE WHEN tem_pico=1 AND (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_pico_critico,
 
-        -- 14. PACIENTES UNICOS (FANTASMA)
+        -- 14. COMPRA ÚNICA
         CASE 
-            WHEN tem_fantasma=1 AND (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) >= 5 THEN (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) * 3
-            WHEN tem_fantasma=1 AND (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) >= 3 THEN (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) * 2
-            WHEN tem_fantasma=1 AND (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) >= 1.5 THEN (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) 
-        END AS risco_pacientes_unicos_ajustado,
-        CASE WHEN tem_fantasma=1 AND (CASE WHEN risco_pacientes_unicos_reg > 10 THEN 10 ELSE ISNULL(risco_pacientes_unicos_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_pacientes_unicos_critico,
+            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 5 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 3
+            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 3 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 2
+            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 1.5 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 1.5
+            ELSE (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) 
+        END AS risco_compra_unica_ajustado,
+        CASE WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_compra_unica_critico,
 
         -- 15. CRM HHI
         CASE 
@@ -407,7 +407,7 @@ ScoreCalculado AS (
             (risco_geografico_ajustado * @PESO_DISTANCIA_GEOGRAFICA) +
             (risco_alto_custo_ajustado * @PESO_ALTO_CUSTO) +
             (risco_pico_ajustado * @PESO_CONCENTRACAO_PICO) +
-            (risco_pacientes_unicos_ajustado * @PESO_PACIENTES_UNICOS_FANTASMA) +
+            (risco_compra_unica_ajustado * @PESO_COMPRA_UNICA) +
             (risco_crm_ajustado * @PESO_CONCENTRACAO_CRM_HHI) +
             (risco_exclusividade_crm_ajustado * @PESO_EXCLUSIVIDADE_CRM) +
             (risco_crms_irregulares_ajustado * @PESO_CRMS_IRREGULARES) +
@@ -429,7 +429,7 @@ ScoreCalculado AS (
             (tem_geografico * @PESO_DISTANCIA_GEOGRAFICA) +
             (tem_alto_custo * @PESO_ALTO_CUSTO) +
             (tem_pico * @PESO_CONCENTRACAO_PICO) +
-            (tem_fantasma * @PESO_PACIENTES_UNICOS_FANTASMA) +
+            (tem_compra_unica * @PESO_COMPRA_UNICA) +
             (tem_crm * @PESO_CONCENTRACAO_CRM_HHI) +
             (tem_exclusividade_crm * @PESO_EXCLUSIVIDADE_CRM) +
             (tem_crms_irregulares * @PESO_CRMS_IRREGULARES) +
@@ -442,7 +442,7 @@ ScoreCalculado AS (
          flag_polimedicamento_critico + flag_ticket_critico +
          flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
          flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico +
-         flag_pico_critico + flag_pacientes_unicos_critico + flag_crm_critico +
+         flag_pico_critico + flag_compra_unica_critico + flag_crm_critico +
          flag_exclusividade_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_auditado_critico
         ) AS qtd_indicadores_criticos
     FROM RiscosAjustados
@@ -485,7 +485,7 @@ ScoreCalculadoFim AS (
             CASE WHEN flag_geografico_critico = 1 THEN ', Geográfico' ELSE '' END +
             CASE WHEN flag_alto_custo_critico = 1 THEN ', Alto Custo' ELSE '' END +
             CASE WHEN flag_pico_critico = 1 THEN ', Pico' ELSE '' END +
-            CASE WHEN flag_pacientes_unicos_critico = 1 THEN ', Pacientes Únicos' ELSE '' END +
+            CASE WHEN flag_compra_unica_critico = 1 THEN ', Compra Única' ELSE '' END +
             CASE WHEN flag_crm_critico = 1 THEN ', CRM HHI' ELSE '' END +
             CASE WHEN flag_exclusividade_crm_critico = 1 THEN ', Exclusividade CRM' ELSE '' END +
             CASE WHEN flag_crms_irregulares_critico = 1 THEN ', CRMs Irregulares' ELSE '' END +

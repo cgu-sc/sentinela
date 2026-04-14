@@ -112,7 +112,7 @@ export const INDICATOR_THRESHOLDS = {
   recorrencia_sistemica:  { atencao: 1.4, critico: 1.7 },
   dias_pico:              { atencao: 1.4, critico: 1.7 },
   dispersao_geografica:   { atencao: 2.0, critico: 3.0 },
-  pacientes_unicos:       { atencao: 1.4, critico: 1.7 },
+  compra_unica:           { atencao: 1.4, critico: 1.7 },
 
   // 6. Integridade Médica
   hhi_crm:                { atencao: 2.0, critico: 3.0 },
@@ -185,8 +185,8 @@ export const INDICATOR_GROUPS = [
         metodologia: 'Percentual do faturamento mensal concentrado nos 3 dias de maior movimento do mês.' },
       { key: 'dispersao_geografica', label: 'Dispersão Geográfica Interestadual', formato: 'pct', thresholdKey: 'dispersao_geografica',
         metodologia: 'Percentual de vendas para pacientes cuja UF de residência difere da UF da farmácia.' },
-      { key: 'pacientes_unicos', label: 'Pacientes Únicos', formato: 'pct', thresholdKey: 'pacientes_unicos',
-        metodologia: 'Proporção de CPFs que realizaram apenas uma única compra durante todo o período analisado (2015-2024).' },
+      { key: 'compra_unica', label: 'Compra Única', formato: 'pct', thresholdKey: 'compra_unica',
+        metodologia: 'Percentual de pacientes (CPFs) que realizaram apenas uma compra em todo o histórico de operação da farmácia.' },
     ],
   },
   {

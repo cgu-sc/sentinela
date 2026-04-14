@@ -60,7 +60,7 @@ INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
     'recorrencia_sistemica': ('pct_recorrencia_sistemica', 'med_recorrencia_sistemica_reg','med_recorrencia_sistemica_uf','med_recorrencia_sistemica_br','risco_recorrencia_sistemica_reg','risco_recorrencia_sistemica_uf','risco_recorrencia_sistemica_br'),
     'dias_pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
     'dispersao_geografica':       ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
-    'pacientes_unicos':      ('pct_pacientes_unicos',      'med_pacientes_unicos_reg',     'med_pacientes_unicos_uf',     'med_pacientes_unicos_br',     'risco_pacientes_unicos_reg',     'risco_pacientes_unicos_uf',     'risco_pacientes_unicos_br'),
+    'compra_unica':      ('pct_compra_unica',          'med_compra_unica_reg',         'med_compra_unica_uf',         'med_compra_unica_br',         'risco_compra_unica_reg',         'risco_compra_unica_uf',         'risco_compra_unica_br'),
     'hhi_crm':               ('val_hhi_crm',               'avg_hhi_crm_reg',              'avg_hhi_crm_uf',              'avg_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
     'exclusividade_crm':     ('pct_exclusividade_crm',     'med_exclusividade_crm_reg',    'med_exclusividade_crm_uf',    'med_exclusividade_crm_br',    'risco_exclusividade_crm_reg',    'risco_exclusividade_crm_uf',    'risco_exclusividade_crm_br'),
     'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
@@ -91,7 +91,7 @@ _INDICATOR_THRESHOLDS: dict[str, tuple[float, float]] = {
     'recorrencia_sistemica':  (1.4, 1.7),
     'dias_pico':                   (1.4, 1.7),
     'dispersao_geografica':        (2.0, 3.0),
-    'pacientes_unicos':       (1.4, 1.7),
+    'compra_unica':           (2.0, 3.0),
     # 6. Integridade Médica
     'hhi_crm':                (2.0, 3.0),
     'exclusividade_crm':      (2.0, 3.0),

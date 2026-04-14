@@ -187,7 +187,7 @@ $$
 
 ---
 
-## 5. Pacientes Únicos (One-off)
+## 5. Compra Única
 
 ### 5.1. Definição
 
@@ -196,15 +196,15 @@ Mede a proporção de CPFs que realizaram **apenas uma compra** em todo o perío
 ### 5.2. Script
 
 ```
-📄 Indicadores/pacientes_unicos.sql
+📄 Indicadores/compra_unica.sql
 ```
 
 ### 5.3. Contexto
 
-Medicamentos para doenças crônicas são de uso contínuo. Pacientes legítimos tendem a retornar periodicamente. Alto percentual de pacientes únicos pode indicar:
+Medicamentos para doenças crônicas são de uso contínuo. Pacientes legítimos tendem a retornar periodicamente. Alto percentual de pacientes que realizaram apenas uma compra (compra única) pode indicar:
 
 - **CPFs usados uma vez:** Evitar detecção de padrões
-- **Vendas fictícias:** Cada venda usa CPF diferente
+- **Vendas fictícias:** Cada venda usa CPF diferente (falsos positivos em farmácias de passagem)
 - **Farmácia de passagem:** Legítimo em locais turísticos
 
 ### 5.4. Lógica de Cálculo
@@ -219,7 +219,7 @@ Medicamentos para doenças crônicas são de uso contínuo. Pacientes legítimos
 ### 5.5. Fórmula
 
 $$
-\% \text{Pacientes Únicos} = \frac{\text{CPFs com apenas 1 compra}}{\text{Total de CPFs distintos}} \times 100
+\% \text{Compra Única} = \frac{\text{CPFs com apenas 1 compra}}{\text{Total de CPFs distintos}} \times 100
 $$
 
 ---
@@ -232,7 +232,7 @@ $$
 | Horário Atípico       | % vendas      | > 5%   |
 | Concentração em Pico  | % faturamento | > 40%  |
 | Dispersão Geográfica  | % vendas      |        |
-| Pacientes Únicos      | % CPFs        |        |
+| Compra Única          | % CPFs        |        |
 
 ---
 

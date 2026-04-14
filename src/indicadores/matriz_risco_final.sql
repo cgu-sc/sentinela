@@ -2,16 +2,16 @@ USE [temp_CGUSC]
 GO
 
 -- ==========================================================================================
--- SCRIPT: Matriz de Risco Final - Versão 6.0 (MASTER: MÉDIA PONDERADA COM PESOS CONFIGURÁVEIS)
--- OBJETIVO: Consolidação, Score de Risco Ponderado, Rankings e Classificação
--- MUDANÇAS V6.0:
---   1. Pesos Dinâmicos: Variáveis no topo permitem ajustar o impacto de cada indicador.
---   2. Média Ponderada Real: O score é calculado considerando o peso dos indicadores disponíveis.
---   3. Mantém agravantes de severidade interna (multiplicadores 3x, 5x, etc).
+-- SCRIPT: Matriz de Risco Final - Versão 7.0 (NORMALIZAÇÃO PERCENTIL + PENALIDADE LINEAR)
+-- OBJETIVO: Consolidação, Score de Risco Baseado em Percentil Nacional/Regional, Rankings
+-- MUDANÇAS V7.0:
+--   1. Normalização CUME_DIST: Scores relativos ao benchmark local (0-100).
+--   2. Penalidade Linear: +10 pontos por flag crítico (linear e auditável).
+--   3. Remoção de V6: Exclusão de multiplicadores exponenciais e tetos de 10x.
 -- ==========================================================================================
 
 SET NOCOUNT ON;
-PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V6.0 (PONDERADA)...';
+PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO V7.0 (FINAL - PERCENTIL)...';
 
 -- ============================================================================
 -- MATRIZ DE PESOS (0.1 a 5.0) - AJUSTE A IMPORTÂNCIA DE CADA INDICADOR AQUI
@@ -49,6 +49,21 @@ END;
         SELECT DISTINCT municipio, uf, id_regiao_saude, ISNULL(populacao2019, 0) as pop_mun
         FROM temp_CGUSC.fp.dados_farmacia
     ) T
+    GROUP BY id_regiao_saude
+),
+
+-- ====================================================================================
+-- V7: CTE DE SUPORTE - CONTAGEM DE FARMÁCIAS POR REGIÃO (BASE DA NORMALIZAÇÃO HIERÁRQUICA)
+-- Decide o nível de normalização: >= 20 farmácias => usa Região; < 20 => usa UF
+-- Limiar de 20 garante que o CUME_DIST() tenha granularidade mínima de ~5%
+-- ====================================================================================
+ContadorRegiao AS (
+    SELECT
+        id_regiao_saude,
+        COUNT(*)                                               AS qtd_farmacias_regiao,
+        CASE WHEN COUNT(*) >= 20 THEN 'REGIAO' ELSE 'UF' END AS escopo_benchmark
+    FROM temp_CGUSC.fp.dados_farmacia
+    WHERE id_regiao_saude IS NOT NULL
     GROUP BY id_regiao_saude
 ),
 
@@ -209,320 +224,365 @@ IndicadoresPresenca AS (
     LEFT JOIN temp_CGUSC.fp.indicador_auditado_detalhado IA ON IA.cnpj = F.cnpj
 ),
 
--- 3. CTE 2: CÁLCULO DE SCORE COM TETO (AQUI É A MÁGICA)
-RiscosAjustados AS (
+-- 3. CTE 2: CÁLCULO DE FLAGS CRÍTICOS (BASEADO EM LIMITES ESTATÍSTICOS BRUTOS)
+-- Mantemos os flags para fins de visualização no Dashboard e penalidade do score.
+CalculoFlagsV7 AS (
     SELECT 
         *,
-        (tem_falecidos + tem_clinico + tem_teto + tem_polimedicamento + 
-         tem_ticket + tem_receita_paciente + tem_per_capita + tem_vendas_rapidas + 
-         tem_volume_atipico + tem_geografico + tem_alto_custo + tem_pico + tem_compra_unica + 
-         tem_crm + tem_exclusividade_crm + tem_crms_irregulares + tem_recorrencia_sistemica + tem_auditado) AS qtd_indicadores_preenchidos,
-        
-        -- LÓGICA DO TETO: "CASE WHEN risco > 10 THEN 10 ELSE risco END" aplicado APENAS NO CÁLCULO
-        
-        -- 1. FALECIDOS
-        CASE 
-            WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) >= 5 THEN (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) * 3
-            WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) >= 3 THEN (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) * 2
-            WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) >= 1.5 THEN (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) 
-        END AS risco_falecidos_ajustado,
-        CASE WHEN tem_falecidos=1 AND (CASE WHEN risco_falecidos_reg > 10 THEN 10 ELSE ISNULL(risco_falecidos_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_falecidos_critico,
-        
-        -- 2. CLÍNICO
-        CASE 
-            WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) >= 5 THEN (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) * 3
-            WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) >= 3 THEN (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) * 2
-            WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) >= 1.5 THEN (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) 
-        END AS risco_clinico_ajustado,
-        CASE WHEN tem_clinico=1 AND (CASE WHEN risco_clinico_reg > 10 THEN 10 ELSE ISNULL(risco_clinico_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_clinico_critico,
-        
-        -- 3. TETO
-        CASE 
-            WHEN tem_teto=1 AND (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) >= 5 THEN (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) * 3
-            WHEN tem_teto=1 AND (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) >= 3 THEN (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) * 2
-            WHEN tem_teto=1 AND (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) >= 1.5 THEN (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) 
-        END AS risco_teto_ajustado,
-        CASE WHEN tem_teto=1 AND (CASE WHEN risco_teto_reg > 10 THEN 10 ELSE ISNULL(risco_teto_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_teto_critico,
-
-        -- 4. POLIMEDICAMENTO
-        CASE 
-            WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) * 3
-            WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 3 THEN (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) * 2
-            WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 1.5 THEN (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) 
-        END AS risco_polimedicamento_ajustado,
-        CASE WHEN tem_polimedicamento=1 AND (CASE WHEN risco_polimedicamento_reg > 10 THEN 10 ELSE ISNULL(risco_polimedicamento_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
-
-        -- 6. TICKET
-        CASE 
-            WHEN tem_ticket=1 AND (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) >= 5 THEN (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) * 3
-            WHEN tem_ticket=1 AND (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) >= 3 THEN (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) * 2
-            WHEN tem_ticket=1 AND (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) >= 1.5 THEN (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) 
-        END AS risco_ticket_ajustado,
-        CASE WHEN tem_ticket=1 AND (CASE WHEN risco_ticket_reg > 10 THEN 10 ELSE ISNULL(risco_ticket_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_ticket_critico,
-
-        -- 7. RECEITA PACIENTE
-        CASE 
-            WHEN tem_receita_paciente=1 AND (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) >= 5 THEN (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) * 3
-            WHEN tem_receita_paciente=1 AND (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) >= 3 THEN (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) * 2
-            WHEN tem_receita_paciente=1 AND (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) >= 1.5 THEN (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) 
-        END AS risco_receita_paciente_ajustado,
-        CASE WHEN tem_receita_paciente=1 AND (CASE WHEN risco_receita_paciente_reg > 10 THEN 10 ELSE ISNULL(risco_receita_paciente_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_receita_paciente_critico,
-
-        -- 8. PER CAPITA
-        CASE 
-            WHEN tem_per_capita=1 AND (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) >= 5 THEN (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) * 3
-            WHEN tem_per_capita=1 AND (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) >= 3 THEN (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) * 2
-            WHEN tem_per_capita=1 AND (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) >= 1.5 THEN (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) 
-        END AS risco_per_capita_ajustado,
-        CASE WHEN tem_per_capita=1 AND (CASE WHEN risco_per_capita_reg > 10 THEN 10 ELSE ISNULL(risco_per_capita_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_per_capita_critico,
-
-        -- 9. VENDAS RAPIDAS
-        CASE 
-            WHEN tem_vendas_rapidas=1 AND (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) >= 5 THEN (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) * 3
-            WHEN tem_vendas_rapidas=1 AND (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) >= 3 THEN (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) * 2
-            WHEN tem_vendas_rapidas=1 AND (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) >= 1.5 THEN (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) 
-        END AS risco_vendas_rapidas_ajustado,
-        CASE WHEN tem_vendas_rapidas=1 AND (CASE WHEN risco_vendas_rapidas_reg > 10 THEN 10 ELSE ISNULL(risco_vendas_rapidas_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_vendas_rapidas_critico,
-
-        -- 10. VOLUME ATIPICO
-        CASE 
-            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) >= 5 THEN (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) * 3
-            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) >= 3 THEN (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) * 2
-            WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) >= 1.5 THEN (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) 
-        END AS risco_volume_atipico_ajustado,
-        CASE WHEN tem_volume_atipico=1 AND (CASE WHEN risco_volume_atipico_reg > 10 THEN 10 ELSE ISNULL(risco_volume_atipico_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_volume_atipico_critico,
-
-        -- 11. GEOGRAFICO
-        CASE 
-            WHEN tem_geografico=1 AND (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) >= 5 THEN (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) * 3
-            WHEN tem_geografico=1 AND (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) >= 3 THEN (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) * 2
-            WHEN tem_geografico=1 AND (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) >= 1.5 THEN (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) 
-        END AS risco_geografico_ajustado,
-        CASE WHEN tem_geografico=1 AND (CASE WHEN risco_geografico_reg > 10 THEN 10 ELSE ISNULL(risco_geografico_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_geografico_critico,
-
-        -- 12. ALTO CUSTO
-        CASE 
-            WHEN tem_alto_custo=1 AND (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) >= 5 THEN (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) * 3
-            WHEN tem_alto_custo=1 AND (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) >= 3 THEN (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) * 2
-            WHEN tem_alto_custo=1 AND (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) >= 1.5 THEN (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) 
-        END AS risco_alto_custo_ajustado,
-        CASE WHEN tem_alto_custo=1 AND (CASE WHEN risco_alto_custo_reg > 10 THEN 10 ELSE ISNULL(risco_alto_custo_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_alto_custo_critico,
-
-        -- 13. PICO
-        CASE 
-            WHEN tem_pico=1 AND (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) >= 5 THEN (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) * 3
-            WHEN tem_pico=1 AND (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) >= 3 THEN (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) * 2
-            WHEN tem_pico=1 AND (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) >= 1.5 THEN (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) 
-        END AS risco_pico_ajustado,
-        CASE WHEN tem_pico=1 AND (CASE WHEN risco_pico_reg > 10 THEN 10 ELSE ISNULL(risco_pico_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_pico_critico,
-
-        -- 14. COMPRA ÚNICA
-        CASE 
-            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 5 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 3
-            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 3 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 2
-            WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 1.5 THEN (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) 
-        END AS risco_compra_unica_ajustado,
-        CASE WHEN tem_compra_unica=1 AND (CASE WHEN risco_compra_unica_reg > 10 THEN 10 ELSE ISNULL(risco_compra_unica_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_compra_unica_critico,
-
-        -- 15. CRM HHI
-        CASE 
-            WHEN tem_crm=1 AND (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) >= 5 THEN (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) * 3
-            WHEN tem_crm=1 AND (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) >= 3 THEN (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) * 2
-            WHEN tem_crm=1 AND (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) >= 1.5 THEN (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) 
-        END AS risco_crm_ajustado,
-        CASE WHEN tem_crm=1 AND (CASE WHEN risco_crm_reg > 10 THEN 10 ELSE ISNULL(risco_crm_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_crm_critico,
-
-        -- 16. EXCLUSIVIDADE CRM
-        CASE 
-            WHEN tem_exclusividade_crm=1 AND (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) >= 5 THEN (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) * 3
-            WHEN tem_exclusividade_crm=1 AND (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) >= 3 THEN (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) * 2
-            WHEN tem_exclusividade_crm=1 AND (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) >= 1.5 THEN (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) 
-        END AS risco_exclusividade_crm_ajustado,
-        CASE WHEN tem_exclusividade_crm=1 AND (CASE WHEN risco_exclusividade_crm_reg > 10 THEN 10 ELSE ISNULL(risco_exclusividade_crm_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_exclusividade_crm_critico,
-
-        -- 17. CRMS IRREGULARES
-        CASE 
-            WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) >= 5 THEN (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) * 3
-            WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) >= 3 THEN (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) * 2
-            WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) >= 1.5 THEN (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) 
-        END AS risco_crms_irregulares_ajustado,
-        CASE WHEN tem_crms_irregulares=1 AND (CASE WHEN risco_crms_irregulares_reg > 10 THEN 10 ELSE ISNULL(risco_crms_irregulares_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
-
-        -- 18. RECORRÊNCIA SISTÊMICA (RELÓGIO SUÍÇO)
-        CASE 
-            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) >= 5 THEN (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) * 3
-            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) >= 3 THEN (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) * 2
-            WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) >= 1.5 THEN (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) * 1.5
-            ELSE (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) 
-        END AS risco_recorrencia_sistemica_ajustado,
-        CASE WHEN tem_recorrencia_sistemica=1 AND (CASE WHEN risco_recorrencia_sistemica_reg > 10 THEN 10 ELSE ISNULL(risco_recorrencia_sistemica_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_critico,
-
-        -- 19. AUDITORIA FINANCEIRA (MUITO PESADO)
-        CASE 
-            WHEN tem_auditado=1 AND (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) >= 8 THEN (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) * 5
-            WHEN tem_auditado=1 AND (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) >= 4 THEN (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) * 3
-            WHEN tem_auditado=1 AND (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) >= 2 THEN (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) * 2
-            ELSE (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) 
-        END AS risco_auditado_ajustado,
-        CASE WHEN tem_auditado=1 AND (CASE WHEN risco_auditado_reg > 10 THEN 10 ELSE ISNULL(risco_auditado_reg,0) END) >= 5 THEN 1 ELSE 0 END AS flag_auditado_critico
-
+        -- FLAGS CRÍTICOS: Identificam se o risco bruto atingiu o limiar de alerta (>= 5x a média)
+        CASE WHEN tem_falecidos=1            AND ISNULL(risco_falecidos_reg,0)            >= 5 THEN 1 ELSE 0 END AS flag_falecidos_critico,
+        CASE WHEN tem_clinico=1              AND ISNULL(risco_clinico_reg,0)              >= 5 THEN 1 ELSE 0 END AS flag_clinico_critico,
+        CASE WHEN tem_teto=1                 AND ISNULL(risco_teto_reg,0)                 >= 5 THEN 1 ELSE 0 END AS flag_teto_critico,
+        CASE WHEN tem_polimedicamento=1      AND ISNULL(risco_polimedicamento_reg,0)      >= 5 THEN 1 ELSE 0 END AS flag_polimedicamento_critico,
+        CASE WHEN tem_ticket=1               AND ISNULL(risco_ticket_reg,0)               >= 5 THEN 1 ELSE 0 END AS flag_ticket_critico,
+        CASE WHEN tem_receita_paciente=1     AND ISNULL(risco_receita_paciente_reg,0)     >= 5 THEN 1 ELSE 0 END AS flag_receita_paciente_critico,
+        CASE WHEN tem_per_capita=1           AND ISNULL(risco_per_capita_reg,0)           >= 5 THEN 1 ELSE 0 END AS flag_per_capita_critico,
+        CASE WHEN tem_vendas_rapidas=1       AND ISNULL(risco_vendas_rapidas_reg,0)       >= 5 THEN 1 ELSE 0 END AS flag_vendas_rapidas_critico,
+        CASE WHEN tem_volume_atipico=1       AND ISNULL(risco_volume_atipico_reg,0)       >= 5 THEN 1 ELSE 0 END AS flag_volume_atipico_critico,
+        CASE WHEN tem_geografico=1           AND ISNULL(risco_geografico_reg,0)           >= 5 THEN 1 ELSE 0 END AS flag_geografico_critico,
+        CASE WHEN tem_alto_custo=1           AND ISNULL(risco_alto_custo_reg,0)           >= 5 THEN 1 ELSE 0 END AS flag_alto_custo_critico,
+        CASE WHEN tem_pico=1                 AND ISNULL(risco_pico_reg,0)                 >= 5 THEN 1 ELSE 0 END AS flag_pico_critico,
+        CASE WHEN tem_compra_unica=1         AND ISNULL(risco_compra_unica_reg,0)         >= 5 THEN 1 ELSE 0 END AS flag_compra_unica_critico,
+        CASE WHEN tem_crm=1                  AND ISNULL(risco_crm_reg,0)                  >= 5 THEN 1 ELSE 0 END AS flag_crm_critico,
+        CASE WHEN tem_exclusividade_crm=1    AND ISNULL(risco_exclusividade_crm_reg,0)    >= 5 THEN 1 ELSE 0 END AS flag_exclusividade_crm_critico,
+        CASE WHEN tem_crms_irregulares=1     AND ISNULL(risco_crms_irregulares_reg,0)     >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
+        CASE WHEN tem_recorrencia_sistemica=1 AND ISNULL(risco_recorrencia_sistemica_reg,0) >= 5 THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_critico,
+        CASE WHEN tem_auditado=1             AND ISNULL(risco_auditado_reg,0)             >= 5 THEN 1 ELSE 0 END AS flag_auditado_critico
     FROM IndicadoresPresenca
 ),
 
--- 4. CTE 3: CONSOLIDAÇÃO DOS RISCOS (SOMA PONDERADA V6.0)
-ScoreCalculado AS (
-    SELECT 
-        *,
-        CAST(qtd_indicadores_preenchidos * 100.0 / 18.0 AS DECIMAL(5,2)) AS pct_completude,
-        
-        -- SOMA PONDERADA: Multiplica cada risco ajustado pelo seu peso configurado no topo
-        (
-            (risco_falecidos_ajustado * @PESO_FALECIDOS) +
-            (risco_clinico_ajustado * @PESO_INCONSISTENCIA_CLINICA) +
-            (risco_teto_ajustado * @PESO_ESTOURO_TETO) +
-            (risco_polimedicamento_ajustado * @PESO_POLIMEDICAMENTO) +
-            (risco_ticket_ajustado * @PESO_TICKET_MEDIO) +
-            (risco_receita_paciente_ajustado * @PESO_RECEITA_POR_PACIENTE) +
-            (risco_per_capita_ajustado * @PESO_VALOR_PER_CAPITA) +
-            (risco_vendas_rapidas_ajustado * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
-            (risco_volume_atipico_ajustado * @PESO_VOLUME_ATIPICO) +
-            (risco_geografico_ajustado * @PESO_DISTANCIA_GEOGRAFICA) +
-            (risco_alto_custo_ajustado * @PESO_ALTO_CUSTO) +
-            (risco_pico_ajustado * @PESO_CONCENTRACAO_PICO) +
-            (risco_compra_unica_ajustado * @PESO_COMPRA_UNICA) +
-            (risco_crm_ajustado * @PESO_CONCENTRACAO_CRM_HHI) +
-            (risco_exclusividade_crm_ajustado * @PESO_EXCLUSIVIDADE_CRM) +
-            (risco_crms_irregulares_ajustado * @PESO_CRMS_IRREGULARES) +
-            (risco_recorrencia_sistemica_ajustado * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
-            (risco_auditado_ajustado * @PESO_AUDITORIA_NAO_COMPROVACAO)
-        ) AS soma_riscos_ponderada,
-
-        -- SOMA DOS PESOS DISPONÍVEIS: Soma apenas os pesos dos indicadores que a farmácia possui dado
-        (
-            (tem_falecidos * @PESO_FALECIDOS) +
-            (tem_clinico * @PESO_INCONSISTENCIA_CLINICA) +
-            (tem_teto * @PESO_ESTOURO_TETO) +
-            (tem_polimedicamento * @PESO_POLIMEDICAMENTO) +
-            (tem_ticket * @PESO_TICKET_MEDIO) +
-            (tem_receita_paciente * @PESO_RECEITA_POR_PACIENTE) +
-            (tem_per_capita * @PESO_VALOR_PER_CAPITA) +
-            (tem_vendas_rapidas * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
-            (tem_volume_atipico * @PESO_VOLUME_ATIPICO) +
-            (tem_geografico * @PESO_DISTANCIA_GEOGRAFICA) +
-            (tem_alto_custo * @PESO_ALTO_CUSTO) +
-            (tem_pico * @PESO_CONCENTRACAO_PICO) +
-            (tem_compra_unica * @PESO_COMPRA_UNICA) +
-            (tem_crm * @PESO_CONCENTRACAO_CRM_HHI) +
-            (tem_exclusividade_crm * @PESO_EXCLUSIVIDADE_CRM) +
-            (tem_crms_irregulares * @PESO_CRMS_IRREGULARES) +
-            (tem_recorrencia_sistemica * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
-            (tem_auditado * @PESO_AUDITORIA_NAO_COMPROVACAO)
-        ) AS soma_pesos_disponiveis,
-        
-        -- Contagem de flags críticos
-        (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico +
-         flag_polimedicamento_critico + flag_ticket_critico +
-         flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico +
-         flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico +
-         flag_pico_critico + flag_compra_unica_critico + flag_crm_critico +
-         flag_exclusividade_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_auditado_critico
-        ) AS qtd_indicadores_criticos
-    FROM RiscosAjustados
-),
-
--- 5. CTE 4: CÁLCULO DOS SCORES FINAIS PONDERADOS
-ScoreCalculadoFim AS (
+-- 4. CTE 3: CONSOLIDAÇÃO DE ALERTA (COUNT E LISTA)
+ConsolidacaoFlags AS (
     SELECT
         *,
-        -- Score Ponderado Base (Média Ponderada Real)
-        CAST(
-            CASE WHEN soma_pesos_disponiveis > 0 
-            THEN soma_riscos_ponderada / soma_pesos_disponiveis ELSE 0 END 
-        AS DECIMAL(18,4)) AS SCORE_BASE,
+        (flag_falecidos_critico + flag_clinico_critico + flag_teto_critico + flag_polimedicamento_critico + 
+         flag_ticket_critico + flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico + 
+         flag_volume_atipico_critico + flag_geografico_critico + flag_alto_custo_critico + flag_pico_critico + 
+         flag_compra_unica_critico + flag_crm_critico + flag_exclusividade_crm_critico + flag_crms_irregulares_critico + 
+         flag_recorrencia_sistemica_critico + flag_auditado_critico) AS qtd_indicadores_criticos,
 
-        -- Score Final (com bônus de reincidência aplicados sobre a média ponderada)
-        CAST(
-            CASE WHEN soma_pesos_disponiveis > 0 THEN
-                (soma_riscos_ponderada / soma_pesos_disponiveis) *
-                CASE 
-                    WHEN qtd_indicadores_criticos >= 5 THEN 4.0
-                    WHEN qtd_indicadores_criticos >= 3 THEN 2.0
-                    WHEN qtd_indicadores_criticos >= 1 THEN 1.5
-                    ELSE 1.0
-                END
-            ELSE 0 END
-        AS DECIMAL(18,4)) AS score_risco_final,
-
-        -- Lista textual de problemas
-        STUFF(
-            CASE WHEN flag_falecidos_critico = 1 THEN ', Falecidos' ELSE '' END +
-            CASE WHEN flag_clinico_critico = 1 THEN ', Clínico' ELSE '' END +
-            CASE WHEN flag_teto_critico = 1 THEN ', Teto' ELSE '' END +
-            CASE WHEN flag_polimedicamento_critico = 1 THEN ', Polimedicamento' ELSE '' END +
-            CASE WHEN flag_ticket_critico = 1 THEN ', Ticket Médio' ELSE '' END +
-            CASE WHEN flag_receita_paciente_critico = 1 THEN ', Receita/Paciente' ELSE '' END +
-            CASE WHEN flag_per_capita_critico = 1 THEN ', Per Capita' ELSE '' END +
-            CASE WHEN flag_vendas_rapidas_critico = 1 THEN ', Vendas Rápidas' ELSE '' END +
-            CASE WHEN flag_volume_atipico_critico = 1 THEN ', Volume Atípico' ELSE '' END +
-            CASE WHEN flag_geografico_critico = 1 THEN ', Geográfico' ELSE '' END +
-            CASE WHEN flag_alto_custo_critico = 1 THEN ', Alto Custo' ELSE '' END +
-            CASE WHEN flag_pico_critico = 1 THEN ', Pico' ELSE '' END +
-            CASE WHEN flag_compra_unica_critico = 1 THEN ', Compra Única' ELSE '' END +
-            CASE WHEN flag_crm_critico = 1 THEN ', CRM HHI' ELSE '' END +
-            CASE WHEN flag_exclusividade_crm_critico = 1 THEN ', Exclusividade CRM' ELSE '' END +
-            CASE WHEN flag_crms_irregulares_critico = 1 THEN ', CRMs Irregulares' ELSE '' END +
-            CASE WHEN flag_recorrencia_sistemica_critico = 1 THEN ', Recorrência Sistêmica' ELSE '' END +
-            CASE WHEN flag_auditado_critico = 1 THEN ', Auditoria Financeira' ELSE '' END,
-        1, 2, '') AS indicadores_criticos_lista
-    FROM ScoreCalculado
+        SUBSTRING(
+            (CASE WHEN flag_falecidos_critico=1 THEN ', Falecidos' ELSE '' END) +
+            (CASE WHEN flag_clinico_critico=1 THEN ', Clinico' ELSE '' END) +
+            (CASE WHEN flag_teto_critico=1 THEN ', Estouro Teto' ELSE '' END) +
+            (CASE WHEN flag_polimedicamento_critico=1 THEN ', Polimedicamento' ELSE '' END) +
+            (CASE WHEN flag_ticket_critico=1 THEN ', Ticket Medio' ELSE '' END) +
+            (CASE WHEN flag_receita_paciente_critico=1 THEN ', Receita Paciente' ELSE '' END) +
+            (CASE WHEN flag_per_capita_critico=1 THEN ', Valor Per Capita' ELSE '' END) +
+            (CASE WHEN flag_vendas_rapidas_critico=1 THEN ', Vendas Rapidas' ELSE '' END) +
+            (CASE WHEN flag_volume_atipico_critico=1 THEN ', Volume Atipico' ELSE '' END) +
+            (CASE WHEN flag_geografico_critico=1 THEN ', Distancia Geografica' ELSE '' END) +
+            (CASE WHEN flag_alto_custo_critico=1 THEN ', Alto Custo' ELSE '' END) +
+            (CASE WHEN flag_pico_critico=1 THEN ', Concentracao Pico' ELSE '' END) +
+            (CASE WHEN flag_compra_unica_critico=1 THEN ', Compra Unica' ELSE '' END) +
+            (CASE WHEN flag_crm_critico=1 THEN ', Concentracao CRM' ELSE '' END) +
+            (CASE WHEN flag_exclusividade_crm_critico=1 THEN ', Exclusividade CRM' ELSE '' END) +
+            (CASE WHEN flag_crms_irregulares_critico=1 THEN ', CRMs Irregulares' ELSE '' END) +
+            (CASE WHEN flag_recorrencia_sistemica_critico=1 THEN ', Recorrencia Sistemica' ELSE '' END) +
+            (CASE WHEN flag_auditado_critico=1 THEN ', Auditoria Financeira' ELSE '' END)
+        , 3, 500) AS indicadores_criticos_lista
+    FROM CalculoFlagsV7
 ),
 
--- 6. CTE 5: CLASSIFICAÇÃO FINAL
-ClassificacaoFinal AS (
-    SELECT 
-        *,
-        CASE 
-            -- 1. CRÍTICO (Fraude Sistêmica)
-            WHEN qtd_indicadores_criticos >= 3 THEN 'RISCO CRITICO'
+-- ====================================================================================
+-- V7 - CTE 2a: BASE DE NORMALIZAÇÃO
+-- Calcula CUME_DIST (percentil 0-100) por REGIÃO e por UF para cada indicador.
+-- Ambos são calculados sempre; a escolha entre eles ocorre na CTE seguinte.
+-- ASC = menor risco = menor percentil = menos suspeito
+-- ====================================================================================
+NormalizacaoBase AS (
+    SELECT
+        IP.cnpj,
+        IP.uf,
+        IP.id_regiao_saude,
+        CR.escopo_benchmark,
 
-            -- 2. ALTO (2 problemas graves OU Score alto)
-            WHEN qtd_indicadores_criticos >= 2 THEN 'RISCO ALTO'
-            WHEN score_risco_final >= 4.0 THEN 'RISCO ALTO' 
+        -- 1. FALECIDOS
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_falecidos_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_falecidos,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_falecidos_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_falecidos,
 
-            -- 3. MÉDIO (1 problema grave OU Score moderado)
-            WHEN qtd_indicadores_criticos = 1 THEN 'RISCO MEDIO'
-            WHEN score_risco_final >= 2.0 THEN 'RISCO MEDIO'
+        -- 2. CLÍNICO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_clinico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_clinico,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_clinico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_clinico,
 
-            -- 4. BAIXO
-            WHEN score_risco_final >= 1.0 THEN 'RISCO BAIXO'
+        -- 3. TETO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_teto_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_teto,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_teto_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_teto,
 
-            -- 5. MÍNIMO
+        -- 4. POLIMEDICAMENTO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_polimedicamento_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_polimedicamento,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_polimedicamento_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_polimedicamento,
+
+        -- 5. TICKET MÉDIO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_ticket_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_ticket,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_ticket_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_ticket,
+
+        -- 6. RECEITA POR PACIENTE
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_receita_paciente_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_receita_paciente,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_receita_paciente_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_receita_paciente,
+
+        -- 7. PER CAPITA
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_per_capita_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_per_capita,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_per_capita_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_per_capita,
+
+        -- 8. VENDAS RÁPIDAS
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_vendas_rapidas_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_vendas_rapidas,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_vendas_rapidas_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_vendas_rapidas,
+
+        -- 9. VOLUME ATÍPICO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_volume_atipico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_volume_atipico,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_volume_atipico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_volume_atipico,
+
+        -- 10. GEOGRÁFICO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_geografico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_geografico,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_geografico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_geografico,
+
+        -- 11. ALTO CUSTO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_alto_custo_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_alto_custo,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_alto_custo_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_alto_custo,
+
+        -- 12. PICO
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_pico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_pico,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_pico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_pico,
+
+        -- 13. COMPRA ÚNICA
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_compra_unica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_compra_unica,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_compra_unica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_compra_unica,
+
+        -- 14. CRM HHI
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_crm,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_crm,
+
+        -- 15. EXCLUSIVIDADE CRM
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_exclusividade_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_exclusividade_crm,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_exclusividade_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_exclusividade_crm,
+
+        -- 16. CRMs IRREGULARES
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_crms_irregulares_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_crms_irregulares,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_crms_irregulares_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_crms_irregulares,
+
+        -- 17. RECORRÊNCIA SISTÊMICA
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_recorrencia_sistemica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_recorrencia_sistemica,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_recorrencia_sistemica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_recorrencia_sistemica,
+
+        -- 18. AUDITORIA
+        CAST(CUME_DIST() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_auditado_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_auditado,
+        CAST(CUME_DIST() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_auditado_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_auditado
+
+    FROM IndicadoresPresenca IP
+    LEFT JOIN ContadorRegiao CR ON CR.id_regiao_saude = IP.id_regiao_saude
+),
+
+-- ====================================================================================
+-- V7 - CTE 2b: NORMALIZAÇÃO FINAL (ESCOLHA DO ESCOPO CORRETO)
+-- Seleciona o percentil de Região ou UF conforme o escopo_benchmark.
+-- Farmácias sem id_regiao_saude sempre usam UF.
+-- ====================================================================================
+NormalizacaoV7 AS (
+    SELECT
+        cnpj,
+        escopo_benchmark,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_falecidos           ELSE pct_uf_falecidos           END AS score_pct_falecidos,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_clinico             ELSE pct_uf_clinico             END AS score_pct_clinico,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_teto                ELSE pct_uf_teto                END AS score_pct_teto,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_polimedicamento     ELSE pct_uf_polimedicamento     END AS score_pct_polimedicamento,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_ticket              ELSE pct_uf_ticket              END AS score_pct_ticket,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_receita_paciente    ELSE pct_uf_receita_paciente    END AS score_pct_receita_paciente,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_per_capita          ELSE pct_uf_per_capita          END AS score_pct_per_capita,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_vendas_rapidas      ELSE pct_uf_vendas_rapidas      END AS score_pct_vendas_rapidas,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_volume_atipico      ELSE pct_uf_volume_atipico      END AS score_pct_volume_atipico,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_geografico          ELSE pct_uf_geografico          END AS score_pct_geografico,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_alto_custo          ELSE pct_uf_alto_custo          END AS score_pct_alto_custo,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_pico                ELSE pct_uf_pico                END AS score_pct_pico,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_compra_unica        ELSE pct_uf_compra_unica        END AS score_pct_compra_unica,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_crm                 ELSE pct_uf_crm                 END AS score_pct_crm,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_exclusividade_crm   ELSE pct_uf_exclusividade_crm   END AS score_pct_exclusividade_crm,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_crms_irregulares    ELSE pct_uf_crms_irregulares    END AS score_pct_crms_irregulares,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_recorrencia_sistemica ELSE pct_uf_recorrencia_sistemica END AS score_pct_recorrencia_sistemica,
+        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_auditado            ELSE pct_uf_auditado            END AS score_pct_auditado
+    FROM NormalizacaoBase
+),
+
+-- ====================================================================================
+-- V7 - CTE 3: SCORE FINAL PONDERADO V7
+-- Fórmula: média ponderada dos percentis normalizados (0-100) + penalidade linear de flags
+--
+-- PESOS: usa as variáveis @PESO_ declaradas no topo — qualquer ajuste aqui aplica ao V7.
+-- PENALIDADE: cada flag_critico adiciona +10 pontos (linear, auditável, defensável).
+-- RESULTADO: score_v7 em escala de 0 a ~100+ (pode ultrapassar 100 com penalidade).
+-- ====================================================================================
+ScoreV7 AS (
+    SELECT
+        CF.*,
+        NV.escopo_benchmark,
+
+        -- SCORE_V7_BASE: Média ponderada pura dos percentis (sem penalidade)
+        -- Cada score_pct_X já é 0-100. A média ponderada fica em 0-100.
+        CAST(
+            (
+                (ISNULL(NV.score_pct_falecidos,            0) * @PESO_FALECIDOS) +
+                (ISNULL(NV.score_pct_clinico,              0) * @PESO_INCONSISTENCIA_CLINICA) +
+                (ISNULL(NV.score_pct_teto,                 0) * @PESO_ESTOURO_TETO) +
+                (ISNULL(NV.score_pct_polimedicamento,      0) * @PESO_POLIMEDICAMENTO) +
+                (ISNULL(NV.score_pct_ticket,               0) * @PESO_TICKET_MEDIO) +
+                (ISNULL(NV.score_pct_receita_paciente,     0) * @PESO_RECEITA_POR_PACIENTE) +
+                (ISNULL(NV.score_pct_per_capita,           0) * @PESO_VALOR_PER_CAPITA) +
+                (ISNULL(NV.score_pct_vendas_rapidas,       0) * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+                (ISNULL(NV.score_pct_volume_atipico,       0) * @PESO_VOLUME_ATIPICO) +
+                (ISNULL(NV.score_pct_geografico,           0) * @PESO_DISTANCIA_GEOGRAFICA) +
+                (ISNULL(NV.score_pct_alto_custo,           0) * @PESO_ALTO_CUSTO) +
+                (ISNULL(NV.score_pct_pico,                 0) * @PESO_CONCENTRACAO_PICO) +
+                (ISNULL(NV.score_pct_compra_unica,         0) * @PESO_COMPRA_UNICA) +
+                (ISNULL(NV.score_pct_crm,                  0) * @PESO_CONCENTRACAO_CRM_HHI) +
+                (ISNULL(NV.score_pct_exclusividade_crm,    0) * @PESO_EXCLUSIVIDADE_CRM) +
+                (ISNULL(NV.score_pct_crms_irregulares,     0) * @PESO_CRMS_IRREGULARES) +
+                (ISNULL(NV.score_pct_recorrencia_sistemica,0) * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+                (ISNULL(NV.score_pct_auditado,             0) * @PESO_AUDITORIA_NAO_COMPROVACAO)
+            )
+            /
+            -- Divide apenas pelos pesos dos indicadores com dado (tem_X = 1)
+            NULLIF(
+                (CF.tem_falecidos            * @PESO_FALECIDOS) +
+                (CF.tem_clinico              * @PESO_INCONSISTENCIA_CLINICA) +
+                (CF.tem_teto                 * @PESO_ESTOURO_TETO) +
+                (CF.tem_polimedicamento      * @PESO_POLIMEDICAMENTO) +
+                (CF.tem_ticket               * @PESO_TICKET_MEDIO) +
+                (CF.tem_receita_paciente     * @PESO_RECEITA_POR_PACIENTE) +
+                (CF.tem_per_capita           * @PESO_VALOR_PER_CAPITA) +
+                (CF.tem_vendas_rapidas       * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+                (CF.tem_volume_atipico       * @PESO_VOLUME_ATIPICO) +
+                (CF.tem_geografico           * @PESO_DISTANCIA_GEOGRAFICA) +
+                (CF.tem_alto_custo           * @PESO_ALTO_CUSTO) +
+                (CF.tem_pico                 * @PESO_CONCENTRACAO_PICO) +
+                (CF.tem_compra_unica         * @PESO_COMPRA_UNICA) +
+                (CF.tem_crm                  * @PESO_CONCENTRACAO_CRM_HHI) +
+                (CF.tem_exclusividade_crm    * @PESO_EXCLUSIVIDADE_CRM) +
+                (CF.tem_crms_irregulares     * @PESO_CRMS_IRREGULARES) +
+                (CF.tem_recorrencia_sistemica* @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+                (CF.tem_auditado             * @PESO_AUDITORIA_NAO_COMPROVACAO)
+            , 0)
+        AS DECIMAL(7,2)) AS score_v7_base,
+
+        -- SCORE FINAL (V7 consumindo nome legado)
+        CAST(
+            (
+                (ISNULL(NV.score_pct_falecidos,            0) * @PESO_FALECIDOS) +
+                (ISNULL(NV.score_pct_clinico,              0) * @PESO_INCONSISTENCIA_CLINICA) +
+                (ISNULL(NV.score_pct_teto,                 0) * @PESO_ESTOURO_TETO) +
+                (ISNULL(NV.score_pct_polimedicamento,      0) * @PESO_POLIMEDICAMENTO) +
+                (ISNULL(NV.score_pct_ticket,               0) * @PESO_TICKET_MEDIO) +
+                (ISNULL(NV.score_pct_receita_paciente,     0) * @PESO_RECEITA_POR_PACIENTE) +
+                (ISNULL(NV.score_pct_per_capita,           0) * @PESO_VALOR_PER_CAPITA) +
+                (ISNULL(NV.score_pct_vendas_rapidas,       0) * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+                (ISNULL(NV.score_pct_volume_atipico,       0) * @PESO_VOLUME_ATIPICO) +
+                (ISNULL(NV.score_pct_geografico,           0) * @PESO_DISTANCIA_GEOGRAFICA) +
+                (ISNULL(NV.score_pct_alto_custo,           0) * @PESO_ALTO_CUSTO) +
+                (ISNULL(NV.score_pct_pico,                 0) * @PESO_CONCENTRACAO_PICO) +
+                (ISNULL(NV.score_pct_compra_unica,         0) * @PESO_COMPRA_UNICA) +
+                (ISNULL(NV.score_pct_crm,                  0) * @PESO_CONCENTRACAO_CRM_HHI) +
+                (ISNULL(NV.score_pct_exclusividade_crm,    0) * @PESO_EXCLUSIVIDADE_CRM) +
+                (ISNULL(NV.score_pct_crms_irregulares,     0) * @PESO_CRMS_IRREGULARES) +
+                (ISNULL(NV.score_pct_recorrencia_sistemica,0) * @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+                (ISNULL(NV.score_pct_auditado,             0) * @PESO_AUDITORIA_NAO_COMPROVACAO)
+            )
+            /
+            NULLIF(
+                (CF.tem_falecidos            * @PESO_FALECIDOS) +
+                (CF.tem_clinico              * @PESO_INCONSISTENCIA_CLINICA) +
+                (CF.tem_teto                 * @PESO_ESTOURO_TETO) +
+                (CF.tem_polimedicamento      * @PESO_POLIMEDICAMENTO) +
+                (CF.tem_ticket               * @PESO_TICKET_MEDIO) +
+                (CF.tem_receita_paciente     * @PESO_RECEITA_POR_PACIENTE) +
+                (CF.tem_per_capita           * @PESO_VALOR_PER_CAPITA) +
+                (CF.tem_vendas_rapidas       * @PESO_VENDAS_CONSECUTIVAS_RAPIDAS) +
+                (CF.tem_volume_atipico       * @PESO_VOLUME_ATIPICO) +
+                (CF.tem_geografico           * @PESO_DISTANCIA_GEOGRAFICA) +
+                (CF.tem_alto_custo           * @PESO_ALTO_CUSTO) +
+                (CF.tem_pico                 * @PESO_CONCENTRACAO_PICO) +
+                (CF.tem_compra_unica         * @PESO_COMPRA_UNICA) +
+                (CF.tem_crm                  * @PESO_CONCENTRACAO_CRM_HHI) +
+                (CF.tem_exclusividade_crm    * @PESO_EXCLUSIVIDADE_CRM) +
+                (CF.tem_crms_irregulares     * @PESO_CRMS_IRREGULARES) +
+                (CF.tem_recorrencia_sistemica* @PESO_RECORRENCIA_HORARIOS_SISTEMICA) +
+                (CF.tem_auditado             * @PESO_AUDITORIA_NAO_COMPROVACAO)
+            , 0)
+            + (CF.qtd_indicadores_criticos * 10.0)
+        AS DECIMAL(7,2)) AS score_risco_final,
+
+        -- CLASSIFICAÇÃO (Nome legado)
+        CASE
+            WHEN CF.qtd_indicadores_criticos >= 3 THEN 'RISCO CRITICO'
+            WHEN CF.qtd_indicadores_criticos >= 2 THEN 'RISCO ALTO'
+            WHEN (
+                (ISNULL(NV.score_pct_falecidos,0)*@PESO_FALECIDOS + ISNULL(NV.score_pct_clinico,0)*@PESO_INCONSISTENCIA_CLINICA +
+                 ISNULL(NV.score_pct_teto,0)*@PESO_ESTOURO_TETO + ISNULL(NV.score_pct_polimedicamento,0)*@PESO_POLIMEDICAMENTO +
+                 ISNULL(NV.score_pct_ticket,0)*@PESO_TICKET_MEDIO + ISNULL(NV.score_pct_receita_paciente,0)*@PESO_RECEITA_POR_PACIENTE +
+                 ISNULL(NV.score_pct_per_capita,0)*@PESO_VALOR_PER_CAPITA + ISNULL(NV.score_pct_vendas_rapidas,0)*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS +
+                 ISNULL(NV.score_pct_volume_atipico,0)*@PESO_VOLUME_ATIPICO + ISNULL(NV.score_pct_geografico,0)*@PESO_DISTANCIA_GEOGRAFICA +
+                 ISNULL(NV.score_pct_alto_custo,0)*@PESO_ALTO_CUSTO + ISNULL(NV.score_pct_pico,0)*@PESO_CONCENTRACAO_PICO +
+                 ISNULL(NV.score_pct_compra_unica,0)*@PESO_COMPRA_UNICA + ISNULL(NV.score_pct_crm,0)*@PESO_CONCENTRACAO_CRM_HHI +
+                 ISNULL(NV.score_pct_exclusividade_crm,0)*@PESO_EXCLUSIVIDADE_CRM + ISNULL(NV.score_pct_crms_irregulares,0)*@PESO_CRMS_IRREGULARES +
+                 ISNULL(NV.score_pct_recorrencia_sistemica,0)*@PESO_RECORRENCIA_HORARIOS_SISTEMICA + ISNULL(NV.score_pct_auditado,0)*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                / NULLIF(
+                    (CF.tem_falecidos*@PESO_FALECIDOS)+(CF.tem_clinico*@PESO_INCONSISTENCIA_CLINICA)+(CF.tem_teto*@PESO_ESTOURO_TETO)+
+                    (CF.tem_polimedicamento*@PESO_POLIMEDICAMENTO)+(CF.tem_ticket*@PESO_TICKET_MEDIO)+(CF.tem_receita_paciente*@PESO_RECEITA_POR_PACIENTE)+
+                    (CF.tem_per_capita*@PESO_VALOR_PER_CAPITA)+(CF.tem_vendas_rapidas*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS)+(CF.tem_volume_atipico*@PESO_VOLUME_ATIPICO)+
+                    (CF.tem_geografico*@PESO_DISTANCIA_GEOGRAFICA)+(CF.tem_alto_custo*@PESO_ALTO_CUSTO)+(CF.tem_pico*@PESO_CONCENTRACAO_PICO)+
+                    (CF.tem_compra_unica*@PESO_COMPRA_UNICA)+(CF.tem_crm*@PESO_CONCENTRACAO_CRM_HHI)+(CF.tem_exclusividade_crm*@PESO_EXCLUSIVIDADE_CRM)+
+                    (CF.tem_crms_irregulares*@PESO_CRMS_IRREGULARES)+(CF.tem_recorrencia_sistemica*@PESO_RECORRENCIA_HORARIOS_SISTEMICA)+(CF.tem_auditado*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                , 0)
+            ) >= 75 THEN 'RISCO ALTO'
+            WHEN CF.qtd_indicadores_criticos >= 1 THEN 'RISCO MEDIO'
+            WHEN (
+                (ISNULL(NV.score_pct_falecidos,0)*@PESO_FALECIDOS + ISNULL(NV.score_pct_clinico,0)*@PESO_INCONSISTENCIA_CLINICA +
+                 ISNULL(NV.score_pct_teto,0)*@PESO_ESTOURO_TETO + ISNULL(NV.score_pct_polimedicamento,0)*@PESO_POLIMEDICAMENTO +
+                 ISNULL(NV.score_pct_ticket,0)*@PESO_TICKET_MEDIO + ISNULL(NV.score_pct_receita_paciente,0)*@PESO_RECEITA_POR_PACIENTE +
+                 ISNULL(NV.score_pct_per_capita,0)*@PESO_VALOR_PER_CAPITA + ISNULL(NV.score_pct_vendas_rapidas,0)*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS +
+                 ISNULL(NV.score_pct_volume_atipico,0)*@PESO_VOLUME_ATIPICO + ISNULL(NV.score_pct_geografico,0)*@PESO_DISTANCIA_GEOGRAFICA +
+                 ISNULL(NV.score_pct_alto_custo,0)*@PESO_ALTO_CUSTO + ISNULL(NV.score_pct_pico,0)*@PESO_CONCENTRACAO_PICO +
+                 ISNULL(NV.score_pct_compra_unica,0)*@PESO_COMPRA_UNICA + ISNULL(NV.score_pct_crm,0)*@PESO_CONCENTRACAO_CRM_HHI +
+                 ISNULL(NV.score_pct_exclusividade_crm,0)*@PESO_EXCLUSIVIDADE_CRM + ISNULL(NV.score_pct_crms_irregulares,0)*@PESO_CRMS_IRREGULARES +
+                 ISNULL(NV.score_pct_recorrencia_sistemica,0)*@PESO_RECORRENCIA_HORARIOS_SISTEMICA + ISNULL(NV.score_pct_auditado,0)*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                / NULLIF(
+                    (CF.tem_falecidos*@PESO_FALECIDOS)+(CF.tem_clinico*@PESO_INCONSISTENCIA_CLINICA)+(CF.tem_teto*@PESO_ESTOURO_TETO)+
+                    (CF.tem_polimedicamento*@PESO_POLIMEDICAMENTO)+(CF.tem_ticket*@PESO_TICKET_MEDIO)+(CF.tem_receita_paciente*@PESO_RECEITA_POR_PACIENTE)+
+                    (CF.tem_per_capita*@PESO_VALOR_PER_CAPITA)+(CF.tem_vendas_rapidas*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS)+(CF.tem_volume_atipico*@PESO_VOLUME_ATIPICO)+
+                    (CF.tem_geografico*@PESO_DISTANCIA_GEOGRAFICA)+(CF.tem_alto_custo*@PESO_ALTO_CUSTO)+(CF.tem_pico*@PESO_CONCENTRACAO_PICO)+
+                    (CF.tem_compra_unica*@PESO_COMPRA_UNICA)+(CF.tem_crm*@PESO_CONCENTRACAO_CRM_HHI)+(CF.tem_exclusividade_crm*@PESO_EXCLUSIVIDADE_CRM)+
+                    (CF.tem_crms_irregulares*@PESO_CRMS_IRREGULARES)+(CF.tem_recorrencia_sistemica*@PESO_RECORRENCIA_HORARIOS_SISTEMICA)+(CF.tem_auditado*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                , 0)
+            ) >= 50 THEN 'RISCO MEDIO'
+            WHEN (
+                (ISNULL(NV.score_pct_falecidos,0)*@PESO_FALECIDOS + ISNULL(NV.score_pct_clinico,0)*@PESO_INCONSISTENCIA_CLINICA +
+                 ISNULL(NV.score_pct_teto,0)*@PESO_ESTOURO_TETO + ISNULL(NV.score_pct_polimedicamento,0)*@PESO_POLIMEDICAMENTO +
+                 ISNULL(NV.score_pct_ticket,0)*@PESO_TICKET_MEDIO + ISNULL(NV.score_pct_receita_paciente,0)*@PESO_RECEITA_POR_PACIENTE +
+                 ISNULL(NV.score_pct_per_capita,0)*@PESO_VALOR_PER_CAPITA + ISNULL(NV.score_pct_vendas_rapidas,0)*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS +
+                 ISNULL(NV.score_pct_volume_atipico,0)*@PESO_VOLUME_ATIPICO + ISNULL(NV.score_pct_geografico,0)*@PESO_DISTANCIA_GEOGRAFICA +
+                 ISNULL(NV.score_pct_alto_custo,0)*@PESO_ALTO_CUSTO + ISNULL(NV.score_pct_pico,0)*@PESO_CONCENTRACAO_PICO +
+                 ISNULL(NV.score_pct_compra_unica,0)*@PESO_COMPRA_UNICA + ISNULL(NV.score_pct_crm,0)*@PESO_CONCENTRACAO_CRM_HHI +
+                 ISNULL(NV.score_pct_exclusividade_crm,0)*@PESO_EXCLUSIVIDADE_CRM + ISNULL(NV.score_pct_crms_irregulares,0)*@PESO_CRMS_IRREGULARES +
+                 ISNULL(NV.score_pct_recorrencia_sistemica,0)*@PESO_RECORRENCIA_HORARIOS_SISTEMICA + ISNULL(NV.score_pct_auditado,0)*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                / NULLIF(
+                    (CF.tem_falecidos*@PESO_FALECIDOS)+(CF.tem_clinico*@PESO_INCONSISTENCIA_CLINICA)+(CF.tem_teto*@PESO_ESTOURO_TETO)+
+                    (CF.tem_polimedicamento*@PESO_POLIMEDICAMENTO)+(CF.tem_ticket*@PESO_TICKET_MEDIO)+(CF.tem_receita_paciente*@PESO_RECEITA_POR_PACIENTE)+
+                    (CF.tem_per_capita*@PESO_VALOR_PER_CAPITA)+(CF.tem_vendas_rapidas*@PESO_VENDAS_CONSECUTIVAS_RAPIDAS)+(CF.tem_volume_atipico*@PESO_VOLUME_ATIPICO)+
+                    (CF.tem_geografico*@PESO_DISTANCIA_GEOGRAFICA)+(CF.tem_alto_custo*@PESO_ALTO_CUSTO)+(CF.tem_pico*@PESO_CONCENTRACAO_PICO)+
+                    (CF.tem_compra_unica*@PESO_COMPRA_UNICA)+(CF.tem_crm*@PESO_CONCENTRACAO_CRM_HHI)+(CF.tem_exclusividade_crm*@PESO_EXCLUSIVIDADE_CRM)+
+                    (CF.tem_crms_irregulares*@PESO_CRMS_IRREGULARES)+(CF.tem_recorrencia_sistemica*@PESO_RECORRENCIA_HORARIOS_SISTEMICA)+(CF.tem_auditado*@PESO_AUDITORIA_NAO_COMPROVACAO)
+                , 0)
+            ) >= 25 THEN 'RISCO BAIXO'
             ELSE 'RISCO MINIMO'
         END AS classificacao_risco
-    FROM ScoreCalculadoFim
+
+    FROM ConsolidacaoFlags CF
+    LEFT JOIN NormalizacaoV7 NV ON NV.cnpj = CF.cnpj
 )
 
 -- 7. SELEÇÃO FINAL E CRIAÇÃO DA TABELA FÍSICA
 SELECT 
     S.*,
     
-    -- RANKINGS NACIONAIS E ESTADUAIS
+    -- RANKINGS (Mantendo nomes de colunas originais mas usando lógica V7)
     RANK() OVER (ORDER BY score_risco_final DESC) AS rank_nacional,
     COUNT(*) OVER () AS total_nacional,
     RANK() OVER (PARTITION BY uf ORDER BY score_risco_final DESC) AS rank_uf,
@@ -546,9 +606,9 @@ SELECT
     CAST(CUME_DIST() OVER (ORDER BY score_risco_final ASC) * 100 AS DECIMAL(5,2)) AS percentil_risco
 
 INTO temp_CGUSC.fp.matriz_risco_consolidada
-FROM ClassificacaoFinal S;
+FROM ScoreV7 S;
 
-PRINT '   > Tabela temp_CGUSC.fp.matriz_risco_consolidada (V5.5) criada com sucesso.';
+PRINT '   > Tabela temp_CGUSC.fp.matriz_risco_consolidada (V7 - FINAL) criada com sucesso.';
 
 -- ============================================================================
 -- CRIAÇÃO DE ÍNDICES OTIMIZADOS
@@ -560,7 +620,7 @@ CREATE CLUSTERED INDEX IDX_MatrizFinal_CNPJ
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_ScoreRiscoFinal 
     ON temp_CGUSC.fp.matriz_risco_consolidada(score_risco_final DESC)
-    INCLUDE (razaoSocial, uf, rank_nacional, classificacao_risco);
+    INCLUDE (razaoSocial, uf, rank_nacional);
 
 CREATE NONCLUSTERED INDEX IDX_MatrizFinal_Municipio 
     ON temp_CGUSC.fp.matriz_risco_consolidada(uf, municipio, score_risco_final DESC)

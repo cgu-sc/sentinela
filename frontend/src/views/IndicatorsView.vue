@@ -53,6 +53,10 @@ function clearMunicipioFilter() {
   filterStore.selectedMunicipio = 'Todos';
 }
 
+function clearRegiaoFilter() {
+  filterStore.selectedRegiaoSaude = 'Todos';
+}
+
 function onSelectUf(uf) {
   filterStore.selectedMunicipio = 'Todos';
   filterStore.selectedRegiaoSaude = 'Todos';
@@ -166,17 +170,30 @@ function onIndicadorSelect(key) {
           :is-loading="isLoading"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
           :selected-ibge7="selectedMunicipioIbge7"
+          :selected-regiao="filterStore.selectedRegiaoSaude"
           @select-municipio="onSelectMunicipio"
           @select-uf="onSelectUf"
         />
 
-        <!-- Filtro de município ativo -->
-        <div v-if="selectedMunicipioNome" class="municipio-filter-chip">
-          <i class="pi pi-map-marker" />
-          <span>Filtrando: <strong>{{ selectedMunicipioNome }}</strong></span>
-          <button class="chip-clear" @click="clearMunicipioFilter" title="Limpar filtro">
-            <i class="pi pi-times" />
-          </button>
+        <!-- Pílulas de Filtros Ativos -->
+        <div class="active-filters-row" v-if="selectedMunicipioNome || (filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos')">
+          <!-- Filtro de Região de Saúde ativa -->
+          <div v-if="filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos'" class="municipio-filter-chip">
+            <i class="pi pi-directions" />
+            <span>Região: <strong>{{ filterStore.selectedRegiaoSaude }}</strong></span>
+            <button class="chip-clear" @click="clearRegiaoFilter" title="Limpar Região">
+              <i class="pi pi-times" />
+            </button>
+          </div>
+
+          <!-- Filtro de município ativo -->
+          <div v-if="selectedMunicipioNome" class="municipio-filter-chip">
+            <i class="pi pi-map-marker" />
+            <span>Município: <strong>{{ selectedMunicipioNome }}</strong></span>
+            <button class="chip-clear" @click="clearMunicipioFilter" title="Limpar Município">
+              <i class="pi pi-times" />
+            </button>
+          </div>
         </div>
 
         <!-- Tabela ranqueada de CNPJs -->
@@ -299,7 +316,13 @@ function onIndicadorSelect(key) {
 }
 
 
-/* ── Chip de filtro de município ── */
+/* ── Pílulas de Filtros Ativos ── */
+.active-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .municipio-filter-chip {
   display: inline-flex;
   align-items: center;
@@ -313,7 +336,8 @@ function onIndicadorSelect(key) {
   align-self: flex-start;
 }
 
-.municipio-filter-chip i.pi-map-marker {
+.municipio-filter-chip i.pi-map-marker,
+.municipio-filter-chip i.pi-directions {
   color: var(--risk-indicator-critical, #ef4444);
   font-size: 0.75rem;
 }

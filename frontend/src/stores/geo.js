@@ -8,6 +8,17 @@ export const useGeoStore = defineStore('geo', () => {
   const isLoading = ref(false);
   const estabelecimentos = ref([]);  // [{cnpj, razao_social, lat, lon, id_ibge7, score_risco, classificacao_risco}]
 
+  // Mapa O(1) para buscas rápidas (id_ibge7 -> localidade)
+  const localidadesByIbge7 = computed(() => {
+    const map = new Map();
+    for (const l of localidades.value) {
+      if (l.id_ibge7 != null) {
+        map.set(Number(l.id_ibge7), l);
+      }
+    }
+    return map;
+  });
+
   // GeoJSON de municípios — carregado no boot, filtrado por UF sob demanda
   const municipiosGeoJson = ref(null);
 
@@ -139,19 +150,19 @@ export const useGeoStore = defineStore('geo', () => {
   // Auxiliares para tradução de IBGE7 para formato de Filtro (Nome|UF)
   function getFilterValueByIbge7(ibge7) {
     if (!ibge7 || ibge7 === 'Todos') return 'Todos';
-    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    const found = localidadesByIbge7.value.get(Number(ibge7));
     return found ? `${found.no_municipio}|${found.sg_uf}` : 'Todos';
   }
 
   function getMunicipioNomeByIbge7(ibge7) {
     if (!ibge7 || ibge7 === 'Todos') return null;
-    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    const found = localidadesByIbge7.value.get(Number(ibge7));
     return found ? found.no_municipio : null;
   }
 
   function getRegiaoByIbge7(ibge7) {
     if (!ibge7 || ibge7 === 'Todos') return 'Todos';
-    const found = localidades.value.find(l => Number(l.id_ibge7) === Number(ibge7));
+    const found = localidadesByIbge7.value.get(Number(ibge7));
     return found ? found.no_regiao_saude : 'Todos';
   }
 

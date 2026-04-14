@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
 const STORAGE_KEY = 'sentinela_indicadores_selected';
+let abortController = null;
 
 export const useIndicadoresStore = defineStore('indicadores', {
   state: () => ({
@@ -27,15 +28,26 @@ export const useIndicadoresStore = defineStore('indicadores', {
       
       this.isLoading = true;
       this.error = null;
+
+      if (abortController) {
+        abortController.abort();
+      }
+      abortController = new AbortController();
+
       try {
         const response = await axios.get(API_ENDPOINTS.analyticsIndicadoresAnalise, {
           params: { indicador, ...params },
+          signal: abortController.signal,
         });
         
         this.kpis = response.data.kpis;
         this.municipios = response.data.municipios ?? [];
         this.cnpjs = response.data.cnpjs ?? [];
       } catch (err) {
+        if (axios.isCancel(err)) {
+          console.log('Requisição de indicadores cancelada.');
+          return;
+        }
         console.error('Erro ao buscar análise de indicadores:', err);
         this.error = 'Não foi possível carregar a análise do indicador.';
       } finally {

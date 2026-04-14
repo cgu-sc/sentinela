@@ -31,6 +31,8 @@ const props = defineProps({
   indicadorLabel: { type: String, default: 'Indicador' },
   /** ibge7 do município selecionado (controlado pelo pai) */
   selectedIbge7: { type: Number, default: null },
+  /** Região de Saúde selecionada */
+  selectedRegiao: { type: String, default: null },
 });
 
 const emit = defineEmits(['select-municipio', 'select-uf']);
@@ -119,6 +121,32 @@ watch(
   { immediate: true },
 );
 
+// ── Registro de sub-mapa para drill-down de Região ────────────────────────
+watch(
+  () => props.selectedRegiao,
+  (regiao) => {
+    if (!regiao || regiao === 'Todos' || isNational.value) return;
+    const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
+    if (!geo) return;
+    const ibge7sRegiao = new Set(
+      geoStore.localidades
+        .filter(
+          (l) =>
+            l.no_regiao_saude === regiao &&
+            (props.activeUf === 'Todos' || l.sg_uf === props.activeUf)
+        )
+        .map((l) => Number(l.id_ibge7))
+    );
+    const features = geo.features.filter((f) =>
+      ibge7sRegiao.has(Number(f.properties.id))
+    );
+    if (!features.length) return;
+    registerMap(`regiao-filter-${regiao}`, { type: "FeatureCollection", features });
+    mapKey.value++;
+  },
+  { immediate: true }
+);
+
 // ── Lookup de dados por id_ibge7 ──────────────────────────────────────────────
 const dataByIbge7 = computed(() => {
   const m = new Map();
@@ -149,7 +177,11 @@ const dataByUf = computed(() => {
 });
 
 // ── Nome do mapa registrado ───────────────────────────────────────────────────
-const mapName = computed(() => isNational.value ? 'brasil-uf' : `municipios-${props.activeUf}`);
+const mapName = computed(() => {
+  if (isNational.value) return 'brasil-uf';
+  if (props.selectedRegiao && props.selectedRegiao !== 'Todos') return `regiao-filter-${props.selectedRegiao}`;
+  return `municipios-${props.activeUf}`;
+});
 
 // ── Dados para o ECharts ──────────────────────────────────────────────────────
 const echartsMapData = computed(() => {
@@ -170,20 +202,33 @@ const echartsMapData = computed(() => {
     });
   }
 
-  // Modo UF: um item por município
+  // Modo UF ou Região: um item por município ou município da região
   const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
   if (!geo) return [];
 
   const sel = props.selectedIbge7;
-  const hasSel = sel != null;
+  const selReg = props.selectedRegiao && props.selectedRegiao !== 'Todos' ? props.selectedRegiao : null;
+  const hasSel = sel != null; // 'dimming' apenas quando existe um municipio exato selecionado
+  
+  let features = geo.features;
 
-  return geo.features.map(f => {
+  if (selReg) {
+    const ibge7sRegiao = new Set(
+      geoStore.localidades
+        .filter(l => l.no_regiao_saude === selReg)
+        .map(l => Number(l.id_ibge7))
+    );
+    features = features.filter((f) => ibge7sRegiao.has(Number(f.properties.id)));
+  }
+
+  return features.map(f => {
     const ibge7 = Number(f.properties.id);
     const d = dataByIbge7.value.get(ibge7);
     const hasData = !!d && d.total_cnpjs > 0;
     const perc = hasData ? (d.pct_critico ?? 0) : 0;
     const piece = getRiskPiece(perc);
-    const isSelected = hasSel && ibge7 === sel;
+    
+    const isSelected = sel != null && ibge7 === sel;
     const dimmed = hasSel && !isSelected;
     const baseColor = hasData ? piece.color : mapAreaColor.value;
 

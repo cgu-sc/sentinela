@@ -27,9 +27,10 @@ export function useFetchIndicadores() {
     const params = {};
     if (uf) params.uf = uf;
 
-    // Comentados para que o mapa receba sempre a UF inteira e continue colorido.
-    // O destaque de Município/Região passa a ser puramente visual/local no frontend.
-    // if (regiaoSaude)  params.regiao_saude = regiaoSaude;
+    // Descomentado para desafogar o servidor e retornar dados apenas da região
+    if (regiaoSaude)  params.regiao_saude = regiaoSaude;
+    // O município continua focado apenas localmente para que o usuário veja
+    // todo o contexto da região no mapa e na tabela.
     // if (municipio)    params.municipio = municipio;
     if (situacaoRf)   params.situacao_rf = situacaoRf;
     if (conexaoMs)    params.conexao_ms = conexaoMs;
@@ -61,7 +62,6 @@ export function useFetchIndicadores() {
     () => [
       filterStore.selectedUF,
       filterStore.selectedRegiaoSaude,
-      filterStore.selectedMunicipio,
       filterStore.selectedSituacao,
       filterStore.selectedMS,
       filterStore.selectedPorte,

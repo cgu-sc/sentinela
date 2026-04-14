@@ -159,7 +159,7 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       <Column header="Limiar Crítico" style="width:9%; text-align:center">
         <template #body>
           <span v-if="limiarCritico" class="val-cell-ref">
-            {{ limiarCritico.toFixed(1) }}x
+            {{ limiarCritico.toFixed(2) }}x
           </span>
           <span v-else class="muted">—</span>
         </template>

@@ -71,11 +71,9 @@ const valorFraudeCrm = computed(
     (summary.value.vl_crm_antes_registro || 0),
 );
 
-// Multi-Farmácia (>70 estabelecimentos)
-const qtdMultiFarmacia = computed(
-  () =>
-    summary.value.qtd_prescritores_multi_farmacia ??
-    top20.value.filter((m) => m.qtd_estabelecimentos_atua > 70).length,
+// CRMs Exclusivos (Atua em 1 único estabelecimento no Brasil)
+const qtdCrmExclusivo = computed(
+  () => top20.value.filter((m) => m.flag_crm_exclusivo > 0).length,
 );
 
 const qtdLancamentosAgrupados = computed(
@@ -99,7 +97,7 @@ const kpiFilters = {
   agrupamento: (m) => !!(m.alerta2_tempo_concentrado || m.alerta2),
   intensiva_local: (m) => m.flag_robo > 0,
   intensiva_brasil: (m) => m.flag_robo_oculto > 0,
-  multi_farmacia: (m) => m.qtd_estabelecimentos_atua > 70,
+  exclusivo: (m) => m.flag_crm_exclusivo > 0,
   fraude_crm: (m) =>
     m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia: (m) => !!m.alerta5_geografico,
@@ -111,7 +109,7 @@ const kpiFilterLabels = {
   agrupamento: "Lançamentos em Sequência",
   intensiva_local: ">30 Prescrições/Dia neste CNPJ",
   intensiva_brasil: ">30 Prescrições/Dia Brasil",
-  multi_farmacia: "Multi-Farmácia",
+  exclusivo: "CRM Exclusivo",
   fraude_crm: "Fraudes CRM",
   distancia: "Distância (>400km)",
 };
@@ -138,7 +136,7 @@ const hasAnyIssue = (m) =>
   m.flag_crm_invalido > 0 ||
   m.flag_prescricao_antes_registro > 0 ||
   m.alerta5_geografico ||
-  m.qtd_estabelecimentos_atua === 1;
+  m.flag_crm_exclusivo > 0;
 
 const filteredTop20 = computed(() => {
   let list = top20.value;
@@ -158,7 +156,7 @@ defineExpose({
     qtdLancamentosAgrupados: qtdLancamentosAgrupados.value,
     qtdPrescrIntensivaLocal: qtdPrescrIntensivaLocal.value,
     qtdPrescrIntensivaOcultos: qtdPrescrIntensivaOcultos.value,
-    qtdMultiFarmacia: qtdMultiFarmacia.value,
+    qtdCrmExclusivo: qtdCrmExclusivo.value,
     totalIrregularesCfm: totalIrregularesCfm.value,
     qtdCrmInvalido: qtdCrmInvalido.value,
     qtdPrescrAntesRegistro: qtdPrescrAntesRegistro.value,
@@ -353,29 +351,27 @@ defineExpose({
             </div>
           </div>
 
-          <!-- Multi-Farmácia (>70) -->
+          <!-- CRMs Exclusivos -->
           <div
             class="alert-kpi-card"
             :class="[
-              qtdMultiFarmacia > 0 ? 'highlight-purple' : '',
-              activeKpiFilter === 'multi_farmacia' ? 'kpi-active' : '',
+              qtdCrmExclusivo > 0 ? 'highlight-purple' : '',
+              activeKpiFilter === 'exclusivo' ? 'kpi-active' : '',
             ]"
-            @click="setKpiFilter('multi_farmacia')"
+            @click="setKpiFilter('exclusivo')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">MULTI-FARMÁCIA</span>
+              <span class="alert-kpi-label">CRMs EXCLUSIVOS</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
-                  'Médicos com atuação simultânea em mais de 70 estabelecimentos.'
+                  'Médicos de gaveta: prescrevem exclusivamente para este estabelecimento em todo o Brasil.'
                 "
               />
             </div>
             <div class="alert-kpi-body">
-              <span class="alert-kpi-val">{{ qtdMultiFarmacia }}</span>
-              <span class="alert-kpi-hint"
-                >CRMs em > 70 farmácias distintas</span
-              >
+              <span class="alert-kpi-val">{{ qtdCrmExclusivo }}</span>
+              <span class="alert-kpi-hint">100% de exclusividade local</span>
             </div>
           </div>
 
@@ -544,14 +540,11 @@ defineExpose({
                     <span v-if="m.flag_prescricao_antes_registro" class="issue-tag dark-red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
                       <i class="pi pi-calendar-times"></i> CRM Irregular
                     </span>
-                    <span v-if="m.qtd_estabelecimentos_atua === 1" class="issue-tag orange" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no período'">
-                      <i class="pi pi-lock"></i> CNPJ Exclusivo
+                    <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag orange" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
+                      <i class="pi pi-lock"></i> CRM Exclusivo
                     </span>
                     <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
                       <i class="pi pi-map-marker"></i> >400km
-                    </span>
-                    <span v-if="m.qtd_estabelecimentos_atua >= 70" class="issue-tag blue-network" v-tooltip.top="'Médico com atuação em rede ampla (mais de 70 farmácias distintas)'">
-                      <i class="pi pi-share-alt"></i> Multi-Farmácia
                     </span>
                     <i
                       v-if="
@@ -559,9 +552,8 @@ defineExpose({
                         !m.flag_robo_oculto &&
                         !m.flag_crm_invalido &&
                         !m.flag_prescricao_antes_registro &&
-                        m.pct_volume_aqui_vs_total <= 90 &&
                         !m.alerta5_geografico &&
-                        m.qtd_estabelecimentos_atua < 70
+                        (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)
                       "
                       class="pi pi-check-circle"
                       style="color: var(--text-muted); font-size: 0.85rem;"

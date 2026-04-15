@@ -593,6 +593,9 @@ WITH CRMsRankeados AS (
         ISNULL(A.nu_prescricoes_dia_em_todos_estabelecimentos, P.nu_prescricoes_dia) AS prescricoes_dia_total_brasil,
         ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) AS qtd_estabelecimentos_atua,
         
+        -- Flag CRM Exclusivo (Atua em apenas 1 estabelecimento no Brasil)
+        CASE WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) = 1 THEN 1 ELSE 0 END AS flag_crm_exclusivo,
+        
         -- % do volume aqui vs total
         CASE 
             WHEN ISNULL(A.nu_prescricoes_medico_em_todos_estabelecimentos, 0) > 0 
@@ -608,13 +611,6 @@ WITH CRMsRankeados AS (
             THEN 1
             ELSE 0
         END AS flag_robo_oculto,
-        
-        -- Flag Multi-Farmácia (>70 estabelecimentos)
-        CASE 
-            WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) > 70 
-            THEN 1 
-            ELSE 0 
-        END AS flag_multi_farmacia,
         
         --NOVO: Data de inscrição do CRM (da tabela CFM)
         CFM.dt_inscricao_convertida AS dt_inscricao_crm,
@@ -665,21 +661,21 @@ WITH CRMsRankeados AS (
     ) CFM ON TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(P.nu_crm AS BIGINT) AND CFM.SG_uf = P.sg_uf_crm
 )
 
---CORREÇÃO PRINCIPAL: top20 por volume OU qualquer prescritor com alerta
+--CORREÇÃO PRINCIPAL: top30 por volume OU qualquer prescritor com alerta
 SELECT *
 INTO temp_CGUSC.fp.top_20_crms_farmacia
 FROM CRMsRankeados
-WHERE ranking <= 20
+WHERE ranking <= 30
    OR alerta1_crm_invalido <> ''
    OR alerta2_tempo_concentrado <> ''
    OR alerta3_robo_estabelecimento <> ''
    OR alerta4_robo_rede <> ''
    OR alerta5_geografico <> ''
    OR alerta6_prescricao_antes_registro <> ''
-   OR flag_multi_farmacia = 1
    OR flag_crm_invalido = 1
    OR flag_robo = 1
    OR flag_robo_oculto = 1
+   OR flag_crm_exclusivo = 1
    OR flag_prescricao_antes_registro = 1;
 
 CREATE CLUSTERED INDEX IDX_Top20_CNPJ ON temp_CGUSC.fp.top_20_crms_farmacia(cnpj, ranking);
@@ -692,24 +688,24 @@ SELECT
 FROM temp_CGUSC.fp.top_20_crms_farmacia
 UNION ALL
 SELECT 
-    'Registros no top20' AS metrica,
+    'Registros no top30' AS metrica,
     COUNT(*) AS valor
 FROM temp_CGUSC.fp.top_20_crms_farmacia
-WHERE ranking <= 20
+WHERE ranking <= 30
 UNION ALL
 SELECT 
-    'Registros FORA do top20 (só por alerta)' AS metrica,
+    'Registros FORA do top30 (só por alerta)' AS metrica,
     COUNT(*) AS valor
 FROM temp_CGUSC.fp.top_20_crms_farmacia
-WHERE ranking > 20;
+WHERE ranking > 30;
 
 PRINT '============================================================================';
 PRINT 'SCRIPT EXECUTADO COM SUCESSO - CORREÇÕES APLICADAS:';
 PRINT '  1. Prescrições contadas por COUNT(DISTINCT num_autorizacao)';
-PRINT '  2. Todos os alertas (1-6) incluídos na tabela top_20_crms_farmacia';
+PRINT '  2. Alertas (1-6) incluídos na tabela top_20_crms_farmacia (filtro Top30)';
 PRINT '  3. Dados de rede (total Brasil) incluídos para cada prescritor';
-PRINT '  4. Flags de robô oculto e multi-farmácia calculados';
-PRINT '  5. NOVO: Tabela inclui top20 + TODOS prescritores com alertas';
+PRINT '  4. Flag de robô oculto calculado (inclusão via Top30)';
+PRINT '  5. NOVO: Tabela inclui top30 + TODOS prescritores com alertas';
 PRINT '  6. NOVO: Alerta6 (prescrição antes do registro) vem da tabela de análise';
 PRINT '  7. NOVO: dt_inscricao_crm e flag_prescricao_antes_registro incluídos';
 PRINT '============================================================================';

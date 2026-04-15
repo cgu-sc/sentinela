@@ -200,7 +200,8 @@ function formatScore(v) {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 1300px;
+  max-width: 98%;
+  margin: 0 auto;
 }
 
 .lists-header {
@@ -224,14 +225,14 @@ function formatScore(v) {
 
 .lists-title h2 {
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: 400;
   margin: 0;
   color: var(--text-color);
 }
 
 .total-badge {
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 400;
   padding: 0.1rem 0.5rem;
   border-radius: 20px;
   background: color-mix(in srgb, var(--primary-color) 15%, transparent);
@@ -258,7 +259,7 @@ function formatScore(v) {
 }
 
 .empty-icon { font-size: 2.5rem; }
-.empty-state p { font-size: 0.95rem; font-weight: 600; margin: 0; }
+.empty-state p { font-size: 0.95rem; font-weight: 400; margin: 0; }
 .empty-state span { font-size: 0.8rem; }
 
 /* Card container */
@@ -284,7 +285,7 @@ function formatScore(v) {
   align-items: center;
   gap: 0.6rem;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-color);
@@ -314,11 +315,11 @@ function formatScore(v) {
 .lists-table th {
   padding: 0.7rem 0.9rem;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-color);
-  opacity: 0.5;
+  opacity: 0.8;
   background: color-mix(in srgb, var(--card-bg) 85%, var(--card-border));
   border-bottom: 1px solid var(--card-border);
   text-align: left;
@@ -340,16 +341,16 @@ function formatScore(v) {
   background: color-mix(in srgb, var(--primary-color) 4%, transparent);
 }
 
-.col-num   { width: 36px; opacity: 0.4; font-weight: 600; }
-.col-cnpj  { font-family: ui-monospace, monospace; font-size: 0.75rem; white-space: nowrap; }
-.col-razao { font-weight: 500; max-width: 220px; }
+.col-num   { width: 36px; opacity: 0.4; font-weight: 400; }
+.col-cnpj  { font-size: 0.75rem; white-space: nowrap; opacity: 0.7; }
+.col-razao { font-weight: 400; max-width: 220px; }
 .col-date  { opacity: 0.55; font-size: 0.76rem; white-space: nowrap; }
 .col-right { text-align: right; }
 .col-vazio { opacity: 0.3; }
-.col-money { font-size: 0.78rem; white-space: nowrap; }
-.col-sem-comp { color: var(--risk-critical); opacity: 0.85; }
+.col-money { font-size: 0.78rem; white-space: nowrap; opacity: 0.75; }
+.col-sem-comp { color: var(--risk-critical); opacity: 0.65; }
 
-.col-loc { font-size: 0.78rem; white-space: nowrap; }
+.col-loc { font-size: 0.78rem; white-space: nowrap; opacity: 0.65; }
 .col-uf  { opacity: 0.55; margin-left: 1px; }
 
 /* Badge % Não Comprovação */
@@ -358,7 +359,7 @@ function formatScore(v) {
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 .perc-alto  { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
 .perc-medio { background: color-mix(in srgb, #f59e0b 12%, transparent); color: #f59e0b; }
@@ -370,7 +371,7 @@ function formatScore(v) {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 .score-class {
   font-size: 0.65rem;

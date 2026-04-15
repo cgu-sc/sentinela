@@ -168,7 +168,8 @@ def get_cnpj_lookup():
 def get_score_percentiles(
     scope: str = Query(..., description="Escopo: 'regiao', 'uf' ou 'brasil'"),
     uf: Optional[str] = Query(None),
-    regiao_id: Optional[str] = Query(None)
+    regiao_id: Optional[str] = Query(None),
+    metric: str = Query("score", description="Métrica: 'score' ou 'percentual_sem_comprovacao'")
 ):
-    """Retorna os percentis de score de risco para o escopo selecionado."""
-    return AnalyticsService.get_score_percentiles(scope, uf, regiao_id)
+    """Retorna os percentis de score de risco ou não comprovação para o escopo selecionado."""
+    return AnalyticsService.get_score_percentiles(scope, uf, regiao_id, metric)

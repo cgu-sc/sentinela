@@ -1634,15 +1634,20 @@ class AnalyticsService:
 
 
     @staticmethod
-    def get_score_percentiles(scope: str, uf: str = None, regiao_id: str = None) -> list[dict]:
+    def get_score_percentiles(scope: str, uf: str = None, regiao_id: str = None, metric: str = 'score') -> list[dict]:
         """
-        Calcula a curva de percentis de score (1% a 100%) para diferentes escopos.
+        Calcula a curva de percentis de score ou percentual de não comprovação (1% a 100%) para diferentes escopos.
         Escopos: 'brasil', 'uf', 'regiao'.
         """
         try:
             from data_cache import get_df_matriz_risco
             df = get_df_matriz_risco()
             df = df.rename({c: c.lower() for c in df.columns})
+
+            # Mapeamento de colunas conforme o schema real do cache
+            col_target = "score_risco_final"
+            if metric == "percentual_sem_comprovacao":
+                col_target = "pct_auditado"
 
             # ── 1. Aplica o Filtro de Escopo ──────────────────────────────────
             df_scoped = df
@@ -1658,17 +1663,21 @@ class AnalyticsService:
                 return []
 
             # ── 2. Calcula 100 percentis (0.01 a 1.0) ─────────────────────────
-            # Usamos uma lista de 1 a 100 para representar os percentis
             percentis_list = [i / 100.0 for i in range(1, 101)]
             
-            # O Polars consegue calcular múltiplos quantis de uma vez
-            # mas vamos simplificar a iteração para garantir estabilidade
-            scores = df_scoped.select(pl.col("score_risco_final")).to_series().sort()
+            # Seleciona a coluna correta baseada no metric selecionado
+            # Se for percentual, limitamos a 100 para evitar que o eixo Y estique para outliers (ex: 713)
+            # Usando uma expressão de clipping do polars para segurança máxima
+            if metric == "percentual_sem_comprovacao":
+                series_target = df_scoped.select(
+                    pl.when(pl.col(col_target) > 100).then(100).otherwise(pl.col(col_target)).alias("val")
+                ).to_series().sort()
+            else:
+                series_target = df_scoped.select(pl.col(col_target)).to_series().sort()
             
             res = []
             for p in percentis_list:
-                # Quantile retorna o valor do score naquele percentil
-                val = scores.quantile(p)
+                val = series_target.quantile(p)
                 res.append({
                     "percentile": int(p * 100),
                     "score": float(val or 0.0)

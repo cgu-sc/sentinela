@@ -409,7 +409,7 @@ const pctIrregular = (section) => {
           <div class="mch-left">
             <i class="pi pi-list" />
             <span class="mch-title">Detalhamento por GTIN</span>
-            <div class="mch-filter-tag" v-if="selectedSubstance || searchRanking.trim()">
+            <div class="mch-filter-tag" :class="{'is-empty': visibleSections.length === 0}" v-if="selectedSubstance || searchRanking.trim()">
               <span v-if="selectedSubstance">Filtrado: {{ visibleSections.length }} itens de <strong>{{ selectedSubstance }}</strong></span>
               <span v-else>Filtrado: <strong>{{ searchRanking }}</strong> ({{ visibleSections.length }} itens)</span>
               <button class="clear-filter-btn" @click="() => { selectedSubstance = null; searchRanking = '' }" v-tooltip.top="'Limpar filtros e exibir tudo'">
@@ -625,6 +625,8 @@ const pctIrregular = (section) => {
   color: var(--text-primary);
 }
 .mch-filter-tag strong { font-weight: 700; color: var(--primary-color); }
+
+
 .clear-filter-btn {
   background: none;
   border: none;
@@ -638,6 +640,23 @@ const pctIrregular = (section) => {
   transition: all 0.2s;
 }
 .clear-filter-btn:hover { background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); transform: scale(1.1); }
+
+/* Variação visual para Filtro Vazio (Avisar o Usuário) */
+.mch-filter-tag.is-empty {
+  background: color-mix(in srgb, var(--risk-high) 10%, var(--card-bg)) !important;
+  border-color: color-mix(in srgb, var(--risk-high) 30%, transparent) !important;
+  color: var(--risk-high) !important;
+}
+.mch-filter-tag.is-empty strong { color: var(--risk-high) !important; }
+.mch-filter-tag.is-empty .clear-filter-btn,
+.mch-filter-tag.is-empty .clear-filter-btn i {
+  color: color-mix(in srgb, var(--risk-high) 80%, transparent) !important;
+}
+.mch-filter-tag.is-empty .clear-filter-btn:hover,
+.mch-filter-tag.is-empty .clear-filter-btn:hover i {
+  background: color-mix(in srgb, var(--risk-high) 15%, transparent) !important;
+  color: var(--risk-high) !important;
+}
 
 .mch-actions { display: flex; align-items: center; gap: 0.6rem; }
 .mch-divider { width: 1px; height: 16px; background: var(--tabs-border); margin: 0 0.2rem; }

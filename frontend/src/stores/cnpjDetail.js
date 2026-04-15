@@ -203,14 +203,14 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchScorePercentiles(scope, uf = null, regiao_id = null) {
-      const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}`;
+    async fetchScorePercentiles(scope, uf = null, regiao_id = null, metric = 'score') {
+      const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}|${metric}`;
       if (this.scorePercentilesLoaded === key) return;
       
       this.scorePercentilesLoading = true;
       try {
         const { data } = await axios.get(API_ENDPOINTS.analyticsScorePercentiles, { 
-          params: { scope, uf, regiao_id } 
+          params: { scope, uf, regiao_id, metric } 
         });
         this.scorePercentiles = data || [];
         this.scorePercentilesLoaded = key;

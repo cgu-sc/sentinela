@@ -26,15 +26,27 @@ const regionalScopes = [
 const currentScore = computed(() => {
     const data = props.cnpjData;
     if (!data) return 0;
-    return Number(data.score_risco_final || data.percentual_sem_comprovacao || 0);
+    
+    // Retorna o valor base de comparação dependendo da métrica ativa
+    if (riskMetric.value === 'percentual_sem_comprovacao') {
+      return Number(data.percValSemComp || 0);
+    }
+    return Number(data.score_risco_final || 0);
 });
 
 // Configuração do Escopo da Curva de Risco
 const riskScope = ref('uf');
+const riskMetric = ref('score');
+
 const riskScopes = [
   { label: 'Na Região de Saúde', value: 'regiao', icon: 'pi-compass' },
   { label: 'No Estado', value: 'uf', icon: 'pi-map' },
   { label: 'No Brasil (Nacional)', value: 'brasil', icon: 'pi-globe' }
+];
+
+const riskMetricOptions = [
+  { label: 'Score de Risco', value: 'score' },
+  { label: '% Não-Comprovação', value: 'percentual_sem_comprovacao' }
 ];
 
 const updateRiskCurve = () => {
@@ -42,7 +54,8 @@ const updateRiskCurve = () => {
      cnpjDetailStore.fetchScorePercentiles(
        riskScope.value, 
        props.geoData.sg_uf, 
-       props.geoData.id_regiao_saude
+       props.geoData.id_regiao_saude,
+       riskMetric.value
      );
   }
 };
@@ -54,6 +67,7 @@ const loadRegional = () => {
 };
 
 watch(riskScope, updateRiskCurve, { immediate: true });
+watch(riskMetric, updateRiskCurve);
 watch(() => props.geoData?.sg_uf, () => {
     updateRiskCurve();
     loadRegional();
@@ -65,6 +79,11 @@ watch(regionalScope, loadRegional);
 const rankingText = computed(() => {
   const d = props.cnpjData;
   if (!d) return null;
+  
+  // O Rank textual (ex: 4º de 1000) por enquanto só está disponível para o Score final consolidado nos dados do CNPJ
+  // Se estiver visualizando apenas a métrica de %, removemos o texto fixo de rank consolidado para não confundir
+  if (riskMetric.value !== 'score') return null;
+
   const map = {
     uf:     { rank: d.rank_uf,           total: d.total_uf,           label: 'no estado' },
     regiao: { rank: d.rank_regiao_saude, total: d.total_regiao_saude, label: 'na região' },
@@ -77,8 +96,11 @@ const rankingText = computed(() => {
 
 // Calcula em qual "topo" de risco a farmácia está
 const riskRankBadge = computed(() => {
+  // Se está carregando, não tentamos calcular com dados potencialmente "sujos" da métrica anterior
+  if (cnpjDetailStore.scorePercentilesLoading) return null;
+  
   const data = cnpjDetailStore.scorePercentiles;
-  if (!data?.length || !currentScore.value) return null;
+  if (!data?.length || currentScore.value === null || currentScore.value === undefined) return null;
   const idx = data.findIndex(d => d.score >= currentScore.value);
   if (idx === -1) return { label: 'Extremo', value: 'TOP 1%', color: '#ef4444' };
   const pct = data[idx].percentile;
@@ -87,6 +109,12 @@ const riskRankBadge = computed(() => {
   if (topPct <= 15) return { label: 'Alerta', value: `TOP ${topPct}%`, color: '#f59e0b' };
   return { label: 'Normal', value: `Percentil ${pct}%`, color: '#10b981' };
 });
+
+// Cache local para evitar flickering do badge durante o loading
+const displayedBadge = ref(null);
+watch(riskRankBadge, (nv) => {
+  if (nv) displayedBadge.value = nv;
+}, { immediate: true });
 </script>
 
 <template>
@@ -153,12 +181,19 @@ const riskRankBadge = computed(() => {
                 <i class="pi pi-chart-line" />
                 <span>Percentil de Risco</span>
                 
-                <div v-if="riskRankBadge" 
-                     class="risk-rank-badge" 
-                     :style="{ background: riskRankBadge.color + '15', color: riskRankBadge.color, borderColor: riskRankBadge.color + '40' }">
-                   <span class="badge-label">{{ riskRankBadge.label }}</span>
-                   <span class="badge-value">{{ riskRankBadge.value }}</span>
-                </div>
+                <div v-if="displayedBadge" 
+                      class="risk-rank-badge" 
+                      :class="{ 'badge-loading': cnpjDetailStore.scorePercentilesLoading }"
+                      :style="{ 
+                        background: displayedBadge.color + '15', 
+                        color: displayedBadge.color, 
+                        borderColor: displayedBadge.color + '40' 
+                      }">
+                    <span class="badge-label">{{ displayedBadge.label }}</span>
+                    <span class="badge-value">{{ displayedBadge.value }}</span>
+                 </div>
+
+
              </div>
              <div class="scope-selector">
                 <Dropdown
@@ -178,14 +213,29 @@ const riskRankBadge = computed(() => {
                 </Dropdown>
              </div>
           </div>
-          <div class="card-body">
-            <RiskDistributionChart
-              v-if="cnpjDetailStore.scorePercentiles"
-              :data="cnpjDetailStore.scorePercentiles"
-              :current-score="currentScore"
-              :loading="cnpjDetailStore.scorePercentilesLoading"
-              :ranking-text="rankingText"
-            />
+            <div class="card-body">
+              <!-- Linha de Toggle de Métrica -->
+              <div class="header-context-mini">
+                 <div class="y-metric-toggle">
+                  <button 
+                    v-for="m in riskMetricOptions" 
+                    :key="m.value"
+                    class="metric-btn"
+                    :class="{ active: riskMetric === m.value }"
+                    @click="riskMetric = m.value"
+                  >
+                    {{ m.label }}
+                  </button>
+                </div>
+              </div>
+
+              <RiskDistributionChart
+                :data="cnpjDetailStore.scorePercentiles"
+                :current-score="currentScore"
+                :loading="cnpjDetailStore.scorePercentilesLoading"
+                :ranking-text="rankingText"
+                :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
+              />
             <!-- AJUDA CONTEXTUAL CARD 2 -->
             <div class="diagnosis-card-help">
                <i class="pi pi-chart-line" />
@@ -217,6 +267,7 @@ const riskRankBadge = computed(() => {
   gap: 1.5rem;
   align-items: stretch;
   flex: 1;
+  min-height: 520px;
 }
 
 .diagnosis-card {
@@ -251,19 +302,19 @@ const riskRankBadge = computed(() => {
 
 .header-info i { color: var(--primary-color); font-size: 1.1rem; }
 
-.header-context {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: var(--tabs-border);
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
+.header-context-mini {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1.25rem 0 1.25rem;
+  margin-bottom: 0.25rem;
 }
+
 
 .card-body {
   flex: 1;
-  min-height: 350px;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* permite que flex-children usem height: 100% corretamente */
 }
 
 .relative-body {
@@ -286,6 +337,13 @@ const riskRankBadge = computed(() => {
   border: 1px solid;
   font-size: 0.7rem;
   margin-left: 0.5rem;
+  transition: all 0.4s ease;
+}
+
+.risk-rank-badge.badge-loading {
+  opacity: 0.3;
+  filter: grayscale(0.5);
+  transform: scale(0.96);
 }
 
 .badge-label { font-weight: 500; opacity: 0.8; border-right: 1px solid currentColor; padding-right: 0.4rem; }
@@ -396,5 +454,43 @@ const riskRankBadge = computed(() => {
 .help-text b {
   color: var(--text-color);
   font-weight: 600;
+}
+
+/* Padronização do Toggle de Métricas (Igual ao componente de Scatter) */
+.y-metric-toggle {
+  display: flex;
+  gap: 0.25rem;
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.metric-btn {
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  white-space: nowrap;
+}
+
+.metric-btn:hover {
+  color: var(--primary-color);
+}
+
+.metric-btn.active {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.chart-header-row-mini {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.8rem 1.25rem 0;
 }
 </style>

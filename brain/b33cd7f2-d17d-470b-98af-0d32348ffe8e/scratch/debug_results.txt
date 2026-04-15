@@ -1,0 +1,38 @@
+TOP 10 PCT_AUDITADO:
+shape: (10, 4)
+┌────────────────┬─────────────────────────────────┬───────────────────┬──────────────┐
+│ cnpj           ┆ razaosocial                     ┆ score_risco_final ┆ pct_auditado │
+│ ---            ┆ ---                             ┆ ---               ┆ ---          │
+│ str            ┆ str                             ┆ f64               ┆ f64          │
+╞════════════════╪═════════════════════════════════╪═══════════════════╪══════════════╡
+│ 11262139000120 ┆ Energy Farma Comercio Varejist… ┆ 74.81             ┆ 713.0        │
+│ 68644087000173 ┆ Farmacia Sao Luiz De Cordeiro … ┆ 134.87            ┆ 107.33       │
+│ 05828624000115 ┆ Roman & Cia Ltda                ┆ 49.8              ┆ 107.2        │
+│ 00204125000214 ┆ Secretaria Municipal De Saude   ┆ 76.74             ┆ 100.0        │
+│ 00237347000233 ┆ Fundacao De Atividade Municipa… ┆ 48.12             ┆ 100.0        │
+│ 00582625000109 ┆ Drogaria Bueno Ltda             ┆ 151.4             ┆ 100.0        │
+│ 00634997000212 ┆ Fundo Municipal De Saude        ┆ 48.62             ┆ 100.0        │
+│ 00634997000301 ┆ Fundo Municipal De Saude        ┆ 52.88             ┆ 100.0        │
+│ 00697295008009 ┆ Secretaria De Estado Da Saude … ┆ 85.05             ┆ 100.0        │
+│ 00697295008181 ┆ Secretaria De Estado Da Saude … ┆ 60.15             ┆ 100.0        │
+└────────────────┴─────────────────────────────────┴───────────────────┴──────────────┘
+
+STATISTICS:
+shape: (9, 2)
+┌────────────┬──────────────┐
+│ statistic  ┆ pct_auditado │
+│ ---        ┆ ---          │
+│ str        ┆ f64          │
+╞════════════╪══════════════╡
+│ count      ┆ 35109.0      │
+│ null_count ┆ 0.0          │
+│ mean       ┆ 20.595291    │
+│ std        ┆ 26.8774      │
+│ min        ┆ 0.0          │
+│ 25%        ┆ 1.87         │
+│ 50%        ┆ 8.81         │
+│ 75%        ┆ 27.65        │
+│ max        ┆ 713.0        │
+└────────────┴──────────────┘
+
+PERCENTAGE-LIKE COLUMNS: ['pct_falecidos', 'pct_clinico', 'pct_teto', 'pct_polimedicamento', 'pct_vendas_rapidas', 'pct_geografico', 'pct_alto_custo', 'pct_pico', 'pct_compra_unica', 'pct_exclusividade_crm', 'pct_crms_irregulares', 'pct_recorrencia_sistemica', 'pct_auditado', 'flag_percentual_sem_comprovacao_critico', 'flag_percentual_sem_comprovacao_atencao', 'percentil_risco']

@@ -35,7 +35,7 @@ SELECT
 INTO #CRMs_Hist
 FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR' AND crm > 0
+  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
 GROUP BY cnpj, crm, crm_uf;
 
 -- B. Agregação Base Recente (2021-2024)
@@ -49,7 +49,7 @@ SELECT
 INTO #CRMs_Recente
 FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR' AND crm > 0
+  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
 GROUP BY cnpj, crm, crm_uf;
 
 -- C. Consolidação Final
@@ -165,9 +165,9 @@ FROM #CRMsPorFarmacia P
 WHERE NOT EXISTS (
     SELECT 1 
     FROM temp_CFM.dbo.medicos_jul_2025_mod CFM
-    WHERE CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) 
+    WHERE TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(P.nu_crm AS BIGINT) 
       AND CFM.SG_uf = P.sg_uf_crm
-)
+) AND P.nu_prescricoes >= 5
 GROUP BY P.cnpj;
 CREATE CLUSTERED INDEX IDX_CRMInv_CNPJ ON #CRMInvalidoPorFarmacia(cnpj);
 
@@ -182,10 +182,11 @@ INNER JOIN (
     SELECT NU_CRM, SG_uf, TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao
     FROM temp_CFM.dbo.medicos_jul_2025_mod
     WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
-) CFM ON CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25))
+) CFM ON TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(P.nu_crm AS BIGINT)
       AND CFM.SG_uf = P.sg_uf_crm
 WHERE CFM.dt_inscricao IS NOT NULL
   AND P.dt_primeira_prescricao < CFM.dt_inscricao
+  AND P.nu_prescricoes >= 5
 GROUP BY P.cnpj;
 CREATE CLUSTERED INDEX IDX_CRMAntesReg_CNPJ ON #CRMAntesRegistroPorFarmacia(cnpj);
 
@@ -355,7 +356,7 @@ WITH CTE_Mediana_Reg AS (
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(qtd_prescritores_turistas, 0)) OVER (PARTITION BY F.id_regiao_saude) AS mediana_turistas_reg,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(indice_rede_suspeita, 0)) OVER (PARTITION BY F.id_regiao_saude) AS mediana_indice_rede_reg
     FROM temp_CGUSC.fp.dados_farmacia F
-    LEFT JOIN temp_CGUSC.fp.indicador_crm I ON CAST(I.nu_cnpj AS VARCHAR(20)) = CAST(F.cnpj AS VARCHAR(20))
+    LEFT JOIN temp_CGUSC.fp.indicador_crm I ON I.nu_cnpj = F.cnpj
     WHERE F.id_regiao_saude IS NOT NULL
 )
 SELECT * INTO temp_CGUSC.fp.indicador_crm_regiao FROM CTE_Mediana_Reg;
@@ -535,9 +536,9 @@ SELECT
 INTO temp_CGUSC.fp.indicador_crm_detalhado
 FROM temp_CGUSC.fp.indicador_crm I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.nu_cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_crm_mun MUN ON CAST(F.uf AS VARCHAR(2)) = MUN.uf AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
+LEFT JOIN temp_CGUSC.fp.indicador_crm_mun MUN ON F.uf = MUN.uf AND F.municipio = MUN.municipio
 LEFT JOIN temp_CGUSC.fp.indicador_crm_regiao REG ON F.id_regiao_saude = REG.id_regiao_saude
-LEFT JOIN temp_CGUSC.fp.indicador_crm_uf UF ON CAST(F.uf AS VARCHAR(2)) = UF.uf
+LEFT JOIN temp_CGUSC.fp.indicador_crm_uf UF ON F.uf = UF.uf
 CROSS JOIN temp_CGUSC.fp.indicador_crm_br BR;
 
 CREATE CLUSTERED INDEX IDX_FinalPresc_CNPJ ON temp_CGUSC.fp.indicador_crm_detalhado(nu_cnpj);
@@ -581,8 +582,8 @@ WITH CRMsRankeados AS (
         -- Ranking
         ROW_NUMBER() OVER (PARTITION BY P.cnpj ORDER BY P.vl_total_prescricoes DESC) AS ranking,
         
-        -- Flag CRM Inválido (verifica se existe na base do CFM)
-        CASE WHEN CFM.NU_CRM IS NULL THEN 1 ELSE 0 END AS flag_crm_invalido,
+        -- Flag CRM Inválido (verifica se existe na base do CFM e tem volume >= 5)
+        CASE WHEN CFM.NU_CRM IS NULL AND P.nu_prescricoes >= 5 THEN 1 ELSE 0 END AS flag_crm_invalido,
         
         -- Flag Robô (>30 prescrições/dia neste estabelecimento)
         CASE WHEN P.nu_prescricoes_dia > 30 THEN 1 ELSE 0 END AS flag_robo,
@@ -622,6 +623,7 @@ WITH CRMsRankeados AS (
         CASE 
             WHEN CFM.dt_inscricao_convertida IS NOT NULL 
              AND P.dt_primeira_prescricao < CFM.dt_inscricao_convertida 
+             AND P.nu_prescricoes >= 5
             THEN 1 
             ELSE 0 
         END AS flag_prescricao_antes_registro,
@@ -660,7 +662,7 @@ WITH CRMsRankeados AS (
             SG_uf,
             TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
         FROM temp_CFM.dbo.medicos_jul_2025_mod
-    ) CFM ON CFM.NU_CRM = CAST(P.nu_crm AS VARCHAR(25)) AND CFM.SG_uf = P.sg_uf_crm
+    ) CFM ON TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(P.nu_crm AS BIGINT) AND CFM.SG_uf = P.sg_uf_crm
 )
 
 --CORREÇÃO PRINCIPAL: top20 por volume OU qualquer prescritor com alerta
@@ -673,7 +675,12 @@ WHERE ranking <= 20
    OR alerta3_robo_estabelecimento <> ''
    OR alerta4_robo_rede <> ''
    OR alerta5_geografico <> ''
-   OR alerta6_prescricao_antes_registro <> '';
+   OR alerta6_prescricao_antes_registro <> ''
+   OR flag_multi_farmacia = 1
+   OR flag_crm_invalido = 1
+   OR flag_robo = 1
+   OR flag_robo_oculto = 1
+   OR flag_prescricao_antes_registro = 1;
 
 CREATE CLUSTERED INDEX IDX_Top20_CNPJ ON temp_CGUSC.fp.top_20_crms_farmacia(cnpj, ranking);
 

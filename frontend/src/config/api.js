@@ -4,7 +4,12 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
-  analyticsRegional:    (regiao, uf) => `${BASE_URL}/api/v1/analytics/regional?regiao_saude=${encodeURIComponent(regiao)}${uf ? '&uf=' + uf : ''}`,
+  analyticsRegional:    (regiao, uf) => {
+    const params = new URLSearchParams();
+    if (regiao) params.set('regiao_saude', regiao);
+    if (uf)     params.set('uf', uf);
+    return `${BASE_URL}/api/v1/analytics/regional?${params.toString()}`;
+  },
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
   geoEstabelecimentos:  `${BASE_URL}/api/v1/geo/estabelecimentos`,
   analyticsEvolucao:    (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,

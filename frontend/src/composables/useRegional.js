@@ -18,10 +18,14 @@ export function useRegional() {
    */
   const loadedRegion = ref(null);
 
+  /**
+   * @param {string|null} nomeRegiao - Nome da Região de Saúde, ou null para escopo estadual.
+   * @param {string}      uf         - Sigla do estado (obrigatório quando nomeRegiao é null).
+   */
   async function fetchRegional(nomeRegiao, uf) {
-    if (!nomeRegiao) return;
-    // Evita re-fetch da mesma região, mas permite trocar de região
-    if (regionalLoaded.value && loadedRegion.value === nomeRegiao) return;
+    if (!nomeRegiao && !uf) return;
+    const cacheKey = nomeRegiao ? `${nomeRegiao}|${uf}` : `UF:${uf}`;
+    if (regionalLoaded.value && loadedRegion.value === cacheKey) return;
     try {
       regionalLoading.value = true;
       regionalLoaded.value  = false;
@@ -29,7 +33,7 @@ export function useRegional() {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       regionalData.value = await res.json();
-      loadedRegion.value = nomeRegiao;
+      loadedRegion.value = cacheKey;
     } catch (e) {
       console.error('❌ Erro ao buscar dados regionais:', e);
       regionalData.value = null;

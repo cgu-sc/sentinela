@@ -128,7 +128,7 @@ SELECT
     A.nu_prescricoes_medico,
     A.dt_prescricao_inicial_medico,
     A.dt_prescricao_final_medico,
-    DATEDIFF(DAY, dt_prescricao_inicial_medico, dt_prescricao_final_medico) AS nu_dias_prescricao_inicial_final,
+    DATEDIFF(DAY, dt_prescricao_inicial_medico, dt_prescricao_final_medico) + 1 AS nu_dias_prescricao_inicial_final,
     DATEDIFF(MINUTE, dt_prescricao_inicial_medico, dt_prescricao_final_medico) AS nu_minutos_prescricao_inicial_final,
     C.nu_autorizacoes_estabelecimento,
     C.dt_venda_inicial_estabelecimento,
@@ -144,7 +144,7 @@ SELECT
 INTO #lista_medicos_farmacia_popularFP_temp
 FROM #tb_info_medico_farmacia_popular A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj
-WHERE A.nu_prescricoes_medico > 0
+WHERE A.nu_prescricoes_medico >= 5
 
 
 -- ============================================================================
@@ -156,7 +156,7 @@ FROM #lista_medicos_farmacia_popularFP_temp A
 WHERE NOT EXISTS (
     SELECT 1 
     FROM temp_CFM.dbo.medicos_jul_2025_mod M
-    WHERE M.NU_CRM = CAST(A.nu_crm AS VARCHAR(25)) 
+    WHERE TRY_CAST(M.NU_CRM AS BIGINT) = TRY_CAST(A.nu_crm AS BIGINT) 
       AND M.SG_uf = A.sg_uf_crm
 );
 
@@ -170,7 +170,7 @@ SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
               ' prescrições lançadas em ' + 
               CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' + 
               CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)' 
-WHERE nu_dias_prescricao_inicial_final = 1
+WHERE nu_dias_prescricao_inicial_final = 2
   AND nu_prescricoes_medico > 5
 
 
@@ -181,7 +181,7 @@ SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
               ' prescrições lançadas no mesmo dia, em ' +
               CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' +
               CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)'
-WHERE nu_dias_prescricao_inicial_final = 0
+WHERE nu_dias_prescricao_inicial_final = 1
   AND nu_prescricoes_medico > 5
 
 
@@ -199,11 +199,10 @@ SELECT
     C.latitude,
     C.longitude,
     A.nu_prescricoes_medico,
-    -- CORRIGIDO: usa nu_dias + 1 (dias inclusivos), igual ao crms.sql
-    -- sem o +1, medicos que prescrevem em 1 dia unico geram nu_dias=0 -> NULL -> alertas 3 e 4 nunca disparam
+    -- CORRIGIDO: usa nu_dias inclusivos (já calculado como +1 no passo anterior)
     TRY_CAST(
         TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(18,2)) / 
-        NULLIF(TRY_CAST(A.nu_dias_prescricao_inicial_final + 1 AS DECIMAL(18,2)), 0) 
+        NULLIF(TRY_CAST(A.nu_dias_prescricao_inicial_final AS DECIMAL(18,2)), 0) 
     AS DECIMAL(18,2)) AS nu_prescricoes_dia,
     A.nu_autorizacoes_estabelecimento,
     A.dt_prescricao_inicial_medico,
@@ -455,7 +454,7 @@ INNER JOIN (
         TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
     FROM temp_CFM.dbo.medicos_jul_2025_mod
     WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
-) CFM ON CFM.NU_CRM = CAST(AM.nu_crm AS VARCHAR(25)) AND CFM.SG_uf = AM.sg_uf_crm
+) CFM ON TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(AM.nu_crm AS BIGINT) AND CFM.SG_uf = AM.sg_uf_crm
 WHERE CFM.dt_inscricao_convertida IS NOT NULL 
   AND AM.dt_prescricao_inicial_medico < CFM.dt_inscricao_convertida;
 

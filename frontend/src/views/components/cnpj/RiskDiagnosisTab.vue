@@ -15,6 +15,13 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const { regionalData, regionalLoading, fetchRegional } = useRegional();
 
+// Escopo do scatter regional
+const regionalScope = ref('regiao');
+const regionalScopes = [
+  { label: 'Região de Saúde', value: 'regiao', icon: 'pi-compass' },
+  { label: 'Estado (UF)',      value: 'uf',     icon: 'pi-map'     },
+];
+
 // Score da farmácia atual
 const currentScore = computed(() => {
     const data = props.cnpjData;
@@ -41,9 +48,9 @@ const updateRiskCurve = () => {
 };
 
 const loadRegional = () => {
-    if (props.geoData?.no_regiao_saude) {
-        fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf);
-    }
+    if (!props.geoData?.sg_uf) return;
+    const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
+    fetchRegional(regiao, props.geoData.sg_uf);
 };
 
 watch(riskScope, updateRiskCurve, { immediate: true });
@@ -51,6 +58,22 @@ watch(() => props.geoData?.sg_uf, () => {
     updateRiskCurve();
     loadRegional();
 }, { immediate: true });
+
+watch(regionalScope, loadRegional);
+
+// Texto de ranking baseado no escopo selecionado
+const rankingText = computed(() => {
+  const d = props.cnpjData;
+  if (!d) return null;
+  const map = {
+    uf:     { rank: d.rank_uf,           total: d.total_uf,           label: 'no estado' },
+    regiao: { rank: d.rank_regiao_saude, total: d.total_regiao_saude, label: 'na região' },
+    brasil: { rank: d.rank_nacional,     total: d.total_nacional,     label: 'no Brasil'  },
+  };
+  const entry = map[riskScope.value];
+  if (!entry?.rank) return null;
+  return `${entry.rank}º de ${entry.total} ${entry.label}`;
+});
 
 // Calcula em qual "topo" de risco a farmácia está
 const riskRankBadge = computed(() => {
@@ -85,8 +108,21 @@ const riskRankBadge = computed(() => {
                 <i class="pi pi-users" />
                 <span>Posicionamento Regional</span>
              </div>
-             <div v-if="geoData?.no_regiao_saude" class="header-context">
-                {{ geoData.no_regiao_saude }}
+             <div class="scope-selector">
+                <Dropdown
+                  v-model="regionalScope"
+                  :options="regionalScopes"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="p-inputtext-sm"
+                >
+                  <template #value="slotProps">
+                    <div v-if="slotProps.value" class="flex align-items-center gap-2">
+                      <i :class="regionalScopes.find(s => s.value === slotProps.value).icon" />
+                      <span class="dropdown-selected-label">{{ regionalScopes.find(s => s.value === slotProps.value).label }}</span>
+                    </div>
+                  </template>
+                </Dropdown>
              </div>
           </div>
           <div class="card-body">
@@ -126,7 +162,7 @@ const riskRankBadge = computed(() => {
                    <span class="badge-value">{{ riskRankBadge.value }}</span>
                 </div>
              </div>
-             <div class="scope-selector p-input-filled">
+             <div class="scope-selector">
                 <Dropdown 
                   v-model="riskScope" 
                   :options="riskScopes" 
@@ -149,6 +185,7 @@ const riskRankBadge = computed(() => {
               :data="cnpjDetailStore.scorePercentiles"
               :current-score="currentScore"
               :loading="cnpjDetailStore.scorePercentilesLoading"
+              :ranking-text="rankingText"
             />
             <!-- AJUDA CONTEXTUAL CARD 2 -->
             <div class="diagnosis-card-help">
@@ -206,7 +243,7 @@ const riskRankBadge = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.82rem;
   color: var(--text-color);
   text-transform: uppercase;
@@ -256,12 +293,64 @@ const riskRankBadge = computed(() => {
 }
 
 .badge-label { font-weight: 500; opacity: 0.8; border-right: 1px solid currentColor; padding-right: 0.4rem; }
-.badge-value { font-weight: 800; }
+.badge-value { font-weight: 600; }
 
-.scope-selector { min-width: 200px; }
+.scope-selector { min-width: 180px; }
 
-:deep(.p-dropdown) { background: transparent !important; border-color: var(--card-border) !important; }
-:deep(.p-dropdown-label) { font-size: 0.75rem; padding: 0.35rem 0.6rem; }
+:deep(.scope-selector .p-dropdown) {
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border-radius: 8px;
+  transition: border-color 0.2s, background 0.2s;
+  width: 100%;
+}
+
+:deep(.scope-selector .p-dropdown:hover),
+:deep(.scope-selector .p-dropdown.p-focus) {
+  border-color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  box-shadow: none !important;
+}
+
+:deep(.scope-selector .p-dropdown-label) {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--primary-color);
+  padding: 0.35rem 0.5rem;
+}
+
+:deep(.scope-selector .p-dropdown-trigger) {
+  color: var(--primary-color);
+  width: 2rem;
+}
+
+:deep(.scope-selector .p-dropdown-trigger .p-dropdown-trigger-icon) {
+  font-size: 0.7rem;
+}
+
+:deep(.scope-selector .p-dropdown-panel) {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+:deep(.scope-selector .p-dropdown-item) {
+  font-size: 0.78rem;
+  color: var(--text-color);
+  padding: 0.5rem 0.85rem;
+}
+
+:deep(.scope-selector .p-dropdown-item:hover),
+:deep(.scope-selector .p-dropdown-item.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--primary-color);
+}
+
+.dropdown-selected-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
 
 .placeholder-card {
   padding: 4rem;
@@ -304,6 +393,6 @@ const riskRankBadge = computed(() => {
 
 .help-text b {
   color: var(--text-color);
-  font-weight: 700;
+  font-weight: 600;
 }
 </style>

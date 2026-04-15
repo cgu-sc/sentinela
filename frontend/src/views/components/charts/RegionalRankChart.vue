@@ -30,6 +30,12 @@ const { chartTheme } = useChartTheme();
 const { formatCurrencyFull } = useFormatting();
 const isReady = ref(false);
 
+const yMetric = ref('score');
+const yOptions = [
+  { label: 'Score de Risco',        value: 'score' },
+  { label: '% Não-Comprovação',     value: 'pct'   },
+];
+
 onMounted(() => {
   setTimeout(() => { isReady.value = true; }, 400);
 });
@@ -37,35 +43,29 @@ onMounted(() => {
 const chartData = computed(() => {
   if (!props.farmacias?.length) return { others: [], current: [] };
 
-  // Encontra o maior valor de vendas para calibrar a escala comprimida (acima de 1M)
   const allSales = props.farmacias.map(f => f.totalMov || 0);
   const maxSales = Math.max(...allSales, 1000001);
 
-  /**
-   * Função que mapeia o valor real para a posição no gráfico (0 a 100)
-   * 0 a 1M -> 0 a 70% do gráfico
-   * 1M a Max -> 70% a 100% do gráfico
-   */
   const mapX = (val) => {
-    if (val <= 1000000) {
-      return (val / 1000000) * 70;
-    } else {
-      // Regra de três para o pedaço de 70 a 100
-      const ratio = (val - 1000000) / (maxSales - 1000000);
-      return 70 + (ratio * 30);
-    }
+    if (val <= 1000000) return (val / 1000000) * 70;
+    const ratio = (val - 1000000) / (maxSales - 1000000);
+    return 70 + (ratio * 30);
   };
+
+  const getY = (f) => yMetric.value === 'pct'
+    ? (f.percValSemComp || 0)
+    : (f.score_risco || 0);
 
   const others = [];
   const current = [];
 
   props.farmacias.forEach(f => {
     const valRealX = f.totalMov || 0;
+    // value: [X mapeado, Y real, X real, percValSemComp, score_risco]
     const point = {
       name: f.razao_social,
       cnpj: f.cnpj,
-      // Armazenamos [X mapeado, Y real, X real]
-      value: [mapX(valRealX), f.score_risco || 0, valRealX]
+      value: [mapX(valRealX), getY(f), valRealX, f.percValSemComp || 0, f.score_risco || 0]
     };
     if (f.cnpj === props.cnpjAtual) current.push(point);
     else others.push(point);
@@ -90,17 +90,19 @@ const chartOption = computed(() => {
       textStyle: { color: c.tooltipText, fontSize: 12 },
       formatter: (params) => {
         const d = params.data;
-        // d.value[2] é o valor real de vendas que guardamos no mapX
+        const isPct = yMetric.value === 'pct';
+        const yLabel = isPct ? '% Não-Comprovação' : 'Score de Risco';
+        const yVal   = isPct ? `${d.value[3].toFixed(1)}%` : d.value[4].toFixed(2);
         return `
           <div style="padding: 2px; color: ${c.tooltipText}">
-            <div style="font-weight: 700; margin-bottom: 5px;">${d.name}</div>
+            <div style="font-weight: 600; margin-bottom: 5px;">${d.name}</div>
             <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 11px;">
               <span style="opacity: 0.7;">Vendas:</span>
               <span>${formatCurrencyFull(d.value[2])}</span>
             </div>
             <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 11px; margin-top: 2px;">
-              <span style="opacity: 0.7;">Score de Risco:</span>
-              <span style="font-weight: 700; color: #f43f5e;">${d.value[1].toFixed(2)}</span>
+              <span style="opacity: 0.7;">${yLabel}:</span>
+              <span style="font-weight: 600; color: #f43f5e;">${yVal}</span>
             </div>
           </div>
         `;
@@ -134,13 +136,17 @@ const chartOption = computed(() => {
       }
     },
     yAxis: {
-      name: 'Score de Risco',
+      name: yMetric.value === 'pct' ? '% Não-Comprovação' : 'Score de Risco',
       nameLocation: 'middle',
       nameGap: 45,
       nameTextStyle: { color: c.textColor, fontSize: 10, fontWeight: 600 },
       type: 'value',
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.5 } },
-      axisLabel: { color: c.textColor, fontSize: 10 }
+      axisLabel: {
+        color: c.textColor,
+        fontSize: 10,
+        formatter: yMetric.value === 'pct' ? (v) => `${v}%` : undefined
+      }
     },
     series: [
       {
@@ -175,16 +181,27 @@ const chartOption = computed(() => {
 
 <template>
   <div class="regional-rank-wrapper">
-    <!-- Legenda Local Compacta -->
-    <div class="chart-legend-overlay">
-       <div class="legend-item">
+    <!-- Legenda + Toggle -->
+    <div class="chart-header-row">
+      <div class="chart-legend-overlay">
+        <div class="legend-item">
           <span class="dot-self"></span>
           <span>ESTABELECIMENTO ATUAL</span>
-       </div>
-       <div class="legend-item">
+        </div>
+        <div class="legend-item">
           <span class="dot-others"></span>
           <span>OUTRAS FARMÁCIAS</span>
-       </div>
+        </div>
+      </div>
+      <div class="y-metric-toggle">
+        <button
+          v-for="opt in yOptions"
+          :key="opt.value"
+          class="metric-btn"
+          :class="{ active: yMetric === opt.value }"
+          @click="yMetric = opt.value"
+        >{{ opt.label }}</button>
+      </div>
     </div>
 
     <div class="chart-container">
@@ -219,11 +236,48 @@ const chartOption = computed(() => {
   height: 100%;
 }
 
+.chart-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  gap: 0.75rem;
+}
+
 .chart-legend-overlay {
   display: flex;
   gap: 1.25rem;
-  justify-content: center;
-  margin-bottom: 0.5rem;
+}
+
+.y-metric-toggle {
+  display: flex;
+  gap: 0.25rem;
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.metric-btn {
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  white-space: nowrap;
+}
+
+.metric-btn:hover {
+  color: var(--primary-color);
+}
+
+.metric-btn.active {
+  background: var(--primary-color);
+  color: #fff;
 }
 
 .legend-item {

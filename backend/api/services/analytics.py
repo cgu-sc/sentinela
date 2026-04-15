@@ -1075,7 +1075,7 @@ class AnalyticsService:
             return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
     @staticmethod
-    def get_regional_data(regiao_saude: str, uf: str = None) -> RegionalResponse:
+    def get_regional_data(regiao_saude: str = None, uf: str = None) -> RegionalResponse:
         """
         Constrói o payload completo da aba 'Região de Saúde'.
 
@@ -1092,14 +1092,18 @@ class AnalyticsService:
             df_risco = get_df_matriz_risco()
             df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
-            # ── Filtra movimentação para a região ───────────────────────────────
-            mask = (pl.col("no_regiao_saude") == regiao_saude)
-            if uf and uf != 'Todos':
-                mask = mask & (pl.col("uf") == uf)
+            # ── Filtra movimentação para a região ou UF ──────────────────────────
+            if regiao_saude:
+                mask = (pl.col("no_regiao_saude") == regiao_saude)
+                if uf and uf != 'Todos':
+                    mask = mask & (pl.col("uf") == uf)
+            else:
+                mask = (pl.col("uf") == uf)
             df_reg = df_mov.filter(mask)
 
+            nome_escopo = regiao_saude or uf or ''
             if df_reg.is_empty():
-                return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+                return RegionalResponse(nome_regiao=nome_escopo, municipios=[], farmacias=[])
 
             # ── 1. Resumo por Município ─────────────────────────────────────────
             # Agrega CNPJs únicos e valores financeiros por município
@@ -1225,7 +1229,7 @@ class AnalyticsService:
                 ))
 
             return RegionalResponse(
-                nome_regiao=regiao_saude,
+                nome_regiao=nome_escopo,
                 id_regiao=id_regiao,
                 municipios=municipios,
                 farmacias=farmacias,

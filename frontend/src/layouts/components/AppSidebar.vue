@@ -683,9 +683,11 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 }
 
 :deep(.p-dropdown),
-:deep(.p-calendar) {
+:deep(.p-calendar),
+:deep(.filter-input.p-inputtext) {
   height: 32px;
   align-items: center;
+  box-sizing: border-box;
 }
 
 :deep(.filter-input.p-dropdown),

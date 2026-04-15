@@ -97,12 +97,13 @@ def get_cpf_timeline(
 
 @router.get("/regional", response_model=RegionalResponse)
 def get_regional(
-    regiao_saude: str = Query(..., description="Nome da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS')"),
+    regiao_saude: Optional[str] = Query(None, description="Nome da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS'). Omitir para escopo estadual."),
     uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')")
 ):
     """
-    Retorna o resumo municipal e o ranking de farmácias por risco da Região de Saúde selecionada.
-    Alimenta a aba 'Região de Saúde' no dashboard.
+    Retorna o resumo municipal e o ranking de farmácias por risco.
+    - Com regiao_saude: filtra pela região de saúde (+ UF opcional para desambiguação).
+    - Sem regiao_saude: filtra por UF inteiro (escopo estadual).
     """
     return AnalyticsService.get_regional_data(regiao_saude, uf)
 

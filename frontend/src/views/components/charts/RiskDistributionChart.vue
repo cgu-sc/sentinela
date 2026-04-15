@@ -24,7 +24,8 @@ const props = defineProps({
   /** Array de percentis [{ percentile, score }] */
   data: { type: Array, default: () => [] },
   currentScore: { type: Number, default: 0 },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  rankingText: { type: String, default: null }
 });
 
 const { chartTheme } = useChartTheme();
@@ -42,7 +43,7 @@ const chartOption = computed(() => {
 
   return {
     backgroundColor: 'transparent',
-    grid: { top: 60, right: 70, bottom: 40, left: 50 },
+    grid: { top: 90, right: 70, bottom: 40, left: 50 },
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -112,7 +113,14 @@ const chartOption = computed(() => {
           label: {
             show: true,
             position: 'end',
-            formatter: () => `{title|ESTABELECIMENTO ATUAL}\n{score|Score: ${props.currentScore?.toFixed(2) || '—'}}`,
+            formatter: () => {
+              const lines = [
+                `{title|ESTABELECIMENTO ATUAL}`,
+                `{score|Score: ${props.currentScore?.toFixed(2) || '—'}}`,
+              ];
+              if (props.rankingText) lines.push(`{rank|${props.rankingText}}`);
+              return lines.join('\n');
+            },
             backgroundColor: c.tooltip, // Retorno da transparência exata agora que não tem mais conflito de opacidade do Echarts
             borderColor: c.tooltipBorder,
             color: c.tooltipText,
@@ -124,7 +132,8 @@ const chartOption = computed(() => {
             shadowColor: 'rgba(0,0,0,0.15)',
             rich: {
               title: { fontWeight: 500, fontSize: 11, color: c.tooltipText, padding: [0, 0, 4, 0] },
-              score: { fontWeight: 700, fontSize: 13, color: c.tooltipText }
+              score: { fontWeight: 600, fontSize: 13, color: c.tooltipText },
+              rank:  { fontWeight: 500, fontSize: 10, color: c.tooltipText, opacity: 0.65, padding: [3, 0, 0, 0] }
             },
             distance: 6
           },

@@ -15,6 +15,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     evolucaoLoading:    false,
     evolucaoLoaded:     false,
     evolucaoError:      null,
+    evolucaoKey:        null,   // Cache key: "cnpj|inicio|fim" — evita re-fetch desnecessário
 
     // ── Movimentação (Memória de Cálculo) ─────────────────────────────────────
     movimentacaoData:    null,
@@ -70,13 +71,23 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Evolução Financeira ───────────────────────────────────────────────────
-    async fetchEvolucaoFinanceira(cnpj) {
-      if (this.evolucaoLoaded) return;
+    async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.evolucaoKey === key) return;   // Já carregado para este escopo exato
+
       this.evolucaoLoading = true;
       this.evolucaoError   = null;
+      // Não limpa evolucaoFinanceira/evolucaoLoaded aqui — mantém o dado
+      // anterior visível enquanto o novo carrega (evita flash na troca de período).
+
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj));
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });
         this.evolucaoFinanceira = data;
+        this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
       } catch (e) {
         console.error('Erro ao buscar evolução financeira:', e);
@@ -219,6 +230,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.evolucaoLoading    = false;
       this.evolucaoLoaded     = false;
       this.evolucaoError      = null;
+      this.evolucaoKey        = null;
 
       this.movimentacaoData    = null;
       this.movimentacaoLoading = false;

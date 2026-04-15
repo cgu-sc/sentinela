@@ -384,14 +384,26 @@ class AnalyticsService:
             return []
 
     @staticmethod
-    def get_evolucao_financeira(cnpj: str) -> EvolucaoFinanceiraResponse:
+    def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoFinanceiraResponse:
         """
         Retorna a série semestral de valores (total, regular, irregular) para um CNPJ.
-        Fonte: DataFrame Polars em memória (movimentacao_mensal_cnpj).
+
+        Args:
+            cnpj: CNPJ completo (14 dígitos).
+            data_inicio: Data inicial opcional para recorte do período (date).
+            data_fim: Data final opcional para recorte do período (date).
+
+        Returns:
+            EvolucaoFinanceiraResponse com lista de semestres dentro do período informado.
         """
         try:
             df = get_df()
             cnpj_df = df.filter(pl.col("cnpj") == cnpj).select(["periodo", "total_vendas", "total_sem_comprovacao"])
+
+            if data_inicio:
+                cnpj_df = cnpj_df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+            if data_fim:
+                cnpj_df = cnpj_df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
 
             if cnpj_df.is_empty():
                 return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
@@ -405,13 +417,16 @@ class AnalyticsService:
                   .alias("sem_num"),
             ])
 
-            # Agrega por (ano, sem_num) e formata o rótulo depois
+            # Agrega por (ano, sem_num) — captura min/max de período para exibir
+            # os meses reais incluídos (útil quando o semestre é parcial por filtro)
             agg = (
                 cnpj_df
                 .group_by(["ano", "sem_num"])
                 .agg([
                     pl.sum("total_vendas").alias("total"),
                     pl.sum("total_sem_comprovacao").alias("irregular"),
+                    pl.col("periodo").min().alias("dt_inicio"),
+                    pl.col("periodo").max().alias("dt_fim"),
                 ])
                 .sort(["ano", "sem_num"])
                 .with_columns([
@@ -433,6 +448,8 @@ class AnalyticsService:
                     regular=round(r["regular"], 2),
                     irregular=round(r["irregular"], 2),
                     pct_irregular=r["pct_irregular"],
+                    mes_inicio=r["dt_inicio"].strftime("%Y-%m") if r.get("dt_inicio") else None,
+                    mes_fim=r["dt_fim"].strftime("%Y-%m") if r.get("dt_fim") else None,
                 )
                 for r in agg.iter_rows(named=True)
             ]

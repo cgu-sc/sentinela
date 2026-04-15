@@ -45,11 +45,12 @@ const cnpj = computed(() => route.params.cnpj);
 const analyticsStore = useAnalyticsStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { resultadoCnpjs } = storeToRefs(analyticsStore);
-const { dadosCadastro } = storeToRefs(cnpjDetailStore);
+const { dadosCadastro, evolucaoFinanceira, evolucaoLoading } = storeToRefs(cnpjDetailStore);
 
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
 
+const filterStore = useFilterStore();
 const cnpjNav = useCnpjNavStore();
 
 // ── Composables ───────────────────────────────────────────
@@ -113,6 +114,18 @@ const cnpjData = computed(
     null,
 );
 
+// Totais calculados a partir dos semestres da evolução financeira —
+// refletem exatamente o período de análise selecionado (incluindo semestres parciais).
+// Substitui valSemComp/totalMov do cnpjData quando disponível.
+const periodSummary = computed(() => {
+  const semestres = evolucaoFinanceira.value?.semestres;
+  if (!semestres?.length) return null;
+  const totalMov   = semestres.reduce((a, s) => a + s.total,     0);
+  const valSemComp = semestres.reduce((a, s) => a + s.irregular, 0);
+  const percValSemComp = totalMov > 0 ? (valSemComp / totalMov) * 100 : 0;
+  return { totalMov, valSemComp, percValSemComp };
+});
+
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
@@ -123,8 +136,9 @@ watch(
     }
     if (newCnpj) {
       // Eager load: dispara todos os fetches ao carregar a página
+      const { inicio, fim } = getApiParams();
       cnpjDetailStore.fetchDadosCadastro(newCnpj);
-      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj);
+      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj, inicio, fim);
       cnpjDetailStore.fetchMovimentacao(newCnpj);
       cnpjDetailStore.fetchIndicadores(newCnpj);
       cnpjDetailStore.fetchFalecidos(newCnpj);
@@ -136,6 +150,17 @@ watch(
     }
   },
   { immediate: true },
+);
+
+// Re-fetch da evolução financeira quando o período de análise muda
+watch(
+  () => filterStore.periodo,
+  () => {
+    if (!cnpj.value) return;
+    const { inicio, fim } = getApiParams();
+    cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
+  },
+  { deep: true },
 );
 
 // Watch auxilar para quando o cnpjData (e a UF) chegar via fetchCnpjAvulso
@@ -209,6 +234,8 @@ const formatCnpj = (v) => {
       :geo-data="geoData"
       :cadastro="dadosCadastro"
       :is-exporting="isExporting"
+      :period-summary="periodSummary"
+      :period-loading="evolucaoLoading"
       @export="handleExport"
     />
 

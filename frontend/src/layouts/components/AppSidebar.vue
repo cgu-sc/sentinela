@@ -160,9 +160,15 @@ const toggleSidebarLock = () => {
   isSidebarLocked.value = !isSidebarLocked.value;
 };
 
-// ── Rotas que bloqueiam filtros e colapsam a sidebar ─────────────────────────
-const LOCKED_ROUTES = ['/estabelecimentos/', '/listas'];
+// ── Rotas que bloqueiam todos os filtros e colapsam a sidebar ────────────────
+const LOCKED_ROUTES = ['/listas'];
 const isLockedRoute = (path) => LOCKED_ROUTES.some((r) => path.startsWith(r));
+
+// Em telas de detalhe de CNPJ apenas o Período de Análise fica disponível
+const isEstabelecimentoRoute = computed(() => route.path.startsWith('/estabelecimentos/'));
+
+// Bloqueia todos os filtros exceto o Período (usado pelo template em cada seção)
+const allFiltersLocked = computed(() => filtersLocked.value || isEstabelecimentoRoute.value);
 
 watch(
   () => route.path,
@@ -292,13 +298,14 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
     <div class="sidebar-content">
       <!-- BANNER DE FILTROS BLOQUEADOS -->
-      <div v-if="filtersLocked" class="filters-locked-banner">
+      <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
-        <span>Filtros indisponíveis durante a análise de um CNPJ</span>
+        <span v-if="isEstabelecimentoRoute">Apenas o Período de Análise está disponível nesta tela</span>
+        <span v-else>Filtros indisponíveis nesta tela</span>
       </div>
 
       <!-- FILTROS GLOBAIS -->
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">
           UF
           <button v-if="isFilterActive('selectedUF')" class="filter-clear-btn" @click="filterStore.selectedUF = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
@@ -308,7 +315,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">
           Região de Saúde
           <button v-if="isFilterActive('selectedRegiaoSaude')" class="filter-clear-btn" @click="filterStore.selectedRegiaoSaude = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
@@ -318,7 +325,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         <Dropdown v-model="filterStore.selectedRegiaoSaude" :options="regiaoSaudeOptions" placeholder="Região" filter reset-filter-on-hide auto-option-focus filter-match-mode="contains" @show="onDropdownShow" :virtualScrollerOptions="{ itemSize: 32 }" panelClass="sidebar-panel" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }" />
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">
           Município
           <button v-if="isFilterActive('selectedMunicipio')" class="filter-clear-btn" @click="filterStore.selectedMunicipio = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
@@ -328,7 +335,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter optionLabel="label" optionValue="value" reset-filter-on-hide auto-option-focus filter-match-mode="contains" @show="onDropdownShow" :virtualScrollerOptions="{ itemSize: 32 }" panelClass="sidebar-panel" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedMunicipio') }" />
       </div>
 
-      <div class="grid-filters" :class="{ 'filter-locked': filtersLocked }">
+      <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-section">
           <label class="filter-label">Situação RF</label>
           <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
@@ -339,7 +346,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
 
-      <div class="grid-filters" :class="{ 'filter-locked': filtersLocked }">
+      <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-section">
           <label class="filter-label">Porte CNPJ</label>
           <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
@@ -350,7 +357,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">
           Estabelecimento
           <i class="pi pi-info-circle" style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;" v-tooltip.right="'Digite o CNPJ (completo ou raiz de 8 dígitos) ou parte da razão social. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede; texto livre filtra por razão social.'" />
@@ -384,7 +391,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </AutoComplete>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">% de não comprovação</label>
         <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('percentualNaoComprovacaoRange') }">
           <div class="perc-chips">
@@ -432,7 +439,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
 
-      <div class="filter-section" style="margin-top: 1.8rem" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" style="margin-top: 1.8rem" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">Valor mínimo sem comprovação</label>
         <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
           <div class="slider-values">
@@ -442,7 +449,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         </div>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
+      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
         <label class="filter-label">
           Jurisdição PF
           <button v-if="isFilterActive('selectedUnidadePf')" class="filter-clear-btn" @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
@@ -455,7 +462,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
       <hr class="sidebar-divider my-4" />
 
       <!-- FILTROS CONTEXTUAIS -->
-      <div class="dynamic-filters-box" :class="{ 'filter-locked': filtersLocked }">
+      <div class="dynamic-filters-box" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-header">
           <i class="pi pi-filter"></i>
           <span>Filtros da Página</span>
@@ -502,7 +509,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         @click="limparFiltros"
         class="w-full clear-filters-btn"
         :class="{ 'filters-active': activeFilterCount > 0 }"
-        :disabled="filtersLocked"
+        :disabled="allFiltersLocked"
       />
     </div>
   </aside>

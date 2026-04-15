@@ -32,11 +32,15 @@ const formatPopulacao = (n) => {
 };
 
 const props = defineProps({
-  cnpj: { type: String, required: true },
-  cnpjData: { type: Object, default: null },
-  geoData: { type: Object, default: null },
-  cadastro: { type: Object, default: null },
-  isExporting: { type: Boolean, default: false },
+  cnpj:          { type: String,  required: true },
+  cnpjData:      { type: Object,  default: null },
+  geoData:       { type: Object,  default: null },
+  cadastro:      { type: Object,  default: null },
+  isExporting:   { type: Boolean, default: false },
+  // Totais recalculados para o período de análise selecionado.
+  // Quando presentes, sobrepõem os valores globais do cnpjData.
+  periodSummary: { type: Object,  default: null },  // { totalMov, valSemComp, percValSemComp }
+  periodLoading: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["export"]);
@@ -52,7 +56,13 @@ const copyCnpj = () => {
   }
 };
 
-const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
+// Valores financeiros — usam periodSummary quando disponível (período filtrado),
+// caem de volta para cnpjData quando a evolução ainda não carregou.
+const displayValSemComp    = computed(() => props.periodSummary?.valSemComp    ?? props.cnpjData?.valSemComp    ?? 0);
+const displayTotalMov      = computed(() => props.periodSummary?.totalMov      ?? props.cnpjData?.totalMov      ?? 0);
+const displayPercValSemComp = computed(() => props.periodSummary?.percValSemComp ?? props.cnpjData?.percValSemComp ?? 0);
+
+const risco = computed(() => displayPercValSemComp.value);
 
 // Classificação de badges — delegada ao composable useStatusClass
 const conexaoMsClassComp = computed(() =>
@@ -328,10 +338,10 @@ const filterNetwork = () => {
               v-if="cnpjData.score_risco_final != null"
             ></div>
 
-            <div class="pill-item">
+            <div class="pill-item" :class="{ 'kpi-refreshing': periodLoading }">
               <span class="pill-label">Valor sem Comprovação</span>
               <span class="pill-value currency">
-                {{ formatCurrencyFull(cnpjData.valSemComp) }}
+                {{ formatCurrencyFull(displayValSemComp) }}
                 <small
                   style="
                     color: var(--text-color);
@@ -340,18 +350,18 @@ const filterNetwork = () => {
                     font-weight: 600;
                     padding-left: 4px;
                   "
-                  >({{ cnpjData.percValSemComp?.toFixed(2) }}%)</small
+                  >({{ displayPercValSemComp.toFixed(2) }}%)</small
                 >
               </span>
             </div>
           </div>
 
           <!-- Bloco Neutro - Agora em formato Pill -->
-          <div class="kpi-pill-group kpi-pill-group--neutral">
+          <div class="kpi-pill-group kpi-pill-group--neutral" :class="{ 'kpi-refreshing': periodLoading }">
             <div class="pill-item">
               <span class="pill-label">Total Movimentado</span>
               <span class="pill-value total">
-                {{ formatCurrencyFull(cnpjData.totalMov) }}
+                {{ formatCurrencyFull(displayTotalMov) }}
               </span>
             </div>
           </div>
@@ -781,7 +791,13 @@ const filterNetwork = () => {
   border-radius: 12px;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.3s ease, opacity 0.25s ease;
+}
+
+.kpi-pill-group.kpi-refreshing,
+.pill-item.kpi-refreshing {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 /* Barra de acento no rodapé (Opção 2 — Bottom-up) */

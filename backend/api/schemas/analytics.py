@@ -137,6 +137,8 @@ class EvolucaoSemestreSchema(BaseModel):
     regular: float
     irregular: float
     pct_irregular: float
+    mes_inicio: Optional[str] = None  # "YYYY-MM" — mês mais antigo no grupo (pode ser parcial)
+    mes_fim: Optional[str] = None     # "YYYY-MM" — mês mais recente no grupo
 
 class EvolucaoFinanceiraResponse(BaseModel):
     cnpj: str

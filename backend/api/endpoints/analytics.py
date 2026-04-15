@@ -66,9 +66,13 @@ def get_resultado_faixas_risco(
     return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
-def get_evolucao_financeira(cnpj: str):
-    """Retorna a série semestral de valores financeiros para um CNPJ."""
-    return AnalyticsService.get_evolucao_financeira(cnpj)
+def get_evolucao_financeira(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna a série semestral de valores financeiros para um CNPJ, com recorte temporal opcional."""
+    return AnalyticsService.get_evolucao_financeira(cnpj, data_inicio, data_fim)
 
 @router.get("/cnpj/{cnpj}/indicadores", response_model=IndicadoresResponse)
 def get_indicadores(cnpj: str):

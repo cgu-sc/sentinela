@@ -26,6 +26,26 @@ const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolu
 
 const chartRef = ref(null);
 
+/**
+ * Formata o intervalo real de meses de um semestre (ex: "mai – jun").
+ * Quando o semestre é completo (jan–jun ou jul–dez) retorna null — não é
+ * necessário repetir o óbvio. Quando é parcial, exibe os meses reais.
+ */
+function formatMesRange(mesInicio, mesFim) {
+  if (!mesInicio || !mesFim) return null;
+  const fmt = (iso) =>
+    new Date(iso + '-02')
+      .toLocaleDateString('pt-BR', { month: 'short' })
+      .replace('.', '');
+  const mi = fmt(mesInicio);
+  const mf = fmt(mesFim);
+  return mi === mf ? mi : `${mi} – ${mf}`;
+}
+
+// Verdadeiro quando há dados anteriores visíveis E um novo fetch está em curso.
+// Usado para dimir os cards suavemente em vez de exibir o spinner novamente.
+const isRefreshing = computed(() => evolucaoLoading.value && evolucaoLoaded.value);
+
 defineExpose({
   getChartImage: (pixelRatio = 2) =>
     chartRef.value?.chart?.getDataURL({ type: 'jpeg', pixelRatio, backgroundColor: '#ffffff', quality: 0.85 }) ?? null,
@@ -158,7 +178,7 @@ const chartOption = computed(() => {
 
 <template>
   <div class="tab-content evolucao-tab">
-    <div v-if="evolucaoLoading" class="tab-placeholder">
+    <div v-if="evolucaoLoading && !evolucaoLoaded" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Carregando dados...</p>
     </div>
@@ -174,16 +194,17 @@ const chartOption = computed(() => {
     </div>
 
     <template v-else-if="evolucaoLoaded">
-      <div class="evolucao-card evolucao-card-highlight">
+      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
           <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
+          <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
         </div>
         <div class="evolucao-chart-wrap">
           <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" />
         </div>
       </div>
 
-      <div class="evolucao-card evolucao-card-highlight">
+      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
           <i class="pi pi-table" /><span>Detalhamento Semestral</span>
         </div>
@@ -209,7 +230,12 @@ const chartOption = computed(() => {
             </thead>
             <tbody>
               <tr v-for="(s, i) in evolucaoData.semestres" :key="s.semestre">
-                <td class="sem-label">{{ s.semestre }}</td>
+                <td class="sem-label">
+                  {{ s.semestre }}
+                  <span v-if="formatMesRange(s.mes_inicio, s.mes_fim)" class="sem-months">
+                    {{ formatMesRange(s.mes_inicio, s.mes_fim) }}
+                  </span>
+                </td>
                 <td>{{ formatCurrencyFull(s.total) }}</td>
                 <td class="col-regular">{{ formatCurrencyFull(s.regular) }}</td>
                 <td class="col-irregular">{{ formatCurrencyFull(s.irregular) }}</td>
@@ -298,11 +324,16 @@ const chartOption = computed(() => {
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   padding: 1.25rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.25s ease;
 }
 
 .evolucao-card-highlight:hover {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
+.evolucao-card-highlight.is-refreshing {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .evolucao-card-header {
@@ -321,6 +352,12 @@ const chartOption = computed(() => {
 }
 
 .evolucao-card-header i { font-size: 1rem; color: var(--primary-color); }
+
+.refresh-spinner {
+  margin-left: auto;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
 .evolucao-chart-wrap { height: 350px; padding: 0.5rem 0 0 0; }
 .evolucao-chart { width: 100%; height: 100%; }
 
@@ -357,7 +394,21 @@ const chartOption = computed(() => {
   color: var(--text-color);
 }
 
-.sem-label { font-weight: 600; color: var(--text-secondary); }
+.sem-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sem-months {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.7;
+  letter-spacing: 0.01em;
+}
 .col-regular { color: var(--risk-low); }
 .col-irregular { color: var(--risk-high); }
 

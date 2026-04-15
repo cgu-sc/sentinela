@@ -670,15 +670,16 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.65rem;
+  padding: 0.6rem 0.8rem;
   margin-bottom: 0.75rem;
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  /* Usa o fundo da sidebar para evitar o flash branco em modo light */
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
   border-radius: 8px;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: var(--primary-color);
-  opacity: 0.85;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .filters-locked-banner .pi { font-size: 0.7rem; }
@@ -946,16 +947,47 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 :deep(.clear-filters-btn.p-button:focus-visible) { box-shadow: 0 0 0 2px var(--primary-color) !important; }
 
 :deep(.filters-active.p-button) {
-  background: transparent !important;
-  border-color: var(--primary-color) !important;
-  color: var(--primary-color) !important;
-  animation: pulse-filter 1.5s ease-in-out infinite !important;
-}
-
-:deep(.filters-active.p-button:hover) {
   background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
   border-color: var(--primary-color) !important;
   color: var(--primary-color) !important;
+  position: relative;
+  overflow: hidden; /* Necessário para o efeito de brilho (shimmer) */
+}
+
+/* Efeito Shimmer (Brilho que atravessa o botão) */
+:deep(.filters-active.p-button::after) {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: shimmer-sweep 3s infinite ease-in-out;
+}
+
+/* Animação do Ícone (Micro-interação) */
+:deep(.filters-active.p-button .p-button-icon) {
+  animation: icon-spin-subtle 3s infinite ease-in-out;
+}
+
+@keyframes shimmer-sweep {
+  0%   { left: -100%; }
+  20%  { left: 100%; }  /* Passa rápido no início do ciclo */
+  100% { left: 100%; }  /* Fica invisível no resto do tempo */
+}
+
+@keyframes icon-spin-subtle {
+  0%, 75% { transform: rotate(0deg); }
+  90%     { transform: rotate(-360deg); }
+  100%    { transform: rotate(-360deg); }
 }
 
 @keyframes pulse-filter {

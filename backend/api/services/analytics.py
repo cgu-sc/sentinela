@@ -9,7 +9,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_crms_detalhado, get_df_top20_crms
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_crms_detalhado, get_df_top20_crms, get_df_dados_farmacia
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -97,7 +97,7 @@ _INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
 
 class AnalyticsService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None) -> AnalyticsResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None) -> AnalyticsResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -165,6 +165,8 @@ class AnalyticsService:
                     mask = mask & (pl.col("cnpj") == cnpj_raiz)
                 else:
                     mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
+            if razao_social:
+                mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
 
             period_df = df.filter(mask)
 
@@ -982,7 +984,7 @@ class AnalyticsService:
             )
 
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None) -> FatorRiscoResponseSchema:
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None) -> FatorRiscoResponseSchema:
         """
         Calcula as faixas de risco (Buckets de 10%) via Polars.
         """
@@ -1012,6 +1014,8 @@ class AnalyticsService:
                     mask = mask & (pl.col("cnpj") == cnpj_raiz)
                 else:
                     mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
+            if razao_social:
+                mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
 
             cnpj_agg = (
                 df.filter(mask)
@@ -1657,4 +1661,20 @@ class AnalyticsService:
             
         except Exception as e:
             print(f"⚠️ Erro ao calcular percentis de score: {e}")
+            return []
+
+    @staticmethod
+    def get_cnpj_lookup() -> list[dict]:
+        """Retorna lista slim de {cnpj, razao_social, municipio, uf} para autocomplete no frontend.
+        Usa get_rede_df() — DataFrame leve de cadastro, sem dados temporais."""
+        try:
+            df = get_rede_df()
+            return (
+                df.select(["cnpj", "razao_social", "municipio", "uf"])
+                .unique(subset=["cnpj"])
+                .sort("razao_social", nulls_last=True)
+                .to_dicts()
+            )
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar lookup de CNPJs: {e}")
             return []

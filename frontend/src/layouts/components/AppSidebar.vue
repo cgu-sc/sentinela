@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   FILTER_DEFAULTS,
@@ -16,6 +16,7 @@ import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
 import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
+import AutoComplete from 'primevue/autocomplete';
 import DataIntegrityBanner from '@/layouts/components/DataIntegrityBanner.vue';
 
 const props = defineProps({
@@ -118,6 +119,31 @@ const clusterOptions   = FILTER_OPTIONS.cluster;
 const rfaOptions       = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
+
+// ── Autocomplete de Estabelecimento (CNPJ / Razão Social) ───────────────────
+const cnpjSuggestions = ref([]);
+
+function searchEstabelecimento(event) {
+  const q = (event.query || '').trim().toLowerCase();
+  if (q.length < 2) { cnpjSuggestions.value = []; return; }
+  const lista = geoStore.cnpjLookup;
+  const numericQ = q.replace(/\D/g, '');
+  // Divide a query em tokens e exige que TODOS estejam presentes (qualquer ordem)
+  const tokens = q.split(/\s+/).filter(Boolean);
+  cnpjSuggestions.value = lista
+    .filter(e => {
+      if (numericQ.length >= 4 && e.cnpj?.includes(numericQ)) return true;
+      const nome = e.razao_social?.toLowerCase() ?? '';
+      return tokens.every(t => nome.includes(t));
+    })
+    .slice(0, 40)
+    .map(e => ({ label: e.razao_social, cnpj: e.cnpj, municipio: e.municipio, uf: e.uf }));
+}
+
+function onEstabelecimentoSelect(event) {
+  // Ao selecionar uma sugestão, preenche com o CNPJ completo
+  filterStore.selectedCnpjRaiz = event.value.cnpj;
+}
 
 // ── Controle collapse/lock da sidebar ───────────────────────────────────────
 const isCollapsed = computed({
@@ -326,13 +352,36 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
       <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
         <label class="filter-label">
-          CNPJ
-          <i class="pi pi-info-circle" style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;" v-tooltip.right="'Aceita CNPJ completo (14 dígitos) ou apenas a raiz (8 dígitos), com ou sem máscara. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede.'" />
+          Estabelecimento
+          <i class="pi pi-info-circle" style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;" v-tooltip.right="'Digite o CNPJ (completo ou raiz de 8 dígitos) ou parte da razão social. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede; texto livre filtra por razão social.'" />
           <button v-if="isFilterActive('selectedCnpjRaiz')" class="filter-clear-btn" @click="filterStore.selectedCnpjRaiz = ''" v-tooltip.right="'Limpar filtro'">
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <InputText v-model="filterStore.selectedCnpjRaiz" placeholder="Digite o CNPJ..." class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedCnpjRaiz') }" :maxlength="18" />
+        <AutoComplete
+          v-model="filterStore.selectedCnpjRaiz"
+          :suggestions="cnpjSuggestions"
+          optionLabel="label"
+          @complete="searchEstabelecimento"
+          @option-select="onEstabelecimentoSelect"
+          placeholder="CNPJ ou razão social..."
+          class="w-full filter-input estabelecimento-ac"
+          :class="{ 'filter-active': isFilterActive('selectedCnpjRaiz') }"
+          :delay="200"
+          :forceSelection="false"
+          panelClass="sidebar-ac-panel"
+          :pt="{ input: { maxlength: 60 } }"
+        >
+          <template #option="{ option }">
+            <div class="ac-option">
+              <span class="ac-razao">{{ option.label }}</span>
+              <div class="ac-meta">
+                <span class="ac-cnpj">{{ option.cnpj }}</span>
+                <span v-if="option.municipio" class="ac-loc">{{ option.municipio }}/{{ option.uf }}</span>
+              </div>
+            </div>
+          </template>
+        </AutoComplete>
       </div>
 
       <div class="filter-section" :class="{ 'filter-locked': filtersLocked }">
@@ -935,5 +984,86 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 :deep(.filter-input.sm .p-dropdown-label) {
   padding: 0.5rem;
   font-size: 0.8rem;
+}
+
+/* AUTOCOMPLETE DE ESTABELECIMENTO */
+:deep(.estabelecimento-ac) {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+:deep(.estabelecimento-ac .p-autocomplete-input) {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  background: var(--sidebar-input-bg) !important;
+  border-color: var(--sidebar-border) !important;
+  color: var(--sidebar-text) !important;
+}
+
+:global(.admin-sidebar .estabelecimento-ac .p-autocomplete-input:focus) {
+  border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  outline: none !important;
+}
+
+:global(.admin-sidebar .filter-active.estabelecimento-ac .p-autocomplete-input) {
+  border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+}
+
+:global(.sidebar-ac-panel) {
+  background: var(--sidebar-bg) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 8px !important;
+  max-height: 280px !important;
+}
+
+:global(.sidebar-ac-panel .p-autocomplete-item) {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+:global(.sidebar-ac-panel .p-autocomplete-item:hover),
+:global(.sidebar-ac-panel .p-autocomplete-item.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important;
+}
+
+.ac-option {
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0.75rem;
+  gap: 0.15rem;
+}
+
+.ac-razao {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.ac-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ac-cnpj {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.ac-loc {
+  font-size: 0.65rem;
+  color: var(--primary-color);
+  opacity: 0.75;
 }
 </style>

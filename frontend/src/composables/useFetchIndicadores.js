@@ -19,9 +19,9 @@ export function useFetchIndicadores() {
    * Agora inclui filtros de percentual e valor acumulado.
    */
   function getIndicadorParams() {
-    const { 
-      uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf,
-      percMin, percMax, valMin 
+    const {
+      uf, regiaoSaude, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf,
+      percMin, percMax, valMin
     } = getApiParams();
 
     const params = {};
@@ -37,6 +37,7 @@ export function useFetchIndicadores() {
     if (porteEmpresa) params.porte_empresa = porteEmpresa;
     if (grandeRede)   params.grande_rede = grandeRede;
     if (cnpjRaiz)     params.cnpj_raiz = cnpjRaiz;
+    if (razaoSocial)  params.razao_social = razaoSocial;
     if (unidadePf)    params.unidade_pf = unidadePf;
 
     // Novos: Filtros de Auditoria (Snapshot)

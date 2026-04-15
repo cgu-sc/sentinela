@@ -10,7 +10,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null) {
+function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null) {
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -26,6 +26,7 @@ function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoS
   if (grandeRede) params.grande_rede = grandeRede;
   if (cnpjRaiz) params.cnpj_raiz = cnpjRaiz;
   if (unidadePf) params.unidade_pf = unidadePf;
+  if (razaoSocial) params.razao_social = razaoSocial;
   return params;
 }
 
@@ -44,11 +45,11 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null) {
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null) {
       this.isLoading = true;
       this.error = null;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
 
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
@@ -82,10 +83,10 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null) {
       this.fatorRiscoLoading = true;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
         const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {

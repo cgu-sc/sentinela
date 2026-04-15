@@ -20,7 +20,7 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
     const args = [
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
-      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf,
+      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
     ];
 
     analyticsStore.fetchDashboardSummary(...args);

@@ -38,35 +38,16 @@ class GeoService:
     @staticmethod
     def get_estabelecimentos_geo() -> EstabelecimentosGeoResponseSchema:
         """
-        Retorna coordenadas e score de risco de todos os estabelecimentos com lat/lon
-        preenchidos. Cruza dados_farmacia com matriz_risco em memória (sem SQL).
+        Retorna coordenadas e indicadores de risco consolidados de todos os estabelecimentos.
+        Utiliza os dados pré-calculados e enriquecidos no cache farmacias.parquet.
         """
         try:
-            df_farm = get_df_dados_farmacia()
-            df_risco = get_df_matriz_risco()
-            df_mov = get_df()
+            df = get_df_dados_farmacia()
 
-            # Filtra apenas quem tem coordenadas
-            df_farm = df_farm.filter(
+            # Filtra apenas quem tem coordenadas (necessário para o mapa)
+            df = df.filter(
                 pl.col("latitude").is_not_null() & pl.col("longitude").is_not_null()
             )
-
-            # Seleciona necessário da matriz de risco
-            df_risco_slim = df_risco.select([
-                "cnpj", "score_risco_final", "classificacao_risco"
-            ]).rename({"score_risco_final": "score_risco"})
-
-            # Agrega histórico completo de movimentação por CNPJ
-            df_mov_agg = df_mov.group_by("cnpj").agg([
-                pl.sum("total_vendas").alias("totalMov"),
-                pl.sum("total_sem_comprovacao").alias("valSemComp")
-            ]).with_columns([
-                (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).fill_null(0).alias("percValSemComp")
-            ])
-
-            # Join para trazer score e dados financeiros
-            df = df_farm.join(df_risco_slim, on="cnpj", how="left") \
-                        .join(df_mov_agg, on="cnpj", how="left")
 
             estabelecimentos = [
                 EstabelecimentoGeoSchema(
@@ -75,11 +56,11 @@ class GeoService:
                     lat=r["latitude"],
                     lon=r["longitude"],
                     id_ibge7=r.get("id_ibge7"),
-                    score_risco=r.get("score_risco"),
+                    score_risco=r.get("score_risco_final"),
                     classificacao_risco=r.get("classificacao_risco"),
-                    percValSemComp=r.get("percValSemComp") or 0.0,
-                    totalMov=r.get("totalMov") or 0.0,
-                    valSemComp=r.get("valSemComp") or 0.0,
+                    percValSemComp=r.get("perc_val_sem_comp"),
+                    totalMov=r.get("total_mov"),
+                    valSemComp=r.get("val_sem_comp"),
                 )
                 for r in df.iter_rows(named=True)
             ]

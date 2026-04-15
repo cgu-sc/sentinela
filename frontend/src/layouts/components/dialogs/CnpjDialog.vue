@@ -16,7 +16,8 @@ const formatCnpjMask = (v) => {
 };
 
 watch(() => filterStore.selectedCnpjRaiz, (val) => {
-  const digits = val.replace(/\D/g, '');
+  const str = typeof val === 'string' ? val : (val?.cnpj ?? '');
+  const digits = str.replace(/\D/g, '');
   if (digits.length === 14) {
     cnpjCompletoDetectado.value = digits;
     showCnpjDialog.value = true;

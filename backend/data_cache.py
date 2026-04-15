@@ -209,14 +209,29 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     global _df_dados_farmacia
     print("Sincronizando Dados Cadastrais das Farmácias...")
     sql = """
-        SELECT cnpj,
-               razaoSocial as razao_social,
-               nomeFantasia as nome_fantasia,
-               tipoLogradouro as tipo_logradouro,
-               logradouro, numero, complemento, bairro, cep,
-               latitude, longitude,
-               codibge as id_ibge7
-        FROM [temp_CGUSC].[fp].[dados_farmacia]
+        SELECT D.cnpj,
+               D.razaoSocial as razao_social,
+               D.nomeFantasia as nome_fantasia,
+               D.tipoLogradouro as tipo_logradouro,
+               D.logradouro, D.numero, D.complemento, D.bairro, D.cep,
+               D.latitude, D.longitude,
+               D.codibge as id_ibge7,
+               CAST(ISNULL(R.total_mov, 0) AS FLOAT) as total_mov,
+               CAST(ISNULL(R.val_sem_comp, 0) AS FLOAT) as val_sem_comp,
+               CAST(CASE WHEN ISNULL(R.total_mov, 0) > 0 
+                         THEN (ISNULL(R.val_sem_comp, 0) / R.total_mov) * 100 
+                         ELSE 0 END AS FLOAT) as perc_val_sem_comp,
+               CAST(ISNULL(M.score_risco_final, 0) AS FLOAT) as score_risco_final,
+               ISNULL(M.classificacao_risco, 'N/A') as classificacao_risco
+        FROM [temp_CGUSC].[fp].[dados_farmacia] D
+        LEFT JOIN (
+            SELECT cnpj, 
+                   SUM(total_vendas) as total_mov, 
+                   SUM(total_sem_comprovacao) as val_sem_comp
+            FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
+            GROUP BY cnpj
+        ) R ON R.cnpj = D.cnpj
+        LEFT JOIN [temp_CGUSC].[fp].[matriz_risco_consolidada] M ON M.cnpj = D.cnpj
     """
     with engine.connect() as conn:
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[dados_farmacia]")).scalar()

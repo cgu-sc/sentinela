@@ -72,6 +72,18 @@ export const useGeoStore = defineStore('geo', () => {
     }
   }
 
+  // Lista slim [{cnpj, razao_social}] para autocomplete na sidebar
+  const cnpjLookup = ref([]);
+
+  async function fetchCnpjLookup() {
+    try {
+      const response = await axios.get(API_ENDPOINTS.analyticsCnpjLookup);
+      cnpjLookup.value = response.data;
+    } catch (err) {
+      console.error('Erro ao buscar lookup de CNPJs:', err);
+    }
+  }
+
   // Lookup O(1) por id_ibge7 → lista de estabelecimentos
   const estabelecimentosPorIbge7 = computed(() => {
     const map = new Map();
@@ -184,5 +196,7 @@ export const useGeoStore = defineStore('geo', () => {
     estabelecimentos,
     fetchEstabelecimentos,
     estabelecimentosPorIbge7,
+    cnpjLookup,
+    fetchCnpjLookup,
   };
 })

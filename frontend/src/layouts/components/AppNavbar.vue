@@ -8,7 +8,8 @@ import { useSyncManager } from '@/composables/useSyncManager';
 import ThemeSelector from '@/components/ThemeSelector.vue';
 import Button from 'primevue/button';
 import SelectButton from 'primevue/selectbutton';
-import InputText from 'primevue/inputtext';
+import AutoComplete from 'primevue/autocomplete';
+import { useGeoStore } from '@/stores/geo';
 
 const props = defineProps({
   modelValue: { type: String, required: true },
@@ -27,6 +28,7 @@ const recentCnpj = computed(() => recentCnpjStore.recent);
 const farmaciaLists = useFarmaciaListsStore();
 const totalListas = computed(() => farmaciaLists.interesse.length);
 const { showConfirmSync } = useSyncManager();
+const geoStore = useGeoStore();
 
 // Abas dinâmicas baseadas no módulo selecionado
 const tabs = computed(() => {
@@ -36,7 +38,7 @@ const tabs = computed(() => {
       { label: 'Municípios',           path: '/municipios' },
       { label: 'Estabelecimentos',     path: '/estabelecimentos' },
       { label: 'Indicadores',          path: '/indicadores' },
-      { label: 'Dispersão Benefício',  path: '/dispersao-beneficio' },
+
     ];
   } else {
     return [
@@ -59,7 +61,7 @@ onMounted(() => {
 watch(activeModule, (newVal) => {
   if (
     newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:dispersao-beneficio|dispersao|municipios|empresa|estabelecimentos|$)/)
+    !route.path.match(/^\/(?:municipios|empresa|estabelecimentos|$)/)
   ) {
     router.push('/');
   } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {
@@ -67,15 +69,38 @@ watch(activeModule, (newVal) => {
   }
 });
 
-// Busca rápida por CNPJ completo
+// Busca rápida por CNPJ ou Razão Social
 const navCnpjInput = ref('');
+const navSuggestions = ref([]);
+
 watch(navCnpjInput, (val) => {
-  const digits = val.replace(/\D/g, '');
+  const str = typeof val === 'string' ? val : (val?.cnpj ?? '');
+  const digits = str.replace(/\D/g, '');
   if (digits.length === 14) {
     navCnpjInput.value = '';
     router.push(`/estabelecimentos/${digits}`);
   }
 });
+
+function searchNav(event) {
+  const q = (event.query || '').trim().toLowerCase();
+  if (q.length < 2) { navSuggestions.value = []; return; }
+  const numericQ = q.replace(/\D/g, '');
+  const tokens = q.split(/\s+/).filter(Boolean);
+  navSuggestions.value = geoStore.cnpjLookup
+    .filter(e => {
+      if (numericQ.length >= 4 && e.cnpj?.includes(numericQ)) return true;
+      const nome = e.razao_social?.toLowerCase() ?? '';
+      return tokens.every(t => nome.includes(t));
+    })
+    .slice(0, 40)
+    .map(e => ({ label: e.razao_social, cnpj: e.cnpj, municipio: e.municipio, uf: e.uf }));
+}
+
+function onNavSelect(event) {
+  navCnpjInput.value = '';
+  router.push(`/estabelecimentos/${event.value.cnpj}`);
+}
 </script>
 
 <template>
@@ -130,12 +155,28 @@ watch(navCnpjInput, (val) => {
     <div class="nav-actions">
       <div class="nav-cnpj-search">
         <i class="pi pi-search nav-cnpj-icon" />
-        <InputText
+        <AutoComplete
           v-model="navCnpjInput"
-          placeholder="CNPJ (14 dígitos)"
-          class="nav-cnpj-input"
-          maxlength="18"
-        />
+          :suggestions="navSuggestions"
+          optionLabel="label"
+          @complete="searchNav"
+          @option-select="onNavSelect"
+          placeholder="CNPJ ou razão social..."
+          :delay="200"
+          :forceSelection="false"
+          panelClass="nav-ac-panel"
+          class="nav-ac"
+        >
+          <template #option="{ option }">
+            <div class="nav-ac-option">
+              <span class="nav-ac-razao">{{ option.label }}</span>
+              <div class="nav-ac-meta">
+                <span class="nav-ac-cnpj">{{ option.cnpj }}</span>
+                <span v-if="option.municipio" class="nav-ac-loc">{{ option.municipio }}/{{ option.uf }}</span>
+              </div>
+            </div>
+          </template>
+        </AutoComplete>
       </div>
       <ThemeSelector />
       <Button
@@ -357,30 +398,87 @@ watch(navCnpjInput, (val) => {
   z-index: 1;
 }
 
-.nav-cnpj-input {
+:deep(.nav-ac) {
+  width: 200px;
+}
+
+:deep(.nav-ac .p-autocomplete-input) {
   padding: 0.3rem 0.7rem 0.3rem 1.8rem !important;
   height: 30px !important;
   font-size: 0.72rem !important;
   font-family: 'Inter', sans-serif !important;
-  font-weight: 600 !important;
-  width: 170px !important;
+  font-weight: 500 !important;
+  width: 200px !important;
   background: color-mix(in srgb, var(--card-bg) 80%, transparent) !important;
   border: 1px solid var(--card-border) !important;
   border-radius: 6px !important;
   color: var(--text-color) !important;
   letter-spacing: 0.03em;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
 }
 
-.nav-cnpj-input:focus {
+:deep(.nav-ac .p-autocomplete-input:focus) {
   border-color: color-mix(in srgb, var(--primary-color) 60%, transparent) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
   outline: none !important;
 }
 
-.nav-cnpj-input::placeholder {
+:deep(.nav-ac .p-autocomplete-input::placeholder) {
   color: var(--text-muted) !important;
   opacity: 0.6;
+}
+
+:global(.nav-ac-panel) {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 8px !important;
+  max-height: 320px !important;
+}
+
+:global(.nav-ac-panel .p-autocomplete-item) {
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--text-color) !important;
+}
+
+:global(.nav-ac-panel .p-autocomplete-item:hover),
+:global(.nav-ac-panel .p-autocomplete-item.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important;
+}
+
+.nav-ac-option {
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0.75rem;
+  gap: 0.15rem;
+}
+
+.nav-ac-razao {
+  font-size: 0.75rem;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.nav-ac-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-ac-cnpj {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.nav-ac-loc {
+  font-size: 0.65rem;
+  color: var(--primary-color);
+  opacity: 0.75;
 }
 
 .lists-nav-btn {

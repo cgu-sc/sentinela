@@ -35,10 +35,17 @@ export function useFilterParameters() {
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;
     const grandeRede   = filterStore.selectedGrandeRede !== FILTER_ALL_VALUE ? filterStore.selectedGrandeRede : null;
-    const cnpjRaiz     = extractCnpjFilter(filterStore.selectedCnpjRaiz);
+    // Detecção automática: ≥8 dígitos numéricos → CNPJ; texto livre → razão social
+    // Coerção defensiva: AutoComplete pode entregar objeto antes do onSelect handler
+    const raw = filterStore.selectedCnpjRaiz;
+    const rawSearch = typeof raw === 'string' ? raw : (raw?.cnpj ?? raw?.label ?? '');
+    const numericOnly = rawSearch.replace(/\D/g, '');
+    const cnpjRaiz   = numericOnly.length >= 8 ? extractCnpjFilter(rawSearch) : null;
+    const razaoSocial = numericOnly.length < 8 && rawSearch.trim().length >= 2 ? rawSearch.trim() : null;
+
     const unidadePf    = filterStore.selectedUnidadePf !== FILTER_ALL_VALUE ? filterStore.selectedUnidadePf : null;
 
-    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf };
+    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf };
   }
 
   function isPeriodoValido() {

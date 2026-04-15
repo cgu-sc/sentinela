@@ -35,9 +35,10 @@ def get_analytics_summary(
     grande_rede: Optional[str] = Query(None),
     cnpj_raiz: Optional[str] = Query(None),
     unidade_pf: Optional[str] = Query(None),
+    razao_social: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -59,9 +60,10 @@ def get_resultado_faixas_risco(
     grande_rede: Optional[str] = Query(None),
     cnpj_raiz: Optional[str] = Query(None),
     unidade_pf: Optional[str] = Query(None),
+    razao_social: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(cnpj: str):
@@ -153,6 +155,11 @@ def get_movimentacao(
     - **Parâmetro check_cache**: permite carregar apenas se já existir cache, sem disparar processamento.
     """
     return AnalyticsService.get_movimentacao_data(cnpj, engine, check_cache=check_cache)
+@router.get("/cnpj-lookup")
+def get_cnpj_lookup():
+    """Retorna lista slim [{cnpj, razao_social}] para autocomplete no frontend."""
+    return AnalyticsService.get_cnpj_lookup()
+
 @router.get("/score-percentiles")
 def get_score_percentiles(
     scope: str = Query(..., description="Escopo: 'regiao', 'uf' ou 'brasil'"),

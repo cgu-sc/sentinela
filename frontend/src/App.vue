@@ -94,6 +94,7 @@ const initializeApp = async () => {
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
+      geoStore.fetchCnpjLookup(),
       configStore.fetchThresholds(),
     ];
 

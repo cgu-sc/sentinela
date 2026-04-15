@@ -57,7 +57,7 @@ GROUP BY crm, crm_uf, cnpj;
 -- C. União Final dos Médicos
 DROP TABLE IF EXISTS #tb_info_medico_farmacia_popular;
 SELECT
-    CONCAT(cnpj, crm, crm_uf) AS chave,
+    CONCAT(cnpj, '|', crm, '|', crm_uf) AS chave,
     crm AS nu_crm,
     crm_uf AS sg_uf_crm,
     cnpj AS nu_cnpj,
@@ -115,16 +115,13 @@ FROM (
 ) U
 GROUP BY cnpj;
 
-USE [temp_CGUSC];
-GO
-
 -- ============================================================================
 -- TABELA TEMPORÁRIA COM ALERTAS
 -- ============================================================================
 -- ✅ NOVO: Adicionado alerta6 para prescrição antes do registro do CRM
 DROP TABLE IF EXISTS #lista_medicos_farmacia_popularFP_temp
 SELECT
-    CONCAT(A.nu_cnpj, A.nu_crm, A.sg_uf_crm) AS chave,
+    CONCAT(A.nu_cnpj, '|', A.nu_crm, '|', A.sg_uf_crm) AS chave,
     A.nu_cnpj,
     A.nu_crm,
     A.sg_uf_crm,
@@ -137,7 +134,7 @@ SELECT
     C.dt_venda_inicial_estabelecimento,
     C.dt_venda_final_estabelecimento,
     A.vl_autorizacoes_medico,
-    (TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10, 2)) / TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10, 2))) AS percentual,
+    (TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10, 2)) / NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10, 2)), 0)) AS percentual,
     TRY_CAST('' AS VARCHAR(MAX)) AS alerta1,
     TRY_CAST('' AS VARCHAR(MAX)) AS alerta2,
     TRY_CAST('' AS VARCHAR(MAX)) AS alerta3,
@@ -180,11 +177,10 @@ WHERE nu_dias_prescricao_inicial_final = 1
 -- Caso: todas as prescrições no mesmo dia (diferença de 0 dias = mesmo momento)
 -- Isso indica possível fraude - todas as prescrições em um único ponto no tempo
 UPDATE #lista_medicos_farmacia_popularFP_temp 
-SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) + 
-              ' prescrições lançadas no final de semana (sábado ou domingo), em ' + 
-              CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' + 
-              CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)',
-    nu_dias_prescricao_inicial_final = 1 
+SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
+              ' prescrições lançadas no mesmo dia, em ' +
+              CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' +
+              CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)'
 WHERE nu_dias_prescricao_inicial_final = 0
   AND nu_prescricoes_medico > 5
 
@@ -233,31 +229,6 @@ INTO #lista_medicos_farmacia_popularFP_temp2
 FROM #lista_medicos_farmacia_popularFP_temp A
 LEFT JOIN temp_CGUSC.fp.dados_farmacia B ON B.cnpj = A.nu_cnpj
 LEFT JOIN temp_CGUSC.sus.tb_ibge C ON C.id_ibge7 = B.codibge
-GROUP BY 
-    B.codibge,
-    C.sg_uf,
-    C.no_municipio,
-    C.nu_populacao,
-    C.latitude,
-    C.longitude,
-    A.nu_cnpj,
-    nu_crm,
-    sg_uf_crm,
-    nu_prescricoes_medico,
-    nu_autorizacoes_estabelecimento,
-    percentual,
-    A.vl_autorizacoes_medico,
-    A.dt_venda_inicial_estabelecimento,
-    A.dt_venda_final_estabelecimento,
-    A.dt_prescricao_inicial_medico,
-    A.dt_prescricao_final_medico,
-    A.nu_dias_prescricao_inicial_final,
-    A.alerta1,
-    A.alerta2,
-    A.alerta3,
-    A.alerta4,
-    A.alerta5,
-    A.alerta6
 
 
 -- ============================================================================
@@ -277,6 +248,7 @@ SELECT
         AS DECIMAL(18,2)), 0) AS nu_prescricoes_dia_em_todos_estabelecimentos
 INTO #prescricoes_todos_estabelecimentos
 FROM #lista_medicos_farmacia_popularFP_temp2
+WHERE nu_prescricoes_medico >= 5  -- ignora aparições espúrias (ex: plantões isolados, erros de CRM)
 GROUP BY nu_crm, sg_uf_crm
 
 
@@ -295,7 +267,7 @@ SELECT
     A.nu_populacao,
     A.nu_crm,
     A.sg_uf_crm,
-    TRY_CAST(TRY_CAST(A.nu_crm AS VARCHAR(MAX)) + '/' + TRY_CAST(A.sg_uf_crm AS VARCHAR(MAX)) AS VARCHAR(20)) AS id_medico,
+    CAST(A.nu_crm AS VARCHAR(10)) + '/' + A.sg_uf_crm AS id_medico,
     A.nu_prescricoes_medico,
     B.nu_prescricoes_medico_em_todos_estabelecimentos,
     A.nu_prescricoes_dia,
@@ -325,9 +297,9 @@ INNER JOIN #prescricoes_todos_estabelecimentos B
 -- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta3 = 'Foram registradas uma média de ' + CAST(nu_prescricoes_dia AS VARCHAR(MAX)) + 
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
-              CAST(sg_uf_crm AS VARCHAR(MAX)) + ' neste estabelecimento.'
+SET alerta3 = 'Foram registradas uma média de ' + CAST(CAST(nu_prescricoes_dia AS DECIMAL(10,1)) AS VARCHAR(20)) +
+              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(20)) + '/' +
+              sg_uf_crm + ' neste estabelecimento.'
 WHERE nu_prescricoes_dia > 30
 
 
@@ -335,23 +307,22 @@ WHERE nu_prescricoes_dia > 30
 -- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
 -- ============================================================================
 UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta4 = 'Foram registradas uma média de ' + 
-              CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS VARCHAR(MAX)) + 
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(MAX)) + '/' + 
-              CAST(sg_uf_crm AS VARCHAR(MAX)) + ' em todos os ' + 
-              CAST(nu_estabelecimentos_com_registro_mesmo_crm AS VARCHAR(MAX)) + 
+SET alerta4 = 'Foram registradas uma média de ' +
+              CAST(CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS DECIMAL(10,1)) AS VARCHAR(20)) +
+              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(20)) + '/' +
+              sg_uf_crm + ' em todos os ' +
+              CAST(nu_estabelecimentos_com_registro_mesmo_crm AS VARCHAR(10)) +
               ' estabelecimentos em que há registros.'
 WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
 
 
-select * from dados_crm_detalhado
 
 -- ============================================================================
 -- ÍNDICE PARA PERFORMANCE
 -- ============================================================================
 CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
 ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj)
-INCLUDE (Latitude, Longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico, no_municipio, sg_uf, nu_prescricoes_medico);
+INCLUDE (latitude, longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico, no_municipio, sg_uf, nu_prescricoes_medico);
 GO
 
 
@@ -375,7 +346,7 @@ PairedWithDistance AS (
         T2.no_municipio AS M2, 
         T2.sg_uf AS UF2, 
         T2.nu_prescricoes_medico AS P2,
-        temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.Latitude, T1.Longitude, T2.Latitude, T2.Longitude) AS DistanciaKM
+        temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.latitude, T1.longitude, T2.latitude, T2.longitude) AS DistanciaKM
     FROM temp_CGUSC.fp.dados_crm_detalhado T1
     INNER JOIN temp_CGUSC.fp.dados_crm_detalhado T2 
         ON T1.id_medico = T2.id_medico AND T1.nu_cnpj < T2.nu_cnpj
@@ -387,9 +358,8 @@ AllValidPairsFiltered AS (
     FROM PairedWithDistance
     WHERE (DI1 <= DF2 AND DF1 >= DI2)  -- Sobreposição de datas
       AND DistanciaKM > 400
-      AND DistanciaKM IS NOT NULL
-      AND P1 >= 100  -- Mínimo de prescrições no Estabelecimento 1
-      AND P2 >= 100  -- Mínimo de prescrições no Estabelecimento 2
+      AND P1 >= 30  -- Mínimo de prescrições no Estabelecimento 1
+      AND P2 >= 30  -- Mínimo de prescrições no Estabelecimento 2
 ),
 
 -- 3. Ranqueia os pares por número de prescrições

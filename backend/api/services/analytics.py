@@ -61,83 +61,41 @@ INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
     'dias_pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
     'dispersao_geografica':       ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
     'compra_unica':      ('pct_compra_unica',          'med_compra_unica_reg',         'med_compra_unica_uf',         'med_compra_unica_br',         'risco_compra_unica_reg',         'risco_compra_unica_uf',         'risco_compra_unica_br'),
-    'hhi_crm':               ('val_hhi_crm',               'avg_hhi_crm_reg',              'avg_hhi_crm_uf',              'avg_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
+    'hhi_crm':               ('val_hhi_crm',               'med_hhi_crm_reg',              'med_hhi_crm_uf',              'med_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
     'exclusividade_crm':     ('pct_exclusividade_crm',     'med_exclusividade_crm_reg',    'med_exclusividade_crm_uf',    'med_exclusividade_crm_br',    'risco_exclusividade_crm_reg',    'risco_exclusividade_crm_uf',    'risco_exclusividade_crm_br'),
     'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
 }
 
-# Caminho para persistência de configurações customizadas
-CONFIG_FILE = "data/thresholds_config.json"
-
-# Limiares de risco por indicador (ratio = valor_farmacia / mediana_regional).
-# Cada indicador possui sua própria entrada. Espelha riskConfig.js → INDICATOR_THRESHOLDS.
-_INDICATOR_THRESHOLDS: dict[str, tuple[float, float]] = {
+# Mapeamento indicador → (col_flag_atencao, col_flag_critico) na fp.matriz_risco_consolidada.
+# Flags calculadas via Modified Z-Score (MAD) no SQL — fonte de verdade para Status na UI.
+_INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
     # 1. Auditoria Financeira
-    'percentual_nao_comprovacao':   (2.0, 4.0),
+    'percentual_nao_comprovacao':   ('flag_percentual_sem_comprovacao_atencao', 'flag_percentual_sem_comprovacao_critico'),
     # 2. Elegibilidade & Clínica
-    'falecidos':                    (2.0, 3.0),
-    'incompatibilidade_patologica': (2.0, 3.0),
+    'falecidos':                    ('flag_falecidos_atencao',                  'flag_falecidos_critico'),
+    'incompatibilidade_patologica': ('flag_incompatibilidade_patologica_atencao', 'flag_incompatibilidade_patologica_critico'),
     # 3. Padrões de Quantidade
-    'teto':                   (1.2, 1.39),
-    'polimedicamento':        (2.0, 3.0),
+    'teto':                         ('flag_estouro_teto_atencao',               'flag_estouro_teto_critico'),
+    'polimedicamento':               ('flag_polimedicamento_atencao',            'flag_polimedicamento_critico'),
     # 4. Padrões Financeiros
-    'ticket_medio':                (2.0, 3.0),
-    'receita_paciente':       (2.0, 3.0),
-    'per_capita':             (2.0, 3.0),
-    'alto_custo':             (1.4, 1.7),
+    'ticket_medio':                  ('flag_ticket_medio_atencao',               'flag_ticket_medio_critico'),
+    'receita_paciente':              ('flag_receita_paciente_atencao',           'flag_receita_paciente_critico'),
+    'per_capita':                    ('flag_per_capita_atencao',                 'flag_per_capita_critico'),
+    'alto_custo':                    ('flag_alto_custo_atencao',                 'flag_alto_custo_critico'),
     # 5. Automação & Geografia
-    'vendas_rapidas':         (2.0, 3.0),
-    'volume_atipico':         (2.0, 3.0),
-    'recorrencia_sistemica':  (1.4, 1.7),
-    'dias_pico':                   (1.4, 1.7),
-    'dispersao_geografica':        (2.0, 3.0),
-    'compra_unica':           (2.0, 3.0),
+    'vendas_rapidas':                ('flag_vendas_rapidas_atencao',             'flag_vendas_rapidas_critico'),
+    'volume_atipico':                ('flag_volume_atipico_atencao',             'flag_volume_atipico_critico'),
+    'recorrencia_sistemica':         ('flag_recorrencia_sistemica_atencao',      'flag_recorrencia_sistemica_critico'),
+    'dias_pico':                     ('flag_concentracao_pico_atencao',          'flag_concentracao_pico_critico'),
+    'dispersao_geografica':          ('flag_dispersao_geografica_atencao',       'flag_dispersao_geografica_critico'),
+    'compra_unica':                  ('flag_compra_unica_atencao',               'flag_compra_unica_critico'),
     # 6. Integridade Médica
-    'hhi_crm':                (2.0, 3.0),
-    'exclusividade_crm':      (2.0, 3.0),
-    'crms_irregulares':       (2.0, 3.0),
+    'hhi_crm':                       ('flag_hhi_crm_atencao',                   'flag_hhi_crm_critico'),
+    'exclusividade_crm':             ('flag_exclusividade_crm_atencao',          'flag_exclusividade_crm_critico'),
+    'crms_irregulares':              ('flag_crms_irregulares_atencao',           'flag_crms_irregulares_critico'),
 }
 
-# Tenta carregar configurações customizadas do disco
-if os.path.exists(CONFIG_FILE):
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            custom = json.load(f)
-            # Converte as listas do JSON de volta para tuplas de floats
-            for k, v in custom.items():
-                if isinstance(v, list) and len(v) == 2:
-                    _INDICATOR_THRESHOLDS[k] = (float(v[0]), float(v[1]))
-        print(f"✅ Configurações de limiares carregadas do disco: {CONFIG_FILE}")
-    except Exception as e:
-        print(f"⚠️ Erro ao carregar {CONFIG_FILE}: {e}")
-
 class AnalyticsService:
-    @staticmethod
-    def get_config_thresholds():
-        """Retorna o dicionário mestre de limiares (Source of Truth)."""
-        return _INDICATOR_THRESHOLDS
-
-    @staticmethod
-    def save_config_thresholds(edited_data: dict):
-        """Salva novos limiares na memória e no disco."""
-        global _INDICATOR_THRESHOLDS
-        
-        # 1. Atualiza memória
-        for k, v in edited_data.items():
-            if isinstance(v, dict) and 'atencao' in v and 'critico' in v:
-                _INDICATOR_THRESHOLDS[k] = (float(v['atencao']), float(v['critico']))
-
-        # 2. Persiste no disco
-        try:
-            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                # Salva como lista simples para ser compatível com JSON
-                json.dump(_INDICATOR_THRESHOLDS, f, indent=4)
-            return True
-        except Exception as e:
-            print(f"❌ Erro ao salvar configurações no disco: {e}")
-            return False
-
     @staticmethod
     def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None) -> AnalyticsResponse:
         """
@@ -568,7 +526,7 @@ class AnalyticsService:
 
         try:
             c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
-            atencao, critico = _INDICATOR_THRESHOLDS[indicador]
+            c_aten, c_crit = _INDICATOR_FLAGS[indicador]
 
             # ── 1. Snapshot geográfico por CNPJ (última ocorrência de cada campo cadastral) ──
             df_mov = get_df()
@@ -635,10 +593,8 @@ class AnalyticsService:
             df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
             # Seleciona apenas as colunas necessárias da matriz
-            risco_cols = ["cnpj", c_val, c_mr, c_rr]
             score_col = "score_risco_final"
-            if score_col in df_risco.columns:
-                risco_cols.append(score_col)
+            risco_cols = ["cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
             risco_cols_available = [c for c in risco_cols if c in df_risco.columns]
 
             df_risco_slim = df_risco.select(risco_cols_available)
@@ -658,15 +614,17 @@ class AnalyticsService:
                 how="left"
             )
 
-            # ── 5. Calcula status (CRÍTICO / ATENÇÃO / NORMAL / SEM DADOS) ──
+            # ── 5. Calcula status via flags MAD (fonte de verdade: fp.matriz_risco_consolidada) ──
+            # fl_*_crit e fl_*_aten são calculados no SQL via Modified Z-Score por região/UF.
             rr_col = c_rr if c_rr in df_joined.columns else None
-            if rr_col:
+            has_flags = c_crit in df_joined.columns and c_aten in df_joined.columns
+            if has_flags:
                 df_joined = df_joined.with_columns([
-                    pl.when(pl.col(rr_col).is_null())
+                    pl.when(pl.col(c_val).is_null())
                       .then(pl.lit("SEM DADOS"))
-                      .when(pl.col(rr_col) >= critico)
+                      .when(pl.col(c_crit).cast(pl.Int32) == 1)
                       .then(pl.lit("CRÍTICO"))
-                      .when(pl.col(rr_col) >= atencao)
+                      .when(pl.col(c_aten).cast(pl.Int32) == 1)
                       .then(pl.lit("ATENÇÃO"))
                       .otherwise(pl.lit("NORMAL"))
                       .alias("status")
@@ -790,8 +748,8 @@ class AnalyticsService:
                 mediana_reg=mediana_reg,
                 mad_reg=mad_reg,
                 pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
-                limiar_atencao=float(atencao),
-                limiar_critico=float(critico)
+                limiar_atencao=None,
+                limiar_critico=None
             )
 
             return IndicadorAnaliseResponse(

@@ -11,7 +11,6 @@ import { useGeoStore } from "@/stores/geo";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
 
-
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
 const geoStore = useGeoStore();
@@ -26,8 +25,9 @@ const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
 const formatPopulacao = (n) => {
   if (n == null) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace('.', ',')} M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.', ',')} mil`;
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(2).replace(".", ",")} M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(".", ",")} mil`;
   return n.toLocaleString("pt-BR");
 };
 
@@ -39,9 +39,7 @@ const props = defineProps({
   isExporting: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['export']);
-
-
+const emit = defineEmits(["export"]);
 
 const copied = ref(false);
 const copyCnpj = () => {
@@ -54,16 +52,20 @@ const copyCnpj = () => {
   }
 };
 
-
-
 const risco = computed(() => props.cnpjData?.percValSemComp ?? 0);
 
 // Classificação de badges — delegada ao composable useStatusClass
-const conexaoMsClassComp = computed(() => conexaoMsClass(props.cnpjData?.is_conexao_ativa));
-const situacaoRfClassComp = computed(() => situacaoRfClass(props.cnpjData?.situacao_rf));
+const conexaoMsClassComp = computed(() =>
+  conexaoMsClass(props.cnpjData?.is_conexao_ativa),
+);
+const situacaoRfClassComp = computed(() =>
+  situacaoRfClass(props.cnpjData?.situacao_rf),
+);
 
 const nomeFantasia = computed(() => props.cadastro?.nome_fantasia ?? null);
-const razaoSocial  = computed(() => props.cadastro?.razao_social ?? props.cnpjData?.razao_social ?? null);
+const razaoSocial = computed(
+  () => props.cadastro?.razao_social ?? props.cnpjData?.razao_social ?? null,
+);
 
 const tituloDisplay = computed(() => {
   const nome = nomeFantasia.value ?? razaoSocial.value;
@@ -107,7 +109,6 @@ const formattedFullAddress = computed(() => {
   const c = props.cadastro;
   if (!c || !c.logradouro) return null;
 
-
   // 1. Parte Principal: Tipo + Logradouro + Número
   let main = [c.tipo_logradouro, c.logradouro].filter(Boolean).join(" ");
   if (c.numero && c.numero !== "None") main += `, ${c.numero}`;
@@ -134,8 +135,6 @@ const filterNetwork = () => {
     router.push("/cnpj");
   }
 };
-
-
 </script>
 
 <template>
@@ -146,10 +145,7 @@ const filterNetwork = () => {
         <div class="razao-social-row">
           <div class="titulo-group">
             <div class="titulo-row">
-              <h1
-                class="razao-social-new"
-                v-tooltip.bottom="tituloTooltip"
-              >
+              <h1 class="razao-social-new" v-tooltip.bottom="tituloTooltip">
                 {{ tituloDisplay }}
               </h1>
               <div
@@ -158,7 +154,12 @@ const filterNetwork = () => {
                 @click="copyCnpj"
               >
                 <span class="cnpj-text">{{ formatCnpj(props.cnpj) }}</span>
-                <i :class="['pi', copied ? 'pi-check text-green-400' : 'pi-copy']" />
+                <i
+                  :class="[
+                    'pi',
+                    copied ? 'pi-check text-green-400' : 'pi-copy',
+                  ]"
+                />
               </div>
             </div>
             <span
@@ -186,19 +187,22 @@ const filterNetwork = () => {
             {{ geoData?.sg_uf ?? cnpjData.uf }}
           </span>
           <span class="loc-separator">·</span>
-          <span class="loc-text">Região {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span>
+          <span class="loc-text"
+            >Região {{ geoData?.no_regiao_saude ?? "Não Identificada" }}</span
+          >
         </div>
 
         <!-- Linha 2: Risco | Status Cadastral -->
         <div class="status-chips-row">
-
           <!-- Tipo: Matriz / Filial -->
           <div
             class="institution-chip status-secondary"
             v-tooltip.bottom="'Tipo de estabelecimento'"
           >
             <span class="institution-label">Estabelecimento</span>
-            <span class="institution-value">{{ cnpjData.is_matriz ? 'Matriz' : 'Filial' }}</span>
+            <span class="institution-value">{{
+              cnpjData.is_matriz ? "Matriz" : "Filial"
+            }}</span>
           </div>
 
           <!-- Grande Rede -->
@@ -206,19 +210,23 @@ const filterNetwork = () => {
             class="institution-chip"
             :class="[
               cnpjData.is_grande_rede ? 'status-info' : 'status-secondary',
-              cnpjData.qtd_estabelecimentos_rede > 1 ? 'clickable-badge' : ''
+              cnpjData.qtd_estabelecimentos_rede > 1 ? 'clickable-badge' : '',
             ]"
-            v-tooltip.bottom="cnpjData.qtd_estabelecimentos_rede > 1 ? 'Clique para ver todos os estabelecimentos desta rede' : 'Estabelecimento Individual'"
+            v-tooltip.bottom="
+              cnpjData.qtd_estabelecimentos_rede > 1
+                ? 'Clique para ver todos os estabelecimentos desta rede'
+                : 'Estabelecimento Individual'
+            "
             @click="filterNetwork"
           >
             <span class="institution-label">Grande Rede</span>
             <span class="institution-value">
-              {{ cnpjData.is_grande_rede ? 'Sim' : 'Não' }}
-              <small class="ml-1 opacity-70">({{ cnpjData.qtd_estabelecimentos_rede }})</small>
+              {{ cnpjData.is_grande_rede ? "Sim" : "Não" }}
+              <small class="ml-1 opacity-70"
+                >({{ cnpjData.qtd_estabelecimentos_rede }})</small
+              >
             </span>
           </div>
-
-
 
           <!-- Ministério da Saúde -->
           <div
@@ -227,7 +235,9 @@ const filterNetwork = () => {
             v-tooltip.bottom="'Conexão com o Ministério da Saúde'"
           >
             <span class="institution-label">Ministério da Saúde</span>
-            <span class="institution-value">{{ props.cnpjData?.is_conexao_ativa ? 'Ativa' : 'Inativa' }}</span>
+            <span class="institution-value">{{
+              props.cnpjData?.is_conexao_ativa ? "Ativa" : "Inativa"
+            }}</span>
           </div>
 
           <!-- Receita Federal -->
@@ -237,9 +247,10 @@ const filterNetwork = () => {
             v-tooltip.bottom="'Situação na Receita Federal'"
           >
             <span class="institution-label">Receita Federal</span>
-            <span class="institution-value">{{ cnpjData.situacao_rf ?? '—' }}</span>
+            <span class="institution-value">{{
+              cnpjData.situacao_rf ?? "—"
+            }}</span>
           </div>
-
         </div>
       </div>
 
@@ -251,38 +262,86 @@ const filterNetwork = () => {
             :disabled="isExporting"
             v-tooltip.bottom="'Exportar relatório PDF'"
           >
-            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+            <i
+              :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"
+            />
           </button>
           <button
             class="list-btn list-btn--icon-only"
-            :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
+            :class="
+              farmaciaLists.isInteresse(cnpj)
+                ? 'list-btn--interesse-active'
+                : 'list-btn--interesse'
+            "
             @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
-            v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
+            v-tooltip.bottom="
+              farmaciaLists.isInteresse(cnpj)
+                ? 'Remover da Lista de Interesse'
+                : 'Adicionar à Lista de Interesse'
+            "
           >
-            <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
+            <i
+              :class="
+                farmaciaLists.isInteresse(cnpj)
+                  ? 'pi pi-star-fill'
+                  : 'pi pi-star'
+              "
+            />
           </button>
         </div>
         <div class="header-kpis-new">
           <!-- Bloco Unificado de Risco -->
-          <div 
+          <div
             class="kpi-pill-group"
-            :class="[getRiskClass(risco) === 'risk-critical' ? 'risk-high' : getRiskClass(risco)]"
+            :class="[
+              getRiskClass(risco) === 'risk-critical'
+                ? 'risk-high'
+                : getRiskClass(risco),
+            ]"
           >
-            <div class="pill-item" v-if="cnpjData.score_risco_final != null" v-tooltip.bottom="'Score de Risco Consolidado'">
+            <div
+              class="pill-item"
+              v-if="cnpjData.score_risco_final != null"
+              v-tooltip.bottom="'Score de Risco Consolidado'"
+            >
               <span class="pill-label">Score de Risco</span>
               <span class="pill-value">
                 {{ cnpjData.score_risco_final.toFixed(1) }}
-                <small style="color: var(--text-color); opacity: 0.8; font-size: 0.75em; font-weight: 600; padding-left: 3px;">· {{ cnpjData.classificacao_risco?.replace('RISCO ', '') ?? '' }}</small>
+                <small
+                  style="
+                    color: var(--text-color);
+                    opacity: 0.8;
+                    font-size: 0.75em;
+                    font-weight: 600;
+                    padding-left: 3px;
+                  "
+                  >·
+                  {{
+                    cnpjData.classificacao_risco?.replace("RISCO ", "") ?? ""
+                  }}</small
+                >
               </span>
             </div>
 
-            <div class="pill-divider" v-if="cnpjData.score_risco_final != null"></div>
+            <div
+              class="pill-divider"
+              v-if="cnpjData.score_risco_final != null"
+            ></div>
 
             <div class="pill-item">
               <span class="pill-label">Valor sem Comprovação</span>
               <span class="pill-value currency">
                 {{ formatCurrencyFull(cnpjData.valSemComp) }}
-                <small style="color: var(--text-color); opacity: 0.8; font-size: 0.8em; font-weight: 600; padding-left: 4px;">({{ cnpjData.percValSemComp?.toFixed(2) }}%)</small>
+                <small
+                  style="
+                    color: var(--text-color);
+                    opacity: 0.8;
+                    font-size: 0.8em;
+                    font-weight: 600;
+                    padding-left: 4px;
+                  "
+                  >({{ cnpjData.percValSemComp?.toFixed(2) }}%)</small
+                >
               </span>
             </div>
           </div>
@@ -307,32 +366,44 @@ const filterNetwork = () => {
           <i class="pi pi-globe gold" />
           <div class="rank-details">
             <span class="rank-label">Rank Nacional</span>
-            <span class="rank-val">{{ formatRank(cnpjData.rank_nacional) }} <small>/ {{ cnpjData.total_nacional }}</small></span>
+            <span class="rank-val"
+              >{{ formatRank(cnpjData.rank_nacional) }}
+              <small>/ {{ cnpjData.total_nacional }}</small></span
+            >
           </div>
         </div>
         <div class="rank-stat">
           <i class="pi pi-compass silver" />
           <div class="rank-details">
             <span class="rank-label">Rank Estadual</span>
-            <span class="rank-val">{{ formatRank(cnpjData.rank_uf) }} <small>/ {{ cnpjData.total_uf }}</small></span>
+            <span class="rank-val"
+              >{{ formatRank(cnpjData.rank_uf) }}
+              <small>/ {{ cnpjData.total_uf }}</small></span
+            >
           </div>
         </div>
         <div class="rank-stat">
           <i class="pi pi-share-alt bronze" />
           <div class="rank-details">
             <span class="rank-label">Rank Regional</span>
-            <span class="rank-val">{{ formatRank(cnpjData.rank_regiao_saude) }} <small>/ {{ cnpjData.total_regiao_saude }}</small></span>
+            <span class="rank-val"
+              >{{ formatRank(cnpjData.rank_regiao_saude) }}
+              <small>/ {{ cnpjData.total_regiao_saude }}</small></span
+            >
           </div>
         </div>
         <div class="rank-stat">
           <i class="pi pi-building neutral" />
           <div class="rank-details">
             <span class="rank-label">Rank Municipal</span>
-            <span class="rank-val">{{ formatRank(cnpjData.rank_municipio) }} <small>/ {{ cnpjData.total_municipio }}</small></span>
+            <span class="rank-val"
+              >{{ formatRank(cnpjData.rank_municipio) }}
+              <small>/ {{ cnpjData.total_municipio }}</small></span
+            >
           </div>
         </div>
         <div class="rank-stat" v-if="qtdMunicipiosRegiao">
-          <i class="pi pi-map" style="color: #34d399;" />
+          <i class="pi pi-map" style="color: #34d399" />
           <div class="rank-details">
             <span class="rank-label">Municípios da Região</span>
             <span class="rank-val">{{ qtdMunicipiosRegiao }}</span>
@@ -344,7 +415,10 @@ const filterNetwork = () => {
           v-tooltip.top="'Ver ranking completo da Região de Saúde'"
           @click="cnpjNav.navigateToRegiao(null)"
         >
-          <i class="pi pi-sitemap" style="color: var(--text-muted); opacity: 0.8;" />
+          <i
+            class="pi pi-sitemap"
+            style="color: var(--text-muted); opacity: 0.8"
+          />
           <div class="rank-details">
             <span class="rank-label">Estab. Região</span>
             <span class="rank-val">{{ cnpjData.total_regiao_saude }}</span>
@@ -354,19 +428,25 @@ const filterNetwork = () => {
           class="rank-stat rank-stat--clickable"
           v-if="cnpjData.total_municipio"
           v-tooltip.top="'Ver ranking do município na Região de Saúde'"
-          @click="cnpjNav.navigateToRegiao(geoData?.no_municipio ?? cnpjData.municipio)"
+          @click="
+            cnpjNav.navigateToRegiao(
+              geoData?.no_municipio ?? cnpjData.municipio,
+            )
+          "
         >
-          <i class="pi pi-building" style="color: #a78bfa;" />
+          <i class="pi pi-building" style="color: #a78bfa" />
           <div class="rank-details">
             <span class="rank-label">Estab. Município</span>
             <span class="rank-val">{{ cnpjData.total_municipio }}</span>
           </div>
         </div>
         <div class="rank-stat" v-if="geoData?.nu_populacao">
-          <i class="pi pi-users" style="color: #60a5fa;" />
+          <i class="pi pi-users" style="color: #60a5fa" />
           <div class="rank-details">
             <span class="rank-label">Pop. Município</span>
-            <span class="rank-val">{{ formatPopulacao(geoData.nu_populacao) }}</span>
+            <span class="rank-val">{{
+              formatPopulacao(geoData.nu_populacao)
+            }}</span>
           </div>
         </div>
       </div>
@@ -398,7 +478,7 @@ const filterNetwork = () => {
 }
 
 .detail-header-new::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -461,7 +541,8 @@ const filterNetwork = () => {
 .list-btn--export:hover:not(:disabled) {
   background: color-mix(in srgb, var(--primary-color) 15%, transparent);
   border-color: var(--primary-color);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 .list-btn--export:disabled {
   opacity: 0.6;
@@ -477,22 +558,23 @@ const filterNetwork = () => {
 .list-btn--interesse:hover {
   background: color-mix(in srgb, var(--primary-color) 15%, transparent);
   border-color: var(--primary-color);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 .list-btn--interesse-active {
   color: #fff;
   border-color: var(--primary-color);
-  background: var(--primary-color); /* Sólido para destaque conforme padrão do tema */
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: var(
+    --primary-color
+  ); /* Sólido para destaque conforme padrão do tema */
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--primary-color) 30%, transparent);
   font-weight: 700;
 }
 .list-btn--interesse-active:hover {
   background: color-mix(in srgb, var(--primary-color) 85%, black);
   border-color: color-mix(in srgb, var(--primary-color) 85%, black);
 }
-
-
-
 
 .risk-chip {
   font-weight: 700;
@@ -549,7 +631,7 @@ const filterNetwork = () => {
 }
 
 .cnpj-text {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -559,7 +641,6 @@ const filterNetwork = () => {
   font-size: 0.7rem;
   color: var(--text-muted);
 }
-
 
 .header-main-info {
   display: flex;
@@ -705,7 +786,7 @@ const filterNetwork = () => {
 
 /* Barra de acento no rodapé (Opção 2 — Bottom-up) */
 .kpi-pill-group::before {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -716,17 +797,80 @@ const filterNetwork = () => {
 }
 
 /* Cores dinâmicas — acento + gradiente Bottom-up por nível de risco */
-.kpi-pill-group.risk-high   { --accent: var(--risk-high);    background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-high) 20%, var(--card-border)) !important; color: inherit !important; }
-.kpi-pill-group.risk-critical { --accent: var(--risk-critical); background: linear-gradient(to top, color-mix(in srgb, var(--risk-critical) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-critical) 20%, var(--card-border)) !important; color: inherit !important; }
-.kpi-pill-group.risk-medium { --accent: var(--risk-medium);  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-medium) 20%, var(--card-border)) !important; color: inherit !important; }
-.kpi-pill-group.risk-low    { --accent: var(--risk-low);     background: linear-gradient(to top, color-mix(in srgb, var(--risk-low) 10%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important; border-color: color-mix(in srgb, var(--risk-low) 20%, var(--card-border)) !important; color: inherit !important; }
+.kpi-pill-group.risk-high {
+  --accent: var(--risk-high);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--risk-high) 10%, var(--establishment-header-bg)) 0%,
+    var(--establishment-header-bg) 75%
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--risk-high) 20%,
+    var(--card-border)
+  ) !important;
+  color: inherit !important;
+}
+.kpi-pill-group.risk-critical {
+  --accent: var(--risk-critical);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--risk-critical) 10%, var(--establishment-header-bg))
+      0%,
+    var(--establishment-header-bg) 75%
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--risk-critical) 20%,
+    var(--card-border)
+  ) !important;
+  color: inherit !important;
+}
+.kpi-pill-group.risk-medium {
+  --accent: var(--risk-medium);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--risk-medium) 10%, var(--establishment-header-bg))
+      0%,
+    var(--establishment-header-bg) 75%
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--risk-medium) 20%,
+    var(--card-border)
+  ) !important;
+  color: inherit !important;
+}
+.kpi-pill-group.risk-low {
+  --accent: var(--risk-low);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--risk-low) 10%, var(--establishment-header-bg)) 0%,
+    var(--establishment-header-bg) 75%
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--risk-low) 20%,
+    var(--card-border)
+  ) !important;
+  color: inherit !important;
+}
 
 /* Variante Neutra para Dados de Contexto */
 .kpi-pill-group--neutral {
-   --accent: var(--primary-color);
-   background: linear-gradient(to top, color-mix(in srgb, var(--primary-color) 8%, var(--establishment-header-bg)) 0%, var(--establishment-header-bg) 75%) !important;
-   border-color: color-mix(in srgb, var(--primary-color) 15%, var(--card-border)) !important;
-   backdrop-filter: blur(4px);
+  --accent: var(--primary-color);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--primary-color) 8%, var(--establishment-header-bg))
+      0%,
+    var(--establishment-header-bg) 75%
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 15%,
+    var(--card-border)
+  ) !important;
+  backdrop-filter: blur(4px);
 }
 
 .kpi-pill-group--neutral::before {
@@ -750,13 +894,13 @@ const filterNetwork = () => {
 }
 
 .pill-value {
-  font-size: 1rem;
-  font-weight: 700;
-  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: "Inter", sans-serif;
   color: var(--text-color);
   line-height: 1.1;
   letter-spacing: -0.02em;
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
 .pill-value.currency {
@@ -781,21 +925,37 @@ const filterNetwork = () => {
   /* Inherits 0.95 from .pill-value now */
 }
 
-.kpi-card.risk-high .kpi-card-value, 
-.kpi-card.risk-high .kpi-badge-value   { color: var(--risk-high); }
-.kpi-card.risk-high                   { border-left-color: var(--risk-high); }
+.kpi-card.risk-high .kpi-card-value,
+.kpi-card.risk-high .kpi-badge-value {
+  color: var(--risk-high);
+}
+.kpi-card.risk-high {
+  border-left-color: var(--risk-high);
+}
 
 .kpi-card.risk-critical .kpi-card-value,
-.kpi-card.risk-critical .kpi-badge-value { color: var(--risk-critical); }
-.kpi-card.risk-critical               { border-left-color: var(--risk-critical); }
+.kpi-card.risk-critical .kpi-badge-value {
+  color: var(--risk-critical);
+}
+.kpi-card.risk-critical {
+  border-left-color: var(--risk-critical);
+}
 
 .kpi-card.risk-medium .kpi-card-value,
-.kpi-card.risk-medium .kpi-badge-value { color: var(--risk-medium); }
-.kpi-card.risk-medium                  { border-left-color: var(--risk-medium); }
+.kpi-card.risk-medium .kpi-badge-value {
+  color: var(--risk-medium);
+}
+.kpi-card.risk-medium {
+  border-left-color: var(--risk-medium);
+}
 
 .kpi-card.risk-low .kpi-card-value,
-.kpi-card.risk-low .kpi-badge-value     { color: var(--risk-low); }
-.kpi-card.risk-low                     { border-left-color: var(--risk-low); }
+.kpi-card.risk-low .kpi-badge-value {
+  color: var(--risk-low);
+}
+.kpi-card.risk-low {
+  border-left-color: var(--risk-low);
+}
 
 /* ── RANKING PANEL ── */
 .header-ranking-panel {
@@ -883,10 +1043,18 @@ const filterNetwork = () => {
   opacity: 0.8;
 }
 
-.pi.gold { color: #ffd700; }
-.pi.silver { color: #cbd5e1; }
-.pi.bronze { color: #fbbf24; }
-.pi.neutral { color: #94a3b8; }
+.pi.gold {
+  color: #ffd700;
+}
+.pi.silver {
+  color: #cbd5e1;
+}
+.pi.bronze {
+  color: #fbbf24;
+}
+.pi.neutral {
+  color: #94a3b8;
+}
 
 .pi-users-group {
   color: var(--text-muted);
@@ -979,8 +1147,16 @@ const filterNetwork = () => {
 
 /* ── OVERRIDE STATUS-SECONDARY PARA SOLIDIFICAR CONTRA O HEADER ── */
 .institution-chip.status-secondary {
-  background: color-mix(in srgb, var(--text-muted) 14%, var(--establishment-header-bg)) !important;
-  border-color: color-mix(in srgb, var(--text-muted) 25%, var(--establishment-header-bg)) !important;
+  background: color-mix(
+    in srgb,
+    var(--text-muted) 14%,
+    var(--establishment-header-bg)
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--text-muted) 25%,
+    var(--establishment-header-bg)
+  ) !important;
 }
 
 /* ── VALORES INTERNOS (linha de baixo) ── */
@@ -1020,5 +1196,4 @@ const filterNetwork = () => {
   letter-spacing: 0.04em;
   line-height: 1;
 }
-
 </style>

@@ -1,6 +1,6 @@
 # Indicadores de Risco e Fraude
 
-Esta seção detalha os **16 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
+Esta seção detalha os **18 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
 
 ---
 
@@ -58,15 +58,15 @@ Os indicadores são organizados em **5 grupos** temáticos:
 
 <div class="grid cards" markdown>
 
-- :material-chart-box:{ .lg .middle } **Score de Risco Final**
+- :material-chart-box:{ .lg .middle } **Score de Risco Final (V7.0)**
 
   ***
 
-  Entenda como os indicadores são combinados para gerar um score único e classificação de risco.
+  A V7 utiliza normalização regional por percentil e penalidade linear por indicadores críticos.
 
   [:octicons-arrow-right-24: Ver metodologia](matriz-risco.md)
 
-- :material-stethoscope:{ .lg .middle } **Análise de Prescritores**
+- :material- stethoscope:{ .lg .middle } **Análise de Prescritores**
 
   ***
 
@@ -78,66 +78,55 @@ Os indicadores são organizados em **5 grupos** temáticos:
 
 ---
 
-## Visão Geral dos 16 Indicadores
+## Visão Geral dos Indicadores
 
-| #   | Indicador                 | Grupo         | O que mede                                     |
-| --- | ------------------------- | ------------- | ---------------------------------------------- |
-| 1   | Vendas para Falecidos     | Elegibilidade | % de vendas para beneficiários após óbito      |
-| 2   | Incompatibilidade Clínica | Elegibilidade | % de vendas com perfil idade/sexo incompatível |
-| 3   | Dispensação em Teto       | Quantidade    | % de vendas no limite máximo permitido         |
-| 4   | Polimedicamentos          | Quantidade    | % de cupons com 4+ medicamentos                |
-| 5   | Ticket Médio              | Financeiro    | Valor médio por autorização                    |
-| 6   | Receita por Paciente      | Financeiro    | Faturamento médio por CPF                      |
-| 7   | Venda Per Capita          | Financeiro    | Faturamento / população do município           |
-| 8   | Medicamentos Alto Custo   | Financeiro    | % de vendas de medicamentos caros              |
-| 9   | Vendas Rápidas            | Automação     | % de vendas consecutivas <60 segundos          |
-| 10  | Horário Atípico           | Automação     | % de vendas na madrugada (00h-06h)             |
-| 11  | Concentração em Pico      | Automação     | % de vendas nos 3 dias de maior movimento      |
-| 12  | Dispersão Geográfica      | Automação     | % de pacientes de outras UFs                   |
-| 13  | Compra Única              | Automação     | % de CPFs com apenas uma compra                |
-| 14  | Concentração HHI          | CRMs          | Índice de concentração de prescritores         |
-| 15  | Exclusividade CRM         | CRMs          | % de CRMs exclusivos da farmácia               |
-| 16  | Irregularidade CRM        | CRMs          | % de CRMs inválidos ou retroativos             |
-
----
-
-## Conceito de Risco Relativo (RR)
-
-Todos os indicadores são normalizados através do conceito de **Risco Relativo**:
-
-$$
-RR = \frac{\text{Valor do Indicador na Farmácia}}{\text{Média do Indicador na UF}}
-$$
-
-### Interpretação do RR
-
-| Valor RR      | Interpretação            | Nível de Alerta |
-| ------------- | ------------------------ | --------------- |
-| **< 1.0**     | Abaixo da média          | 🟢 Normal       |
-| **≈ 1.0**     | Na média                 | 🟢 Normal       |
-| **1.5 - 2.0** | Levemente acima          | 🟡 Atenção      |
-| **2.0 - 5.0** | Significativamente acima | 🟠 Alerta       |
-| **> 5.0**     | Muito acima              | 🔴 Crítico      |
+| # | Indicador | Grupo | O que mede |
+| :--- | :--- | :--- | :--- |
+| 1 | Vendas para Falecidos | Elegibilidade | % de vendas para beneficiários após óbito |
+| 2 | Incompatibilidade Clínica | Elegibilidade | % de vendas com perfil idade/sexo incompatível |
+| 3 | Dispensação em Teto | Quantidade | % de vendas no limite máximo permitido |
+| 4 | Polimedicamentos | Quantidade | % de cupons com 4+ medicamentos |
+| 5 | Ticket Médio | Financeiro | Valor médio por autorização |
+| 6 | Receita por Paciente | Financeiro | Faturamento médio por CPF |
+| 7 | Venda Per Capita | Financeiro | Faturamento / população do município |
+| 8 | Medicamentos Alto Custo | Financeiro | % de vendas de medicamentos caros |
+| 9 | Vendas Rápidas | Automação | % de vendas consecutivas <60 segundos |
+| 10 | Horário Atípico | Automação | % de vendas na madrugada (00h-06h) |
+| 11 | Concentração em Pico | Automação | % de vendas nos 3 dias de maior movimento |
+| 12 | Dispersão Geográfica | Automação | % de pacientes de outras UFs |
+| 13 | Compra Única | Automação | % de CPFs com apenas uma compra |
+| 14 | Concentração HHI | CRMs | Índice de concentração de prescritores |
+| 15 | Exclusividade CRM | CRMs | % de CRMs exclusivos da farmácia |
+| 16 | Irregularidade CRM | CRMs | % de CRMs inválidos ou retroativos |
+| 17 | **Recorrência Sistêmica** | Automação | Padrão repetitivo de horários e datas |
+| 18 | **Auditoria Financeira** | Financeiro | % de não comprovação em auditorias prévias |
 
 ---
 
-## Fontes de Dados para Indicadores
+## Normalização por Percentil (Modelo V7.0)
 
-| Indicador         | Fontes Utilizadas                                       |
-| ----------------- | ------------------------------------------------------- |
-| Falecidos         | `movimentacaoFP` + `tb_obitos_unificada`                |
-| Incompatibilidade | `movimentacaoFP` + `medicamentosPatologiaFP` + `db_CPF` |
-| Quantidade        | `movimentacaoFP`                                        |
-| Financeiros       | `movimentacaoFP` + `tb_ibge`                            |
-| Automação         | `movimentacaoFP` (timestamps)                           |
-| CRMs              | `movimentacaoFP` + Base CFM                             |
+Diferente de versões anteriores, o Sistema Sentinela agora utiliza a função **Percentil Acumulado (CUME_DIST)** para normalizar os resultados:
+
+### A Escala 0-100
+- **0.0**: Comportamento padrão (baixa suspeição).
+- **50.0**: Posição mediana no benchmark regional.
+- **100.0**: Posição máxima de risco no benchmark regional.
+
+### Penalidade Linear por Flags Críticos
+Além da escala base, cada indicador que apresenta uma anomalia severa (>5x a média regional) gera um **Flag Crítico**, adicionando **+10 pontos fixos** ao score final.
 
 ---
 
-!!! tip "Como usar esta seção"
-Clique em cada grupo para ver a **metodologia detalhada** de cálculo de cada indicador, incluindo:
+## Fontes de Dados
 
-    - Lógica de seleção de dados
-    - Fórmula de cálculo
-    - Interpretação dos resultados
-    - Casos de borda e exceções
+| Fonte | Descrição |
+| :--- | :--- |
+| `movimentacaoFP` | Dados transacionais do Farmácia Popular. |
+| `tb_obitos_unificada` | Base de óbitos do SISOBI/Cartórios. |
+| `base_CFM` | Cadastro nacional de médicos e CRMs. |
+| `tb_ibge` | Dados populacionais e geográficos. |
+
+---
+
+!!! tip "Manual Detalhado"
+    Clique em cada grupo de indicadores no topo para ver as fórmulas matemáticas e critérios de corte específicos.

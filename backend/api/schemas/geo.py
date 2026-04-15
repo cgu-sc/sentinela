@@ -21,7 +21,9 @@ class EstabelecimentoGeoSchema(BaseModel):
     razao_social: Optional[str] = None
     lat: float
     lon: float
-    id_ibge7: Optional[int] = None
+    id_ibge7: Optional[str] = None
+    uf: Optional[str] = None
+    municipio: Optional[str] = None
     score_risco: Optional[float] = None
     classificacao_risco: Optional[str] = None
     percValSemComp: Optional[float] = 0.0

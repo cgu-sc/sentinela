@@ -56,6 +56,8 @@ class GeoService:
                     lat=r["latitude"],
                     lon=r["longitude"],
                     id_ibge7=r.get("id_ibge7"),
+                    uf=r.get("uf"),
+                    municipio=r.get("municipio"),
                     score_risco=r.get("score_risco_final"),
                     classificacao_risco=r.get("classificacao_risco"),
                     percValSemComp=r.get("perc_val_sem_comp"),

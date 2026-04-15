@@ -38,7 +38,7 @@ const analyticsMap = computed(() => {
 // Map O(1): cnpj → geo (municipio, uf) — fallback quando não está no escopo dos filtros
 const geoMap = computed(() => {
   const map = new Map();
-  for (const e of geoStore.cnpjLookup) {
+  for (const e of geoStore.estabelecimentos) {
     map.set(e.cnpj, e);
   }
   return map;

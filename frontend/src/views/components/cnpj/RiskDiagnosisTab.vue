@@ -106,7 +106,7 @@ const riskRankBadge = computed(() => {
           <div class="card-header">
              <div class="header-info">
                 <i class="pi pi-users" />
-                <span>Posicionamento Regional</span>
+                <span>{{ regionalScope === 'uf' ? 'Posicionamento Estadual' : 'Posicionamento Regional' }}</span>
              </div>
              <div class="scope-selector">
                 <Dropdown
@@ -115,6 +115,7 @@ const riskRankBadge = computed(() => {
                   optionLabel="label"
                   optionValue="value"
                   class="p-inputtext-sm"
+                  panelClass="card-panel"
                 >
                   <template #value="slotProps">
                     <div v-if="slotProps.value" class="flex align-items-center gap-2">
@@ -125,26 +126,23 @@ const riskRankBadge = computed(() => {
                 </Dropdown>
              </div>
           </div>
-          <div class="card-body">
-             <div v-if="regionalLoading" class="inner-loading">
-                <i class="pi pi-spin pi-spinner" />
-                <span>Mapeando vizinhança...</span>
+          <div class="card-body relative-body">
+             <div class="chart-wrapper">
+                <RegionalRankChart 
+                   v-if="regionalData?.farmacias?.length"
+                   :farmacias="regionalData.farmacias"
+                   :cnpj-atual="cnpj"
+                   :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
+                 />
              </div>
-             <template v-else>
-               <RegionalRankChart 
-                  v-if="regionalData?.farmacias?.length"
-                  :farmacias="regionalData.farmacias"
-                  :cnpj-atual="cnpj"
-                  :regiao-nome="geoData.no_regiao_saude"
-                />
-                <!-- AJUDA CONTEXTUAL CARD 1 -->
-                    <div class="diagnosis-card-help">
-                   <i class="pi pi-info-circle" />
-                   <div class="help-text">
-                      <b>Contexto Regional:</b> Confronta o score deste CNPJ com os CNPJs da mesma região de saúde. Permite detectar se o estabelecimento é um "ponto fora da curva". Quanto mais ao topo e à direita do gráfico, pior e mais anômalo é o cenário avaliado.
-                   </div>
-                </div>
-             </template>
+
+             <!-- AJUDA CONTEXTUAL CARD 1 -->
+             <div class="diagnosis-card-help">
+               <i class="pi pi-info-circle" />
+               <div class="help-text">
+                  <b>Contexto {{ regionalScope === 'uf' ? 'Estadual' : 'Regional' }}:</b> Confronta o score deste CNPJ com os CNPJs {{ regionalScope === 'uf' ? 'do mesmo estado' : 'da mesma região de saúde' }}. Permite detectar se o estabelecimento é um "ponto fora da curva". Quanto mais ao topo e à direita do gráfico, pior e mais anômalo é o cenário avaliado.
+               </div>
+             </div>
           </div>
         </div>
 
@@ -153,7 +151,7 @@ const riskRankBadge = computed(() => {
           <div class="card-header">
              <div class="header-info">
                 <i class="pi pi-chart-line" />
-                <span>Diagnóstico Comparativo de Risco</span>
+                <span>Percentil de Risco</span>
                 
                 <div v-if="riskRankBadge" 
                      class="risk-rank-badge" 
@@ -163,12 +161,13 @@ const riskRankBadge = computed(() => {
                 </div>
              </div>
              <div class="scope-selector">
-                <Dropdown 
-                  v-model="riskScope" 
-                  :options="riskScopes" 
-                  optionLabel="label" 
+                <Dropdown
+                  v-model="riskScope"
+                  :options="riskScopes"
+                  optionLabel="label"
                   optionValue="value"
                   class="p-inputtext-sm"
+                  panelClass="card-panel"
                 >
                   <template #value="slotProps">
                     <div v-if="slotProps.value" class="flex align-items-center gap-2">
@@ -267,18 +266,15 @@ const riskRankBadge = computed(() => {
   flex-direction: column;
 }
 
-.inner-loading {
+.relative-body {
+  position: relative;
+}
+
+.chart-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
 }
-
-.inner-loading i { font-size: 1.5rem; color: var(--primary-color); }
 
 /* Badge de Ranking */
 .risk-rank-badge {
@@ -328,23 +324,29 @@ const riskRankBadge = computed(() => {
   font-size: 0.7rem;
 }
 
-:deep(.scope-selector .p-dropdown-panel) {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
+/* O painel do Dropdown é renderizado no body (fora do DOM do componente),
+   por isso precisa de :global() em vez de :deep() para os estilos alcançarem. */
+:global(.p-dropdown-panel.card-panel) {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
 }
 
-:deep(.scope-selector .p-dropdown-item) {
+:global(.card-panel .p-dropdown-items .p-dropdown-item) {
   font-size: 0.78rem;
-  color: var(--text-color);
+  color: var(--text-color) !important;
   padding: 0.5rem 0.85rem;
 }
 
-:deep(.scope-selector .p-dropdown-item:hover),
-:deep(.scope-selector .p-dropdown-item.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--primary-color);
+:global(.card-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  color: var(--primary-color) !important;
+}
+
+:global(.card-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  color: var(--primary-color) !important;
 }
 
 .dropdown-selected-label {

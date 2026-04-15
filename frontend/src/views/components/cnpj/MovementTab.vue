@@ -125,6 +125,15 @@ const visibleSections = computed(() => {
     });
   }
   
+  const query = searchRanking.value.trim().toLowerCase();
+  if (query) {
+    filtered = filtered.filter(s => {
+      const matchName = (s.medicamento || '').toLowerCase().includes(query);
+      const matchGtin = String(s.gtin).includes(query);
+      return matchName || matchGtin;
+    });
+  }
+  
   // Ordenar sempre do pior GTIN (maior prejuízo) para o menor
   return filtered.sort((a, b) => {
     const valA = a.subtotal?.valor_irregular ?? 0;
@@ -162,6 +171,8 @@ const rankingData = computed(() => {
         qtd_total: 0,
         qtd_irreg: 0,
         gtins: new Set(),
+        gtinRegCount: 0,
+        gtinIrrCount: 0,
         firstGtin: s.gtin, // Para o link de scroll (primeiro da lista)
         minStart: null,
         maxEnd: null
@@ -174,6 +185,12 @@ const rankingData = computed(() => {
     g.qtd_total += st.vendas;
     g.qtd_irreg += (st.vendas_irregular || 0);
     g.gtins.add(s.gtin);
+    
+    if (hasIrregular(s)) {
+      g.gtinIrrCount++;
+    } else {
+      g.gtinRegCount++;
+    }
     
     const irrRows = s.rows.filter(r => r.tipo_linha === 'venda_irregular');
     if (irrRows.length) {
@@ -311,7 +328,12 @@ const pctIrregular = (section) => {
                 <td>
                   <div class="rank-med-cell">
                     <span class="rank-nome">{{ item.substancia }}</span>
-                    <span class="rank-gtin">{{ item.gtinCount }} {{ item.gtinCount > 1 ? 'GTINs' : 'GTIN' }}</span>
+                    <span class="rank-gtin">
+                      {{ item.gtinCount }} {{ item.gtinCount > 1 ? 'GTINs' : 'GTIN' }}
+                      <span v-if="item.gtinCount > 0" class="rank-gtin-split" style="margin-left: 3px; opacity: 0.9; font-weight: 600; font-size: 0.65rem;">
+                        (<span style="color: color-mix(in srgb, var(--primary-color) 80%, black);" v-tooltip.top="'GTINs 100% regulares'">{{ item.gtinRegCount }}</span> / <span style="color: var(--risk-high);" v-tooltip.top="'GTINs com irregularidades'">{{ item.gtinIrrCount }}</span>)
+                      </span>
+                    </span>
                   </div>
                 </td>
                 <td class="rank-periodo">{{ item.periodo }}</td>
@@ -387,9 +409,10 @@ const pctIrregular = (section) => {
           <div class="mch-left">
             <i class="pi pi-list" />
             <span class="mch-title">Detalhamento por GTIN</span>
-            <div class="mch-filter-tag" v-if="selectedSubstance">
-              <span>Filtrado: {{ visibleSections.length }} itens de <strong>{{ selectedSubstance }}</strong></span>
-              <button class="clear-filter-btn" @click="selectedSubstance = null" v-tooltip.top="'Limpar filtro e exibir tudo'">
+            <div class="mch-filter-tag" v-if="selectedSubstance || searchRanking.trim()">
+              <span v-if="selectedSubstance">Filtrado: {{ visibleSections.length }} itens de <strong>{{ selectedSubstance }}</strong></span>
+              <span v-else>Filtrado: <strong>{{ searchRanking }}</strong> ({{ visibleSections.length }} itens)</span>
+              <button class="clear-filter-btn" @click="() => { selectedSubstance = null; searchRanking = '' }" v-tooltip.top="'Limpar filtros e exibir tudo'">
                 <i class="pi pi-times" />
               </button>
             </div>
@@ -879,8 +902,8 @@ const pctIrregular = (section) => {
 .ranking-table .text-center { text-align: center !important; }
 
 .rank-med-cell { display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; }
-.rank-gtin { font-size: 0.65rem; color: var(--text-muted); font-weight: 600; }
-.rank-nome { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-gtin { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+.rank-nome { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rank-periodo { font-size: 0.68rem; color: var(--text-secondary); }
 .rank-prejuizo { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 .r-val-tot { color: var(--text-muted); }

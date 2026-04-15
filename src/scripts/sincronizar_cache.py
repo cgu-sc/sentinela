@@ -34,14 +34,14 @@ from data_cache import (
 # ── Módulos disponíveis ────────────────────────────────────────────────────────
 
 MODULOS = [
-    {"id": 1, "name": "Localidades",          "func": _sync_localidades,    "peso": "~rápido"},
-    {"id": 2, "name": "Rede Estabelecimentos","func": _sync_rede,            "peso": "~rápido"},
-    {"id": 3, "name": "Matriz de Risco",      "func": _sync_matriz_risco,   "peso": "~médio"},
-    {"id": 4, "name": "Falecidos",            "func": _sync_falecidos,      "peso": "~médio"},
-    {"id": 5, "name": "CRMs Detalhado",       "func": _sync_crms_detalhado, "peso": "~médio"},
-    {"id": 6, "name": "CRMs de Interesse",    "func": _sync_top20_crms,     "peso": "~pesado"},
-    {"id": 7, "name": "Dados das Farmácias",  "func": _sync_dados_farmacia, "peso": "~médio"},
-    {"id": 8, "name": "Movimentação",         "func": _sync_movimentacao,   "peso": "~muito pesado"},
+    {"id": 1, "name": "Localidades (IBGE)",      "func": _sync_localidades,    "peso": "~rápido"},
+    {"id": 2, "name": "Rede de Estabelecimentos","func": _sync_rede,           "peso": "~rápido"},
+    {"id": 3, "name": "Matriz de Risco",         "func": _sync_matriz_risco,   "peso": "~médio"},
+    {"id": 4, "name": "Falecidos por Farmácia",  "func": _sync_falecidos,      "peso": "~médio"},
+    {"id": 5, "name": "Indicador CRM Detalhado", "func": _sync_crms_detalhado, "peso": "~médio"},
+    {"id": 6, "name": "Top 20 CRMs (Médicos)",   "func": _sync_top20_crms,     "peso": "~pesado"},
+    {"id": 7, "name": "Dados das Farmácias",     "func": _sync_dados_farmacia, "peso": "~médio"},
+    {"id": 8, "name": "Movimentação Mensal",     "func": _sync_movimentacao,   "peso": "~muito pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

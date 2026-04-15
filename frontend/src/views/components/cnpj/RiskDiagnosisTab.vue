@@ -23,13 +23,14 @@ const regionalScopes = [
 ];
 
 // Score da farmácia atual
+// Nota: percValSemComp pode exceder 100% por anomalias nos dados de auditoria
+// (val_sem_comp > total_mov). Limitamos a 100 para coincidir com a curva de percentis.
 const currentScore = computed(() => {
     const data = props.cnpjData;
     if (!data) return 0;
     
-    // Retorna o valor base de comparação dependendo da métrica ativa
     if (riskMetric.value === 'percentual_sem_comprovacao') {
-      return Number(data.percValSemComp || 0);
+      return Math.min(Number(data.percValSemComp || 0), 100);
     }
     return Number(data.score_risco_final || 0);
 });
@@ -95,26 +96,30 @@ const rankingText = computed(() => {
 });
 
 // Calcula em qual "topo" de risco a farmácia está
+// Não bloqueamos durante o loading — o displayedBadge já guarda o valor anterior
+// e só atualiza quando nv for truthy, evitando qualquer flash.
 const riskRankBadge = computed(() => {
-  // Se está carregando, não tentamos calcular com dados potencialmente "sujos" da métrica anterior
-  if (cnpjDetailStore.scorePercentilesLoading) return null;
-  
   const data = cnpjDetailStore.scorePercentiles;
   if (!data?.length || currentScore.value === null || currentScore.value === undefined) return null;
   const idx = data.findIndex(d => d.score >= currentScore.value);
   if (idx === -1) return { label: 'Extremo', value: 'TOP 1%', color: '#ef4444' };
   const pct = data[idx].percentile;
   const topPct = 101 - pct;
-  if (topPct <= 5) return { label: 'Crítico', value: `TOP ${topPct}%`, color: '#ef4444' };
-  if (topPct <= 15) return { label: 'Alerta', value: `TOP ${topPct}%`, color: '#f59e0b' };
+  if (topPct <= 5)  return { label: 'Crítico', value: `TOP ${topPct}%`, color: '#ef4444' };
+  if (topPct <= 15) return { label: 'Alerta',  value: `TOP ${topPct}%`, color: '#f59e0b' };
   return { label: 'Normal', value: `Percentil ${pct}%`, color: '#10b981' };
 });
 
-// Cache local para evitar flickering do badge durante o loading
+// Cache local: só atualiza quando loading=false para garantir que
+// currentScore e scorePercentiles são sempre da mesma métrica.
 const displayedBadge = ref(null);
-watch(riskRankBadge, (nv) => {
-  if (nv) displayedBadge.value = nv;
-}, { immediate: true });
+watch(
+  [riskRankBadge, () => cnpjDetailStore.scorePercentilesLoading],
+  ([badge, isLoading]) => {
+    if (badge && !isLoading) displayedBadge.value = badge;
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -183,7 +188,6 @@ watch(riskRankBadge, (nv) => {
                 
                 <div v-if="displayedBadge" 
                       class="risk-rank-badge" 
-                      :class="{ 'badge-loading': cnpjDetailStore.scorePercentilesLoading }"
                       :style="{ 
                         background: displayedBadge.color + '15', 
                         color: displayedBadge.color, 
@@ -337,17 +341,28 @@ watch(riskRankBadge, (nv) => {
   border: 1px solid;
   font-size: 0.7rem;
   margin-left: 0.5rem;
-  transition: all 0.4s ease;
+  /* Largura fixa = maior combinação possível evita qualquer redimensionamento */
+  min-width: 10.5rem;
+  justify-content: center;
 }
 
-.risk-rank-badge.badge-loading {
-  opacity: 0.3;
-  filter: grayscale(0.5);
-  transform: scale(0.96);
+.badge-label {
+  font-weight: 500;
+  opacity: 0.8;
+  border-right: 1px solid currentColor;
+  padding-right: 0.4rem;
+  /* "Extremo" é o label mais longo (7 chars) */
+  min-width: 4.2rem;
+  text-align: center;
 }
 
-.badge-label { font-weight: 500; opacity: 0.8; border-right: 1px solid currentColor; padding-right: 0.4rem; }
-.badge-value { font-weight: 600; }
+.badge-value {
+  font-weight: 600;
+  /* "Percentil 99%" é o valor mais longo */
+  min-width: 5.8rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 .scope-selector { min-width: 180px; }
 

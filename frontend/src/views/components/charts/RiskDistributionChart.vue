@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue';
+import { computed, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -21,44 +21,35 @@ use([
 ]);
 
 const props = defineProps({
-  data: { type: Array, default: () => [] },
-  currentScore: { type: Number, default: 0 },
-  loading: { type: Boolean, default: false },
-  rankingText: { type: String, default: null },
-  metricLabel: { type: String, default: 'Score de Risco' }
+  data:         { type: Array,   default: () => [] },
+  currentScore: { type: Number,  default: 0 },
+  loading:      { type: Boolean, default: false },
+  rankingText:  { type: String,  default: null },
+  metricLabel:  { type: String,  default: 'Score de Risco' }
 });
 
 const { chartTheme } = useChartTheme();
 
-// Cache local dos dados — permite manter o gráfico visível enquanto novos dados carregam
-const localData = ref([]);
+// Cache local: mantém os dados do render anterior visíveis enquanto novos chegam.
+// Só atualiza quando há dados reais E não está carregando — exatamente como o RegionalRankChart
+// mantém seus pontos visíveis ao trocar de métrica (o ECharts anima internamente).
+const localData  = ref([]);
 const localScore = ref(0);
 const localLabel = ref('Score de Risco');
+const isReady    = ref(false);
 
-// Estado de transição para o crossfade suave ao trocar de métrica
-const isTransitioning = ref(false);
-
-watch([() => props.data, () => props.metricLabel], async ([nv, newLabel], [_ov, oldLabel]) => {
-  // Detecta mudança de métrica (label) para disparar crossfade
-  const metricChanged = newLabel !== oldLabel;
-
-  if (metricChanged && localData.value.length) {
-    // Inicia a transição de saída
-    isTransitioning.value = true;
-    await new Promise(r => setTimeout(r, 280)); // aguarda o fade-out
-  }
-
-  if (nv?.length && !props.loading) {
-    localData.value = [...nv];
-    localScore.value = props.currentScore;
-    localLabel.value = props.metricLabel;
-  }
-
-  if (metricChanged) {
-    await nextTick();
-    isTransitioning.value = false;
-  }
-}, { immediate: true });
+watch(
+  [() => props.data, () => props.currentScore, () => props.metricLabel],
+  ([data, score, label]) => {
+    if (data?.length && !props.loading) {
+      localData.value  = [...data];
+      localScore.value = score;
+      localLabel.value = label;
+      isReady.value    = true;
+    }
+  },
+  { immediate: true }
+);
 
 const chartOption = computed(() => {
   if (!localData.value?.length) return {};
@@ -70,31 +61,30 @@ const chartOption = computed(() => {
   let markerXIndex = localData.value.findIndex(d => d.score >= localScore.value);
   if (markerXIndex === -1) markerXIndex = localData.value.length - 1;
 
-  // Alinhamento horizontal do label: evita cortar nas bordas do gráfico
-  const totalPoints = localData.value.length;
-  const relPos = markerXIndex / totalPoints;
+  // Alinhamento horizontal do label: evita corte nas bordas
+  const relPos     = markerXIndex / localData.value.length;
   const labelAlign = relPos < 0.25 ? 'left' : relPos > 0.75 ? 'right' : 'center';
 
-  const isPct = localLabel.value.includes('%');
+  const isPct          = localLabel.value.includes('%');
   const scoreFormatted = isPct
     ? `${localScore.value.toFixed(1)}%`
     : localScore.value.toFixed(2);
 
   return {
-    animation: true,
-    animationDuration: 400,
-    animationEasing: 'cubicOut',
-    backgroundColor: 'transparent',
+    animation:         true,
+    animationDuration: 500,
+    animationEasing:   'cubicOut',
+    backgroundColor:   'transparent',
     grid: { top: 80, right: 24, bottom: 36, left: 56, containLabel: false },
     tooltip: {
-      trigger: 'axis',
+      trigger:     'axis',
       axisPointer: { type: 'line', lineStyle: { color: c.grid, width: 1, type: 'dashed' } },
       backgroundColor: c.tooltip,
-      borderColor: c.tooltipBorder,
+      borderColor:     c.tooltipBorder,
       borderWidth: 1,
-      textStyle: { color: c.tooltipText, fontSize: 12 },
+      textStyle:   { color: c.tooltipText, fontSize: 12 },
       formatter: (params) => {
-        const p = params[0];
+        const p            = params[0];
         const valFormatted = isPct ? `${p.value.toFixed(1)}%` : p.value.toFixed(2);
         return `
           <div style="padding:4px 6px;color:${c.tooltipText}">
@@ -106,27 +96,27 @@ const chartOption = computed(() => {
       }
     },
     xAxis: {
-      type: 'category',
-      data: xData,
+      type:        'category',
+      data:        xData,
       boundaryGap: false,
-      axisLabel: { color: c.textColor, fontSize: 10, interval: 19 },
-      axisLine: { lineStyle: { color: c.borderColor } },
-      axisTick: { show: false }
+      axisLabel:   { color: c.textColor, fontSize: 10, interval: 19 },
+      axisLine:    { lineStyle: { color: c.borderColor } },
+      axisTick:    { show: false }
     },
     yAxis: {
-      type: 'value',
+      type:      'value',
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.4 } },
       axisLabel: {
-        color: c.textColor,
-        fontSize: 10,
+        color:     c.textColor,
+        fontSize:  10,
         formatter: (v) => isPct ? `${v}%` : v
       }
     },
     series: [
       {
-        name: 'Curva de Risco',
-        type: 'line',
-        data: yData,
+        name:   'Curva de Risco',
+        type:   'line',
+        data:   yData,
         smooth: 0.4,
         symbol: 'none',
         lineStyle: { width: 2.5, color: '#ef4444' },
@@ -140,37 +130,25 @@ const chartOption = computed(() => {
           }
         },
         markLine: {
-          silent: true,
-          symbol: ['none', 'circle'],
+          silent:     true,
+          symbol:     ['none', 'circle'],
           symbolSize: 5,
-          lineStyle: { color: 'rgba(239,68,68,0.6)', type: 'dashed', width: 1.5 },
+          lineStyle:  { color: 'rgba(239,68,68,0.6)', type: 'dashed', width: 1.5 },
           label: {
-            show: true,
-            position: 'end',
-            distance: 8,
-            rotate: 0,
-            align: labelAlign,
+            show:        true,
+            position:    'end',
+            distance:    8,
+            rotate:      0,
+            align:       labelAlign,
             backgroundColor: c.tooltip,
-            borderColor: '#ef4444',
-            borderWidth: 1,
-            padding: [5, 9],
+            borderColor:     '#ef4444',
+            borderWidth:  1,
+            padding:      [5, 9],
             borderRadius: 5,
-            // Rich text: linha 1 (titulo) + linha 2 (valor)
             formatter: () => `{t|ESTABELECIMENTO}\n{v|${scoreFormatted}}`,
             rich: {
-              t: {
-                fontSize: 9,
-                color: c.tooltipText,
-                opacity: 0.65,
-                lineHeight: 14,
-                letterSpacing: 1,
-              },
-              v: {
-                fontSize: 13,
-                fontWeight: 700,
-                color: '#ef4444',
-                lineHeight: 18,
-              }
+              t: { fontSize: 9,  color: c.tooltipText, opacity: 0.65, lineHeight: 14 },
+              v: { fontSize: 13, fontWeight: 700, color: '#ef4444',   lineHeight: 18 }
             }
           },
           data: [{ xAxis: markerXIndex }]
@@ -183,30 +161,18 @@ const chartOption = computed(() => {
 
 <template>
   <div class="risk-distribution-wrapper">
-    <div
-      class="chart-container"
-      :class="{ 'is-loading': loading, 'is-transitioning': isTransitioning }"
-    >
-      <transition name="chart-fade" mode="out-in">
-        <v-chart
-          v-if="localData.length"
-          class="chart"
-          :option="chartOption"
-          autoresize
-        />
-        <div v-else-if="!loading" class="empty-state" key="empty">
-          <i class="pi pi-chart-line" />
-          <p>Dados não disponíveis.</p>
-        </div>
-      </transition>
-
-      <!-- Overlay de loading -->
-      <transition name="fade-overlay">
-        <div v-if="loading" class="loading-state">
-          <i class="pi pi-spin pi-spinner" />
-          <span>Sincronizando...</span>
-        </div>
-      </transition>
+    <!-- O container nunca sai do DOM: o ECharts anima a troca de dados internamente -->
+    <div class="chart-container" :class="{ 'is-loading': loading && !isReady }">
+      <VChart
+        v-if="isReady"
+        class="chart"
+        :option="chartOption"
+        autoresize
+      />
+      <div v-else class="empty-state">
+        <i class="pi pi-chart-line" />
+        <p>Aguardando dados...</p>
+      </div>
     </div>
   </div>
 </template>
@@ -217,29 +183,23 @@ const chartOption = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* essencial para flex-children com overflow */
+  min-height: 0;
   position: relative;
 }
 
-/* ─── Container do gráfico: cresce com o wrapper ──────────────────────────── */
+/* ─── Container: cresce com o wrapper, dim suave durante loading inicial ───── */
 .chart-container {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 280px;
   position: relative;
-  transition: opacity 0.28s ease, filter 0.28s ease;
+  transition: opacity 0.3s ease;
 }
 
+/* Loading apenas no carregamento inicial (antes de isReady) */
 .chart-container.is-loading {
-  opacity: 0.4;
-  filter: grayscale(0.5);
-}
-
-/* Transição de crossfade suave ao trocar de métrica */
-.chart-container.is-transitioning {
-  opacity: 0.15;
-  filter: blur(1.5px) grayscale(0.6);
+  opacity: 0.5;
 }
 
 /* ─── O chart ECharts preenche todo o container ───────────────────────────── */
@@ -249,31 +209,7 @@ const chartOption = computed(() => {
   min-height: 0;
 }
 
-/* ─── Overlay de loading (posição absoluta sobre o gráfico) ───────────────── */
-.loading-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  color: var(--primary-color);
-  background: rgba(0,0,0,0.04);
-  z-index: 10;
-  backdrop-filter: blur(1px);
-}
-
-.loading-state i   { font-size: 1.4rem; }
-.loading-state span {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  opacity: 0.8;
-}
-
-/* ─── Empty state ─────────────────────────────────────────────────────────── */
+/* ─── Empty/loading state inicial ─────────────────────────────────────────── */
 .empty-state {
   flex: 1;
   display: flex;
@@ -282,28 +218,11 @@ const chartOption = computed(() => {
   justify-content: center;
   color: var(--text-muted);
   gap: 1rem;
+  font-size: 0.85rem;
 }
 
-/* ─── Transições Vue ──────────────────────────────────────────────────────── */
-.chart-fade-enter-active,
-.chart-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.chart-fade-enter-from {
-  opacity: 0;
-  transform: scaleY(0.97);
-}
-.chart-fade-leave-to {
-  opacity: 0;
-  transform: scaleY(0.97);
-}
-
-.fade-overlay-enter-active,
-.fade-overlay-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-overlay-enter-from,
-.fade-overlay-leave-to {
-  opacity: 0;
+.empty-state i {
+  font-size: 1.5rem;
+  opacity: 0.4;
 }
 </style>

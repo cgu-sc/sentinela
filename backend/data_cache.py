@@ -221,7 +221,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                CAST(ISNULL(R.total_mov, 0) AS FLOAT) as total_mov,
                CAST(ISNULL(R.val_sem_comp, 0) AS FLOAT) as val_sem_comp,
                CAST(CASE WHEN ISNULL(R.total_mov, 0) > 0 
-                         THEN (ISNULL(R.val_sem_comp, 0) / R.total_mov) * 100 
+                         THEN LEAST((ISNULL(R.val_sem_comp, 0) / R.total_mov) * 100, 100)
                          ELSE 0 END AS FLOAT) as perc_val_sem_comp,
                CAST(ISNULL(M.score_risco_final, 0) AS FLOAT) as score_risco_final,
                ISNULL(M.classificacao_risco, 'N/A') as classificacao_risco

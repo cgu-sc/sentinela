@@ -18,8 +18,8 @@ const { regionalData, regionalLoading, fetchRegional } = useRegional();
 // Escopo do scatter regional
 const regionalScope = ref('regiao');
 const regionalScopes = [
-  { label: 'Região de Saúde', value: 'regiao', icon: 'pi-compass' },
-  { label: 'Estado (UF)',      value: 'uf',     icon: 'pi-map'     },
+  { label: 'Região de Saúde', value: 'regiao' },
+  { label: 'Estado (UF)',      value: 'uf'     },
 ];
 
 // Score da farmácia atual
@@ -40,9 +40,9 @@ const riskScope = ref('uf');
 const riskMetric = ref('score');
 
 const riskScopes = [
-  { label: 'Na Região de Saúde', value: 'regiao', icon: 'pi-compass' },
-  { label: 'No Estado', value: 'uf', icon: 'pi-map' },
-  { label: 'No Brasil (Nacional)', value: 'brasil', icon: 'pi-globe' }
+  { label: 'Na Região de Saúde', value: 'regiao' },
+  { label: 'No Estado', value: 'uf' },
+  { label: 'No Brasil (Nacional)', value: 'brasil' }
 ];
 
 const riskMetricOptions = [
@@ -152,7 +152,6 @@ watch(
                 >
                   <template #value="slotProps">
                     <div v-if="slotProps.value" class="flex align-items-center gap-2">
-                      <i :class="regionalScopes.find(s => s.value === slotProps.value).icon" />
                       <span class="dropdown-selected-label">{{ regionalScopes.find(s => s.value === slotProps.value).label }}</span>
                     </div>
                   </template>
@@ -210,7 +209,6 @@ watch(
                 >
                   <template #value="slotProps">
                     <div v-if="slotProps.value" class="flex align-items-center gap-2">
-                       <i :class="riskScopes.find(s => s.value === slotProps.value).icon" />
                        <span class="dropdown-selected-label">{{ riskScopes.find(s => s.value === slotProps.value).label }}</span>
                     </div>
                   </template>

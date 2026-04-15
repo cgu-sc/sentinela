@@ -56,11 +56,25 @@ const copyCnpj = () => {
   }
 };
 
-// Valores financeiros — usam periodSummary quando disponível (período filtrado),
-// caem de volta para cnpjData quando a evolução ainda não carregou.
-const displayValSemComp    = computed(() => props.periodSummary?.valSemComp    ?? props.cnpjData?.valSemComp    ?? 0);
-const displayTotalMov      = computed(() => props.periodSummary?.totalMov      ?? props.cnpjData?.totalMov      ?? 0);
-const displayPercValSemComp = computed(() => props.periodSummary?.percValSemComp ?? props.cnpjData?.percValSemComp ?? 0);
+// ── Cache de Valores para Transição Suave ──────────────────
+// Mantém os valores anteriores visíveis durante o loading do novo período,
+// evitando o "piscando" ou volta brusca para os valores globais.
+const cachedValSemComp     = ref(props.cnpjData?.valSemComp     ?? 0);
+const cachedTotalMov       = ref(props.cnpjData?.totalMov       ?? 0);
+const cachedPercValSemComp = ref(props.cnpjData?.percValSemComp ?? 0);
+
+import { watch } from "vue";
+watch([() => props.periodSummary, () => props.periodLoading], ([summary, loading]) => {
+  if (summary && !loading) {
+    cachedValSemComp.value     = summary.valSemComp;
+    cachedTotalMov.value       = summary.totalMov;
+    cachedPercValSemComp.value = summary.percValSemComp;
+  }
+}, { immediate: true });
+
+const displayValSemComp     = computed(() => cachedValSemComp.value);
+const displayTotalMov       = computed(() => cachedTotalMov.value);
+const displayPercValSemComp = computed(() => cachedPercValSemComp.value);
 
 const risco = computed(() => displayPercValSemComp.value);
 
@@ -796,8 +810,10 @@ const filterNetwork = () => {
 
 .kpi-pill-group.kpi-refreshing,
 .pill-item.kpi-refreshing {
-  opacity: 0.4;
+  opacity: 0.8 !important; /* Menos opaco para manter legibilidade */
+  filter: blur(1.2px);     /* Blur sutil para indicar atualização em curso */
   pointer-events: none;
+  transition: all 0.3s ease;
 }
 
 /* Barra de acento no rodapé (Opção 2 — Bottom-up) */

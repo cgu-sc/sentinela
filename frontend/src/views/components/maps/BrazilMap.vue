@@ -293,7 +293,9 @@ const onClick = (params) => {
 }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.8 !important;
+  filter: blur(2.5px);
   pointer-events: none;
+  transition: all 0.4s ease;
 }
 </style>

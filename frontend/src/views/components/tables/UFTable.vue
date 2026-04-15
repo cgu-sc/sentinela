@@ -125,8 +125,10 @@ const handleRowClick = (event) => {
 .spacer { flex: 1; }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.6 !important;
+  filter: blur(3px);
   pointer-events: none;
+  transition: all 0.4s ease;
 }
 
 :deep(.clickable-rows .p-datatable-tbody > tr) {

@@ -27,6 +27,18 @@ const { fatorRisco, fatorRiscoLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartTheme, chartDataColors, chartRiskAccents } = useChartTheme();
 
+// ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
+// Mantém os dados anteriores visíveis para o ECharts animar a transição
+// em vez de limpar o gráfico e redesenhar do zero.
+import { ref, watch } from 'vue';
+const cachedFatorRisco = ref(fatorRisco.value);
+
+watch([fatorRisco, fatorRiscoLoading], ([newVal, loading]) => {
+  if (newVal?.length > 0 && !loading) {
+    cachedFatorRisco.value = newVal;
+  }
+}, { immediate: true });
+
 // ── Tema (cores do gráfico vindas de colors.js via useChartTheme) ─────────
 const C = computed(() => ({
   ...chartTheme.value,
@@ -37,12 +49,13 @@ const C = computed(() => ({
 // ── Opção ECharts ─────────────────────────────────────────────────────────
 const chartOption = computed(() => {
   const c      = C.value;
-  const faixas = fatorRisco.value.map(b => b.faixa);
+  const currentData = cachedFatorRisco.value || [];
+  const faixas = currentData.map(b => b.faixa);
 
   return {
     backgroundColor: c.bg,
     animation: true,
-    animationDuration: 900,
+    animationDuration: 1000,
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: 'Inter, sans-serif' },
 
@@ -130,7 +143,7 @@ const chartOption = computed(() => {
         type: 'bar',
         yAxisIndex: 0,
         barMaxWidth: 40,
-        data: fatorRisco.value.map(b => b.qtd),
+        data: currentData.map(b => b.qtd),
         itemStyle: {
           borderRadius: [6, 6, 0, 0],
           color: {
@@ -151,7 +164,7 @@ const chartOption = computed(() => {
         yAxisIndex: 1,
         smooth: true,
         symbol: 'none',
-        data: fatorRisco.value.map(b => b.valor_raw),
+        data: currentData.map(b => b.valor_raw),
         lineStyle: { color: c.area, width: 2.5 },
         areaStyle: {
           color: {
@@ -243,7 +256,9 @@ const chartOption = computed(() => {
 .spacer { flex: 1; }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.8 !important;
+  filter: blur(2px);
   pointer-events: none;
+  transition: all 0.35s ease;
 }
 </style>

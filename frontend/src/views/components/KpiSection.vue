@@ -1,4 +1,5 @@
 <script setup>
+import { ref, watch } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useChartTheme } from '@/config/chartTheme';
 import { storeToRefs } from 'pinia';
@@ -7,6 +8,16 @@ import Button from 'primevue/button';
 const analyticsStore = useAnalyticsStore();
 const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 const { chartDataColors } = useChartTheme();
+
+// ── Cache de KPIs para Transição Suave ──────────────────
+// Mantém os valores anteriores visíveis durante o refresh
+const cachedKpis = ref(enrichedKpis.value);
+
+watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
+  if (newKpis?.length > 0 && !loading) {
+    cachedKpis.value = newKpis;
+  }
+}, { immediate: true });
 </script>
 
 <template>
@@ -21,7 +32,7 @@ const { chartDataColors } = useChartTheme();
     <!-- CARDS DE KPI -->
     <div class="kpi-grid" :class="{ 'is-refreshing': isLoading }">
       <div 
-        v-for="kpi in enrichedKpis" 
+        v-for="kpi in (cachedKpis || enrichedKpis)" 
         :key="kpi.label" 
         class="kpi-card"
         :style="{
@@ -35,7 +46,9 @@ const { chartDataColors } = useChartTheme();
           </div>
           <div class="kpi-content">
             <span class="kpi-label">{{ kpi.label }}</span>
-            <span class="kpi-value">{{ kpi.value }}</span>
+            <transition name="kpi-count" mode="out-in">
+              <span :key="kpi.value" class="kpi-value">{{ kpi.value }}</span>
+            </transition>
           </div>
         </div>
       </div>
@@ -47,6 +60,24 @@ const { chartDataColors } = useChartTheme();
 .kpi-section {
   width: 100%;
   overflow: visible;
+}
+
+/* Animação Slide-Fade para os Números */
+.kpi-count-enter-active,
+.kpi-count-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpi-count-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(2px);
+}
+
+.kpi-count-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+  filter: blur(2px);
 }
 
 .kpi-grid {
@@ -105,8 +136,6 @@ const { chartDataColors } = useChartTheme();
   color: var(--text-color);
   opacity: 0.90;
   line-height: 1;
-  white-space: nowrap; /* IMPEDE QUEBRA */
-  letter-spacing: -0.6px; /* COMPACTO */
 }
 
 .kpi-icon-bg {
@@ -121,8 +150,10 @@ const { chartDataColors } = useChartTheme();
 }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.8 !important;
+  filter: blur(2px);
   pointer-events: none;
+  transition: all 0.3s ease;
 }
 
 .error-banner {

@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
@@ -16,7 +17,14 @@ const { resultadoSentinelaUF, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent } = useFormatting();
 
-const { totals } = useTableAggregation(resultadoSentinelaUF, {
+// Mantém os dados anteriores visíveis durante o re-fetch, evitando flash de tabela vazia
+const cachedUF = ref(resultadoSentinelaUF.value);
+const showRefreshing = useDelayedLoading(isLoading);
+watch([resultadoSentinelaUF, isLoading], ([newData, loading]) => {
+  if (newData?.length > 0 && !loading) cachedUF.value = newData;
+}, { immediate: true });
+
+const { totals } = useTableAggregation(cachedUF, {
   sums: ['cnpjs', 'valSemComp', 'totalMov', 'qtdeSemComp', 'totalQtde'],
   percents: [
     { field: 'percValSemComp',  numerator: 'valSemComp',  denominator: 'totalMov'   },
@@ -43,7 +51,7 @@ const handleRowClick = (event) => {
 </script>
 
 <template>
-  <div class="table-section shadow-card" :class="{ 'is-refreshing': isLoading }">
+  <div class="table-section shadow-card" :class="{ 'is-refreshing': showRefreshing }">
     <div class="section-header">
        <i class="pi pi-table"></i>
        <h3>Análise UF</h3>
@@ -51,7 +59,7 @@ const handleRowClick = (event) => {
     </div>
 
     <DataTable 
-      :value="resultadoSentinelaUF" 
+      :value="cachedUF"
       size="small" 
       stripedRows 
       removableSort 
@@ -120,15 +128,14 @@ const handleRowClick = (event) => {
 .table-section {
   display: flex;
   flex-direction: column;
+  transition: opacity 0.25s ease;
 }
 
 .spacer { flex: 1; }
 
 .is-refreshing {
-  opacity: 0.6 !important;
-  filter: blur(3px);
+  opacity: 0.45;
   pointer-events: none;
-  transition: all 0.4s ease;
 }
 
 :deep(.clickable-rows .p-datatable-tbody > tr) {

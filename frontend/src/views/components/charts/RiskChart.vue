@@ -31,7 +31,9 @@ const { chartTheme, chartDataColors, chartRiskAccents } = useChartTheme();
 // Mantém os dados anteriores visíveis para o ECharts animar a transição
 // em vez de limpar o gráfico e redesenhar do zero.
 import { ref, watch } from 'vue';
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 const cachedFatorRisco = ref(fatorRisco.value);
+const showRefreshing = useDelayedLoading(fatorRiscoLoading);
 
 watch([fatorRisco, fatorRiscoLoading], ([newVal, loading]) => {
   if (newVal?.length > 0 && !loading) {
@@ -182,7 +184,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="chart-section" :class="{ 'is-refreshing': fatorRiscoLoading }">
+  <div class="chart-section" :class="{ 'is-refreshing': showRefreshing }">
     <div class="chart-header">
       <i class="pi pi-chart-bar"></i>
       <h3>FATOR RISCO X QTD ESTAB</h3>
@@ -207,6 +209,7 @@ const chartOption = computed(() => {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   overflow: hidden;
+  transition: opacity 0.25s ease;
 }
 
 .chart-header {
@@ -256,9 +259,7 @@ const chartOption = computed(() => {
 .spacer { flex: 1; }
 
 .is-refreshing {
-  opacity: 0.8 !important;
-  filter: blur(2px);
+  opacity: 0.45;
   pointer-events: none;
-  transition: all 0.35s ease;
 }
 </style>

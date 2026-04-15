@@ -1,65 +1,71 @@
 <script setup>
-import { computed, ref, onMounted, watch, nextTick } from 'vue';
-import { useAnalyticsStore } from '@/stores/analytics';
-import { useFormatting } from '@/composables/useFormatting';
-import { useChartTheme } from '@/config/chartTheme';
-import { useThemeStore } from '@/stores/theme';
-import { useFilterStore } from '@/stores/filters';
-import { MAP_VISUAL_SCALE } from '@/config/colors.js';
-import { storeToRefs } from 'pinia';
-import { use, registerMap } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { MapChart } from 'echarts/charts';
-import { TooltipComponent, VisualMapComponent } from 'echarts/components';
-import VChart from 'vue-echarts';
+import { computed, ref, onMounted, watch, nextTick } from "vue";
+import { useAnalyticsStore } from "@/stores/analytics";
+import { useFormatting } from "@/composables/useFormatting";
+import { useChartTheme } from "@/config/chartTheme";
+import { useThemeStore } from "@/stores/theme";
+import { useFilterStore } from "@/stores/filters";
+import { MAP_VISUAL_SCALE } from "@/config/colors.js";
+import { storeToRefs } from "pinia";
+import { use, registerMap } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { MapChart } from "echarts/charts";
+import { TooltipComponent, VisualMapComponent } from "echarts/components";
+import VChart from "vue-echarts";
 
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
 const analyticsStore = useAnalyticsStore();
-const filterStore    = useFilterStore();
+const filterStore = useFilterStore();
 const { resultadoSentinelaUFNacional, isLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
 
-const mapAreaColor   = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
-const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)');
+const mapAreaColor = computed(() =>
+  themeStore.isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)",
+);
+const mapBorderColor = computed(() =>
+  themeStore.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
+);
 
 // ── GeoJSON do Brasil ────────────────────────────────────────────────────────
 const mapReady = ref(false);
 
 onMounted(async () => {
-  const geo = await fetch('/geo/brasil-uf.json').then(r => r.json());
-  registerMap('brasil-uf', geo);
+  const geo = await fetch("/geo/brasil-uf.json").then((r) => r.json());
+  registerMap("brasil-uf", geo);
   mapReady.value = true;
 });
 
 // ── Escala ativa conforme tema ────────────────────────────────────────────────
-const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
+const activeScale = computed(
+  () => MAP_VISUAL_SCALE[themeStore.isDark ? "dark" : "light"],
+);
 
 const getRiskPiece = (perc) =>
-  activeScale.value.find(p =>
-    (p.min == null || perc >= p.min) && (p.max == null || perc < p.max)
+  activeScale.value.find(
+    (p) => (p.min == null || perc >= p.min) && (p.max == null || perc < p.max),
   ) ?? activeScale.value[activeScale.value.length - 1];
 
 // ── mapData ──────────────────────────────────────────────────────────────────
 const mapData = computed(() => {
   const hasSelection =
-    filterStore.selectedUF && filterStore.selectedUF !== 'Todos';
+    filterStore.selectedUF && filterStore.selectedUF !== "Todos";
 
-  return resultadoSentinelaUFNacional.value.map(d => {
-    const perc  = d.percValSemComp ?? 0;
+  return resultadoSentinelaUFNacional.value.map((d) => {
+    const perc = d.percValSemComp ?? 0;
     const piece = getRiskPiece(perc);
     const isSelected = hasSelection && d.uf === filterStore.selectedUF;
     const opacity = hasSelection && !isSelected ? 0.85 : 1;
 
     return {
-      name:       d.uf,
-      value:      perc,
+      name: d.uf,
+      value: perc,
       valSemComp: d.valSemComp ?? 0,
-      cnpjs:      d.cnpjs ?? 0,
-      selected:   isSelected,
-      itemStyle:  { areaColor: piece.color, opacity },
+      cnpjs: d.cnpjs ?? 0,
+      selected: isSelected,
+      itemStyle: { areaColor: piece.color, opacity },
       select: {
         itemStyle: {
           areaColor: piece.color,
@@ -71,7 +77,14 @@ const mapData = computed(() => {
         },
       },
       unselected: { itemStyle: { areaColor: piece.color, opacity } },
-      emphasis:   { itemStyle: { areaColor: piece.color, borderColor: piece.borderColor, borderWidth: 2, opacity: 1 } },
+      emphasis: {
+        itemStyle: {
+          areaColor: piece.color,
+          borderColor: piece.borderColor,
+          borderWidth: 2,
+          opacity: 1,
+        },
+      },
     };
   });
 });
@@ -82,15 +95,20 @@ const chartOption = computed(() => {
   return {
     backgroundColor: c.bg,
     tooltip: {
-      trigger: 'item',
+      trigger: "item",
       confine: true,
       backgroundColor: c.tooltip,
       borderColor: c.tooltipBorder,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      textStyle: {
+        color: c.tooltipText,
+        fontFamily: "Inter, sans-serif",
+        fontSize: 12,
+      },
       formatter: (params) => {
-        if (!params.data) return `
+        if (!params.data)
+          return `
           <div style="color:${c.tooltipText};">
             <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${params.name}</div>
             <div style="font-size:11px;opacity:0.6;">Sem dados</div>
@@ -102,7 +120,7 @@ const chartOption = computed(() => {
             <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
               <div>% sem comprovação: <strong>${formatPercent(d.value)}</strong></div>
               <div>Valor sem comprovação: <strong>${formatBRL(d.valSemComp)}</strong></div>
-              <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString('pt-BR')}</strong></div>
+              <div>CNPJs: <strong>${(d.cnpjs ?? 0).toLocaleString("pt-BR")}</strong></div>
             </div>
           </div>`;
       },
@@ -112,27 +130,35 @@ const chartOption = computed(() => {
       pieces: activeScale.value,
       seriesIndex: 0,
     },
-    series: [{
-      type: 'map',
-      map: 'brasil-uf',
-      nameProperty: 'UF',
-      roam: false,
-      layoutCenter: ['50%', '45%'],
-      layoutSize: '95%',
-      aspectScale: 1,
-      selectedMode: 'single',
-      select: { label: { show: false } }, // Adicionado para manter consistência e evitar poluição
-      emphasis: {
-        label: { show: true, fontSize: 10, fontWeight: 700, color: c.text },
+    series: [
+      {
+        type: "map",
+        map: "brasil-uf",
+        nameProperty: "UF",
+        roam: false,
+        layoutCenter: ["50%", "45%"],
+        layoutSize: "95%",
+        aspectScale: 1,
+        selectedMode: "single",
+        select: { label: { show: false } }, // Adicionado para manter consistência e evitar poluição
+        emphasis: {
+          label: { show: true, fontSize: 10, fontWeight: 700, color: c.text },
+        },
+        label: {
+          show: true,
+          fontSize: 9,
+          fontWeight: 600,
+          color: c.text,
+          fontFamily: "Inter, sans-serif",
+        },
+        itemStyle: {
+          borderColor: mapBorderColor.value,
+          borderWidth: 1,
+          areaColor: mapAreaColor.value,
+        },
+        data: mapData.value,
       },
-      label: { show: true, fontSize: 9, fontWeight: 600, color: c.text, fontFamily: 'Inter, sans-serif' },
-      itemStyle: {
-        borderColor: mapBorderColor.value,
-        borderWidth: 1,
-        areaColor: mapAreaColor.value,
-      },
-      data: mapData.value,
-    }],
+    ],
   };
 });
 
@@ -148,21 +174,25 @@ watch(
     if (!chart) return;
 
     if (_prevSelectedName) {
-      chart.dispatchAction({ type: 'unselect', seriesIndex: 0, name: _prevSelectedName });
+      chart.dispatchAction({
+        type: "unselect",
+        seriesIndex: 0,
+        name: _prevSelectedName,
+      });
       _prevSelectedName = null;
     }
 
-    if (!uf || uf === 'Todos') return;
+    if (!uf || uf === "Todos") return;
     _prevSelectedName = uf;
-    chart.dispatchAction({ type: 'select', seriesIndex: 0, name: uf });
+    chart.dispatchAction({ type: "select", seriesIndex: 0, name: uf });
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 const onClick = (params) => {
   const name = params.data?.name ?? params.name;
   if (name === filterStore.selectedUF) {
-    filterStore.selectedUF = 'Todos';
+    filterStore.selectedUF = "Todos";
   } else {
     filterStore.selectedUF = name;
   }
@@ -198,7 +228,9 @@ const onClick = (params) => {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
 
@@ -238,7 +270,9 @@ const onClick = (params) => {
   cursor: pointer;
 }
 
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
 
 .is-refreshing {
   opacity: 0.5;

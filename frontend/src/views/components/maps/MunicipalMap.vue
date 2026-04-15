@@ -119,7 +119,7 @@ onMounted(async () => {
     const geo = geoStore.getMunicipiosGeoByUF(activeUf.value);
     if (geo) registerMap(`municipios-${activeUf.value}`, geo);
   }
-  
+
   // O autoresize do vue-echarts resolve a maioria dos problemas de tamanho,
   // mas esperamos um tick para garantir que o contêiner grid está estável.
   await nextTick();
@@ -174,7 +174,9 @@ const munDataByIbge7 = computed(() => {
 // Snapshot local (vive enquanto o componente existe).
 // filterStore.regionMapData é o fallback persistente entre desmontagens.
 // Em modo embutido não usa o snapshot do filterStore (que pode conter dados de outra UF)
-const regionSnapshot = ref(props.propUf ? null : (filterStore.regionMapData ?? null));
+const regionSnapshot = ref(
+  props.propUf ? null : (filterStore.regionMapData ?? null),
+);
 const mapMunData = computed(() => {
   if (embeddedMode.value) return munDataByIbge7.value;
   return (
@@ -214,7 +216,11 @@ const mapData = computed(() => {
     const perc = hasData ? (munData.percValSemComp ?? 0) : 0;
     const piece = getRiskPiece(perc);
     const baseColor = hasData ? piece.color : chartTheme.value.bg;
-    const bColor = hasData ? piece.borderColor : (themeStore.isDark ? '#555555' : '#aaaaaa');
+    const bColor = hasData
+      ? piece.borderColor
+      : themeStore.isDark
+        ? "#555555"
+        : "#aaaaaa";
 
     return {
       name: f.properties.name,
@@ -272,7 +278,7 @@ const chartOption = computed(() => {
       },
       formatter: (params) => {
         const d = params.data;
-        if (!d) return '';
+        if (!d) return "";
         if (!d.hasData || d.cnpjs === 0) {
           return `
             <div style="color:${c.tooltipText}">

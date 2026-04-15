@@ -1,5 +1,6 @@
 <script setup>
 import { computed, watch, ref, nextTick, onMounted } from "vue";
+import { useDelayedLoading } from "@/composables/useDelayedLoading";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useChartTheme } from "@/config/chartTheme";
@@ -19,6 +20,7 @@ use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const { resultadoSentinelaUFNacional, isLoading } = storeToRefs(analyticsStore);
+const showRefreshing = useDelayedLoading(isLoading);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
@@ -218,7 +220,7 @@ const onClick = (params) => {
 </script>
 
 <template>
-  <div class="chart-section" :class="{ 'is-refreshing': isLoading }">
+  <div class="chart-section" :class="{ 'is-refreshing': showRefreshing }">
     <div class="chart-header">
       <i class="pi pi-map"></i>
       <h3>MAPA DE RISCO — UFs</h3>
@@ -250,6 +252,7 @@ const onClick = (params) => {
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  transition: opacity 0.25s ease;
 }
 
 .chart-header {
@@ -293,9 +296,7 @@ const onClick = (params) => {
 }
 
 .is-refreshing {
-  opacity: 0.8 !important;
-  filter: blur(2.5px);
+  opacity: 0.45;
   pointer-events: none;
-  transition: all 0.4s ease;
 }
 </style>

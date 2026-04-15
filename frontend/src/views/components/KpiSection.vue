@@ -2,12 +2,15 @@
 import { ref, watch } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useChartTheme } from '@/config/chartTheme';
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { storeToRefs } from 'pinia';
 import Button from 'primevue/button';
 
 const analyticsStore = useAnalyticsStore();
 const { enrichedKpis, isLoading, error } = storeToRefs(analyticsStore);
 const { chartDataColors } = useChartTheme();
+
+const showRefreshing = useDelayedLoading(isLoading);
 
 // ── Cache de KPIs para Transição Suave ──────────────────
 // Mantém os valores anteriores visíveis durante o refresh
@@ -30,7 +33,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
     </div>
 
     <!-- CARDS DE KPI -->
-    <div class="kpi-grid" :class="{ 'is-refreshing': isLoading }">
+    <div class="kpi-grid" :class="{ 'is-refreshing': showRefreshing }">
       <div 
         v-for="kpi in (cachedKpis || enrichedKpis)" 
         :key="kpi.label" 
@@ -46,9 +49,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
           </div>
           <div class="kpi-content">
             <span class="kpi-label">{{ kpi.label }}</span>
-            <transition name="kpi-count" mode="out-in">
-              <span :key="kpi.value" class="kpi-value">{{ kpi.value }}</span>
-            </transition>
+            <span class="kpi-value">{{ kpi.value }}</span>
           </div>
         </div>
       </div>
@@ -62,23 +63,6 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   overflow: visible;
 }
 
-/* Animação Slide-Fade para os Números */
-.kpi-count-enter-active,
-.kpi-count-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.kpi-count-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-  filter: blur(2px);
-}
-
-.kpi-count-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-  filter: blur(2px);
-}
 
 .kpi-grid {
   display: grid;
@@ -86,6 +70,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   gap: 1.15rem;
   width: 100%;
   padding-top: 4px; /* espaço para o lift do hover não ser cortado */
+  transition: opacity 0.25s ease;
 }
 
 .kpi-card {
@@ -150,10 +135,8 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
 }
 
 .is-refreshing {
-  opacity: 0.8 !important;
-  filter: blur(2px);
+  opacity: 0.45;
   pointer-events: none;
-  transition: all 0.3s ease;
 }
 
 .error-banner {

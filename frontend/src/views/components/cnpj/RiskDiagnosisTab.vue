@@ -43,8 +43,8 @@ const currentScore = computed(() => {
 });
 
 // Configuração do Escopo da Curva de Risco
-const riskScope = ref('uf');
-const riskMetric = ref('score');
+const riskScope = ref('brasil');
+const riskMetric = ref('percentual_sem_comprovacao');
 
 const riskScopes = [
   { label: 'Na Região de Saúde', value: 'regiao' },

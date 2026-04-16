@@ -58,22 +58,33 @@ const riskMetricOptions = [
 ];
 
 const updateRiskCurve = () => {
-  if (props.geoData?.sg_uf) {
-     const { inicio, fim } = getApiParams();
-     cnpjDetailStore.fetchMetricPercentiles(
-       riskScope.value, 
-       props.geoData.sg_uf, 
-       props.geoData.id_regiao_saude,
-       riskMetric.value,
-       inicio,
-       fim
-     );
+  if (!props.geoData?.sg_uf) return;
+  const { inicio, fim } = getApiParams();
+
+  // Durante animação, serve do cache sem round-trip HTTP
+  if (filterStore.isAnimating) {
+    const key = `${riskScope.value}|${props.geoData.sg_uf}|${props.geoData.id_regiao_saude ?? ''}|${riskMetric.value}|${inicio}|${fim}`;
+    if (percentilesCache.has(key)) {
+      cnpjDetailStore.setMetricPercentilesDirectly(percentilesCache.get(key), key);
+      return;
+    }
   }
+
+  cnpjDetailStore.fetchMetricPercentiles(
+    riskScope.value,
+    props.geoData.sg_uf,
+    props.geoData.id_regiao_saude,
+    riskMetric.value,
+    inicio,
+    fim
+  );
 };
 
 // ── Cache de animação ────────────────────────────────────────────────────────
 // Mapa local: "YYYY-MM-DD|YYYY-MM-DD" → farmacias[] (pré-carregado pelo endpoint único)
 const periodsCache = new Map();
+// Mapa local: "scope|uf|regioId|metric|YYYY-MM-DD|YYYY-MM-DD" → percentiles[]
+const percentilesCache = new Map();
 
 // Máximos globais calculados sobre todos os trimestres — usados para fixar os
 // eixos do scatter durante a animação e evitar que a escala salte entre passos.
@@ -107,20 +118,38 @@ watch(() => filterStore.animationPreload.status, async (status) => {
 
   try {
     const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
-    const url = API_ENDPOINTS.analyticsRegionalBenchmarkingAnimation(
+    const scatterUrl = API_ENDPOINTS.analyticsRegionalBenchmarkingAnimation(
       regiao,
       props.geoData.sg_uf,
       filterStore.animationPreload.dataInicio,
       filterStore.animationPreload.dataFim,
     );
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const percentilesUrl = API_ENDPOINTS.analyticsMetricPercentilesAnimation(
+      riskScope.value,
+      props.geoData.sg_uf,
+      props.geoData.id_regiao_saude ?? null,
+      riskMetric.value,
+      filterStore.animationPreload.dataInicio,
+      filterStore.animationPreload.dataFim,
+    );
 
-    // Popula o cache: cada trimestre vira uma entrada keyed por "inicio|fim"
+    // Ambos os fetches em paralelo — uma única "rodada" de rede antes de animar
+    const [scatterRes, percRes] = await Promise.all([
+      fetch(scatterUrl),
+      fetch(percentilesUrl),
+    ]);
+    if (!scatterRes.ok) throw new Error(`scatter HTTP ${scatterRes.status}`);
+    if (!percRes.ok)    throw new Error(`percentiles HTTP ${percRes.status}`);
+
+    const [scatterData, percData] = await Promise.all([
+      scatterRes.json(),
+      percRes.json(),
+    ]);
+
+    // Popula cache do scatter: cada período vira entrada keyed por "inicio|fim"
     periodsCache.clear();
     let xMax = 0, scoreMax = 0, pctMax = 0;
-    for (const q of data.quarters ?? []) {
+    for (const q of scatterData.quarters ?? []) {
       periodsCache.set(`${q.inicio}|${q.fim}`, { farmacias: q.farmacias });
       for (const f of q.farmacias ?? []) {
         xMax     = Math.max(xMax,     f.totalMov || 0);
@@ -131,6 +160,13 @@ watch(() => filterStore.animationPreload.status, async (status) => {
     animationXMax.value    = xMax     || null;
     animationYMax.value    = scoreMax || null;
     animationYMaxPct.value = pctMax   || null;
+
+    // Popula cache de percentis: keyed por "scope|uf|regioId|metric|inicio|fim"
+    percentilesCache.clear();
+    for (const q of percData.quarters ?? []) {
+      const key = `${riskScope.value}|${props.geoData.sg_uf}|${props.geoData.id_regiao_saude ?? ''}|${riskMetric.value}|${q.inicio}|${q.fim}`;
+      percentilesCache.set(key, q.percentiles);
+    }
   } catch (e) {
     console.error('[RiskDiagnosis] Erro no preload de animação:', e);
   }
@@ -140,6 +176,7 @@ watch(() => filterStore.animationPreload.status, async (status) => {
 
 const clearAnimationState = () => {
   periodsCache.clear();
+  percentilesCache.clear();
   animationXMax.value    = null;
   animationYMax.value    = null;
   animationYMaxPct.value = null;
@@ -162,7 +199,6 @@ watch(() => props.geoData?.sg_uf, () => {
 
 // Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
-    const { inicio, fim } = getApiParams();
     updateRiskCurve();
     loadRegional();
 }, { deep: true });

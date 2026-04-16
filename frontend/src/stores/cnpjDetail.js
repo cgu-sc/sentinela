@@ -203,6 +203,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    setMetricPercentilesDirectly(data, cacheKey) {
+      this.metricPercentiles = data || [];
+      this.metricPercentilesLoaded = cacheKey;
+    },
+
     async fetchMetricPercentiles(scope, uf = null, regiao_id = null, metric = 'score', inicio = null, fim = null) {
       const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}|${metric}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.metricPercentilesLoaded === key) return;

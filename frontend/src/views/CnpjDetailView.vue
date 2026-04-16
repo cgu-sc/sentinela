@@ -157,6 +157,7 @@ watch(
   () => filterStore.periodo,
   () => {
     if (!cnpj.value) return;
+    if (filterStore.isAnimating) return;
     const { inicio, fim } = getApiParams();
     cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
   },

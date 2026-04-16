@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## REGRA CRÍTICA: Autorização Antes de Qualquer Alteração
+
+**NUNCA edite, crie ou delete arquivos sem antes apresentar o plano ao usuário e receber autorização explícita.**
+
+Antes de qualquer mudança de código:
+1. Explique o que precisa ser feito e por quê.
+2. Descreva quais arquivos serão afetados e o que mudará em cada um.
+3. Aguarde o usuário dizer "ok", "pode fazer", "sim" ou equivalente.
+4. Só então execute as alterações.
+
+Diagnóstico e investigação (leitura de arquivos, buscas, análise) podem ser feitos livremente. A trava é apenas para **escrita**.
+
 ## Project Overview
 
 **Sentinela** is an automated audit system for detecting irregularities in Brazil's Popular Pharmacy Program (PFPB), developed by CGU. It is a hybrid Web/Desktop application (Vue 3 SPA + FastAPI + PyWebView desktop wrapper).

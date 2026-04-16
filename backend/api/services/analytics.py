@@ -1303,8 +1303,9 @@ class AnalyticsService:
             if df_reg.is_empty():
                 return RegionalAnimationResponse(nome_regiao=nome_escopo, quarters=[])
 
-            # ── Deriva índice de trimestre relativo ao início do período ────
-            # quarter_idx = 0 → primeiro trimestre, 1 → segundo, etc.
+            # ── Deriva índice de período relativo ao início do período ────
+            # period_idx = 0 → primeiros 2 meses, 1 → próximos 2 meses, etc.
+            # Janela de 2 meses para coincidir com PLAY_STEP=2 do slider de animação.
             inicio_year  = inicio.year
             inicio_month = inicio.month
             df_q = df_reg.with_columns([
@@ -1314,7 +1315,7 @@ class AnalyticsService:
                     - inicio_month
                 ).alias("_months_since_start")
             ]).with_columns([
-                (pl.col("_months_since_start") // 3).alias("_quarter_idx")
+                (pl.col("_months_since_start") // 2).alias("_quarter_idx")
             ])
 
             # ── Agrega por (trimestre, CNPJ) em uma única operação ──────────
@@ -1372,13 +1373,12 @@ class AnalyticsService:
             for r in cnpj_q.iter_rows(named=True):
                 idx = r["_quarter_idx"]
                 if idx not in quarters_map:
-                    q_start = _add_months(inicio, idx * 3)
-                    q_end_first = _add_months(inicio, idx * 3 + 2)
+                    q_start = _add_months(inicio, idx * 2)
+                    q_end_first = _add_months(inicio, idx * 2 + 1)
                     last_day = calendar.monthrange(q_end_first.year, q_end_first.month)[1]
                     q_end = min(date(q_end_first.year, q_end_first.month, last_day), fim)
-                    q_num = (q_start.month - 1) // 3 + 1
                     quarters_map[idx] = {
-                        "trimestre": f"{q_start.year}-Q{q_num}",
+                        "trimestre": f"{q_start.year}-{q_start.month:02d}",
                         "inicio": q_start,
                         "fim": q_end,
                         "farmacias": [],
@@ -1884,6 +1884,63 @@ class AnalyticsService:
         except Exception as e:
             print(f"⚠️ Erro ao calcular percentis de score: {e}")
             return []
+
+    @staticmethod
+    def get_metric_percentiles_animation(
+        scope: str,
+        uf: str = None,
+        regiao_id: str = None,
+        metric: str = 'score',
+        data_inicio: date = None,
+        data_fim: date = None,
+    ) -> dict:
+        """
+        Retorna os percentis de métrica para cada janela de 2 meses no período.
+
+        Usado pela animação da curva de risco — evita N round-trips HTTP.
+        A janela de 2 meses coincide com PLAY_STEP=2 do slider de animação no frontend.
+
+        Args:
+            scope: Escopo geográfico ('brasil', 'uf', 'regiao').
+            uf: Sigla do estado (obrigatório para scope 'uf' ou 'regiao').
+            regiao_id: ID da região de saúde (obrigatório para scope 'regiao').
+            metric: Métrica ('score' ou 'percentual_sem_comprovacao').
+            data_inicio: Início do período total.
+            data_fim: Fim do período total.
+
+        Returns:
+            Dict com lista de quarters, cada um contendo inicio, fim e percentiles.
+        """
+        MIN_DATA = date(2015, 7, 1)
+        MAX_DATA = date(2024, 12, 31)
+        inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
+        fim    = data_fim if data_fim else MAX_DATA
+
+        def _add_months(d: date, n: int) -> date:
+            m = d.month - 1 + n
+            return date(d.year + m // 12, m % 12 + 1, 1)
+
+        def _end_of_month(d: date) -> date:
+            last_day = calendar.monthrange(d.year, d.month)[1]
+            return date(d.year, d.month, last_day)
+
+        quarters = []
+        cursor = inicio
+        while cursor <= fim:
+            window_start = cursor
+            window_end   = min(_end_of_month(_add_months(cursor, 1)), fim)
+
+            percentiles = AnalyticsService.get_metric_percentiles(
+                scope, uf, regiao_id, metric, window_start, window_end
+            )
+            quarters.append({
+                "inicio":      window_start,
+                "fim":         window_end,
+                "percentiles": percentiles,
+            })
+            cursor = _add_months(cursor, 2)
+
+        return {"quarters": quarters}
 
     @staticmethod
     def get_cnpj_lookup() -> list[dict]:

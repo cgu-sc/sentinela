@@ -7,7 +7,8 @@ from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
-    PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse
+    PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
+    PercentilesAnimationResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -180,6 +181,19 @@ def get_movimentacao(
 def get_cnpj_lookup():
     """Retorna lista slim [{cnpj, razao_social}] para autocomplete no frontend."""
     return AnalyticsService.get_cnpj_lookup()
+
+@router.get("/metric-percentiles-animation", response_model=PercentilesAnimationResponse)
+def get_metric_percentiles_animation(
+    scope: str = Query(..., description="Escopo: 'regiao', 'uf' ou 'brasil'"),
+    uf: Optional[str] = Query(None),
+    regiao_id: Optional[str] = Query(None),
+    metric: str = Query("score", description="Métrica: 'score' ou 'percentual_sem_comprovacao'"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna percentis por janela de 2 meses para animação da curva de risco — uma única chamada."""
+    return AnalyticsService.get_metric_percentiles_animation(scope, uf, regiao_id, metric, data_inicio, data_fim)
+
 
 @router.get("/metric-percentiles")
 def get_metric_percentiles(

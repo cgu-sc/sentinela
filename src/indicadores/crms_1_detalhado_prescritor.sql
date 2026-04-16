@@ -11,6 +11,7 @@
 
 DECLARE @DataInicio     DATE          = '2015-07-01';
 DECLARE @DataFim        DATE          = '2024-12-10';
+DECLARE @ModoTeste       BIT           = 1; -- 0: Base Total (2h) | 1: Base reduzida SC (2 min)
 
 -- Número de Sociedades que o Sócio de um estabelecimento possui dentro do programa Farmácia Popular
 DROP TABLE IF EXISTS #socios_num_sociedades
@@ -21,99 +22,108 @@ GROUP BY cpf_cnpj_Socio
 
 
 -- ============================================================================
+-- PASSO 0 & 0.1: AGREGAÇÃO (TESTE vs PRODUÇÃO)
 -- ============================================================================
--- PASSO 0: AGREGAÇÃO POR MÉDICO/FARMÁCIA (OTIMIZADA PARA GRANDES VOLUMES)
--- ============================================================================
--- Agregamos cada base separadamente e depois unimos o resultado.
-
--- A. Agregação Base Histórica (2015-2020)
-DROP TABLE IF EXISTS #Medicos_Hist;
-SELECT
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #Medicos_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
-WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
-  AND data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY crm, crm_uf, cnpj;
-
--- B. Agregação Base Recente (2021-2024)
-DROP TABLE IF EXISTS #Medicos_Recente;
-SELECT
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #Medicos_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
-  AND data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY crm, crm_uf, cnpj;
-
--- C. União Final dos Médicos
 DROP TABLE IF EXISTS #tb_info_medico_farmacia_popular;
-SELECT
-    CONCAT(cnpj, '|', crm, '|', crm_uf) AS chave,
-    crm AS nu_crm,
-    crm_uf AS sg_uf_crm,
-    cnpj AS nu_cnpj,
-    SUM(nu_prescricoes) AS nu_prescricoes_medico,
-    SUM(vl_pago) AS vl_autorizacoes_medico,
-    MIN(dt_ini) AS dt_prescricao_inicial_medico,
-    MAX(dt_fim) AS dt_prescricao_final_medico
-INTO #tb_info_medico_farmacia_popular
-FROM (
-    SELECT * FROM #Medicos_Hist
-    UNION ALL
-    SELECT * FROM #Medicos_Recente
-) U
-GROUP BY crm, crm_uf, cnpj;
-
--- ============================================================================
--- PASSO 0.1: AGREGAÇÃO POR ESTABELECIMENTO
--- ============================================================================
-DROP TABLE IF EXISTS #Estab_Hist;
-SELECT 
-    cnpj,
-    COUNT(DISTINCT num_autorizacao) AS nu_aut,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #Estab_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY cnpj;
-
-DROP TABLE IF EXISTS #Estab_Recente;
-SELECT 
-    cnpj,
-    COUNT(DISTINCT num_autorizacao) AS nu_aut,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #Estab_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY cnpj;
-
 DROP TABLE IF EXISTS #tb_info_estabelecimento;
-SELECT 
-    cnpj,
-    SUM(nu_aut) AS nu_autorizacoes_estabelecimento,
-    SUM(vl_pago) AS vl_autorizacoes_estabelecimento,
-    MIN(dt_ini) AS dt_venda_inicial_estabelecimento,
-    MAX(dt_fim) AS dt_venda_final_estabelecimento
-INTO #tb_info_estabelecimento
-FROM (
-    SELECT * FROM #Estab_Hist
-    UNION ALL
-    SELECT * FROM #Estab_Recente
-) U
-GROUP BY cnpj;
+
+IF @ModoTeste = 1
+BEGIN
+    PRINT '>> MODO TESTE ATIVADO: Processando apenas SC (tabela reduzida)';
+    
+    -- Agregação de Médicos (Direto da teste_mov_SC)
+    SELECT
+        CONCAT(cnpj, '|', crm, '|', crm_uf) AS chave,
+        crm AS nu_crm,
+        crm_uf AS sg_uf_crm,
+        cnpj AS nu_cnpj,
+        COUNT(DISTINCT num_autorizacao) AS nu_prescricoes_medico,
+        SUM(valor_pago) AS vl_autorizacoes_medico,
+        MIN(data_hora) AS dt_prescricao_inicial_medico,
+        MAX(data_hora) AS dt_prescricao_final_medico
+    INTO #tb_info_medico_farmacia_popular
+    FROM temp_CGUSC.fp.teste_mov_SC
+    GROUP BY crm, crm_uf, cnpj;
+
+    -- Agregação de Estabelecimento (Direto da teste_mov_SC)
+    SELECT 
+        cnpj,
+        COUNT(DISTINCT num_autorizacao) AS nu_autorizacoes_estabelecimento,
+        SUM(valor_pago) AS vl_autorizacoes_estabelecimento,
+        MIN(data_hora) AS dt_venda_inicial_estabelecimento,
+        MAX(data_hora) AS dt_venda_final_estabelecimento
+    INTO #tb_info_estabelecimento
+    FROM temp_CGUSC.fp.teste_mov_SC
+    GROUP BY cnpj;
+END
+ELSE
+BEGIN
+    PRINT '>> MODO PRODUÇÃO: Processando base total (pode demorar)';
+
+    -- A. Agregação Base Histórica (2015-2020)
+    DROP TABLE IF EXISTS #Medicos_Hist;
+    SELECT
+        cnpj, crm, crm_uf,
+        COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
+        SUM(valor_pago) AS vl_pago,
+        MIN(data_hora) AS dt_ini,
+        MAX(data_hora) AS dt_fim
+    INTO #Medicos_Hist
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+      AND data_hora >= @DataInicio AND data_hora <= @DataFim
+    GROUP BY crm, crm_uf, cnpj;
+
+    -- B. Agregação Base Recente (2021-2024)
+    DROP TABLE IF EXISTS #Medicos_Recente;
+    SELECT
+        cnpj, crm, crm_uf,
+        COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
+        SUM(valor_pago) AS vl_pago,
+        MIN(data_hora) AS dt_ini,
+        MAX(data_hora) AS dt_fim
+    INTO #Medicos_Recente
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+    WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
+      AND data_hora >= @DataInicio AND data_hora <= @DataFim
+    GROUP BY crm, crm_uf, cnpj;
+
+    -- C. União Final dos Médicos
+    SELECT
+        CONCAT(cnpj, '|', crm, '|', crm_uf) AS chave,
+        crm AS nu_crm,
+        crm_uf AS sg_uf_crm,
+        cnpj AS nu_cnpj,
+        SUM(nu_prescricoes) AS nu_prescricoes_medico,
+        SUM(vl_pago) AS vl_autorizacoes_medico,
+        MIN(dt_ini) AS dt_prescricao_inicial_medico,
+        MAX(dt_fim) AS dt_prescricao_final_medico
+    INTO #tb_info_medico_farmacia_popular
+    FROM (
+        SELECT * FROM #Medicos_Hist
+        UNION ALL
+        SELECT * FROM #Medicos_Recente
+    ) U
+    GROUP BY crm, crm_uf, cnpj;
+
+    -- D. Estabelecimentos Histórico
+    DROP TABLE IF EXISTS #Estab_Hist;
+    SELECT cnpj, COUNT(DISTINCT num_autorizacao) AS nu_aut, SUM(valor_pago) AS vl_pago, MIN(data_hora) AS dt_ini, MAX(data_hora) AS dt_fim
+    INTO #Estab_Hist FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim GROUP BY cnpj;
+
+    -- E. Estabelecimentos Recente
+    DROP TABLE IF EXISTS #Estab_Recente;
+    SELECT cnpj, COUNT(DISTINCT num_autorizacao) AS nu_aut, SUM(valor_pago) AS vl_pago, MIN(data_hora) AS dt_ini, MAX(data_hora) AS dt_fim
+    INTO #Estab_Recente FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim GROUP BY cnpj;
+
+    -- F. União Final Estabelecimentos
+    SELECT cnpj, SUM(nu_aut) AS nu_autorizacoes_estabelecimento, SUM(vl_pago) AS vl_autorizacoes_estabelecimento, MIN(dt_ini) AS dt_venda_inicial_estabelecimento, MAX(dt_fim) AS dt_venda_final_estabelecimento
+    INTO #tb_info_estabelecimento
+    FROM (SELECT * FROM #Estab_Hist UNION ALL SELECT * FROM #Estab_Recente) U
+    GROUP BY cnpj;
+END
 
 -- ============================================================================
 -- TABELA TEMPORÁRIA COM ALERTAS
@@ -212,23 +222,22 @@ LEFT JOIN temp_CGUSC.sus.tb_ibge C ON C.id_ibge7 = B.codibge
 
 
 -- ============================================================================
--- SOMAR PRESCRIÇÕES DE CADA MÉDICO EM TODOS OS ESTABELECIMENTOS
+-- SOMAR PRESCRIÇÕES DE CADA MÉDICO EM TODOS OS ESTABELECIMENTOS (SEM FILTRO)
 -- ============================================================================
+-- IMPORTANTE: Calculamos a exclusividade sobre a base COMPLETA (#tb_info_medico_farmacia_popular)
+-- para garantir que o flag_crm_exclusivo seja real e não apenas fruto de filtros.
 DROP TABLE IF EXISTS #prescricoes_todos_estabelecimentos
 SELECT 
     nu_crm,
     sg_uf_crm,
     SUM(nu_prescricoes_medico) AS nu_prescricoes_medico_em_todos_estabelecimentos,
-    COUNT(*) AS nu_estabelecimentos_com_registro_mesmo_crm,
-    -- CORRIGIDO: recalcula a taxa usando os totais agregados em vez de somar taxas individuais
-    -- Somar nu_prescricoes_dia (taxa por farmacia) entre farmacias e matematicamente invalido
+    COUNT(DISTINCT nu_cnpj) AS nu_estabelecimentos_com_registro_mesmo_crm,
     CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
         NULLIF(CAST(
             DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
         AS DECIMAL(18,2)), 0) AS nu_prescricoes_dia_em_todos_estabelecimentos
 INTO #prescricoes_todos_estabelecimentos
-FROM #lista_medicos_farmacia_popularFP_temp2
-WHERE nu_prescricoes_medico >= 5  -- ignora aparições espúrias (ex: plantões isolados, erros de CRM)
+FROM #tb_info_medico_farmacia_popular
 GROUP BY nu_crm, sg_uf_crm
 
 

@@ -28,6 +28,15 @@ export const API_ENDPOINTS = {
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsCnpjLookup: `${BASE_URL}/api/v1/analytics/cnpj-lookup`,
   analyticsMetricPercentiles: `${BASE_URL}/api/v1/analytics/metric-percentiles`,
+  analyticsMetricPercentilesAnimation: (scope, uf, regioId, metric, inicio, fim) => {
+    const params = new URLSearchParams({ scope });
+    if (uf)      params.set('uf', uf);
+    if (regioId) params.set('regiao_id', regioId);
+    if (metric)  params.set('metric', metric);
+    if (inicio)  params.set('data_inicio', inicio);
+    if (fim)     params.set('data_fim', fim);
+    return `${BASE_URL}/api/v1/analytics/metric-percentiles-animation?${params.toString()}`;
+  },
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
    analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
   analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,

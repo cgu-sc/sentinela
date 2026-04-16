@@ -145,6 +145,21 @@ class RegionalAnimationResponse(BaseModel):
     nome_regiao: str
     quarters: List[RegionalAnimationQuarterSchema]
 
+
+class PercentilesPointSchema(BaseModel):
+    percentile: int
+    score: float
+
+class PercentilesQuarterSchema(BaseModel):
+    """Dados de percentis de uma janela de 2 meses para animação da curva de risco."""
+    inicio: date
+    fim: date
+    percentiles: List[PercentilesPointSchema]
+
+class PercentilesAnimationResponse(BaseModel):
+    """Payload completo de percentis por período — todos os períodos em uma única chamada."""
+    quarters: List[PercentilesQuarterSchema]
+
 class EvolucaoSemestreSchema(BaseModel):
     semestre: str
     total: float

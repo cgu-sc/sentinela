@@ -722,8 +722,8 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
   opacity: 0.45;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 0.2rem 0.5rem 0.5rem;
-  margin-bottom: 0.15rem;
+  padding: 0.2rem 0.5rem 0.3rem;
+  margin-bottom: 0rem;
   border-bottom: 1px solid var(--sidebar-border);
 }
 

@@ -144,7 +144,10 @@ onBeforeUnmount(() => {
      <!-- Logo fixada no topo, independente do conteúdo -->
      <div class="boot-brand-anchor">
         <img src="/img/logo_sentinela_transparente.png" alt="Sentinela" class="boot-logo" />
-        <span class="boot-brand-text">SENTINELA</span>
+        <div class="boot-brand-caption">
+           <span class="boot-brand-text">SENTINELA</span>
+           <span class="boot-brand-sub">Auditoria no Farmácia Popular</span>
+        </div>
      </div>
 
      <!-- Conteúdo central dinâmico (spinner ou erro) -->

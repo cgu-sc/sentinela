@@ -154,7 +154,11 @@ watch(() => filterStore.animationPreload.status, async (status) => {
       for (const f of q.farmacias ?? []) {
         xMax     = Math.max(xMax,     f.totalMov || 0);
         scoreMax = Math.max(scoreMax, f.score_risco ?? f.score_risco_final ?? 0);
-        pctMax   = Math.max(pctMax,   f.percValSemComp ?? 0);
+        
+        // Capamos o cálculo do máximo global em 100% para evitar que anomalias 
+        // de auditoria (val > total) joguem o eixo do scatter para 400%+.
+        const valPct = f.percValSemComp ?? 0;
+        pctMax = Math.max(pctMax, valPct > 100 ? 100 : valPct);
       }
     }
     animationXMax.value    = xMax     || null;

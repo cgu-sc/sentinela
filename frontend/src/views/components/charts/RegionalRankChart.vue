@@ -60,8 +60,11 @@ const chartData = computed(() => {
 
   const getY = (f) => {
     const score = f.score_risco ?? f.score_risco_final ?? 0;
-    const pct = f.percValSemComp ?? 0;
-    return yMetric.value === 'pct' ? pct : score;
+    const pct   = f.percValSemComp ?? 0;
+    
+    // Se for %, capamos em 100 para manter a consistência visual do gráfico
+    // e evitar que pontos com anomalia joguem o eixo para valores surreais.
+    return yMetric.value === 'pct' ? Math.min(pct, 100) : score;
   };
 
   const others = [];
@@ -153,7 +156,10 @@ const chartOption = computed(() => {
       nameGap: 45,
       nameTextStyle: { color: c.textColor, fontSize: 10, fontWeight: 600 },
       type: 'value',
-      ...(props.yAxisMax != null ? { max: props.yAxisMax } : {}),
+      // Durante animação usamos o yAxisMax fixo (que já vem capado em 100 no Pai).
+      // Fora da animação, se for %, forçamos o teto em 100% para evitar que anomalias
+      // estiquem o eixo para 400%+.
+      max: props.yAxisMax ?? (yMetric.value === 'pct' ? 100 : undefined),
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.5 } },
       axisLabel: {
         color: c.textColor,

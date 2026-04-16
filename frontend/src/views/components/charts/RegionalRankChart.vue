@@ -39,14 +39,6 @@ const yMetric = computed(() =>
   props.activeMetric === 'percentual_sem_comprovacao' ? 'pct' : 'score'
 );
 
-import { watch } from 'vue';
-watch(yMetric, (nv) => {
-  console.log(`[RegionalRankChart] Métrica Y alterada para: ${nv}`);
-}, { immediate: true });
-
-watch(() => props.farmacias, (nv) => {
-  console.log(`[RegionalRankChart] Dados das farmácias atualizados. Total: ${nv?.length || 0}`);
-});
 
 onMounted(() => {
   // O atraso de 400ms ajuda a evitar que o ECharts inicialize enquanto a aba 

@@ -45,7 +45,6 @@ export const useIndicadoresStore = defineStore('indicadores', {
         this.cnpjs = response.data.cnpjs ?? [];
       } catch (err) {
         if (axios.isCancel(err)) {
-          console.log('Requisição de indicadores cancelada.');
           return;
         }
         console.error('Erro ao buscar análise de indicadores:', err);

@@ -163,7 +163,6 @@ watch(() => props.geoData?.sg_uf, () => {
 // Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
     const { inicio, fim } = getApiParams();
-    console.log(`[RiskDiagnosis] Filtro alterado: ${inicio} a ${fim}`);
     updateRiskCurve();
     loadRegional();
 }, { deep: true });

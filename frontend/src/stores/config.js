@@ -29,7 +29,6 @@ export const useConfigStore = defineStore('config', () => {
       try {
         isLoading.value = true;
         await axios.post(API_ENDPOINTS.analyticsConfigThresholds, newThresholds);
-        console.log('✅ Configurações persistidas no Backend (Autosave).');
       } catch (err) {
         console.error('⚠️ Falha ao salvar configurações no servidor:', err);
       } finally {
@@ -85,7 +84,6 @@ export const useConfigStore = defineStore('config', () => {
   function resetToDefaults() {
     thresholds.value = { ...DEFAULT_THRESHOLDS };
     localStorage.removeItem(STORAGE_KEY);
-    console.log('🗑️ Configurações resetadas para o padrão de fábrica.');
   }
 
   return {

@@ -4,11 +4,19 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
-  analyticsRegionalBenchmarking:    (regiao, uf) => {
+  analyticsRegionalBenchmarking: (regiao, uf) => {
     const params = new URLSearchParams();
     if (regiao) params.set('regiao_saude', regiao);
     if (uf)     params.set('uf', uf);
     return `${BASE_URL}/api/v1/analytics/regional-benchmarking?${params.toString()}`;
+  },
+  analyticsRegionalBenchmarkingAnimation: (regiao, uf, inicio, fim) => {
+    const params = new URLSearchParams();
+    if (regiao) params.set('regiao_saude', regiao);
+    if (uf)     params.set('uf', uf);
+    if (inicio) params.set('data_inicio', inicio);
+    if (fim)    params.set('data_fim', fim);
+    return `${BASE_URL}/api/v1/analytics/regional-benchmarking-animation?${params.toString()}`;
   },
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
   geoEstabelecimentos:  `${BASE_URL}/api/v1/geo/estabelecimentos`,

@@ -163,15 +163,6 @@ watch(
   { deep: true },
 );
 
-// Watch auxilar para quando o cnpjData (e a UF) chegar via fetchCnpjAvulso
-watch(
-  () => cnpjData.value?.uf,
-  (val) => {
-    if (val) {
-      cnpjDetailStore.fetchScorePercentiles('uf', val);
-    }
-  }
-);
 
 const recentCnpjStore = useRecentCnpjStore();
 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   FILTER_DEFAULTS,
@@ -11,6 +11,7 @@ import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
 import { useFormatting } from '@/composables/useFormatting';
 import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
+import { useFilterParameters } from '@/composables/useFilterParameters';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
@@ -273,6 +274,8 @@ const {
   endMonthLabel,
 } = useSliderPeriodLogic();
 
+const { getApiParams } = useFilterParameters();
+
 // Move a ponta inicial do slider em `delta` meses (+1 ou -1)
 const stepStart = (delta) => {
   const [s, e] = timeSliderValue.value;
@@ -292,6 +295,104 @@ const stepEnd = (delta) => {
 };
 
 onMounted(() => applySliderPeriod(timeSliderValue.value));
+
+// ── Play automático do Período de Análise ────────────────────────────────────
+const PLAY_INTERVAL_MS = 350;
+const PLAY_STEP = 3; // trimestral: avança 3 meses por tick
+
+const isPlaying = ref(false);
+let playIntervalId = null;
+
+// Range salvo ao iniciar o play, para restaurar ao final ou no reset
+const savedRange = ref(null);
+
+const stopPlay = () => {
+  isPlaying.value = false;
+  filterStore.isAnimating = false;
+  if (playIntervalId !== null) {
+    clearInterval(playIntervalId);
+    playIntervalId = null;
+  }
+};
+
+const playStep = () => {
+  const [s] = timeSliderValue.value;
+  const maxE = savedRange.value[1];
+  const nextS = s + PLAY_STEP;
+  if (nextS > maxE) {
+    // Chegou ao fim: para e restaura o range original
+    stopPlay();
+    timeSliderValue.value = [...savedRange.value];
+    applySliderPeriod(savedRange.value);
+    savedRange.value = null;
+    return;
+  }
+  const nextE = Math.min(nextS + PLAY_STEP - 1, maxE);
+  timeSliderValue.value = [nextS, nextE];
+  applySliderPeriod([nextS, nextE]);
+};
+
+const isPreloading = computed(() => filterStore.animationPreload.status === 'loading');
+
+const startAnimation = () => {
+  if (!savedRange.value) return;
+  const startIdx = savedRange.value[0];
+  const endIdx = Math.min(startIdx + PLAY_STEP - 1, savedRange.value[1]);
+  timeSliderValue.value = [startIdx, endIdx];
+  applySliderPeriod([startIdx, endIdx]);
+  isPlaying.value = true;
+  filterStore.isAnimating = true;
+  playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
+};
+
+const togglePlay = () => {
+  if (isPlaying.value) {
+    stopPlay();
+    return;
+  }
+
+  // Pausa → retoma de onde parou (preload já está pronto)
+  if (savedRange.value && filterStore.animationPreload.status === 'ready') {
+    isPlaying.value = true;
+    filterStore.isAnimating = true;
+    playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
+    return;
+  }
+
+  // Início limpo: salva range e dispara preload (RiskDiagnosisTab observa e busca os dados)
+  savedRange.value = [...timeSliderValue.value];
+  const { inicio, fim } = getApiParams();
+  filterStore.animationPreload.status = 'loading';
+  filterStore.animationPreload.dataInicio = inicio;
+  filterStore.animationPreload.dataFim = fim;
+};
+
+// Auto-inicia a animação quando o RiskDiagnosisTab sinalizar que o preload concluiu
+watch(() => filterStore.animationPreload.status, (status) => {
+  if (status === 'ready') startAnimation();
+});
+
+const resetPlayback = () => {
+  stopPlay();
+  if (savedRange.value) {
+    timeSliderValue.value = [...savedRange.value];
+    applySliderPeriod(savedRange.value);
+    savedRange.value = null;
+  }
+  filterStore.animationPreload.status = 'idle';
+  filterStore.animationPreload.dataInicio = null;
+  filterStore.animationPreload.dataFim = null;
+};
+
+// Para o play e reseta preload ao navegar para outra rota
+watch(() => route.path, () => {
+  stopPlay();
+  savedRange.value = null;
+  filterStore.animationPreload.status = 'idle';
+});
+
+// Limpa o intervalo ao desmontar o componente
+onBeforeUnmount(stopPlay);
 </script>
 
 <template>
@@ -523,7 +624,29 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
             </div>
           </div>
           <div class="slider-wrapper">
-            <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" :disabled="isIndicadoresRoute" @slideend="() => applySliderPeriod(timeSliderValue)" />
+            <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" :disabled="isIndicadoresRoute" @slideend="() => { stopPlay(); savedRange.value = null; applySliderPeriod(timeSliderValue); }" />
+          </div>
+
+          <!-- Controles de Playback -->
+          <div class="playback-controls" :class="{ disabled: isIndicadoresRoute }">
+            <button
+              class="play-btn"
+              :class="{ playing: isPlaying, loading: isPreloading }"
+              :disabled="isIndicadoresRoute || isPreloading"
+              :title="isPreloading ? 'Carregando dados...' : isPlaying ? 'Pausar animação' : 'Animar trimestre a trimestre'"
+              @click="togglePlay"
+            >
+              <i :class="isPreloading ? 'pi pi-spin pi-spinner' : isPlaying ? 'pi pi-pause' : 'pi pi-play'" />
+              <span>{{ isPreloading ? 'Carregando...' : isPlaying ? 'Pausar' : 'Animar' }}</span>
+            </button>
+            <button
+              class="period-step-btn reset-btn"
+              :disabled="isIndicadoresRoute"
+              title="Voltar ao início"
+              @click="resetPlayback"
+            >
+              <i class="pi pi-step-backward" />
+            </button>
           </div>
         </div>
       </div>
@@ -1245,5 +1368,69 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
   font-size: 0.65rem;
   color: var(--primary-color);
   opacity: 0.75;
+}
+
+/* CONTROLES DE PLAYBACK */
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.playback-controls.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.play-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 26px;
+  padding: 0 0.75rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+  letter-spacing: 0.03em;
+}
+
+.play-btn i {
+  font-size: 0.6rem;
+}
+
+.play-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 16%, transparent);
+  border-color: var(--primary-color);
+}
+
+.play-btn.loading {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.play-btn.playing {
+  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
+  animation: play-pulse 1.6s ease-in-out infinite;
+}
+
+.reset-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+@keyframes play-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent); }
+  50%       { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color) 10%, transparent); }
 }
 </style>

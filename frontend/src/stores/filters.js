@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { ref, reactive, watch } from 'vue';
 import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
 import { useGeoStore } from './geo';
 
@@ -55,6 +55,16 @@ export const useFilterStore = defineStore('filters', () => {
   });
   const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
   const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
+  // Estado de animação do slider de período (play automático na sidebar)
+  const isAnimating = ref(false);
+
+  // Coordena o pré-carregamento de dados antes da animação iniciar.
+  // status: 'idle' → 'loading' (AppSidebar dispara) → 'ready' (RiskDiagnosisTab conclui)
+  const animationPreload = reactive({
+    status: 'idle',   // 'idle' | 'loading' | 'ready'
+    dataInicio: null, // string YYYY-MM-DD do início do range
+    dataFim: null,    // string YYYY-MM-DD do fim do range
+  });
   watch(sidebarCollapsed, (val) => {
     localStorage.setItem('sentinela_sidebar_collapsed', String(val));
   });
@@ -215,6 +225,8 @@ export const useFilterStore = defineStore('filters', () => {
     regionMapData,
     sidebarCollapsed,
     sidebarLocked,
+    isAnimating,
+    animationPreload,
     resetFilters
   };
 });

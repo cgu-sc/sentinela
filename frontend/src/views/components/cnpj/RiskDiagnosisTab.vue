@@ -1,9 +1,10 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRegional } from '@/composables/useRegional';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
+import { API_ENDPOINTS } from '@/config/api';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
 import Dropdown from 'primevue/dropdown';
@@ -70,12 +71,65 @@ const updateRiskCurve = () => {
   }
 };
 
+// ── Cache de animação ────────────────────────────────────────────────────────
+// Mapa local: "YYYY-MM-DD|YYYY-MM-DD" → farmacias[] (pré-carregado pelo endpoint único)
+const periodsCache = new Map();
+
 const loadRegional = () => {
     if (!props.geoData?.sg_uf) return;
     const { inicio, fim } = getApiParams();
+
+    // Durante animação, serve direto do cache sem round-trip HTTP
+    const cacheKey = `${inicio}|${fim}`;
+    if (periodsCache.has(cacheKey)) {
+      regionalData.value = periodsCache.get(cacheKey);
+      return;
+    }
+
     const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
     fetchRegional(regiao, props.geoData.sg_uf, inicio, fim);
 };
+
+// Observa o gatilho de preload disparado pelo AppSidebar.
+// Faz UM único fetch que retorna todos os trimestres, popula o cache e sinaliza 'ready'.
+watch(() => filterStore.animationPreload.status, async (status) => {
+  if (status !== 'loading') return;
+  if (!props.geoData?.sg_uf) {
+    filterStore.animationPreload.status = 'ready';
+    return;
+  }
+
+  try {
+    const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
+    const url = API_ENDPOINTS.analyticsRegionalBenchmarkingAnimation(
+      regiao,
+      props.geoData.sg_uf,
+      filterStore.animationPreload.dataInicio,
+      filterStore.animationPreload.dataFim,
+    );
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Popula o cache: cada trimestre vira uma entrada keyed por "inicio|fim"
+    periodsCache.clear();
+    for (const q of data.quarters ?? []) {
+      periodsCache.set(`${q.inicio}|${q.fim}`, { farmacias: q.farmacias });
+    }
+  } catch (e) {
+    console.error('[RiskDiagnosis] Erro no preload de animação:', e);
+  }
+
+  filterStore.animationPreload.status = 'ready';
+});
+
+// Limpa cache e reseta preload se o componente for desmontado durante animação
+onUnmounted(() => {
+  periodsCache.clear();
+  if (filterStore.animationPreload.status !== 'idle') {
+    filterStore.animationPreload.status = 'idle';
+  }
+});
 
 watch(riskScope, updateRiskCurve, { immediate: true });
 watch(riskMetric, updateRiskCurve);
@@ -84,7 +138,7 @@ watch(() => props.geoData?.sg_uf, () => {
     loadRegional();
 }, { immediate: true });
 
-// NOVO: Escuta mudanças no filtro global de período
+// Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
     const { inicio, fim } = getApiParams();
     console.log(`[RiskDiagnosis] Filtro alterado: ${inicio} a ${fim}`);
@@ -92,8 +146,11 @@ watch(() => filterStore.periodo, () => {
     loadRegional();
 }, { deep: true });
 
+
 watch(regionalScope, () => {
-    console.log('[RiskDiagnosis] Escopo regional alterado');
+    // Escopo mudou — cache de animação é inválido (regiao vs uf)
+    periodsCache.clear();
+    filterStore.animationPreload.status = 'idle';
     loadRegional();
 });
 
@@ -181,7 +238,7 @@ watch(
           </div>
           <div class="card-body relative-body">
              <div class="chart-wrapper">
-                <RegionalRankChart 
+                <RegionalRankChart
                    v-if="regionalData?.farmacias?.length"
                    :farmacias="regionalData.farmacias"
                    :cnpj-atual="cnpj"

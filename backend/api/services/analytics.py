@@ -1,5 +1,6 @@
 from typing import List
 from datetime import date
+import calendar
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -33,6 +34,8 @@ from ..schemas.analytics import (
     RegionalMunicipioSchema,
     RegionalFarmaciaSchema,
     RegionalResponse,
+    RegionalAnimationQuarterSchema,
+    RegionalAnimationResponse,
     PrescritoresResponse,
     DadosFarmaciaSchema,
     MovimentacaoRowSchema,
@@ -1261,6 +1264,160 @@ class AnalyticsService:
             print(f"❌ ERRO AO CALCULAR DADOS REGIONAIS: {e}")
             print(traceback.format_exc())
             return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+
+    @staticmethod
+    def get_regional_benchmarking_animation(
+        regiao_saude: str = None,
+        uf: str = None,
+        data_inicio: date = None,
+        data_fim: date = None,
+    ) -> RegionalAnimationResponse:
+        """
+        Retorna todos os trimestres do período em uma única chamada para animação fluida.
+
+        Em vez de N requests separados, o Polars deriva a coluna de trimestre e agrupa
+        tudo em uma única passagem sobre o DataFrame em memória.
+        """
+        try:
+            df_mov   = get_df()
+            df_risco = get_df_matriz_risco()
+            df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
+
+            MIN_DATA = date(2015, 7, 1)
+            MAX_DATA = date(2024, 12, 31)
+            inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
+            fim    = data_fim if data_fim else MAX_DATA
+
+            # ── Filtro geográfico + temporal ────────────────────────────────
+            mask = pl.col("periodo").is_between(inicio, fim)
+            if regiao_saude:
+                mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+                if uf and uf != "Todos":
+                    mask = mask & (pl.col("uf") == uf)
+            else:
+                mask = mask & (pl.col("uf") == uf)
+
+            df_reg = df_mov.filter(mask)
+            nome_escopo = regiao_saude or uf or ""
+
+            if df_reg.is_empty():
+                return RegionalAnimationResponse(nome_regiao=nome_escopo, quarters=[])
+
+            # ── Deriva índice de trimestre relativo ao início do período ────
+            # quarter_idx = 0 → primeiro trimestre, 1 → segundo, etc.
+            inicio_year  = inicio.year
+            inicio_month = inicio.month
+            df_q = df_reg.with_columns([
+                (
+                    (pl.col("periodo").dt.year() - inicio_year) * 12
+                    + pl.col("periodo").dt.month()
+                    - inicio_month
+                ).alias("_months_since_start")
+            ]).with_columns([
+                (pl.col("_months_since_start") // 3).alias("_quarter_idx")
+            ])
+
+            # ── Agrega por (trimestre, CNPJ) em uma única operação ──────────
+            cnpj_q = (
+                df_q
+                .group_by(["_quarter_idx", "cnpj"])
+                .agg([
+                    pl.col("no_municipio").first().alias("municipio"),
+                    pl.col("uf").first().alias("uf"),
+                    pl.col("razao_social").first().alias("razao_social"),
+                    pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
+                    pl.sum("total_vendas").alias("totalMov"),
+                    pl.sum("total_sem_comprovacao").alias("valSemComp"),
+                ])
+                .with_columns([
+                    (
+                        pl.col("valSemComp")
+                        / pl.when(pl.col("totalMov") > 0)
+                          .then(pl.col("totalMov"))
+                          .otherwise(pl.lit(1.0))
+                        * 100
+                    ).round(2).alias("percValSemComp")
+                ])
+            )
+
+            # ── Enriquece com score de risco consolidado ────────────────────
+            risco_cols = ["cnpj"]
+            for col in ["score_risco_final", "classificacao_risco"]:
+                if col in df_risco.columns:
+                    risco_cols.append(col)
+            df_risco_slim = df_risco.select(risco_cols)
+            cnpj_q = cnpj_q.join(df_risco_slim, on="cnpj", how="left")
+
+            if "score_risco_final" not in cnpj_q.columns:
+                cnpj_q = cnpj_q.with_columns(pl.lit(None).cast(pl.Float64).alias("score_risco_final"))
+            if "classificacao_risco" not in cnpj_q.columns:
+                cnpj_q = cnpj_q.with_columns(pl.lit(None).cast(pl.Utf8).alias("classificacao_risco"))
+
+            # Ordena por trimestre (asc) e risco (desc) para ranking correto
+            cnpj_q = cnpj_q.sort(
+                ["_quarter_idx", "score_risco_final"],
+                descending=[False, True],
+                nulls_last=True,
+            )
+
+            # ── Monta dicionário de trimestres ──────────────────────────────
+            def _add_months(d: date, n: int) -> date:
+                """Avança n meses a partir de d, retornando o dia 1 do novo mês."""
+                m = d.month - 1 + n
+                return date(d.year + m // 12, m % 12 + 1, 1)
+
+            quarters_map: dict = {}
+            rank_counter: dict = {}
+
+            for r in cnpj_q.iter_rows(named=True):
+                idx = r["_quarter_idx"]
+                if idx not in quarters_map:
+                    q_start = _add_months(inicio, idx * 3)
+                    q_end_first = _add_months(inicio, idx * 3 + 2)
+                    last_day = calendar.monthrange(q_end_first.year, q_end_first.month)[1]
+                    q_end = min(date(q_end_first.year, q_end_first.month, last_day), fim)
+                    q_num = (q_start.month - 1) // 3 + 1
+                    quarters_map[idx] = {
+                        "trimestre": f"{q_start.year}-Q{q_num}",
+                        "inicio": q_start,
+                        "fim": q_end,
+                        "farmacias": [],
+                    }
+                    rank_counter[idx] = 1
+
+                quarters_map[idx]["farmacias"].append(RegionalFarmaciaSchema(
+                    cnpj=r["cnpj"],
+                    razao_social=str(r.get("razao_social") or "").title(),
+                    municipio=str(r.get("municipio") or "").title(),
+                    uf=r.get("uf"),
+                    score_risco=float(r["score_risco_final"]) if r.get("score_risco_final") is not None else None,
+                    classificacao_risco=r.get("classificacao_risco"),
+                    valSemComp=float(r.get("valSemComp") or 0.0),
+                    totalMov=float(r.get("totalMov") or 0.0),
+                    percValSemComp=float(r.get("percValSemComp") or 0.0),
+                    is_conexao_ativa=bool(r.get("is_conexao_ativa")),
+                    data_ultima_venda=None,
+                    rank=rank_counter[idx],
+                ))
+                rank_counter[idx] += 1
+
+            quarters = [
+                RegionalAnimationQuarterSchema(
+                    trimestre=v["trimestre"],
+                    inicio=v["inicio"],
+                    fim=v["fim"],
+                    farmacias=v["farmacias"],
+                )
+                for v in sorted(quarters_map.values(), key=lambda x: x["inicio"])
+            ]
+
+            return RegionalAnimationResponse(nome_regiao=nome_escopo, quarters=quarters)
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR ANIMAÇÃO REGIONAL: {e}")
+            print(traceback.format_exc())
+            return RegionalAnimationResponse(nome_regiao=regiao_saude or "", quarters=[])
 
     @staticmethod
     def get_prescritores_data(cnpj: str) -> PrescritoresResponse:

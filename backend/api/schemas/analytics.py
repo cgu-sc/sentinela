@@ -131,6 +131,20 @@ class RegionalResponse(BaseModel):
     municipios: List[RegionalMunicipioSchema]
     farmacias: List[RegionalFarmaciaSchema]
 
+
+class RegionalAnimationQuarterSchema(BaseModel):
+    """Dados de um trimestre para animação do scatter de posicionamento regional."""
+    trimestre: str          # ex: "2015-Q3"
+    inicio: date
+    fim: date
+    farmacias: List[RegionalFarmaciaSchema]
+
+
+class RegionalAnimationResponse(BaseModel):
+    """Payload completo para animação trimestral — todos os trimestres em uma única chamada."""
+    nome_regiao: str
+    quarters: List[RegionalAnimationQuarterSchema]
+
 class EvolucaoSemestreSchema(BaseModel):
     semestre: str
     total: float

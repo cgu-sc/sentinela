@@ -6,8 +6,8 @@ from database import get_db, engine
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
-    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, PrescritoresResponse,
-    DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse
+    FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
+    PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -114,6 +114,21 @@ def get_regional_benchmarking(
     - Sem regiao_saude: filtra por UF inteiro (escopo estadual).
     """
     return AnalyticsService.get_regional_benchmarking(regiao_saude, uf, data_inicio, data_fim)
+
+
+@router.get("/regional-benchmarking-animation", response_model=RegionalAnimationResponse)
+def get_regional_benchmarking_animation(
+    regiao_saude: Optional[str] = Query(None, description="Nome da Região de Saúde. Omitir para escopo estadual."),
+    uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """
+    Retorna todos os trimestres do período em uma única chamada.
+    Usado pela animação do scatter de posicionamento regional — evita N round-trips.
+    """
+    return AnalyticsService.get_regional_benchmarking_animation(regiao_saude, uf, data_inicio, data_fim)
+
 
 @router.get("/cnpj/{cnpj}/prescritores", response_model=PrescritoresResponse)
 def get_prescritores(cnpj: str):

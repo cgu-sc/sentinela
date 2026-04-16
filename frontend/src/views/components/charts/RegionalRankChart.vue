@@ -55,19 +55,14 @@ onMounted(() => {
 // Removemos os logs de amostragem para manter o console limpo, 
 // mantendo apenas os de sincronização se necessário.
 const chartData = computed(() => {
-  if (!props.farmacias?.length) return { others: [], current: [] };
+  if (!props.farmacias?.length) return { others: [], current: [], xMax: 1 };
 
   const allSales = props.farmacias.map(f => f.totalMov || 0);
-  const maxSales = Math.max(...allSales, 1000001);
-
-  const mapX = (val) => {
-    if (val <= 1000000) return (val / 1000000) * 70;
-    const ratio = (val - 1000000) / (maxSales - 1000000);
-    return 70 + (ratio * 30);
-  };
+  // Escala dinâmica: usa o max real do período atual para distribuir os pontos
+  // de ponta a ponta no eixo X, independente do intervalo de tempo selecionado.
+  const xMax = Math.max(...allSales, 1);
 
   const getY = (f) => {
-    // Tentamos score_risco ou score_risco_final (depende da API regional)
     const score = f.score_risco ?? f.score_risco_final ?? 0;
     const pct = f.percValSemComp ?? 0;
     return yMetric.value === 'pct' ? pct : score;
@@ -77,27 +72,38 @@ const chartData = computed(() => {
   const current = [];
 
   props.farmacias.forEach(f => {
-    const valRealX = f.totalMov || 0;
+    const valX = f.totalMov || 0;
     const valY = getY(f);
-    
     const point = {
+      id: f.cnpj, // chave de identidade para o ECharts animar a transição entre períodos
       name: f.razao_social,
       cnpj: f.cnpj,
-      value: [mapX(valRealX), valY, valRealX, f.percValSemComp || 0, f.score_risco ?? f.score_risco_final ?? 0]
+      value: [valX, valY, f.percValSemComp || 0, f.score_risco ?? f.score_risco_final ?? 0]
     };
     if (f.cnpj === props.cnpjAtual) current.push(point);
     else others.push(point);
   });
 
-  return { others, current };
+  return { others, current, xMax };
 });
 
 const chartOption = computed(() => {
   const c = chartTheme.value;
-  const { others, current } = chartData.value;
+  const { others, current, xMax } = chartData.value;
+
+  const formatXLabel = (val) => {
+    if (val === 0) return '0';
+    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(val % 1_000_000 === 0 ? 0 : 1)}M`;
+    if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
+    return String(val);
+  };
 
   return {
     backgroundColor: 'transparent',
+    // Animação de atualização: os dots deslizam suavemente para as novas posições
+    // quando os dados do período mudam (animação trimestral do play).
+    animationDurationUpdate: 650,
+    animationEasingUpdate: 'cubicInOut',
     grid: { top: 20, right: 30, bottom: 50, left: 70 },
     tooltip: {
       trigger: 'item',
@@ -110,13 +116,13 @@ const chartOption = computed(() => {
         const d = params.data;
         const isPct = yMetric.value === 'pct';
         const yLabel = isPct ? '% Não-Comprovação' : 'Score de Risco';
-        const yVal   = isPct ? `${d.value[3].toFixed(1)}%` : d.value[4].toFixed(2);
+        const yVal   = isPct ? `${d.value[2].toFixed(1)}%` : d.value[3].toFixed(2);
         return `
           <div style="padding: 2px; color: ${c.tooltipText}">
             <div style="font-weight: 600; margin-bottom: 5px;">${d.name}</div>
             <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 11px;">
               <span style="opacity: 0.7;">Vendas:</span>
-              <span>${formatCurrencyFull(d.value[2])}</span>
+              <span>${formatCurrencyFull(d.value[0])}</span>
             </div>
             <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 11px; margin-top: 2px;">
               <span style="opacity: 0.7;">${yLabel}:</span>
@@ -133,24 +139,15 @@ const chartOption = computed(() => {
       nameTextStyle: { color: c.textColor, fontSize: 10, fontWeight: 600 },
       type: 'value',
       min: 0,
-      max: 100, // Nossa escala mapeada vai de 0 a 100
-      splitLine: { 
+      max: xMax,
+      splitLine: {
         lineStyle: { color: c.grid, type: 'dashed', opacity: 0.5 },
         show: true
       },
-      // Definimos ticks manuais para mostrar a quebra de escala
-      interval: 10, 
-      axisLabel: { 
-        color: c.textColor, 
+      axisLabel: {
+        color: c.textColor,
         fontSize: 10,
-        formatter: (val) => {
-           if (val === 0) return '0';
-           if (val === 35) return '500k';
-           if (val === 70) return '1M';
-           if (val === 85) return 'Média+';
-           if (val === 100) return 'Max';
-           return ''; // Escondemos os intermediários para não poluir
-        }
+        formatter: formatXLabel
       }
     },
     yAxis: {

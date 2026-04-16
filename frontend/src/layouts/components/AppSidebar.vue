@@ -360,7 +360,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 // tweens se sobreponham e o movimento seja contínuo (sem pausa entre passos).
 const PLAY_DURATION_MS = 350; // duração da transição ECharts (publicada na store)
 const PLAY_INTERVAL_MS = 300; // intervalo entre steps (< PLAY_DURATION_MS = overlap)
-const PLAY_STEP = 3; // trimestral: avança 3 meses por tick
+const PLAY_STEP = 2; // trimestral: avança 3 meses por tick
 
 const isPlaying = ref(false);
 let playIntervalId = null;

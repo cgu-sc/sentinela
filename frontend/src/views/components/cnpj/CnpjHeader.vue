@@ -56,6 +56,8 @@ const copyCnpj = () => {
   }
 };
 
+const filterStore = useFilterStore();
+
 // ── Cache de Valores para Transição Suave ──────────────────
 // Mantém os valores anteriores visíveis durante o loading do novo período,
 // evitando o "piscando" ou volta brusca para os valores globais.
@@ -65,6 +67,8 @@ const cachedPercValSemComp = ref(props.cnpjData?.percValSemComp ?? 0);
 
 import { watch } from "vue";
 watch([() => props.periodSummary, () => props.periodLoading], ([summary, loading]) => {
+  // Durante a animação os KPIs do header ficam congelados no valor pré-play
+  if (filterStore.isAnimating) return;
   if (!loading) {
     if (summary) {
       cachedValSemComp.value     = summary.valSemComp;
@@ -157,7 +161,6 @@ const formattedFullAddress = computed(() => {
   return parts.filter(Boolean).join(" · ");
 });
 
-const filterStore = useFilterStore();
 const router = useRouter();
 
 const filterNetwork = () => {

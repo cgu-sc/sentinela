@@ -65,10 +65,17 @@ const cachedPercValSemComp = ref(props.cnpjData?.percValSemComp ?? 0);
 
 import { watch } from "vue";
 watch([() => props.periodSummary, () => props.periodLoading], ([summary, loading]) => {
-  if (summary && !loading) {
-    cachedValSemComp.value     = summary.valSemComp;
-    cachedTotalMov.value       = summary.totalMov;
-    cachedPercValSemComp.value = summary.percValSemComp;
+  if (!loading) {
+    if (summary) {
+      cachedValSemComp.value     = summary.valSemComp;
+      cachedTotalMov.value       = summary.totalMov;
+      cachedPercValSemComp.value = summary.percValSemComp;
+    } else {
+      // Se terminou de carregar e não veio nada (período sem dados), zeramos os cards
+      cachedValSemComp.value     = 0;
+      cachedTotalMov.value       = 0;
+      cachedPercValSemComp.value = 0;
+    }
   }
 }, { immediate: true });
 

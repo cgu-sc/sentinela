@@ -8,11 +8,13 @@ import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { TIMING } from '@/config/constants';
+import { useThemeStore } from '@/stores/theme';
 
 const resultadoStore = useResultadoStore();
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
 const configStore = useConfigStore();
+const themeStore = useThemeStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
 const syncProgress = ref(0);
@@ -128,6 +130,7 @@ const retryConnection = () => {
 };
 
 onMounted(() => {
+  themeStore.initTheme();
   initializeApp();
 });
 

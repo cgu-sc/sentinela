@@ -16,7 +16,7 @@ const activeModule = ref("consolidado");
 // Lógica Profissional: Esconde a sidebar se a rota atual pedir via meta: { hideSidebar: true }
 const isSidebarHidden = computed(() => !!route.meta?.hideSidebar);
 
-onMounted(() => themeStore.initTheme());
+onMounted(() => {});
 </script>
 
 <template>

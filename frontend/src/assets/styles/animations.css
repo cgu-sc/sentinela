@@ -6,7 +6,7 @@
  .app-boot-overlay {
     position: fixed;
     inset: 0;
-    background: radial-gradient(circle at center, #0f172a, #020617);
+    background: radial-gradient(circle at center, var(--card-bg, #0f172a), var(--bg-color, #020617));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -77,19 +77,25 @@
   
   /* SPINNER ATÔMICO */
   .spinner-orbit { position: relative; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; }
-  .core { width: 12px; height: 12px; background-color: var(--primary-color, #3b82f6); border-radius: 50%; box-shadow: 0 0 20px var(--primary-color, #3b82f6); }
+  .core { width: 12px; height: 12px; background-color: var(--primary-color); border-radius: 50%; box-shadow: 0 0 20px var(--primary-color); }
   .electron { position: absolute; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 50%; }
   .one { width: 60px; height: 60px; animation: orbit 2s linear infinite; }
-  .one::after { content: ''; position: absolute; top: 50%; left: -3px; width: 6px; height: 6px; background: var(--primary-color, #3b82f6); border-radius: 50%; }
+  .one::after { content: ''; position: absolute; top: 50%; left: -3px; width: 6px; height: 6px; background: var(--primary-color); border-radius: 50%; }
   .two { width: 40px; height: 40px; animation: orbit 1.5s linear reverse infinite; }
-  .two::after { content: ''; position: absolute; top: 0; left: 50%; width: 4px; height: 4px; background: color-mix(in srgb, var(--primary-color, #3b82f6) 70%, white); border-radius: 50%; }
+  .two::after { content: ''; position: absolute; top: 0; left: 50%; width: 4px; height: 4px; background: color-mix(in srgb, var(--primary-color) 70%, white); border-radius: 50%; }
   
   @keyframes orbit {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
   
-  .status-message { font-size: 0.9rem; font-weight: 500; color: var(--scrollbar-thumb, #cbd5e1); letter-spacing: 1px; }
+  .status-message { 
+    font-size: 0.95rem; 
+    font-weight: 600; 
+    color: var(--text-color, #ffffff); 
+    opacity: 0.85;
+    letter-spacing: 0.5px; 
+  }
   .progress-bar-mini { width: 200px; height: 2px; background: rgba(255, 255, 255, 0.1); border-radius: 1px; overflow: hidden; }
   .progress-fill { width: 100%; height: 100%; background: var(--primary-color, #3b82f6); animation: loading-bar 2s ease-in-out infinite; transform-origin: left; }
   

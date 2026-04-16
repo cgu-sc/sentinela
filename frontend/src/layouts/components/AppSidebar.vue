@@ -354,6 +354,14 @@ const stepEnd = (delta) => {
 
 onMounted(() => applySliderPeriod(timeSliderValue.value));
 
+// Handler do @slideend do Slider — extraído do template para evitar o auto-unwrap
+// de refs pelo Vue no contexto inline, que causava "Cannot set properties of null".
+const onSliderEnd = () => {
+  stopPlay();
+  savedRange.value = null;
+  applySliderPeriod(timeSliderValue.value);
+};
+
 // ── Play automático do Período de Análise ────────────────────────────────────
 // Duração centralizada no store: Sidebar e gráfico usam exatamente o mesmo valor.
 // Intervalo ligeiramente menor que a duração de animação do ECharts para que os
@@ -958,13 +966,7 @@ onBeforeUnmount(stopPlay);
               :max="availableMonths.length - 1"
               class="w-full time-slider"
               :disabled="isIndicadoresRoute"
-              @slideend="
-                () => {
-                  stopPlay();
-                  savedRange.value = null;
-                  applySliderPeriod(timeSliderValue);
-                }
-              "
+              @slideend="onSliderEnd"
             />
           </div>
 

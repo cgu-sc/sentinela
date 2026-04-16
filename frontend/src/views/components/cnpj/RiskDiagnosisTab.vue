@@ -98,7 +98,7 @@ const loadRegional = () => {
 
     // Durante animação, serve direto do cache sem round-trip HTTP
     const cacheKey = `${inicio}|${fim}`;
-    if (periodsCache.has(cacheKey)) {
+    if (filterStore.isAnimating && periodsCache.has(cacheKey)) {
       regionalData.value = periodsCache.get(cacheKey);
       return;
     }
@@ -206,6 +206,12 @@ watch(() => filterStore.periodo, () => {
     updateRiskCurve();
     loadRegional();
 }, { deep: true });
+
+// Limpa os caches de animação quando o play termina (isAnimating: true → false),
+// garantindo que mudanças manuais de período sempre busquem dados frescos do backend.
+watch(() => filterStore.isAnimating, (isAnimating) => {
+    if (!isAnimating) clearAnimationState();
+});
 
 
 watch(regionalScope, () => {

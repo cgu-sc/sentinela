@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRegional } from '@/composables/useRegional';
+import { useFilterStore } from '@/stores/filters';
+import { useFilterParameters } from '@/composables/useFilterParameters';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
 import Dropdown from 'primevue/dropdown';
@@ -9,10 +11,14 @@ import Dropdown from 'primevue/dropdown';
 const props = defineProps({
   cnpj: { type: String, required: true },
   geoData: { type: Object, default: null },
-  cnpjData: { type: Object, default: null }
+  cnpjData: { type: Object, default: null },
+  periodSummary: { type: Object, default: null },
+  periodLoading: { type: Boolean, default: false }
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
+const filterStore = useFilterStore();
+const { getApiParams } = useFilterParameters();
 const { regionalData, regionalLoading, fetchRegional } = useRegional();
 
 // Escopo do scatter regional
@@ -26,13 +32,13 @@ const regionalScopes = [
 // Nota: percValSemComp pode exceder 100% por anomalias nos dados de auditoria
 // (val_sem_comp > total_mov). Limitamos a 100 para coincidir com a curva de percentis.
 const currentScore = computed(() => {
-    const data = props.cnpjData;
-    if (!data) return 0;
-    
+    // Se estivermos vendo %, usamos o valor do período selecionado (se disponível)
     if (riskMetric.value === 'percentual_sem_comprovacao') {
-      return Math.min(Number(data.percValSemComp || 0), 100);
+      const val = props.periodSummary?.percValSemComp ?? props.cnpjData?.percValSemComp ?? 0;
+      return Math.min(Number(val), 100);
     }
-    return Number(data.score_risco_final || 0);
+    // Para Score de Risco, usamos o valor consolidado
+    return Number(props.cnpjData?.score_risco_final || 0);
 });
 
 // Configuração do Escopo da Curva de Risco
@@ -52,19 +58,23 @@ const riskMetricOptions = [
 
 const updateRiskCurve = () => {
   if (props.geoData?.sg_uf) {
-     cnpjDetailStore.fetchScorePercentiles(
+     const { inicio, fim } = getApiParams();
+     cnpjDetailStore.fetchMetricPercentiles(
        riskScope.value, 
        props.geoData.sg_uf, 
        props.geoData.id_regiao_saude,
-       riskMetric.value
+       riskMetric.value,
+       inicio,
+       fim
      );
   }
 };
 
 const loadRegional = () => {
     if (!props.geoData?.sg_uf) return;
+    const { inicio, fim } = getApiParams();
     const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
-    fetchRegional(regiao, props.geoData.sg_uf);
+    fetchRegional(regiao, props.geoData.sg_uf, inicio, fim);
 };
 
 watch(riskScope, updateRiskCurve, { immediate: true });
@@ -74,7 +84,18 @@ watch(() => props.geoData?.sg_uf, () => {
     loadRegional();
 }, { immediate: true });
 
-watch(regionalScope, loadRegional);
+// NOVO: Escuta mudanças no filtro global de período
+watch(() => filterStore.periodo, () => {
+    const { inicio, fim } = getApiParams();
+    console.log(`[RiskDiagnosis] Filtro alterado: ${inicio} a ${fim}`);
+    updateRiskCurve();
+    loadRegional();
+}, { deep: true });
+
+watch(regionalScope, () => {
+    console.log('[RiskDiagnosis] Escopo regional alterado');
+    loadRegional();
+});
 
 // Texto de ranking baseado no escopo selecionado
 const rankingText = computed(() => {
@@ -99,7 +120,7 @@ const rankingText = computed(() => {
 // Não bloqueamos durante o loading — o displayedBadge já guarda o valor anterior
 // e só atualiza quando nv for truthy, evitando qualquer flash.
 const riskRankBadge = computed(() => {
-  const data = cnpjDetailStore.scorePercentiles;
+  const data = cnpjDetailStore.metricPercentiles;
   if (!data?.length || currentScore.value === null || currentScore.value === undefined) return null;
   const idx = data.findIndex(d => d.score >= currentScore.value);
   if (idx === -1) return { label: 'Extremo', value: 'TOP 1%', color: '#ef4444' };
@@ -111,10 +132,10 @@ const riskRankBadge = computed(() => {
 });
 
 // Cache local: só atualiza quando loading=false para garantir que
-// currentScore e scorePercentiles são sempre da mesma métrica.
+// currentScore e metricPercentiles são sempre da mesma métrica.
 const displayedBadge = ref(null);
 watch(
-  [riskRankBadge, () => cnpjDetailStore.scorePercentilesLoading],
+  [riskRankBadge, () => cnpjDetailStore.metricPercentilesLoading],
   ([badge, isLoading]) => {
     if (badge && !isLoading) displayedBadge.value = badge;
   },
@@ -165,6 +186,7 @@ watch(
                    :farmacias="regionalData.farmacias"
                    :cnpj-atual="cnpj"
                    :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
+                   :active-metric="riskMetric"
                  />
              </div>
 
@@ -232,9 +254,9 @@ watch(
               </div>
 
               <RiskDistributionChart
-                :data="cnpjDetailStore.scorePercentiles"
+                :data="cnpjDetailStore.metricPercentiles"
                 :current-score="currentScore"
-                :loading="cnpjDetailStore.scorePercentilesLoading"
+                :loading="cnpjDetailStore.metricPercentilesLoading"
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
               />

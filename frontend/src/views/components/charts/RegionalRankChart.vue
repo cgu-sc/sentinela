@@ -23,23 +23,37 @@ useECharts([
 const props = defineProps({
   farmacias: { type: Array, default: () => [] },
   cnpjAtual: { type: String, required: true },
-  regiaoNome: { type: String, default: '' }
+  regiaoNome: { type: String, default: '' },
+  activeMetric: { type: String, default: 'score' } // 'score' ou 'percentual_sem_comprovacao'
 });
 
 const { chartTheme } = useChartTheme();
 const { formatCurrencyFull } = useFormatting();
 const isReady = ref(false);
 
-const yMetric = ref('score');
-const yOptions = [
-  { label: 'Score de Risco',        value: 'score' },
-  { label: '% Não-Comprovação',     value: 'pct'   },
-];
+const yMetric = computed(() => 
+  props.activeMetric === 'percentual_sem_comprovacao' ? 'pct' : 'score'
+);
 
-onMounted(() => {
-  setTimeout(() => { isReady.value = true; }, 400);
+import { watch } from 'vue';
+watch(yMetric, (nv) => {
+  console.log(`[RegionalRankChart] Métrica Y alterada para: ${nv}`);
+}, { immediate: true });
+
+watch(() => props.farmacias, (nv) => {
+  console.log(`[RegionalRankChart] Dados das farmácias atualizados. Total: ${nv?.length || 0}`);
 });
 
+onMounted(() => {
+  // O atraso de 400ms ajuda a evitar que o ECharts inicialize enquanto a aba 
+  // do PrimeVue ainda está fazendo a animação de transição (opacidade/tamanho 0).
+  setTimeout(() => { 
+    isReady.value = true; 
+  }, 450);
+});
+
+// Removemos os logs de amostragem para manter o console limpo, 
+// mantendo apenas os de sincronização se necessário.
 const chartData = computed(() => {
   if (!props.farmacias?.length) return { others: [], current: [] };
 
@@ -52,20 +66,24 @@ const chartData = computed(() => {
     return 70 + (ratio * 30);
   };
 
-  const getY = (f) => yMetric.value === 'pct'
-    ? (f.percValSemComp || 0)
-    : (f.score_risco || 0);
+  const getY = (f) => {
+    // Tentamos score_risco ou score_risco_final (depende da API regional)
+    const score = f.score_risco ?? f.score_risco_final ?? 0;
+    const pct = f.percValSemComp ?? 0;
+    return yMetric.value === 'pct' ? pct : score;
+  };
 
   const others = [];
   const current = [];
 
   props.farmacias.forEach(f => {
     const valRealX = f.totalMov || 0;
-    // value: [X mapeado, Y real, X real, percValSemComp, score_risco]
+    const valY = getY(f);
+    
     const point = {
       name: f.razao_social,
       cnpj: f.cnpj,
-      value: [mapX(valRealX), getY(f), valRealX, f.percValSemComp || 0, f.score_risco || 0]
+      value: [mapX(valRealX), valY, valRealX, f.percValSemComp || 0, f.score_risco ?? f.score_risco_final ?? 0]
     };
     if (f.cnpj === props.cnpjAtual) current.push(point);
     else others.push(point);
@@ -192,15 +210,6 @@ const chartOption = computed(() => {
           <span class="dot-others"></span>
           <span>OUTRAS FARMÁCIAS</span>
         </div>
-      </div>
-      <div class="y-metric-toggle">
-        <button
-          v-for="opt in yOptions"
-          :key="opt.value"
-          class="metric-btn"
-          :class="{ active: yMetric === opt.value }"
-          @click="yMetric = opt.value"
-        >{{ opt.label }}</button>
       </div>
     </div>
 

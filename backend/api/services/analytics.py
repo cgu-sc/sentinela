@@ -1096,16 +1096,9 @@ class AnalyticsService:
             return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
     @staticmethod
-    def get_regional_data(regiao_saude: str = None, uf: str = None) -> RegionalResponse:
+    def get_regional_benchmarking(regiao_saude: str = None, uf: str = None, data_inicio: date = None, data_fim: date = None) -> RegionalResponse:
         """
-        Constrói o payload completo da aba 'Região de Saúde'.
-
-        Args:
-            regiao_saude: Nome da Região de Saúde (filtro da sidebar, ex: 'GRANDE FLORIANOPOLIS').
-            uf: Sigla do estado (ex: 'SC'). Evita mistura se o mesmo nome existir em outro estado.
-
-        Returns:
-            RegionalResponse com resumo de municípios e ranking de farmácias.
+        Constrói o payload completo de Benchmarking Regional.
         """
         try:
             df_mov   = get_df()
@@ -1113,16 +1106,23 @@ class AnalyticsService:
             df_risco = get_df_matriz_risco()
             df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
+            # ── Filtros de Período ───────────────────────────────────────────
+            MIN_DATA = date(2015, 7, 1)
+            MAX_DATA = date(2024, 12, 31)
+            inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
+            fim = data_fim if data_fim else MAX_DATA
+
             # ── Filtra movimentação para a região ou UF ──────────────────────────
+            mask = pl.col("periodo").is_between(inicio, fim)
             if regiao_saude:
-                mask = (pl.col("no_regiao_saude") == regiao_saude)
+                mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
                 if uf and uf != 'Todos':
                     mask = mask & (pl.col("uf") == uf)
             else:
-                mask = (pl.col("uf") == uf)
+                mask = mask & (pl.col("uf") == uf)
+                
             df_reg = df_mov.filter(mask)
-
-            nome_escopo = regiao_saude or uf or ''
+            nome_escopo = f"{regiao_saude or uf or ''}"
             if df_reg.is_empty():
                 return RegionalResponse(nome_regiao=nome_escopo, municipios=[], farmacias=[])
 
@@ -1634,15 +1634,54 @@ class AnalyticsService:
 
 
     @staticmethod
-    def get_score_percentiles(scope: str, uf: str = None, regiao_id: str = None, metric: str = 'score') -> list[dict]:
+    def get_metric_percentiles(scope: str, uf: str = None, regiao_id: str = None, metric: str = 'score', data_inicio: date = None, data_fim: date = None) -> list[dict]:
         """
         Calcula a curva de percentis de score ou percentual de não comprovação (1% a 100%) para diferentes escopos.
-        Escopos: 'brasil', 'uf', 'regiao'.
         """
         try:
-            from data_cache import get_df_matriz_risco
-            df = get_df_matriz_risco()
-            df = df.rename({c: c.lower() for c in df.columns})
+            # Se houver data e for percentual, calculamos do zero para ser dinâmico
+            if (data_inicio or data_fim) and metric == "percentual_sem_comprovacao":
+                df_base = get_df()
+                MIN_DATA = date(2015, 7, 1)
+                MAX_DATA = date(2024, 12, 31)
+                inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
+                fim = data_fim if data_fim else MAX_DATA
+                
+                mask = pl.col("periodo").is_between(inicio, fim)
+                
+                # Agrega por CNPJ primeiro
+                df_agg = (
+                    df_base.filter(mask)
+                    .group_by("cnpj")
+                    .agg([
+                        pl.col("uf").first().alias("uf"),
+                        pl.col("no_municipio").first().alias("no_municipio"),
+                        pl.sum("total_vendas").alias("tv"),
+                        pl.sum("total_sem_comprovacao").alias("tsc")
+                    ])
+                    .with_columns([
+                        (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(pl.lit(1.0)) * 100).alias("pct_auditado")
+                    ])
+                )
+                
+                # Injeta id_regiao_saude via join com localidades para suportar o filtro de escopo
+                try:
+                    df_loc = get_localidades_df().select(["no_municipio", "sg_uf", "id_regiao_saude"]).unique(subset=["no_municipio", "sg_uf"])
+                    df_agg = df_agg.join(
+                        df_loc,
+                        left_on=["no_municipio", "uf"],
+                        right_on=["no_municipio", "sg_uf"],
+                        how="left"
+                    )
+                except Exception as e:
+                    print(f"⚠️ Erro ao cruzar regiões em percentis: {e}")
+                
+                df = df_agg
+            else:
+                # Caso contrário, usa a matriz consolidada (mais rápido)
+                from data_cache import get_df_matriz_risco
+                df = get_df_matriz_risco()
+                df = df.rename({c: c.lower() for c in df.columns})
 
             # Mapeamento de colunas conforme o schema real do cache
             col_target = "score_risco_final"

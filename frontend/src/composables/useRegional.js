@@ -22,18 +22,30 @@ export function useRegional() {
    * @param {string|null} nomeRegiao - Nome da Região de Saúde, ou null para escopo estadual.
    * @param {string}      uf         - Sigla do estado (obrigatório quando nomeRegiao é null).
    */
-  async function fetchRegional(nomeRegiao, uf) {
+  async function fetchRegional(nomeRegiao, uf, inicio = null, fim = null) {
     if (!nomeRegiao && !uf) return;
-    const cacheKey = nomeRegiao ? `${nomeRegiao}|${uf}` : `UF:${uf}`;
-    if (regionalLoaded.value && loadedRegion.value === cacheKey) return;
+    const cacheKey = `${nomeRegiao ?? 'UF'}|${uf}|${inicio ?? ''}|${fim ?? ''}`;
+    console.log(`[useRegional] Buscando dados. Key: ${cacheKey}`);
+    
+    if (regionalLoaded.value && loadedRegion.value === cacheKey) {
+      console.log('[useRegional] Cache hit! Ignorando fetch.');
+      return;
+    }
+
     try {
       regionalLoading.value = true;
       regionalLoaded.value  = false;
-      const url = API_ENDPOINTS.analyticsRegional(nomeRegiao, uf);
+      
+      let url = API_ENDPOINTS.analyticsRegionalBenchmarking(nomeRegiao, uf);
+      if (inicio) url += `&data_inicio=${inicio}`;
+      if (fim)    url += `&data_fim=${fim}`;
+
+      console.log(`[useRegional] URL Final: ${url}`);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       regionalData.value = await res.json();
       loadedRegion.value = cacheKey;
+      console.log('[useRegional] Dados recebidos com sucesso.');
     } catch (e) {
       console.error('❌ Erro ao buscar dados regionais:', e);
       regionalData.value = null;

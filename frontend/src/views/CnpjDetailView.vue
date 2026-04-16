@@ -264,6 +264,8 @@ const formatCnpj = (v) => {
           :cnpj="cnpj"
           :cnpj-data="cnpjData"
           :geo-data="geoData"
+          :period-summary="periodSummary"
+          :period-loading="evolucaoLoading"
           class="tab-content" 
         />
       </TabPanel>

@@ -49,10 +49,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     municipiosRegiaoKey:     null,
     municipiosRegiaoLoading: false,
 
-    // ── Curva de Percentis de Score (Contexto Regional/UF/Brasil) ─────────────
-    scorePercentiles:        null,
-    scorePercentilesLoading: false,
-    scorePercentilesLoaded:  false, // Guarda a chave do escopo atual
+    // ── Curva de Percentis (Contexto Regional/UF/Brasil) ────────────────────
+    metricPercentiles:        null,
+    metricPercentilesLoading: false,
+    metricPercentilesLoaded:  false, // Guarda a chave do escopo atual
   }),
 
   actions: {
@@ -203,21 +203,23 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchScorePercentiles(scope, uf = null, regiao_id = null, metric = 'score') {
-      const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}|${metric}`;
-      if (this.scorePercentilesLoaded === key) return;
+    async fetchMetricPercentiles(scope, uf = null, regiao_id = null, metric = 'score', inicio = null, fim = null) {
+      const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}|${metric}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.metricPercentilesLoaded === key) return;
       
-      this.scorePercentilesLoading = true;
+      this.metricPercentilesLoading = true;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsScorePercentiles, { 
-          params: { scope, uf, regiao_id, metric } 
-        });
-        this.scorePercentiles = data || [];
-        this.scorePercentilesLoaded = key;
+        const params = { scope, uf, regiao_id, metric };
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsMetricPercentiles, { params });
+        this.metricPercentiles = data || [];
+        this.metricPercentilesLoaded = key;
       } catch (e) {
-        console.error('Erro ao buscar percentis de score:', e);
+        console.error('Erro ao buscar percentis da métrica:', e);
       } finally {
-        this.scorePercentilesLoading = false;
+        this.metricPercentilesLoading = false;
       }
     },
 
@@ -256,9 +258,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.municipiosRegiaoKey     = null;
       this.municipiosRegiaoLoading = false;
 
-      this.scorePercentiles        = null;
-      this.scorePercentilesLoading = false;
-      this.scorePercentilesLoaded  = false;
+      this.metricPercentiles        = null;
+      this.metricPercentilesLoading = false;
+      this.metricPercentilesLoaded  = false;
     },
   },
 });

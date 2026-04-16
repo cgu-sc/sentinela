@@ -4,11 +4,11 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
-  analyticsRegional:    (regiao, uf) => {
+  analyticsRegionalBenchmarking:    (regiao, uf) => {
     const params = new URLSearchParams();
     if (regiao) params.set('regiao_saude', regiao);
     if (uf)     params.set('uf', uf);
-    return `${BASE_URL}/api/v1/analytics/regional?${params.toString()}`;
+    return `${BASE_URL}/api/v1/analytics/regional-benchmarking?${params.toString()}`;
   },
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,
   geoEstabelecimentos:  `${BASE_URL}/api/v1/geo/estabelecimentos`,
@@ -19,7 +19,7 @@ export const API_ENDPOINTS = {
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsCnpjLookup: `${BASE_URL}/api/v1/analytics/cnpj-lookup`,
-  analyticsScorePercentiles: `${BASE_URL}/api/v1/analytics/score-percentiles`,
+  analyticsMetricPercentiles: `${BASE_URL}/api/v1/analytics/metric-percentiles`,
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
    analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
   analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,

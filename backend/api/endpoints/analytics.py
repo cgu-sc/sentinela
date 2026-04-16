@@ -101,17 +101,19 @@ def get_cpf_timeline(
     """
     return AnalyticsService.get_timeline_cpf(cnpj_referencia=cnpj, cpf=cpf)
 
-@router.get("/regional", response_model=RegionalResponse)
-def get_regional(
+@router.get("/regional-benchmarking", response_model=RegionalResponse)
+def get_regional_benchmarking(
     regiao_saude: Optional[str] = Query(None, description="Nome da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS'). Omitir para escopo estadual."),
-    uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')")
+    uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
 ):
     """
-    Retorna o resumo municipal e o ranking de farmácias por risco.
+    Retorna o resumo municipal e o ranking de farmácias por risco (Benchmarking Regional).
     - Com regiao_saude: filtra pela região de saúde (+ UF opcional para desambiguação).
     - Sem regiao_saude: filtra por UF inteiro (escopo estadual).
     """
-    return AnalyticsService.get_regional_data(regiao_saude, uf)
+    return AnalyticsService.get_regional_benchmarking(regiao_saude, uf, data_inicio, data_fim)
 
 @router.get("/cnpj/{cnpj}/prescritores", response_model=PrescritoresResponse)
 def get_prescritores(cnpj: str):
@@ -164,12 +166,14 @@ def get_cnpj_lookup():
     """Retorna lista slim [{cnpj, razao_social}] para autocomplete no frontend."""
     return AnalyticsService.get_cnpj_lookup()
 
-@router.get("/score-percentiles")
-def get_score_percentiles(
+@router.get("/metric-percentiles")
+def get_metric_percentiles(
     scope: str = Query(..., description="Escopo: 'regiao', 'uf' ou 'brasil'"),
     uf: Optional[str] = Query(None),
     regiao_id: Optional[str] = Query(None),
-    metric: str = Query("score", description="Métrica: 'score' ou 'percentual_sem_comprovacao'")
+    metric: str = Query("score", description="Métrica: 'score' ou 'percentual_sem_comprovacao'"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
 ):
     """Retorna os percentis de score de risco ou não comprovação para o escopo selecionado."""
-    return AnalyticsService.get_score_percentiles(scope, uf, regiao_id, metric)
+    return AnalyticsService.get_metric_percentiles(scope, uf, regiao_id, metric, data_inicio, data_fim)

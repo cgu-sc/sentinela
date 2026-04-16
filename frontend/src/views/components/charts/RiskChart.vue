@@ -5,6 +5,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { CHART_TOOLTIP_SHADOW } from '@/config/colors.js';
 import { storeToRefs } from 'pinia';
+import { useFilterStore } from '@/stores/filters';
 import Button from 'primevue/button';
 
 // ── ECharts ───────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, Legen
 
 // ── Stores ────────────────────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
+const filterStore = useFilterStore();
 const { fatorRisco, fatorRiscoLoading } = storeToRefs(analyticsStore);
 const { formatBRL, formatCurrencyFull, formatNumberFull } = useFormatting();
 const { chartTheme, chartDataColors, chartRiskAccents } = useChartTheme();
@@ -184,7 +186,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="chart-section" :class="{ 'is-refreshing': showRefreshing }">
+  <div class="chart-section" :class="{ 'is-refreshing': showRefreshing && !filterStore.isAnimating }">
     <div class="chart-header">
       <i class="pi pi-chart-bar"></i>
       <h3>FATOR RISCO X QTD ESTAB</h3>

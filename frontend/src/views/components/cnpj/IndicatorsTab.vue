@@ -4,12 +4,16 @@ import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useConfigStore } from '@/stores/config';
 import { useFormatting } from '@/composables/useFormatting';
+import { useFrozenData } from '@/composables/useFrozenData';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 const { formatCurrencyFull } = useFormatting();
 const cnpjDetailStore = useCnpjDetailStore();
 const configStore = useConfigStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
+
+// ── Cache de Dados para Transição Suave ──────────────────
+const cachedIndicadoresData = useFrozenData(indicadoresData, indicadoresLoading);
 // Inicializa o filtro a partir do localStorage (persistência)
 const showOnlyHighRisk = ref(localStorage.getItem('sentinela_indicators_filter_only_risky') === 'true');
 
@@ -39,11 +43,11 @@ function formatIndicadorValue(valor, formato) {
 
 // ── Pontos críticos (resumo de auditoria) ────────────────
 const pontosCriticos = computed(() => {
-  if (!indicadoresData.value?.indicadores) return [];
+  if (!cachedIndicadoresData.value?.indicadores) return [];
   const result = [];
   for (const grupo of INDICATOR_GROUPS) {
     for (const ind of grupo.indicators) {
-      const d = indicadoresData.value.indicadores[ind.key];
+      const d = cachedIndicadoresData.value.indicadores[ind.key];
       if (!d || d.valor == null) continue;
       const t = configStore.thresholds[ind.thresholdKey];
       if (!t) continue;
@@ -75,7 +79,7 @@ const filteredGroups = computed(() => {
 
   return INDICATOR_GROUPS.map(grupo => {
     const indicators = grupo.indicators.filter(ind => {
-      const d = indicadoresData.value?.indicadores?.[ind.key];
+      const d = cachedIndicadoresData.value?.indicadores?.[ind.key];
       if (!d || d.valor == null) return false;
       const status = getIndicadorStatus(d.risco_reg, ind.thresholdKey);
       return status.label !== 'NORMAL';
@@ -85,7 +89,7 @@ const filteredGroups = computed(() => {
 });
 
 defineExpose({
-  getIndicadoresData: () => indicadoresData.value?.indicadores ?? {},
+  getIndicadoresData: () => cachedIndicadoresData.value?.indicadores ?? {},
   getPontosCriticos: () => pontosCriticos.value,
 });
 
@@ -107,7 +111,7 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 <template>
   <div class="tab-content indicadores-tab">
 
-    <div v-if="indicadoresLoading" class="tab-placeholder">
+    <div v-if="indicadoresLoading && !cachedIndicadoresData" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Carregando indicadores...</p>
     </div>
@@ -117,12 +121,12 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
       <p>{{ indicadoresError }}</p>
     </div>
 
-    <div v-else-if="indicadoresLoaded && !Object.keys(indicadoresData?.indicadores ?? {}).length" class="tab-placeholder">
+    <div v-else-if="indicadoresLoaded && !Object.keys(cachedIndicadoresData?.indicadores ?? {}).length" class="tab-placeholder">
       <i class="pi pi-inbox placeholder-icon" />
       <p>Nenhum indicador encontrado para este CNPJ.</p>
     </div>
 
-    <template v-else-if="indicadoresLoaded">
+    <template v-else-if="cachedIndicadoresData">
 
       <div class="ind-section">
         <div class="ind-card">
@@ -187,28 +191,28 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
                   </div>
                 </td>
 
-                <template v-if="indicadoresData.indicadores[ind.key]?.valor != null">
-                  <td class="ind-val-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
-                  <td class="ind-med-cell">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
-                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</span></td>
-                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(indicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</span></td>
+                <template v-if="cachedIndicadoresData.indicadores[ind.key]?.valor != null">
+                  <td class="ind-val-cell">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
+                  <td class="ind-med-cell">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
+                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</span></td>
+                  <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</span></td>
                   <td class="ind-risco-cell">
                     <span
                       class="ind-risco-pill"
-                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
-                    >{{ indicadoresData.indicadores[ind.key].risco_reg != null ? indicadoresData.indicadores[ind.key].risco_reg.toFixed(1) + 'x' : '—' }}</span>
+                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
+                    >{{ cachedIndicadoresData.indicadores[ind.key].risco_reg != null ? cachedIndicadoresData.indicadores[ind.key].risco_reg.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-risco-cell ind-secondary-cell">
-                    <span class="ind-risco-muted" :style="riscoTextStyle(indicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)">{{ indicadoresData.indicadores[ind.key].risco_uf != null ? indicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
+                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)">{{ cachedIndicadoresData.indicadores[ind.key].risco_uf != null ? cachedIndicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-risco-cell ind-secondary-cell">
-                    <span class="ind-risco-muted" :style="riscoTextStyle(indicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)">{{ indicadoresData.indicadores[ind.key].risco_br != null ? indicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
+                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)">{{ cachedIndicadoresData.indicadores[ind.key].risco_br != null ? cachedIndicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-status-cell">
                     <span
                       class="ind-status-pill"
-                      :style="riscoPillStyle(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
-                    >{{ getIndicadorStatus(indicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey).label }}</span>
+                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
+                    >{{ getIndicadorStatus(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey).label }}</span>
                   </td>
                 </template>
                 <template v-else>

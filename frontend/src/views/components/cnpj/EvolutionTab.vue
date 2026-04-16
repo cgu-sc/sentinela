@@ -3,6 +3,9 @@ import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
+import { useFilterStore } from '@/stores/filters';
+import { useFrozenData } from '@/composables/useFrozenData';
+import { watch } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
@@ -20,9 +23,14 @@ const cnpj = computed(() => route.params.cnpj);
 
 const { formatCurrencyFull } = useFormatting();
 const { chartTheme, chartDataColors } = useChartTheme();
+const filterStore = useFilterStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError } = storeToRefs(cnpjDetailStore);
+
+// ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
+// Mantém os dados do semestre anterior visíveis durante a animação de período.
+const cachedEvolucaoData = useFrozenData(evolucaoData, evolucaoLoading);
 
 const chartRef = ref(null);
 
@@ -44,12 +52,13 @@ function formatMesRange(mesInicio, mesFim) {
 
 // Verdadeiro quando há dados anteriores visíveis E um novo fetch está em curso.
 // Usado para dimir os cards suavemente em vez de exibir o spinner novamente.
-const isRefreshing = computed(() => evolucaoLoading.value && evolucaoLoaded.value);
+// NOTA: Durante a animação (autoplay), mantemos a opacidade total para evitar flicker.
+const isRefreshing = computed(() => evolucaoLoading.value && cachedEvolucaoData.value !== null && !filterStore.isAnimating);
 
 defineExpose({
   getChartImage: (pixelRatio = 2) =>
     chartRef.value?.chart?.getDataURL({ type: 'jpeg', pixelRatio, backgroundColor: '#ffffff', quality: 0.85 }) ?? null,
-  getSemestresData: () => evolucaoData.value?.semestres ?? [],
+  getSemestresData: () => cachedEvolucaoData.value?.semestres ?? [],
 });
 
 // ── Cores dos gráficos ────────────────────────────────────
@@ -61,7 +70,7 @@ const C = computed(() => ({
 // ── Opção: barras empilhadas ──────────────────────────────
 const chartOption = computed(() => {
   const c         = C.value;
-  const semestres = evolucaoData.value?.semestres ?? [];
+  const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const labels    = semestres.map(s => s.semestre);
   const regular   = semestres.map(s => s.regular);
   const irregular = semestres.map(s => s.irregular);
@@ -178,7 +187,7 @@ const chartOption = computed(() => {
 
 <template>
   <div class="tab-content evolucao-tab">
-    <div v-if="evolucaoLoading && !evolucaoLoaded" class="tab-placeholder">
+    <div v-if="evolucaoLoading && !cachedEvolucaoData" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Carregando dados...</p>
     </div>
@@ -188,12 +197,12 @@ const chartOption = computed(() => {
       <p>{{ evolucaoError }}</p>
     </div>
 
-    <div v-else-if="evolucaoLoaded && !evolucaoData?.semestres?.length" class="tab-placeholder">
+    <div v-else-if="evolucaoLoaded && !cachedEvolucaoData?.semestres?.length" class="tab-placeholder">
       <i class="pi pi-inbox placeholder-icon" />
       <p>Nenhum dado de movimentação encontrado para este CNPJ.</p>
     </div>
 
-    <template v-else-if="evolucaoLoaded">
+    <template v-else-if="cachedEvolucaoData">
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
           <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
@@ -229,7 +238,7 @@ const chartOption = computed(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(s, i) in evolucaoData.semestres" :key="s.semestre">
+              <tr v-for="(s, i) in cachedEvolucaoData.semestres" :key="s.semestre">
                 <td class="sem-label">
                   {{ s.semestre }}
                   <span v-if="formatMesRange(s.mes_inicio, s.mes_fim)" class="sem-months">
@@ -265,15 +274,15 @@ const chartOption = computed(() => {
                   </template>
                   <template v-else>
                     <span
-                      v-if="s.pct_irregular > evolucaoData.semestres[i-1].pct_irregular"
+                      v-if="s.pct_irregular > cachedEvolucaoData.semestres[i-1].pct_irregular"
                       class="trend-up"
-                      :title="`+${(s.pct_irregular - evolucaoData.semestres[i-1].pct_irregular).toFixed(1)}pp`"
-                    >▲ {{ (s.pct_irregular - evolucaoData.semestres[i-1].pct_irregular).toFixed(1) }}pp</span>
+                      :title="`+${(s.pct_irregular - cachedEvolucaoData.semestres[i-1].pct_irregular).toFixed(1)}pp`"
+                    >▲ {{ (s.pct_irregular - cachedEvolucaoData.semestres[i-1].pct_irregular).toFixed(1) }}pp</span>
                     <span
-                      v-else-if="s.pct_irregular < evolucaoData.semestres[i-1].pct_irregular"
+                      v-else-if="s.pct_irregular < cachedEvolucaoData.semestres[i-1].pct_irregular"
                       class="trend-down"
-                      :title="`-${(evolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1)}pp`"
-                    >▼ {{ (evolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1) }}pp</span>
+                      :title="`-${(cachedEvolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1)}pp`"
+                    >▼ {{ (cachedEvolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1) }}pp</span>
                     <span v-else class="trend-neutral">= 0pp</span>
                   </template>
                 </td>
@@ -282,9 +291,9 @@ const chartOption = computed(() => {
             <tfoot>
               <tr>
                 <td>TOTAL</td>
-                <td>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.total, 0)) }}</td>
-                <td>{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.regular, 0)) }}</td>
-                <td class="col-irregular">{{ formatCurrencyFull(evolucaoData.semestres.reduce((a, s) => a + s.irregular, 0)) }}</td>
+                <td>{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.total, 0)) }}</td>
+                <td>{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.regular, 0)) }}</td>
+                <td class="col-irregular">{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.irregular, 0)) }}</td>
                 <td></td>
                 <td></td>
               </tr>

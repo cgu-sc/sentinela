@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
+import { useFrozenData } from "@/composables/useFrozenData";
 
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
@@ -61,31 +62,19 @@ const filterStore = useFilterStore();
 // ── Cache de Valores para Transição Suave ──────────────────
 // Mantém os valores anteriores visíveis durante o loading do novo período,
 // evitando o "piscando" ou volta brusca para os valores globais.
-const cachedValSemComp     = ref(props.cnpjData?.valSemComp     ?? 0);
-const cachedTotalMov       = ref(props.cnpjData?.totalMov       ?? 0);
-const cachedPercValSemComp = ref(props.cnpjData?.percValSemComp ?? 0);
+const displaySummary = useFrozenData(
+  () => props.periodSummary || {
+    valSemComp: props.cnpjData?.valSemComp ?? 0,
+    totalMov: props.cnpjData?.totalMov ?? 0,
+    percValSemComp: props.cnpjData?.percValSemComp ?? 0
+  },
+  () => props.periodLoading,
+  { deep: true }
+);
 
-import { watch } from "vue";
-watch([() => props.periodSummary, () => props.periodLoading], ([summary, loading]) => {
-  // Durante a animação os KPIs do header ficam congelados no valor pré-play
-  if (filterStore.isAnimating) return;
-  if (!loading) {
-    if (summary) {
-      cachedValSemComp.value     = summary.valSemComp;
-      cachedTotalMov.value       = summary.totalMov;
-      cachedPercValSemComp.value = summary.percValSemComp;
-    } else {
-      // Se terminou de carregar e não veio nada (período sem dados), zeramos os cards
-      cachedValSemComp.value     = 0;
-      cachedTotalMov.value       = 0;
-      cachedPercValSemComp.value = 0;
-    }
-  }
-}, { immediate: true });
-
-const displayValSemComp     = computed(() => cachedValSemComp.value);
-const displayTotalMov       = computed(() => cachedTotalMov.value);
-const displayPercValSemComp = computed(() => cachedPercValSemComp.value);
+const displayValSemComp     = computed(() => displaySummary.value?.valSemComp ?? 0);
+const displayTotalMov       = computed(() => displaySummary.value?.totalMov ?? 0);
+const displayPercValSemComp = computed(() => displaySummary.value?.percValSemComp ?? 0);
 
 const risco = computed(() => displayPercValSemComp.value);
 
@@ -362,7 +351,7 @@ const filterNetwork = () => {
               v-if="cnpjData.score_risco_final != null"
             ></div>
 
-            <div class="pill-item" :class="{ 'kpi-refreshing': periodLoading }">
+            <div class="pill-item" :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }">
               <span class="pill-label">Valor sem Comprovação</span>
               <span class="pill-value currency">
                 {{ formatCurrencyFull(displayValSemComp) }}
@@ -381,7 +370,7 @@ const filterNetwork = () => {
           </div>
 
           <!-- Bloco Neutro - Agora em formato Pill -->
-          <div class="kpi-pill-group kpi-pill-group--neutral" :class="{ 'kpi-refreshing': periodLoading }">
+          <div class="kpi-pill-group kpi-pill-group--neutral" :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }">
             <div class="pill-item">
               <span class="pill-label">Total Movimentado</span>
               <span class="pill-value total">

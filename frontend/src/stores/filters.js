@@ -57,6 +57,9 @@ export const useFilterStore = defineStore('filters', () => {
   const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
   // Estado de animação do slider de período (play automático na sidebar)
   const isAnimating = ref(false);
+  // Duração compartilhada entre Sidebar (intervalo de steps) e gráfico (ECharts transition).
+  // 0 = resposta instantânea (filtro manual), >0 = animação fluida (modo play).
+  const animationDuration = ref(0);
 
   // Coordena o pré-carregamento de dados antes da animação iniciar.
   // status: 'idle' → 'loading' (AppSidebar dispara) → 'ready' (RiskDiagnosisTab conclui)
@@ -226,6 +229,7 @@ export const useFilterStore = defineStore('filters', () => {
     sidebarCollapsed,
     sidebarLocked,
     isAnimating,
+    animationDuration,
     animationPreload,
     resetFilters
   };

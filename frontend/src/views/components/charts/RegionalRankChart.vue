@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue';
 import { useChartTheme } from '@/config/chartTheme';
 import { useFormatting } from '@/composables/useFormatting';
+import { useFilterStore } from '@/stores/filters';
 import { use as useECharts } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ScatterChart } from 'echarts/charts';
@@ -24,11 +25,14 @@ const props = defineProps({
   farmacias: { type: Array, default: () => [] },
   cnpjAtual: { type: String, required: true },
   regiaoNome: { type: String, default: '' },
-  activeMetric: { type: String, default: 'score' } // 'score' ou 'percentual_sem_comprovacao'
+  activeMetric: { type: String, default: 'score' }, // 'score' ou 'percentual_sem_comprovacao'
+  xAxisMax: { type: Number, default: null }, // fixado durante animação; null = dinâmico
+  yAxisMax: { type: Number, default: null }, // fixado durante animação; null = dinâmico
 });
 
 const { chartTheme } = useChartTheme();
 const { formatCurrencyFull } = useFormatting();
+const filterStore = useFilterStore();
 const isReady = ref(false);
 
 const yMetric = computed(() => 
@@ -100,10 +104,11 @@ const chartOption = computed(() => {
 
   return {
     backgroundColor: 'transparent',
-    // Animação de atualização: os dots deslizam suavemente para as novas posições
-    // quando os dados do período mudam (animação trimestral do play).
-    animationDurationUpdate: 650,
-    animationEasingUpdate: 'cubicInOut',
+    animationDuration: 0,                                    // render inicial sem tweening
+    animationDurationUpdate: filterStore.animationDuration, // 0 = manual, >0 = play
+    animationEasingUpdate: 'linear',
+    animationThreshold: 10000,
+    progressiveThreshold: 10000,
     grid: { top: 20, right: 30, bottom: 50, left: 70 },
     tooltip: {
       trigger: 'item',
@@ -139,7 +144,7 @@ const chartOption = computed(() => {
       nameTextStyle: { color: c.textColor, fontSize: 10, fontWeight: 600 },
       type: 'value',
       min: 0,
-      max: xMax,
+      max: props.xAxisMax ?? xMax,
       splitLine: {
         lineStyle: { color: c.grid, type: 'dashed', opacity: 0.5 },
         show: true
@@ -156,6 +161,7 @@ const chartOption = computed(() => {
       nameGap: 45,
       nameTextStyle: { color: c.textColor, fontSize: 10, fontWeight: 600 },
       type: 'value',
+      ...(props.yAxisMax != null ? { max: props.yAxisMax } : {}),
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.5 } },
       axisLabel: {
         color: c.textColor,

@@ -75,6 +75,12 @@ const updateRiskCurve = () => {
 // Mapa local: "YYYY-MM-DD|YYYY-MM-DD" → farmacias[] (pré-carregado pelo endpoint único)
 const periodsCache = new Map();
 
+// Máximos globais calculados sobre todos os trimestres — usados para fixar os
+// eixos do scatter durante a animação e evitar que a escala salte entre passos.
+const animationXMax    = ref(null); // max totalMov
+const animationYMax    = ref(null); // max score_risco
+const animationYMaxPct = ref(null); // max percValSemComp
+
 const loadRegional = () => {
     if (!props.geoData?.sg_uf) return;
     const { inicio, fim } = getApiParams();
@@ -113,9 +119,18 @@ watch(() => filterStore.animationPreload.status, async (status) => {
 
     // Popula o cache: cada trimestre vira uma entrada keyed por "inicio|fim"
     periodsCache.clear();
+    let xMax = 0, scoreMax = 0, pctMax = 0;
     for (const q of data.quarters ?? []) {
       periodsCache.set(`${q.inicio}|${q.fim}`, { farmacias: q.farmacias });
+      for (const f of q.farmacias ?? []) {
+        xMax     = Math.max(xMax,     f.totalMov || 0);
+        scoreMax = Math.max(scoreMax, f.score_risco ?? f.score_risco_final ?? 0);
+        pctMax   = Math.max(pctMax,   f.percValSemComp ?? 0);
+      }
     }
+    animationXMax.value    = xMax     || null;
+    animationYMax.value    = scoreMax || null;
+    animationYMaxPct.value = pctMax   || null;
   } catch (e) {
     console.error('[RiskDiagnosis] Erro no preload de animação:', e);
   }
@@ -123,9 +138,16 @@ watch(() => filterStore.animationPreload.status, async (status) => {
   filterStore.animationPreload.status = 'ready';
 });
 
+const clearAnimationState = () => {
+  periodsCache.clear();
+  animationXMax.value    = null;
+  animationYMax.value    = null;
+  animationYMaxPct.value = null;
+};
+
 // Limpa cache e reseta preload se o componente for desmontado durante animação
 onUnmounted(() => {
-  periodsCache.clear();
+  clearAnimationState();
   if (filterStore.animationPreload.status !== 'idle') {
     filterStore.animationPreload.status = 'idle';
   }
@@ -149,7 +171,7 @@ watch(() => filterStore.periodo, () => {
 
 watch(regionalScope, () => {
     // Escopo mudou — cache de animação é inválido (regiao vs uf)
-    periodsCache.clear();
+    clearAnimationState();
     filterStore.animationPreload.status = 'idle';
     loadRegional();
 });
@@ -244,6 +266,8 @@ watch(
                    :cnpj-atual="cnpj"
                    :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
                    :active-metric="riskMetric"
+                   :x-axis-max="filterStore.isAnimating ? animationXMax : null"
+                   :y-axis-max="filterStore.isAnimating ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
                  />
              </div>
 

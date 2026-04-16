@@ -1,24 +1,24 @@
 <script setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
+import { useRoute } from "vue-router";
 import {
   FILTER_DEFAULTS,
   FILTER_ALL_VALUE,
   ANALYSIS_YEARS,
   TIMING,
-} from '@/config/constants';
-import { useFilterStore } from '@/stores/filters';
-import { useGeoStore } from '@/stores/geo';
-import { useFormatting } from '@/composables/useFormatting';
-import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
-import { useFilterParameters } from '@/composables/useFilterParameters';
-import { FILTER_OPTIONS } from '@/config/filterOptions';
-import Button from 'primevue/button';
-import Dropdown from 'primevue/dropdown';
-import Slider from 'primevue/slider';
-import InputText from 'primevue/inputtext';
-import AutoComplete from 'primevue/autocomplete';
-import DataIntegrityBanner from '@/layouts/components/DataIntegrityBanner.vue';
+} from "@/config/constants";
+import { useFilterStore } from "@/stores/filters";
+import { useGeoStore } from "@/stores/geo";
+import { useFormatting } from "@/composables/useFormatting";
+import { useSliderPeriodLogic } from "@/composables/useSliderPeriodLogic";
+import { useFilterParameters } from "@/composables/useFilterParameters";
+import { FILTER_OPTIONS } from "@/config/filterOptions";
+import Button from "primevue/button";
+import Dropdown from "primevue/dropdown";
+import Slider from "primevue/slider";
+import InputText from "primevue/inputtext";
+import AutoComplete from "primevue/autocomplete";
+import DataIntegrityBanner from "@/layouts/components/DataIntegrityBanner.vue";
 
 const props = defineProps({
   activeModule: { type: String, required: true },
@@ -31,7 +31,9 @@ const route = useRoute();
 
 // ── Opções dos Selects ───────────────────────────────────────────────────────
 const ufOptions = computed(() => geoStore.ufs);
-const regiaoSaudeOptions = computed(() => geoStore.regioesPorUF(filterStore.selectedUF));
+const regiaoSaudeOptions = computed(() =>
+  geoStore.regioesPorUF(filterStore.selectedUF),
+);
 const unidadePfOptions = computed(() =>
   geoStore.jurisdicoesPorFiltro(
     filterStore.selectedUF,
@@ -53,19 +55,27 @@ watch(
   (newUF) => {
     const regioesDisponiveis = geoStore.regioesPorUF(newUF);
     if (!regioesDisponiveis.includes(filterStore.selectedRegiaoSaude)) {
-      filterStore.selectedRegiaoSaude = 'Todos';
+      filterStore.selectedRegiaoSaude = "Todos";
     }
     const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
-      newUF, filterStore.selectedRegiaoSaude, filterStore.selectedMunicipio,
+      newUF,
+      filterStore.selectedRegiaoSaude,
+      filterStore.selectedMunicipio,
     );
     if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
-      filterStore.selectedUnidadePf = 'Todos';
+      filterStore.selectedUnidadePf = "Todos";
     }
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
-      newUF, filterStore.selectedRegiaoSaude, filterStore.selectedUnidadePf,
+      newUF,
+      filterStore.selectedRegiaoSaude,
+      filterStore.selectedUnidadePf,
     );
-    if (!municipiosDisponiveis.some((m) => m.value === filterStore.selectedMunicipio)) {
-      filterStore.selectedMunicipio = 'Todos';
+    if (
+      !municipiosDisponiveis.some(
+        (m) => m.value === filterStore.selectedMunicipio,
+      )
+    ) {
+      filterStore.selectedMunicipio = "Todos";
     }
   },
 );
@@ -74,16 +84,24 @@ watch(
   () => filterStore.selectedRegiaoSaude,
   (newRegiao) => {
     const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
-      filterStore.selectedUF, newRegiao, filterStore.selectedMunicipio,
+      filterStore.selectedUF,
+      newRegiao,
+      filterStore.selectedMunicipio,
     );
     if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
-      filterStore.selectedUnidadePf = 'Todos';
+      filterStore.selectedUnidadePf = "Todos";
     }
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
-      filterStore.selectedUF, newRegiao, filterStore.selectedUnidadePf,
+      filterStore.selectedUF,
+      newRegiao,
+      filterStore.selectedUnidadePf,
     );
-    if (!municipiosDisponiveis.some((m) => m.value === filterStore.selectedMunicipio)) {
-      filterStore.selectedMunicipio = 'Todos';
+    if (
+      !municipiosDisponiveis.some(
+        (m) => m.value === filterStore.selectedMunicipio,
+      )
+    ) {
+      filterStore.selectedMunicipio = "Todos";
     }
   },
 );
@@ -92,10 +110,12 @@ watch(
   () => filterStore.selectedMunicipio,
   (newMun) => {
     const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
-      filterStore.selectedUF, filterStore.selectedRegiaoSaude, newMun,
+      filterStore.selectedUF,
+      filterStore.selectedRegiaoSaude,
+      newMun,
     );
     if (!unidadesDisponiveis.includes(filterStore.selectedUnidadePf)) {
-      filterStore.selectedUnidadePf = 'Todos';
+      filterStore.selectedUnidadePf = "Todos";
     }
   },
 );
@@ -104,20 +124,26 @@ watch(
   () => filterStore.selectedUnidadePf,
   (newUnidade) => {
     const municipiosDisponiveis = geoStore.municipiosPorFiltro(
-      filterStore.selectedUF, filterStore.selectedRegiaoSaude, newUnidade,
+      filterStore.selectedUF,
+      filterStore.selectedRegiaoSaude,
+      newUnidade,
     );
-    if (!municipiosDisponiveis.some((m) => m.value === filterStore.selectedMunicipio)) {
-      filterStore.selectedMunicipio = 'Todos';
+    if (
+      !municipiosDisponiveis.some(
+        (m) => m.value === filterStore.selectedMunicipio,
+      )
+    ) {
+      filterStore.selectedMunicipio = "Todos";
     }
   },
 );
 
-const situacaoOptions  = FILTER_OPTIONS.situacao;
-const msOptions        = FILTER_OPTIONS.ms;
-const porteOptions     = FILTER_OPTIONS.porte;
+const situacaoOptions = FILTER_OPTIONS.situacao;
+const msOptions = FILTER_OPTIONS.ms;
+const porteOptions = FILTER_OPTIONS.porte;
 const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
-const clusterOptions   = FILTER_OPTIONS.cluster;
-const rfaOptions       = FILTER_OPTIONS.rfa;
+const clusterOptions = FILTER_OPTIONS.cluster;
+const rfaOptions = FILTER_OPTIONS.rfa;
 
 const { formatBRL: formatCurrency } = useFormatting();
 
@@ -125,20 +151,28 @@ const { formatBRL: formatCurrency } = useFormatting();
 const cnpjSuggestions = ref([]);
 
 function searchEstabelecimento(event) {
-  const q = (event.query || '').trim().toLowerCase();
-  if (q.length < 2) { cnpjSuggestions.value = []; return; }
+  const q = (event.query || "").trim().toLowerCase();
+  if (q.length < 2) {
+    cnpjSuggestions.value = [];
+    return;
+  }
   const lista = geoStore.cnpjLookup;
-  const numericQ = q.replace(/\D/g, '');
+  const numericQ = q.replace(/\D/g, "");
   // Divide a query em tokens e exige que TODOS estejam presentes (qualquer ordem)
   const tokens = q.split(/\s+/).filter(Boolean);
   cnpjSuggestions.value = lista
-    .filter(e => {
+    .filter((e) => {
       if (numericQ.length >= 4 && e.cnpj?.includes(numericQ)) return true;
-      const nome = e.razao_social?.toLowerCase() ?? '';
-      return tokens.every(t => nome.includes(t));
+      const nome = e.razao_social?.toLowerCase() ?? "";
+      return tokens.every((t) => nome.includes(t));
     })
     .slice(0, 40)
-    .map(e => ({ label: e.razao_social, cnpj: e.cnpj, municipio: e.municipio, uf: e.uf }));
+    .map((e) => ({
+      label: e.razao_social,
+      cnpj: e.cnpj,
+      municipio: e.municipio,
+      uf: e.uf,
+    }));
 }
 
 function onEstabelecimentoSelect(event) {
@@ -149,12 +183,16 @@ function onEstabelecimentoSelect(event) {
 // ── Controle collapse/lock da sidebar ───────────────────────────────────────
 const isCollapsed = computed({
   get: () => filterStore.sidebarCollapsed,
-  set: (val) => { filterStore.sidebarCollapsed = val; },
+  set: (val) => {
+    filterStore.sidebarCollapsed = val;
+  },
 });
 
 const isSidebarLocked = computed({
   get: () => filterStore.sidebarLocked,
-  set: (val) => { filterStore.sidebarLocked = val; },
+  set: (val) => {
+    filterStore.sidebarLocked = val;
+  },
 });
 
 const toggleSidebarLock = () => {
@@ -162,14 +200,18 @@ const toggleSidebarLock = () => {
 };
 
 // ── Rotas que bloqueiam todos os filtros e colapsam a sidebar ────────────────
-const LOCKED_ROUTES = ['/listas'];
+const LOCKED_ROUTES = ["/listas"];
 const isLockedRoute = (path) => LOCKED_ROUTES.some((r) => path.startsWith(r));
 
 // Em telas de detalhe de CNPJ apenas o Período de Análise fica disponível
-const isEstabelecimentoRoute = computed(() => route.path.startsWith('/estabelecimentos/'));
+const isEstabelecimentoRoute = computed(() =>
+  route.path.startsWith("/estabelecimentos/"),
+);
 
 // Bloqueia todos os filtros exceto o Período (usado pelo template em cada seção)
-const allFiltersLocked = computed(() => filtersLocked.value || isEstabelecimentoRoute.value);
+const allFiltersLocked = computed(
+  () => filtersLocked.value || isEstabelecimentoRoute.value,
+);
 
 watch(
   () => route.path,
@@ -186,12 +228,14 @@ watch(
 // ── Operações de filtro ──────────────────────────────────────────────────────
 const limparFiltros = () => {
   filterStore.resetFilters();
-  filterStore.selectedCnpjRaiz = '';
+  filterStore.selectedCnpjRaiz = "";
   resetYears();
 };
 
 const applyPercentualNaoComprovacao = () => {
-  filterStore.percentualNaoComprovacaoFilter = [...filterStore.percentualNaoComprovacaoRange];
+  filterStore.percentualNaoComprovacaoFilter = [
+    ...filterStore.percentualNaoComprovacaoRange,
+  ];
 };
 
 const stepPercStart = (delta) => {
@@ -217,7 +261,7 @@ const applyValorMinSemComp = () => {
 // Força foco no campo de busca do Dropdown ao abrir
 const onDropdownShow = () => {
   setTimeout(() => {
-    const input = document.querySelector('.p-dropdown-filter');
+    const input = document.querySelector(".p-dropdown-filter");
     if (input) input.focus();
   }, TIMING.DROPDOWN_FOCUS_DELAY);
 };
@@ -226,35 +270,49 @@ const onDropdownShow = () => {
 const isFilterActive = (field) => {
   const value = filterStore[field];
   const mapStoreToConstants = {
-    selectedUF:                    FILTER_DEFAULTS.UF,
-    selectedRegiaoSaude:           FILTER_DEFAULTS.REGIAO,
-    selectedMunicipio:             FILTER_DEFAULTS.MUNICIPIO,
-    selectedUnidadePf:             FILTER_DEFAULTS.UNIDADE_PF,
-    selectedSituacao:              FILTER_DEFAULTS.SITUACAO,
-    selectedMS:                    FILTER_DEFAULTS.MS,
-    selectedPorte:                 FILTER_DEFAULTS.PORTE,
-    selectedGrandeRede:            FILTER_DEFAULTS.GRANDE_REDE,
-    selectedCnpjRaiz:              '',
+    selectedUF: FILTER_DEFAULTS.UF,
+    selectedRegiaoSaude: FILTER_DEFAULTS.REGIAO,
+    selectedMunicipio: FILTER_DEFAULTS.MUNICIPIO,
+    selectedUnidadePf: FILTER_DEFAULTS.UNIDADE_PF,
+    selectedSituacao: FILTER_DEFAULTS.SITUACAO,
+    selectedMS: FILTER_DEFAULTS.MS,
+    selectedPorte: FILTER_DEFAULTS.PORTE,
+    selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
+    selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
-    valorMinSemComp:               FILTER_DEFAULTS.VALOR_MIN,
-    clusterSelection:              FILTER_DEFAULTS.CLUSTER,
-    rfaSelection:                  FILTER_DEFAULTS.RFA,
-    searchTarget:                  FILTER_DEFAULTS.SEARCH,
-    sliderValue:                   FILTER_DEFAULTS.SLIDER_INDEX_RANGE,
+    valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
+    clusterSelection: FILTER_DEFAULTS.CLUSTER,
+    rfaSelection: FILTER_DEFAULTS.RFA,
+    searchTarget: FILTER_DEFAULTS.SEARCH,
+    sliderValue: FILTER_DEFAULTS.SLIDER_INDEX_RANGE,
   };
   const defaultValue = mapStoreToConstants[field];
-  if (Array.isArray(value)) return JSON.stringify(value) !== JSON.stringify(defaultValue);
+  if (Array.isArray(value))
+    return JSON.stringify(value) !== JSON.stringify(defaultValue);
   return value !== defaultValue;
 };
 
-const isIndicadoresRoute = computed(() => route.path.startsWith('/indicadores'));
+const isIndicadoresRoute = computed(() =>
+  route.path.startsWith("/indicadores"),
+);
 
 const activeFilterCount = computed(() => {
   const fields = [
-    'selectedUF', 'selectedRegiaoSaude', 'selectedMunicipio', 'selectedUnidadePf',
-    'selectedSituacao', 'selectedMS', 'selectedPorte', 'selectedGrandeRede',
-    'selectedCnpjRaiz', 'percentualNaoComprovacaoRange', 'valorMinSemComp',
-    'sliderValue', 'clusterSelection', 'rfaSelection', 'searchTarget',
+    "selectedUF",
+    "selectedRegiaoSaude",
+    "selectedMunicipio",
+    "selectedUnidadePf",
+    "selectedSituacao",
+    "selectedMS",
+    "selectedPorte",
+    "selectedGrandeRede",
+    "selectedCnpjRaiz",
+    "percentualNaoComprovacaoRange",
+    "valorMinSemComp",
+    "sliderValue",
+    "clusterSelection",
+    "rfaSelection",
+    "searchTarget",
   ];
   return fields.filter((f) => isFilterActive(f)).length;
 });
@@ -297,7 +355,11 @@ const stepEnd = (delta) => {
 onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 // ── Play automático do Período de Análise ────────────────────────────────────
-const PLAY_INTERVAL_MS = 350;
+// Duração centralizada no store: Sidebar e gráfico usam exatamente o mesmo valor.
+// Intervalo ligeiramente menor que a duração de animação do ECharts para que os
+// tweens se sobreponham e o movimento seja contínuo (sem pausa entre passos).
+const PLAY_DURATION_MS = 350; // duração da transição ECharts (publicada na store)
+const PLAY_INTERVAL_MS = 300; // intervalo entre steps (< PLAY_DURATION_MS = overlap)
 const PLAY_STEP = 3; // trimestral: avança 3 meses por tick
 
 const isPlaying = ref(false);
@@ -309,6 +371,7 @@ const savedRange = ref(null);
 const stopPlay = () => {
   isPlaying.value = false;
   filterStore.isAnimating = false;
+  filterStore.animationDuration = 0; // volta a resposta instantânea para filtros manuais
   if (playIntervalId !== null) {
     clearInterval(playIntervalId);
     playIntervalId = null;
@@ -332,7 +395,9 @@ const playStep = () => {
   applySliderPeriod([nextS, nextE]);
 };
 
-const isPreloading = computed(() => filterStore.animationPreload.status === 'loading');
+const isPreloading = computed(
+  () => filterStore.animationPreload.status === "loading",
+);
 
 const startAnimation = () => {
   if (!savedRange.value) return;
@@ -342,6 +407,7 @@ const startAnimation = () => {
   applySliderPeriod([startIdx, endIdx]);
   isPlaying.value = true;
   filterStore.isAnimating = true;
+  filterStore.animationDuration = PLAY_DURATION_MS; // gráfico lê este valor para os tweens
   playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
 };
 
@@ -352,9 +418,10 @@ const togglePlay = () => {
   }
 
   // Pausa → retoma de onde parou (preload já está pronto)
-  if (savedRange.value && filterStore.animationPreload.status === 'ready') {
+  if (savedRange.value && filterStore.animationPreload.status === "ready") {
     isPlaying.value = true;
     filterStore.isAnimating = true;
+    filterStore.animationDuration = PLAY_DURATION_MS;
     playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
     return;
   }
@@ -362,15 +429,18 @@ const togglePlay = () => {
   // Início limpo: salva range e dispara preload (RiskDiagnosisTab observa e busca os dados)
   savedRange.value = [...timeSliderValue.value];
   const { inicio, fim } = getApiParams();
-  filterStore.animationPreload.status = 'loading';
+  filterStore.animationPreload.status = "loading";
   filterStore.animationPreload.dataInicio = inicio;
   filterStore.animationPreload.dataFim = fim;
 };
 
 // Auto-inicia a animação quando o RiskDiagnosisTab sinalizar que o preload concluiu
-watch(() => filterStore.animationPreload.status, (status) => {
-  if (status === 'ready') startAnimation();
-});
+watch(
+  () => filterStore.animationPreload.status,
+  (status) => {
+    if (status === "ready") startAnimation();
+  },
+);
 
 const resetPlayback = () => {
   stopPlay();
@@ -379,17 +449,31 @@ const resetPlayback = () => {
     applySliderPeriod(savedRange.value);
     savedRange.value = null;
   }
-  filterStore.animationPreload.status = 'idle';
+  filterStore.animationPreload.status = "idle";
   filterStore.animationPreload.dataInicio = null;
   filterStore.animationPreload.dataFim = null;
 };
 
-// Para o play e reseta preload ao navegar para outra rota
-watch(() => route.path, () => {
+// Limpa o filtro de período — para a animação sem restaurar o range salvo,
+// depois delega ao resetYears para restaurar o padrão.
+const clearPeriodFilter = () => {
   stopPlay();
   savedRange.value = null;
-  filterStore.animationPreload.status = 'idle';
-});
+  filterStore.animationPreload.status = "idle";
+  filterStore.animationPreload.dataInicio = null;
+  filterStore.animationPreload.dataFim = null;
+  resetYears();
+};
+
+// Para o play e reseta preload ao navegar para outra rota
+watch(
+  () => route.path,
+  () => {
+    stopPlay();
+    savedRange.value = null;
+    filterStore.animationPreload.status = "idle";
+  },
+);
 
 // Limpa o intervalo ao desmontar o componente
 onBeforeUnmount(stopPlay);
@@ -410,7 +494,11 @@ onBeforeUnmount(stopPlay);
     class="sidebar-lock-btn"
     :class="{ locked: isSidebarLocked }"
     @click="toggleSidebarLock"
-    :title="isSidebarLocked ? 'Sidebar travada — clique para destravar' : 'Travar sidebar colapsada'"
+    :title="
+      isSidebarLocked
+        ? 'Sidebar travada — clique para destravar'
+        : 'Travar sidebar colapsada'
+    "
   >
     <i :class="isSidebarLocked ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
   </button>
@@ -428,59 +516,142 @@ onBeforeUnmount(stopPlay);
       <!-- BANNER DE FILTROS BLOQUEADOS -->
       <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
-        <span v-if="isEstabelecimentoRoute">Apenas o Período de Análise está disponível nesta tela</span>
+        <span v-if="isEstabelecimentoRoute"
+          >Apenas o Período de Análise está disponível nesta tela</span
+        >
         <span v-else>Filtros indisponíveis nesta tela</span>
       </div>
 
       <!-- FILTROS GLOBAIS -->
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           UF
-          <button v-if="isFilterActive('selectedUF')" class="filter-clear-btn" @click="filterStore.selectedUF = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('selectedUF')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedUF = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <Dropdown v-model="filterStore.selectedUF" :options="ufOptions" placeholder="Estado" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedUF') }" />
+        <Dropdown
+          v-model="filterStore.selectedUF"
+          :options="ufOptions"
+          placeholder="Estado"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedUF') }"
+        />
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           Região de Saúde
-          <button v-if="isFilterActive('selectedRegiaoSaude')" class="filter-clear-btn" @click="filterStore.selectedRegiaoSaude = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('selectedRegiaoSaude')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedRegiaoSaude = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <Dropdown v-model="filterStore.selectedRegiaoSaude" :options="regiaoSaudeOptions" placeholder="Região" filter reset-filter-on-hide auto-option-focus filter-match-mode="contains" @show="onDropdownShow" :virtualScrollerOptions="{ itemSize: 32 }" panelClass="sidebar-panel" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }" />
+        <Dropdown
+          v-model="filterStore.selectedRegiaoSaude"
+          :options="regiaoSaudeOptions"
+          placeholder="Região"
+          filter
+          reset-filter-on-hide
+          auto-option-focus
+          filter-match-mode="contains"
+          @show="onDropdownShow"
+          :virtualScrollerOptions="{ itemSize: 32 }"
+          panelClass="sidebar-panel"
+          class="w-full filter-input"
+          :class="{ 'filter-active': isFilterActive('selectedRegiaoSaude') }"
+        />
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           Município
-          <button v-if="isFilterActive('selectedMunicipio')" class="filter-clear-btn" @click="filterStore.selectedMunicipio = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('selectedMunicipio')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedMunicipio = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <Dropdown v-model="filterStore.selectedMunicipio" :options="municipioOptions" placeholder="Município" filter optionLabel="label" optionValue="value" reset-filter-on-hide auto-option-focus filter-match-mode="contains" @show="onDropdownShow" :virtualScrollerOptions="{ itemSize: 32 }" panelClass="sidebar-panel" class="w-full filter-input" :class="{ 'filter-active': isFilterActive('selectedMunicipio') }" />
+        <Dropdown
+          v-model="filterStore.selectedMunicipio"
+          :options="municipioOptions"
+          placeholder="Município"
+          filter
+          optionLabel="label"
+          optionValue="value"
+          reset-filter-on-hide
+          auto-option-focus
+          filter-match-mode="contains"
+          @show="onDropdownShow"
+          :virtualScrollerOptions="{ itemSize: 32 }"
+          panelClass="sidebar-panel"
+          class="w-full filter-input"
+          :class="{ 'filter-active': isFilterActive('selectedMunicipio') }"
+        />
       </div>
 
       <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-section">
           <label class="filter-label">
             Situação RF
-            <button v-if="isFilterActive('selectedSituacao')" class="filter-clear-btn" @click="filterStore.selectedSituacao = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+            <button
+              v-if="isFilterActive('selectedSituacao')"
+              class="filter-clear-btn"
+              @click="filterStore.selectedSituacao = FILTER_ALL_VALUE"
+              v-tooltip.right="'Limpar filtro'"
+            >
               <i class="pi pi-eraser" />
             </button>
           </label>
-          <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
+          <Dropdown
+            v-model="filterStore.selectedSituacao"
+            :options="situacaoOptions"
+            class="w-full filter-input"
+            panelClass="sidebar-panel"
+            :class="{ 'filter-active': isFilterActive('selectedSituacao') }"
+          />
         </div>
         <div class="filter-section">
           <label class="filter-label">
             Conexão MS
-            <button v-if="isFilterActive('selectedMS')" class="filter-clear-btn" @click="filterStore.selectedMS = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+            <button
+              v-if="isFilterActive('selectedMS')"
+              class="filter-clear-btn"
+              @click="filterStore.selectedMS = FILTER_ALL_VALUE"
+              v-tooltip.right="'Limpar filtro'"
+            >
               <i class="pi pi-eraser" />
             </button>
           </label>
-          <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedMS') }" />
+          <Dropdown
+            v-model="filterStore.selectedMS"
+            :options="msOptions"
+            class="w-full filter-input"
+            panelClass="sidebar-panel"
+            :class="{ 'filter-active': isFilterActive('selectedMS') }"
+          />
         </div>
       </div>
 
@@ -488,28 +659,69 @@ onBeforeUnmount(stopPlay);
         <div class="filter-section">
           <label class="filter-label">
             Porte CNPJ
-            <button v-if="isFilterActive('selectedPorte')" class="filter-clear-btn" @click="filterStore.selectedPorte = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+            <button
+              v-if="isFilterActive('selectedPorte')"
+              class="filter-clear-btn"
+              @click="filterStore.selectedPorte = FILTER_ALL_VALUE"
+              v-tooltip.right="'Limpar filtro'"
+            >
               <i class="pi pi-eraser" />
             </button>
           </label>
-          <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
+          <Dropdown
+            v-model="filterStore.selectedPorte"
+            :options="porteOptions"
+            class="w-full filter-input"
+            panelClass="sidebar-panel"
+            :class="{ 'filter-active': isFilterActive('selectedPorte') }"
+          />
         </div>
         <div class="filter-section">
           <label class="filter-label">
             Grande Rede
-            <button v-if="isFilterActive('selectedGrandeRede')" class="filter-clear-btn" @click="filterStore.selectedGrandeRede = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+            <button
+              v-if="isFilterActive('selectedGrandeRede')"
+              class="filter-clear-btn"
+              @click="filterStore.selectedGrandeRede = FILTER_ALL_VALUE"
+              v-tooltip.right="'Limpar filtro'"
+            >
               <i class="pi pi-eraser" />
             </button>
           </label>
-          <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
+          <Dropdown
+            v-model="filterStore.selectedGrandeRede"
+            :options="grandeRedeOptions"
+            class="w-full filter-input"
+            panelClass="sidebar-panel"
+            :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }"
+          />
         </div>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           Estabelecimento
-          <i class="pi pi-info-circle" style="font-size: 0.7rem; margin-left: 4px; opacity: 0.6; cursor: default;" v-tooltip.right="'Digite o CNPJ (completo ou raiz de 8 dígitos) ou parte da razão social. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede; texto livre filtra por razão social.'" />
-          <button v-if="isFilterActive('selectedCnpjRaiz')" class="filter-clear-btn" @click="filterStore.selectedCnpjRaiz = ''" v-tooltip.right="'Limpar filtro'">
+          <i
+            class="pi pi-info-circle"
+            style="
+              font-size: 0.7rem;
+              margin-left: 4px;
+              opacity: 0.6;
+              cursor: default;
+            "
+            v-tooltip.right="
+              'Digite o CNPJ (completo ou raiz de 8 dígitos) ou parte da razão social. CNPJ completo filtra o estabelecimento exato; raiz filtra toda a rede; texto livre filtra por razão social.'
+            "
+          />
+          <button
+            v-if="isFilterActive('selectedCnpjRaiz')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedCnpjRaiz = ''"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
@@ -532,71 +744,161 @@ onBeforeUnmount(stopPlay);
               <span class="ac-razao">{{ option.label }}</span>
               <div class="ac-meta">
                 <span class="ac-cnpj">{{ option.cnpj }}</span>
-                <span v-if="option.municipio" class="ac-loc">{{ option.municipio }}/{{ option.uf }}</span>
+                <span v-if="option.municipio" class="ac-loc"
+                  >{{ option.municipio }}/{{ option.uf }}</span
+                >
               </div>
             </div>
           </template>
         </AutoComplete>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           % de não comprovação
-          <button v-if="isFilterActive('percentualNaoComprovacaoRange')" class="filter-clear-btn" @click="() => { filterStore.percentualNaoComprovacaoRange = [0, 100]; applyPercentualNaoComprovacao(); }" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('percentualNaoComprovacaoRange')"
+            class="filter-clear-btn"
+            @click="
+              () => {
+                filterStore.percentualNaoComprovacaoRange = [0, 100];
+                applyPercentualNaoComprovacao();
+              }
+            "
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('percentualNaoComprovacaoRange') }">
+        <div
+          class="slider-container"
+          :class="{
+            'filter-active-box': isFilterActive(
+              'percentualNaoComprovacaoRange',
+            ),
+          }"
+        >
           <div class="perc-chips">
             <button
               v-for="v in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]"
               :key="v"
               class="perc-chip"
-              :class="{ 'perc-chip-active': filterStore.percentualNaoComprovacaoRange[0] === v }"
-              @click="() => { filterStore.percentualNaoComprovacaoRange = [v, 100]; applyPercentualNaoComprovacao(); }"
+              :class="{
+                'perc-chip-active':
+                  filterStore.percentualNaoComprovacaoRange[0] === v,
+              }"
+              @click="
+                () => {
+                  filterStore.percentualNaoComprovacaoRange = [v, 100];
+                  applyPercentualNaoComprovacao();
+                }
+              "
             >
               {{ v }}%
             </button>
           </div>
           <div class="period-steppers">
             <div class="period-stepper-group">
-              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[0] === 0" @click="stepPercStart(-1)">
+              <button
+                class="period-step-btn"
+                :disabled="filterStore.percentualNaoComprovacaoRange[0] === 0"
+                @click="stepPercStart(-1)"
+              >
                 <i class="pi pi-chevron-left" />
               </button>
-              <span class="period-step-label">{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
-              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[0] >= filterStore.percentualNaoComprovacaoRange[1] - 1" @click="stepPercStart(1)">
+              <span class="period-step-label"
+                >{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span
+              >
+              <button
+                class="period-step-btn"
+                :disabled="
+                  filterStore.percentualNaoComprovacaoRange[0] >=
+                  filterStore.percentualNaoComprovacaoRange[1] - 1
+                "
+                @click="stepPercStart(1)"
+              >
                 <i class="pi pi-chevron-right" />
               </button>
             </div>
             <div class="period-stepper-group">
-              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[1] <= filterStore.percentualNaoComprovacaoRange[0] + 1" @click="stepPercEnd(-1)">
+              <button
+                class="period-step-btn"
+                :disabled="
+                  filterStore.percentualNaoComprovacaoRange[1] <=
+                  filterStore.percentualNaoComprovacaoRange[0] + 1
+                "
+                @click="stepPercEnd(-1)"
+              >
                 <i class="pi pi-chevron-left" />
               </button>
-              <span class="period-step-label">{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
-              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[1] === 100" @click="stepPercEnd(1)">
+              <span class="period-step-label"
+                >{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span
+              >
+              <button
+                class="period-step-btn"
+                :disabled="filterStore.percentualNaoComprovacaoRange[1] === 100"
+                @click="stepPercEnd(1)"
+              >
                 <i class="pi pi-chevron-right" />
               </button>
             </div>
           </div>
-          <Slider v-model="filterStore.percentualNaoComprovacaoRange" range class="w-full" @slideend="applyPercentualNaoComprovacao" />
+          <Slider
+            v-model="filterStore.percentualNaoComprovacaoRange"
+            range
+            class="w-full"
+            @slideend="applyPercentualNaoComprovacao"
+          />
         </div>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked-alt': filtersLocked || isIndicadoresRoute }">
-        <label class="filter-label" style="pointer-events: auto;">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked-alt': filtersLocked || isIndicadoresRoute }"
+      >
+        <label class="filter-label" style="pointer-events: auto">
           Período de Análise
-          <button v-if="isFilterActive('sliderValue') && !isIndicadoresRoute" class="filter-clear-btn" @click="resetYears" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('sliderValue') && !isIndicadoresRoute"
+            class="filter-clear-btn"
+            @click="clearPeriodFilter"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
-          <i v-if="isIndicadoresRoute" class="pi pi-info-circle" style="font-size: 0.75rem; margin-left: auto; color: var(--primary-color); cursor: help;" v-tooltip.right="'Indicadores utilizam snapshots consolidados da Matriz de Risco. O filtro de período não se aplica a esta tela.'" />
+          <i
+            v-if="isIndicadoresRoute"
+            class="pi pi-info-circle"
+            style="
+              font-size: 0.75rem;
+              margin-left: auto;
+              color: var(--primary-color);
+              cursor: help;
+            "
+            v-tooltip.right="
+              'Indicadores utilizam snapshots consolidados da Matriz de Risco. O filtro de período não se aplica a esta tela.'
+            "
+          />
         </label>
-        <div class="slider-container" :class="{ 'filter-locked': filtersLocked || isIndicadoresRoute, 'filter-active-box': isFilterActive('sliderValue') }">
+        <div
+          class="slider-container"
+          :class="{
+            'filter-locked': filtersLocked || isIndicadoresRoute,
+            'filter-active-box': isFilterActive('sliderValue'),
+          }"
+        >
           <div class="perc-chips" style="margin-bottom: 0.5rem">
             <button
               v-for="year in displayYears"
               :key="year"
               class="perc-chip"
-              :class="{ 'perc-chip-active': isYearActive(year), 'perc-chip-disabled': isYearDisabled(year) }"
+              :class="{
+                'perc-chip-active': isYearActive(year),
+                'perc-chip-disabled': isYearDisabled(year),
+              }"
               :disabled="isYearDisabled(year) || isIndicadoresRoute"
               @click="toggleYear(year)"
             >
@@ -605,39 +907,97 @@ onBeforeUnmount(stopPlay);
           </div>
           <div class="period-steppers">
             <div class="period-stepper-group">
-              <button class="period-step-btn" :disabled="timeSliderValue[0] === 0 || isIndicadoresRoute" @click="stepStart(-1)">
+              <button
+                class="period-step-btn"
+                :disabled="timeSliderValue[0] === 0 || isIndicadoresRoute"
+                @click="stepStart(-1)"
+              >
                 <i class="pi pi-chevron-left" />
               </button>
               <span class="period-step-label">{{ startMonthLabel }}</span>
-              <button class="period-step-btn" :disabled="timeSliderValue[0] >= timeSliderValue[1] - 1 || isIndicadoresRoute" @click="stepStart(1)">
+              <button
+                class="period-step-btn"
+                :disabled="
+                  timeSliderValue[0] >= timeSliderValue[1] - 1 ||
+                  isIndicadoresRoute
+                "
+                @click="stepStart(1)"
+              >
                 <i class="pi pi-chevron-right" />
               </button>
             </div>
             <div class="period-stepper-group">
-              <button class="period-step-btn" :disabled="timeSliderValue[1] <= timeSliderValue[0] + 1 || isIndicadoresRoute" @click="stepEnd(-1)">
+              <button
+                class="period-step-btn"
+                :disabled="
+                  timeSliderValue[1] <= timeSliderValue[0] + 1 ||
+                  isIndicadoresRoute
+                "
+                @click="stepEnd(-1)"
+              >
                 <i class="pi pi-chevron-left" />
               </button>
               <span class="period-step-label">{{ endMonthLabel }}</span>
-              <button class="period-step-btn" :disabled="timeSliderValue[1] === availableMonths.length - 1 || isIndicadoresRoute" @click="stepEnd(1)">
+              <button
+                class="period-step-btn"
+                :disabled="
+                  timeSliderValue[1] === availableMonths.length - 1 ||
+                  isIndicadoresRoute
+                "
+                @click="stepEnd(1)"
+              >
                 <i class="pi pi-chevron-right" />
               </button>
             </div>
           </div>
           <div class="slider-wrapper">
-            <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" :disabled="isIndicadoresRoute" @slideend="() => { stopPlay(); savedRange.value = null; applySliderPeriod(timeSliderValue); }" />
+            <Slider
+              v-model="timeSliderValue"
+              range
+              :min="0"
+              :max="availableMonths.length - 1"
+              class="w-full time-slider"
+              :disabled="isIndicadoresRoute"
+              @slideend="
+                () => {
+                  stopPlay();
+                  savedRange.value = null;
+                  applySliderPeriod(timeSliderValue);
+                }
+              "
+            />
           </div>
 
           <!-- Controles de Playback -->
-          <div class="playback-controls" :class="{ disabled: isIndicadoresRoute }">
+          <div
+            class="playback-controls"
+            :class="{ disabled: isIndicadoresRoute }"
+          >
             <button
               class="play-btn"
               :class="{ playing: isPlaying, loading: isPreloading }"
               :disabled="isIndicadoresRoute || isPreloading"
-              :title="isPreloading ? 'Carregando dados...' : isPlaying ? 'Pausar animação' : 'Animar trimestre a trimestre'"
+              :title="
+                isPreloading
+                  ? 'Carregando dados...'
+                  : isPlaying
+                    ? 'Pausar animação'
+                    : 'Animar trimestre a trimestre'
+              "
               @click="togglePlay"
             >
-              <i :class="isPreloading ? 'pi pi-spin pi-spinner' : isPlaying ? 'pi pi-pause' : 'pi pi-play'" />
-              <span>{{ isPreloading ? 'Carregando...' : isPlaying ? 'Pausar' : 'Animar' }}</span>
+              <i
+                :class="
+                  isPreloading
+                    ? 'pi pi-spin pi-spinner'
+                    : isPlaying
+                      ? 'pi pi-pause'
+                      : 'pi pi-play'
+                "
+              />
+              <span>{{
+                isPreloading ? "Carregando..." : isPlaying ? "Pausar" : "Animar"
+              }}</span>
             </button>
             <button
               class="period-step-btn reset-btn"
@@ -651,35 +1011,83 @@ onBeforeUnmount(stopPlay);
         </div>
       </div>
 
-      <div class="filter-section" style="margin-top: 1.8rem" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        style="margin-top: 1.8rem"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           Valor mínimo sem comprovação
-          <button v-if="isFilterActive('valorMinSemComp')" class="filter-clear-btn" @click="() => { filterStore.valorMinSemComp = 0; applyValorMinSemComp(); }" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('valorMinSemComp')"
+            class="filter-clear-btn"
+            @click="
+              () => {
+                filterStore.valorMinSemComp = 0;
+                applyValorMinSemComp();
+              }
+            "
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
+        <div
+          class="slider-container"
+          :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }"
+        >
           <div class="slider-values">
             <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
           </div>
-          <Slider v-model="filterStore.valorMinSemComp" :min="0" :max="FILTER_DEFAULTS.VALOR_MAX" :step="1000" class="w-full" @slideend="applyValorMinSemComp" />
+          <Slider
+            v-model="filterStore.valorMinSemComp"
+            :min="0"
+            :max="FILTER_DEFAULTS.VALOR_MAX"
+            :step="1000"
+            class="w-full"
+            @slideend="applyValorMinSemComp"
+          />
         </div>
       </div>
 
-      <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <label class="filter-label">
           Jurisdição PF
-          <button v-if="isFilterActive('selectedUnidadePf')" class="filter-clear-btn" @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+          <button
+            v-if="isFilterActive('selectedUnidadePf')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <Dropdown v-model="filterStore.selectedUnidadePf" :options="unidadePfOptions" placeholder="Delegacia / Unidade PF" filter reset-filter-on-hide auto-option-focus filter-match-mode="contains" @show="onDropdownShow" :virtualScrollerOptions="{ itemSize: 32 }" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }" />
+        <Dropdown
+          v-model="filterStore.selectedUnidadePf"
+          :options="unidadePfOptions"
+          placeholder="Delegacia / Unidade PF"
+          filter
+          reset-filter-on-hide
+          auto-option-focus
+          filter-match-mode="contains"
+          @show="onDropdownShow"
+          :virtualScrollerOptions="{ itemSize: 32 }"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"
+        />
       </div>
 
       <hr class="sidebar-divider my-4" />
 
       <!-- FILTROS CONTEXTUAIS -->
-      <div class="dynamic-filters-box" :class="{ 'filter-locked': allFiltersLocked }">
+      <div
+        class="dynamic-filters-box"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
         <div class="filter-header">
           <i class="pi pi-filter"></i>
           <span>Filtros da Página</span>
@@ -689,29 +1097,61 @@ onBeforeUnmount(stopPlay);
           <div class="filter-section mini">
             <label class="filter-label sm">
               Busca Alvo
-              <button v-if="isFilterActive('searchTarget')" class="filter-clear-btn" @click="filterStore.searchTarget = ''" v-tooltip.right="'Limpar filtro'">
+              <button
+                v-if="isFilterActive('searchTarget')"
+                class="filter-clear-btn"
+                @click="filterStore.searchTarget = ''"
+                v-tooltip.right="'Limpar filtro'"
+              >
                 <i class="pi pi-eraser" />
               </button>
             </label>
-            <InputText v-model="filterStore.searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('searchTarget') }" />
+            <InputText
+              v-model="filterStore.searchTarget"
+              placeholder="ID/CNPJ..."
+              class="w-full filter-input sm"
+              :class="{ 'filter-active': isFilterActive('searchTarget') }"
+            />
           </div>
           <div class="filter-section mini">
             <label class="filter-label sm">
               Target Cluster
-              <button v-if="isFilterActive('clusterSelection')" class="filter-clear-btn" @click="filterStore.clusterSelection = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <button
+                v-if="isFilterActive('clusterSelection')"
+                class="filter-clear-btn"
+                @click="filterStore.clusterSelection = FILTER_ALL_VALUE"
+                v-tooltip.right="'Limpar filtro'"
+              >
                 <i class="pi pi-eraser" />
               </button>
             </label>
-            <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('clusterSelection') }" />
+            <Dropdown
+              v-model="filterStore.clusterSelection"
+              :options="clusterOptions"
+              class="w-full filter-input sm"
+              panelClass="sidebar-panel"
+              :class="{ 'filter-active': isFilterActive('clusterSelection') }"
+            />
           </div>
           <div class="filter-section mini">
             <label class="filter-label sm">
               Risco (RFA)
-              <button v-if="isFilterActive('rfaSelection')" class="filter-clear-btn" @click="filterStore.rfaSelection = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <button
+                v-if="isFilterActive('rfaSelection')"
+                class="filter-clear-btn"
+                @click="filterStore.rfaSelection = FILTER_ALL_VALUE"
+                v-tooltip.right="'Limpar filtro'"
+              >
                 <i class="pi pi-eraser" />
               </button>
             </label>
-            <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('rfaSelection') }" />
+            <Dropdown
+              v-model="filterStore.rfaSelection"
+              :options="rfaOptions"
+              class="w-full filter-input sm"
+              panelClass="sidebar-panel"
+              :class="{ 'filter-active': isFilterActive('rfaSelection') }"
+            />
           </div>
         </div>
 
@@ -719,16 +1159,28 @@ onBeforeUnmount(stopPlay);
           <div class="filter-section mini">
             <label class="filter-label sm">
               CPF/CNPJ Alvo
-              <button v-if="isFilterActive('searchTarget')" class="filter-clear-btn" @click="filterStore.searchTarget = ''" v-tooltip.right="'Limpar filtro'">
+              <button
+                v-if="isFilterActive('searchTarget')"
+                class="filter-clear-btn"
+                @click="filterStore.searchTarget = ''"
+                v-tooltip.right="'Limpar filtro'"
+              >
                 <i class="pi pi-eraser" />
               </button>
             </label>
-            <InputText v-model="filterStore.searchTarget" placeholder="Pesquisar rede..." class="w-full filter-input sm" />
+            <InputText
+              v-model="filterStore.searchTarget"
+              placeholder="Pesquisar rede..."
+              class="w-full filter-input sm"
+            />
           </div>
         </div>
 
         <div v-if="activeModule === 'consolidado'" class="contextual-filters">
-          <p class="text-xs px-2 italic" style="color: var(--sidebar-text); opacity: 0.7">
+          <p
+            class="text-xs px-2 italic"
+            style="color: var(--sidebar-text); opacity: 0.7"
+          >
             Nenhum filtro extra necessário.
           </p>
         </div>
@@ -739,7 +1191,11 @@ onBeforeUnmount(stopPlay);
 
     <div class="sidebar-footer">
       <Button
-        :label="activeFilterCount > 0 ? `Limpar Filtros (${activeFilterCount})` : 'Limpar Filtros'"
+        :label="
+          activeFilterCount > 0
+            ? `Limpar Filtros (${activeFilterCount})`
+            : 'Limpar Filtros'
+        "
         icon="pi pi-undo"
         outlined
         :severity="activeFilterCount > 0 ? 'warn' : 'secondary'"
@@ -799,7 +1255,9 @@ onBeforeUnmount(stopPlay);
   box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
 }
 
-.sidebar-float-btn i { font-size: 0.8rem; }
+.sidebar-float-btn i {
+  font-size: 0.8rem;
+}
 
 /* BOTÃO DE CADEADO */
 .sidebar-lock-btn {
@@ -823,7 +1281,10 @@ onBeforeUnmount(stopPlay);
   box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
 }
 
-.sidebar-lock-btn:hover { width: 28px; box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15); }
+.sidebar-lock-btn:hover {
+  width: 28px;
+  box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
+}
 
 .sidebar-lock-btn.locked {
   opacity: 1;
@@ -831,8 +1292,9 @@ onBeforeUnmount(stopPlay);
   background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-bg));
 }
 
-.sidebar-lock-btn i { font-size: 0.8rem; }
-
+.sidebar-lock-btn i {
+  font-size: 0.8rem;
+}
 
 .sidebar-title-simple {
   display: flex;
@@ -867,16 +1329,36 @@ onBeforeUnmount(stopPlay);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
 }
 
-.sidebar-content::-webkit-scrollbar       { width: 4px; }
-.sidebar-content::-webkit-scrollbar-track { background: var(--sidebar-bg); }
-.sidebar-content::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 4px; }
-.sidebar-content::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.sidebar-content::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-content::-webkit-scrollbar-track {
+  background: var(--sidebar-bg);
+}
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border);
+  border-radius: 4px;
+}
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
 
-.sidebar-footer   { padding: 1rem; }
-.sidebar-spacer   { flex: 1; }
-.sidebar-divider  { border: 0; border-top: 1px solid var(--sidebar-border); opacity: 0.5; margin: 0.5rem 0; }
+.sidebar-footer {
+  padding: 1rem;
+}
+.sidebar-spacer {
+  flex: 1;
+}
+.sidebar-divider {
+  border: 0;
+  border-top: 1px solid var(--sidebar-border);
+  opacity: 0.5;
+  margin: 0.5rem 0;
+}
 
-.filter-section { margin-bottom: 0.35rem; }
+.filter-section {
+  margin-bottom: 0.35rem;
+}
 
 .filter-locked {
   pointer-events: none;
@@ -905,7 +1387,9 @@ onBeforeUnmount(stopPlay);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.filters-locked-banner .pi { font-size: 0.7rem; }
+.filters-locked-banner .pi {
+  font-size: 0.7rem;
+}
 
 .filter-label {
   display: flex;
@@ -936,8 +1420,12 @@ onBeforeUnmount(stopPlay);
   flex-shrink: 0;
 }
 
-.filter-clear-btn:hover { opacity: 1; }
-.filter-clear-btn .pi   { font-size: 0.75rem; }
+.filter-clear-btn:hover {
+  opacity: 1;
+}
+.filter-clear-btn .pi {
+  font-size: 0.75rem;
+}
 
 .grid-filters {
   display: grid;
@@ -945,7 +1433,9 @@ onBeforeUnmount(stopPlay);
   gap: 0.5rem;
 }
 
-.grid-filters .filter-section { min-width: 0; }
+.grid-filters .filter-section {
+  min-width: 0;
+}
 
 .grid-filters :deep(.p-dropdown-label) {
   overflow: hidden;
@@ -989,7 +1479,8 @@ onBeforeUnmount(stopPlay);
 :global(.admin-sidebar .filter-active.p-inputtext:not(.p-dropdown-label)) {
   border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
   background: rgba(255, 255, 255, 0.03) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
   outline: none !important;
 }
 
@@ -1017,13 +1508,21 @@ onBeforeUnmount(stopPlay);
   font-size: 0.8rem;
 }
 
-:global(.sidebar-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
+:global(
+  .sidebar-panel
+    .p-dropdown-items
+    .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover
+) {
   background: var(--sidebar-input-bg) !important;
   color: var(--sidebar-text) !important;
 }
 
 :global(.sidebar-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 20%,
+    transparent
+  ) !important;
   color: var(--primary-color) !important;
 }
 
@@ -1038,7 +1537,9 @@ onBeforeUnmount(stopPlay);
 }
 
 /* SLIDERS */
-.slider-container { padding: 0.5rem 0.2rem; }
+.slider-container {
+  padding: 0.5rem 0.2rem;
+}
 
 .slider-values {
   display: flex;
@@ -1075,12 +1576,18 @@ onBeforeUnmount(stopPlay);
   background: color-mix(in srgb, var(--primary-color) 8%, transparent);
 }
 
-.perc-chip:focus { outline: none; }
+.perc-chip:focus {
+  outline: none;
+}
 
 .perc-chip-active {
   border-color: var(--primary-color) !important;
   color: var(--primary-color) !important;
-  background: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 14%,
+    transparent
+  ) !important;
   box-shadow: 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
@@ -1095,7 +1602,9 @@ onBeforeUnmount(stopPlay);
   margin-top: 8px;
 }
 
-.filter-input { margin-bottom: 4px !important; }
+.filter-input {
+  margin-bottom: 4px !important;
+}
 
 .period-steppers {
   display: flex;
@@ -1138,7 +1647,10 @@ onBeforeUnmount(stopPlay);
   background: var(--sidebar-input-bg);
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -1147,7 +1659,11 @@ onBeforeUnmount(stopPlay);
 }
 
 .period-step-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-input-bg));
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 12%,
+    var(--sidebar-input-bg)
+  );
   border-color: var(--primary-color);
   color: var(--primary-color);
 }
@@ -1162,7 +1678,9 @@ onBeforeUnmount(stopPlay);
   height: 4px !important;
 }
 
-:deep(.p-slider .p-slider-range) { background: var(--sidebar-border) !important; }
+:deep(.p-slider .p-slider-range) {
+  background: var(--sidebar-border) !important;
+}
 
 :deep(.p-slider-handle) {
   border: 2px solid var(--accent-indigo) !important;
@@ -1170,12 +1688,15 @@ onBeforeUnmount(stopPlay);
   width: 14px !important;
   height: 14px !important;
   margin-top: -6px !important;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
 }
 
 :deep(.p-slider:not(.p-disabled) .p-slider-handle:hover) {
   background: var(--accent-indigo) !important;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-indigo) 20%, transparent) !important;
+  box-shadow: 0 0 0 6px
+    color-mix(in srgb, var(--accent-indigo) 20%, transparent) !important;
 }
 
 .filter-active-box :deep(.p-slider-handle) {
@@ -1184,12 +1705,17 @@ onBeforeUnmount(stopPlay);
 
 .filter-active-box :deep(.p-slider:not(.p-disabled) .p-slider-handle:hover) {
   background: var(--primary-color) !important;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+  box-shadow: 0 0 0 6px
+    color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
 }
 
 /* FILTROS ATIVOS */
 .filter-active-box {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 12%,
+    transparent
+  ) !important;
   border-radius: 4px;
 }
 
@@ -1201,17 +1727,30 @@ onBeforeUnmount(stopPlay);
 
 :deep(.clear-filters-btn.p-button:hover) {
   background: transparent !important;
-  border-color: color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 50%,
+    transparent
+  ) !important;
   color: var(--primary-color) !important;
 }
 
 :deep(.clear-filters-btn.p-button:focus),
-:deep(.clear-filters-btn.p-button:active) { outline: none !important; box-shadow: none !important; }
+:deep(.clear-filters-btn.p-button:active) {
+  outline: none !important;
+  box-shadow: none !important;
+}
 
-:deep(.clear-filters-btn.p-button:focus-visible) { box-shadow: 0 0 0 2px var(--primary-color) !important; }
+:deep(.clear-filters-btn.p-button:focus-visible) {
+  box-shadow: 0 0 0 2px var(--primary-color) !important;
+}
 
 :deep(.filters-active.p-button) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 12%,
+    transparent
+  ) !important;
   border-color: var(--primary-color) !important;
   color: var(--primary-color) !important;
   position: relative;
@@ -1243,20 +1782,40 @@ onBeforeUnmount(stopPlay);
 }
 
 @keyframes shimmer-sweep {
-  0%   { left: -100%; }
-  20%  { left: 100%; }  /* Passa rápido no início do ciclo */
-  100% { left: 100%; }  /* Fica invisível no resto do tempo */
+  0% {
+    left: -100%;
+  }
+  20% {
+    left: 100%;
+  } /* Passa rápido no início do ciclo */
+  100% {
+    left: 100%;
+  } /* Fica invisível no resto do tempo */
 }
 
 @keyframes icon-spin-subtle {
-  0%, 75% { transform: rotate(0deg); }
-  90%     { transform: rotate(-360deg); }
-  100%    { transform: rotate(-360deg); }
+  0%,
+  75% {
+    transform: rotate(0deg);
+  }
+  90% {
+    transform: rotate(-360deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
 }
 
 @keyframes pulse-filter {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-color) 25%, transparent); }
-  50%       { box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 0%, transparent); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--primary-color) 25%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px
+      color-mix(in srgb, var(--primary-color) 0%, transparent);
+  }
 }
 
 /* FILTROS CONTEXTUAIS */
@@ -1276,12 +1835,28 @@ onBeforeUnmount(stopPlay);
   margin-bottom: 1rem;
 }
 
-.filter-header i    { color: var(--primary-color); font-size: 0.9rem; }
-.filter-header span { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--sidebar-text); letter-spacing: 0.5px; }
+.filter-header i {
+  color: var(--primary-color);
+  font-size: 0.9rem;
+}
+.filter-header span {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--sidebar-text);
+  letter-spacing: 0.5px;
+}
 
-.filter-section.mini { margin-bottom: 1rem; padding: 0 0.5rem; }
+.filter-section.mini {
+  margin-bottom: 1rem;
+  padding: 0 0.5rem;
+}
 
-.filter-label.sm { font-size: 0.7rem; opacity: 0.8; margin-bottom: 0.4rem; }
+.filter-label.sm {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  margin-bottom: 0.4rem;
+}
 
 :deep(.filter-input.sm .p-inputtext),
 :deep(.filter-input.sm .p-dropdown-label) {
@@ -1310,11 +1885,14 @@ onBeforeUnmount(stopPlay);
 :global(.admin-sidebar .estabelecimento-ac .p-autocomplete-input:focus) {
   border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
   background: rgba(255, 255, 255, 0.03) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
   outline: none !important;
 }
 
-:global(.admin-sidebar .filter-active.estabelecimento-ac .p-autocomplete-input) {
+:global(
+  .admin-sidebar .filter-active.estabelecimento-ac .p-autocomplete-input
+) {
   border: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
 }
 
@@ -1333,7 +1911,11 @@ onBeforeUnmount(stopPlay);
 
 :global(.sidebar-ac-panel .p-autocomplete-item:hover),
 :global(.sidebar-ac-panel .p-autocomplete-item.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 10%,
+    transparent
+  ) !important;
 }
 
 .ac-option {
@@ -1398,7 +1980,10 @@ onBeforeUnmount(stopPlay);
   font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    box-shadow 0.18s;
   letter-spacing: 0.03em;
 }
 
@@ -1419,7 +2004,8 @@ onBeforeUnmount(stopPlay);
 .play-btn.playing {
   background: color-mix(in srgb, var(--primary-color) 18%, transparent);
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-color) 20%, transparent);
   animation: play-pulse 1.6s ease-in-out infinite;
 }
 
@@ -1430,7 +2016,14 @@ onBeforeUnmount(stopPlay);
 }
 
 @keyframes play-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent); }
-  50%       { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--primary-color) 20%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--primary-color) 10%, transparent);
+  }
 }
 </style>

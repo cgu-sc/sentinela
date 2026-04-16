@@ -9,7 +9,10 @@ const STORAGE_KEY = 'sentinela_config_thresholds';
 export const useConfigStore = defineStore('config', () => {
   // 1. ESTADO INICIAL: Tenta carregar do LocalStorage, caso contrário usa o padrão
   const saved = localStorage.getItem(STORAGE_KEY);
-  const thresholds = ref(saved ? JSON.parse(saved) : { ...DEFAULT_THRESHOLDS });
+  const thresholds = ref(saved 
+    ? { ...DEFAULT_THRESHOLDS, ...JSON.parse(saved) } 
+    : { ...DEFAULT_THRESHOLDS }
+  );
   
   const isLoading = ref(false);
   const hasLoaded = ref(false);
@@ -58,8 +61,8 @@ export const useConfigStore = defineStore('config', () => {
             critico: values[1]
           };
         }
-        // Só atualizamos se o usuário ainda não tiver customizado
-        thresholds.value = formatted;
+        // Fazemos o merge dos padrões com o que veio do servidor
+        thresholds.value = { ...DEFAULT_THRESHOLDS, ...formatted };
         hasLoaded.value = true;
       }
     } catch (err) {

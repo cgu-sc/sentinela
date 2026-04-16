@@ -364,22 +364,42 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
       <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-section">
-          <label class="filter-label">Situação RF</label>
+          <label class="filter-label">
+            Situação RF
+            <button v-if="isFilterActive('selectedSituacao')" class="filter-clear-btn" @click="filterStore.selectedSituacao = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
           <Dropdown v-model="filterStore.selectedSituacao" :options="situacaoOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedSituacao') }" />
         </div>
         <div class="filter-section">
-          <label class="filter-label">Conexão MS</label>
+          <label class="filter-label">
+            Conexão MS
+            <button v-if="isFilterActive('selectedMS')" class="filter-clear-btn" @click="filterStore.selectedMS = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
           <Dropdown v-model="filterStore.selectedMS" :options="msOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedMS') }" />
         </div>
       </div>
 
       <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
         <div class="filter-section">
-          <label class="filter-label">Porte CNPJ</label>
+          <label class="filter-label">
+            Porte CNPJ
+            <button v-if="isFilterActive('selectedPorte')" class="filter-clear-btn" @click="filterStore.selectedPorte = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
           <Dropdown v-model="filterStore.selectedPorte" :options="porteOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedPorte') }" />
         </div>
         <div class="filter-section">
-          <label class="filter-label">Grande Rede</label>
+          <label class="filter-label">
+            Grande Rede
+            <button v-if="isFilterActive('selectedGrandeRede')" class="filter-clear-btn" @click="filterStore.selectedGrandeRede = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+              <i class="pi pi-eraser" />
+            </button>
+          </label>
           <Dropdown v-model="filterStore.selectedGrandeRede" :options="grandeRedeOptions" class="w-full filter-input" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }" />
         </div>
       </div>
@@ -419,7 +439,12 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
       </div>
 
       <div class="filter-section" :class="{ 'filter-locked': allFiltersLocked }">
-        <label class="filter-label">% de não comprovação</label>
+        <label class="filter-label">
+          % de não comprovação
+          <button v-if="isFilterActive('percentualNaoComprovacaoRange')" class="filter-clear-btn" @click="() => { filterStore.percentualNaoComprovacaoRange = [0, 100]; applyPercentualNaoComprovacao(); }" v-tooltip.right="'Limpar filtro'">
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
         <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('percentualNaoComprovacaoRange') }">
           <div class="perc-chips">
             <button
@@ -459,6 +484,9 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
       <div class="filter-section" :class="{ 'filter-locked-alt': filtersLocked || isIndicadoresRoute }">
         <label class="filter-label" style="pointer-events: auto;">
           Período de Análise
+          <button v-if="isFilterActive('sliderValue') && !isIndicadoresRoute" class="filter-clear-btn" @click="resetYears" v-tooltip.right="'Limpar filtro'">
+            <i class="pi pi-eraser" />
+          </button>
           <i v-if="isIndicadoresRoute" class="pi pi-info-circle" style="font-size: 0.75rem; margin-left: auto; color: var(--primary-color); cursor: help;" v-tooltip.right="'Indicadores utilizam snapshots consolidados da Matriz de Risco. O filtro de período não se aplica a esta tela.'" />
         </label>
         <div class="slider-container" :class="{ 'filter-locked': filtersLocked || isIndicadoresRoute, 'filter-active-box': isFilterActive('sliderValue') }">
@@ -501,7 +529,12 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
       </div>
 
       <div class="filter-section" style="margin-top: 1.8rem" :class="{ 'filter-locked': allFiltersLocked }">
-        <label class="filter-label">Valor mínimo sem comprovação</label>
+        <label class="filter-label">
+          Valor mínimo sem comprovação
+          <button v-if="isFilterActive('valorMinSemComp')" class="filter-clear-btn" @click="() => { filterStore.valorMinSemComp = 0; applyValorMinSemComp(); }" v-tooltip.right="'Limpar filtro'">
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
         <div class="slider-container" :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }">
           <div class="slider-values">
             <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
@@ -531,22 +564,42 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
         <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
           <div class="filter-section mini">
-            <label class="filter-label sm">Busca Alvo</label>
+            <label class="filter-label sm">
+              Busca Alvo
+              <button v-if="isFilterActive('searchTarget')" class="filter-clear-btn" @click="filterStore.searchTarget = ''" v-tooltip.right="'Limpar filtro'">
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
             <InputText v-model="filterStore.searchTarget" placeholder="ID/CNPJ..." class="w-full filter-input sm" :class="{ 'filter-active': isFilterActive('searchTarget') }" />
           </div>
           <div class="filter-section mini">
-            <label class="filter-label sm">Target Cluster</label>
+            <label class="filter-label sm">
+              Target Cluster
+              <button v-if="isFilterActive('clusterSelection')" class="filter-clear-btn" @click="filterStore.clusterSelection = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
             <Dropdown v-model="filterStore.clusterSelection" :options="clusterOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('clusterSelection') }" />
           </div>
           <div class="filter-section mini">
-            <label class="filter-label sm">Risco (RFA)</label>
+            <label class="filter-label sm">
+              Risco (RFA)
+              <button v-if="isFilterActive('rfaSelection')" class="filter-clear-btn" @click="filterStore.rfaSelection = FILTER_ALL_VALUE" v-tooltip.right="'Limpar filtro'">
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
             <Dropdown v-model="filterStore.rfaSelection" :options="rfaOptions" class="w-full filter-input sm" panelClass="sidebar-panel" :class="{ 'filter-active': isFilterActive('rfaSelection') }" />
           </div>
         </div>
 
         <div v-if="route.path === '/alvos/rede'" class="contextual-filters">
           <div class="filter-section mini">
-            <label class="filter-label sm">CPF/CNPJ Alvo</label>
+            <label class="filter-label sm">
+              CPF/CNPJ Alvo
+              <button v-if="isFilterActive('searchTarget')" class="filter-clear-btn" @click="filterStore.searchTarget = ''" v-tooltip.right="'Limpar filtro'">
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
             <InputText v-model="filterStore.searchTarget" placeholder="Pesquisar rede..." class="w-full filter-input sm" />
           </div>
         </div>

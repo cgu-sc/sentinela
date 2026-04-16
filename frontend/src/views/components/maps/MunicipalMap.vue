@@ -1,6 +1,7 @@
 <script setup>
 import { computed, watch, ref, onMounted, nextTick } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
+import { useDelayedLoading } from "@/composables/useDelayedLoading";
 import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
@@ -34,6 +35,7 @@ const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
 const filterStore = useFilterStore();
 const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
+const showRefreshing = useDelayedLoading(isLoading);
 const { formatBRL, formatPercent } = useFormatting();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
@@ -417,7 +419,7 @@ const onBackClick = () => {
 <template>
   <div
     class="chart-section"
-    :class="{ 'is-refreshing': isLoading && !embeddedMode }"
+    :class="{ 'is-refreshing': showRefreshing && !embeddedMode }"
   >
     <div class="chart-header">
       <i class="pi pi-map"></i>
@@ -457,6 +459,7 @@ const onBackClick = () => {
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  transition: opacity 0.25s ease;
 }
 
 .chart-header {
@@ -523,7 +526,7 @@ const onBackClick = () => {
 }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
 }
 </style>

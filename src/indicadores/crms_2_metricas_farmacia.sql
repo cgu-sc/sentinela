@@ -593,8 +593,8 @@ WITH CRMsRankeados AS (
         ISNULL(A.nu_prescricoes_dia_em_todos_estabelecimentos, P.nu_prescricoes_dia) AS prescricoes_dia_total_brasil,
         ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) AS qtd_estabelecimentos_atua,
         
-        -- Flag CRM Exclusivo (Atua em apenas 1 estabelecimento no Brasil)
-        CASE WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 1) = 1 THEN 1 ELSE 0 END AS flag_crm_exclusivo,
+        -- Flag CRM Exclusivo (VILÃO CORRIGIDO: Só marca se tivermos certeza via tabela A que estab=1)
+        CASE WHEN ISNULL(A.nu_estabelecimentos_com_registro_mesmo_crm, 0) = 1 THEN 1 ELSE 0 END AS flag_crm_exclusivo,
         
         -- % do volume aqui vs total
         CASE 

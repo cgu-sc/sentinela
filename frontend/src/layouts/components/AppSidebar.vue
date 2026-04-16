@@ -193,6 +193,22 @@ const applyPercentualNaoComprovacao = () => {
   filterStore.percentualNaoComprovacaoFilter = [...filterStore.percentualNaoComprovacaoRange];
 };
 
+const stepPercStart = (delta) => {
+  const [s, e] = filterStore.percentualNaoComprovacaoRange;
+  const newS = Math.max(0, Math.min(e - 1, s + delta));
+  if (newS === s) return;
+  filterStore.percentualNaoComprovacaoRange = [newS, e];
+  applyPercentualNaoComprovacao();
+};
+
+const stepPercEnd = (delta) => {
+  const [s, e] = filterStore.percentualNaoComprovacaoRange;
+  const newE = Math.max(s + 1, Math.min(100, e + delta));
+  if (newE === e) return;
+  filterStore.percentualNaoComprovacaoRange = [s, newE];
+  applyPercentualNaoComprovacao();
+};
+
 const applyValorMinSemComp = () => {
   filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
@@ -253,11 +269,25 @@ const {
   resetYears,
   startMonthLabel,
   endMonthLabel,
-  startPos,
-  endPos,
-  startTransform,
-  endTransform,
 } = useSliderPeriodLogic();
+
+// Move a ponta inicial do slider em `delta` meses (+1 ou -1)
+const stepStart = (delta) => {
+  const [s, e] = timeSliderValue.value;
+  const newS = Math.max(0, Math.min(e - 1, s + delta));
+  if (newS === s) return;
+  timeSliderValue.value = [newS, e];
+  applySliderPeriod([newS, e]);
+};
+
+// Move a ponta final do slider em `delta` meses (+1 ou -1)
+const stepEnd = (delta) => {
+  const [s, e] = timeSliderValue.value;
+  const newE = Math.max(s + 1, Math.min(availableMonths.length - 1, e + delta));
+  if (newE === e) return;
+  timeSliderValue.value = [s, newE];
+  applySliderPeriod([s, newE]);
+};
 
 onMounted(() => applySliderPeriod(timeSliderValue.value));
 </script>
@@ -405,9 +435,25 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
               {{ v }}%
             </button>
           </div>
-          <div class="slider-values">
-            <span>{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
-            <span>{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
+          <div class="period-steppers">
+            <div class="period-stepper-group">
+              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[0] === 0" @click="stepPercStart(-1)">
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">{{ filterStore.percentualNaoComprovacaoRange[0] }}%</span>
+              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[0] >= filterStore.percentualNaoComprovacaoRange[1] - 1" @click="stepPercStart(1)">
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
+            <div class="period-stepper-group">
+              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[1] <= filterStore.percentualNaoComprovacaoRange[0] + 1" @click="stepPercEnd(-1)">
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">{{ filterStore.percentualNaoComprovacaoRange[1] }}%</span>
+              <button class="period-step-btn" :disabled="filterStore.percentualNaoComprovacaoRange[1] === 100" @click="stepPercEnd(1)">
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
           </div>
           <Slider v-model="filterStore.percentualNaoComprovacaoRange" range class="w-full" @slideend="applyPercentualNaoComprovacao" />
         </div>
@@ -431,9 +477,27 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
               {{ year }}
             </button>
           </div>
-          <div class="slider-wrapper relative pt-3 mt-0">
-            <div class="slider-tip" :style="{ left: startPos + '%', transform: startTransform }">{{ startMonthLabel }}</div>
-            <div class="slider-tip" :style="{ left: endPos + '%', transform: endTransform }">{{ endMonthLabel }}</div>
+          <div class="period-steppers">
+            <div class="period-stepper-group">
+              <button class="period-step-btn" :disabled="timeSliderValue[0] === 0 || isIndicadoresRoute" @click="stepStart(-1)">
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">{{ startMonthLabel }}</span>
+              <button class="period-step-btn" :disabled="timeSliderValue[0] >= timeSliderValue[1] - 1 || isIndicadoresRoute" @click="stepStart(1)">
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
+            <div class="period-stepper-group">
+              <button class="period-step-btn" :disabled="timeSliderValue[1] <= timeSliderValue[0] + 1 || isIndicadoresRoute" @click="stepEnd(-1)">
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">{{ endMonthLabel }}</span>
+              <button class="period-step-btn" :disabled="timeSliderValue[1] === availableMonths.length - 1 || isIndicadoresRoute" @click="stepEnd(1)">
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
+          </div>
+          <div class="slider-wrapper">
             <Slider v-model="timeSliderValue" range :min="0" :max="availableMonths.length - 1" class="w-full time-slider" :disabled="isIndicadoresRoute" @slideend="() => applySliderPeriod(timeSliderValue)" />
           </div>
         </div>
@@ -869,37 +933,69 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 .slider-wrapper {
   position: relative;
-  margin-top: 12px !important;
+  margin-top: 8px;
 }
 
 .filter-input { margin-bottom: 4px !important; }
 
-.slider-tip {
-  position: absolute;
-  top: 16px;
-  transform: translateX(-50%);
-  background: var(--sidebar-input-bg);
-  color: var(--sidebar-text);
-  border: 1px solid var(--sidebar-border);
-  padding: 3px 7px;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  pointer-events: none;
-  z-index: 10;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+.period-steppers {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 0.25rem;
 }
 
-.slider-tip::after {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 3px solid transparent;
-  border-right: 3px solid transparent;
-  border-bottom: 4px solid var(--sidebar-border);
+.period-stepper-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.period-step-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--sidebar-text);
+  background: var(--sidebar-input-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 62px;
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.period-step-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 4px;
+  background: var(--sidebar-input-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.period-step-btn i {
+  font-size: 0.55rem;
+}
+
+.period-step-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-input-bg));
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.period-step-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 :deep(.p-slider) {
@@ -910,8 +1006,8 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 :deep(.p-slider .p-slider-range) { background: var(--sidebar-border) !important; }
 
 :deep(.p-slider-handle) {
-  border: 2px solid var(--primary-color) !important;
-  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent) !important;
+  border: 2px solid var(--accent-indigo) !important;
+  background: var(--sidebar-bg) !important;
   width: 14px !important;
   height: 14px !important;
   margin-top: -6px !important;
@@ -919,6 +1015,15 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 }
 
 :deep(.p-slider:not(.p-disabled) .p-slider-handle:hover) {
+  background: var(--accent-indigo) !important;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-indigo) 20%, transparent) !important;
+}
+
+.filter-active-box :deep(.p-slider-handle) {
+  border-color: var(--primary-color) !important;
+}
+
+.filter-active-box :deep(.p-slider:not(.p-disabled) .p-slider-handle:hover) {
   background: var(--primary-color) !important;
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
 }

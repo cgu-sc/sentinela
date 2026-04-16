@@ -42,7 +42,7 @@ const generateAvailableMonths = () => {
         const startMonth = (y === AUDIT_PERIOD.START_YEAR) ? AUDIT_PERIOD.START_MONTH : 0;
         for (let m = startMonth; m <= AUDIT_PERIOD.END_MONTH; m++) {
             months.push({
-                label: `${MONTH_LABELS[m]}/${y.toString().slice(-2)}`,
+                label: `${MONTH_LABELS[m].toLowerCase()}/${y}`,
                 date:  new Date(y, m, 1)
             });
         }

@@ -1,11 +1,12 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useTableAggregation } from '@/composables/useTableAggregation';
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { storeToRefs } from 'pinia';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import { extractCnpjRaiz } from '@/composables/useParsing';
@@ -29,8 +30,15 @@ const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatPercent } = useFormatting();
 const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
+// Mantém os dados anteriores visíveis durante o re-fetch, evitando flash de tabela vazia
+const cachedCnpjs = ref(resultadoCnpjs.value);
+const showRefreshing = useDelayedLoading(isLoading);
+watch([resultadoCnpjs, isLoading], ([newData, loading]) => {
+  if (newData?.length > 0 && !loading) cachedCnpjs.value = newData;
+}, { immediate: true });
+
 // Agregação de rodapé
-const { totals } = useTableAggregation(resultadoCnpjs, {
+const { totals } = useTableAggregation(cachedCnpjs, {
   sums: ['valSemComp', 'totalMov'],
   percents: [
     { field: 'percValSemComp',  numerator: 'valSemComp',  denominator: 'totalMov'   },
@@ -82,20 +90,20 @@ const filteredLocation = computed(() => {
 </script>
 
 <template>
-  <div class="table-section shadow-card modern-scroll-card" :class="{ 'is-refreshing': isLoading }">
+  <div class="table-section shadow-card modern-scroll-card" :class="{ 'is-refreshing': showRefreshing }">
     <div class="section-header">
        <div class="header-icon-box">
          <i class="pi pi-briefcase"></i>
        </div>
        <div class="header-text-box">
          <h3>Análise por CNPJ</h3>
-         <span class="subtitle">{{ filteredLocation }} — {{ resultadoCnpjs.length }} Estabelecimentos</span>
+         <span class="subtitle">{{ filteredLocation }} — {{ cachedCnpjs.length }} Estabelecimentos</span>
        </div>
        <div class="spacer"></div>
     </div>
 
     <DataTable
-      :value="resultadoCnpjs"
+      :value="cachedCnpjs"
       size="small"
       stripedRows
       removableSort
@@ -226,7 +234,7 @@ const filteredLocation = computed(() => {
 .table-section {
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .modern-scroll-card {
@@ -269,7 +277,7 @@ const filteredLocation = computed(() => {
 .spacer { flex: 1; }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
 }
 

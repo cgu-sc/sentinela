@@ -1,10 +1,11 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useFilterStore } from "@/stores/filters";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useTableAggregation } from "@/composables/useTableAggregation";
+import { useDelayedLoading } from "@/composables/useDelayedLoading";
 import { storeToRefs } from "pinia";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
@@ -16,8 +17,15 @@ const { resultadoMunicipios, isLoading } = storeToRefs(analyticsStore);
 const { getRiskClass } = useRiskMetrics();
 const { formatBRL, formatNumber, formatPercent } = useFormatting();
 
+// Mantém os dados anteriores visíveis durante o re-fetch, evitando flash de tabela vazia
+const cachedMunicipios = ref(resultadoMunicipios.value);
+const showRefreshing = useDelayedLoading(isLoading);
+watch([resultadoMunicipios, isLoading], ([newData, loading]) => {
+  if (newData?.length > 0 && !loading) cachedMunicipios.value = newData;
+}, { immediate: true });
+
 // Agregação de rodapé
-const { totals } = useTableAggregation(resultadoMunicipios, {
+const { totals } = useTableAggregation(cachedMunicipios, {
   sums: ["cnpjs", "valSemComp", "totalMov", "qtdeSemComp", "totalQtde"],
   percents: [
     {
@@ -70,7 +78,7 @@ const onTableLeave = () => {
 <template>
   <div
     class="table-section shadow-card modern-scroll-card"
-    :class="{ 'is-refreshing': isLoading }"
+    :class="{ 'is-refreshing': showRefreshing }"
     @mouseover="onTableHover"
     @mouseleave="onTableLeave"
   >
@@ -86,14 +94,14 @@ const onTableLeave = () => {
               ? "Brasil"
               : filterStore.selectedUF
           }}
-          — {{ resultadoMunicipios.length }} Municípios</span
+          — {{ cachedMunicipios.length }} Municípios</span
         >
       </div>
       <div class="spacer"></div>
     </div>
 
     <DataTable
-      :value="resultadoMunicipios"
+      :value="cachedMunicipios"
       size="small"
       stripedRows
       removableSort
@@ -184,7 +192,7 @@ const onTableLeave = () => {
 .table-section {
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .modern-scroll-card {
@@ -229,7 +237,7 @@ const onTableLeave = () => {
 }
 
 .is-refreshing {
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
 }
 

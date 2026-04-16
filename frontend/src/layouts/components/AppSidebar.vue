@@ -314,16 +314,6 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
   <!-- BARRA LATERAL -->
   <aside class="admin-sidebar">
-    <div class="sidebar-header" title="Projeto Sentinela">
-      <div class="brand">
-        <img src="/img/logo_sentinela_transparente.png" alt="Sentinela V3" class="logo-img" />
-        <div class="brand-text">
-          <span class="brand-name">SENTINELA</span>
-          <span class="brand-version">AUDITORIA NO FARMÁCIA POPULAR</span>
-        </div>
-      </div>
-    </div>
-
     <DataIntegrityBanner />
 
     <div class="sidebar-content">
@@ -660,40 +650,6 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 .sidebar-lock-btn i { font-size: 0.8rem; }
 
-.sidebar-header {
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--sidebar-border);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.logo-img {
-  width: 52px;
-  filter: var(--logo-filter);
-}
-
-:global(.dark-mode) .logo-img  { --logo-filter: none; }
-:global(.light-mode) .logo-img { --logo-filter: none; }
-
-.brand-name {
-  font-weight: 700;
-  font-size: 1.2rem;
-  display: block;
-  color: var(--sidebar-text);
-}
-
-.brand-version {
-  font-size: 0.7rem;
-  opacity: 0.7;
-  color: var(--sidebar-text);
-}
 
 .sidebar-content {
   flex: 1;

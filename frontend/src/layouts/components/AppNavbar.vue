@@ -106,6 +106,16 @@ function onNavSelect(event) {
 <template>
   <nav class="top-navbar">
     <div class="nav-left">
+      <div class="nav-brand">
+        <img src="/img/logo_sentinela_transparente.png" alt="Sentinela" class="nav-logo-img" />
+        <div class="nav-brand-text">
+          <span class="nav-brand-name">SENTINELA</span>
+          <span class="nav-brand-sub">Auditoria no Farmácia Popular</span>
+        </div>
+      </div>
+
+      <div class="nav-divider"></div>
+
       <SelectButton
         v-model="activeModule"
         :options="modules"
@@ -243,6 +253,44 @@ function onNavSelect(event) {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.nav-logo-img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.nav-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.nav-brand-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-color);
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.nav-brand-sub {
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0.75;
+  line-height: 1.1;
 }
 
 .nav-divider {

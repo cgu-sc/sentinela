@@ -15,67 +15,30 @@ GO
 -- ============================================================================
 -- DEFINIÇÃO DE VARIÁVEIS
 -- ============================================================================
-DECLARE @DataInicio DATE = '2015-07-01';
-DECLARE @DataFim DATE = '2024-12-10';
-
 -- ============================================================================
+-- PASSO 1: CONSUMO DOS DADOS AGREGADOS (VEM DO CRMS_1)
 -- ============================================================================
--- PASSO 0: AGREGAÇÃO POR MÉDICO/FARMÁCIA (OTIMIZADA)
--- ============================================================================
--- Agregamos cada base separadamente aplicando o filtro de data antes da união.
-
--- A. Agregação Base Histórica (2015-2020)
-DROP TABLE IF EXISTS #CRMs_Hist;
-SELECT 
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_total,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #CRMs_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
-GROUP BY cnpj, crm, crm_uf;
-
--- B. Agregação Base Recente (2021-2024)
-DROP TABLE IF EXISTS #CRMs_Recente;
-SELECT 
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_total,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
-INTO #CRMs_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
-GROUP BY cnpj, crm, crm_uf;
-
--- C. Consolidação Final
+-- Não precisamos mais ler a base bruta de 2 horas aqui!
 DROP TABLE IF EXISTS #CRMsPorFarmacia;
+
 SELECT 
-    cnpj,
-    CONCAT(crm, '/', crm_uf) AS id_medico,
-    crm AS nu_crm,
-    crm_uf AS sg_uf_crm,
-    SUM(nu_prescricoes) AS nu_prescricoes,
-    SUM(vl_total) AS vl_total_prescricoes,
-    MIN(dt_ini) AS dt_primeira_prescricao,
-    MAX(dt_fim) AS dt_ultima_prescricao,
+    nu_cnpj AS cnpj,
+    CONCAT(nu_crm, '/', sg_uf_crm) AS id_medico,
+    nu_crm,
+    sg_uf_crm,
+    nu_prescricoes_medico AS nu_prescricoes,
+    vl_autorizacoes_medico AS vl_total_prescricoes,
+    dt_prescricao_inicial_medico AS dt_primeira_prescricao,
+    dt_prescricao_final_medico AS dt_ultima_prescricao,
     CAST(
-        CAST(SUM(nu_prescricoes) AS DECIMAL(18,2)) /
-        CAST(DATEDIFF(DAY, MIN(dt_ini), MAX(dt_fim)) + 1 AS DECIMAL(18,2))
+        CAST(nu_prescricoes_medico AS DECIMAL(18,2)) /
+        NULLIF(CAST(DATEDIFF(DAY, dt_prescricao_inicial_medico, dt_prescricao_final_medico) + 1 AS DECIMAL(18,2)), 0)
     AS DECIMAL(18,2)) AS nu_prescricoes_dia
 INTO #CRMsPorFarmacia
-FROM (
-    SELECT * FROM #CRMs_Hist
-    UNION ALL
-    SELECT * FROM #CRMs_Recente
-) U
-GROUP BY cnpj, crm, crm_uf;
+FROM temp_CGUSC.fp.base_agregada_crm_cnpj;
 
 CREATE CLUSTERED INDEX IDX_Presc_CNPJ ON #CRMsPorFarmacia(cnpj);
+CREATE NONCLUSTERED INDEX IDX_CRMPorchave ON #CRMsPorFarmacia(nu_crm, sg_uf_crm);
 
 -- ============================================================================
 -- PASSO 1: TOTAIS POR FARMÁCIA (para calcular participação %)
@@ -155,7 +118,7 @@ WHERE nu_prescricoes_dia > 30
 GROUP BY cnpj;
 CREATE CLUSTERED INDEX IDX_Robos_CNPJ ON #RobosPorFarmacia(cnpj);
 
--- CRM Inválido (Atualizado para utilizar a base oficial do CFM)
+-- CRM Inválido (Otimizado: comparando sem CASTs pesados no sub-select)
 DROP TABLE IF EXISTS #CRMInvalidoPorFarmacia;
 SELECT P.cnpj AS cnpj, 
        COUNT(*) AS qtd_crm_invalido,
@@ -163,9 +126,10 @@ SELECT P.cnpj AS cnpj,
 INTO #CRMInvalidoPorFarmacia
 FROM #CRMsPorFarmacia P
 WHERE NOT EXISTS (
+    -- Forçamos ambos para VARCHAR para aceitar casos como '11818-P' sem erro de conversão
     SELECT 1 
-    FROM temp_CFM.dbo.medicos_jul_2025_mod CFM
-    WHERE TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(P.nu_crm AS BIGINT) 
+    FROM temp_CFM.dbo.medicos_jul_2025_mod CFM WITH(NOLOCK)
+    WHERE CAST(CFM.NU_CRM AS VARCHAR(20)) = CAST(P.nu_crm AS VARCHAR(20)) 
       AND CFM.SG_uf = P.sg_uf_crm
 ) AND P.nu_prescricoes >= 5
 GROUP BY P.cnpj;

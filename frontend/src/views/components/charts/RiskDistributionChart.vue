@@ -5,6 +5,7 @@ import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
 import {
+  TitleComponent,
   GridComponent,
   TooltipComponent,
   MarkLineComponent,
@@ -13,6 +14,7 @@ import {
 import { useChartTheme } from '@/config/chartTheme';
 
 use([
+  TitleComponent,
   CanvasRenderer,
   LineChart,
   GridComponent,
@@ -25,7 +27,8 @@ const props = defineProps({
   currentScore: { type: Number,  default: 0 },
   loading:      { type: Boolean, default: false },
   rankingText:  { type: String,  default: null },
-  metricLabel:  { type: String,  default: 'Score de Risco' }
+  metricLabel:  { type: String,  default: 'Score de Risco' },
+  rankBadge:    { type: Object,  default: null }
 });
 
 const { chartTheme } = useChartTheme();
@@ -61,16 +64,35 @@ const chartOption = computed(() => {
   let markerXIndex = localData.value.findIndex(d => d.score >= localScore.value);
   if (markerXIndex === -1) markerXIndex = localData.value.length - 1;
 
-  // Alinhamento horizontal do label: evita corte nas bordas
-  const relPos     = markerXIndex / localData.value.length;
-  const labelAlign = relPos < 0.25 ? 'left' : relPos > 0.75 ? 'right' : 'center';
-
   const isPct          = localLabel.value.includes('%');
   const scoreFormatted = isPct
     ? `${localScore.value.toFixed(1)}%`
     : localScore.value.toFixed(2);
 
+  const badgeColor = props.rankBadge?.color ?? '#6b7280';
+  const badgeText  = props.rankBadge
+    ? `{bl|${props.rankBadge.label}}  {bv|${props.rankBadge.value}}`
+    : '';
+
   return {
+    title: {
+      text: `{t|ESTABELECIMENTO}\n{v|${scoreFormatted}}${badgeText ? '\n' + badgeText : ''}`,
+      left: 24,
+      top: 0,
+      backgroundColor: c.tooltip,
+      borderColor: '#ef4444',
+      borderWidth: 1,
+      padding: [5, 9],
+      borderRadius: 5,
+      textStyle: {
+        rich: {
+          t:  { fontSize: 9,  color: c.tooltipText, opacity: 0.65, lineHeight: 14 },
+          v:  { fontSize: 13, fontWeight: 700, color: '#ef4444', lineHeight: 18 },
+          bl: { fontSize: 9,  color: badgeColor, opacity: 0.8, lineHeight: 16 },
+          bv: { fontSize: 9,  color: badgeColor, fontWeight: 700, lineHeight: 16 }
+        }
+      }
+    },
     animation:         true,
     animationDuration: 500,
     animationEasing:   'cubicOut',
@@ -135,21 +157,7 @@ const chartOption = computed(() => {
           symbolSize: 5,
           lineStyle:  { color: 'rgba(239,68,68,0.6)', type: 'dashed', width: 1.5 },
           label: {
-            show:        true,
-            position:    'end',
-            distance:    8,
-            rotate:      0,
-            align:       labelAlign,
-            backgroundColor: c.tooltip,
-            borderColor:     '#ef4444',
-            borderWidth:  1,
-            padding:      [5, 9],
-            borderRadius: 5,
-            formatter: () => `{t|ESTABELECIMENTO}\n{v|${scoreFormatted}}`,
-            rich: {
-              t: { fontSize: 9,  color: c.tooltipText, opacity: 0.65, lineHeight: 14 },
-              v: { fontSize: 13, fontWeight: 700, color: '#ef4444',   lineHeight: 18 }
-            }
+            show: false
           },
           data: [{ xAxis: markerXIndex }]
         }

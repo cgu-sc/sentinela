@@ -47,9 +47,9 @@ const riskScope = ref('brasil');
 const riskMetric = ref('percentual_sem_comprovacao');
 
 const riskScopes = [
-  { label: 'Na Região de Saúde', value: 'regiao' },
-  { label: 'No Estado', value: 'uf' },
-  { label: 'No Brasil (Nacional)', value: 'brasil' }
+  { label: 'Região de Saúde', value: 'regiao' },
+  { label: 'UF', value: 'uf' },
+  { label: 'Brasil', value: 'brasil' }
 ];
 
 const riskMetricOptions = [
@@ -230,9 +230,7 @@ const rankingText = computed(() => {
   return `${entry.rank}º de ${entry.total} ${entry.label}`;
 });
 
-// Calcula em qual "topo" de risco a farmácia está
-// Não bloqueamos durante o loading — o displayedBadge já guarda o valor anterior
-// e só atualiza quando nv for truthy, evitando qualquer flash.
+// Calcula em qual "topo" de risco a farmácia está — exibido dentro do box do gráfico
 const riskRankBadge = computed(() => {
   const data = cnpjDetailStore.metricPercentiles;
   if (!data?.length || currentScore.value === null || currentScore.value === undefined) return null;
@@ -240,21 +238,10 @@ const riskRankBadge = computed(() => {
   if (idx === -1) return { label: 'Extremo', value: 'TOP 1%', color: '#ef4444' };
   const pct = data[idx].percentile;
   const topPct = 101 - pct;
-  if (topPct <= 5)  return { label: 'Crítico', value: `TOP ${topPct}%`, color: '#ef4444' };
-  if (topPct <= 15) return { label: 'Alerta',  value: `TOP ${topPct}%`, color: '#f59e0b' };
-  return { label: 'Normal', value: `Percentil ${pct}%`, color: '#10b981' };
+  if (topPct <= 5)  return { label: 'Crítico', value: `TOP ${topPct}%`,    color: '#ef4444' };
+  if (topPct <= 15) return { label: 'Alerta',  value: `TOP ${topPct}%`,    color: '#f59e0b' };
+  return             { label: 'Normal',  value: `Percentil ${pct}%`, color: '#10b981' };
 });
-
-// Cache local: só atualiza quando loading=false para garantir que
-// currentScore e metricPercentiles são sempre da mesma métrica.
-const displayedBadge = ref(null);
-watch(
-  [riskRankBadge, () => cnpjDetailStore.metricPercentilesLoading],
-  ([badge, isLoading]) => {
-    if (badge && !isLoading) displayedBadge.value = badge;
-  },
-  { immediate: true }
-);
 </script>
 
 <template>
@@ -322,52 +309,43 @@ watch(
              <div class="header-info">
                 <i class="pi pi-chart-line" />
                 <span>Percentil de Risco</span>
-                
-                <div v-if="displayedBadge" 
-                      class="risk-rank-badge" 
-                      :style="{ 
-                        background: displayedBadge.color + '15', 
-                        color: displayedBadge.color, 
-                        borderColor: displayedBadge.color + '40' 
-                      }">
-                    <span class="badge-label">{{ displayedBadge.label }}</span>
-                    <span class="badge-value">{{ displayedBadge.value }}</span>
-                 </div>
-
-
              </div>
-             <div class="scope-selector">
-                <Dropdown
-                  v-model="riskScope"
-                  :options="riskScopes"
-                  optionLabel="label"
-                  optionValue="value"
-                  class="p-inputtext-sm"
-                  panelClass="card-panel"
-                >
-                  <template #value="slotProps">
-                    <div v-if="slotProps.value" class="flex align-items-center gap-2">
-                       <span class="dropdown-selected-label">{{ riskScopes.find(s => s.value === slotProps.value).label }}</span>
-                    </div>
-                  </template>
-                </Dropdown>
+             <div class="header-actions">
+               <div class="scope-selector">
+                  <Dropdown
+                    v-model="riskMetric"
+                    :options="riskMetricOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="p-inputtext-sm"
+                    panelClass="card-panel"
+                  >
+                    <template #value="slotProps">
+                      <div v-if="slotProps.value" class="flex align-items-center gap-2">
+                        <span class="dropdown-selected-label">{{ riskMetricOptions.find(m => m.value === slotProps.value)?.label }}</span>
+                      </div>
+                    </template>
+                  </Dropdown>
+               </div>
+               <div class="scope-selector">
+                  <Dropdown
+                    v-model="riskScope"
+                    :options="riskScopes"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="p-inputtext-sm"
+                    panelClass="card-panel"
+                  >
+                    <template #value="slotProps">
+                      <div v-if="slotProps.value" class="flex align-items-center gap-2">
+                         <span class="dropdown-selected-label">{{ riskScopes.find(s => s.value === slotProps.value).label }}</span>
+                      </div>
+                    </template>
+                  </Dropdown>
+               </div>
              </div>
           </div>
             <div class="card-body">
-              <!-- Linha de Toggle de Métrica -->
-              <div class="header-context-mini">
-                 <div class="y-metric-toggle">
-                  <button 
-                    v-for="m in riskMetricOptions" 
-                    :key="m.value"
-                    class="metric-btn"
-                    :class="{ active: riskMetric === m.value }"
-                    @click="riskMetric = m.value"
-                  >
-                    {{ m.label }}
-                  </button>
-                </div>
-              </div>
 
               <RiskDistributionChart
                 :data="cnpjDetailStore.metricPercentiles"
@@ -375,6 +353,7 @@ watch(
                 :loading="cnpjDetailStore.metricPercentilesLoading"
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
+                :rank-badge="riskRankBadge"
               />
             <!-- AJUDA CONTEXTUAL CARD 2 -->
             <div class="diagnosis-card-help">
@@ -441,14 +420,11 @@ watch(
 }
 
 .header-info i { color: var(--primary-color); font-size: 1.1rem; }
-
-.header-context-mini {
+.header-actions {
   display: flex;
-  justify-content: flex-end;
-  padding: 0.75rem 1.25rem 0 1.25rem;
-  margin-bottom: 0.25rem;
+  align-items: center;
+  gap: 0.75rem;
 }
-
 
 .card-body {
   flex: 1;
@@ -465,39 +441,6 @@ watch(
   flex: 1;
   display: flex;
   flex-direction: column;
-}
-
-/* Badge de Ranking */
-.risk-rank-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  border: 1px solid;
-  font-size: 0.7rem;
-  margin-left: 0.5rem;
-  /* Largura fixa = maior combinação possível evita qualquer redimensionamento */
-  min-width: 10.5rem;
-  justify-content: center;
-}
-
-.badge-label {
-  font-weight: 500;
-  opacity: 0.8;
-  border-right: 1px solid currentColor;
-  padding-right: 0.4rem;
-  /* "Extremo" é o label mais longo (7 chars) */
-  min-width: 4.2rem;
-  text-align: center;
-}
-
-.badge-value {
-  font-weight: 600;
-  /* "Percentil 99%" é o valor mais longo */
-  min-width: 5.8rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 
 .scope-selector { min-width: 180px; }
@@ -607,41 +550,4 @@ watch(
   font-weight: 600;
 }
 
-/* Padronização do Toggle de Métricas (Igual ao componente de Scatter) */
-.y-metric-toggle {
-  display: flex;
-  gap: 0.25rem;
-  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
-  border-radius: 8px;
-  padding: 3px;
-}
-
-.metric-btn {
-  background: transparent;
-  border: none;
-  border-radius: 5px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-  white-space: nowrap;
-}
-
-.metric-btn:hover {
-  color: var(--primary-color);
-}
-
-.metric-btn.active {
-  background: var(--primary-color);
-  color: #fff;
-}
-
-.chart-header-row-mini {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0.8rem 1.25rem 0;
-}
 </style>

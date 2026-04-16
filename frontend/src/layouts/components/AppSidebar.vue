@@ -465,6 +465,16 @@ const clearPeriodFilter = () => {
   resetYears();
 };
 
+// Para o play e reseta preload ao navegar para outra rota
+watch(
+  () => route.path,
+  () => {
+    stopPlay();
+    savedRange.value = null;
+    filterStore.animationPreload.status = "idle";
+  },
+);
+
 // Limpa o intervalo ao desmontar o componente
 onBeforeUnmount(stopPlay);
 </script>

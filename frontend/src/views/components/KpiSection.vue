@@ -69,7 +69,6 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   grid-template-columns: repeat(6, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
   gap: 1.15rem;
   width: 100%;
-  padding-top: 4px; /* espaço para o lift do hover não ser cortado */
   transition: opacity 0.25s ease;
 }
 
@@ -78,15 +77,9 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   border-radius: 12px;
   padding: 0.8rem 1rem;
   border: 1px solid color-mix(in srgb, var(--primary-color) 15%, var(--sidebar-border));
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 0;
   display: flex;
   align-items: center;
-}
-
-.kpi-card:hover {
-  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--primary-color) 20%, transparent);
-  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--sidebar-border));
 }
 
 .kpi-body {
@@ -105,7 +98,8 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
 
 .kpi-label {
   font-size: 0.70rem; /* MEDIDA DO USUÁRIO */
-  color: var(--text-muted);
+  color: var(--text-color);
+  opacity: 0.7; /* Hierarquia via transparência */
   font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
@@ -117,7 +111,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   font-size: 1.3rem; /* MEDIDA DO USUÁRIO */
   white-space: nowrap;
   letter-spacing: -0.6px;
-  font-weight: 700;
+  font-weight: 700; /* Bold padrão consolidado */
   color: var(--text-color);
   opacity: 0.90;
   line-height: 1;

@@ -21,30 +21,32 @@ DECLARE @DataFim        DATE          = '2024-12-10';
 -- A. Agregação Base Histórica (2015-2020)
 DROP TABLE IF EXISTS #Medicos_Hist;
 SELECT
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
+    M.cnpj, M.crm, M.crm_uf,
+    COUNT(DISTINCT M.num_autorizacao) AS nu_prescricoes,
+    SUM(M.valor_pago) AS vl_pago,
+    MIN(M.data_hora) AS dt_ini,
+    MAX(M.data_hora) AS dt_fim
 INTO #Medicos_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
-WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
-  AND data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY crm, crm_uf, cnpj;
+FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP M
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
+  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
+GROUP BY M.crm, M.crm_uf, M.cnpj;
 
 -- B. Agregação Base Recente (2021-2024)
 DROP TABLE IF EXISTS #Medicos_Recente;
 SELECT
-    cnpj, crm, crm_uf,
-    COUNT(DISTINCT num_autorizacao) AS nu_prescricoes,
-    SUM(valor_pago) AS vl_pago,
-    MIN(data_hora) AS dt_ini,
-    MAX(data_hora) AS dt_fim
+    M.cnpj, M.crm, M.crm_uf,
+    COUNT(DISTINCT M.num_autorizacao) AS nu_prescricoes,
+    SUM(M.valor_pago) AS vl_pago,
+    MIN(M.data_hora) AS dt_ini,
+    MAX(M.data_hora) AS dt_fim
 INTO #Medicos_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-WHERE crm_uf IS NOT NULL AND crm IS NOT NULL AND crm_uf <> 'BR'
-  AND data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY crm, crm_uf, cnpj;
+FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 M
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
+  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
+GROUP BY M.crm, M.crm_uf, M.cnpj;
 
 -- C. União Final dos Médicos
 DROP TABLE IF EXISTS temp_CGUSC.fp.base_agregada_crm_cnpj;

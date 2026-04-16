@@ -259,6 +259,8 @@ const activeFilterCount = computed(() => {
 });
 
 // ── Período de análise (slider) ──────────────────────────────────────────────
+const displayYears = computed(() => ANALYSIS_YEARS.filter((y) => y >= 2020));
+
 const {
   availableMonths,
   timeSliderValue,
@@ -317,6 +319,11 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
     <DataIntegrityBanner />
 
     <div class="sidebar-content">
+      <div class="sidebar-title-simple">
+        <i class="pi pi-sliders-h"></i>
+        <span>FILTROS DE PESQUISA</span>
+      </div>
+
       <!-- BANNER DE FILTROS BLOQUEADOS -->
       <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
@@ -457,7 +464,7 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
         <div class="slider-container" :class="{ 'filter-locked': filtersLocked || isIndicadoresRoute, 'filter-active-box': isFilterActive('sliderValue') }">
           <div class="perc-chips" style="margin-bottom: 0.5rem">
             <button
-              v-for="year in ANALYSIS_YEARS"
+              v-for="year in displayYears"
               :key="year"
               class="perc-chip"
               :class="{ 'perc-chip-active': isYearActive(year), 'perc-chip-disabled': isYearDisabled(year) }"
@@ -650,6 +657,26 @@ onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 .sidebar-lock-btn i { font-size: 0.8rem; }
 
+
+.sidebar-title-simple {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--sidebar-text);
+  opacity: 0.45;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem 0.5rem;
+  margin-bottom: 0.15rem;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.sidebar-title-simple i {
+  font-size: 0.8rem;
+}
 
 .sidebar-content {
   flex: 1;

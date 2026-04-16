@@ -135,30 +135,15 @@ SELECT
     C.dt_venda_final_estabelecimento,
     A.vl_autorizacoes_medico,
     (TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10, 2)) / NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10, 2)), 0)) AS percentual,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta1,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta2,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta3,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta4,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta5,
-    TRY_CAST('' AS VARCHAR(MAX)) AS alerta6
+    TRY_CAST('' AS VARCHAR(800)) AS alerta2,
+    TRY_CAST('' AS VARCHAR(800)) AS alerta5
 INTO #lista_medicos_farmacia_popularFP_temp
 FROM #tb_info_medico_farmacia_popular A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj
 WHERE A.nu_prescricoes_medico >= 5
 
 
--- ============================================================================
--- ALERTA 1: CRM INVÁLIDO
--- ============================================================================
-UPDATE A
-SET alerta1 = 'CRM/UF não localizado na base do CFM.'
-FROM #lista_medicos_farmacia_popularFP_temp A
-WHERE NOT EXISTS (
-    SELECT 1 
-    FROM temp_CFM.dbo.medicos_jul_2025_mod M
-    WHERE TRY_CAST(M.NU_CRM AS BIGINT) = TRY_CAST(A.nu_crm AS BIGINT) 
-      AND M.SG_uf = A.sg_uf_crm
-);
+-- (Alerta 1 removido por redundância com flag_crm_invalido)
 
 
 -- ============================================================================
@@ -218,12 +203,8 @@ SELECT
     A.percentual,
     A.nu_crm,
     A.sg_uf_crm,
-    A.alerta1,
     A.alerta2,
-    A.alerta3,
-    A.alerta4,
-    A.alerta5,
-    A.alerta6
+    A.alerta5
 INTO #lista_medicos_farmacia_popularFP_temp2
 FROM #lista_medicos_farmacia_popularFP_temp A
 LEFT JOIN temp_CGUSC.fp.dados_farmacia B ON B.cnpj = A.nu_cnpj
@@ -280,39 +261,15 @@ SELECT
     A.Conexao,
     A.vl_autorizacoes_medico,
     A.percentual,
-    A.alerta1,
     A.alerta2,
-    A.alerta3,
-    A.alerta4,
-    A.alerta5,
-    A.alerta6
+    A.alerta5
 INTO temp_CGUSC.fp.dados_crm_detalhado
 FROM #lista_medicos_farmacia_popularFP_temp2 A
 INNER JOIN #prescricoes_todos_estabelecimentos B 
     ON B.nu_crm = A.nu_crm AND B.sg_uf_crm = A.sg_uf_crm
 
 
--- ============================================================================
--- ALERTA 3: MÉDIA >30 PRESCRIÇÕES/DIA NESTE ESTABELECIMENTO
--- ============================================================================
-UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta3 = 'Foram registradas uma média de ' + CAST(CAST(nu_prescricoes_dia AS DECIMAL(10,1)) AS VARCHAR(20)) +
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(20)) + '/' +
-              sg_uf_crm + ' neste estabelecimento.'
-WHERE nu_prescricoes_dia > 30
-
-
--- ============================================================================
--- ALERTA 4: MÉDIA >30 PRESCRIÇÕES/DIA EM TODOS OS ESTABELECIMENTOS
--- ============================================================================
-UPDATE temp_CGUSC.fp.dados_crm_detalhado 
-SET alerta4 = 'Foram registradas uma média de ' +
-              CAST(CAST(nu_prescricoes_dia_em_todos_estabelecimentos AS DECIMAL(10,1)) AS VARCHAR(20)) +
-              ' prescrições por dia para o CRM ' + CAST(nu_crm AS VARCHAR(20)) + '/' +
-              sg_uf_crm + ' em todos os ' +
-              CAST(nu_estabelecimentos_com_registro_mesmo_crm AS VARCHAR(10)) +
-              ' estabelecimentos em que há registros.'
-WHERE nu_prescricoes_dia_em_todos_estabelecimentos > 30
+-- (Alertas 3 e 4 removidos por redundância com flags de robô)
 
 
 
@@ -436,29 +393,7 @@ PRINT 'Coluna "alerta5" atualizada com sucesso.';
 GO
 
 
--- ============================================================================
--- ALERTA 6: PRESCRIÇÃO ANTES DO REGISTRO DO CRM
--- ============================================================================
--- ✅ NOVO: Verifica se a primeira prescrição do médico neste estabelecimento
---          ocorreu antes da data de inscrição do CRM no CFM
-UPDATE AM
-SET AM.alerta6 = 
-    'Prescrição anterior ao registro do CRM (1ª prescrição: ' + 
-    CONVERT(VARCHAR, AM.dt_prescricao_inicial_medico, 103) + 
-    ', registro CRM: ' + CONVERT(VARCHAR, CFM.dt_inscricao_convertida, 103) + ')'
-FROM temp_CGUSC.fp.dados_crm_detalhado AM
-INNER JOIN (
-    SELECT 
-        NU_CRM,
-        SG_uf,
-        TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
-    FROM temp_CFM.dbo.medicos_jul_2025_mod
-    WHERE DT_INSCRICAO IS NOT NULL AND DT_INSCRICAO <> ''
-) CFM ON TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(AM.nu_crm AS BIGINT) AND CFM.SG_uf = AM.sg_uf_crm
-WHERE CFM.dt_inscricao_convertida IS NOT NULL 
-  AND AM.dt_prescricao_inicial_medico < CFM.dt_inscricao_convertida;
-
-PRINT 'Coluna "alerta6" atualizada com sucesso.';
+-- (Alerta 6 removido por redundância com flag_prescricao_antes_registro)
 PRINT '============================================================================';
 PRINT 'SCRIPT EXECUTADO COM CORREÇÕES:';
 PRINT '  - Prescrições contadas por COUNT(DISTINCT num_autorizacao)';

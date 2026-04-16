@@ -624,13 +624,9 @@ WITH CRMsRankeados AS (
             ELSE 0 
         END AS flag_prescricao_antes_registro,
         
-        --CORREÇÃO: Trazer TODOS os alertas (incluindo alerta6)
-        ISNULL(A.alerta1, '') AS alerta1_crm_invalido,
+        --CORREÇÃO: Trazer Alertas de Texto remanescentes
         ISNULL(A.alerta2, '') AS alerta2_tempo_concentrado,
-        ISNULL(A.alerta3, '') AS alerta3_robo_estabelecimento,
-        ISNULL(A.alerta4, '') AS alerta4_robo_rede,
-        ISNULL(A.alerta5, '') AS alerta5_geografico,
-        ISNULL(A.alerta6, '') AS alerta6_prescricao_antes_registro
+        ISNULL(A.alerta5, '') AS alerta5_geografico
         
     FROM #CRMsPorFarmacia P
     INNER JOIN #TotaisFarmacia T ON T.cnpj = P.cnpj
@@ -642,12 +638,8 @@ WITH CRMsRankeados AS (
             MAX(nu_prescricoes_medico_em_todos_estabelecimentos) AS nu_prescricoes_medico_em_todos_estabelecimentos,
             MAX(nu_prescricoes_dia_em_todos_estabelecimentos) AS nu_prescricoes_dia_em_todos_estabelecimentos,
             MAX(nu_estabelecimentos_com_registro_mesmo_crm) AS nu_estabelecimentos_com_registro_mesmo_crm,
-            MAX(alerta1) AS alerta1,
             MAX(alerta2) AS alerta2,
-            MAX(alerta3) AS alerta3,
-            MAX(alerta4) AS alerta4,
-            MAX(alerta5) AS alerta5,
-            MAX(alerta6) AS alerta6
+            MAX(alerta5) AS alerta5
         FROM temp_CGUSC.fp.dados_crm_detalhado
         GROUP BY nu_cnpj, id_medico
     ) A ON A.nu_cnpj = P.cnpj AND A.id_medico = P.id_medico
@@ -666,12 +658,8 @@ SELECT *
 INTO temp_CGUSC.fp.top_20_crms_farmacia
 FROM CRMsRankeados
 WHERE ranking <= 30
-   OR alerta1_crm_invalido <> ''
    OR alerta2_tempo_concentrado <> ''
-   OR alerta3_robo_estabelecimento <> ''
-   OR alerta4_robo_rede <> ''
    OR alerta5_geografico <> ''
-   OR alerta6_prescricao_antes_registro <> ''
    OR flag_crm_invalido = 1
    OR flag_robo = 1
    OR flag_robo_oculto = 1

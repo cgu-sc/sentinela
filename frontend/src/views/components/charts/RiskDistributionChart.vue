@@ -71,25 +71,34 @@ const chartOption = computed(() => {
 
   const badgeColor = props.rankBadge?.color ?? '#6b7280';
   const badgeText  = props.rankBadge
-    ? `{bl|${props.rankBadge.label}}  {bv|${props.rankBadge.value}}`
+    ? `{v|${props.rankBadge.label.toUpperCase()} · ${props.rankBadge.value}}`
     : '';
 
   return {
     title: {
-      text: `{t|ESTABELECIMENTO}\n{v|${scoreFormatted}}${badgeText ? '\n' + badgeText : ''}`,
+      text: `{t|ESTABELECIMENTO}${badgeText ? '\n' + badgeText : ''}`,
       left: 24,
-      top: 0,
-      backgroundColor: c.tooltip,
-      borderColor: '#ef4444',
-      borderWidth: 1,
-      padding: [5, 9],
-      borderRadius: 5,
+      top: 15,
+      backgroundColor: 'rgba(30, 37, 51, 0.85)', // Fundo escuro levemente transparente
+      borderColor: badgeColor,
+      borderWidth: 1.5,
+      padding: [10, 16],
+      borderRadius: 8,
       textStyle: {
         rich: {
-          t:  { fontSize: 9,  color: c.tooltipText, opacity: 0.65, lineHeight: 14 },
-          v:  { fontSize: 13, fontWeight: 700, color: '#ef4444', lineHeight: 18 },
-          bl: { fontSize: 9,  color: badgeColor, opacity: 0.8, lineHeight: 16 },
-          bv: { fontSize: 9,  color: badgeColor, fontWeight: 700, lineHeight: 16 }
+          t: { 
+            fontSize: 10, 
+            color: badgeColor, 
+            fontWeight: 600, 
+            lineHeight: 12,
+            padding: [0, 0, 4, 0] 
+          },
+          v: { 
+            fontSize: 11, 
+            fontWeight: 800, 
+            color: badgeColor, 
+            lineHeight: 16 
+          }
         }
       }
     },

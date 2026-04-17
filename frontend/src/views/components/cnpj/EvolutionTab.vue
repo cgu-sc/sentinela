@@ -261,36 +261,39 @@ const chartOption = computed(() => {
             @row-click="toggleRow"
           >
 
-            <Column field="semestre" header="Semestre">
+            <Column field="semestre" header="Semestre" style="width: 15%">
               <template #body="{ data }">
                 <div class="sem-label">
-                  {{ data.semestre }}
-                  <span v-if="formatMesRange(data.mes_inicio, data.mes_fim)" class="sem-months">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="pi" :class="expandedRows[data.semestre] ? 'pi-chevron-down' : 'pi-chevron-right'" style="font-size: 0.70rem; color: var(--text-muted); opacity: 0.8;"></i>
+                    {{ data.semestre }}
+                  </div>
+                  <span v-if="formatMesRange(data.mes_inicio, data.mes_fim)" class="sem-months" style="margin-left: 20px;">
                     {{ formatMesRange(data.mes_inicio, data.mes_fim) }}
                   </span>
                 </div>
               </template>
             </Column>
 
-            <Column field="total" header="Total Movimentado">
+            <Column field="total" header="Total Movimentado" style="width: 18%">
               <template #body="{ data }">
                 {{ formatCurrencyFull(data.total) }}
               </template>
             </Column>
 
-            <Column field="regular" header="Total Regular">
+            <Column field="regular" header="Total Regular" style="width: 18%">
               <template #body="{ data }">
                 <span class="col-regular">{{ formatCurrencyFull(data.regular) }}</span>
               </template>
             </Column>
 
-            <Column field="irregular" header="Sem Comprovação">
+            <Column field="irregular" header="Sem Comprovação" style="width: 18%">
               <template #body="{ data }">
                 <span class="col-irregular">{{ formatCurrencyFull(data.irregular) }}</span>
               </template>
             </Column>
 
-            <Column field="pct_irregular" header="% S/ Comp">
+            <Column field="pct_irregular" header="% S/ Comp" style="width: 18%">
               <template #body="{ data }">
                 <div class="pct-cell" style="text-align: right; padding: 0;">
                   <div class="pct-bar-wrap">
@@ -315,7 +318,7 @@ const chartOption = computed(() => {
               </template>
             </Column>
 
-            <Column header="Tendência">
+            <Column header="Tendência" style="width: 13%">
               <template #body="{ data, index }">
                 <div class="trend-cell">
                   <template v-if="index === 0">
@@ -345,15 +348,15 @@ const chartOption = computed(() => {
                   Detalhamento de {{ slotProps.data.semestre }}
                 </div>
                 <DataTable :value="slotProps.data.meses" class="sanfona-table">
-                  <Column field="mes" header="Mês">
+                  <Column field="mes" header="Mês" style="width: 25%" headerStyle="text-align: left" bodyStyle="text-align: left">
                     <template #body="{ data }">
                       <span style="font-weight: 500;">{{ formatMonth(data.mes) }}</span>
                     </template>
                   </Column>
-                  <Column field="total" header="Total Movimentado">
+                  <Column field="total" header="Total Movimentado" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">{{ formatCurrencyFull(data.total) }}</template>
                   </Column>
-                  <Column field="irregular" header="Sem Comprovação">
+                  <Column field="irregular" header="Sem Comprovação" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">
                       <a 
                         v-if="data.irregular > 0" 
@@ -367,7 +370,7 @@ const chartOption = computed(() => {
                       <span v-else>{{ formatCurrencyFull(data.irregular) }}</span>
                     </template>
                   </Column>
-                  <Column field="pct_irregular" header="% S/ Comp">
+                  <Column field="pct_irregular" header="% S/ Comp" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">
                       <span :class="{
                         'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
@@ -385,7 +388,6 @@ const chartOption = computed(() => {
 
             <ColumnGroup type="footer">
               <Row>
-                <Column footer="" />
                 <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" />
                 <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.total, 0))" />
                 <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.regular, 0))" />
@@ -520,10 +522,21 @@ const chartOption = computed(() => {
   padding: 0.85rem 1rem;
 }
 :deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:nth-child(1)),
-:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:nth-child(2)),
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td:nth-child(1)),
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td:nth-child(2)) { 
-  text-align: left; 
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td:nth-child(1)) { 
+  text-align: left !important; 
+}
+
+/* Override explícito do flexbox das headers do PrimeVue */
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th .p-column-header-content),
+:deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th .p-column-header-content) {
+  justify-content: flex-end;
+}
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:first-child .p-column-header-content),
+:deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th:first-child .p-column-header-content) {
+  justify-content: flex-start;
+}
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:last-child .p-column-header-content) {
+  justify-content: center;
 }
 
 /* Fix text colors */
@@ -552,6 +565,7 @@ const chartOption = computed(() => {
   font-size: 0.72rem;
   text-transform: uppercase;
   border-bottom: 1px solid var(--sidebar-border);
+  text-align: right !important;
 }
 :deep(.sanfona-table.p-datatable .p-datatable-tbody > tr > td) {
   padding: 0.5rem 1rem;
@@ -559,11 +573,11 @@ const chartOption = computed(() => {
   background: transparent;
   border-bottom: 1px dashed var(--sidebar-border);
   color: var(--text-secondary);
-  text-align: right;
+  text-align: right !important;
 }
 :deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th:first-child),
 :deep(.sanfona-table.p-datatable .p-datatable-tbody > tr > td:first-child) {
-  text-align: left;
+  text-align: left !important;
 }
 
 .sem-label {

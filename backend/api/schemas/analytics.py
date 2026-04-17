@@ -160,6 +160,13 @@ class PercentilesAnimationResponse(BaseModel):
     """Payload completo de percentis por período — todos os períodos em uma única chamada."""
     quarters: List[PercentilesQuarterSchema]
 
+class EvolucaoMesSchema(BaseModel):
+    mes: str
+    total: float
+    regular: float
+    irregular: float
+    pct_irregular: float
+
 class EvolucaoSemestreSchema(BaseModel):
     semestre: str
     total: float
@@ -168,6 +175,7 @@ class EvolucaoSemestreSchema(BaseModel):
     pct_irregular: float
     mes_inicio: Optional[str] = None  # "YYYY-MM" — mês mais antigo no grupo (pode ser parcial)
     mes_fim: Optional[str] = None     # "YYYY-MM" — mês mais recente no grupo
+    meses: List[EvolucaoMesSchema] = []
 
 class EvolucaoFinanceiraResponse(BaseModel):
     cnpj: str

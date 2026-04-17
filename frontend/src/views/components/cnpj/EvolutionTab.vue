@@ -16,6 +16,11 @@ import { BarChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import ColumnGroup from 'primevue/columngroup';
+import Row from 'primevue/row';
+
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 const route = useRoute();
@@ -54,6 +59,36 @@ function formatMesRange(mesInicio, mesFim) {
 // Usado para dimir os cards suavemente em vez de exibir o spinner novamente.
 // NOTA: Durante a animação (autoplay), mantemos a opacidade total para evitar flicker.
 const isRefreshing = computed(() => evolucaoLoading.value && cachedEvolucaoData.value !== null && !filterStore.isAnimating);
+
+const expandedRows = ref([]);
+
+/**
+ * Alterna a expansão da linha ao clicar em qualquer célula da linha pai.
+ * O PrimeVue usa um objeto { [dataKey]: rowData } para controlar as linhas expandidas.
+ */
+function toggleRow(event) {
+  const row = event.data;
+  const key = row.semestre;
+  const current = { ...expandedRows.value };
+  if (current[key]) {
+    delete current[key];
+  } else {
+    current[key] = row;
+  }
+  expandedRows.value = current;
+}
+
+function formatMonth(mesIso) {
+  if (!mesIso) return '';
+  const [year, month] = mesIso.split('-');
+  const date = new Date(year, parseInt(month) - 1);
+  return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(' de ', '/').toUpperCase();
+}
+
+function abrirInfratores(mes) {
+  console.log("Abrir modal de inflatores do mês:", mes);
+  // Futuro: abrir um dialog/sidebar com os top N medicamentes do mês.
+}
 
 defineExpose({
   getChartImage: (pixelRatio = 2) =>
@@ -218,87 +253,147 @@ const chartOption = computed(() => {
           <i class="pi pi-table" /><span>Detalhamento Semestral</span>
         </div>
         <div class="evolucao-table-wrap">
-          <table class="evolucao-table">
-            <colgroup>
-              <col style="width: 10%" />
-              <col style="width: 18%" />
-              <col style="width: 18%" />
-              <col style="width: 18%" />
-              <col style="width: 24%" />
-              <col style="width: 12%" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Semestre</th>
-                <th>Total Movimentado</th>
-                <th>Total Regular</th>
-                <th>Sem Comprovação</th>
-                <th>% S/ Comp</th>
-                <th>Tendência</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(s, i) in cachedEvolucaoData.semestres" :key="s.semestre">
-                <td class="sem-label">
-                  {{ s.semestre }}
-                  <span v-if="formatMesRange(s.mes_inicio, s.mes_fim)" class="sem-months">
-                    {{ formatMesRange(s.mes_inicio, s.mes_fim) }}
+          <DataTable 
+            :value="cachedEvolucaoData.semestres" 
+            v-model:expandedRows="expandedRows" 
+            dataKey="semestre" 
+            class="evolucao-table"
+            @row-click="toggleRow"
+          >
+
+            <Column field="semestre" header="Semestre">
+              <template #body="{ data }">
+                <div class="sem-label">
+                  {{ data.semestre }}
+                  <span v-if="formatMesRange(data.mes_inicio, data.mes_fim)" class="sem-months">
+                    {{ formatMesRange(data.mes_inicio, data.mes_fim) }}
                   </span>
-                </td>
-                <td>{{ formatCurrencyFull(s.total) }}</td>
-                <td class="col-regular">{{ formatCurrencyFull(s.regular) }}</td>
-                <td class="col-irregular">{{ formatCurrencyFull(s.irregular) }}</td>
-                <td class="pct-cell">
+                </div>
+              </template>
+            </Column>
+
+            <Column field="total" header="Total Movimentado">
+              <template #body="{ data }">
+                {{ formatCurrencyFull(data.total) }}
+              </template>
+            </Column>
+
+            <Column field="regular" header="Total Regular">
+              <template #body="{ data }">
+                <span class="col-regular">{{ formatCurrencyFull(data.regular) }}</span>
+              </template>
+            </Column>
+
+            <Column field="irregular" header="Sem Comprovação">
+              <template #body="{ data }">
+                <span class="col-irregular">{{ formatCurrencyFull(data.irregular) }}</span>
+              </template>
+            </Column>
+
+            <Column field="pct_irregular" header="% S/ Comp">
+              <template #body="{ data }">
+                <div class="pct-cell" style="text-align: right; padding: 0;">
                   <div class="pct-bar-wrap">
                     <div
                       class="pct-bar"
                       :style="{
-                        width: Math.min(s.pct_irregular, 100) + '%',
-                        background: s.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
-                                  : s.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
-                                  : s.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
+                        width: Math.min(data.pct_irregular, 100) + '%',
+                        background: data.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
+                                  : data.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
+                                  : data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
                                   : 'var(--risk-low)'
                       }"
                     />
                   </div>
                   <span class="pct-value" :class="{
-                    'pct-critical': s.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                    'pct-high':     s.pct_irregular >= RISK_THRESHOLDS.HIGH     && s.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                    'pct-medium':   s.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && s.pct_irregular < RISK_THRESHOLDS.HIGH,
-                    'pct-low':      s.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                  }">{{ s.pct_irregular.toFixed(1) }}%</span>
-                </td>
-                <td class="trend-cell">
-                  <template v-if="i === 0">
+                    'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                    'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                    'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
+                    'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                  }">{{ data.pct_irregular.toFixed(1) }}%</span>
+                </div>
+              </template>
+            </Column>
+
+            <Column header="Tendência">
+              <template #body="{ data, index }">
+                <div class="trend-cell">
+                  <template v-if="index === 0">
                     <span class="trend-neutral">—</span>
                   </template>
                   <template v-else>
                     <span
-                      v-if="s.pct_irregular > cachedEvolucaoData.semestres[i-1].pct_irregular"
+                      v-if="data.pct_irregular > cachedEvolucaoData.semestres[index-1].pct_irregular"
                       class="trend-up"
-                      :title="`+${(s.pct_irregular - cachedEvolucaoData.semestres[i-1].pct_irregular).toFixed(1)}pp`"
-                    >▲ {{ (s.pct_irregular - cachedEvolucaoData.semestres[i-1].pct_irregular).toFixed(1) }}pp</span>
+                      :title="`+${(data.pct_irregular - cachedEvolucaoData.semestres[index-1].pct_irregular).toFixed(1)}pp`"
+                    >▲ {{ (data.pct_irregular - cachedEvolucaoData.semestres[index-1].pct_irregular).toFixed(1) }}pp</span>
                     <span
-                      v-else-if="s.pct_irregular < cachedEvolucaoData.semestres[i-1].pct_irregular"
+                      v-else-if="data.pct_irregular < cachedEvolucaoData.semestres[index-1].pct_irregular"
                       class="trend-down"
-                      :title="`-${(cachedEvolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1)}pp`"
-                    >▼ {{ (cachedEvolucaoData.semestres[i-1].pct_irregular - s.pct_irregular).toFixed(1) }}pp</span>
+                      :title="`-${(cachedEvolucaoData.semestres[index-1].pct_irregular - data.pct_irregular).toFixed(1)}pp`"
+                    >▼ {{ (cachedEvolucaoData.semestres[index-1].pct_irregular - data.pct_irregular).toFixed(1) }}pp</span>
                     <span v-else class="trend-neutral">= 0pp</span>
                   </template>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>TOTAL</td>
-                <td>{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.total, 0)) }}</td>
-                <td>{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.regular, 0)) }}</td>
-                <td class="col-irregular">{{ formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.irregular, 0)) }}</td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+                </div>
+              </template>
+            </Column>
+
+            <!-- Expanded content (Meses) -->
+            <template #expansion="slotProps">
+              <div class="meses-expansion-box p-3">
+                <div class="mb-3" style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">
+                  Detalhamento de {{ slotProps.data.semestre }}
+                </div>
+                <DataTable :value="slotProps.data.meses" class="sanfona-table">
+                  <Column field="mes" header="Mês">
+                    <template #body="{ data }">
+                      <span style="font-weight: 500;">{{ formatMonth(data.mes) }}</span>
+                    </template>
+                  </Column>
+                  <Column field="total" header="Total Movimentado">
+                    <template #body="{ data }">{{ formatCurrencyFull(data.total) }}</template>
+                  </Column>
+                  <Column field="irregular" header="Sem Comprovação">
+                    <template #body="{ data }">
+                      <a 
+                        v-if="data.irregular > 0" 
+                        @click.prevent="abrirInfratores(data.mes)" 
+                        style="color: var(--risk-high); cursor: pointer; text-decoration: none; font-weight: 600; transition: opacity 0.2s;"
+                        onmouseover="this.style.opacity=0.8; this.style.textDecoration='underline'"
+                        onmouseout="this.style.opacity=1; this.style.textDecoration='none'"
+                      >
+                        {{ formatCurrencyFull(data.irregular) }} <i class="pi pi-search" style="font-size: 0.7rem; margin-left: 4px;"></i>
+                      </a>
+                      <span v-else>{{ formatCurrencyFull(data.irregular) }}</span>
+                    </template>
+                  </Column>
+                  <Column field="pct_irregular" header="% S/ Comp">
+                    <template #body="{ data }">
+                      <span :class="{
+                        'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                        'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                        'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
+                        'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                      }" style="font-weight: 600; font-size: 0.8rem;">
+                        {{ data.pct_irregular.toFixed(1) }}%
+                      </span>
+                    </template>
+                  </Column>
+                </DataTable>
+              </div>
+            </template>
+
+            <ColumnGroup type="footer">
+              <Row>
+                <Column footer="" />
+                <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" />
+                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.total, 0))" />
+                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.regular, 0))" />
+                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.irregular, 0))" footerStyle="color: var(--risk-high)" />
+                <Column :colspan="2" />
+              </Row>
+            </ColumnGroup>
+          </DataTable>
         </div>
       </div>
     </template>
@@ -371,8 +466,16 @@ const chartOption = computed(() => {
 .evolucao-chart { width: 100%; height: 100%; }
 
 .evolucao-table-wrap { overflow-x: auto; padding-top: 0.5rem; }
-.evolucao-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.evolucao-table th { 
+
+:deep(.p-datatable.evolucao-table) { font-size: 0.82rem; background: transparent; }
+:deep(.p-datatable.evolucao-table .p-datatable-wrapper) { background: transparent; }
+
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr) {
+  background: transparent;
+  color: var(--text-color);
+}
+
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th) {
   text-align: right; 
   padding: 0.75rem 1rem; 
   background: transparent; 
@@ -384,23 +487,83 @@ const chartOption = computed(() => {
   border-bottom: 2px solid var(--tabs-border); 
   opacity: 0.85;
 }
-.evolucao-table th:first-child, .evolucao-table td:first-child { text-align: left; }
-.evolucao-table td { 
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td) {
   text-align: right; 
   padding: 0.65rem 1rem; 
   color: var(--text-secondary); 
   border-bottom: 1px solid var(--tabs-border); 
   transition: background 0.2s ease;
+  background: transparent;
 }
-.evolucao-table tbody tr:hover td {
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr:not(.p-datatable-row-expansion)) {
+  cursor: pointer;
+}
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr:not(.p-datatable-row-expansion):hover > td) {
   background: var(--table-hover);
 }
-.evolucao-table tfoot td { 
-  border-top: 2px solid var(--tabs-border); 
-  border-bottom: none; 
+/* Linha de expansão: sem hover, sem cursor, sem background diferente */
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr.p-datatable-row-expansion) {
+  cursor: default;
+}
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr.p-datatable-row-expansion > td) {
+  background: var(--table-expansion-bg) !important;
+  padding: 0 !important;
+  border-bottom: 2px solid var(--tabs-border);
+}
+:deep(.p-datatable.evolucao-table .p-datatable-tfoot > tr > td) {
+  text-align: right; 
+  border-top: 2px solid var(--tabs-border) !important; 
+  border-bottom: none !important; 
   background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%); 
   font-weight: 600;
   color: var(--text-color);
+  padding: 0.85rem 1rem;
+}
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:nth-child(1)),
+:deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:nth-child(2)),
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td:nth-child(1)),
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr > td:nth-child(2)) { 
+  text-align: left; 
+}
+
+/* Fix text colors */
+:deep(.p-datatable.evolucao-table .col-regular) { color: var(--risk-low); }
+:deep(.p-datatable.evolucao-table .col-irregular) { color: var(--risk-high); }
+
+/* expansion row */
+:deep(.p-datatable-row-expansion > td) {
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+}
+
+.meses-expansion-box {
+  border-bottom: 1px solid var(--tabs-border);
+  padding: 1.5rem 2.5rem;
+}
+
+:deep(.sanfona-table.p-datatable) { background: transparent; }
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr) { background: transparent; }
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr:hover > td) { background: transparent !important; }
+:deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th) {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  background: transparent;
+  border-bottom: 1px dashed var(--sidebar-border);
+  color: var(--text-secondary);
+  text-align: right;
+}
+:deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th:first-child),
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr > td:first-child) {
+  text-align: left;
 }
 
 .sem-label {

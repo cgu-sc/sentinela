@@ -32,6 +32,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#f8fafc",
+      "table-expansion-bg": "#f8fafc",
       // Risco — tons saturados, legíveis sobre fundo claro
       "risk-low": "#faa716", // original amber style
       "risk-medium": "#faa716", // amber-500
@@ -80,6 +81,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#131920",
+      "table-expansion-bg": "#12161c",
       "risk-low": "#fbbf24",
       "risk-medium": "#fbbf24",
       "risk-high": "#f87171",
@@ -128,6 +130,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#f8fafc",
+      "table-expansion-bg": "#f8fafc",
       "risk-low": "#faa716",
       "risk-medium": "#faa716",
       "risk-high": "#f43f5e",
@@ -175,6 +178,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#071020",
+      "table-expansion-bg": "#071120",
       // Risco — tons luminosos sobre fundo azul escuro
       "risk-low": "#fbbf24",
       "risk-medium": "#fbbf24",
@@ -223,6 +227,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
       "table-stripe": "#fafaf9",
+      "table-expansion-bg": "#f5f5f4",
       // Risco — escala quente: amber claro → orange → rose → red
       "risk-low": "#fbbf24", // amber-400 — tom suave, menos intenso que o médio
       "risk-medium": "#f97316", // orange-500 — intermediário entre amber e vermelho
@@ -270,6 +275,7 @@ export const SURFACE_COLORS = {
       "table-hover":
         "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
       "table-stripe": "#131920",
+      "table-expansion-bg": "#12161c",
       // Risco — escala quente: amber claro → orange → rose → red
       "risk-low": "#fcd34d", // amber-300 — tom suave e legível no dark
       "risk-medium": "#fb923c", // orange-400 — intermediário entre amber e vermelho

@@ -444,6 +444,32 @@ class AnalyticsService:
                 ])
             )
 
+            # Preparar o detalhamento mensal para a "sanfona" do frontend
+            meses_df = (
+                cnpj_df
+                .with_columns([
+                    pl.col("periodo").dt.strftime("%Y-%m").alias("mes"),
+                ])
+                .group_by(["ano", "sem_num", "mes"])
+                .agg([
+                    pl.sum("total_vendas").alias("total"),
+                    pl.sum("total_sem_comprovacao").alias("irregular"),
+                ])
+                .with_columns([
+                    (pl.col("total") - pl.col("irregular")).alias("regular"),
+                    (pl.col("irregular") / pl.when(pl.col("total") > 0).then(pl.col("total")).otherwise(pl.lit(1.0)) * 100)
+                      .round(2).alias("pct_irregular"),
+                ])
+                .sort("mes")
+            )
+            
+            meses_by_semestre = {}
+            for m in meses_df.iter_rows(named=True):
+                k = (m["ano"], m["sem_num"])
+                if k not in meses_by_semestre:
+                    meses_by_semestre[k] = []
+                meses_by_semestre[k].append(m)
+
             semestres = [
                 EvolucaoSemestreSchema(
                     semestre=r["semestre"],
@@ -453,6 +479,16 @@ class AnalyticsService:
                     pct_irregular=r["pct_irregular"],
                     mes_inicio=r["dt_inicio"].strftime("%Y-%m") if r.get("dt_inicio") else None,
                     mes_fim=r["dt_fim"].strftime("%Y-%m") if r.get("dt_fim") else None,
+                    meses=[
+                        {
+                            "mes": m["mes"],
+                            "total": round(m["total"], 2),
+                            "regular": round(m["regular"], 2),
+                            "irregular": round(m["irregular"], 2),
+                            "pct_irregular": m["pct_irregular"]
+                        }
+                        for m in meses_by_semestre.get((r["ano"], r["sem_num"]), [])
+                    ]
                 )
                 for r in agg.iter_rows(named=True)
             ]

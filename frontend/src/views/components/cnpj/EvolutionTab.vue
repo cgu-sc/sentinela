@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
@@ -76,6 +76,34 @@ function toggleRow(event) {
     current[key] = row;
   }
   expandedRows.value = current;
+}
+
+/**
+ * Disparado ao clicar em uma barra no gráfico ECharts.
+ * O `params.name` neste gráfico contém a label do Eixo X (o Semestre, ex: "1S/2021").
+ */
+function onChartClick(params) {
+  if (!params || !params.name) return;
+  const semestre = params.name;
+  
+  if (!cachedEvolucaoData.value?.semestres) return;
+  
+  const rowData = cachedEvolucaoData.value.semestres.find(s => s.semestre === semestre);
+  if (!rowData) return;
+
+  // Auto-expande a sanfona do respectivo semestre (fechando as outras se existirem)
+  expandedRows.value = { [semestre]: rowData };
+
+  // Localiza o elemento renderizado da tabela no DOM para rolar a tela suavemente até ele
+  nextTick(() => {
+    const labels = document.querySelectorAll('.sem-label');
+    for (let el of labels) {
+      if (el.textContent.includes(semestre)) {
+        el.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+    }
+  });
 }
 
 function formatMonth(mesIso) {
@@ -244,7 +272,7 @@ const chartOption = computed(() => {
           <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
         </div>
         <div class="evolucao-chart-wrap">
-          <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" />
+          <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" @click="onChartClick" />
         </div>
       </div>
 
@@ -537,6 +565,9 @@ const chartOption = computed(() => {
 }
 :deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:last-child .p-column-header-content) {
   justify-content: center;
+}
+:deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th:last-child .p-column-header-content) {
+  justify-content: flex-end !important;
 }
 
 /* Fix text colors */

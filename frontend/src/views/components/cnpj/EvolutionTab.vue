@@ -376,15 +376,15 @@ const chartOption = computed(() => {
                   Detalhamento de {{ slotProps.data.semestre }}
                 </div>
                 <DataTable :value="slotProps.data.meses" class="sanfona-table">
-                  <Column field="mes" header="Mês" style="width: 25%" headerStyle="text-align: left" bodyStyle="text-align: left">
+                  <Column field="mes" header="Mês" style="width: 15%" headerStyle="text-align: left" bodyStyle="text-align: left">
                     <template #body="{ data }">
                       <span style="font-weight: 500;">{{ formatMonth(data.mes) }}</span>
                     </template>
                   </Column>
-                  <Column field="total" header="Total Movimentado" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
+                  <Column field="total" header="Total Movimentado" style="width: 20%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">{{ formatCurrencyFull(data.total) }}</template>
                   </Column>
-                  <Column field="irregular" header="Sem Comprovação" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
+                  <Column field="irregular" header="Sem Comprovação" style="width: 20%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">
                       <a 
                         v-if="data.irregular > 0" 
@@ -398,16 +398,30 @@ const chartOption = computed(() => {
                       <span v-else>{{ formatCurrencyFull(data.irregular) }}</span>
                     </template>
                   </Column>
-                  <Column field="pct_irregular" header="% S/ Comp" style="width: 25%" headerStyle="text-align: right" bodyStyle="text-align: right">
+                  <Column field="pct_irregular" header="% SEM COMPROVAÇÃO" style="width: 45%" headerStyle="text-align: right" bodyStyle="text-align: right">
                     <template #body="{ data }">
-                      <span :class="{
-                        'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                        'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                        'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
-                        'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                      }" style="font-weight: 600; font-size: 0.8rem;">
-                        {{ data.pct_irregular.toFixed(1) }}%
-                      </span>
+                      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: 100%;">
+                        <div style="flex: 1; max-width: 250px; height: 5px; background: color-mix(in srgb, var(--text-color) 8%, var(--tabs-border)); border-radius: 99px; overflow: hidden; display: flex;">
+                          <div
+                            :style="{
+                              width: Math.min(data.pct_irregular, 100) + '%',
+                              height: '100%',
+                              background: data.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
+                                        : data.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
+                                        : data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
+                                        : 'var(--risk-low)'
+                            }"
+                          ></div>
+                        </div>
+                        <span :class="{
+                          'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                          'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                          'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
+                          'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                        }" style="font-weight: 600; font-size: 0.8rem; min-width: 42px; text-align: right;">
+                          {{ data.pct_irregular.toFixed(1) }}%
+                        </span>
+                      </div>
                     </template>
                   </Column>
                 </DataTable>

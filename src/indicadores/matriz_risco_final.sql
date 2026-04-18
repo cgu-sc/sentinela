@@ -229,9 +229,8 @@ IndicadoresPresenca AS (
     LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_compra_unica_detalhado I14 ON I14.cnpj = F.cnpj
-    -- I15: 'nu_cnpj' é o nome original da coluna-chave em indicador_crm_detalhado (fonte CNES/HHI).
-    --      Todos os outros indicadores usam 'cnpj'. Não alterar sem verificar o schema da tabela.
-    LEFT JOIN temp_CGUSC.fp.indicador_crm_detalhado I15 ON I15.nu_cnpj = F.cnpj
+    -- I15: indicador_crm_hhi — HHI agregado por CNPJ, gerado por crms_1_detalhado_prescritor.sql.
+    LEFT JOIN temp_CGUSC.fp.indicador_crm_hhi I15 ON I15.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_exclusividade_crm_detalhado I16 ON I16.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado I19 ON I19.cnpj = F.cnpj

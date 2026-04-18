@@ -61,6 +61,12 @@ export const useThemeStore = defineStore('theme', () => {
       html.style.setProperty(`--${key}`, surface[key]);
     });
 
+    // Variáveis forçadas para o Dark Mode, usadas ex: tela de boot
+    const surfaceDark = SURFACE_COLORS[themeKey]['dark'];
+    Object.keys(surfaceDark).forEach(key => {
+      html.style.setProperty(`--dark-${key}`, surfaceDark[key]);
+    });
+
     // 4. Forçamos o navegador a renderizar as mudanças instantaneamente
     // antes de devolvermos as transições, evitando a "piscada".
     void document.documentElement.offsetHeight; // Força reflow

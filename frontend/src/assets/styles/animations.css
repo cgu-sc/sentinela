@@ -6,7 +6,7 @@
  .app-boot-overlay {
     position: fixed;
     inset: 0;
-    background: radial-gradient(circle at center, var(--card-bg, #0f172a), var(--bg-color, #020617));
+    background: radial-gradient(circle at center, var(--dark-card-bg, #161b22), var(--dark-bg-color, #0d1117));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -92,7 +92,7 @@
   .status-message { 
     font-size: 0.95rem; 
     font-weight: 600; 
-    color: var(--text-color, #ffffff); 
+    color: var(--dark-text-color, #ffffff); 
     opacity: 0.85;
     letter-spacing: 0.5px; 
   }

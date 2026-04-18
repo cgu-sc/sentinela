@@ -1,13 +1,13 @@
 -- ============================================================================
--- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 3
+-- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 4
 -- ============================================================================
--- ALTERAÇÕES v3:
---   1. Adicionada dimensão COMPETENCIA (YYYYMM INT) em toda a cadeia de agregação
---   2. Granularidade muda de (cnpj, crm) acumulado para (cnpj, crm, competencia)
---   3. Alerta 5: verificação de sobreposição de datas substituída por
---      T1.competencia = T2.competencia (mesmo mês = simultaneidade garantida)
---   4. Detecção de robô nacional calculada por (crm, crm_uf, competencia)
---   5. Coluna 'Conexao' removida (redundante com granularidade mensal)
+-- ALTERAÇÕES v4:
+--   1. Alertas extraídos para tabela permanente separada: fp.alertas_crm
+--   2. alerta2 → alerta_concentracao_temporal
+--   3. alerta5 → alerta_distancia_geografica
+--   4. dados_crm_detalhado: removidas colunas de alerta e nu_populacao
+--   5. Eliminada tabela temp intermediária #lista_medicos_farmacia_popularFP_temp2
+--   6. crm_export gerado neste script; LEFT JOIN em alertas_crm por (nu_cnpj, id_medico, competencia)
 -- ============================================================================
 
 DECLARE @DataInicio DATE = '2015-07-01';
@@ -16,280 +16,239 @@ DECLARE @DataFim    DATE = '2024-12-31';
 
 -- ============================================================================
 -- PASSO 0: AGREGAÇÃO POR MÉDICO / FARMÁCIA / MÊS
+-- Fonte dupla: histórico (até 2020) + recente (2021-2024)
 -- ============================================================================
+DROP TABLE IF EXISTS #base_agregada_crm_cnpj;
 
--- A. Base Histórica (2015-2020)
-DROP TABLE IF EXISTS #Medicos_Hist;
 SELECT
-    M.cnpj,
-    M.crm,
-    M.crm_uf,
+    CONCAT(M.cnpj, '|', M.crm, '|', M.crm_uf, '|',
+           CAST(YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS VARCHAR(6))) AS chave,
+    M.crm                                         AS nu_crm,
+    M.crm_uf                                      AS sg_uf_crm,
+    M.cnpj                                        AS nu_cnpj,
     YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS competencia,
-    COUNT(DISTINCT M.num_autorizacao)             AS nu_prescricoes,
-    SUM(M.valor_pago)                             AS vl_pago,
-    MIN(M.data_hora)                              AS dt_ini,
-    MAX(M.data_hora)                              AS dt_fim
-INTO #Medicos_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP M
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.crm, M.crm_uf, M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
-
--- B. Base Recente (2021-2024)
-DROP TABLE IF EXISTS #Medicos_Recente;
-SELECT
-    M.cnpj,
-    M.crm,
-    M.crm_uf,
-    YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS competencia,
-    COUNT(DISTINCT M.num_autorizacao)             AS nu_prescricoes,
-    SUM(M.valor_pago)                             AS vl_pago,
-    MIN(M.data_hora)                              AS dt_ini,
-    MAX(M.data_hora)                              AS dt_fim
-INTO #Medicos_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 M
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.crm, M.crm_uf, M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
-
--- C. União Final dos Médicos
-DROP TABLE IF EXISTS temp_CGUSC.fp.base_agregada_crm_cnpj;
-SELECT
-    CONCAT(cnpj, '|', crm, '|', crm_uf, '|', CAST(competencia AS VARCHAR(6))) AS chave,
-    crm        AS nu_crm,
-    crm_uf     AS sg_uf_crm,
-    cnpj       AS nu_cnpj,
-    competencia,
-    SUM(nu_prescricoes) AS nu_prescricoes_medico,
-    SUM(vl_pago)        AS vl_autorizacoes_medico,
-    MIN(dt_ini)         AS dt_prescricao_inicial_medico,
-    MAX(dt_fim)         AS dt_prescricao_final_medico
-INTO temp_CGUSC.fp.base_agregada_crm_cnpj
+    COUNT(DISTINCT M.num_autorizacao)             AS nu_prescricoes_medico,
+    SUM(M.valor_pago)                             AS vl_autorizacoes_medico,
+    MIN(M.data_hora)                              AS dt_prescricao_inicial_medico,
+    MAX(M.data_hora)                              AS dt_prescricao_final_medico
+INTO #base_agregada_crm_cnpj
 FROM (
-    SELECT * FROM #Medicos_Hist
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
     UNION ALL
-    SELECT * FROM #Medicos_Recente
-) U
-GROUP BY crm, crm_uf, cnpj, competencia;
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
+  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
+GROUP BY M.crm, M.crm_uf, M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
 
-CREATE CLUSTERED INDEX IDX_BaseAgreg_Key ON temp_CGUSC.fp.base_agregada_crm_cnpj(nu_cnpj, nu_crm, competencia);
+CREATE CLUSTERED INDEX IDX_BaseAgreg_Key ON #base_agregada_crm_cnpj(nu_cnpj, nu_crm, competencia);
 
 
 -- ============================================================================
--- PASSO 0.1: AGREGAÇÃO POR ESTABELECIMENTO / MÊS
+-- PASSO 0.1: TOTAIS POR ESTABELECIMENTO / MÊS
+-- Fonte dupla: histórico (até 2020) + recente (2021-2024)
 -- ============================================================================
-DROP TABLE IF EXISTS #Estab_Hist;
-SELECT
-    cnpj,
-    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
-    COUNT(DISTINCT num_autorizacao)           AS nu_aut,
-    SUM(valor_pago)                           AS vl_pago,
-    MIN(data_hora)                            AS dt_ini,
-    MAX(data_hora)                            AS dt_fim
-INTO #Estab_Hist
-FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora);
-
-DROP TABLE IF EXISTS #Estab_Recente;
-SELECT
-    cnpj,
-    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
-    COUNT(DISTINCT num_autorizacao)           AS nu_aut,
-    SUM(valor_pago)                           AS vl_pago,
-    MIN(data_hora)                            AS dt_ini,
-    MAX(data_hora)                            AS dt_fim
-INTO #Estab_Recente
-FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora);
-
 DROP TABLE IF EXISTS #tb_info_estabelecimento;
+
 SELECT
     cnpj,
-    competencia,
-    SUM(nu_aut)  AS nu_autorizacoes_estabelecimento,
-    SUM(vl_pago) AS vl_autorizacoes_estabelecimento,
-    MIN(dt_ini)  AS dt_venda_inicial_estabelecimento,
-    MAX(dt_fim)  AS dt_venda_final_estabelecimento
+    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
+    COUNT(DISTINCT num_autorizacao)           AS nu_autorizacoes_estabelecimento,
+    SUM(valor_pago)                           AS vl_autorizacoes_estabelecimento,
+    MIN(data_hora)                            AS dt_venda_inicial_estabelecimento,
+    MAX(data_hora)                            AS dt_venda_final_estabelecimento
 INTO #tb_info_estabelecimento
-FROM (SELECT * FROM #Estab_Hist UNION ALL SELECT * FROM #Estab_Recente) U
-GROUP BY cnpj, competencia;
+FROM (
+    SELECT cnpj, data_hora, num_autorizacao, valor_pago
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, data_hora, num_autorizacao, valor_pago
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
+WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
+GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora);
+GO
+-- GO: base_agregada_crm_cnpj e #tb_info_estabelecimento existem com schema novo antes do próximo batch.
 
 
 -- ============================================================================
--- TABELA TEMPORÁRIA COM ALERTAS
+-- BASE TEMPORÁRIA PARA ALERTAS
+-- (substitui #lista_medicos_farmacia_popularFP_temp e _temp2)
 -- ============================================================================
-DROP TABLE IF EXISTS #lista_medicos_farmacia_popularFP_temp;
+DROP TABLE IF EXISTS #lista_alertas_temp;
+
 SELECT
-    CONCAT(A.nu_cnpj, '|', A.nu_crm, '|', A.sg_uf_crm, '|', CAST(A.competencia AS VARCHAR(6))) AS chave,
     A.nu_cnpj,
     A.nu_crm,
     A.sg_uf_crm,
+    CAST(A.nu_crm AS VARCHAR(10)) + '/' + A.sg_uf_crm AS id_medico,
     A.competencia,
     A.nu_prescricoes_medico,
+    A.vl_autorizacoes_medico,
     A.dt_prescricao_inicial_medico,
     A.dt_prescricao_final_medico,
-    DATEDIFF(DAY,    A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico) + 1 AS nu_dias_prescricao_inicial_final,
-    DATEDIFF(MINUTE, A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico)     AS nu_minutos_prescricao_inicial_final,
+    DATEDIFF(DAY,    A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico) + 1 AS nu_dias,
+    DATEDIFF(MINUTE, A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico)     AS nu_minutos,
     C.nu_autorizacoes_estabelecimento,
     C.dt_venda_inicial_estabelecimento,
     C.dt_venda_final_estabelecimento,
-    A.vl_autorizacoes_medico,
-    (TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10,2)) / NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10,2)), 0)) AS percentual,
-    TRY_CAST('' AS VARCHAR(800)) AS alerta2,
-    TRY_CAST('' AS VARCHAR(800)) AS alerta5
-INTO #lista_medicos_farmacia_popularFP_temp
-FROM temp_CGUSC.fp.base_agregada_crm_cnpj A
+    TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10,2)) /
+        NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10,2)), 0) AS percentual,
+    TRY_CAST('' AS VARCHAR(800)) AS alerta_concentracao_temporal
+INTO #lista_alertas_temp
+FROM #base_agregada_crm_cnpj A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj AND C.competencia = A.competencia
 WHERE A.nu_prescricoes_medico >= 5;
+GO
 
 
 -- ============================================================================
--- ALERTA 2: TODAS AS PRESCRIÇÕES EM PERÍODO MUITO CURTO (dentro do mês)
+-- ALERTA CONCENTRAÇÃO TEMPORAL: prescrições em janela de 1 ou 2 dias
 -- ============================================================================
+
 -- Caso: todas as prescrições em uma janela de 2 dias
-UPDATE #lista_medicos_farmacia_popularFP_temp
-SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
-              ' prescrições lançadas em ' +
-              CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' +
-              CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)'
-WHERE nu_dias_prescricao_inicial_final = 2
-  AND nu_prescricoes_medico > 5;
+UPDATE #lista_alertas_temp
+SET alerta_concentracao_temporal =
+    'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
+    ' prescrições lançadas em ' +
+    CAST(nu_minutos / 60 AS VARCHAR(10)) + ' hora(s) e ' +
+    CAST(nu_minutos % 60 AS VARCHAR(10)) + ' minuto(s)'
+WHERE nu_dias = 2
+  AND nu_prescricoes_medico >= 5;
 
--- Caso: todas no mesmo dia
-UPDATE #lista_medicos_farmacia_popularFP_temp
-SET alerta2 = 'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
-              ' prescrições lançadas no mesmo dia, em ' +
-              CAST(nu_minutos_prescricao_inicial_final / 60 AS VARCHAR(10)) + ' hora(s) e ' +
-              CAST(nu_minutos_prescricao_inicial_final % 60 AS VARCHAR(10)) + ' minuto(s)'
-WHERE nu_dias_prescricao_inicial_final = 1
-  AND nu_prescricoes_medico > 5;
-
-
--- ============================================================================
--- TABELA TEMPORÁRIA 2 COM DADOS GEOGRÁFICOS
--- ============================================================================
-DROP TABLE IF EXISTS #lista_medicos_farmacia_popularFP_temp2;
-SELECT
-    A.nu_cnpj,
-    A.competencia,
-    C.no_municipio,
-    C.sg_uf,
-    C.nu_populacao,
-    B.codibge,
-    C.latitude,
-    C.longitude,
-    A.nu_prescricoes_medico,
-    TRY_CAST(
-        TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(18,2)) /
-        NULLIF(TRY_CAST(A.nu_dias_prescricao_inicial_final AS DECIMAL(18,2)), 0)
-    AS DECIMAL(18,2))                   AS nu_prescricoes_dia,
-    A.nu_autorizacoes_estabelecimento,
-    A.dt_prescricao_inicial_medico,
-    A.dt_prescricao_final_medico,
-    A.dt_venda_inicial_estabelecimento,
-    A.dt_venda_final_estabelecimento,
-    A.vl_autorizacoes_medico,
-    A.percentual,
-    A.nu_crm,
-    A.sg_uf_crm,
-    A.alerta2,
-    A.alerta5
-INTO #lista_medicos_farmacia_popularFP_temp2
-FROM #lista_medicos_farmacia_popularFP_temp A
-LEFT JOIN temp_CGUSC.fp.dados_farmacia   B ON B.cnpj     = A.nu_cnpj
-LEFT JOIN temp_CGUSC.sus.tb_ibge         C ON C.id_ibge7 = B.codibge;
+-- Caso: todas as prescrições no mesmo dia
+UPDATE #lista_alertas_temp
+SET alerta_concentracao_temporal =
+    'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
+    ' prescrições lançadas no mesmo dia, em ' +
+    CAST(nu_minutos / 60 AS VARCHAR(10)) + ' hora(s) e ' +
+    CAST(nu_minutos % 60 AS VARCHAR(10)) + ' minuto(s)'
+WHERE nu_dias = 1
+  AND nu_prescricoes_medico >= 5;
+GO
 
 
 -- ============================================================================
 -- TOTAIS NACIONAIS POR MÉDICO / COMPETÊNCIA
 -- ============================================================================
 DROP TABLE IF EXISTS #prescricoes_todos_estabelecimentos;
+
 SELECT
     nu_crm,
     sg_uf_crm,
     competencia,
-    SUM(nu_prescricoes_medico)                                          AS nu_prescricoes_medico_em_todos_estabelecimentos,
-    COUNT(DISTINCT nu_cnpj)                                             AS nu_estabelecimentos_com_registro_mesmo_crm,
+    SUM(nu_prescricoes_medico)                                    AS nu_prescricoes_medico_em_todos_estabelecimentos,
+    COUNT(DISTINCT nu_cnpj)                                       AS nu_estabelecimentos_com_registro_mesmo_crm,
     CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
         NULLIF(CAST(
             DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
-        AS DECIMAL(18,2)), 0)                                           AS nu_prescricoes_dia_em_todos_estabelecimentos
+        AS DECIMAL(18,2)), 0)                                     AS nu_prescricoes_dia_em_todos_estabelecimentos
 INTO #prescricoes_todos_estabelecimentos
-FROM temp_CGUSC.fp.base_agregada_crm_cnpj
+FROM #base_agregada_crm_cnpj
 GROUP BY nu_crm, sg_uf_crm, competencia;
+GO
 
 
 -- ============================================================================
 -- TABELA FINAL: dados_crm_detalhado
+-- Sem colunas de alerta (ficam em alertas_crm) e sem nu_populacao.
+-- Elimina a necessidade de #lista_medicos_farmacia_popularFP_temp2.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.dados_crm_detalhado;
+
 SELECT
     A.nu_cnpj,
     A.competencia,
-    A.no_municipio,
-    A.codIBGE,
-    A.latitude,
-    A.longitude,
-    A.sg_uf,
-    A.nu_populacao,
+    GEO.no_municipio,
+    F.codibge,
+    GEO.latitude,
+    GEO.longitude,
+    CAST(GEO.sg_uf AS VARCHAR(2))                                  AS sg_uf,
     A.nu_crm,
     A.sg_uf_crm,
-    CAST(A.nu_crm AS VARCHAR(10)) + '/' + A.sg_uf_crm AS id_medico,
+    A.id_medico,
     A.nu_prescricoes_medico,
-    B.nu_prescricoes_medico_em_todos_estabelecimentos,
-    A.nu_prescricoes_dia,
-    B.nu_prescricoes_dia_em_todos_estabelecimentos,
-    B.nu_estabelecimentos_com_registro_mesmo_crm,
+    P.nu_prescricoes_medico_em_todos_estabelecimentos,
+    TRY_CAST(
+        TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(18,2)) /
+        NULLIF(TRY_CAST(A.nu_dias AS DECIMAL(18,2)), 0)
+    AS DECIMAL(18,2))                                              AS nu_prescricoes_dia,
+    P.nu_prescricoes_dia_em_todos_estabelecimentos,
+    P.nu_estabelecimentos_com_registro_mesmo_crm,
     A.nu_autorizacoes_estabelecimento,
     A.dt_prescricao_inicial_medico,
     A.dt_prescricao_final_medico,
     A.dt_venda_inicial_estabelecimento,
     A.dt_venda_final_estabelecimento,
     A.vl_autorizacoes_medico,
-    A.percentual,
-    A.alerta2,
-    A.alerta5
+    A.percentual
 INTO temp_CGUSC.fp.dados_crm_detalhado
-FROM #lista_medicos_farmacia_popularFP_temp2 A
-INNER JOIN #prescricoes_todos_estabelecimentos B
-    ON  B.nu_crm      = A.nu_crm
-    AND B.sg_uf_crm   = A.sg_uf_crm
-    AND B.competencia = A.competencia;
+FROM #lista_alertas_temp A
+LEFT JOIN temp_CGUSC.fp.dados_farmacia            F   ON F.cnpj     = A.nu_cnpj
+LEFT JOIN temp_CGUSC.sus.tb_ibge                  GEO ON GEO.id_ibge7 = F.codibge
+INNER JOIN #prescricoes_todos_estabelecimentos    P
+    ON  P.nu_crm      = A.nu_crm
+    AND P.sg_uf_crm   = A.sg_uf_crm
+    AND P.competencia = A.competencia;
 
 CREATE NONCLUSTERED INDEX idx_dados_crm_detalhado_performance
-ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj, competencia)
-INCLUDE (latitude, longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico, no_municipio, sg_uf, nu_prescricoes_medico);
+    ON temp_CGUSC.fp.dados_crm_detalhado (id_medico, nu_cnpj, competencia)
+    INCLUDE (latitude, longitude, dt_prescricao_inicial_medico, dt_prescricao_final_medico,
+             no_municipio, sg_uf, nu_prescricoes_medico);
 GO
 
 
 -- ============================================================================
--- ALERTA 5: DISTÂNCIA >400KM NO MESMO MÊS (competencia = simultaneidade)
+-- TABELA DE ALERTAS: alertas_crm
+-- Chave: (nu_cnpj, id_medico, competencia)
+-- Inicializa com alerta_concentracao_temporal; alerta_distancia_geografica
+-- será preenchido na etapa seguinte via MERGE.
 -- ============================================================================
-PRINT '>> Processando Alerta 5 (Geográfico)...';
+DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
+
+SELECT
+    nu_cnpj,
+    id_medico,
+    competencia,
+    NULLIF(alerta_concentracao_temporal, '') AS alerta_concentracao_temporal,
+    CAST(NULL AS VARCHAR(800))               AS alerta_distancia_geografica
+INTO temp_CGUSC.fp.alertas_crm
+FROM #lista_alertas_temp
+WHERE NULLIF(alerta_concentracao_temporal, '') IS NOT NULL;
+
+CREATE CLUSTERED INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm(nu_cnpj, id_medico, competencia);
+GO
+
+
+-- ============================================================================
+-- ALERTA DISTÂNCIA GEOGRÁFICA: >400KM NO MESMO MÊS
+-- Usa dados_crm_detalhado (lat/lon já resolvidos) para calcular pares.
+-- MERGE: atualiza linha existente (tem alerta_concentracao_temporal) ou insere nova.
+-- ============================================================================
+PRINT '>> Processando Alerta Distância Geográfica...';
 
 WITH
--- 1. Pares de CNPJs do mesmo médico na mesma competência
+-- 1. Pares do mesmo médico / mesmo mês em CNPJs distintos
 PairedWithDistance AS (
     SELECT
         T1.competencia,
         T1.id_medico,
-        T1.nu_cnpj               AS CNPJ1_orig,
+        T1.nu_cnpj               AS CNPJ1,
         T1.dt_prescricao_inicial_medico AS DI1,
         T1.dt_prescricao_final_medico   AS DF1,
         T1.no_municipio          AS M1,
         T1.sg_uf                 AS UF1,
         T1.nu_prescricoes_medico AS P1,
-        T2.nu_cnpj               AS CNPJ2_orig,
+        T2.nu_cnpj               AS CNPJ2,
         T2.dt_prescricao_inicial_medico AS DI2,
         T2.dt_prescricao_final_medico   AS DF2,
         T2.no_municipio          AS M2,
         T2.sg_uf                 AS UF2,
         T2.nu_prescricoes_medico AS P2,
-        -- Só chama a função pesada se a diferença geográfica for grande
+        -- Chama função de distância apenas quando diferença geográfica bruta é grande
         CASE
             WHEN (ABS(T1.latitude - T2.latitude) > 2.0 OR ABS(T1.longitude - T2.longitude) > 2.0)
             THEN temp_CGUSC.fp.fnCalcular_Distancia_KM(T1.latitude, T1.longitude, T2.latitude, T2.longitude)
@@ -299,104 +258,428 @@ PairedWithDistance AS (
     INNER JOIN temp_CGUSC.fp.dados_crm_detalhado T2
         ON  T1.id_medico   = T2.id_medico
         AND T1.nu_cnpj     < T2.nu_cnpj
-        AND T1.competencia = T2.competencia   -- mesmo mês garante simultaneidade
+        AND T1.competencia = T2.competencia
 ),
 
 -- 2. Filtra pares com distância >400km e volume mínimo
-AllValidPairsFiltered AS (
-    SELECT *
-    FROM PairedWithDistance
-    WHERE DistanciaKM > 400
-      AND P1 >= 30
-      AND P2 >= 30
+ParesFiltrados AS (
+    SELECT * FROM PairedWithDistance
+    WHERE DistanciaKM > 400 AND P1 >= 30 AND P2 >= 30
 ),
 
 -- 3. Ranqueia o par mais relevante por (médico, competência)
-RankedValidPairs AS (
+ParesPriorizados AS (
     SELECT *,
         ROW_NUMBER() OVER (
             PARTITION BY id_medico, competencia
             ORDER BY (P1 + P2) DESC, DistanciaKM DESC
         ) AS rn
-    FROM AllValidPairsFiltered
+    FROM ParesFiltrados
 ),
 
 -- 4. Total de pares válidos por (médico, competência)
-DoctorOverallStats AS (
-    SELECT
-        id_medico,
-        competencia,
-        COUNT(*) AS TotalValidPairsInDoctor
-    FROM RankedValidPairs
+TotaisPorMedico AS (
+    SELECT id_medico, competencia, COUNT(*) AS total_pares
+    FROM ParesPriorizados
     GROUP BY id_medico, competencia
 ),
 
--- 5. Dados finais para montar a mensagem
-FinalAlertInfo AS (
+-- 5. Monta a mensagem de alerta
+MensagensAlerta AS (
     SELECT
-        RP.competencia,
-        RP.id_medico,
-        RP.CNPJ1_orig AS Top_CNPJ1_orig,
-        RP.DI1, RP.DF1, RP.M1, RP.UF1, RP.P1,
-        RP.CNPJ2_orig AS Top_CNPJ2_orig,
-        RP.DI2, RP.DF2, RP.M2, RP.UF2, RP.P2,
-        RP.DistanciaKM AS Top_DistanciaKM,
-        CASE WHEN DOS.TotalValidPairsInDoctor > 0
-             THEN DOS.TotalValidPairsInDoctor - 1
-             ELSE 0
-        END AS CountOtherActualValidPairs,
-        CASE WHEN RP.CNPJ1_orig IS NOT NULL AND LEN(RP.CNPJ1_orig) = 14
-             THEN SUBSTRING(RP.CNPJ1_orig,1,2)+'.'+SUBSTRING(RP.CNPJ1_orig,3,3)+'.'+
-                  SUBSTRING(RP.CNPJ1_orig,6,3)+'/'+SUBSTRING(RP.CNPJ1_orig,9,4)+'-'+SUBSTRING(RP.CNPJ1_orig,13,2)
-             ELSE ISNULL(RP.CNPJ1_orig, 'N/I CNPJ')
-        END AS Fmtd_Top_CNPJ1,
-        CASE WHEN RP.CNPJ2_orig IS NOT NULL AND LEN(RP.CNPJ2_orig) = 14
-             THEN SUBSTRING(RP.CNPJ2_orig,1,2)+'.'+SUBSTRING(RP.CNPJ2_orig,3,3)+'.'+
-                  SUBSTRING(RP.CNPJ2_orig,6,3)+'/'+SUBSTRING(RP.CNPJ2_orig,9,4)+'-'+SUBSTRING(RP.CNPJ2_orig,13,2)
-             ELSE ISNULL(RP.CNPJ2_orig, 'N/I CNPJ')
-        END AS Fmtd_Top_CNPJ2
-    FROM RankedValidPairs RP
-    LEFT JOIN DoctorOverallStats DOS
-        ON  RP.id_medico   = DOS.id_medico
-        AND RP.competencia = DOS.competencia
-    WHERE RP.rn = 1
+        D.nu_cnpj,
+        D.id_medico,
+        D.competencia,
+        'Em ' + RIGHT('0' + CAST(P.competencia % 100 AS VARCHAR(2)), 2) + '/' +
+                CAST(P.competencia / 100 AS VARCHAR(4)) + ': ' +
+        'A distância entre a farmácia ' +
+            CASE WHEN LEN(P.CNPJ1) = 14
+                 THEN SUBSTRING(P.CNPJ1,1,2)+'.'+SUBSTRING(P.CNPJ1,3,3)+'.'+
+                      SUBSTRING(P.CNPJ1,6,3)+'/'+SUBSTRING(P.CNPJ1,9,4)+'-'+SUBSTRING(P.CNPJ1,13,2)
+                 ELSE ISNULL(P.CNPJ1,'N/I') END +
+        ' (' + ISNULL(P.M1,'N/I') + '/' + ISNULL(P.UF1,'N/I') + ')' +
+        ' - ' + CONVERT(VARCHAR, P.DI1, 103) + ' a ' + CONVERT(VARCHAR, P.DF1, 103) +
+        ' (' + CAST(P.P1 AS VARCHAR(10)) + ' prescrições)' +
+        ' e a farmácia ' +
+            CASE WHEN LEN(P.CNPJ2) = 14
+                 THEN SUBSTRING(P.CNPJ2,1,2)+'.'+SUBSTRING(P.CNPJ2,3,3)+'.'+
+                      SUBSTRING(P.CNPJ2,6,3)+'/'+SUBSTRING(P.CNPJ2,9,4)+'-'+SUBSTRING(P.CNPJ2,13,2)
+                 ELSE ISNULL(P.CNPJ2,'N/I') END +
+        ' (' + ISNULL(P.M2,'N/I') + '/' + ISNULL(P.UF2,'N/I') + ')' +
+        ' - ' + CONVERT(VARCHAR, P.DI2, 103) + ' a ' + CONVERT(VARCHAR, P.DF2, 103) +
+        ' (' + CAST(P.P2 AS VARCHAR(10)) + ' prescrições)' +
+        ' é de ' + CAST(CAST(P.DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
+        CASE WHEN T.total_pares > 1
+             THEN ' Há também outros ' + CAST(T.total_pares - 1 AS VARCHAR(10)) +
+                  ' pares de estabelecimentos com distância maior que 400km no mesmo período.'
+             ELSE '' END
+        AS alerta_distancia_geografica
+    FROM ParesPriorizados P
+    INNER JOIN TotaisPorMedico T
+        ON T.id_medico = P.id_medico AND T.competencia = P.competencia
+    INNER JOIN temp_CGUSC.fp.dados_crm_detalhado D
+        ON  D.id_medico   = P.id_medico
+        AND D.competencia = P.competencia
+        AND (D.nu_cnpj = P.CNPJ1 OR D.nu_cnpj = P.CNPJ2)
+    WHERE P.rn = 1
 )
 
--- Atualiza alerta5 com contexto do mês
-UPDATE AM
-SET AM.alerta5 =
-    'Em ' + RIGHT('0' + CAST(FAI.competencia % 100 AS VARCHAR(2)), 2) + '/' + CAST(FAI.competencia / 100 AS VARCHAR(4)) + ': ' +
-    'A distância entre a farmácia ' + FAI.Fmtd_Top_CNPJ1 +
-    ' (' + ISNULL(FAI.M1, 'N/I') + '/' + ISNULL(FAI.UF1, 'N/I') + ')' +
-    ' - ' + CONVERT(VARCHAR, FAI.DI1, 103) + ' a ' + CONVERT(VARCHAR, FAI.DF1, 103) +
-    ' (' + ISNULL(CAST(FAI.P1 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
-    ' e a farmácia ' + FAI.Fmtd_Top_CNPJ2 +
-    ' (' + ISNULL(FAI.M2, 'N/I') + '/' + ISNULL(FAI.UF2, 'N/I') + ')' +
-    ' - ' + CONVERT(VARCHAR, FAI.DI2, 103) + ' a ' + CONVERT(VARCHAR, FAI.DF2, 103) +
-    ' (' + ISNULL(CAST(FAI.P2 AS VARCHAR(10)), 'N/I') + ' Prescrições no período)' +
-    ' é de ' + CAST(CAST(FAI.Top_DistanciaKM AS DECIMAL(10,2)) AS VARCHAR(20)) + ' km.' +
-    CASE
-        WHEN FAI.CountOtherActualValidPairs > 0
-        THEN ' Há também outros ' + CAST(FAI.CountOtherActualValidPairs AS VARCHAR(10)) +
-             ' pares de estabelecimentos com distância maior que 400km no mesmo período.'
-        ELSE ''
-    END
-FROM temp_CGUSC.fp.dados_crm_detalhado AM
-INNER JOIN FinalAlertInfo FAI
-    ON  AM.id_medico   = FAI.id_medico
-    AND AM.competencia = FAI.competencia
-    AND (AM.nu_cnpj = FAI.Top_CNPJ1_orig OR AM.nu_cnpj = FAI.Top_CNPJ2_orig);
+MERGE temp_CGUSC.fp.alertas_crm AS tgt
+USING MensagensAlerta AS src
+    ON  tgt.nu_cnpj     = src.nu_cnpj
+    AND tgt.id_medico   = src.id_medico
+    AND tgt.competencia = src.competencia
+WHEN MATCHED THEN
+    UPDATE SET tgt.alerta_distancia_geografica = src.alerta_distancia_geografica
+WHEN NOT MATCHED THEN
+    INSERT (nu_cnpj, id_medico, competencia, alerta_concentracao_temporal, alerta_distancia_geografica)
+    VALUES (src.nu_cnpj, src.id_medico, src.competencia, NULL, src.alerta_distancia_geografica);
 
-PRINT 'Coluna "alerta5" atualizada com sucesso.';
+PRINT 'alerta_distancia_geografica preenchido em alertas_crm.';
+GO
+
+
+-- ============================================================================
+-- ANOMALIAS CFM — TABELA 1: crm_invalido
+-- CRMs sem nenhum registro na base do CFM.
+-- Grain: (cnpj, id_medico) — uma linha por par farmácia/médico com essa anomalia.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_invalido;
+
+SELECT
+    A.nu_cnpj                    AS cnpj,
+    A.id_medico,
+    A.nu_crm,
+    A.sg_uf_crm,
+    SUM(A.nu_prescricoes_medico) AS nu_prescricoes
+INTO temp_CGUSC.fp.crm_invalido
+FROM #lista_alertas_temp A
+LEFT JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM
+    ON  TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(A.nu_crm AS BIGINT)
+    AND CFM.SG_uf = A.sg_uf_crm
+WHERE CFM.NU_CRM IS NULL
+GROUP BY A.nu_cnpj, A.id_medico, A.nu_crm, A.sg_uf_crm;
+
+CREATE CLUSTERED INDEX IDX_CrmInvalido ON temp_CGUSC.fp.crm_invalido(cnpj, id_medico);
+
+
+-- ============================================================================
+-- ANOMALIAS CFM — TABELA 2: crm_irregular_registro
+-- CRMs válidos (existem no CFM) mas com prescrições anteriores à data de inscrição.
+-- Grain: (cnpj, id_medico) — uma linha por par farmácia/médico com essa anomalia.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_irregular_registro;
+
+SELECT
+    A.nu_cnpj                                AS cnpj,
+    A.id_medico,
+    A.nu_crm,
+    A.sg_uf_crm,
+    MIN(A.dt_prescricao_inicial_medico)      AS dt_primeira_prescricao,
+    TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103) AS dt_inscricao_crm,
+    SUM(A.nu_prescricoes_medico)             AS nu_prescricoes
+INTO temp_CGUSC.fp.crm_irregular_registro
+FROM #lista_alertas_temp A
+INNER JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM
+    ON  TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(A.nu_crm AS BIGINT)
+    AND CFM.SG_uf = A.sg_uf_crm
+WHERE A.dt_prescricao_inicial_medico < TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103)
+GROUP BY A.nu_cnpj, A.id_medico, A.nu_crm, A.sg_uf_crm,
+         TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103);
+
+CREATE CLUSTERED INDEX IDX_CrmIrregular ON temp_CGUSC.fp.crm_irregular_registro(cnpj, id_medico);
+GO
+
+
+-- ============================================================================
+-- TABELA DE EXPORTAÇÃO: crm_export
+-- Grain: (cnpj, id_medico, competencia) — base para geração dos parquets por CNPJ.
+-- Flags CFM derivadas das tabelas dedicadas: sem datas cruas, sem JOIN ao CFM.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
+
+SELECT
+    A.nu_cnpj                                                         AS cnpj,
+    A.id_medico,
+    A.competencia,
+    A.nu_prescricoes_medico                                           AS nu_prescricoes,
+    A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
+    TRY_CAST(
+        TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(18,2)) /
+        NULLIF(TRY_CAST(A.nu_dias AS DECIMAL(18,2)), 0)
+    AS DECIMAL(18,2))                                                 AS nu_prescricoes_dia,
+    ISNULL(P.nu_prescricoes_dia_em_todos_estabelecimentos,  0)        AS prescricoes_dia_brasil,
+    ISNULL(P.nu_prescricoes_medico_em_todos_estabelecimentos,
+           A.nu_prescricoes_medico)                                   AS prescricoes_total_brasil,
+    ISNULL(P.nu_estabelecimentos_com_registro_mesmo_crm, 1)           AS nu_estabelecimentos,
+    -- Alertas textuais (tabela separada)
+    AL.alerta_concentracao_temporal,
+    AL.alerta_distancia_geografica,
+    -- Flags CFM (derivadas das tabelas dedicadas)
+    CASE WHEN INV.cnpj IS NOT NULL THEN 1 ELSE 0 END                  AS flag_crm_invalido,
+    CASE WHEN IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END                  AS flag_prescricao_antes_registro
+INTO temp_CGUSC.fp.crm_export
+FROM #lista_alertas_temp A
+INNER JOIN #prescricoes_todos_estabelecimentos P
+    ON  P.nu_crm      = A.nu_crm
+    AND P.sg_uf_crm   = A.sg_uf_crm
+    AND P.competencia = A.competencia
+LEFT JOIN temp_CGUSC.fp.alertas_crm AL
+    ON  AL.nu_cnpj     = A.nu_cnpj
+    AND AL.id_medico   = A.id_medico
+    AND AL.competencia = A.competencia
+LEFT JOIN temp_CGUSC.fp.crm_invalido INV
+    ON  INV.cnpj      = A.nu_cnpj
+    AND INV.id_medico = A.id_medico
+LEFT JOIN temp_CGUSC.fp.crm_irregular_registro IRR
+    ON  IRR.cnpj      = A.nu_cnpj
+    AND IRR.id_medico = A.id_medico
+    AND A.competencia <= CAST(FORMAT(IRR.dt_inscricao_crm, 'yyyyMM') AS INT);
+
+CREATE CLUSTERED INDEX IDX_CrmExport_Key
+    ON temp_CGUSC.fp.crm_export(cnpj, competencia, id_medico);
+GO
+
+
+-- ============================================================================
+-- BASE PARA BENCHMARKS: #indicador_crm (temp)
+-- Grain: (cnpj, competencia) — métricas resumidas por farmácia/mês.
+-- Colapsa os steps 1-12 do crms_2 em CTEs sobre crm_export.
+-- Não é persistida: existe apenas para alimentar as 4 tabelas de benchmark abaixo.
+-- ============================================================================
+DROP TABLE IF EXISTS #indicador_crm;
+
+WITH
+Totais AS (
+    SELECT
+        cnpj,
+        competencia,
+        SUM(nu_prescricoes)       AS total_prescricoes,
+        SUM(vl_total_prescricoes) AS total_valor,
+        COUNT(DISTINCT id_medico) AS total_prescritores
+    FROM temp_CGUSC.fp.crm_export
+    GROUP BY cnpj, competencia
+),
+Top5 AS (
+    SELECT
+        cnpj, competencia,
+        MAX(CASE WHEN rk = 1 THEN id_medico END)                           AS id_top1,
+        SUM(CASE WHEN rk = 1 THEN vl_total_prescricoes ELSE 0 END)         AS vl_top1,
+        SUM(CASE WHEN rk <= 5 THEN vl_total_prescricoes ELSE 0 END)        AS vl_top5
+    FROM (
+        SELECT cnpj, competencia, id_medico, vl_total_prescricoes,
+               ROW_NUMBER() OVER (PARTITION BY cnpj, competencia
+                                  ORDER BY vl_total_prescricoes DESC) AS rk
+        FROM temp_CGUSC.fp.crm_export
+    ) R
+    WHERE rk <= 5
+    GROUP BY cnpj, competencia
+),
+Anomalias AS (
+    SELECT
+        cnpj, competencia,
+        COUNT(CASE WHEN nu_prescricoes_dia > 30                                          THEN 1 END) AS qtd_robos,
+        COUNT(CASE WHEN flag_crm_invalido = 1                                            THEN 1 END) AS qtd_crm_invalido,
+        COUNT(CASE WHEN flag_prescricao_antes_registro = 1                               THEN 1 END) AS qtd_antes_registro,
+        COUNT(CASE WHEN nu_prescricoes_dia <= 30
+                    AND prescricoes_dia_brasil > 30                                      THEN 1 END) AS qtd_robos_ocultos,
+        COUNT(CASE WHEN nu_estabelecimentos > 70                                         THEN 1 END) AS qtd_multi_farmacia,
+        AVG(CAST(nu_estabelecimentos AS DECIMAL(18,4)))                                             AS indice_rede_suspeita
+    FROM temp_CGUSC.fp.crm_export
+    GROUP BY cnpj, competencia
+),
+HHI AS (
+    SELECT
+        E.cnpj, E.competencia,
+        SUM(POWER(
+            CAST(E.vl_total_prescricoes AS DECIMAL(18,4)) /
+            NULLIF(CAST(T.total_valor   AS DECIMAL(18,4)), 0) * 100.0
+        , 2)) AS indice_hhi
+    FROM temp_CGUSC.fp.crm_export E
+    INNER JOIN Totais T ON T.cnpj = E.cnpj AND T.competencia = E.competencia
+    GROUP BY E.cnpj, E.competencia
+),
+Turistas AS (
+    SELECT nu_cnpj AS cnpj, competencia,
+           COUNT(DISTINCT id_medico) AS qtd_turistas
+    FROM temp_CGUSC.fp.alertas_crm
+    WHERE alerta_distancia_geografica IS NOT NULL
+    GROUP BY nu_cnpj, competencia
+)
+
+SELECT
+    T.cnpj                                                                                      AS nu_cnpj,
+    T.competencia,
+    T.total_prescricoes,
+    T.total_valor,
+    T.total_prescritores,
+    ISNULL(CAST(T5.vl_top1 AS DECIMAL(18,2)) / NULLIF(CAST(T.total_valor AS DECIMAL(18,2)), 0) * 100.0, 0) AS pct_concentracao_top1,
+    ISNULL(T5.id_top1, '')                                                                      AS id_top1_prescritor,
+    ISNULL(CAST(T5.vl_top5 AS DECIMAL(18,2)) / NULLIF(CAST(T.total_valor AS DECIMAL(18,2)), 0) * 100.0, 0) AS pct_concentracao_top5,
+    ISNULL(H.indice_hhi, 0)                                                                     AS indice_hhi,
+    ISNULL(AN.qtd_robos, 0)                                                                     AS qtd_prescritores_robos,
+    ISNULL(AN.qtd_crm_invalido, 0)                                                              AS qtd_crm_invalido,
+    ISNULL(AN.qtd_antes_registro, 0)                                                            AS qtd_crm_antes_registro,
+    ISNULL(TU.qtd_turistas, 0)                                                                  AS qtd_prescritores_turistas,
+    ISNULL(AN.qtd_robos_ocultos, 0)                                                             AS qtd_prescritores_robos_ocultos,
+    ISNULL(AN.qtd_multi_farmacia, 0)                                                            AS qtd_prescritores_multi_farmacia,
+    ISNULL(AN.indice_rede_suspeita, 1.0)                                                        AS indice_rede_suspeita
+INTO #indicador_crm
+FROM Totais T
+LEFT JOIN Top5      T5 ON T5.cnpj = T.cnpj AND T5.competencia = T.competencia
+LEFT JOIN HHI        H ON  H.cnpj = T.cnpj AND  H.competencia = T.competencia
+LEFT JOIN Anomalias AN ON AN.cnpj = T.cnpj AND AN.competencia = T.competencia
+LEFT JOIN Turistas  TU ON TU.cnpj = T.cnpj AND TU.competencia = T.competencia;
+
+CREATE CLUSTERED INDEX IDX_IndCrm ON #indicador_crm(nu_cnpj, competencia);
+GO
+
+
+-- ============================================================================
+-- BENCHMARK POR UF / COMPETÊNCIA
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_uf;
+
+WITH CTE AS (
+    SELECT DISTINCT
+        CAST(F.uf AS VARCHAR(2)) AS uf,
+        I.competencia,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top1, 0))  OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_concentracao_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top5, 0))  OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_concentracao_top5_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_hhi, 0))             OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_hhi_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_robos, 0)) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_robos_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(CAST(
+            CASE WHEN I.total_prescritores > 0
+                 THEN I.qtd_crm_invalido * 100.0 / I.total_prescritores
+                 ELSE 0 END AS DECIMAL(18,4)), 0))                                        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_pct_crm_invalido_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_turistas, 0)) OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_turistas_uf,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_rede_suspeita, 0))   OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), I.competencia) AS mediana_indice_rede_uf
+    FROM #indicador_crm I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.nu_cnpj
+)
+SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_uf FROM CTE;
+
+CREATE CLUSTERED INDEX IDX_BenchUF ON temp_CGUSC.fp.indicador_crm_bench_uf(uf, competencia);
+
+
+-- ============================================================================
+-- BENCHMARK POR REGIÃO DE SAÚDE / COMPETÊNCIA
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_regiao;
+
+WITH CTE AS (
+    SELECT DISTINCT
+        F.id_regiao_saude,
+        I.competencia,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_hhi, 0))                OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_hhi_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top1, 0))     OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_concentracao_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top5, 0))     OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_concentracao_top5_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(CAST(
+            CASE WHEN I.total_prescritores > 0
+                 THEN I.qtd_crm_invalido * 100.0 / I.total_prescritores
+                 ELSE 0 END AS DECIMAL(18,4)), 0))                                           OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_crm_invalido_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_robos, 0))    OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_robos_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_turistas, 0)) OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_turistas_reg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_rede_suspeita, 0))      OVER (PARTITION BY F.id_regiao_saude, I.competencia) AS mediana_indice_rede_reg
+    FROM temp_CGUSC.fp.dados_farmacia F
+    LEFT JOIN #indicador_crm I ON I.nu_cnpj = F.cnpj
+    WHERE F.id_regiao_saude IS NOT NULL
+)
+SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_regiao FROM CTE;
+
+CREATE CLUSTERED INDEX IDX_BenchReg ON temp_CGUSC.fp.indicador_crm_bench_regiao(id_regiao_saude, competencia);
+
+
+-- ============================================================================
+-- BENCHMARK NACIONAL / COMPETÊNCIA
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_br;
+
+WITH CTE AS (
+    SELECT DISTINCT
+        I.competencia,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top1, 0))     OVER (PARTITION BY I.competencia) AS mediana_concentracao_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.pct_concentracao_top5, 0))     OVER (PARTITION BY I.competencia) AS mediana_concentracao_top5_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_hhi, 0))                OVER (PARTITION BY I.competencia) AS mediana_hhi_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_robos, 0))    OVER (PARTITION BY I.competencia) AS mediana_robos_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(CAST(
+            CASE WHEN I.total_prescritores > 0
+                 THEN I.qtd_crm_invalido * 100.0 / I.total_prescritores
+                 ELSE 0 END AS DECIMAL(18,4)), 0))                                           OVER (PARTITION BY I.competencia) AS mediana_pct_crm_invalido_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.qtd_prescritores_turistas, 0)) OVER (PARTITION BY I.competencia) AS mediana_turistas_br,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.indice_rede_suspeita, 0))      OVER (PARTITION BY I.competencia) AS mediana_indice_rede_br
+    FROM #indicador_crm I
+)
+SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_br FROM CTE;
+
+CREATE CLUSTERED INDEX IDX_BenchBR ON temp_CGUSC.fp.indicador_crm_bench_br(competencia);
+GO
+
+
+-- ============================================================================
+-- TABELA PARA MATRIZ DE RISCO: indicador_crm_hhi
+-- Chave: cnpj (uma linha por farmácia, agregada sobre todas as competências)
+-- Consumida por matriz_risco_final.sql como I15.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_hhi;
+
+WITH HHI_por_cnpj AS (
+    SELECT
+        I.nu_cnpj                   AS cnpj,
+        AVG(I.indice_hhi)           AS indice_hhi,
+        F.id_regiao_saude,
+        CAST(F.uf AS VARCHAR(2))    AS uf
+    FROM #indicador_crm I
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.nu_cnpj
+    GROUP BY I.nu_cnpj, F.id_regiao_saude, F.uf
+),
+Bench AS (
+    -- Mediana de HHI por UF (uma por UF, colapsa competencias)
+    SELECT uf, AVG(mediana_hhi_uf) AS mediana_hhi_uf
+    FROM temp_CGUSC.fp.indicador_crm_bench_uf
+    GROUP BY uf
+),
+BenchReg AS (
+    SELECT
+        id_regiao_saude,
+        AVG(mediana_hhi_reg)        AS mediana_hhi_reg
+    FROM temp_CGUSC.fp.indicador_crm_bench_regiao
+    GROUP BY id_regiao_saude
+),
+BenchBR AS (
+    SELECT AVG(mediana_hhi_br) AS mediana_hhi_br
+    FROM temp_CGUSC.fp.indicador_crm_bench_br
+)
+
+SELECT
+    H.cnpj,
+    CAST(H.indice_hhi AS DECIMAL(18,4))                                             AS indice_hhi,
+    -- Medianas (compatíveis com os nomes que a matriz espera)
+    ISNULL(CAST(BU.mediana_hhi_uf  AS DECIMAL(18,4)), 0)                            AS estado_mediana,
+    ISNULL(CAST(BR.mediana_hhi_br  AS DECIMAL(18,4)), 0)                            AS pais_mediana,
+    ISNULL(CAST(BR2.mediana_hhi_reg AS DECIMAL(18,4)), 0)                           AS regiao_saude_mediana,
+    -- Riscos relativos
+    CAST(CASE WHEN BU.mediana_hhi_uf  > 0 THEN (H.indice_hhi + 0.01) / (BU.mediana_hhi_uf  + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
+    CAST(CASE WHEN BR.mediana_hhi_br  > 0 THEN (H.indice_hhi + 0.01) / (BR.mediana_hhi_br  + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
+    CAST(CASE WHEN BR2.mediana_hhi_reg > 0 THEN (H.indice_hhi + 0.01) / (BR2.mediana_hhi_reg + 0.01) ELSE 0 END AS DECIMAL(18,4)) AS risco_relativo_reg_mediana
+INTO temp_CGUSC.fp.indicador_crm_hhi
+FROM HHI_por_cnpj H
+LEFT JOIN Bench   BU  ON BU.uf              = H.uf
+LEFT JOIN BenchReg BR2 ON BR2.id_regiao_saude = H.id_regiao_saude
+CROSS JOIN BenchBR BR;
+
+CREATE CLUSTERED INDEX IDX_CrmHHI ON temp_CGUSC.fp.indicador_crm_hhi(cnpj);
 GO
 
 
 PRINT '============================================================================';
-PRINT 'SCRIPT v3 EXECUTADO COM SUCESSO:';
-PRINT '  - Dimensão COMPETENCIA (YYYYMM) adicionada em toda a cadeia';
-PRINT '  - base_agregada_crm_cnpj: granularidade (cnpj, crm, competencia)';
-PRINT '  - dados_crm_detalhado:    granularidade (cnpj, crm, competencia)';
-PRINT '  - Alerta 5: simultaneidade por competencia (mesmo mês)';
-PRINT '  - Robô nacional: calculado por (crm, crm_uf, competencia)';
+PRINT 'SCRIPT v4 EXECUTADO COM SUCESSO:';
+PRINT '  - dados_crm_detalhado          : sem alertas, sem nu_populacao';
+PRINT '  - alertas_crm                  : alerta_concentracao_temporal + alerta_distancia_geografica';
+PRINT '  - crm_invalido                 : CRMs sem registro no CFM, por (cnpj, id_medico)';
+PRINT '  - crm_irregular_registro       : CRMs com prescricao anterior ao registro CFM, por (cnpj, id_medico)';
+PRINT '  - crm_export                   : grain plano para exportacao de parquets por CNPJ';
+PRINT '  - indicador_crm_bench_{uf,regiao,br} : benchmarks de mediana por geografia/competencia';
+PRINT '  - indicador_crm_hhi            : HHI por CNPJ (agregado) para matriz_risco_final.sql';
 PRINT '============================================================================';
 GO

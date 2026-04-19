@@ -67,6 +67,7 @@ GO
 -- (substitui #lista_medicos_farmacia_popularFP_temp e _temp2)
 -- ============================================================================
 DROP TABLE IF EXISTS #lista_alertas_temp;
+GO
 
 SELECT
     A.nu_cnpj,
@@ -80,6 +81,13 @@ SELECT
     A.dt_prescricao_final_medico,
     DATEDIFF(DAY,    A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico) + 1 AS nu_dias,
     DATEDIFF(MINUTE, A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico)     AS nu_minutos,
+    -- Taxa real de prescrições por hora (999 = instante simultâneo → divisão por zero evitada)
+    CASE
+        WHEN DATEDIFF(MINUTE, A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico) = 0
+        THEN 999.0
+        ELSE CAST(A.nu_prescricoes_medico AS DECIMAL(10,2)) /
+             (CAST(DATEDIFF(MINUTE, A.dt_prescricao_inicial_medico, A.dt_prescricao_final_medico) AS DECIMAL(10,2)) / 60.0)
+    END AS taxa_prescricoes_hora,
     C.nu_autorizacoes_estabelecimento,
     C.dt_venda_inicial_estabelecimento,
     C.dt_venda_final_estabelecimento,
@@ -90,32 +98,67 @@ INTO #lista_alertas_temp
 FROM #base_agregada_crm_cnpj A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj AND C.competencia = A.competencia
 WHERE A.nu_prescricoes_medico >= 5;
-GO
 
 
 -- ============================================================================
--- ALERTA CONCENTRAÇÃO TEMPORAL: prescrições em janela de 1 ou 2 dias
+-- ALERTA CONCENTRAÇÃO TEMPORAL: detecção por taxa e janela (Opção B)
+-- Critério primário  : taxa = prescrições / horas de janela ativa
+-- Critério secundário: janela absoluta ≤ 120 min (lançamento em bloco)
+--
+-- Nível 1 — Rajada       : taxa ≥ 6/hora ou aprovação simultânea (nu_minutos = 0)
+-- Nível 2 — Concentração : taxa ≥ 3/hora  OU  janela ≤ 120 min
 -- ============================================================================
 
--- Caso: todas as prescrições em uma janela de 2 dias
+-- Auxiliar: formata a janela como "Xh Ymin" ou "Z min"
+-- (usado inline nas mensagens abaixo)
+
+-- Nível 1a: Simultâneo (aprovações no mesmo instante)
 UPDATE #lista_alertas_temp
 SET alerta_concentracao_temporal =
-    'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
-    ' prescrições lançadas em ' +
-    CAST(nu_minutos / 60 AS VARCHAR(10)) + ' hora(s) e ' +
-    CAST(nu_minutos % 60 AS VARCHAR(10)) + ' minuto(s)'
-WHERE nu_dias = 2
+    CAST(nu_prescricoes_medico AS VARCHAR(10)) + ' prescrições aprovadas no mesmo instante'
+WHERE nu_minutos = 0
   AND nu_prescricoes_medico >= 5;
 
--- Caso: todas as prescrições no mesmo dia
+-- Nível 1b: Rajada — janela curta (≤ 24h, taxa >= 6/h)
 UPDATE #lista_alertas_temp
 SET alerta_concentracao_temporal =
-    'Todas as ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) +
-    ' prescrições lançadas no mesmo dia, em ' +
-    CAST(nu_minutos / 60 AS VARCHAR(10)) + ' hora(s) e ' +
-    CAST(nu_minutos % 60 AS VARCHAR(10)) + ' minuto(s)'
-WHERE nu_dias = 1
+    'Rajada: ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) + ' prescrições em ' +
+    CASE WHEN nu_minutos < 60
+         THEN CAST(nu_minutos AS VARCHAR(10)) + ' min'
+         ELSE CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
+              CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min'
+    END +
+    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
+WHERE alerta_concentracao_temporal IS NULL
+  AND nu_minutos BETWEEN 1 AND 1440
+  AND taxa_prescricoes_hora >= 6
   AND nu_prescricoes_medico >= 5;
+
+-- Nível 1c: Volume Extremo — janela longa (> 24h, taxa >= 6/h sustentada)
+UPDATE #lista_alertas_temp
+SET alerta_concentracao_temporal =
+    'Volume extremo: ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) + ' prescrições em ' +
+    CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
+    CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min' +
+    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
+WHERE alerta_concentracao_temporal IS NULL
+  AND nu_minutos > 1440
+  AND taxa_prescricoes_hora >= 6
+  AND nu_prescricoes_medico >= 5;
+
+-- Nível 2: Concentração (taxa >= 3/hora ou janela <= 120 min, não classificado no nível 1)
+UPDATE #lista_alertas_temp
+SET alerta_concentracao_temporal =
+    'Concentração: ' + CAST(nu_prescricoes_medico AS VARCHAR(10)) + ' prescrições em ' +
+    CASE WHEN nu_minutos < 60
+         THEN CAST(nu_minutos AS VARCHAR(10)) + ' min'
+         ELSE CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
+              CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min'
+    END +
+    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
+WHERE alerta_concentracao_temporal IS NULL
+  AND (taxa_prescricoes_hora >= 3 OR nu_minutos <= 120)
+  AND nu_prescricoes_medico >= 10;
 GO
 
 
@@ -657,6 +700,142 @@ LEFT JOIN BenchReg BR2 ON BR2.id_regiao_saude = H.id_regiao_saude
 CROSS JOIN BenchBR BR;
 
 CREATE CLUSTERED INDEX IDX_CrmHHI ON temp_CGUSC.fp.indicador_crm_hhi(cnpj);
+GO
+
+
+-- ============================================================================
+-- PERFIL DIÁRIO POR FARMÁCIA: todas as janelas ativas por dia
+-- Grain: (cnpj, dt_janela) — uma linha por dia com ≥1 prescrição
+-- hr_pico + nu_prescricoes_hr_pico: contexto para tooltip no gráfico
+-- ============================================================================
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim    DATE = '2024-12-31';
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_daily_profile;
+
+WITH base_horaria AS (
+    SELECT
+        cnpj,
+        YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
+        CAST(data_hora AS DATE)                   AS dt_janela,
+        DATEPART(HOUR, data_hora)                 AS hr_janela,
+        COUNT(DISTINCT num_autorizacao)           AS nu_prescricoes_hora
+    FROM temp_CGUSC.fp.teste_mov_SC
+    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
+      AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
+    GROUP BY cnpj,
+             YEAR(data_hora), MONTH(data_hora),
+             CAST(data_hora AS DATE),
+             DATEPART(HOUR, data_hora)
+),
+totais_diarios AS (
+    SELECT
+        cnpj,
+        competencia,
+        dt_janela,
+        SUM(nu_prescricoes_hora) AS nu_prescricoes_dia
+    FROM base_horaria
+    GROUP BY cnpj, competencia, dt_janela
+),
+pico_horario AS (
+    SELECT
+        cnpj,
+        dt_janela,
+        hr_janela                AS hr_pico,
+        nu_prescricoes_hora      AS nu_prescricoes_hr_pico,
+        ROW_NUMBER() OVER (
+            PARTITION BY cnpj, dt_janela
+            ORDER BY nu_prescricoes_hora DESC
+        )                        AS rn
+    FROM base_horaria
+),
+crms_distintos_dia AS (
+    SELECT
+        cnpj,
+        CAST(data_hora AS DATE)  AS dt_janela,
+        COUNT(DISTINCT crm)      AS nu_crms_distintos
+    FROM temp_CGUSC.fp.teste_mov_SC
+    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
+      AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
+    GROUP BY cnpj, CAST(data_hora AS DATE)
+),
+mediana_por_farmacia AS (
+    SELECT DISTINCT
+        cnpj,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
+            OVER (PARTITION BY cnpj) AS mediana_diaria
+    FROM totais_diarios
+)
+SELECT
+    T.cnpj,
+    T.competencia,
+    T.dt_janela,
+    T.nu_prescricoes_dia,
+    ISNULL(C.nu_crms_distintos, 0)                AS nu_crms_distintos,
+    P.hr_pico,
+    P.nu_prescricoes_hr_pico,
+    CAST(M.mediana_diaria AS DECIMAL(10,2))        AS mediana_diaria,
+    CAST(
+        CAST(T.nu_prescricoes_dia AS DECIMAL(10,2)) /
+        NULLIF(M.mediana_diaria, 0)
+    AS DECIMAL(10,2))                              AS multiplo,
+    CASE
+        WHEN T.nu_prescricoes_dia >= M.mediana_diaria * 4
+         AND T.nu_prescricoes_dia >= 20 THEN 1
+        ELSE 0
+    END                                            AS is_anomalo
+INTO temp_CGUSC.fp.crm_daily_profile
+FROM totais_diarios T
+INNER JOIN mediana_por_farmacia M ON M.cnpj = T.cnpj
+INNER JOIN pico_horario         P ON P.cnpj = T.cnpj
+                                 AND P.dt_janela = T.dt_janela
+                                 AND P.rn = 1
+LEFT JOIN  crms_distintos_dia   C ON C.cnpj = T.cnpj
+                                 AND C.dt_janela = T.dt_janela;
+
+CREATE CLUSTERED INDEX IDX_DailyProfile
+    ON temp_CGUSC.fp.crm_daily_profile(cnpj, dt_janela);
+GO
+
+
+-- ============================================================================
+-- ALERTA PICO DE DISPENSAÇÃO: pior dia anômalo por (cnpj, competencia)
+-- Derivado do crm_daily_profile — sem recalcular CTEs pesadas.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_pico_dispensacao;
+
+SELECT
+    cnpj,
+    competencia,
+    dt_janela,
+    hr_pico,
+    nu_prescricoes_dia,
+    nu_prescricoes_hr_pico,
+    nu_crms_distintos,
+    mediana_diaria,
+    multiplo,
+    CAST(
+        'Pico de dispensação: ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) +
+        ' prescrições em ' + CONVERT(VARCHAR, dt_janela, 103) +
+        ' (pico às ' + RIGHT('0' + CAST(hr_pico AS VARCHAR(2)), 2) + 'h: ' +
+        CAST(nu_prescricoes_hr_pico AS VARCHAR(10)) + ' prescrições), ' +
+        CAST(nu_crms_distintos AS VARCHAR(10)) + ' CRMs distintos, ' +
+        CAST(CAST(multiplo AS DECIMAL(5,1)) AS VARCHAR(10)) + 'x acima do padrão da farmácia'
+    AS VARCHAR(800))                      AS alerta_pico_dispensacao
+INTO temp_CGUSC.fp.alertas_pico_dispensacao
+FROM (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY cnpj, competencia
+            ORDER BY nu_prescricoes_dia DESC
+        ) AS rn
+    FROM temp_CGUSC.fp.crm_daily_profile
+    WHERE is_anomalo = 1
+) X
+WHERE rn = 1;
+
+CREATE CLUSTERED INDEX IDX_PicoDispensacao
+    ON temp_CGUSC.fp.alertas_pico_dispensacao(cnpj, competencia);
 GO
 
 

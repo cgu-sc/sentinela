@@ -75,21 +75,25 @@ def _cast_schema(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def exportar_crms() -> None:
+def exportar_crms(cnpjs: list[str] | None = None) -> None:
     os.makedirs(CRMS_DIR, exist_ok=True)
 
+    if cnpjs:
+        placeholders = ", ".join(f"'{c}'" for c in cnpjs)
+        where        = f"WHERE cnpj IN ({placeholders})"
+        count_sql    = f"SELECT COUNT(*) FROM temp_CGUSC.fp.crm_export {where}"
+        data_sql     = f"SELECT * FROM temp_CGUSC.fp.crm_export {where} ORDER BY cnpj, competencia, id_medico"
+        print(f"\n[crms]  filtrando {len(cnpjs)} CNPJ(s)  →  {CRMS_DIR}")
+    else:
+        count_sql = "SELECT COUNT(*) FROM temp_CGUSC.fp.crm_export"
+        data_sql  = "SELECT * FROM temp_CGUSC.fp.crm_export ORDER BY cnpj, competencia, id_medico"
+
     with engine.connect() as conn:
-        total = conn.execute(
-            text("SELECT COUNT(*) FROM temp_CGUSC.fp.crm_export")
-        ).scalar()
+        total = conn.execute(text(count_sql)).scalar()
 
     print(f"\n[crms]  {total:,} linhas  →  {CRMS_DIR}")
 
-    sql = """
-        SELECT *
-        FROM temp_CGUSC.fp.crm_export
-        ORDER BY cnpj, competencia, id_medico
-    """
+    sql = data_sql
 
     # Lê em chunks e acumula frames por CNPJ.
     # Como o SQL retorna ordenado por cnpj, cada CNPJ é contíguo entre chunks.

@@ -89,10 +89,26 @@ def selecionar_modulos() -> list[dict]:
 
 # ── Execução ───────────────────────────────────────────────────────────────────
 
+def perguntar_params(selecionados: list[dict]) -> None:
+    """Coleta parâmetros extras para módulos que os suportam."""
+    for modulo in selecionados:
+        if modulo["id"] == 6:
+            entrada = input(
+                "\nCNPJs para exportar (separados por vírgula) — Enter para TODOS: "
+            ).strip()
+            if entrada:
+                modulo["params"] = {
+                    "cnpjs": [c.strip() for c in entrada.split(",") if c.strip()]
+                }
+
+
 def confirmar(selecionados: list[dict]) -> bool:
     print("\nMódulos selecionados para sincronização:")
     for m in selecionados:
-        print(f"  • {m['name']}")
+        detalhe = ""
+        if "params" in m and m["params"].get("cnpjs"):
+            detalhe = f"  ({len(m['params']['cnpjs'])} CNPJ(s) específico(s))"
+        print(f"  • {m['name']}{detalhe}")
     resposta = input("\nConfirmar? [S/n]: ").strip().lower()
     return resposta in ('', 's', 'sim', 'y', 'yes')
 
@@ -114,7 +130,7 @@ def executar(selecionados: list[dict]):
 
         t0 = time.perf_counter()
         try:
-            modulo["func"](engine, callback)
+            modulo["func"](engine, callback, **modulo.get("params", {}))
             elapsed = time.perf_counter() - t0
             print(f"\r  ✅ {nome:<25} concluído em {elapsed:.1f}s")
         except Exception as e:
@@ -134,6 +150,8 @@ def main():
         if not selecionados:
             print("\n⚠️  Nenhum módulo selecionado. Encerrando.")
             return
+
+        perguntar_params(selecionados)
 
         if not confirmar(selecionados):
             print("\n⛔ Operação cancelada.")

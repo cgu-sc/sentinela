@@ -327,13 +327,13 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
         progress_callback(100)
 
 
-def _sync_crm_parquets(engine, progress_callback=None):
+def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
     """Tarefa: Gera um parquet por CNPJ em sentinela_cache/crms/."""
     import importlib, sys as _sys
     if "exportar_crms" not in _sys.modules:
         importlib.import_module("exportar_crms")
     from exportar_crms import exportar_crms
-    exportar_crms()
+    exportar_crms(cnpjs=cnpjs)
     if progress_callback:
         progress_callback(100)
 

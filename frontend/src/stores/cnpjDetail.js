@@ -41,6 +41,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     prescritoresError:   null,
 
+    // ── Perfil Diário de Dispensações (gráfico CRM) ──────────────────────────
+    crmDailyProfile:        null,
+    crmDailyProfileLoading: false,
+    crmDailyProfileLoaded:  null,
+
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos: new Map(),
 
@@ -169,6 +174,21 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    // ── Perfil Diário de Dispensações ────────────────────────────────────────
+    async fetchCrmDailyProfile(cnpj) {
+      if (!cnpj || this.crmDailyProfileLoaded === cnpj) return;
+      this.crmDailyProfileLoading = true;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj));
+        this.crmDailyProfile        = data;
+        this.crmDailyProfileLoaded  = cnpj;
+      } catch (e) {
+        console.error('Erro ao buscar perfil diário de CRM:', e);
+      } finally {
+        this.crmDailyProfileLoading = false;
+      }
+    },
+
     // ── CNPJs Avulsos ─────────────────────────────────────────────────────────
     async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
       if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
@@ -262,6 +282,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.prescritoresLoading = false;
       this.prescritoresLoaded  = null;
       this.prescritoresError   = null;
+
+      this.crmDailyProfile        = null;
+      this.crmDailyProfileLoading = false;
+      this.crmDailyProfileLoaded  = null;
 
       this.municipiosRegiao        = [];
       this.municipiosRegiaoKey     = null;

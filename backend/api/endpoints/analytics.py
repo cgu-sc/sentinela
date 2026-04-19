@@ -8,7 +8,7 @@ from ..schemas.analytics import (
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
-    PercentilesAnimationResponse
+    PercentilesAnimationResponse, CrmDailyProfileResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -139,6 +139,11 @@ def get_prescritores(
 ):
     """Retorna KPIs e top prescritores (CRMs) de um CNPJ, com filtro opcional de período."""
     return AnalyticsService.get_crm_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/crm-daily-profile", response_model=CrmDailyProfileResponse)
+def get_crm_daily_profile(cnpj: str):
+    """Retorna o perfil diário de dispensações de um CNPJ para o gráfico de histórico."""
+    return AnalyticsService.get_crm_daily_profile(cnpj)
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
 def get_indicadores_analise(

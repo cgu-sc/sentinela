@@ -1,8 +1,17 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from "@/composables/useFormatting";
+import { useChartTheme } from '@/config/chartTheme';
+
+import VChart from 'vue-echarts';
+import { use } from 'echarts/core';
+import { BarChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+
+use([BarChart, GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
 
 const props = defineProps({
   cnpj: {
@@ -11,8 +20,75 @@ const props = defineProps({
   },
 });
 
-const { prescritoresData, prescritoresLoading, prescritoresError } = storeToRefs(useCnpjDetailStore());
+const cnpjDetailStore = useCnpjDetailStore();
+const { prescritoresData, prescritoresLoading, prescritoresError, crmDailyProfile, crmDailyProfileLoading } = storeToRefs(cnpjDetailStore);
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
+const { chartTheme } = useChartTheme();
+
+onMounted(() => {
+  if (props.cnpj) cnpjDetailStore.fetchCrmDailyProfile(props.cnpj);
+});
+
+const dailyDates     = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.dt_janela));
+const dailyValues    = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.nu_prescricoes_dia));
+const dailyAnomalous = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.is_anomalo === 1));
+const dailyMediana   = computed(() => {
+  const days = crmDailyProfile.value?.days ?? [];
+  if (!days.length) return 0;
+  return days[0].mediana_diaria ?? 0;
+});
+
+const chartOptionDaily = computed(() => ({
+  ...chartTheme.value,
+  animation: false,
+  grid: { top: 32, right: 20, bottom: 80, left: 50, containLabel: false },
+  xAxis: {
+    type: 'category',
+    data: dailyDates.value,
+    axisLabel: {
+      formatter: (v) => v.slice(0, 7),
+      interval: Math.floor(dailyDates.value.length / 24),
+      fontSize: 11,
+    },
+    axisLine: { lineStyle: { color: 'var(--border-color)' } },
+  },
+  yAxis: {
+    type: 'value',
+    minInterval: 1,
+    axisLabel: { fontSize: 11 },
+    splitLine: { lineStyle: { color: 'var(--border-color)', opacity: 0.4 } },
+  },
+  tooltip: {
+    trigger: 'item',
+    formatter: (p) => {
+      const day = crmDailyProfile.value?.days?.[p.dataIndex];
+      if (!day) return p.name;
+      const pico = day.hr_pico != null
+        ? `<br>Pico: ${String(day.hr_pico).padStart(2,'0')}h — ${day.nu_prescricoes_hr_pico} presc.`
+        : '';
+      const flag = day.is_anomalo ? '<br><b style="color:#ef4444">⚠ Dia Anômalo</b>' : '';
+      return `<b>${p.name}</b><br>${p.value} prescrições${pico}<br>${day.nu_crms_distintos} CRMs distintos<br>Mediana: ${day.mediana_diaria?.toFixed(1)}x${flag}`;
+    },
+  },
+  dataZoom: [
+    { type: 'inside', start: 80, end: 100 },
+    { type: 'slider', start: 80, end: 100, height: 20, bottom: 8, handleSize: 14 },
+  ],
+  series: [{
+    type: 'bar',
+    data: dailyValues.value.map((v, i) => ({
+      value: v,
+      itemStyle: { color: dailyAnomalous.value[i] ? '#ef4444' : 'var(--primary-color)', opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 },
+    })),
+    markLine: dailyMediana.value > 0 ? {
+      silent: true,
+      symbol: 'none',
+      lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
+      label: { formatter: `Mediana: ${dailyMediana.value.toFixed(1)}`, fontSize: 11 },
+      data: [{ yAxis: dailyMediana.value }],
+    } : undefined,
+  }],
+}));
 
 // isRefreshing: há dados anteriores visíveis enquanto um novo fetch está em curso
 const isRefreshing = computed(() => prescritoresLoading.value && prescritoresData.value !== null);
@@ -448,7 +524,33 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 2. TOP 20 CRMs (TABELA DETALHADA) -->
+      <!-- 2. GRÁFICO — PERFIL DIÁRIO DE DISPENSAÇÕES -->
+      <div class="section-container daily-chart-section">
+        <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem">
+          <i class="pi pi-chart-bar" />
+          <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
+          <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
+            <i class="pi pi-spinner pi-spin"></i> Carregando...
+          </span>
+        </div>
+        <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.25rem; margin-bottom: 0.75rem">
+          Evolução diária de autorizações aprovadas. Dias com volume anômalo (acima de 4× a mediana e ≥ 20 prescrições) destacados em vermelho.
+          Use o controle abaixo do gráfico para navegar no histórico.
+        </p>
+        <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
+          <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
+          <span>Sem dados de perfil diário disponíveis.</span>
+        </div>
+        <VChart
+          v-else
+          :option="chartOptionDaily"
+          :update-options="{ notMerge: true }"
+          autoresize
+          class="daily-dispensacao-chart"
+        />
+      </div>
+
+      <!-- 3. TOP 20 CRMs (TABELA DETALHADA) -->
       <div class="section-container">
         <div
           class="section-title"
@@ -1259,5 +1361,27 @@ input:checked + .toggle-slider:before {
   font-weight: 500;
   color: var(--text-color);
   text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color);
+}
+
+.daily-chart-section {
+  margin-bottom: 1.25rem;
+}
+.daily-dispensacao-chart {
+  width: 100%;
+  height: 260px;
+}
+.chart-loading-badge {
+  margin-left: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.chart-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.5rem 1.75rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
 }
 </style>

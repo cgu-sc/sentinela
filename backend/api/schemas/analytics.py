@@ -262,6 +262,21 @@ class PrescritoresResponse(BaseModel):
     summary: dict
     top20: list
 
+class CrmDailyProfileItem(BaseModel):
+    dt_janela: str
+    competencia: int
+    nu_prescricoes_dia: int
+    nu_crms_distintos: int
+    hr_pico: int
+    nu_prescricoes_hr_pico: int
+    mediana_diaria: float
+    multiplo: float
+    is_anomalo: int
+
+class CrmDailyProfileResponse(BaseModel):
+    cnpj: str
+    days: List[CrmDailyProfileItem]
+
 # ── Dados Cadastrais e Geográficos ─────────────────────
 class DadosFarmaciaSchema(BaseModel):
     cnpj: str

@@ -45,6 +45,7 @@ from ..schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
+    CrmDailyProfileResponse,
 )
 
 # ── Mapeamento de indicadores: chave → (col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br) ──
@@ -1470,7 +1471,7 @@ class AnalyticsService:
         import pandas as pd
 
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}.parquet")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_crms.parquet")
 
         # ── helpers de competência ────────────────────────────────────────────
         def _to_comp(date_str: str) -> int:
@@ -1640,6 +1641,65 @@ class AnalyticsService:
         }
 
         return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, top20=top20_list)
+
+    @staticmethod
+    def get_crm_daily_profile(cnpj: str) -> "CrmDailyProfileResponse":
+        """Retorna o perfil diário de dispensação de um CNPJ (lazy parquet cache).
+
+        Args:
+            cnpj: CNPJ de 14 dígitos sem formatação.
+
+        Returns:
+            CrmDailyProfileResponse com lista de dias ordenada cronologicamente.
+        """
+        import pandas as pd
+
+        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_daily.parquet")
+
+        df: pl.DataFrame | None = None
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df = pl.read_parquet(PARQUET_PATH)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet daily '{cnpj}': {e}")
+
+        if df is None:
+            try:
+                from database import engine as _engine
+                os.makedirs(CRMS_DIR, exist_ok=True)
+                with _engine.connect() as conn:
+                    pdf = pd.read_sql(
+                        text("SELECT * FROM temp_CGUSC.fp.crm_daily_profile"
+                             " WHERE cnpj = :cnpj ORDER BY dt_janela"),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                df = pl.from_pandas(pdf)
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"⚠️ Erro ao gerar parquet daily '{cnpj}': {e}")
+                df = pl.DataFrame()
+
+        if df.is_empty():
+            return CrmDailyProfileResponse(cnpj=cnpj, days=[])
+
+        days = [
+            {
+                "dt_janela":             str(r["dt_janela"])[:10],
+                "competencia":           int(r["competencia"]),
+                "nu_prescricoes_dia":    int(r["nu_prescricoes_dia"]),
+                "nu_crms_distintos":     int(r["nu_crms_distintos"]),
+                "hr_pico":               int(r["hr_pico"]),
+                "nu_prescricoes_hr_pico": int(r["nu_prescricoes_hr_pico"]),
+                "mediana_diaria":        float(r["mediana_diaria"]),
+                "multiplo":              float(r["multiplo"] or 0),
+                "is_anomalo":            int(r["is_anomalo"]),
+            }
+            for r in df.iter_rows(named=True)
+        ]
+        return CrmDailyProfileResponse(cnpj=cnpj, days=days)
+
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
         """Retorna os dados cadastrais e geográficos de uma farmácia específica."""

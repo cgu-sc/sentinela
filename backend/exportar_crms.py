@@ -142,7 +142,7 @@ def exportar_crms(cnpjs: list[str] | None = None) -> None:
 
 def _escrever_cnpj(cnpj: str, frames: list[pl.DataFrame]) -> None:
     df = pl.concat(frames)
-    df.write_parquet(os.path.join(CRMS_DIR, f"{cnpj}.parquet"), compression="lz4")
+    df.write_parquet(os.path.join(CRMS_DIR, f"{cnpj}_crms.parquet"), compression="lz4")
 
 
 # ---------------------------------------------------------------------------

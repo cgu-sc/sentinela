@@ -1493,8 +1493,8 @@ class AnalyticsService:
                 os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
-                        "SELECT * FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"
-                        " ORDER BY competencia, id_medico",
+                        text("SELECT * FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"
+                             " ORDER BY competencia, id_medico"),
                         conn,
                         params={"cnpj": cnpj},
                     )

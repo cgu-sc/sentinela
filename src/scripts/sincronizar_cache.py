@@ -25,8 +25,8 @@ from data_cache import (
     _sync_rede,
     _sync_matriz_risco,
     _sync_falecidos,
-    _sync_crms_detalhado,
-    _sync_top20_crms,
+    _sync_crm_benchmarks,
+    _sync_crm_parquets,
     _sync_dados_farmacia,
     _sync_movimentacao,
 )
@@ -34,14 +34,14 @@ from data_cache import (
 # ── Módulos disponíveis ────────────────────────────────────────────────────────
 
 MODULOS = [
-    {"id": 1, "name": "Localidades (IBGE)",      "func": _sync_localidades,    "peso": "~rápido"},
-    {"id": 2, "name": "Rede de Estabelecimentos","func": _sync_rede,           "peso": "~rápido"},
-    {"id": 3, "name": "Matriz de Risco",         "func": _sync_matriz_risco,   "peso": "~médio"},
-    {"id": 4, "name": "Falecidos por Farmácia",  "func": _sync_falecidos,      "peso": "~médio"},
-    {"id": 5, "name": "Indicador CRM Detalhado", "func": _sync_crms_detalhado, "peso": "~médio"},
-    {"id": 6, "name": "Top 20 CRMs (Médicos)",   "func": _sync_top20_crms,     "peso": "~pesado"},
-    {"id": 7, "name": "Dados das Farmácias",     "func": _sync_dados_farmacia, "peso": "~médio"},
-    {"id": 8, "name": "Movimentação Mensal",     "func": _sync_movimentacao,   "peso": "~muito pesado"},
+    {"id": 1, "name": "Localidades (IBGE)",        "func": _sync_localidades,    "peso": "~rápido"},
+    {"id": 2, "name": "Rede de Estabelecimentos",  "func": _sync_rede,           "peso": "~rápido"},
+    {"id": 3, "name": "Matriz de Risco",           "func": _sync_matriz_risco,   "peso": "~médio"},
+    {"id": 4, "name": "Falecidos por Farmácia",    "func": _sync_falecidos,      "peso": "~médio"},
+    {"id": 5, "name": "Benchmarks CRM",            "func": _sync_crm_benchmarks, "peso": "~rápido"},
+    {"id": 6, "name": "CRMs por CNPJ (parquets)",  "func": _sync_crm_parquets,   "peso": "~muito pesado"},
+    {"id": 7, "name": "Dados das Farmácias",       "func": _sync_dados_farmacia, "peso": "~médio"},
+    {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

@@ -315,6 +315,29 @@ def _sync_movimentacao(engine, progress_callback):
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 
+def _sync_crm_benchmarks(engine, progress_callback=None):
+    """Tarefa: Gera bench_uf, bench_regiao e bench_br como parquets."""
+    import importlib, sys as _sys
+    # exportar_crms está no mesmo diretório (backend/)
+    if "exportar_crms" not in _sys.modules:
+        importlib.import_module("exportar_crms")
+    from exportar_crms import exportar_benchmarks
+    exportar_benchmarks()
+    if progress_callback:
+        progress_callback(100)
+
+
+def _sync_crm_parquets(engine, progress_callback=None):
+    """Tarefa: Gera um parquet por CNPJ em sentinela_cache/crms/."""
+    import importlib, sys as _sys
+    if "exportar_crms" not in _sys.modules:
+        importlib.import_module("exportar_crms")
+    from exportar_crms import exportar_crms
+    exportar_crms()
+    if progress_callback:
+        progress_callback(100)
+
+
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:

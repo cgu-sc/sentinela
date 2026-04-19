@@ -38,7 +38,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── Prescritores / CRMs ───────────────────────────────────────────────────
     prescritoresData:    null,
     prescritoresLoading: false,
-    prescritoresLoaded:  false,
+    prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     prescritoresError:   null,
 
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
@@ -148,15 +148,19 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Prescritores ──────────────────────────────────────────────────────────
-    async fetchPrescritores(cnpj) {
-      if (this.prescritoresLoaded) return;
+    // ── Prescritores / CRMs ───────────────────────────────────────────────────
+    async fetchPrescritores(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.prescritoresLoaded === key) return;
       this.prescritoresLoading = true;
       this.prescritoresError   = null;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsPrescritores(cnpj));
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsPrescritores(cnpj), { params });
         this.prescritoresData   = data;
-        this.prescritoresLoaded = true;
+        this.prescritoresLoaded = key;
       } catch (e) {
         console.error('Erro ao buscar dados de prescritores:', e);
         this.prescritoresError = ERROR_MSG;
@@ -256,7 +260,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
       this.prescritoresData    = null;
       this.prescritoresLoading = false;
-      this.prescritoresLoaded  = false;
+      this.prescritoresLoaded  = null;
       this.prescritoresError   = null;
 
       this.municipiosRegiao        = [];

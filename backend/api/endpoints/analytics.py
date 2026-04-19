@@ -132,9 +132,13 @@ def get_regional_benchmarking_animation(
 
 
 @router.get("/cnpj/{cnpj}/prescritores", response_model=PrescritoresResponse)
-def get_prescritores(cnpj: str):
-    """Retorna os dados detalhados e KPIs de prescritores (CRMs) atuantes no CNPJ."""
-    return AnalyticsService.get_prescritores_data(cnpj)
+def get_prescritores(
+    cnpj: str,
+    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM)"),
+    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM)"),
+):
+    """Retorna KPIs e top prescritores (CRMs) de um CNPJ, com filtro opcional de período."""
+    return AnalyticsService.get_crm_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
 def get_indicadores_analise(

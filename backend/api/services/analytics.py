@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_crms_detalhado, get_df_top20_crms, get_df_dados_farmacia
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -1456,49 +1456,190 @@ class AnalyticsService:
             return RegionalAnimationResponse(nome_regiao=regiao_saude or "", quarters=[])
 
     @staticmethod
-    def get_prescritores_data(cnpj: str) -> PrescritoresResponse:
-        """Retorna indicadores consolidados e os top 20 CRMs atuantes em uma farmácia específica."""
-        try:
-            df_crms = get_df_crms_detalhado()
-            df_top20 = get_df_top20_crms()
-            
-            # 1. Summary
-            rows_crms = df_crms.filter(pl.col("nu_cnpj") == cnpj)
-            summary_dict = {}
-            if not rows_crms.is_empty():
-                try:
-                    df_risco = get_df_matriz_risco()
-                    df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-                    row_risco = df_risco.filter(pl.col("cnpj") == cnpj)
-                    risco_dict = {}
-                    if not row_risco.is_empty():
-                        risco_dict = row_risco.row(0, named=True)
-                        
-                    row_data = rows_crms.row(0, named=True)
-                    summary_dict = {
-                        **row_data,
-                        "razaoSocial": risco_dict.get("razaosocial") or risco_dict.get("razao_social"),
-                        "municipio": risco_dict.get("municipio"),
-                        "uf": risco_dict.get("uf"),
-                        "populacao_cidade": risco_dict.get("populacao"),
-                        "estabelecimentos_cidade": risco_dict.get("total_municipio")
-                    }
-                except:
-                    summary_dict = rows_crms.row(0, named=True)
+    def get_crm_data(
+        cnpj: str,
+        data_inicio: str | None = None,
+        data_fim: str | None = None,
+    ) -> PrescritoresResponse:
+        """Retorna KPIs e top prescritores de um CNPJ a partir do parquet por CNPJ (lazy cache).
 
-            # 2. Top 20
-            rows_top20 = df_top20.filter(pl.col("cnpj") == cnpj).sort("ranking")
-            top20_list = []
-            if not rows_top20.is_empty():
-                top20_list = [r for r in rows_top20.iter_rows(named=True)]
-                
-            return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, top20=top20_list)
+        Se o parquet ainda não existir, busca crm_export no SQL Server, salva e retorna.
+        O filtro de período é aplicado em Polars sobre a coluna competencia (INT YYYYMM).
+        """
+        import traceback
+        import pandas as pd
 
-        except Exception as e:
-            import traceback
-            print(f"❌ ERRO AO CALCULAR DADOS DE PRESCRITORES: {e}")
-            print(traceback.format_exc())
+        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}.parquet")
+
+        # ── helpers de competência ────────────────────────────────────────────
+        def _to_comp(date_str: str) -> int:
+            return int(date_str[:7].replace("-", ""))
+
+        comp_ini = _to_comp(data_inicio) if data_inicio else None
+        comp_fim = _to_comp(data_fim)    if data_fim    else None
+
+        # ── 1. Carrega ou gera o parquet ──────────────────────────────────────
+        df: pl.DataFrame | None = None
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df = pl.read_parquet(PARQUET_PATH)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet CRM '{cnpj}': {e}")
+
+        if df is None:
+            try:
+                from database import engine as _engine
+                os.makedirs(CRMS_DIR, exist_ok=True)
+                with _engine.connect() as conn:
+                    pdf = pd.read_sql(
+                        "SELECT * FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"
+                        " ORDER BY competencia, id_medico",
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                if pdf.empty:
+                    return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+                df = pl.from_pandas(pdf)
+                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro"]:
+                    if col in df.columns:
+                        df = df.with_columns(pl.col(col).cast(pl.Int8))
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"❌ ERRO ao buscar CRM do banco para {cnpj}: {e}")
+                print(traceback.format_exc())
+                return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+
+        # ── 2. Filtro de período ──────────────────────────────────────────────
+        if comp_ini:
+            df = df.filter(pl.col("competencia") >= comp_ini)
+        if comp_fim:
+            df = df.filter(pl.col("competencia") <= comp_fim)
+
+        if df.is_empty():
             return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+
+        # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
+        total_valor = float(df["vl_total_prescricoes"].sum() or 0)
+
+        df_med = (
+            df.group_by("id_medico")
+            .agg([
+                pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
+                pl.sum("nu_prescricoes").alias("nu_prescricoes"),
+                pl.max("nu_prescricoes_dia").alias("nu_prescricoes_dia"),
+                pl.max("prescricoes_dia_brasil").alias("prescricoes_dia_total_brasil"),
+                pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
+                pl.max("nu_estabelecimentos").alias("qtd_estabelecimentos_atua"),
+                pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
+                pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
+                pl.col("alerta_concentracao_temporal").drop_nulls().first().alias("alerta2_tempo_concentrado"),
+                pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
+            ])
+            .with_columns([
+                (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
+                (
+                    (pl.col("prescricoes_dia_total_brasil") > 30) & (pl.col("nu_prescricoes_dia") <= 30)
+                ).cast(pl.Int8).alias("flag_robo_oculto"),
+                (pl.col("qtd_estabelecimentos_atua") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
+            ])
+            .sort("vl_total_prescricoes", descending=True)
+            .with_row_index("ranking")
+            .with_columns([
+                (pl.col("ranking") + 1).alias("ranking"),
+                (pl.col("vl_total_prescricoes") / total_valor * 100).round(2).alias("pct_participacao")
+                if total_valor > 0 else pl.lit(0.0).alias("pct_participacao"),
+            ])
+            .with_columns([
+                pl.col("pct_participacao").cum_sum().round(2).alias("pct_acumulado"),
+                pl.when(pl.col("prescricoes_total_brasil") > 0)
+                .then(
+                    (pl.col("nu_prescricoes").cast(pl.Float64) /
+                     pl.col("prescricoes_total_brasil").cast(pl.Float64) * 100).round(2)
+                )
+                .otherwise(pl.lit(0.0))
+                .alias("pct_volume_aqui_vs_total"),
+            ])
+        )
+
+        top20_list = [r for r in df_med.head(20).iter_rows(named=True)]
+
+        # ── 4. Summary ────────────────────────────────────────────────────────
+        top1       = df_med.row(0, named=True)
+        top5_valor = float(df_med.head(5)["vl_total_prescricoes"].sum() or 0)
+
+        qtd_robos         = int(df_med["flag_robo"].sum() or 0)
+        qtd_robos_ocultos = int(df_med["flag_robo_oculto"].sum() or 0)
+        qtd_invalido      = int(df_med["flag_crm_invalido"].sum() or 0)
+        qtd_antes_reg     = int(df_med["flag_prescricao_antes_registro"].sum() or 0)
+        qtd_conc_temp     = int(df_med["alerta2_tempo_concentrado"].is_not_null().sum())
+
+        vl_invalido  = float(df_med.filter(pl.col("flag_crm_invalido") == 1)["vl_total_prescricoes"].sum() or 0)
+        vl_antes_reg = float(df_med.filter(pl.col("flag_prescricao_antes_registro") == 1)["vl_total_prescricoes"].sum() or 0)
+
+        pct_top1      = round(top1["vl_total_prescricoes"] / total_valor * 100, 2) if total_valor else 0.0
+        pct_top5      = round(top5_valor / total_valor * 100, 2)                  if total_valor else 0.0
+        pct_invalido  = round(vl_invalido  / total_valor * 100, 2)                if total_valor else 0.0
+        pct_antes_reg = round(vl_antes_reg / total_valor * 100, 2)                if total_valor else 0.0
+
+        # ── 5. Benchmarks ─────────────────────────────────────────────────────
+        bench_top5_reg = 0.0
+        bench_top5_br  = 0.0
+        try:
+            df_farm   = get_df_dados_farmacia()
+            row_farm  = df_farm.filter(pl.col("cnpj") == cnpj)
+            id_regiao = row_farm["id_regiao_saude"][0] if not row_farm.is_empty() else None
+
+            df_br = get_df_bench_crm_br()
+            if comp_ini: df_br = df_br.filter(pl.col("competencia") >= comp_ini)
+            if comp_fim: df_br = df_br.filter(pl.col("competencia") <= comp_fim)
+            bench_top5_br = float(df_br["mediana_concentracao_top5_br"].mean() or 0)
+
+            if id_regiao:
+                df_reg = get_df_bench_crm_regiao()
+                df_reg = df_reg.filter(pl.col("id_regiao_saude") == id_regiao)
+                if comp_ini: df_reg = df_reg.filter(pl.col("competencia") >= comp_ini)
+                if comp_fim: df_reg = df_reg.filter(pl.col("competencia") <= comp_fim)
+                bench_top5_reg = float(df_reg["mediana_concentracao_top5_reg"].mean() or 0)
+        except Exception:
+            pass
+
+        # ── 6. Metadados do CNPJ (matriz de risco) ────────────────────────────
+        razao_social = municipio = uf_str = None
+        try:
+            df_risco  = get_df_matriz_risco()
+            df_risco  = df_risco.rename({c: c.lower() for c in df_risco.columns})
+            row_risco = df_risco.filter(pl.col("cnpj") == cnpj)
+            if not row_risco.is_empty():
+                r            = row_risco.row(0, named=True)
+                razao_social = r.get("razaosocial") or r.get("razao_social")
+                municipio    = r.get("municipio")
+                uf_str       = r.get("uf")
+        except Exception:
+            pass
+
+        summary_dict = {
+            "pct_concentracao_top1":          pct_top1,
+            "pct_concentracao_top5":          pct_top5,
+            "id_top1_prescritor":             top1.get("id_medico", ""),
+            "qtd_prescritores_robos":         qtd_robos,
+            "qtd_prescritores_robos_ocultos": qtd_robos_ocultos,
+            "qtd_crm_invalido":               qtd_invalido,
+            "qtd_crm_antes_registro":         qtd_antes_reg,
+            "vl_crm_invalido":                round(vl_invalido,  2),
+            "vl_crm_antes_registro":          round(vl_antes_reg, 2),
+            "pct_valor_crm_invalido":         pct_invalido,
+            "pct_valor_crm_antes_registro":   pct_antes_reg,
+            "qtd_prescritores_conc_temporal": qtd_conc_temp,
+            "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
+            "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
+            "razaoSocial":                    razao_social,
+            "municipio":                      municipio,
+            "uf":                             uf_str,
+            "from_cache":                     os.path.exists(PARQUET_PATH),
+        }
+
+        return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, top20=top20_list)
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
         """Retorna os dados cadastrais e geográficos de uma farmácia específica."""

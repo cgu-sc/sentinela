@@ -34,9 +34,9 @@ BENCH_DIR = os.path.join(CACHE_DIR, "benchmarks")
 CHUNK_SIZE = 500_000  # linhas por chunk na leitura do SQL Server
 
 BENCHMARKS = [
-    ("bench_uf",     "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_uf"),
-    ("bench_regiao", "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_regiao"),
-    ("bench_br",     "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_br"),
+    ("bench_crm_uf",     "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_uf"),
+    ("bench_crm_regiao", "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_regiao"),
+    ("bench_crm_br",     "SELECT * FROM temp_CGUSC.fp.indicador_crm_bench_br"),
 ]
 
 DATE_COLS   = []

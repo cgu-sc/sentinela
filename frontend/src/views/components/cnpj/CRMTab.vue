@@ -14,6 +14,9 @@ const props = defineProps({
 const { prescritoresData, prescritoresLoading, prescritoresError } = storeToRefs(useCnpjDetailStore());
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 
+// isRefreshing: há dados anteriores visíveis enquanto um novo fetch está em curso
+const isRefreshing = computed(() => prescritoresLoading.value && prescritoresData.value !== null);
+
 // --- CÁLCULOS DOS KPIs ---
 const summary = computed(() => prescritoresData.value?.summary || {});
 const top20 = computed(() => prescritoresData.value?.top20 || []);
@@ -147,6 +150,11 @@ const filteredTop20 = computed(() => {
   return list;
 });
 
+const showAllCrms = ref(false);
+const visibleCrms = computed(() =>
+  showAllCrms.value ? filteredTop20.value : filteredTop20.value.slice(0, 10)
+);
+
 defineExpose({
   getSummary: () => summary.value,
   getTop20: () => top20.value,
@@ -173,12 +181,12 @@ defineExpose({
 
 <template>
   <div class="crm-tab-container">
-    <div v-if="prescritoresLoading" class="loading-state">
+    <div v-if="prescritoresLoading && !prescritoresData" class="loading-state">
       <i class="pi pi-spinner pi-spin"></i>
       <p>Carregando análise de prescritores...</p>
     </div>
 
-    <div v-else-if="prescritoresError" class="loading-state tab-placeholder--error">
+    <div v-else-if="prescritoresError && !prescritoresData" class="loading-state tab-placeholder--error">
       <i class="pi pi-exclamation-circle" style="font-size: 2rem"></i>
       <p>{{ prescritoresError }}</p>
     </div>
@@ -194,7 +202,7 @@ defineExpose({
       </p>
     </div>
 
-    <div v-else class="content-wrapper">
+    <div v-else class="content-wrapper" :class="{ 'is-refreshing': isRefreshing }">
       <!-- 1. KPIs -->
       <div class="no-padding-mobile">
         <div class="alerts-kpi-grid">
@@ -279,7 +287,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdLancamentosAgrupados > 0 ? 'highlight-green' : '',
+              qtdLancamentosAgrupados > 0 ? 'highlight-green' : 'kpi-disabled',
               activeKpiFilter === 'agrupamento' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('agrupamento')"
@@ -305,7 +313,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdPrescrIntensivaLocal > 0 ? 'highlight-red' : '',
+              qtdPrescrIntensivaLocal > 0 ? 'highlight-red' : 'kpi-disabled',
               activeKpiFilter === 'intensiva_local' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('intensiva_local')"
@@ -331,7 +339,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdPrescrIntensivaOcultos > 0 ? 'highlight-orange' : '',
+              qtdPrescrIntensivaOcultos > 0 ? 'highlight-orange' : 'kpi-disabled',
               activeKpiFilter === 'intensiva_brasil' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('intensiva_brasil')"
@@ -355,7 +363,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdCrmExclusivo > 0 ? 'highlight-purple' : '',
+              qtdCrmExclusivo > 0 ? 'highlight-purple' : 'kpi-disabled',
               activeKpiFilter === 'exclusivo' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('exclusivo')"
@@ -379,7 +387,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              totalIrregularesCfm > 0 ? 'highlight-red highlight-fraude' : '',
+              totalIrregularesCfm > 0 ? 'highlight-red highlight-fraude' : 'kpi-disabled',
               activeKpiFilter === 'fraude_crm' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('fraude_crm')"
@@ -416,7 +424,7 @@ defineExpose({
           <div
             class="alert-kpi-card"
             :class="[
-              qtdAcima400km > 0 ? 'highlight-purple-geo' : '',
+              qtdAcima400km > 0 ? 'highlight-purple-geo' : 'kpi-disabled',
               activeKpiFilter === 'distancia' ? 'kpi-active' : '',
             ]"
             @click="setKpiFilter('distancia')"
@@ -509,7 +517,7 @@ defineExpose({
             </thead>
             <tbody>
               <tr
-                v-for="(m, i) in filteredTop20"
+                v-for="(m, i) in visibleCrms"
                 :key="i"
               >
                 <td>
@@ -630,6 +638,23 @@ defineExpose({
             </tbody>
           </table>
         </div>
+
+        <div class="crm-table-footer">
+          <button
+            v-if="filteredTop20.length > 10"
+            class="crm-more-btn"
+            @click="showAllCrms = !showAllCrms"
+          >
+            <template v-if="!showAllCrms">
+              <i class="pi pi-angle-double-down" />
+              Exibir mais {{ filteredTop20.length - 10 }} registros
+            </template>
+            <template v-else>
+              <i class="pi pi-angle-double-up" />
+              Recolher
+            </template>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -671,6 +696,44 @@ defineExpose({
   gap: 1rem;
   width: 100%;
   align-items: stretch;
+  transition: opacity 0.25s ease;
+}
+
+.content-wrapper.is-refreshing {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.crm-table-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0;
+}
+
+.crm-more-btn {
+  background: none;
+  border: none;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text-color) 55%, transparent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 1rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+  opacity: 0.85;
+}
+
+.crm-more-btn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  letter-spacing: 0.08em;
+}
+
+.crm-more-btn i {
+  font-size: 0.7rem;
 }
 
 .no-padding-mobile {
@@ -746,6 +809,13 @@ defineExpose({
 .alert-kpi-card.highlight-purple-geo:hover {
   border-color: color-mix(in srgb, #8b5cf6 45%, var(--card-border));
   box-shadow: 0 8px 16px -8px color-mix(in srgb, #8b5cf6 20%, transparent);
+}
+
+/* Card desabilitado — valor zero, sem interação */
+.alert-kpi-card.kpi-disabled {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 /* Estado ativo (Clicado) — Sincronizado com a cor da categoria */

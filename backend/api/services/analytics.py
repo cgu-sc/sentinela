@@ -1562,7 +1562,7 @@ class AnalyticsService:
             ])
         )
 
-        top20_list = [r for r in df_med.head(20).iter_rows(named=True)]
+        top20_list = [r for r in df_med.iter_rows(named=True)]
 
         # ── 4. Summary ────────────────────────────────────────────────────────
         top1       = df_med.row(0, named=True)

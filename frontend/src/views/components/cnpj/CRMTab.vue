@@ -165,7 +165,7 @@ const chartOptionDaily = computed(() => {
         })),
       },
     {
-      name: 'Mediana (Mensal)',
+      name: 'Mediana Referência (Dia)',
       type: 'line',
       step: 'end',
       symbol: 'none',
@@ -288,9 +288,10 @@ const chartOptionHourly = computed(() => {
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       formatter: (params) => {
         const hora = params[0]?.axisValue ?? '';
-        const vol  = params.find(p => p.seriesName === 'Prescrições (Volume)')?.value ?? 0;
-        const crms = params.find(p => p.seriesName === 'CRMs Distintos')?.value ?? 0;
-        const med  = params.find(p => p.seriesName === 'Mediana Mensal (Hora)')?.value ?? 0;
+        const volItem = params.find(p => p.seriesName === 'Prescrições (Volume)');
+        const vol  = volItem?.value ?? 0;
+        const crms = volItem?.data?.nu_crms ?? 0;
+        const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
         const isPico = hora === `${String(hrPico).padStart(2,'0')}h`;
         const alertaHtml = vol > med && med > 0
           ? `<div style="margin-top:8px; font-size:12px; color:#ef4444; font-weight:600;">${(vol / med).toFixed(1)}× acima da mediana</div>`
@@ -314,7 +315,7 @@ const chartOptionHourly = computed(() => {
                 <span style="font-weight:700; font-size:13px;">${crms} <small>médicos</small></span>
               </div>
               <div style="border-top:1px solid ${c.tooltipBorder}; padding-top:8px; margin-top:2px; display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Mediana Mensal</span>
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Mediana Referência</span>
                 <span style="font-weight:600; font-size:12px; color:#f59e0b;">${med.toFixed(1)}</span>
               </div>
             </div>
@@ -328,7 +329,11 @@ const chartOptionHourly = computed(() => {
         name: 'Prescrições (Volume)',
         type: 'bar',
         barMaxWidth: 28,
-        data: fullPoints.map((p, i) => ({ value: p.nu_prescricoes, itemStyle: { color: barColors[i] } })),
+        data: fullPoints.map((p, i) => ({ 
+          value: p.nu_prescricoes, 
+          nu_crms: p.nu_crms_diferentes,
+          itemStyle: { color: barColors[i] } 
+        })),
         emphasis: { itemStyle: { opacity: 1 } },
       },
       {
@@ -819,7 +824,7 @@ defineExpose({
           </div>
         </div>
         <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.25rem; margin-bottom: 0.75rem">
-          Evolução diária de autorizações. Dias com volume anômalo (acima de 4× a mediana e ≥ 20 prescrições) destacados em vermelho.
+          Evolução diária de autorizações. Dias com volume anômalo (detecção de lançamentos em sequência ≥ 7× a mediana trimestral) destacados em vermelho.
         </p>
         <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
           <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
@@ -836,13 +841,17 @@ defineExpose({
 
         <!-- Detalhamento Horário (Drill-down) -->
         <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in">
-          <div class="hourly-header">
-            <div class="hourly-title">
-              <i class="pi pi-clock" />
-              <span>Análise Horária: {{ formatarData(selectedDay.dt_janela) }}</span>
-              <span class="anomalo-badge">DIA ANÔMALO</span>
+          <div class="hourly-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+            <div class="title-group" style="display: flex; align-items: center; gap: 0.75rem;">
+              <i class="pi pi-clock" style="color: #6366f1; font-size: 1.1rem;"></i>
+              <h3 style="margin:0; font-size: 0.9rem; letter-spacing: 0.05em; font-weight: 700; white-space: nowrap; color: white; opacity: 0.8;">
+                ANÁLISE HORÁRIA: {{ formatarData(selectedDay.dt_janela) }}
+              </h3>
+              <span v-if="selectedDay.is_anomalo" class="anomalo-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 800; white-space: nowrap;">
+                ANOMALIA DETECTADA
+              </span>
             </div>
-            <button class="close-detail-btn" @click="selectedDay = null">
+            <button class="close-detail-btn" @click="selectedDay = null" style="background: transparent; border: none; color: white; opacity: 0.5; cursor: pointer; padding: 5px;">
               <i class="pi pi-times" />
             </button>
           </div>
@@ -854,7 +863,7 @@ defineExpose({
           <div v-else class="hourly-body">
             <p class="hourly-subtitle">
               Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia,
-              comparando o volume real com a mediana de cada horário.
+              comparando o volume real com a mediana trimestral de cada horário.
             </p>
             <VChart
               :option="chartOptionHourly"

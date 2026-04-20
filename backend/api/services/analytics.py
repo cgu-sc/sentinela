@@ -1501,7 +1501,7 @@ class AnalyticsService:
                         params={"cnpj": cnpj},
                     )
                 if pdf.empty:
-                    return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+                    return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
                 df = pl.from_pandas(pdf)
                 for col in ["flag_crm_invalido", "flag_prescricao_antes_registro"]:
                     if col in df.columns:
@@ -1510,7 +1510,7 @@ class AnalyticsService:
             except Exception as e:
                 print(f"❌ ERRO ao buscar CRM do banco para {cnpj}: {e}")
                 print(traceback.format_exc())
-                return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+                return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
 
         # ── 2. Filtro de período ──────────────────────────────────────────────
         if comp_ini:
@@ -1519,7 +1519,7 @@ class AnalyticsService:
             df = df.filter(pl.col("competencia") <= comp_fim)
 
         if df.is_empty():
-            return PrescritoresResponse(cnpj=cnpj, summary={}, top20=[])
+            return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
 
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
@@ -1578,7 +1578,7 @@ class AnalyticsService:
             ])
         )
 
-        top20_list = [r for r in df_med.iter_rows(named=True)]
+        crms_interesse_list = [r for r in df_med.iter_rows(named=True)]
 
         # ── 4. Summary ────────────────────────────────────────────────────────
         top1       = df_med.row(0, named=True)
@@ -1655,7 +1655,37 @@ class AnalyticsService:
             "from_cache":                     os.path.exists(PARQUET_PATH),
         }
 
-        return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, top20=top20_list)
+        # ── 7. Alertas diários — injeta em cada médico ────────────────────────
+        ALERTAS_DIARIOS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_alertas_diarios.parquet")
+        alertas_por_medico: dict[str, list[dict]] = {}
+        if os.path.exists(ALERTAS_DIARIOS_PATH):
+            try:
+                df_ad = pl.read_parquet(ALERTAS_DIARIOS_PATH)
+                if comp_ini:
+                    df_ad = df_ad.filter(
+                        pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 7).str.replace("-", "").cast(pl.Int32) >= comp_ini
+                    )
+                if comp_fim:
+                    df_ad = df_ad.filter(
+                        pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 7).str.replace("-", "").cast(pl.Int32) <= comp_fim
+                    )
+                for row in df_ad.iter_rows(named=True):
+                    mid = row["id_medico"]
+                    alertas_por_medico.setdefault(mid, []).append({
+                        "dt":       str(row["dt_alerta"]),
+                        "nivel":    row["nivel"],
+                        "descricao": row["descricao"],
+                        "nu_prescricoes": row["nu_prescricoes_dia"],
+                        "nu_minutos":     row["nu_minutos_dia"],
+                        "taxa_hora":      float(row["taxa_hora"] or 0),
+                    })
+            except Exception:
+                pass
+
+        for m in crms_interesse_list:
+            m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
+
+        return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, crms_interesse=crms_interesse_list)
 
     @staticmethod
     def get_crm_daily_profile(cnpj: str) -> "CrmDailyProfileResponse":

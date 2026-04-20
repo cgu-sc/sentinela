@@ -260,7 +260,7 @@ class MultiCnpjTimelineResponse(BaseModel):
 class PrescritoresResponse(BaseModel):
     cnpj: str
     summary: dict
-    top20: list
+    crms_interesse: list
 
 class CrmDailyProfileItem(BaseModel):
     dt_janela: str

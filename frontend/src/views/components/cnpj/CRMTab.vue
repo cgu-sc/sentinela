@@ -349,7 +349,7 @@ const isRefreshing = computed(() => prescritoresLoading.value && prescritoresDat
 
 // --- CÁLCULOS DOS KPIs ---
 const summary = computed(() => prescritoresData.value?.summary || {});
-const top20 = computed(() => prescritoresData.value?.top20 || []);
+const crmsInteresse = computed(() => prescritoresData.value?.crms_interesse || []);
 
 const concentracaoTop1 = computed(
   () => summary.value.pct_concentracao_top1 || 0,
@@ -359,10 +359,10 @@ const concentracaoTop5 = computed(
 );
 
 const valorTop1 = computed(() =>
-  top20.value.length > 0 ? top20.value[0].vl_total_prescricoes || 0 : 0,
+  crmsInteresse.value.length > 0 ? crmsInteresse.value[0].vl_total_prescricoes || 0 : 0,
 );
 const valorTop5 = computed(() =>
-  top20.value
+  crmsInteresse.value
     .slice(0, 5)
     .reduce((acc, curr) => acc + (curr.vl_total_prescricoes || 0), 0),
 );
@@ -371,24 +371,24 @@ const valorTop5 = computed(() =>
 const qtdPrescrIntensivaLocal = computed(
   () =>
     summary.value.qtd_prescritores_robos ||
-    top20.value.filter((m) => m.flag_robo > 0).length,
+    crmsInteresse.value.filter((m) => m.flag_robo > 0).length,
 );
 const qtdPrescrIntensivaOcultos = computed(
   () =>
     summary.value.qtd_prescritores_robos_ocultos ||
-    top20.value.filter((m) => m.flag_robo_oculto > 0).length,
+    crmsInteresse.value.filter((m) => m.flag_robo_oculto > 0).length,
 );
 
 // CRMs Inválidos e Irregulares
 const qtdCrmInvalido = computed(
   () =>
     summary.value.qtd_crm_invalido ??
-    top20.value.filter((m) => m.flag_crm_invalido > 0).length,
+    crmsInteresse.value.filter((m) => m.flag_crm_invalido > 0).length,
 );
 const qtdPrescrAntesRegistro = computed(
   () =>
     summary.value.qtd_crm_antes_registro ??
-    top20.value.filter((m) => m.flag_prescricao_antes_registro > 0).length,
+    crmsInteresse.value.filter((m) => m.flag_prescricao_antes_registro > 0).length,
 );
 const totalIrregularesCfm = computed(
   () => qtdCrmInvalido.value + qtdPrescrAntesRegistro.value,
@@ -406,27 +406,49 @@ const valorFraudeCrm = computed(
 
 // CRMs Exclusivos (Atua em 1 único estabelecimento no Brasil)
 const qtdCrmExclusivo = computed(
-  () => top20.value.filter((m) => m.flag_crm_exclusivo > 0).length,
+  () => crmsInteresse.value.filter((m) => m.flag_crm_exclusivo > 0).length,
 );
 
 const qtdLancamentosAgrupados = computed(
   () =>
     summary.value.qtd_prescritores_conc_temporal ||
-    top20.value.filter((m) => m.alerta2_tempo_concentrado || m.alerta2).length,
+    crmsInteresse.value.filter((m) => m.alerta2_tempo_concentrado || m.alerta2).length,
 );
 
 const qtdAcima400km = computed(
-  () => top20.value.filter((m) => m.alerta5_geografico).length,
+  () => crmsInteresse.value.filter((m) => m.alerta5_geografico).length,
 );
 
 const formatPct = (val) =>
   val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
+
+const expandedAlertasMedico = ref(new Set());
+function toggleAlertasDiarios(idMedico) {
+  if (expandedAlertasMedico.value.has(idMedico)) {
+    expandedAlertasMedico.value.delete(idMedico);
+  } else {
+    expandedAlertasMedico.value.add(idMedico);
+  }
+  expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
+}
+function formatarDataAlerta(dt) {
+  if (!dt) return "";
+  const [y, m, d] = dt.split("-");
+  return `${d}/${m}/${y}`;
+}
+function formatarJanela(minutos) {
+  if (!minutos) return "—";
+  if (minutos === 0) return "simultâneo";
+  if (minutos < 60) return `${minutos}min`;
+  return `${Math.floor(minutos / 60)}h ${minutos % 60}min`;
+}
+
 const filterOnlyIssues = ref(false);
 const activeKpiFilter = ref(null);
 
 const kpiFilters = {
-  top1: (m) => m.id_medico === top20.value[0]?.id_medico,
-  top5: (m) => top20.value.slice(0, 5).some((t) => t.id_medico === m.id_medico),
+  top1: (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
+  top5: (m) => crmsInteresse.value.slice(0, 5).some((t) => t.id_medico === m.id_medico),
   agrupamento: (m) => !!(m.alerta2_tempo_concentrado || m.alerta2),
   intensiva_local: (m) => m.flag_robo > 0,
   intensiva_brasil: (m) => m.flag_robo_oculto > 0,
@@ -471,8 +493,8 @@ const hasAnyIssue = (m) =>
   m.alerta5_geografico ||
   m.flag_crm_exclusivo > 0;
 
-const filteredTop20 = computed(() => {
-  let list = top20.value;
+const filteredCrmsInteresse = computed(() => {
+  let list = crmsInteresse.value;
   if (filterOnlyIssues.value) list = list.filter(hasAnyIssue);
   if (activeKpiFilter.value && kpiFilters[activeKpiFilter.value]) {
     list = list.filter(kpiFilters[activeKpiFilter.value]);
@@ -482,12 +504,12 @@ const filteredTop20 = computed(() => {
 
 const showAllCrms = ref(false);
 const visibleCrms = computed(() =>
-  showAllCrms.value ? filteredTop20.value : filteredTop20.value.slice(0, 10)
+  showAllCrms.value ? filteredCrmsInteresse.value : filteredCrmsInteresse.value.slice(0, 10)
 );
 
 defineExpose({
   getSummary: () => summary.value,
-  getTop20: () => top20.value,
+  getCrmsInteresse: () => crmsInteresse.value,
   getKpis: () => ({
     concentracaoTop1: concentracaoTop1.value,
     concentracaoTop5: concentracaoTop5.value,
@@ -522,7 +544,7 @@ defineExpose({
     </div>
 
     <div
-      v-else-if="!prescritoresData || top20.length === 0"
+      v-else-if="!prescritoresData || crmsInteresse.length === 0"
       class="empty-state"
     >
       <i class="pi pi-users empty-icon"></i>
@@ -879,18 +901,18 @@ defineExpose({
           <span v-if="activeKpiFilter" class="filter-badge">
             <i class="pi pi-filter-fill"></i>
             {{ kpiFilterLabels[activeKpiFilter] }} —
-            {{ filteredTop20.length }} de {{ top20.length }}
+            {{ filteredCrmsInteresse.length }} de {{ crmsInteresse.length }}
             <button class="clear-filter-btn" @click.stop="clearFilters">
               <i class="pi pi-times"></i> Limpar filtro
             </button>
           </span>
           <span
-            v-else-if="filterOnlyIssues && filteredTop20.length < top20.length"
+            v-else-if="filterOnlyIssues && filteredCrmsInteresse.length < crmsInteresse.length"
             class="text-orange"
             style="font-weight: 600; margin-left: 8px"
           >
-            (Filtrado: exibindo {{ filteredTop20.length }} de
-            {{ top20.length }})
+            (Filtrado: exibindo {{ filteredCrmsInteresse.length }} de
+            {{ crmsInteresse.length }})
           </span>
         </p>
 
@@ -911,10 +933,11 @@ defineExpose({
               </tr>
             </thead>
             <tbody>
-              <tr
+              <template
                 v-for="(m, i) in visibleCrms"
                 :key="i"
               >
+              <tr>
                 <td>
                   <div class="med-id">{{ m.id_medico }}</div>
                   <div class="med-sub">
@@ -936,10 +959,15 @@ defineExpose({
                     </span>
                     <span
                       v-if="m.alerta2_tempo_concentrado || m.alerta2"
-                      class="issue-tag green-ok"
-                      v-tooltip.top="m.alerta2_tempo_concentrado || m.alerta2"
+                      class="issue-tag green-ok clickable-badge"
+                      v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
+                      @click.stop="toggleAlertasDiarios(m.id_medico)"
                     >
                       <i class="pi pi-stopwatch"></i> Sequencial
+                      <span v-if="m.alertas_diarios?.length > 1" class="badge-count">
+                        ({{ m.alertas_diarios.length }}x)
+                      </span>
+                      <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                     </span>
                     <span v-if="m.flag_crm_invalido" class="issue-tag dark-red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
                       <i class="pi pi-ban"></i> CRM Inexistente
@@ -1034,19 +1062,49 @@ defineExpose({
                   >
                 </td>
               </tr>
+              <tr
+                v-if="expandedAlertasMedico.has(m.id_medico) && m.alertas_diarios?.length"
+                class="alertas-diarios-row"
+              >
+                <td colspan="10" class="alertas-diarios-cell">
+                  <table class="alertas-diarios-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Nível</th>
+                        <th>Prescrições</th>
+                        <th>Janela</th>
+                        <th>Taxa/hora</th>
+                        <th>Descrição</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(a, j) in m.alertas_diarios" :key="j" class="alerta-diario-item">
+                        <td class="col-date">{{ formatarDataAlerta(a.dt) }}</td>
+                        <td><span class="nivel-badge" :class="`nivel-${a.nivel?.toLowerCase().replace(' ', '-')}`">{{ a.nivel }}</span></td>
+                        <td class="col-right">{{ a.nu_prescricoes }}</td>
+                        <td class="col-center">{{ formatarJanela(a.nu_minutos) }}</td>
+                        <td class="col-right">{{ a.taxa_hora?.toFixed(1) }}/h</td>
+                        <td class="col-descricao">{{ a.descricao }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
         </div>
 
         <div class="crm-table-footer">
           <button
-            v-if="filteredTop20.length > 10"
+            v-if="filteredCrmsInteresse.length > 10"
             class="crm-more-btn"
             @click="showAllCrms = !showAllCrms"
           >
             <template v-if="!showAllCrms">
               <i class="pi pi-angle-double-down" />
-              Exibir mais {{ filteredTop20.length - 10 }} registros
+              Exibir mais {{ filteredCrmsInteresse.length - 10 }} registros
             </template>
             <template v-else>
               <i class="pi pi-angle-double-up" />
@@ -1714,6 +1772,81 @@ input:checked + .toggle-slider:before {
   background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--tabs-bg));
   color: var(--risk-indicator-normal);
   border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 20%, transparent);
+}
+
+.badge-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: 0.1rem;
+}
+
+.clickable-badge {
+  cursor: pointer;
+  user-select: none;
+}
+
+.alertas-diarios-row {
+  background: transparent !important;
+}
+
+.alertas-diarios-cell {
+  padding: 0 !important;
+  border-bottom: 2px solid color-mix(in srgb, var(--risk-indicator-normal) 30%, transparent) !important;
+}
+
+.alertas-diarios-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: color-mix(in srgb, var(--risk-indicator-normal) 5%, var(--card-bg));
+  font-size: 0.78rem;
+}
+
+.alertas-diarios-table thead tr {
+  background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent);
+}
+
+.alertas-diarios-table th {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--risk-indicator-normal);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.alertas-diarios-table td {
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 10%, transparent);
+  color: var(--text-color);
+}
+
+.col-date { font-weight: 600; white-space: nowrap; }
+.col-descricao { color: var(--text-secondary); font-size: 0.75rem; }
+
+.nivel-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--risk-indicator-normal) 15%, transparent);
+  color: var(--risk-indicator-normal);
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 25%, transparent);
+}
+
+.nivel-badge.nivel-rajada,
+.nivel-badge.nivel-volume-extremo {
+  background: color-mix(in srgb, var(--risk-critical) 15%, transparent);
+  color: var(--risk-critical);
+  border-color: color-mix(in srgb, var(--risk-critical) 25%, transparent);
+}
+
+.nivel-badge.nivel-concentração {
+  background: color-mix(in srgb, var(--risk-high) 15%, transparent);
+  color: var(--risk-high);
+  border-color: color-mix(in srgb, var(--risk-high) 25%, transparent);
 }
 
 .bar-container {

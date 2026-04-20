@@ -5,7 +5,8 @@ Execução standalone (fora do servidor):
     python backend/exportar_crms.py
 
 Gera:
-    sentinela_cache/crms/{cnpj}.parquet          — um arquivo por farmácia
+    sentinela_cache/crms/{cnpj}_crms.parquet            — dados mensais por farmácia
+    sentinela_cache/crms/{cnpj}_alertas_diarios.parquet — alertas diários por farmácia
     sentinela_cache/benchmarks/bench_uf.parquet
     sentinela_cache/benchmarks/bench_regiao.parquet
     sentinela_cache/benchmarks/bench_br.parquet
@@ -146,6 +147,60 @@ def _escrever_cnpj(cnpj: str, frames: list[pl.DataFrame]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Alertas diários por CNPJ
+# ---------------------------------------------------------------------------
+
+def exportar_alertas_diarios(cnpjs: list[str] | None = None) -> None:
+    os.makedirs(CRMS_DIR, exist_ok=True)
+
+    if cnpjs:
+        placeholders = ", ".join(f"'{c}'" for c in cnpjs)
+        where     = f"WHERE cnpj IN ({placeholders})"
+        count_sql = f"SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm_diario {where}"
+        data_sql  = f"SELECT * FROM temp_CGUSC.fp.alertas_crm_diario {where} ORDER BY cnpj, id_medico, dt_alerta"
+    else:
+        count_sql = "SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm_diario"
+        data_sql  = "SELECT * FROM temp_CGUSC.fp.alertas_crm_diario ORDER BY cnpj, id_medico, dt_alerta"
+
+    with engine.connect() as conn:
+        total = conn.execute(text(count_sql)).scalar()
+
+    print(f"\n[alertas_diarios]  {total:,} linhas  →  {CRMS_DIR}")
+
+    buffer: list[pl.DataFrame] = []
+    current_cnpj: str | None = None
+    cnpjs_escritos = 0
+
+    for chunk in pd.read_sql(data_sql, engine, chunksize=CHUNK_SIZE):
+        df_chunk = pl.from_pandas(chunk).with_columns(
+            pl.col("dt_alerta").cast(pl.Utf8),
+            pl.col("nivel").cast(pl.Utf8),
+            pl.col("descricao").cast(pl.Utf8),
+        )
+        for grupo in df_chunk.partition_by("cnpj", maintain_order=True):
+            cnpj_val: str = grupo["cnpj"][0]
+            if current_cnpj is None:
+                current_cnpj = cnpj_val
+            if cnpj_val != current_cnpj:
+                _escrever_alertas_diarios(current_cnpj, buffer)
+                cnpjs_escritos += 1
+                buffer = []
+                current_cnpj = cnpj_val
+            buffer.append(grupo)
+
+    if buffer and current_cnpj:
+        _escrever_alertas_diarios(current_cnpj, buffer)
+        cnpjs_escritos += 1
+
+    print(f"  Concluído: {cnpjs_escritos:,} arquivos de alertas diários")
+
+
+def _escrever_alertas_diarios(cnpj: str, frames: list[pl.DataFrame]) -> None:
+    df = pl.concat(frames)
+    df.write_parquet(os.path.join(CRMS_DIR, f"{cnpj}_alertas_diarios.parquet"), compression="lz4")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -155,4 +210,5 @@ if __name__ == "__main__":
     print("=" * 60)
     exportar_benchmarks()
     exportar_crms()
+    exportar_alertas_diarios()
     print("\nExportação finalizada.")

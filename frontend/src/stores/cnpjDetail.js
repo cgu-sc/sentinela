@@ -189,6 +189,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchCrmHourlyProfile(cnpj, date) {
+      if (!cnpj || !date) return null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj, date));
+        return data; // Retorna os pontos para uso no componente
+      } catch (e) {
+        console.error('Erro ao buscar perfil horário:', e);
+        return null;
+      }
+    },
+
     // ── CNPJs Avulsos ─────────────────────────────────────────────────────────
     async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
       if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;

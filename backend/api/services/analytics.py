@@ -46,6 +46,7 @@ from ..schemas.analytics import (
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
     CrmDailyProfileResponse,
+    CrmHourlyProfileResponse,
 )
 
 # ── Mapeamento de indicadores: chave → (col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br) ──
@@ -1699,6 +1700,28 @@ class AnalyticsService:
             for r in df.iter_rows(named=True)
         ]
         return CrmDailyProfileResponse(cnpj=cnpj, days=days)
+
+    @staticmethod
+    def get_crm_hourly_profile(cnpj: str, dt_janela: date) -> CrmHourlyProfileResponse:
+        """Retorna o detalhamento horário (0-23h) para um dia específico (Drill-down)."""
+        try:
+            from database import engine as _engine
+            import pandas as pd
+            with _engine.connect() as conn:
+                pdf = pd.read_sql(
+                    text("SELECT hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_mensal_horario "
+                         "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
+                         "WHERE cnpj = :cnpj AND dt_janela = :dt_janela "
+                         "ORDER BY hr_janela"),
+                    conn,
+                    params={"cnpj": cnpj, "dt_janela": dt_janela},
+                )
+            
+            points = pdf.to_dict('records') if not pdf.empty else []
+            return CrmHourlyProfileResponse(cnpj=cnpj, dt_janela=dt_janela, points=points)
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar detalhamento horário '{cnpj}' em {dt_janela}: {e}")
+            return CrmHourlyProfileResponse(cnpj=cnpj, dt_janela=dt_janela, points=[])
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

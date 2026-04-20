@@ -93,7 +93,7 @@ SELECT
     C.dt_venda_final_estabelecimento,
     TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10,2)) /
         NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10,2)), 0) AS percentual,
-    TRY_CAST('' AS VARCHAR(800)) AS alerta_concentracao_temporal
+    CAST(NULL AS VARCHAR(800)) AS alerta_concentracao_temporal
 INTO #lista_alertas_temp
 FROM #base_agregada_crm_cnpj A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj AND C.competencia = A.competencia
@@ -704,19 +704,15 @@ GO
 
 
 -- ============================================================================
--- PERFIL DIÁRIO POR FARMÁCIA: todas as janelas ativas por dia
--- Grain: (cnpj, dt_janela) — uma linha por dia com ≥1 prescrição
--- hr_pico + nu_prescricoes_hr_pico: contexto para tooltip no gráfico
+-- PERFIL DIÁRIO E HORÁRIO POR FARMÁCIA (MODERNIZADO)
+-- Grain 1: (cnpj, dt_janela) -> Visão geral diária (Gráfico Principal)
+-- Grain 2: (cnpj, dt_janela, hr_janela) -> Drill-down para dias anômalos
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-31';
 
--- ============================================================================
--- OTIMIZAÇÃO: Scan Único na tabela de movimentação
--- Evita ler a tabela gigante duas vezes para cálculos de volume e CRMs únicos.
--- ============================================================================
+-- 1. Scan Único na movimentação para base horária
 DROP TABLE IF EXISTS #mov_daily_pre_base;
-
 SELECT
     cnpj,
     data_hora,
@@ -729,88 +725,100 @@ WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 
 CREATE CLUSTERED INDEX IDX_TempMov ON #mov_daily_pre_base(cnpj, data_hora);
 
+-- 2. Materialização da base horária com volume e diversidade de CRMs
+DROP TABLE IF EXISTS #base_horaria;
+SELECT
+    cnpj,
+    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
+    CAST(data_hora AS DATE)                   AS dt_janela,
+    DATEPART(HOUR, data_hora)                 AS hr_janela,
+    COUNT(DISTINCT num_autorizacao)           AS nu_prescricoes_hora,
+    COUNT(DISTINCT crm)                       AS nu_crms_distintos_hora
+INTO #base_horaria
+FROM #mov_daily_pre_base
+GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora), CAST(data_hora AS DATE), DATEPART(HOUR, data_hora);
 
+CREATE CLUSTERED INDEX IDX_BH ON #base_horaria(cnpj, dt_janela, hr_janela);
+
+-- 3. Cálculo de Medianas (Diária e por Hora/Mês)
+DROP TABLE IF EXISTS #medianas_base;
+SELECT DISTINCT
+    cnpj,
+    competencia,
+    hr_janela,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_hora)
+        OVER (PARTITION BY cnpj, competencia, hr_janela) AS mediana_hora_mes
+INTO #medianas_base
+FROM #base_horaria;
+
+DROP TABLE IF EXISTS #totais_diarios;
+SELECT
+    cnpj, competencia, dt_janela,
+    SUM(nu_prescricoes_hora) AS nu_prescricoes_dia,
+    COUNT(DISTINCT hr_janela) AS nu_horas_ativas
+INTO #totais_diarios
+FROM #base_horaria
+GROUP BY cnpj, competencia, dt_janela;
+
+DROP TABLE IF EXISTS #mediana_diaria;
+SELECT DISTINCT
+    cnpj, competencia,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
+        OVER (PARTITION BY cnpj, competencia) AS mediana_diaria
+INTO #mediana_diaria
+FROM #totais_diarios;
+
+-- 4. Tabela Final 1: crm_daily_profile (Gráfico Principal)
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_daily_profile;
 
-WITH base_horaria AS (
+WITH pico_horario AS (
     SELECT
-        cnpj,
-        YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
-        CAST(data_hora AS DATE)                   AS dt_janela,
-        DATEPART(HOUR, data_hora)                 AS hr_janela,
-        COUNT(DISTINCT num_autorizacao)           AS nu_prescricoes_hora
-    FROM #mov_daily_pre_base
-    GROUP BY cnpj,
-             YEAR(data_hora), MONTH(data_hora),
-             CAST(data_hora AS DATE),
-             DATEPART(HOUR, data_hora)
-),
-totais_diarios AS (
-    SELECT
-        cnpj,
-        competencia,
-        dt_janela,
-        SUM(nu_prescricoes_hora) AS nu_prescricoes_dia
-    FROM base_horaria
-    GROUP BY cnpj, competencia, dt_janela
-),
-pico_horario AS (
-    SELECT
-        cnpj,
-        dt_janela,
-        hr_janela                AS hr_pico,
-        nu_prescricoes_hora      AS nu_prescricoes_hr_pico,
-        ROW_NUMBER() OVER (
-            PARTITION BY cnpj, dt_janela
-            ORDER BY nu_prescricoes_hora DESC, hr_janela ASC
-        )                        AS rn
-    FROM base_horaria
+        cnpj, dt_janela,
+        hr_janela AS hr_pico,
+        nu_prescricoes_hora AS nu_prescricoes_hr_pico,
+        ROW_NUMBER() OVER (PARTITION BY cnpj, dt_janela ORDER BY nu_prescricoes_hora DESC, hr_janela ASC) AS rn
+    FROM #base_horaria
 ),
 crms_distintos_dia AS (
     SELECT
-        cnpj,
-        CAST(data_hora AS DATE)  AS dt_janela,
-        COUNT(DISTINCT crm)      AS nu_crms_distintos
+        cnpj, 
+        CAST(data_hora AS DATE) AS dt_janela,
+        COUNT(DISTINCT crm) AS nu_crms_distintos
     FROM #mov_daily_pre_base
     GROUP BY cnpj, CAST(data_hora AS DATE)
-),
-mediana_por_farmacia AS (
-    SELECT DISTINCT
-        cnpj,
-        competencia,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
-            OVER (PARTITION BY cnpj, competencia) AS mediana_diaria
-    FROM totais_diarios
 )
 SELECT
-    T.cnpj,
-    T.competencia,
-    T.dt_janela,
-    T.nu_prescricoes_dia,
-    ISNULL(C.nu_crms_distintos, 0)                AS nu_crms_distintos,
-    P.hr_pico,
-    P.nu_prescricoes_hr_pico,
-    CAST(M.mediana_diaria AS DECIMAL(10,2))        AS mediana_diaria,
-    CAST(
-        CAST(T.nu_prescricoes_dia AS DECIMAL(10,2)) /
-        NULLIF(M.mediana_diaria, 0)
-    AS DECIMAL(10,2))                              AS multiplo,
-    CASE
-        WHEN T.nu_prescricoes_dia >= M.mediana_diaria * 4
-         AND T.nu_prescricoes_dia >= 20 THEN 1
-        ELSE 0
-    END                                            AS is_anomalo
+    T.cnpj, T.competencia, T.dt_janela, T.nu_prescricoes_dia,
+    ISNULL(C.nu_crms_distintos, 0) AS nu_crms_distintos,
+    P.hr_pico, P.nu_prescricoes_hr_pico,
+    CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
+    CAST(CAST(T.nu_prescricoes_dia AS DECIMAL(10,2)) / NULLIF(M.mediana_diaria, 0) AS DECIMAL(10,2)) AS multiplo,
+    CASE WHEN T.nu_prescricoes_dia >= M.mediana_diaria * 4 AND T.nu_prescricoes_dia >= 20 THEN 1 ELSE 0 END AS is_anomalo
 INTO temp_CGUSC.fp.crm_daily_profile
-FROM totais_diarios T
-INNER JOIN mediana_por_farmacia M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
-INNER JOIN pico_horario         P ON P.cnpj = T.cnpj
-                                 AND P.dt_janela = T.dt_janela
-                                 AND P.rn = 1
-LEFT JOIN  crms_distintos_dia   C ON C.cnpj = T.cnpj
-                                 AND C.dt_janela = T.dt_janela;
+FROM #totais_diarios T
+INNER JOIN #mediana_diaria M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
+INNER JOIN pico_horario P ON P.cnpj = T.cnpj AND P.dt_janela = T.dt_janela AND P.rn = 1
+LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela = T.dt_janela;
 
-CREATE CLUSTERED INDEX IDX_DailyProfile
-    ON temp_CGUSC.fp.crm_daily_profile(cnpj, dt_janela);
+CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_daily_profile(cnpj, dt_janela);
+
+-- 5. Tabela Final 2: crm_hourly_profile_anomalo (Drill-down)
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_hourly_profile_anomalo;
+
+SELECT 
+    H.cnpj,
+    H.dt_janela,
+    H.hr_janela,
+    H.nu_prescricoes_hora AS nu_prescricoes,
+    H.nu_crms_distintos_hora AS nu_crms_diferentes,
+    CAST(M.mediana_hora_mes AS DECIMAL(10,2)) AS mediana_mensal_horario
+INTO temp_CGUSC.fp.crm_hourly_profile_anomalo
+FROM #base_horaria H
+INNER JOIN temp_CGUSC.fp.crm_daily_profile D ON D.cnpj = H.cnpj AND D.dt_janela = H.dt_janela
+INNER JOIN #medianas_base M ON M.cnpj = H.cnpj AND M.competencia = H.competencia AND M.hr_janela = H.hr_janela
+WHERE D.is_anomalo = 1;
+
+CREATE CLUSTERED INDEX IDX_HourlyAnomalo ON temp_CGUSC.fp.crm_hourly_profile_anomalo(cnpj, dt_janela, hr_janela);
 GO
 
 

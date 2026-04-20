@@ -7,11 +7,11 @@ import { useChartTheme } from '@/config/chartTheme';
 
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
-import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent } from 'echarts/components';
+import { BarChart, LineChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-use([BarChart, GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
+use([BarChart, LineChart, GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent, LegendComponent, CanvasRenderer]);
 
 const props = defineProps({
   cnpj: {
@@ -104,6 +104,85 @@ const chartOptionDaily = computed(() => ({
     }
   ],
 }));
+
+// --- DRILL-DOWN HORÁRIO ---
+const selectedDay = ref(null);
+const hourlyPoints = ref([]);
+const hourlyLoading = ref(false);
+
+async function onChartClick(params) {
+  const day = crmDailyProfile.value?.days?.[params.dataIndex];
+  if (!day || !day.is_anomalo) {
+    selectedDay.value = null;
+    return;
+  }
+  
+  selectedDay.value = day;
+  hourlyLoading.value = true;
+  hourlyPoints.value = [];
+  
+  try {
+    const res = await cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj, day.dt_janela);
+    hourlyPoints.value = res?.points || [];
+  } catch (e) {
+    console.error("Erro ao carregar detalhamento horário:", e);
+  } finally {
+    hourlyLoading.value = false;
+  }
+}
+
+const chartOptionHourly = computed(() => {
+  if (!selectedDay.value) return {};
+  
+  // Garantir que temos 24 pontos (0-23)
+  const fullPoints = Array.from({ length: 24 }, (_, h) => {
+    const found = hourlyPoints.value.find(p => p.hr_janela === h);
+    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_mensal_horario: 0 };
+  });
+
+  return {
+    ...chartTheme.value,
+    legend: { show: true, bottom: 0, icon: 'circle', itemStyle: { opacity: 0.8 } },
+    grid: { top: 40, right: 20, bottom: 60, left: 50 },
+    xAxis: {
+      type: 'category',
+      data: fullPoints.map(p => `${String(p.hr_janela).padStart(2, '0')}h`),
+      axisLabel: { fontSize: 10 }
+    },
+    yAxis: { type: 'value', minInterval: 1 },
+    tooltip: { trigger: 'axis' },
+    series: [
+      {
+        name: 'Prescrições (Volume)',
+        type: 'bar',
+        data: fullPoints.map(p => p.nu_prescricoes),
+        itemStyle: { color: '#ef4444', opacity: 0.7 }
+      },
+      {
+        name: 'CRMs Distintos',
+        type: 'line',
+        smooth: true,
+        data: fullPoints.map(p => p.nu_crms_diferentes),
+        lineStyle: { color: '#6366f1', width: 2 },
+        itemStyle: { color: '#6366f1' },
+        areaStyle: {
+          color: new (require('echarts/lib/util/graphic').LinearGradient)(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(99, 102, 241, 0.2)' },
+            { offset: 1, color: 'rgba(99, 102, 241, 0)' }
+          ])
+        }
+      },
+      {
+        name: 'Mediana Histórica (Hora)',
+        type: 'line',
+        step: 'start',
+        data: fullPoints.map(p => p.mediana_mensal_horario),
+        lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5, opacity: 0.6 },
+        symbol: 'none'
+      }
+    ]
+  };
+});
 
 // isRefreshing: há dados anteriores visíveis enquanto um novo fetch está em curso
 const isRefreshing = computed(() => prescritoresLoading.value && prescritoresData.value !== null);
@@ -562,7 +641,38 @@ defineExpose({
           :update-options="{ notMerge: true }"
           autoresize
           class="daily-dispensacao-chart"
+          @click="onChartClick"
         />
+
+        <!-- Detalhamento Horário (Drill-down) -->
+        <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in">
+          <div class="hourly-header">
+            <div class="hourly-title">
+              <i class="pi pi-clock" />
+              <span>Análise Horária: {{ formatarData(selectedDay.dt_janela) }}</span>
+              <span class="anomalo-badge">DIA ANÔMALO</span>
+            </div>
+            <button class="close-detail-btn" @click="selectedDay = null">
+              <i class="pi pi-times" />
+            </button>
+          </div>
+          
+          <div v-if="hourlyLoading" class="hourly-loading">
+            <i class="pi pi-spinner pi-spin"></i>
+            <span>Buscando registros horários...</span>
+          </div>
+          <div v-else class="hourly-body">
+            <p class="hourly-subtitle">
+              Este gráfico detalha a distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia, 
+              comparando o volume real com a diversidade de médicos e a mediana esperada para cada horário.
+            </p>
+            <VChart
+              :option="chartOptionHourly"
+              autoresize
+              class="hourly-chart"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- 3. TOP 20 CRMs (TABELA DETALHADA) -->
@@ -796,6 +906,90 @@ defineExpose({
   border-radius: 12px;
   border: 1px dashed var(--border-color);
 }
+.daily-dispensacao-chart {
+  height: 280px;
+  cursor: pointer;
+}
+
+/* Hourly Detail Styles */
+.hourly-detail-wrapper {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.hourly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.hourly-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.anomalo-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.5px;
+}
+
+.close-detail-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.close-detail-btn:hover {
+  background: var(--surface-hover);
+  color: #ef4444;
+}
+
+.hourly-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.hourly-chart {
+  height: 240px;
+}
+
+.hourly-loading {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .empty-icon {
   font-size: 3rem;
   margin-bottom: 1rem;

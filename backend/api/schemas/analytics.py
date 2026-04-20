@@ -277,6 +277,17 @@ class CrmDailyProfileResponse(BaseModel):
     cnpj: str
     days: List[CrmDailyProfileItem]
 
+class CrmHourlyPointSchema(BaseModel):
+    hr_janela: int
+    nu_prescricoes: int
+    nu_crms_diferentes: int
+    mediana_mensal_horario: float
+
+class CrmHourlyProfileResponse(BaseModel):
+    cnpj: str
+    dt_janela: date
+    points: List[CrmHourlyPointSchema]
+
 # ── Dados Cadastrais e Geográficos ─────────────────────
 class DadosFarmaciaSchema(BaseModel):
     cnpj: str

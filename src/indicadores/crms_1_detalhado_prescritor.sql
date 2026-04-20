@@ -340,7 +340,20 @@ CREATE CLUSTERED INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm(nu_cnpj, id_
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_diario;
 
-WITH alertas AS (
+WITH base_com_taxa AS (
+    SELECT
+        nu_cnpj,
+        nu_crm,
+        sg_uf_crm,
+        dt_dia,
+        nu_prescricoes_dia,
+        nu_minutos_dia,
+        CASE WHEN nu_minutos_dia = 0 THEN 999.0
+             ELSE CAST(nu_prescricoes_dia AS DECIMAL(10,2)) / (CAST(nu_minutos_dia AS DECIMAL(10,2)) / 60.0)
+        END AS taxa_dia
+    FROM #base_diaria_crm
+),
+alertas AS (
     SELECT
         nu_cnpj                                          AS cnpj,
         CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm   AS id_medico,
@@ -372,7 +385,7 @@ WITH alertas AS (
                           ELSE CAST(nu_minutos_dia / 60 AS VARCHAR(10)) + 'h ' + CAST(nu_minutos_dia % 60 AS VARCHAR(10)) + 'min' END +
                      ' (' + CAST(CAST(taxa_dia AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
         END AS descricao
-    FROM #base_diaria_crm
+    FROM base_com_taxa
     WHERE
         (nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0)
      OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6)

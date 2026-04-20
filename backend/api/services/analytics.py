@@ -1702,26 +1702,52 @@ class AnalyticsService:
         return CrmDailyProfileResponse(cnpj=cnpj, days=days)
 
     @staticmethod
-    def get_crm_hourly_profile(cnpj: str, dt_janela: date) -> CrmHourlyProfileResponse:
-        """Retorna o detalhamento horário (0-23h) para um dia específico (Drill-down)."""
-        try:
-            from database import engine as _engine
-            import pandas as pd
-            with _engine.connect() as conn:
-                pdf = pd.read_sql(
-                    text("SELECT hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_mensal_horario "
-                         "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
-                         "WHERE cnpj = :cnpj AND dt_janela = :dt_janela "
-                         "ORDER BY hr_janela"),
-                    conn,
-                    params={"cnpj": cnpj, "dt_janela": dt_janela},
-                )
-            
-            points = pdf.to_dict('records') if not pdf.empty else []
-            return CrmHourlyProfileResponse(cnpj=cnpj, dt_janela=dt_janela, points=points)
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar detalhamento horário '{cnpj}' em {dt_janela}: {e}")
-            return CrmHourlyProfileResponse(cnpj=cnpj, dt_janela=dt_janela, points=[])
+    def get_crm_hourly_profile(cnpj: str) -> CrmHourlyProfileResponse:
+        """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ com cache Parquet."""
+        import pandas as pd
+        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly.parquet")
+
+        df: pl.DataFrame | None = None
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df = pl.read_parquet(PARQUET_PATH)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet hourly '{cnpj}': {e}")
+
+        if df is None:
+            try:
+                from database import engine as _engine
+                os.makedirs(CRMS_DIR, exist_ok=True)
+                with _engine.connect() as conn:
+                    pdf = pd.read_sql(
+                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_mensal_horario "
+                             "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
+                             "WHERE cnpj = :cnpj "
+                             "ORDER BY dt_janela, hr_janela"),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                df = pl.from_pandas(pdf)
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"⚠️ Erro ao gerar parquet hourly '{cnpj}': {e}")
+                df = pl.DataFrame()
+
+        if df.is_empty():
+            return CrmHourlyProfileResponse(cnpj=cnpj, points=[])
+
+        points = [
+            {
+                "dt_janela":              str(r["dt_janela"])[:10],
+                "hr_janela":              int(r["hr_janela"]),
+                "nu_prescricoes":         int(r["nu_prescricoes"]),
+                "nu_crms_diferentes":     int(r["nu_crms_diferentes"]),
+                "mediana_mensal_horario": float(r["mediana_mensal_horario"]),
+            }
+            for r in df.iter_rows(named=True)
+        ]
+        return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=os.path.exists(PARQUET_PATH))
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

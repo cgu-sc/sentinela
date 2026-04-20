@@ -21,12 +21,15 @@ const props = defineProps({
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { prescritoresData, prescritoresLoading, prescritoresError, crmDailyProfile, crmDailyProfileLoading } = storeToRefs(cnpjDetailStore);
+const { prescritoresData, prescritoresLoading, prescritoresError, crmDailyProfile, crmDailyProfileLoading, crmHourlyProfile, crmHourlyProfileLoading } = storeToRefs(cnpjDetailStore);
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartRiskAccents } = useChartTheme();
 
 onMounted(() => {
-  if (props.cnpj) cnpjDetailStore.fetchCrmDailyProfile(props.cnpj);
+  if (props.cnpj) {
+    cnpjDetailStore.fetchCrmDailyProfile(props.cnpj);
+    cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj);
+  }
 });
 
 const dailyDates     = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.dt_janela));
@@ -62,14 +65,59 @@ const chartOptionDaily = computed(() => ({
   },
   tooltip: {
     trigger: 'item',
+    enterable: true,
+    padding: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     formatter: (p) => {
       const day = crmDailyProfile.value?.days?.[p.dataIndex];
-      if (!day) return p.name;
-      const pico = day.hr_pico != null
-        ? `<br>Pico: ${String(day.hr_pico).padStart(2,'0')}h — ${day.nu_prescricoes_hr_pico} presc.`
-        : '';
-      const flag = day.is_anomalo ? '<br><b style="color:#ef4444">⚠ Dia Anômalo</b>' : '';
-      return `<b>${p.name}</b><br>${p.value} prescrições${pico}<br>${day.nu_crms_distintos} CRMs distintos<br>Mediana: ${day.mediana_diaria?.toFixed(1)}x${flag}`;
+      if (!day) return '';
+      
+      // Busca pontos horários deste dia no cache global
+      const points = crmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
+      const hasPoints = points.length > 0;
+      
+      // Gera Sparkline (Mini Barras)
+      let sparklineHtml = '';
+      if (hasPoints) {
+        const maxVal = Math.max(...points.map(pt => pt.nu_prescricoes), 1);
+        const bars = Array.from({ length: 24 }, (_, h) => {
+           const pt = points.find(x => x.hr_janela === h);
+           const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
+           const isPico = pt && pt.hr_janela === day.hr_pico;
+           return `<div class="spark-bar ${isPico ? 'is-pico' : ''}" style="height: ${Math.max(hPerc, 2)}%"></div>`;
+        }).join('');
+        sparklineHtml = `<div class="tooltip-sparkline">${bars}</div>`;
+      }
+
+      const flagAnomalo = day.is_anomalo ? '<div class="tooltip-badge">⚠ ANOMALIA DETECTADA</div>' : '';
+      
+      return `
+        <div class="premium-tooltip">
+          <div class="tooltip-header">
+            <span class="tooltip-date">${formatarData(day.dt_janela)}</span>
+            ${flagAnomalo}
+          </div>
+          <div class="tooltip-stats">
+            <div class="stat-item">
+              <span class="stat-label">Total</span>
+              <span class="stat-val">${day.nu_prescricoes_dia} <small>presc.</small></span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Médicos</span>
+              <span class="stat-val">${day.nu_crms_distintos}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Pico</span>
+              <span class="stat-val">${String(day.hr_pico).padStart(2,'0')}h <small>(${day.nu_prescricoes_hr_pico})</small></span>
+            </div>
+          </div>
+          <div class="tooltip-divider"></div>
+          <div class="tooltip-chart-title">Distribuição Horária (0-23h)</div>
+          ${sparklineHtml || '<div class="no-data-hint">Clique para carregar detalhamento</div>'}
+          <div class="tooltip-footer">Clique para drill-down detalhado</div>
+        </div>
+      `;
     },
   },
   dataZoom: [
@@ -107,8 +155,6 @@ const chartOptionDaily = computed(() => ({
 
 // --- DRILL-DOWN HORÁRIO ---
 const selectedDay = ref(null);
-const hourlyPoints = ref([]);
-const hourlyLoading = ref(false);
 
 async function onChartClick(params) {
   const day = crmDailyProfile.value?.days?.[params.dataIndex];
@@ -117,26 +163,20 @@ async function onChartClick(params) {
     return;
   }
   
+  // Agora apenas selecionamos o dia. O computed chartOptionHourly cuidará de filtrar os pontos
+  // que já foram pré-carregados no store.
   selectedDay.value = day;
-  hourlyLoading.value = true;
-  hourlyPoints.value = [];
-  
-  try {
-    const res = await cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj, day.dt_janela);
-    hourlyPoints.value = res?.points || [];
-  } catch (e) {
-    console.error("Erro ao carregar detalhamento horário:", e);
-  } finally {
-    hourlyLoading.value = false;
-  }
 }
 
 const chartOptionHourly = computed(() => {
-  if (!selectedDay.value) return {};
+  if (!selectedDay.value || !crmHourlyProfile.value) return {};
   
+  const targetDate = selectedDay.value.dt_janela;
+  const pointsForDay = crmHourlyProfile.value.points.filter(p => p.dt_janela === targetDate);
+
   // Garantir que temos 24 pontos (0-23)
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
-    const found = hourlyPoints.value.find(p => p.hr_janela === h);
+    const found = pointsForDay.find(p => p.hr_janela === h);
     return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_mensal_horario: 0 };
   });
 
@@ -657,7 +697,7 @@ defineExpose({
             </button>
           </div>
           
-          <div v-if="hourlyLoading" class="hourly-loading">
+          <div v-if="crmHourlyProfileLoading" class="hourly-loading">
             <i class="pi pi-spinner pi-spin"></i>
             <span>Buscando registros horários...</span>
           </div>
@@ -1577,7 +1617,186 @@ input:checked + .toggle-slider:before {
 }
 .daily-dispensacao-chart {
   width: 100%;
-  height: 260px;
+  height: 280px;
+  cursor: pointer;
+}
+
+/* Premium Tooltip Styles */
+:deep(.premium-tooltip) {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  color: #fff;
+  min-width: 220px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+:deep(.tooltip-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+:deep(.tooltip-date) {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #f8fafc;
+}
+
+:deep(.tooltip-badge) {
+  background: #fef2f2;
+  color: #ef4444;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+:deep(.tooltip-stats) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+:deep(.stat-item) {
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.stat-label) {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+:deep(.stat-val) {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+:deep(.tooltip-divider) {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 8px 0;
+}
+
+:deep(.tooltip-chart-title) {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+:deep(.tooltip-sparkline) {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  padding: 4px 0;
+}
+
+:deep(.spark-bar) {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+  transition: all 0.2s;
+}
+
+:deep(.spark-bar.is-pico) {
+  background: #ef4444;
+}
+
+:deep(.tooltip-footer) {
+  margin-top: 8px;
+  font-size: 0.65rem;
+  color: #6366f1;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Hourly Detail Styles */
+.hourly-detail-wrapper {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.hourly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.hourly-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.anomalo-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.5px;
+}
+
+.close-detail-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.close-detail-btn:hover {
+  background: var(--surface-hover);
+  color: #ef4444;
+}
+
+.hourly-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.hourly-chart {
+  height: 240px;
+}
+
+.hourly-loading {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .chart-loading-badge {
   margin-left: 0.75rem;

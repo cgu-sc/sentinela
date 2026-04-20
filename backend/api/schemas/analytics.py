@@ -278,6 +278,7 @@ class CrmDailyProfileResponse(BaseModel):
     days: List[CrmDailyProfileItem]
 
 class CrmHourlyPointSchema(BaseModel):
+    dt_janela: date
     hr_janela: int
     nu_prescricoes: int
     nu_crms_diferentes: int
@@ -285,8 +286,8 @@ class CrmHourlyPointSchema(BaseModel):
 
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str
-    dt_janela: date
     points: List[CrmHourlyPointSchema]
+    from_cache: bool = False
 
 # ── Dados Cadastrais e Geográficos ─────────────────────
 class DadosFarmaciaSchema(BaseModel):

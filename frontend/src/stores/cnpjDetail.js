@@ -46,6 +46,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     crmDailyProfileLoading: false,
     crmDailyProfileLoaded:  null,
 
+    // ── Perfil Horário de Detalhamento (Drill-down pré-carregado) ─────────────
+    crmHourlyProfile:        null,
+    crmHourlyProfileLoading: false,
+    crmHourlyProfileLoaded:  null,
+
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos: new Map(),
 
@@ -189,14 +194,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchCrmHourlyProfile(cnpj, date) {
-      if (!cnpj || !date) return null;
+    async fetchCrmHourlyProfile(cnpj) {
+      if (!cnpj || this.crmHourlyProfileLoaded === cnpj) return;
+      this.crmHourlyProfileLoading = true;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj, date));
-        return data; // Retorna os pontos para uso no componente
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj));
+        this.crmHourlyProfile       = data;
+        this.crmHourlyProfileLoaded = cnpj;
       } catch (e) {
         console.error('Erro ao buscar perfil horário:', e);
-        return null;
+      } finally {
+        this.crmHourlyProfileLoading = false;
       }
     },
 

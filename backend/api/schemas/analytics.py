@@ -283,7 +283,7 @@ class CrmHourlyPointSchema(BaseModel):
     hr_janela: int
     nu_prescricoes: int
     nu_crms_diferentes: int
-    mediana_mensal_horario: float
+    mediana_hora: float
 
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str

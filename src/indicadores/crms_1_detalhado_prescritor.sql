@@ -967,21 +967,20 @@ GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora), CAST(data_hora AS DATE), DATEP
 
 CREATE CLUSTERED INDEX IDX_BH ON #base_horaria(cnpj, dt_janela, hr_janela);
 
--- 3. Cálculo de Medianas e Detecção de Surtos (Regra: 5x Mediana e Min 10)
+-- 3. Cálculo de Medianas e Detecção de Surtos (Regra: 7x Mediana e Min 10)
 DROP TABLE IF EXISTS #mediana_hora;
 SELECT DISTINCT
     cnpj, competencia, hr_janela,
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_hora)
-        OVER (PARTITION BY cnpj, competencia, hr_janela) AS mediana_hora_mes
+        OVER (PARTITION BY cnpj, (competencia / 100), ((competencia % 100 - 1) / 3), hr_janela) AS mediana_hora
 INTO #mediana_hora
 FROM #base_horaria;
 
-DROP TABLE IF EXISTS #anomalias_horarias;
 SELECT
     H.*,
-    CAST(M.mediana_hora_mes AS DECIMAL(10,2)) AS mediana_hora_mes,
+    CAST(M.mediana_hora AS DECIMAL(10,2)) AS mediana_hora,
     CASE WHEN H.nu_prescricoes_hora >= 10 
-          AND H.nu_prescricoes_hora >= CAST(M.mediana_hora_mes AS DECIMAL(10,2)) * 7 
+          AND H.nu_prescricoes_hora >= CAST(M.mediana_hora AS DECIMAL(10,2)) * 7 
          THEN 1 ELSE 0 END AS is_anomalo_hora
 INTO #anomalias_horarias
 FROM #base_horaria H
@@ -1002,7 +1001,7 @@ DROP TABLE IF EXISTS #mediana_diaria;
 SELECT DISTINCT
     cnpj, competencia,
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
-        OVER (PARTITION BY cnpj, competencia) AS mediana_diaria
+        OVER (PARTITION BY cnpj, (competencia / 100), ((competencia % 100 - 1) / 3)) AS mediana_diaria
 INTO #mediana_diaria
 FROM #totais_diarios;
 
@@ -1050,7 +1049,7 @@ SELECT
     H.hr_janela,
     H.nu_prescricoes_hora AS nu_prescricoes,
     H.nu_crms_distintos_hora AS nu_crms_diferentes,
-    H.mediana_hora_mes AS mediana_mensal_horario,
+    H.mediana_hora AS mediana_hora,
     H.is_anomalo_hora
 INTO temp_CGUSC.fp.crm_hourly_profile_anomalo
 FROM #anomalias_horarias H
@@ -1066,14 +1065,14 @@ SELECT
     cnpj, competencia, dt_janela AS dt_alerta, hr_janela,
     nu_prescricoes_hora AS nu_prescricoes,
     nu_crms_distintos_hora AS nu_crms,
-    mediana_hora_mes,
-    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora_mes, 0) AS DECIMAL(10,1)) AS multiplicador,
+    mediana_hora,
+    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador,
     'Surto de Volume' AS nivel,
     CAST(
         'Surto de Volume: ' + CAST(nu_prescricoes_hora AS VARCHAR(10)) + 
         ' prescrições às ' + RIGHT('0' + CAST(hr_janela AS VARCHAR(2)), 2) + 'h (' + 
-        CAST(CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora_mes, 0) AS DECIMAL(10,1)) AS VARCHAR(10)) + 
-        'x acima da mediana da farmácia: ' + CAST(CAST(mediana_hora_mes AS DECIMAL(10,1)) AS VARCHAR(10)) + '/h).'
+        CAST(CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS VARCHAR(10)) + 
+        'x acima da mediana trimestral da farmácia: ' + CAST(CAST(mediana_hora AS DECIMAL(10,1)) AS VARCHAR(10)) + '/h).'
     AS VARCHAR(800)) AS descricao
 INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial
 FROM #anomalias_horarias

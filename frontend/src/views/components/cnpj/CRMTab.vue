@@ -208,7 +208,7 @@ const chartOptionHourly = computed(() => {
   // 24 pontos garantidos (0-23)
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
-    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_mensal_horario: 0 };
+    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0 };
   });
 
   // Cores das barras: pico em vermelho cheio, demais em gradiente temático
@@ -332,10 +332,10 @@ const chartOptionHourly = computed(() => {
         emphasis: { itemStyle: { opacity: 1 } },
       },
       {
-        name: 'Mediana Mensal (Hora)',
+        name: 'Mediana Referência (Hora)',
         type: 'line',
         step: 'middle',
-        data: fullPoints.map(p => p.mediana_mensal_horario),
+        data: fullPoints.map(p => p.mediana_hora),
         lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
         symbol: 'none',
         emphasis: { disabled: true },

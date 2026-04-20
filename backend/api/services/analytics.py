@@ -1657,30 +1657,60 @@ class AnalyticsService:
 
         # ── 7. Alertas diários — injeta em cada médico ────────────────────────
         ALERTAS_DIARIOS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_alertas_diarios.parquet")
-        alertas_por_medico: dict[str, list[dict]] = {}
+        df_ad: pl.DataFrame | None = None
+        
+        # Tenta carregar do cache parquet
         if os.path.exists(ALERTAS_DIARIOS_PATH):
             try:
                 df_ad = pl.read_parquet(ALERTAS_DIARIOS_PATH)
-                if comp_ini:
-                    df_ad = df_ad.filter(
-                        pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 7).str.replace("-", "").cast(pl.Int32) >= comp_ini
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet alertas diários '{cnpj}': {e}")
+        
+        # Se não houver cache, busca no banco e salva (Auto-Healing)
+        if df_ad is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf_ad = pd.read_sql(
+                        text("SELECT id_medico, competencia, dt_alerta, nivel, descricao, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
+                             " FROM temp_CGUSC.fp.alertas_crm_concentracao WHERE cnpj = :cnpj"
+                             " ORDER BY dt_alerta, id_medico"),
+                        conn,
+                        params={"cnpj": cnpj},
                     )
-                if comp_fim:
-                    df_ad = df_ad.filter(
-                        pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 7).str.replace("-", "").cast(pl.Int32) <= comp_fim
-                    )
-                for row in df_ad.iter_rows(named=True):
-                    mid = row["id_medico"]
-                    alertas_por_medico.setdefault(mid, []).append({
-                        "dt":       str(row["dt_alerta"]),
-                        "nivel":    row["nivel"],
-                        "descricao": row["descricao"],
-                        "nu_prescricoes": row["nu_prescricoes_dia"],
-                        "nu_minutos":     row["nu_minutos_dia"],
-                        "taxa_hora":      float(row["taxa_hora"] or 0),
-                    })
-            except Exception:
-                pass
+                if not pdf_ad.empty:
+                    df_ad = pl.from_pandas(pdf_ad)
+                    # Salva no cache para próximas chamadas do mesmo CNPJ
+                    os.makedirs(CRMS_DIR, exist_ok=True)
+                    df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
+                else:
+                    df_ad = pl.DataFrame()
+            except Exception as e:
+                print(f"❌ Erro ao buscar alertas diários do banco para {cnpj}: {e}")
+                df_ad = pl.DataFrame()
+
+        alertas_por_medico: dict[str, list[dict]] = {}
+        if not df_ad.is_empty():
+            # Filtro de período no DataFrame de alertas
+            if comp_ini:
+                df_ad = df_ad.filter(
+                    pl.col("competencia").cast(pl.Int32) >= comp_ini
+                )
+            if comp_fim:
+                df_ad = df_ad.filter(
+                    pl.col("competencia").cast(pl.Int32) <= comp_fim
+                )
+                
+            for row in df_ad.iter_rows(named=True):
+                mid = row["id_medico"]
+                alertas_por_medico.setdefault(mid, []).append({
+                    "dt":       str(row["dt_alerta"]),
+                    "nivel":    row["nivel"],
+                    "descricao": row["descricao"],
+                    "nu_prescricoes": row["nu_prescricoes_dia"],
+                    "nu_minutos":     row["nu_minutos_dia"],
+                    "taxa_hora":      float(row["taxa_hora"] or 0),
+                })
 
         for m in crms_interesse_list:
             m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])

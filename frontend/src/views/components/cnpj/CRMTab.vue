@@ -32,10 +32,12 @@ onMounted(() => {
 const dailyDates     = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.dt_janela));
 const dailyValues    = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.nu_prescricoes_dia));
 const dailyAnomalous = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.is_anomalo === 1));
+const dailyMedians   = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.mediana_diaria ?? 0));
 const dailyMediana   = computed(() => {
   const days = crmDailyProfile.value?.days ?? [];
   if (!days.length) return 0;
-  return days[0].mediana_diaria ?? 0;
+  // Para exibir no KPI ou Label geral, pegamos a mediana do mês mais recente
+  return days[days.length - 1].mediana_diaria ?? 0;
 });
 
 const chartOptionDaily = computed(() => ({
@@ -74,20 +76,30 @@ const chartOptionDaily = computed(() => ({
     { type: 'inside', start: 80, end: 100 },
     { type: 'slider', start: 80, end: 100, height: 20, bottom: 8, handleSize: 14 },
   ],
-  series: [{
-    type: 'bar',
-    data: dailyValues.value.map((v, i) => ({
-      value: v,
-      itemStyle: { color: dailyAnomalous.value[i] ? '#ef4444' : 'var(--primary-color)', opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 },
-    })),
-    markLine: dailyMediana.value > 0 ? {
-      silent: true,
+  series: [
+    {
+      name: 'Prescrições',
+      type: 'bar',
+      data: dailyValues.value.map((v, i) => ({
+        value: v,
+        itemStyle: { color: dailyAnomalous.value[i] ? '#ef4444' : 'var(--primary-color)', opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 },
+      })),
+    },
+    {
+      name: 'Mediana (Mensal)',
+      type: 'line',
+      step: 'end',
       symbol: 'none',
-      lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
-      label: { formatter: `Mediana: ${dailyMediana.value.toFixed(1)}`, fontSize: 11 },
-      data: [{ yAxis: dailyMediana.value }],
-    } : undefined,
-  }],
+      data: dailyMedians.value,
+      lineStyle: {
+        color: '#f59e0b',
+        type: 'dashed',
+        width: 1.5,
+        opacity: 0.8
+      },
+      z: 10
+    }
+  ],
 }));
 
 // isRefreshing: há dados anteriores visíveis enquanto um novo fetch está em curso

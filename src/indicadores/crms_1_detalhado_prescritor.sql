@@ -711,6 +711,25 @@ GO
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-31';
 
+-- ============================================================================
+-- OTIMIZAÇÃO: Scan Único na tabela de movimentação
+-- Evita ler a tabela gigante duas vezes para cálculos de volume e CRMs únicos.
+-- ============================================================================
+DROP TABLE IF EXISTS #mov_daily_pre_base;
+
+SELECT
+    cnpj,
+    data_hora,
+    crm,
+    num_autorizacao
+INTO #mov_daily_pre_base
+FROM temp_CGUSC.fp.teste_mov_SC
+WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
+  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR';
+
+CREATE CLUSTERED INDEX IDX_TempMov ON #mov_daily_pre_base(cnpj, data_hora);
+
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_daily_profile;
 
 WITH base_horaria AS (
@@ -720,9 +739,7 @@ WITH base_horaria AS (
         CAST(data_hora AS DATE)                   AS dt_janela,
         DATEPART(HOUR, data_hora)                 AS hr_janela,
         COUNT(DISTINCT num_autorizacao)           AS nu_prescricoes_hora
-    FROM temp_CGUSC.fp.teste_mov_SC
-    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-      AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
+    FROM #mov_daily_pre_base
     GROUP BY cnpj,
              YEAR(data_hora), MONTH(data_hora),
              CAST(data_hora AS DATE),
@@ -745,7 +762,7 @@ pico_horario AS (
         nu_prescricoes_hora      AS nu_prescricoes_hr_pico,
         ROW_NUMBER() OVER (
             PARTITION BY cnpj, dt_janela
-            ORDER BY nu_prescricoes_hora DESC
+            ORDER BY nu_prescricoes_hora DESC, hr_janela ASC
         )                        AS rn
     FROM base_horaria
 ),
@@ -754,16 +771,15 @@ crms_distintos_dia AS (
         cnpj,
         CAST(data_hora AS DATE)  AS dt_janela,
         COUNT(DISTINCT crm)      AS nu_crms_distintos
-    FROM temp_CGUSC.fp.teste_mov_SC
-    WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-      AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR'
+    FROM #mov_daily_pre_base
     GROUP BY cnpj, CAST(data_hora AS DATE)
 ),
 mediana_por_farmacia AS (
     SELECT DISTINCT
         cnpj,
+        competencia,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
-            OVER (PARTITION BY cnpj) AS mediana_diaria
+            OVER (PARTITION BY cnpj, competencia) AS mediana_diaria
     FROM totais_diarios
 )
 SELECT
@@ -786,7 +802,7 @@ SELECT
     END                                            AS is_anomalo
 INTO temp_CGUSC.fp.crm_daily_profile
 FROM totais_diarios T
-INNER JOIN mediana_por_farmacia M ON M.cnpj = T.cnpj
+INNER JOIN mediana_por_farmacia M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
 INNER JOIN pico_horario         P ON P.cnpj = T.cnpj
                                  AND P.dt_janela = T.dt_janela
                                  AND P.rn = 1

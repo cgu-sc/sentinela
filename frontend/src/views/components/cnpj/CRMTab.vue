@@ -32,10 +32,19 @@ onMounted(() => {
   }
 });
 
-const dailyDates     = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.dt_janela));
-const dailyValues    = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.nu_prescricoes_dia));
-const dailyAnomalous = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.is_anomalo === 1));
-const dailyMedians   = computed(() => (crmDailyProfile.value?.days ?? []).map(d => d.mediana_diaria ?? 0));
+const filterDailyOnlyAnomalous = ref(false);
+
+const filteredDailyDays = computed(() => {
+  const days = crmDailyProfile.value?.days ?? [];
+  if (!filterDailyOnlyAnomalous.value) return days;
+  return days.filter(d => d.is_anomalo === 1);
+});
+
+const dailyDates     = computed(() => filteredDailyDays.value.map(d => d.dt_janela));
+const dailyValues    = computed(() => filteredDailyDays.value.map(d => d.nu_prescricoes_dia));
+const dailyAnomalous = computed(() => filteredDailyDays.value.map(d => d.is_anomalo === 1));
+const dailyMedians   = computed(() => filteredDailyDays.value.map(d => d.mediana_diaria ?? 0));
+
 const dailyMediana   = computed(() => {
   const days = crmDailyProfile.value?.days ?? [];
   if (!days.length) return 0;
@@ -43,107 +52,118 @@ const dailyMediana   = computed(() => {
   return days[days.length - 1].mediana_diaria ?? 0;
 });
 
-const chartOptionDaily = computed(() => ({
-  ...chartTheme.value,
-  animation: false,
-  grid: { top: 32, right: 20, bottom: 80, left: 50, containLabel: false },
-  xAxis: {
-    type: 'category',
-    data: dailyDates.value,
-    axisLabel: {
-      formatter: (v) => v.slice(0, 7),
-      interval: Math.floor(dailyDates.value.length / 24),
-      fontSize: 11,
-    },
-    axisLine: { lineStyle: { color: chartTheme.value.border } },
-  },
-  yAxis: {
-    type: 'value',
-    minInterval: 1,
-    axisLabel: { fontSize: 11 },
-    splitLine: { lineStyle: { color: chartTheme.value.grid } },
-  },
-  tooltip: {
-    trigger: 'item',
-    backgroundColor: chartTheme.value.tooltip,
-    borderColor: chartTheme.value.tooltipBorder,
-    borderWidth: 1,
-    padding: [12, 16],
-    confine: true, // Impede que o tooltip saia dos limites do gráfico
-    textStyle: { color: chartTheme.value.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
-    shadowBlur: 10,
-    shadowColor: 'rgba(0,0,0,0.15)',
-    formatter: (p) => {
-      const day = crmDailyProfile.value?.days?.[p.dataIndex];
-      if (!day) return '';
-      
-      const c = chartTheme.value;
-      const points = crmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
-      
-      // Gera Sparkline (Mini Barras)
-      let sparklineHtml = '';
-      if (points.length > 0) {
-        const maxVal = Math.max(...points.map(pt => pt.nu_prescricoes), 1);
-        const bars = Array.from({ length: 24 }, (_, h) => {
-           const pt = points.find(x => x.hr_janela === h);
-           const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
-           const isPico = pt && pt.hr_janela === day.hr_pico;
-           const color = isPico ? '#ef4444' : 'rgba(255,255,255,0.2)';
-           return `<div style="flex:1; height:${Math.max(hPerc, 2)}%; background:${color}; border-radius:1px;"></div>`;
-        }).join('');
-        sparklineHtml = `
-          <div style="margin-top:10px; border-top:1px solid ${c.tooltipBorder}; padding-top:10px;">
-            <div style="font-size:10px; opacity:.6; letter-spacing:.04em; text-transform:uppercase; margin-bottom:6px; text-align:center;">Distribuição Horária</div>
-            <div style="display:flex; align-items:flex-end; gap:2px; height:40px;">${bars}</div>
-          </div>`;
-      }
+const chartOptionDaily = computed(() => {
+  const totalDays = dailyDates.value.length;
+  // Exibir inicialmente os últimos 180 dias (ou o total se for menor)
+  const windowSize = Math.min(totalDays, 180);
+  const startZoom = totalDays > 0 ? Math.max(0, 100 - (windowSize / totalDays) * 100) : 0;
+  
+  // Limites de Span para forçar entre 20 e 180 barras visíveis
+  const minSpan = totalDays > 20 ? (20 / totalDays) * 100 : null;
+  const maxSpan = totalDays > 180 ? (180 / totalDays) * 100 : null;
 
-      const flagAnomalo = day.is_anomalo 
-        ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:800; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ ANOMALIA</span>` 
-        : '';
-      
-      return `
-        <div style="color: ${c.tooltipText}; min-width: 200px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span style="font-weight:700; font-size:14px;">${formatarData(day.dt_janela)}</span>
-            ${flagAnomalo}
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume Total</span>
-              <span style="font-weight:700; font-size:13px;">${day.nu_prescricoes_dia} <small>presc.</small></span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
-              <span style="font-weight:700; font-size:13px;">${day.nu_crms_distintos}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Horário de Pico</span>
-              <span style="font-weight:700; font-size:13px;">${String(day.hr_pico).padStart(2,'0')}h <small style="color:${day.is_anomalo ? '#ef4444' : c.muted}">(${day.nu_prescricoes_hr_pico})</small></span>
-            </div>
-          </div>
-          ${sparklineHtml}
-          <div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>
-        </div>
-      `;
+  return {
+    ...chartTheme.value,
+    animation: false,
+    grid: { top: 32, right: 20, bottom: 80, left: 50, containLabel: false },
+    xAxis: {
+      type: 'category',
+      data: dailyDates.value,
+      axisLabel: {
+        formatter: (v) => v.slice(0, 7),
+        interval: Math.floor(dailyDates.value.length / 24),
+        fontSize: 11,
+      },
+      axisLine: { lineStyle: { color: chartTheme.value.border } },
     },
-  },
-  dataZoom: [
-    { type: 'inside', start: 80, end: 100 },
-    { type: 'slider', start: 80, end: 100, height: 20, bottom: 8, handleSize: 14 },
-  ],
-  series: [
-    {
-      name: 'Prescrições',
-      type: 'bar',
-      data: dailyValues.value.map((v, i) => ({
-        value: v,
-        itemStyle: { 
-          color: dailyAnomalous.value[i] ? '#ef4444' : chartRiskAccents.value.primary, 
-          opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 
-        },
-      })),
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { fontSize: 11 },
+      splitLine: { lineStyle: { color: chartTheme.value.grid } },
     },
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: chartTheme.value.tooltip,
+      borderColor: chartTheme.value.tooltipBorder,
+      borderWidth: 1,
+      padding: [12, 16],
+      confine: true,
+      textStyle: { color: chartTheme.value.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      shadowBlur: 10,
+      shadowColor: 'rgba(0,0,0,0.15)',
+      formatter: (p) => {
+        const day = filteredDailyDays.value?.[p.dataIndex];
+        if (!day) return '';
+        
+        const c = chartTheme.value;
+        const points = crmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
+        
+        let sparklineHtml = '';
+        if (points.length > 0) {
+          const maxVal = Math.max(...points.map(pt => pt.nu_prescricoes), 1);
+          const bars = Array.from({ length: 24 }, (_, h) => {
+             const pt = points.find(x => x.hr_janela === h);
+             const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
+             const isPico = pt && pt.hr_janela === day.hr_pico;
+             const color = isPico ? '#ef4444' : c.muted;
+             const opacity = hPerc > 0 ? 1 : 0.3;
+             return `<div style="flex:1; height:${Math.max(hPerc, 2)}%; background:${color}; border-radius:1px; opacity:${opacity};"></div>`;
+          }).join('');
+          sparklineHtml = `
+            <div style="margin-top:10px; border-top:1px solid ${c.tooltipBorder}; padding-top:10px;">
+              <div style="font-size:10px; opacity:.6; letter-spacing:.04em; text-transform:uppercase; margin-bottom:6px; text-align:center;">Distribuição Horária</div>
+              <div style="display:flex; align-items:flex-end; gap:2px; height:40px;">${bars}</div>
+            </div>`;
+        }
+
+        const flagAnomalo = day.is_anomalo 
+          ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:800; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ ANOMALIA</span>` 
+          : '';
+        
+        return `
+          <div style="color: ${c.tooltipText}; min-width: 200px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <span style="font-weight:700; font-size:14px;">${formatarData(day.dt_janela)}</span>
+              ${flagAnomalo}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume Total</span>
+                <span style="font-weight:700; font-size:13px;">${day.nu_prescricoes_dia} <small>presc.</small></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
+                <span style="font-weight:700; font-size:13px;">${day.nu_crms_distintos}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Horário de Pico</span>
+                <span style="font-weight:700; font-size:13px;">${String(day.hr_pico).padStart(2,'0')}h <small style="color:${day.is_anomalo ? '#ef4444' : c.muted}">(${day.nu_prescricoes_hr_pico})</small></span>
+              </div>
+            </div>
+            ${sparklineHtml}
+            <div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>
+          </div>
+        `;
+      },
+    },
+    dataZoom: [
+      { type: 'inside', start: startZoom, end: 100, minSpan, maxSpan },
+      { type: 'slider', start: startZoom, end: 100, height: 20, bottom: 8, handleSize: 14, minSpan, maxSpan },
+    ],
+    series: [
+      {
+        name: 'Prescrições',
+        type: 'bar',
+        barMaxWidth: 40,
+        data: dailyValues.value.map((v, i) => ({
+          value: v,
+          itemStyle: { 
+            color: dailyAnomalous.value[i] ? '#ef4444' : chartRiskAccents.value.primary, 
+            opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 
+          },
+        })),
+      },
     {
       name: 'Mediana (Mensal)',
       type: 'line',
@@ -159,13 +179,14 @@ const chartOptionDaily = computed(() => ({
       z: 10
     }
   ],
-}));
+};
+});
 
 // --- DRILL-DOWN HORÁRIO ---
 const selectedDay = ref(null);
 
 async function onChartClick(params) {
-  const day = crmDailyProfile.value?.days?.[params.dataIndex];
+  const day = filteredDailyDays.value?.[params.dataIndex];
   if (!day || !day.is_anomalo) {
     selectedDay.value = null;
     return;
@@ -179,58 +200,145 @@ async function onChartClick(params) {
 const chartOptionHourly = computed(() => {
   if (!selectedDay.value || !crmHourlyProfile.value) return {};
   
+  const c = chartTheme.value;
   const targetDate = selectedDay.value.dt_janela;
   const pointsForDay = crmHourlyProfile.value.points.filter(p => p.dt_janela === targetDate);
+  const hrPico = selectedDay.value.hr_pico;
 
-  // Garantir que temos 24 pontos (0-23)
+  // 24 pontos garantidos (0-23)
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
     return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_mensal_horario: 0 };
   });
 
+  // Cores das barras: pico em vermelho cheio, demais em gradiente temático
+  const barColors = fullPoints.map(p => {
+    if (p.hr_janela === hrPico && p.nu_prescricoes > 0) {
+      return {
+        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [
+          { offset: 0, color: '#ef4444' },
+          { offset: 1, color: 'rgba(239, 68, 68, 0.4)' }
+        ]
+      };
+    }
+    return {
+      type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+      colorStops: [
+        { offset: 0, color: 'rgba(239, 68, 68, 0.65)' },
+        { offset: 1, color: 'rgba(239, 68, 68, 0.15)' }
+      ]
+    };
+  });
+
   return {
-    ...chartTheme.value,
-    legend: { show: true, bottom: 0, icon: 'circle', itemStyle: { opacity: 0.8 } },
-    grid: { top: 40, right: 20, bottom: 60, left: 50 },
+    backgroundColor: c.bg,
+    animation: true,
+    animationDuration: 600,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+
+    legend: {
+      top: 6,
+      left: 'center',
+      textStyle: { color: c.muted, fontSize: 11, fontWeight: 600 },
+      itemGap: 20,
+      itemWidth: 12,
+      itemHeight: 8,
+    },
+
+    grid: { top: 44, left: 54, right: 20, bottom: 42, containLabel: false },
+
     xAxis: {
       type: 'category',
       data: fullPoints.map(p => `${String(p.hr_janela).padStart(2, '0')}h`),
-      axisLabel: { fontSize: 10 }
+      axisLine:  { lineStyle: { color: c.grid } },
+      axisTick:  { show: false },
+      axisLabel: {
+        color: c.muted,
+        fontSize: 10,
+        fontWeight: 600,
+        fontFamily: 'Inter, sans-serif',
+        interval: 1,
+        formatter: (v, i) => (i % 2 === 0 ? v : ''), // Mostra apenas horas pares para não poluir
+      },
     },
-    yAxis: { type: 'value', minInterval: 1 },
-    tooltip: { trigger: 'axis' },
+
+    yAxis: [
+      {
+        type: 'value',
+        minInterval: 1,
+        axisLine:  { show: false },
+        axisTick:  { show: false },
+        splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
+        axisLabel: { color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif' },
+      },
+    ],
+
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      padding: [12, 16],
+      confine: true,
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      shadowBlur: 10,
+      shadowColor: 'rgba(0,0,0,0.15)',
+      axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
+      formatter: (params) => {
+        const hora = params[0]?.axisValue ?? '';
+        const vol  = params.find(p => p.seriesName === 'Prescrições (Volume)')?.value ?? 0;
+        const crms = params.find(p => p.seriesName === 'CRMs Distintos')?.value ?? 0;
+        const med  = params.find(p => p.seriesName === 'Mediana Mensal (Hora)')?.value ?? 0;
+        const isPico = hora === `${String(hrPico).padStart(2,'0')}h`;
+        const alertaHtml = vol > med && med > 0
+          ? `<div style="margin-top:8px; font-size:12px; color:#ef4444; font-weight:600;">${(vol / med).toFixed(1)}× acima da mediana</div>`
+          : '';
+        return `
+          <div style="color:${c.tooltipText}; min-width:190px;">
+            <div style="font-weight:700; font-size:14px; margin-bottom:10px;">${hora}</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  <span style="width:10px;height:10px;border-radius:2px;background:#ef4444;display:inline-block;"></span>
+                  <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume</span>
+                </span>
+                <span style="font-weight:700; font-size:13px;">${vol} <small>presc.</small></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  <span style="width:10px;height:10px;border-radius:2px;background:#6366f1;display:inline-block;"></span>
+                  <span style="font-size:11px; opacity:.6; text-transform:uppercase;">CRMs Distintos</span>
+                </span>
+                <span style="font-weight:700; font-size:13px;">${crms} <small>médicos</small></span>
+              </div>
+              <div style="border-top:1px solid ${c.tooltipBorder}; padding-top:8px; margin-top:2px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Mediana Mensal</span>
+                <span style="font-weight:600; font-size:12px; color:#f59e0b;">${med.toFixed(1)}</span>
+              </div>
+            </div>
+            ${alertaHtml}
+          </div>`;
+      },
+    },
+
     series: [
       {
         name: 'Prescrições (Volume)',
         type: 'bar',
-        data: fullPoints.map(p => p.nu_prescricoes),
-        itemStyle: { color: '#ef4444', opacity: 0.7 }
+        barMaxWidth: 28,
+        data: fullPoints.map((p, i) => ({ value: p.nu_prescricoes, itemStyle: { color: barColors[i] } })),
+        emphasis: { itemStyle: { opacity: 1 } },
       },
       {
-        name: 'CRMs Distintos',
+        name: 'Mediana Mensal (Hora)',
         type: 'line',
-        smooth: true,
-        data: fullPoints.map(p => p.nu_crms_diferentes),
-        lineStyle: { color: '#6366f1', width: 2 },
-        itemStyle: { color: '#6366f1' },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(99, 102, 241, 0.2)' },
-              { offset: 1, color: 'rgba(99, 102, 241, 0)' }
-            ]
-          }
-        }
-      },
-      {
-        name: 'Mediana Histórica (Hora)',
-        type: 'line',
-        step: 'start',
+        step: 'middle',
         data: fullPoints.map(p => p.mediana_mensal_horario),
-        lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5, opacity: 0.6 },
-        symbol: 'none'
+        lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
+        symbol: 'none',
+        emphasis: { disabled: true },
       }
     ]
   };
@@ -672,16 +780,24 @@ defineExpose({
 
       <!-- 2. GRÁFICO — PERFIL DIÁRIO DE DISPENSAÇÕES -->
       <div class="section-container daily-chart-section">
-        <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem">
-          <i class="pi pi-chart-bar" />
-          <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
-          <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
-            <i class="pi pi-spinner pi-spin"></i> Carregando...
-          </span>
+        <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; width: 100%">
+          <div style="display: flex; align-items: center; gap: 0.75rem">
+            <i class="pi pi-chart-bar" />
+            <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
+            <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
+              <i class="pi pi-spinner pi-spin"></i> Carregando...
+            </span>
+          </div>
+          <div class="filter-controls" style="margin-right: 0.5rem">
+            <label class="filter-toggle">
+              <input type="checkbox" v-model="filterDailyOnlyAnomalous" />
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Apenas Anomalias</span>
+            </label>
+          </div>
         </div>
         <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.25rem; margin-bottom: 0.75rem">
-          Evolução diária de autorizações aprovadas. Dias com volume anômalo (acima de 4× a mediana e ≥ 20 prescrições) destacados em vermelho.
-          Use o controle abaixo do gráfico para navegar no histórico.
+          Evolução diária de autorizações. Dias com volume anômalo (acima de 4× a mediana e ≥ 20 prescrições) destacados em vermelho.
         </p>
         <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
           <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
@@ -715,8 +831,8 @@ defineExpose({
           </div>
           <div v-else class="hourly-body">
             <p class="hourly-subtitle">
-              Este gráfico detalha a distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia, 
-              comparando o volume real com a diversidade de médicos e a mediana esperada para cada horário.
+              Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia,
+              comparando o volume real com a mediana de cada horário.
             </p>
             <VChart
               :option="chartOptionHourly"
@@ -1068,6 +1184,8 @@ defineExpose({
 }
 
 .crm-table-footer {
+  background: var(--card-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
   display: flex;
   justify-content: center;
   padding: 0.35rem 0;
@@ -1078,12 +1196,14 @@ defineExpose({
   border: none;
   font-size: 0.65rem;
   font-weight: 500;
-  color: color-mix(in srgb, var(--text-color) 55%, transparent);
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 1rem;
+  gap: 0.4rem;
+  padding: 0.2rem 1rem;
   border-radius: 4px;
   transition: all 0.2s;
   opacity: 0.85;
@@ -1660,13 +1780,16 @@ input:checked + .toggle-slider:before {
 }
 
 .anomalo-badge {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
   font-size: 0.7rem;
+  font-weight: 700;
   padding: 2px 8px;
   border-radius: 99px;
   letter-spacing: 0.5px;
 }
+
 
 .close-detail-btn {
   background: none;

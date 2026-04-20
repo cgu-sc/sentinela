@@ -8,7 +8,8 @@ from ..schemas.analytics import (
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
-    PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse
+    PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
+    CrmHourlyTransactionsResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -149,6 +150,15 @@ def get_crm_daily_profile(cnpj: str):
 def get_crm_hourly_profile(cnpj: str):
     """Retorna o detalhamento horário de prescrições para todos os dias anômalos do CNPJ."""
     return AnalyticsService.get_crm_hourly_profile(cnpj)
+
+@router.get("/cnpj/{cnpj}/crm-hourly-transactions", response_model=CrmHourlyTransactionsResponse)
+def get_crm_hourly_transactions(
+    cnpj: str,
+    date_str: str = Query(..., description="Data da anomalia (YYYY-MM-DD)"),
+    hour: int = Query(..., description="Hora da anomalia (0-23)")
+):
+    """Retorna o raio-x (transação literal) de uma hora específica de surto/concentração."""
+    return AnalyticsService.get_crm_hourly_transactions(cnpj, date_str, hour)
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
 def get_indicadores_analise(

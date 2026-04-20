@@ -215,6 +215,28 @@ WHERE is_anomalo_hora = 1;
 
 CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial(cnpj, dt_alerta, hr_janela);
 
+-- 7. Tabela Final 4: alertas_cnpj_concentracao_sequencial_detalhe (Raio-X Sub-horário)
+-- Salva apenas o detalhamento das transações (minutos, segundos, numero nativo) das horas doentes.
+DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe;
+
+SELECT 
+    A.cnpj,
+    A.competencia,
+    A.dt_alerta AS dt_janela,
+    A.hr_janela,
+    M.data_hora,
+    M.num_autorizacao,
+    M.crm,
+    M.crm_uf
+INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe
+FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial A
+INNER JOIN #mov_surto_base M 
+    ON  M.cnpj = A.cnpj 
+    AND CAST(M.data_hora AS DATE) = A.dt_alerta 
+    AND DATEPART(HOUR, M.data_hora) = A.hr_janela;
+
+CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe(cnpj, dt_janela, hr_janela);
+
 -- ============================================================================
 -- PASSO 0.2: AGREGAÇÃO DIÁRIA POR MÉDICO / FARMÁCIA
 -- O grain mensal do #base_agregada dilui rajadas intra-mês quando há

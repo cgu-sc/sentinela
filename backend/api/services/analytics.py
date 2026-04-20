@@ -1871,7 +1871,89 @@ class AnalyticsService:
             }
             for r in df.iter_rows(named=True)
         ]
+
+        # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X) no background
+        # Isso garante que o cache de drill-down esteja pronto antes mesmo do auditor clicar
+        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly_tx.parquet")
+        if not os.path.exists(TX_PARQUET_PATH):
+            try:
+                from sqlalchemy import text
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf_tx = pd.read_sql(
+                        text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf "
+                             "FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe "
+                             "WHERE cnpj = :cnpj "
+                             "ORDER BY data_hora ASC, num_autorizacao ASC"),
+                        conn, params={"cnpj": cnpj}
+                    )
+                if not pdf_tx.empty:
+                    df_tx = pl.from_pandas(pdf_tx)
+                    df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"⚠️ Erro no auto-warming do parquet de transações horárias '{cnpj}': {e}")
+
         return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=os.path.exists(PARQUET_PATH))
+
+    @staticmethod
+    def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: int) -> "CrmHourlyTransactionsResponse":
+        """Busca as transações literais e sequenciais de uma hora anômala, utilizando cache Parquet."""
+        import pandas as pd
+        import polars as pl
+        from sqlalchemy import text
+        from database import engine as _engine
+        from api.schemas.analytics import CrmHourlyTransactionsResponse
+        
+        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly_tx.parquet")
+
+        df: pl.DataFrame | None = None
+
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df = pl.read_parquet(PARQUET_PATH)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet hourly_tx '{cnpj}': {e}")
+
+        if df is None:
+            try:
+                os.makedirs(CRMS_DIR, exist_ok=True)
+                with _engine.connect() as conn:
+                    # Busca TODAS as transações anômalas do CNPJ e salva em cache
+                    pdf = pd.read_sql(
+                        text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf "
+                             "FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe "
+                             "WHERE cnpj = :cnpj "
+                             "ORDER BY data_hora ASC, num_autorizacao ASC"),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                df = pl.from_pandas(pdf)
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"❌ Erro ao gerar parquet hourly_tx '{cnpj}': {e}")
+                df = pl.DataFrame()
+
+        if df.is_empty():
+            return CrmHourlyTransactionsResponse(transactions=[])
+
+        # O Filtro Rápido do Polars na memória (por Dia e Hora)
+        filtered_df = df.filter(
+            (pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str) &
+            (pl.col("hr_janela") == hour)
+        )
+
+        transactions = [
+            {
+                "data_hora": str(row["data_hora"]),
+                "num_autorizacao": str(row["num_autorizacao"]),
+                "crm": str(row["crm"]),
+                "crm_uf": str(row["crm_uf"])
+            }
+            for row in filtered_df.iter_rows(named=True)
+        ]
+        
+        return CrmHourlyTransactionsResponse(transactions=transactions)
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

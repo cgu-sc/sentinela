@@ -400,3 +400,17 @@ class IndicadorAnaliseResponse(BaseModel):
     municipios: List[IndicadorMunicipioRowSchema]
     cnpjs: List[IndicadorCnpjRowSchema]
 
+
+# ── Drill-down da Análise Horária (Raio-X de Transações) ─────────────────────────
+
+class CrmHourlyTransactionSchema(BaseModel):
+    """Uma prescrição real capturada no Data Mart de anomalias horárias."""
+    data_hora: str
+    num_autorizacao: str
+    crm: str
+    crm_uf: str
+
+class CrmHourlyTransactionsResponse(BaseModel):
+    """Lista cronológica de prescrições aprovadas numa hora anômala."""
+    transactions: List[CrmHourlyTransactionSchema]
+

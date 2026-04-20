@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from "@/composables/useFormatting";
 import { useChartTheme } from '@/config/chartTheme';
+import { API_ENDPOINTS } from '@/config/api';
 
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
@@ -184,17 +185,46 @@ const chartOptionDaily = computed(() => {
 
 // --- DRILL-DOWN HORÁRIO ---
 const selectedDay = ref(null);
+const selectedHourlyHour = ref(null);
+const hourlyTransactions = ref([]);
+const hourlyTransactionsLoading = ref(false);
 
 async function onChartClick(params) {
   const day = filteredDailyDays.value?.[params.dataIndex];
   if (!day || !day.is_anomalo) {
     selectedDay.value = null;
+    selectedHourlyHour.value = null;
     return;
   }
   
   // Agora apenas selecionamos o dia. O computed chartOptionHourly cuidará de filtrar os pontos
   // que já foram pré-carregados no store.
   selectedDay.value = day;
+  selectedHourlyHour.value = null;
+}
+
+async function onHourlyChartClick(params) {
+  const hourStr = params.name.replace('h', '');
+  const hourInt = parseInt(hourStr, 10);
+  
+  if (!selectedDay.value || isNaN(hourInt)) return;
+  if (!params.data || params.data.value === 0) return; // ignora barras vazias
+  
+  selectedHourlyHour.value = hourInt;
+  hourlyTransactionsLoading.value = true;
+  hourlyTransactions.value = [];
+  
+  try {
+    const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, selectedDay.value.dt_janela, hourInt);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Falha HTTP');
+    const data = await res.json();
+    hourlyTransactions.value = data.transactions || [];
+  } catch (err) {
+    console.error("Erro ao buscar Raio-X Sub-horário:", err);
+  } finally {
+    hourlyTransactionsLoading.value = false;
+  }
 }
 
 const chartOptionHourly = computed(() => {
@@ -880,7 +910,54 @@ defineExpose({
               :option="chartOptionHourly"
               autoresize
               class="hourly-chart"
+              @click="onHourlyChartClick"
+              style="cursor: pointer;"
             />
+
+            <!-- Tabela Raio-X Sub-horário (Transactions Literal) -->
+            <div v-if="selectedHourlyHour !== null" class="subhourly-detail-wrapper animate-fade-in" style="margin-top: 1.5rem; background: rgba(0,0,0,0.15); border: 1px solid var(--card-border); border-radius: 8px; padding: 1rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4 style="margin:0; font-size: 0.85rem; color: #ef4444; font-weight: 700; display:flex; align-items:center; gap:0.5rem">
+                  <i class="pi pi-list"></i> RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H
+                </h4>
+                <button class="close-detail-btn" @click="selectedHourlyHour = null" style="background: transparent; border: none; color: white; opacity: 0.5; cursor: pointer; padding: 5px;">
+                  <i class="pi pi-times" />
+                </button>
+              </div>
+              
+              <div v-if="hourlyTransactionsLoading" style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem">
+                <i class="pi pi-spinner pi-spin"></i> Decodificando literais de faturamento...
+              </div>
+              <div v-else-if="hourlyTransactions.length === 0" style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem">
+                Nenhuma transação encontrada no cache/banco.
+              </div>
+              <div v-else class="table-responsive" style="min-height: auto; max-height: 250px; overflow-y: auto; border: none;">
+                <table class="ind-table premium-table row-hover" style="font-size: 0.75rem; min-width: 100%;">
+                  <thead class="sticky-thead" style="background: rgba(30,30,30,0.9)">
+                    <tr>
+                      <th style="padding: 0.4rem; text-align: center; border-bottom: 1px solid var(--tabs-border);">Horário Exato</th>
+                      <th style="padding: 0.4rem;text-align: left; border-bottom: 1px solid var(--tabs-border);">Nº Autorização Nativa</th>
+                      <th style="padding: 0.4rem; text-align: left; border-bottom: 1px solid var(--tabs-border);">CRM Prescritor (UF)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(tx, idx) in hourlyTransactions" :key="idx">
+                      <td style="padding: 0.4rem; text-align: center; font-weight: 600; color: #f59e0b;">
+                        {{ tx.data_hora.split(' ')[1] || tx.data_hora }}
+                      </td>
+                      <td style="padding: 0.4rem; text-align: left; font-family: monospace; letter-spacing: 0.05em; font-size: 0.85rem; opacity: 0.9;">
+                        {{ tx.num_autorizacao }}
+                      </td>
+                      <td style="padding: 0.4rem; text-align: left;">
+                        <span class="issue-tag" style="background: rgba(255,255,255,0.05); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.1)">
+                          {{ tx.crm_uf }} {{ tx.crm }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>

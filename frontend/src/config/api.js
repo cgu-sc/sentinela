@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
   analyticsPrescritores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/prescritores`,
   analyticsCrmDailyProfile: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-daily-profile`,
   analyticsCrmHourlyProfile: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-hourly-profile`,
+  analyticsCrmHourlyTransactions: (cnpj, dateStr, hour) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-hourly-transactions?date_str=${dateStr}&hour=${hour}`,
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsCnpjLookup: `${BASE_URL}/api/v1/analytics/cnpj-lookup`,

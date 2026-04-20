@@ -286,12 +286,39 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
 
 
 def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
-    """Tarefa: Gera um parquet por CNPJ em sentinela_cache/crms/."""
-    import importlib, sys as _sys
-    if "exportar_crms" not in _sys.modules:
-        importlib.import_module("exportar_crms")
-    from exportar_crms import exportar_crms
-    exportar_crms(cnpjs=cnpjs)
+    """Tarefa: Gera todos os parquets (médicos, diário, horário, alertas) para os CNPJs selecionados."""
+    from api.services.analytics import AnalyticsService
+    
+    # Se não informar CNPJs, busca os que já processaram o índice de risco (ativos)
+    if not cnpjs:
+        try:
+            with engine.connect() as conn:
+                res = conn.execute(text("SELECT DISTINCT cnpj FROM temp_CGUSC.fp.matriz_risco_consolidada"))
+                cnpjs = [r[0] for r in res]
+        except Exception as e:
+            print(f"❌ Erro ao buscar lista de CNPJs: {e}")
+            return
+
+    total = len(cnpjs)
+    print(f"Sincronizando parquets de CRMs para {total} estabelecimento(s)...")
+
+    for i, cnpj in enumerate(cnpjs, 1):
+        try:
+            # 1. Lista de Médicos e Alertas Sequenciais (Gera 3 parquets: _prescritores, _alertas_diarios, _cnpj_alerts)
+            AnalyticsService.get_crm_data(cnpj)
+            
+            # 2. Histórico Diário (Gera _daily.parquet)
+            AnalyticsService.get_crm_daily_profile(cnpj)
+            
+            # 3. Detalhamento Horário de Anomalias (Gera _hourly.parquet)
+            AnalyticsService.get_crm_hourly_profile(cnpj)
+
+            if progress_callback:
+                p = int((i / total) * 100)
+                progress_callback(p)
+        except Exception as e:
+            print(f"\n⚠️  Erro ao sincronizar CNPJ {cnpj}: {e}")
+
     if progress_callback:
         progress_callback(100)
 

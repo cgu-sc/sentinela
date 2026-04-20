@@ -452,7 +452,7 @@ const formatCnpj = (v) => {
 }
 
 .tab-content {
-  padding: 2rem;
+  padding: 1.5rem;
   min-height: calc(100vh - 450px); /* Garante que a aba tenha uma altura mínima respeitável */
 }
 

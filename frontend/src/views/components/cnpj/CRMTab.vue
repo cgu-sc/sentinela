@@ -934,7 +934,11 @@ defineExpose({
                     <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="'>30 Prescrições/dia em todo o Brasil (Robô Oculto)'">
                       <i class="pi pi-globe"></i> >30 Presc/dia BR
                     </span>
-                    <span v-if="m.alerta2_tempo_concentrado || m.alerta2" class="issue-tag green-ok" v-tooltip.top="'Lançamentos em sequência (anomalia temporal)'">
+                    <span
+                      v-if="m.alerta2_tempo_concentrado || m.alerta2"
+                      class="issue-tag green-ok"
+                      v-tooltip.top="m.alerta2_tempo_concentrado || m.alerta2"
+                    >
                       <i class="pi pi-stopwatch"></i> Sequencial
                     </span>
                     <span v-if="m.flag_crm_invalido" class="issue-tag dark-red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
@@ -1172,7 +1176,7 @@ defineExpose({
 .content-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   width: 100%;
   align-items: stretch;
   transition: opacity 0.25s ease;
@@ -1530,7 +1534,7 @@ input:checked + .toggle-slider:before {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 1rem;
   width: 100%;
   box-sizing: border-box;
   overflow: hidden; /* Garante que o border-radius se aplique à tabela interna */
@@ -1744,9 +1748,6 @@ input:checked + .toggle-slider:before {
   text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color);
 }
 
-.daily-chart-section {
-  margin-bottom: 1.25rem;
-}
 .daily-dispensacao-chart {
   width: 100%;
   height: 280px;

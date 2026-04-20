@@ -1524,6 +1524,20 @@ class AnalyticsService:
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
 
+        df = df.with_columns(
+            pl.when(pl.col("alerta_concentracao_temporal").is_not_null())
+            .then(
+                pl.concat_str([
+                    pl.col("competencia").cast(pl.Utf8)
+                      .str.replace_all(r"(\d{4})(\d{2})", "${2}/${1}"),
+                    pl.lit(": "),
+                    pl.col("alerta_concentracao_temporal"),
+                ])
+            )
+            .otherwise(None)
+            .alias("alerta_temporal_com_periodo")
+        )
+
         df_med = (
             df.group_by("id_medico")
             .agg([
@@ -1535,7 +1549,7 @@ class AnalyticsService:
                 pl.max("nu_estabelecimentos").alias("qtd_estabelecimentos_atua"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
-                pl.col("alerta_concentracao_temporal").drop_nulls().first().alias("alerta2_tempo_concentrado"),
+                pl.col("alerta_temporal_com_periodo").drop_nulls().str.join(" | ").alias("alerta2_tempo_concentrado"),
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
             ])
             .with_columns([
@@ -1574,7 +1588,7 @@ class AnalyticsService:
         qtd_robos_ocultos = int(df_med["flag_robo_oculto"].sum() or 0)
         qtd_invalido      = int(df_med["flag_crm_invalido"].sum() or 0)
         qtd_antes_reg     = int(df_med["flag_prescricao_antes_registro"].sum() or 0)
-        qtd_conc_temp     = int(df_med["alerta2_tempo_concentrado"].is_not_null().sum())
+        qtd_conc_temp     = int(df["alerta_concentracao_temporal"].is_not_null().sum())
 
         vl_invalido  = float(df_med.filter(pl.col("flag_crm_invalido") == 1)["vl_total_prescricoes"].sum() or 0)
         vl_antes_reg = float(df_med.filter(pl.col("flag_prescricao_antes_registro") == 1)["vl_total_prescricoes"].sum() or 0)

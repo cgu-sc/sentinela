@@ -23,7 +23,7 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const { prescritoresData, prescritoresLoading, prescritoresError, crmDailyProfile, crmDailyProfileLoading } = storeToRefs(cnpjDetailStore);
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
-const { chartTheme } = useChartTheme();
+const { chartTheme, chartRiskAccents } = useChartTheme();
 
 onMounted(() => {
   if (props.cnpj) cnpjDetailStore.fetchCrmDailyProfile(props.cnpj);
@@ -52,13 +52,13 @@ const chartOptionDaily = computed(() => ({
       interval: Math.floor(dailyDates.value.length / 24),
       fontSize: 11,
     },
-    axisLine: { lineStyle: { color: 'var(--border-color)' } },
+    axisLine: { lineStyle: { color: chartTheme.value.border } },
   },
   yAxis: {
     type: 'value',
     minInterval: 1,
     axisLabel: { fontSize: 11 },
-    splitLine: { lineStyle: { color: 'var(--border-color)', opacity: 0.4 } },
+    splitLine: { lineStyle: { color: chartTheme.value.grid } },
   },
   tooltip: {
     trigger: 'item',
@@ -82,7 +82,10 @@ const chartOptionDaily = computed(() => ({
       type: 'bar',
       data: dailyValues.value.map((v, i) => ({
         value: v,
-        itemStyle: { color: dailyAnomalous.value[i] ? '#ef4444' : 'var(--primary-color)', opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 },
+        itemStyle: { 
+          color: dailyAnomalous.value[i] ? '#ef4444' : chartRiskAccents.value.primary, 
+          opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 
+        },
       })),
     },
     {

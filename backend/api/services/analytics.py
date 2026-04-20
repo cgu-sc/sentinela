@@ -1670,6 +1670,7 @@ class AnalyticsService:
         if df_ad is None:
             try:
                 from database import engine as _engine
+                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
                         text("SELECT id_medico, competencia, dt_alerta, nivel, descricao, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
@@ -1680,8 +1681,6 @@ class AnalyticsService:
                     )
                 if not pdf_ad.empty:
                     df_ad = pl.from_pandas(pdf_ad)
-                    # Salva no cache para próximas chamadas do mesmo CNPJ
-                    os.makedirs(CRMS_DIR, exist_ok=True)
                     df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
                 else:
                     df_ad = pl.DataFrame()
@@ -1715,7 +1714,56 @@ class AnalyticsService:
         for m in crms_interesse_list:
             m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
 
-        return PrescritoresResponse(cnpj=cnpj, summary=summary_dict, crms_interesse=crms_interesse_list)
+        # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
+        CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_cnpj_alerts.parquet")
+        df_ca: pl.DataFrame | None = None
+        if os.path.exists(CNPJ_ALERTS_PATH):
+            try:
+                df_ca = pl.read_parquet(CNPJ_ALERTS_PATH)
+            except: pass
+        
+        if df_ca is None:
+            try:
+                from database import engine as _engine
+                os.makedirs(CRMS_DIR, exist_ok=True)
+                with _engine.connect() as conn:
+                    pdf_ca = pd.read_sql(
+                        text("SELECT * FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial WHERE cnpj = :cnpj"),
+                        conn, params={"cnpj": cnpj}
+                    )
+                df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame()
+                # Salva sempre para confirmar sincronia (mesmo vazio)
+                df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
+            except Exception as e:
+                print(f"❌ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
+                df_ca = pl.DataFrame()
+
+        cnpj_alerts_list = []
+        if not df_ca.is_empty():
+            if comp_ini:
+                df_ca = df_ca.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+            if comp_fim:
+                df_ca = df_ca.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+            
+            cnpj_alerts_list = [
+                {
+                    "dt": str(r["dt_alerta"]),
+                    "hr": int(r["hr_janela"]),
+                    "nivel": r["nivel"],
+                    "descricao": r["descricao"],
+                    "nu_prescricoes": int(r["nu_prescricoes"]),
+                    "nu_crms": int(r["nu_crms"]),
+                    "multiplicador": float(r["multiplicador"] or 0)
+                }
+                for r in df_ca.sort(["dt_alerta", "hr_janela"]).iter_rows(named=True)
+            ]
+
+        return PrescritoresResponse(
+            cnpj=cnpj, 
+            summary=summary_dict, 
+            crms_interesse=crms_interesse_list,
+            cnpj_alerts=cnpj_alerts_list
+        )
 
     @staticmethod
     def get_crm_daily_profile(cnpj: str) -> "CrmDailyProfileResponse":

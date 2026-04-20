@@ -261,6 +261,7 @@ class PrescritoresResponse(BaseModel):
     cnpj: str
     summary: dict
     crms_interesse: list
+    cnpj_alerts: List[dict] = []
 
 class CrmDailyProfileItem(BaseModel):
     dt_janela: str

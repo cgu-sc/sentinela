@@ -967,24 +967,35 @@ GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora), CAST(data_hora AS DATE), DATEP
 
 CREATE CLUSTERED INDEX IDX_BH ON #base_horaria(cnpj, dt_janela, hr_janela);
 
--- 3. Cálculo de Medianas (Diária e por Hora/Mês)
-DROP TABLE IF EXISTS #medianas_base;
+-- 3. Cálculo de Medianas e Detecção de Surtos (Regra: 5x Mediana e Min 10)
+DROP TABLE IF EXISTS #mediana_hora;
 SELECT DISTINCT
-    cnpj,
-    competencia,
-    hr_janela,
+    cnpj, competencia, hr_janela,
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_hora)
         OVER (PARTITION BY cnpj, competencia, hr_janela) AS mediana_hora_mes
-INTO #medianas_base
+INTO #mediana_hora
 FROM #base_horaria;
+
+DROP TABLE IF EXISTS #anomalias_horarias;
+SELECT
+    H.*,
+    CAST(M.mediana_hora_mes AS DECIMAL(10,2)) AS mediana_hora_mes,
+    CASE WHEN H.nu_prescricoes_hora >= 10 
+          AND H.nu_prescricoes_hora >= CAST(M.mediana_hora_mes AS DECIMAL(10,2)) * 7 
+         THEN 1 ELSE 0 END AS is_anomalo_hora
+INTO #anomalias_horarias
+FROM #base_horaria H
+INNER JOIN #mediana_hora M ON M.cnpj = H.cnpj 
+                         AND M.competencia = H.competencia 
+                         AND M.hr_janela = H.hr_janela;
 
 DROP TABLE IF EXISTS #totais_diarios;
 SELECT
     cnpj, competencia, dt_janela,
     SUM(nu_prescricoes_hora) AS nu_prescricoes_dia,
-    COUNT(DISTINCT hr_janela) AS nu_horas_ativas
+    MAX(is_anomalo_hora)     AS dia_tem_anomalia_hora
 INTO #totais_diarios
-FROM #base_horaria
+FROM #anomalias_horarias
 GROUP BY cnpj, competencia, dt_janela;
 
 DROP TABLE IF EXISTS #mediana_diaria;
@@ -1020,7 +1031,8 @@ SELECT
     P.hr_pico, P.nu_prescricoes_hr_pico,
     CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
     CAST(CAST(T.nu_prescricoes_dia AS DECIMAL(10,2)) / NULLIF(M.mediana_diaria, 0) AS DECIMAL(10,2)) AS multiplo,
-    CASE WHEN T.nu_prescricoes_dia >= M.mediana_diaria * 4 AND T.nu_prescricoes_dia >= 20 THEN 1 ELSE 0 END AS is_anomalo
+    -- O dia é anômalo se tiver uma rajada horária (Regra Standard 7x Mediana)
+    T.dia_tem_anomalia_hora AS is_anomalo
 INTO temp_CGUSC.fp.crm_daily_profile
 FROM #totais_diarios T
 INNER JOIN #mediana_diaria M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
@@ -1038,14 +1050,36 @@ SELECT
     H.hr_janela,
     H.nu_prescricoes_hora AS nu_prescricoes,
     H.nu_crms_distintos_hora AS nu_crms_diferentes,
-    CAST(M.mediana_hora_mes AS DECIMAL(10,2)) AS mediana_mensal_horario
+    H.mediana_hora_mes AS mediana_mensal_horario,
+    H.is_anomalo_hora
 INTO temp_CGUSC.fp.crm_hourly_profile_anomalo
-FROM #base_horaria H
+FROM #anomalias_horarias H
 INNER JOIN temp_CGUSC.fp.crm_daily_profile D ON D.cnpj = H.cnpj AND D.dt_janela = H.dt_janela
-INNER JOIN #medianas_base M ON M.cnpj = H.cnpj AND M.competencia = H.competencia AND M.hr_janela = H.hr_janela
 WHERE D.is_anomalo = 1;
 
 CREATE CLUSTERED INDEX IDX_HourlyAnomalo ON temp_CGUSC.fp.crm_hourly_profile_anomalo(cnpj, dt_janela, hr_janela);
+
+-- 6. Tabela Final 3: alertas_cnpj_concentracao_sequencial (Mestre de Surtos)
+DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial;
+
+SELECT
+    cnpj, competencia, dt_janela AS dt_alerta, hr_janela,
+    nu_prescricoes_hora AS nu_prescricoes,
+    nu_crms_distintos_hora AS nu_crms,
+    mediana_hora_mes,
+    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora_mes, 0) AS DECIMAL(10,1)) AS multiplicador,
+    'Surto de Volume' AS nivel,
+    CAST(
+        'Surto de Volume: ' + CAST(nu_prescricoes_hora AS VARCHAR(10)) + 
+        ' prescrições às ' + RIGHT('0' + CAST(hr_janela AS VARCHAR(2)), 2) + 'h (' + 
+        CAST(CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora_mes, 0) AS DECIMAL(10,1)) AS VARCHAR(10)) + 
+        'x acima da mediana da farmácia: ' + CAST(CAST(mediana_hora_mes AS DECIMAL(10,1)) AS VARCHAR(10)) + '/h).'
+    AS VARCHAR(800)) AS descricao
+INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial
+FROM #anomalias_horarias
+WHERE is_anomalo_hora = 1;
+
+CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial(cnpj, dt_alerta, hr_janela);
 GO
 
 

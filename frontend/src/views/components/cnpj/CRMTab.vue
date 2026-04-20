@@ -65,57 +65,65 @@ const chartOptionDaily = computed(() => ({
   },
   tooltip: {
     trigger: 'item',
-    enterable: true,
-    padding: 0,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: chartTheme.value.tooltip,
+    borderColor: chartTheme.value.tooltipBorder,
+    borderWidth: 1,
+    padding: [12, 16],
+    confine: true, // Impede que o tooltip saia dos limites do gráfico
+    textStyle: { color: chartTheme.value.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+    shadowBlur: 10,
+    shadowColor: 'rgba(0,0,0,0.15)',
     formatter: (p) => {
       const day = crmDailyProfile.value?.days?.[p.dataIndex];
       if (!day) return '';
       
-      // Busca pontos horários deste dia no cache global
+      const c = chartTheme.value;
       const points = crmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
-      const hasPoints = points.length > 0;
       
       // Gera Sparkline (Mini Barras)
       let sparklineHtml = '';
-      if (hasPoints) {
+      if (points.length > 0) {
         const maxVal = Math.max(...points.map(pt => pt.nu_prescricoes), 1);
         const bars = Array.from({ length: 24 }, (_, h) => {
            const pt = points.find(x => x.hr_janela === h);
            const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
            const isPico = pt && pt.hr_janela === day.hr_pico;
-           return `<div class="spark-bar ${isPico ? 'is-pico' : ''}" style="height: ${Math.max(hPerc, 2)}%"></div>`;
+           const color = isPico ? '#ef4444' : 'rgba(255,255,255,0.2)';
+           return `<div style="flex:1; height:${Math.max(hPerc, 2)}%; background:${color}; border-radius:1px;"></div>`;
         }).join('');
-        sparklineHtml = `<div class="tooltip-sparkline">${bars}</div>`;
+        sparklineHtml = `
+          <div style="margin-top:10px; border-top:1px solid ${c.tooltipBorder}; padding-top:10px;">
+            <div style="font-size:10px; opacity:.6; letter-spacing:.04em; text-transform:uppercase; margin-bottom:6px; text-align:center;">Distribuição Horária</div>
+            <div style="display:flex; align-items:flex-end; gap:2px; height:40px;">${bars}</div>
+          </div>`;
       }
 
-      const flagAnomalo = day.is_anomalo ? '<div class="tooltip-badge">⚠ ANOMALIA DETECTADA</div>' : '';
+      const flagAnomalo = day.is_anomalo 
+        ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:800; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ ANOMALIA</span>` 
+        : '';
       
       return `
-        <div class="premium-tooltip">
-          <div class="tooltip-header">
-            <span class="tooltip-date">${formatarData(day.dt_janela)}</span>
+        <div style="color: ${c.tooltipText}; min-width: 200px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-weight:700; font-size:14px;">${formatarData(day.dt_janela)}</span>
             ${flagAnomalo}
           </div>
-          <div class="tooltip-stats">
-            <div class="stat-item">
-              <span class="stat-label">Total</span>
-              <span class="stat-val">${day.nu_prescricoes_dia} <small>presc.</small></span>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume Total</span>
+              <span style="font-weight:700; font-size:13px;">${day.nu_prescricoes_dia} <small>presc.</small></span>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Médicos</span>
-              <span class="stat-val">${day.nu_crms_distintos}</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
+              <span style="font-weight:700; font-size:13px;">${day.nu_crms_distintos}</span>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Pico</span>
-              <span class="stat-val">${String(day.hr_pico).padStart(2,'0')}h <small>(${day.nu_prescricoes_hr_pico})</small></span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Horário de Pico</span>
+              <span style="font-weight:700; font-size:13px;">${String(day.hr_pico).padStart(2,'0')}h <small style="color:${day.is_anomalo ? '#ef4444' : c.muted}">(${day.nu_prescricoes_hr_pico})</small></span>
             </div>
           </div>
-          <div class="tooltip-divider"></div>
-          <div class="tooltip-chart-title">Distribuição Horária (0-23h)</div>
-          ${sparklineHtml || '<div class="no-data-hint">Clique para carregar detalhamento</div>'}
-          <div class="tooltip-footer">Clique para drill-down detalhado</div>
+          ${sparklineHtml}
+          <div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>
         </div>
       `;
     },
@@ -206,10 +214,14 @@ const chartOptionHourly = computed(() => {
         lineStyle: { color: '#6366f1', width: 2 },
         itemStyle: { color: '#6366f1' },
         areaStyle: {
-          color: new (require('echarts/lib/util/graphic').LinearGradient)(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(99, 102, 241, 0.2)' },
-            { offset: 1, color: 'rgba(99, 102, 241, 0)' }
-          ])
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(99, 102, 241, 0.2)' },
+              { offset: 1, color: 'rgba(99, 102, 241, 0)' }
+            ]
+          }
         }
       },
       {
@@ -1619,105 +1631,6 @@ input:checked + .toggle-slider:before {
   width: 100%;
   height: 280px;
   cursor: pointer;
-}
-
-/* Premium Tooltip Styles */
-:deep(.premium-tooltip) {
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 12px;
-  color: #fff;
-  min-width: 220px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}
-
-:deep(.tooltip-header) {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-:deep(.tooltip-date) {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #f8fafc;
-}
-
-:deep(.tooltip-badge) {
-  background: #fef2f2;
-  color: #ef4444;
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-:deep(.tooltip-stats) {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-:deep(.stat-item) {
-  display: flex;
-  flex-direction: column;
-}
-
-:deep(.stat-label) {
-  font-size: 0.65rem;
-  color: #94a3b8;
-  text-transform: uppercase;
-}
-
-:deep(.stat-val) {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #fff;
-}
-
-:deep(.tooltip-divider) {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 8px 0;
-}
-
-:deep(.tooltip-chart-title) {
-  font-size: 0.7rem;
-  color: #94a3b8;
-  margin-bottom: 6px;
-  text-align: center;
-}
-
-:deep(.tooltip-sparkline) {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 40px;
-  padding: 4px 0;
-}
-
-:deep(.spark-bar) {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 1px;
-  transition: all 0.2s;
-}
-
-:deep(.spark-bar.is-pico) {
-  background: #ef4444;
-}
-
-:deep(.tooltip-footer) {
-  margin-top: 8px;
-  font-size: 0.65rem;
-  color: #6366f1;
-  text-align: center;
-  font-style: italic;
 }
 
 /* Hourly Detail Styles */

@@ -1503,7 +1503,7 @@ class AnalyticsService:
                 if pdf.empty:
                     return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
                 df = pl.from_pandas(pdf)
-                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro"]:
+                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "flag_surto"]:
                     if col in df.columns:
                         df = df.with_columns(pl.col(col).cast(pl.Int8))
                 df.write_parquet(PARQUET_PATH, compression="lz4")
@@ -1549,6 +1549,7 @@ class AnalyticsService:
                 pl.max("nu_estabelecimentos").alias("qtd_estabelecimentos_atua"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
+                pl.max("flag_surto").alias("flag_surto"),
                 pl.col("alerta_temporal_com_periodo").drop_nulls().str.join(" | ").alias("alerta2_tempo_concentrado"),
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
             ])
@@ -1647,6 +1648,7 @@ class AnalyticsService:
             "pct_valor_crm_invalido":         pct_invalido,
             "pct_valor_crm_antes_registro":   pct_antes_reg,
             "qtd_prescritores_conc_temporal": qtd_conc_temp,
+            "qtd_prescritores_surto":         int(df_med["flag_surto"].sum() or 0),
             "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
             "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
             "razaoSocial":                    razao_social,

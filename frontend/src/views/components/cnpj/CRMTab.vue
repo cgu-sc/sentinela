@@ -373,16 +373,19 @@ const valorTop5 = computed(() =>
 );
 
 // Prescrição Intensiva (Robôs)
-const qtdPrescrIntensivaLocal = computed(
-  () =>
-    summary.value.qtd_prescritores_robos ||
-    crmsInteresse.value.filter((m) => m.flag_robo > 0).length,
-);
-const qtdPrescrIntensivaOcultos = computed(
-  () =>
-    summary.value.qtd_prescritores_robos_ocultos ||
-    crmsInteresse.value.filter((m) => m.flag_robo_oculto > 0).length,
-);
+const doctorsIntensivaLocal = computed(() => crmsInteresse.value.filter((m) => m.flag_robo > 0));
+const doctorsIntensivaBrasil = computed(() => crmsInteresse.value.filter((m) => m.flag_robo_oculto > 0));
+
+const qtdPrescrIntensivaLocal = computed(() => doctorsIntensivaLocal.value.length);
+const qtdPrescrIntensivaOcultos = computed(() => doctorsIntensivaBrasil.value.length);
+
+const qtdPrescrIntensivaTotal = computed(() => {
+  const ids = new Set([
+    ...doctorsIntensivaLocal.value.map(m => m.id_medico),
+    ...doctorsIntensivaBrasil.value.map(m => m.id_medico)
+  ]);
+  return ids.size;
+});
 
 // CRMs Inválidos e Irregulares
 const qtdCrmInvalido = computed(
@@ -420,9 +423,13 @@ const qtdLancamentosAgrupados = computed(
     crmsInteresse.value.filter((m) => m.alerta2_tempo_concentrado || m.alerta2).length,
 );
 
-const qtdAcima400km = computed(
-  () => crmsInteresse.value.filter((m) => m.alerta5_geografico).length,
-);
+// Surtos de Lançamento (Frequência horária do Estabelecimento)
+const cnpjAlerts = computed(() => prescritoresData.value?.cnpj_alerts || []);
+const totalSurtosCnpj = computed(() => cnpjAlerts.value.length);
+const diasComSurtosCnpj = computed(() => {
+  const uniqueDays = new Set(cnpjAlerts.value.map(a => a.dt));
+  return uniqueDays.size;
+});
 
 const formatPct = (val) =>
   val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
@@ -455,23 +462,23 @@ const kpiFilters = {
   top1: (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
   top5: (m) => crmsInteresse.value.slice(0, 5).some((t) => t.id_medico === m.id_medico),
   agrupamento: (m) => !!(m.alerta2_tempo_concentrado || m.alerta2),
-  intensiva_local: (m) => m.flag_robo > 0,
-  intensiva_brasil: (m) => m.flag_robo_oculto > 0,
+  intensiva: (m) => m.flag_robo > 0 || m.flag_robo_oculto > 0,
   exclusivo: (m) => m.flag_crm_exclusivo > 0,
   fraude_crm: (m) =>
     m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia: (m) => !!m.alerta5_geografico,
+  surtos_cnpj: (m) => m.flag_surto > 0,
 };
 
 const kpiFilterLabels = {
   top1: "Concentração TOP 1",
   top5: "Concentração TOP 5",
-  agrupamento: "Lançamentos em Sequência",
-  intensiva_local: ">30 Prescrições/Dia neste CNPJ",
-  intensiva_brasil: ">30 Prescrições/Dia Brasil",
+  agrupamento: "Prescrição em Bloco",
+  intensiva: ">30 Prescrições/Dia",
   exclusivo: "CRM Exclusivo",
   fraude_crm: "Fraudes CRM",
   distancia: "Distância (>400km)",
+  surtos_cnpj: "Concentração Horária",
 };
 
 function setKpiFilter(key) {
@@ -532,6 +539,8 @@ defineExpose({
       summary.value.mediana_concentracao_top5_br ??
       40,
     qtdAcima400km: qtdAcima400km.value,
+    totalSurtosCnpj: totalSurtosCnpj.value,
+    diasComSurtosCnpj: diasComSurtosCnpj.value,
   }),
 });
 </script>
@@ -650,7 +659,7 @@ defineExpose({
             @click="setKpiFilter('agrupamento')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">LANÇAMENTOS EM SEQUENCIA</span>
+              <span class="alert-kpi-label">PRESCRIÇÃO EM BLOCO</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -666,53 +675,29 @@ defineExpose({
             </div>
           </div>
 
-          <!-- Prescrição Intensiva Local -->
+          <!-- Prescrição Intensiva Unified -->
           <div
             class="alert-kpi-card"
             :class="[
-              qtdPrescrIntensivaLocal > 0 ? 'highlight-red' : 'kpi-disabled',
-              activeKpiFilter === 'intensiva_local' ? 'kpi-active' : '',
+              qtdPrescrIntensivaTotal > 0 ? 'highlight-red' : 'kpi-disabled',
+              activeKpiFilter === 'intensiva' ? 'kpi-active' : '',
             ]"
-            @click="setKpiFilter('intensiva_local')"
+            @click="setKpiFilter('intensiva')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label"
-                >>30 PRESCRIÇÕES/DIA NESTE CNPJ</span
-              >
+              <span class="alert-kpi-label">>30 PRESCRIÇÕES/DIA</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
-                  'Médicos que emitiram mais de 30 prescrições por dia considerando apenas as vendas desta unidade.'
+                  'Médicos que emitiram mais de 30 prescrições por dia (comportamento de robô), calculado localmente e em todo o Brasil.'
                 "
               />
             </div>
             <div class="alert-kpi-body">
-              <span class="alert-kpi-val">{{ qtdPrescrIntensivaLocal }}</span>
-              <span class="alert-kpi-hint">Na unidade local</span>
-            </div>
-          </div>
-
-          <!-- Prescrição Intensiva Rede -->
-          <div
-            class="alert-kpi-card"
-            :class="[
-              qtdPrescrIntensivaOcultos > 0 ? 'highlight-orange' : 'kpi-disabled',
-              activeKpiFilter === 'intensiva_brasil' ? 'kpi-active' : '',
-            ]"
-            @click="setKpiFilter('intensiva_brasil')"
-          >
-            <div class="alert-kpi-header">
-              <span class="alert-kpi-label">>30 PRESCRIÇÕES/DIA BRASIL</span>
-              <i
-                class="pi pi-info-circle kpi-info-icon"
-                v-tooltip.top="
-                  'Médicos atuando com volume aceitável aqui, mas que emitem mais de 30 prescrições/dia se somadas todas as farmácias do Brasil (Robô Oculto).'
-                "
-              />
-            </div>
-            <div class="alert-kpi-body">
-              <span class="alert-kpi-val">{{ qtdPrescrIntensivaOcultos }}</span>
-              <span class="alert-kpi-hint">Soma de todo o Brasil</span>
+              <span class="alert-kpi-val">{{ qtdPrescrIntensivaTotal }}</span>
+              <span class="alert-kpi-hint">
+                {{ qtdPrescrIntensivaLocal }} local · {{ qtdPrescrIntensivaOcultos }} Brasil
+              </span>
             </div>
           </div>
 
@@ -800,6 +785,32 @@ defineExpose({
               <span class="alert-kpi-hint"
                 >Prescrições em Locais Distantes</span
               >
+            </div>
+          </div>
+
+          <!-- Surtos de Lançamento (Geral CNPJ) -->
+          <div
+            class="alert-kpi-card"
+            :class="[
+              totalSurtosCnpj > 0 ? 'highlight-red' : 'kpi-disabled',
+              activeKpiFilter === 'surtos_cnpj' ? 'kpi-active' : '',
+            ]"
+            @click="setKpiFilter('surtos_cnpj')"
+          >
+            <div class="alert-kpi-header">
+              <span class="alert-kpi-label">CONCENTRAÇÃO HORÁRIA</span>
+              <i
+                class="pi pi-info-circle kpi-info-icon"
+                v-tooltip.top="
+                  'Identifica se a farmácia registrou volume atípico de dispensações concentrado em poucas horas.'
+                "
+              />
+            </div>
+            <div class="alert-kpi-body">
+              <span class="alert-kpi-val">{{ totalSurtosCnpj }}</span>
+              <span class="alert-kpi-hint">
+                Registros em {{ totalDiasSurtosCnpj }} dias distintos
+              </span>
             </div>
           </div>
         </div>
@@ -972,7 +983,7 @@ defineExpose({
                       v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                       @click.stop="toggleAlertasDiarios(m.id_medico)"
                     >
-                      <i class="pi pi-stopwatch"></i> Sequencial
+                      <i class="pi pi-stopwatch"></i> Prescrição em Bloco
                       <span v-if="m.alertas_diarios?.length > 1" class="badge-count">
                         ({{ m.alertas_diarios.length }}x)
                       </span>
@@ -990,6 +1001,9 @@ defineExpose({
                     <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
                       <i class="pi pi-map-marker"></i> >400km
                     </span>
+                    <span v-if="m.flag_surto" class="issue-tag red" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
+                      <i class="pi pi-bolt"></i> Concentração Horária
+                    </span>
                     <i
                       v-if="
                         !m.flag_robo &&
@@ -997,6 +1011,7 @@ defineExpose({
                         !m.flag_crm_invalido &&
                         !m.flag_prescricao_antes_registro &&
                         !m.alerta5_geografico &&
+                        !m.flag_surto &&
                         (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)
                       "
                       class="pi pi-check-circle"

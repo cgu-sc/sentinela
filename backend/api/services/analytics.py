@@ -1847,7 +1847,7 @@ class AnalyticsService:
                 os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
-                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora "
+                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, is_anomalo_hora "
                              "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
                              "WHERE cnpj = :cnpj "
                              "ORDER BY dt_janela, hr_janela"),
@@ -1870,6 +1870,7 @@ class AnalyticsService:
                 "nu_prescricoes":         int(r["nu_prescricoes"]),
                 "nu_crms_diferentes":     int(r["nu_crms_diferentes"]),
                 "mediana_hora":           float(r["mediana_hora"]),
+                "is_anomalo_hora":        int(r.get("is_anomalo_hora", 0)),
             }
             for r in df.iter_rows(named=True)
         ]

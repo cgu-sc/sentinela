@@ -284,6 +284,7 @@ class CrmHourlyPointSchema(BaseModel):
     nu_prescricoes: int
     nu_crms_diferentes: int
     mediana_hora: float
+    is_anomalo_hora: int = 0
 
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str

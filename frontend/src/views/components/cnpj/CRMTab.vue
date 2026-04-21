@@ -238,12 +238,12 @@ const chartOptionHourly = computed(() => {
   // 24 pontos garantidos (0-23)
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
-    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0 };
+    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0, is_anomalo_hora: 0 };
   });
 
-  // Cores das barras: pico em vermelho cheio, demais em gradiente temático
+  // Cores das barras: usa a flag direta do banco, permitindo múltiplas anomalias no mesmo dia
   const barColors = fullPoints.map(p => {
-    if (p.hr_janela === hrPico && p.nu_prescricoes > 0) {
+    if (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) {
       return {
         type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
         colorStops: [
@@ -255,8 +255,8 @@ const chartOptionHourly = computed(() => {
     return {
       type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
       colorStops: [
-        { offset: 0, color: 'rgba(239, 68, 68, 0.65)' },
-        { offset: 1, color: 'rgba(239, 68, 68, 0.15)' }
+        { offset: 0, color: 'rgba(99, 102, 241, 0.65)' },
+        { offset: 1, color: 'rgba(99, 102, 241, 0.15)' }
       ]
     };
   });
@@ -318,12 +318,15 @@ const chartOptionHourly = computed(() => {
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       formatter: (params) => {
         const hora = params[0]?.axisValue ?? '';
+        const dataIndex = params[0]?.dataIndex ?? 0;
+        const ptInfo = fullPoints[dataIndex];
+        
         const volItem = params.find(p => p.seriesName === 'Prescrições (Volume)');
         const vol  = volItem?.value ?? 0;
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
-        const isPico = hora === `${String(hrPico).padStart(2,'0')}h`;
-        const alertaHtml = vol > med && med > 0
+        
+        const alertaHtml = (ptInfo && ptInfo.is_anomalo_hora === 1)
           ? `<div style="margin-top:8px; font-size:12px; color:#ef4444; font-weight:600;">${(vol / med).toFixed(1)}× acima da mediana</div>`
           : '';
         return `

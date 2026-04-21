@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from "vue";
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from "@/composables/useFormatting";
 import { useChartTheme } from '@/config/chartTheme';
 import { API_ENDPOINTS } from '@/config/api';
@@ -24,7 +25,9 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const { prescritoresData, prescritoresLoading, prescritoresError, crmDailyProfile, crmDailyProfileLoading, crmHourlyProfile, crmHourlyProfileLoading } = storeToRefs(cnpjDetailStore);
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
-const { chartTheme, chartRiskAccents } = useChartTheme();
+const { chartTheme, chartUFAccents } = useChartTheme();
+const themeStore = useThemeStore();
+const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
 onMounted(() => {
   if (props.cnpj) {
@@ -159,9 +162,10 @@ const chartOptionDaily = computed(() => {
         barMaxWidth: 40,
         data: dailyValues.value.map((v, i) => ({
           value: v,
-          itemStyle: { 
-            color: dailyAnomalous.value[i] ? '#ef4444' : chartRiskAccents.value.primary, 
-            opacity: dailyAnomalous.value[i] ? 0.9 : 0.6 
+          itemStyle: {
+            color: dailyAnomalous.value[i]
+              ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
+              : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] },
           },
         })),
       },
@@ -189,6 +193,13 @@ const selectedHourlyHour = ref(null);
 const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 
+const RAIOX_PAGE_SIZE = 10;
+const raioxPage = ref(0);
+const raioxTotalPages = computed(() => Math.ceil(hourlyTransactions.value.length / RAIOX_PAGE_SIZE));
+const raioxPagedTransactions = computed(() =>
+  hourlyTransactions.value.slice(raioxPage.value * RAIOX_PAGE_SIZE, (raioxPage.value + 1) * RAIOX_PAGE_SIZE)
+);
+
 async function onChartClick(params) {
   const day = filteredDailyDays.value?.[params.dataIndex];
   if (!day || !day.is_anomalo) {
@@ -208,11 +219,14 @@ async function onHourlyChartClick(params) {
   const hourInt = parseInt(hourStr, 10);
   
   if (!selectedDay.value || isNaN(hourInt)) return;
-  if (!params.data || params.data.value === 0) return; // ignora barras vazias
+  if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return; // ignora vazias e horas comuns
+  
+  if (selectedHourlyHour.value === hourInt) return; // ignora clique na mesma hora
   
   selectedHourlyHour.value = hourInt;
+  raioxPage.value = 0;
   hourlyTransactionsLoading.value = true;
-  hourlyTransactions.value = [];
+  // Não limpo mais o array aqui para manter a tabela renderizada na DOM e evitar Layout Shift
   
   try {
     const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, selectedDay.value.dt_janela, hourInt);
@@ -365,6 +379,8 @@ const chartOptionHourly = computed(() => {
         data: fullPoints.map((p, i) => ({ 
           value: p.nu_prescricoes, 
           nu_crms: p.nu_crms_diferentes,
+          is_anomalo_hora: p.is_anomalo_hora,
+          cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default',
           itemStyle: { color: barColors[i] } 
         })),
         emphasis: { itemStyle: { opacity: 1 } },
@@ -918,51 +934,61 @@ defineExpose({
               autoresize
               class="hourly-chart"
               @click="onHourlyChartClick"
-              style="cursor: pointer;"
             />
 
             <!-- Tabela Raio-X Sub-horário (Transactions Literal) -->
-            <div v-if="selectedHourlyHour !== null" class="subhourly-detail-wrapper animate-fade-in" style="margin-top: 1.5rem; background: rgba(0,0,0,0.15); border: 1px solid var(--card-border); border-radius: 8px; padding: 1rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h4 style="margin:0; font-size: 0.85rem; color: #ef4444; font-weight: 700; display:flex; align-items:center; gap:0.5rem">
-                  <i class="pi pi-list"></i> RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H
-                </h4>
-                <button class="close-detail-btn" @click="selectedHourlyHour = null" style="background: transparent; border: none; color: white; opacity: 0.5; cursor: pointer; padding: 5px;">
+            <div v-if="selectedHourlyHour !== null" class="raiox-wrapper animate-fade-in">
+              <div class="raiox-header">
+                <div class="raiox-title">
+                  <i class="pi pi-search" />
+                  <span>RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H</span>
+                  <span v-if="!hourlyTransactionsLoading && hourlyTransactions.length > 0" class="raiox-count-badge">
+                    {{ hourlyTransactions.length }} registro{{ hourlyTransactions.length !== 1 ? 's' : '' }}
+                  </span>
+                  <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
+                </div>
+                <button class="close-detail-btn" @click="selectedHourlyHour = null">
                   <i class="pi pi-times" />
                 </button>
               </div>
-              
-              <div v-if="hourlyTransactionsLoading" style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem">
-                <i class="pi pi-spinner pi-spin"></i> Decodificando literais de faturamento...
+
+              <div v-if="!hourlyTransactionsLoading && hourlyTransactions.length === 0" class="raiox-empty">
+                <i class="pi pi-inbox raiox-empty-icon" />
+                <span>Nenhuma transação encontrada para este horário.</span>
               </div>
-              <div v-else-if="hourlyTransactions.length === 0" style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.8rem">
-                Nenhuma transação encontrada no cache/banco.
-              </div>
-              <div v-else class="table-responsive" style="min-height: auto; max-height: 250px; overflow-y: auto; border: none;">
-                <table class="ind-table premium-table row-hover" style="font-size: 0.75rem; min-width: 100%;">
-                  <thead class="sticky-thead" style="background: rgba(30,30,30,0.9)">
+
+              <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': hourlyTransactionsLoading }">
+                <table class="premium-table row-hover raiox-table">
+                  <thead class="sticky-thead">
                     <tr>
-                      <th style="padding: 0.4rem; text-align: center; border-bottom: 1px solid var(--tabs-border);">Horário Exato</th>
-                      <th style="padding: 0.4rem;text-align: left; border-bottom: 1px solid var(--tabs-border);">Nº Autorização Nativa</th>
-                      <th style="padding: 0.4rem; text-align: left; border-bottom: 1px solid var(--tabs-border);">CRM Prescritor (UF)</th>
+                      <th class="col-center">Horário Exato</th>
+                      <th>Nº Autorização Nativa</th>
+                      <th>CRM Prescritor (UF)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="(tx, idx) in hourlyTransactions" :key="idx">
-                      <td style="padding: 0.4rem; text-align: center; font-weight: 600; color: #f59e0b;">
-                        {{ tx.data_hora.split(' ')[1] || tx.data_hora }}
-                      </td>
-                      <td style="padding: 0.4rem; text-align: left; font-family: monospace; letter-spacing: 0.05em; font-size: 0.85rem; opacity: 0.9;">
-                        {{ tx.num_autorizacao }}
-                      </td>
-                      <td style="padding: 0.4rem; text-align: left;">
-                        <span class="issue-tag" style="background: rgba(255,255,255,0.05); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.1)">
-                          {{ tx.crm_uf }} {{ tx.crm }}
-                        </span>
+                    <tr v-for="(tx, idx) in raioxPagedTransactions" :key="idx">
+                      <td class="col-center raiox-time">{{ tx.data_hora.split(' ')[1] || tx.data_hora }}</td>
+                      <td class="raiox-auth">{{ tx.num_autorizacao }}</td>
+                      <td>
+                        <span class="issue-tag raiox-crm-tag">{{ tx.crm_uf }} {{ tx.crm }}</span>
                       </td>
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <div v-if="raioxTotalPages > 1" class="raiox-pagination">
+                <span>{{ raioxPage * 10 + 1 }}–{{ Math.min((raioxPage + 1) * 10, hourlyTransactions.length) }} de {{ hourlyTransactions.length }}</span>
+                <div class="raiox-pagination-controls">
+                  <button class="raiox-page-btn" :disabled="raioxPage === 0" @click="raioxPage--">
+                    <i class="pi pi-chevron-left" /> Anterior
+                  </button>
+                  <span class="raiox-page-info">{{ raioxPage + 1 }} / {{ raioxTotalPages }}</span>
+                  <button class="raiox-page-btn" :disabled="raioxPage >= raioxTotalPages - 1" @click="raioxPage++">
+                    Próximo <i class="pi pi-chevron-right" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1326,6 +1352,147 @@ defineExpose({
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Raio-X Sub-horário ─────────────────────────────────────────────────── */
+.raiox-wrapper {
+  margin-top: 1.5rem;
+  background: v-bind(raioxBg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.raiox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.raiox-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--risk-high);
+}
+
+.raiox-title .pi-search { font-size: 0.85rem; }
+
+.raiox-count-badge {
+  background: color-mix(in srgb, var(--risk-high) 15%, transparent);
+  color: var(--risk-high);
+  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.1rem 0.55rem;
+  letter-spacing: 0.03em;
+}
+
+.raiox-spinner {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.raiox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.raiox-empty-icon {
+  font-size: 1.75rem;
+  opacity: 0.4;
+}
+
+.raiox-table-wrapper {
+  border-radius: 6px;
+}
+
+.raiox-table-wrapper.is-loading {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.raiox-table { font-size: 0.75rem; }
+.raiox-table .col-center { text-align: center; }
+
+.raiox-time {
+  font-weight: 600;
+  color: var(--risk-medium);
+}
+
+.raiox-auth {
+  opacity: 0.85;
+  font-size: 0.78rem;
+}
+
+.raiox-crm-tag {
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--surface-card));
+  color: var(--text-color);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.raiox-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--tabs-border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.raiox-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.raiox-page-btn {
+  background: var(--surface-card);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.raiox-page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-color);
+  border-color: var(--primary-color);
+}
+
+.raiox-page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.raiox-page-info {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0 0.25rem;
 }
 
 .empty-icon {

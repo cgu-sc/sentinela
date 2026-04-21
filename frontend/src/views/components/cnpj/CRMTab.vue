@@ -456,10 +456,14 @@ const qtdLancamentosAgrupados = computed(
 // Surtos de Lançamento (Frequência horária do Estabelecimento)
 const cnpjAlerts = computed(() => prescritoresData.value?.cnpj_alerts || []);
 const totalSurtosCnpj = computed(() => cnpjAlerts.value.length);
-const diasComSurtosCnpj = computed(() => {
+const totalDiasSurtosCnpj = computed(() => {
   const uniqueDays = new Set(cnpjAlerts.value.map(a => a.dt));
   return uniqueDays.size;
 });
+
+const qtdAcima400km = computed(
+  () => crmsInteresse.value.filter((m) => m.alerta5_geografico).length,
+);
 
 const formatPct = (val) =>
   val != null ? `${Number(val).toFixed(2)}%` : "0.00%";

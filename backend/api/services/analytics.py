@@ -1829,6 +1829,8 @@ class AnalyticsService:
     def get_crm_hourly_profile(cnpj: str) -> CrmHourlyProfileResponse:
         """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ com cache Parquet."""
         import pandas as pd
+        from sqlalchemy import text
+        
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
         PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly.parquet")
 

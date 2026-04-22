@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -1945,7 +1945,7 @@ class AnalyticsService:
             print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
 
     @staticmethod
-    def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: int) -> "CrmHourlyTransactionsResponse":
+    def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmHourlyTransactionsResponse":
         """Busca as transações literais e sequenciais de uma hora anômala, utilizando cache Parquet."""
         import pandas as pd
         import polars as pl
@@ -1969,11 +1969,12 @@ class AnalyticsService:
         if df.is_empty():
             return CrmHourlyTransactionsResponse(transactions=[])
 
-        # O Filtro Rápido do Polars na memória (por Dia e Hora)
-        filtered_df = df.filter(
-            (pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str) &
-            (pl.col("hr_janela") == hour)
-        )
+        # O Filtro Rápido do Polars na memória (por Dia e Hora opcional)
+        filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
+        if hour is not None:
+            filter_expr = filter_expr & (pl.col("hr_janela") == hour)
+
+        filtered_df = df.filter(filter_expr)
 
         if filtered_df.is_empty():
             return CrmHourlyTransactionsResponse(transactions=[])

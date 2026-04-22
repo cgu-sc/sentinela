@@ -249,8 +249,6 @@ const selectedHourlyHour = ref(null);
 const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 
-const RAIOX_PAGE_SIZE = 8;
-const raioxPage = ref(0);
 const expandedRaioxRows = ref(new Set());
 
 const groupedRaiox = computed(() => {
@@ -295,16 +293,26 @@ function getCRMColor(crm) {
   return `hsl(${h}, 70%, 65%)`;
 }
 
-const raioxTotalPages = computed(() => Math.ceil(groupedRaiox.value.length / RAIOX_PAGE_SIZE));
-const raioxPagedTransactions = computed(() =>
-  groupedRaiox.value.slice(raioxPage.value * RAIOX_PAGE_SIZE, (raioxPage.value + 1) * RAIOX_PAGE_SIZE)
-);
-
 function toggleRaioxRow(auth) {
   if (expandedRaioxRows.value.has(auth)) {
     expandedRaioxRows.value.delete(auth);
   } else {
     expandedRaioxRows.value.add(auth);
+  }
+}
+
+async function loadTransactions(dt_janela, hourInt = null) {
+  hourlyTransactionsLoading.value = true;
+  try {
+    const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, dt_janela, hourInt);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Falha HTTP');
+    const data = await res.json();
+    hourlyTransactions.value = data.transactions || [];
+  } catch (err) {
+    console.error("Erro ao buscar Raio-X Sub-horário:", err);
+  } finally {
+    hourlyTransactionsLoading.value = false;
   }
 }
 
@@ -316,10 +324,9 @@ async function onChartClick(params) {
     return;
   }
   
-  // Agora apenas selecionamos o dia. O computed chartOptionHourly cuidará de filtrar os pontos
-  // que já foram pré-carregados no store.
   selectedDay.value = day;
-  selectedHourlyHour.value = null;
+  selectedHourlyHour.value = 'all';
+  await loadTransactions(day.dt_janela, null);
 }
 
 async function onHourlyChartClick(params) {
@@ -327,26 +334,17 @@ async function onHourlyChartClick(params) {
   const hourInt = parseInt(hourStr, 10);
   
   if (!selectedDay.value || isNaN(hourInt)) return;
-  if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return; // ignora vazias e horas comuns
+  if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return; 
   
-  if (selectedHourlyHour.value === hourInt) return; // ignora clique na mesma hora
+  if (selectedHourlyHour.value === hourInt) {
+    // Se clicar na mesma hora, volta a exibir o dia todo
+    selectedHourlyHour.value = 'all';
+    await loadTransactions(selectedDay.value.dt_janela, null);
+    return;
+  }
   
   selectedHourlyHour.value = hourInt;
-  raioxPage.value = 0;
-  hourlyTransactionsLoading.value = true;
-  // Não limpo mais o array aqui para manter a tabela renderizada na DOM e evitar Layout Shift
-  
-  try {
-    const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, selectedDay.value.dt_janela, hourInt);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Falha HTTP');
-    const data = await res.json();
-    hourlyTransactions.value = data.transactions || [];
-  } catch (err) {
-    console.error("Erro ao buscar Raio-X Sub-horário:", err);
-  } finally {
-    hourlyTransactionsLoading.value = false;
-  }
+  await loadTransactions(selectedDay.value.dt_janela, hourInt);
 }
 
 // Helper para truncar texto
@@ -632,7 +630,8 @@ watch(viewMode, (newMode) => {
     if (anomalousDays.length > 0) {
       const maxDay = anomalousDays.reduce((max, d) => d.nu_prescricoes_dia > max.nu_prescricoes_dia ? d : max, anomalousDays[0]);
       selectedDay.value = maxDay;
-      selectedHourlyHour.value = null;
+      selectedHourlyHour.value = 'all';
+      loadTransactions(maxDay.dt_janela, null);
     }
   }
 });
@@ -1116,7 +1115,7 @@ defineExpose({
               <div class="raiox-header">
                 <div class="raiox-title">
                   <i class="pi pi-search" />
-                  <span>RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H</span>
+                  <span>RAIO-X: TRANSAÇÕES {{ selectedHourlyHour === 'all' ? 'DO DIA TODO' : `ÀS ${String(selectedHourlyHour).padStart(2, '0')}H` }}</span>
                   <span v-if="!hourlyTransactionsLoading && groupedRaiox.length > 0" class="raiox-count-badge">
                     {{ groupedRaiox.length }} Autorização{{ groupedRaiox.length !== 1 ? 'es' : '' }}
                   </span>
@@ -1145,7 +1144,7 @@ defineExpose({
                     </tr>
                   </thead>
                   <tbody>
-                    <template v-for="tx in raioxPagedTransactions" :key="tx.num_autorizacao">
+                    <template v-for="tx in groupedRaiox" :key="tx.num_autorizacao">
                       <tr :class="{ 'row-expanded-main': expandedRaioxRows.has(tx.num_autorizacao) }" 
                           @click="toggleRaioxRow(tx.num_autorizacao)"
                           class="cursor-pointer">
@@ -1210,19 +1209,6 @@ defineExpose({
                     </template>
                   </tbody>
                 </table>
-              </div>
-
-              <div v-if="raioxTotalPages > 1" class="raiox-pagination">
-                <span>{{ raioxPage * RAIOX_PAGE_SIZE + 1 }}–{{ Math.min((raioxPage + 1) * RAIOX_PAGE_SIZE, groupedRaiox.length) }} de {{ groupedRaiox.length }}</span>
-                <div class="raiox-pagination-controls">
-                  <button class="raiox-page-btn" :disabled="raioxPage === 0" @click="raioxPage--">
-                    <i class="pi pi-chevron-left" /> Anterior
-                  </button>
-                  <span class="raiox-page-info">{{ raioxPage + 1 }} / {{ raioxTotalPages }}</span>
-                  <button class="raiox-page-btn" :disabled="raioxPage >= raioxTotalPages - 1" @click="raioxPage++">
-                    Próximo <i class="pi pi-chevron-right" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1788,12 +1774,8 @@ defineExpose({
 
 .raiox-table-wrapper {
   border-radius: 6px;
-  max-height: 480px; /* Limite máximo de altura */
-  overflow-y: auto;  /* Habilita scroll interno */
   background: color-mix(in srgb, var(--card-bg) 40%, transparent);
   border: 1px solid var(--tabs-border);
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color) transparent;
 }
 
 .raiox-table { 

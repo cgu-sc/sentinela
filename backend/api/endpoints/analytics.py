@@ -163,10 +163,11 @@ def get_crm_hourly_profile(
 def get_crm_hourly_transactions(
     cnpj: str,
     date_str: str = Query(..., description="Data da anomalia (YYYY-MM-DD)"),
-    hour: int = Query(..., description="Hora da anomalia (0-23)")
+    hour: Optional[int] = Query(None, description="Hora da anomalia (0-23)")
 ):
-    """Retorna o raio-x (transação literal) de uma hora específica de surto/concentração."""
+    """Retorna o raio-x (transação literal) de uma hora específica ou do dia inteiro se a hora for omitida."""
     return AnalyticsService.get_crm_hourly_transactions(cnpj, date_str, hour)
+
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
 def get_indicadores_analise(

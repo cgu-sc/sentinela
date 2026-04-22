@@ -63,8 +63,6 @@ onMounted(() => {
   }
 });
 
-const filterDailyOnlyAnomalous = ref(false);
-
 const filteredDailyDays = computed(() => {
   const days = cachedCrmDailyProfile.value?.days ?? [];
   if (!filterDailyOnlyAnomalous.value) return days;
@@ -83,21 +81,42 @@ const dailyMediana   = computed(() => {
   return days[days.length - 1].mediana_diaria ?? 0;
 });
 
+const filterDailyOnlyAnomalous = ref(false);
+const dailyZoomStart = ref(0);
+const dailyZoomEnd = ref(100);
+
+watch(dailyDates, (newDates) => {
+  if (newDates.length > 0) {
+    const totalDays = newDates.length;
+    const windowSize = Math.min(totalDays, 150);
+    dailyZoomStart.value = Math.max(0, 100 - (windowSize / totalDays) * 100);
+    dailyZoomEnd.value = 100;
+  }
+}, { immediate: true });
+
+function onDailyZoom(params) {
+  if (params.batch) {
+    dailyZoomStart.value = params.batch[0].start;
+    dailyZoomEnd.value = params.batch[0].end;
+  } else {
+    dailyZoomStart.value = params.start;
+    dailyZoomEnd.value = params.end;
+  }
+}
+
 const chartOptionDaily = computed(() => {
   const totalDays = dailyDates.value.length;
-  // Exibir inicialmente os últimos 180 dias (ou o total se for menor)
-  const windowSize = Math.min(totalDays, 180);
-  const startZoom = totalDays > 0 ? Math.max(0, 100 - (windowSize / totalDays) * 100) : 0;
+  const startZoom = dailyZoomStart.value;
+  const endZoom = dailyZoomEnd.value;
   
-  // Limites de Span para forçar entre 20 e 180 barras visíveis
-  const minSpan = totalDays > 20 ? (20 / totalDays) * 100 : null;
-  const maxSpan = totalDays > 180 ? (180 / totalDays) * 100 : null;
+  // Limites de Span para forçar entre 40 e 150 barras visíveis
+  const minSpan = totalDays > 40 ? (40 / totalDays) * 100 : null;
+  const maxSpan = totalDays > 150 ? (150 / totalDays) * 100 : null;
 
   return {
     ...chartTheme.value,
     animation: true,
-    animationDuration: 1000,
-    animationEasing: 'cubicOut',
+    animationDuration: 300,
     legend: { show: false },
     grid: { top: 16, right: 20, bottom: 80, left: 50, containLabel: false },
     xAxis: {
@@ -182,22 +201,29 @@ const chartOptionDaily = computed(() => {
       },
     },
     dataZoom: [
-      { type: 'inside', start: startZoom, end: 100, minSpan, maxSpan },
-      { type: 'slider', start: startZoom, end: 100, height: 20, bottom: 8, handleSize: 14, minSpan, maxSpan },
+      { type: 'inside', start: startZoom, end: endZoom, minSpan, maxSpan },
+      { type: 'slider', start: startZoom, end: endZoom, height: 20, bottom: 8, handleSize: 14, minSpan, maxSpan },
     ],
     series: [
       {
         name: 'Prescrições',
         type: 'bar',
         barMaxWidth: 40,
-        data: dailyValues.value.map((v, i) => ({
-          value: v,
-          itemStyle: {
-            color: dailyAnomalous.value[i]
-              ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
-              : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] },
-          },
-        })),
+        data: dailyValues.value.map((v, i) => {
+          const day = filteredDailyDays.value[i];
+          const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
+          const hasSelection = !!selectedDay.value;
+          
+          return {
+            value: v,
+            itemStyle: {
+              opacity: hasSelection && !isSelected ? 0.5 : 1,
+              color: dailyAnomalous.value[i]
+                ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
+                : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] },
+            },
+          };
+        }),
       },
     {
       name: 'Mediana Referência (Dia)',
@@ -1024,6 +1050,7 @@ defineExpose({
             autoresize
             class="daily-dispensacao-chart"
             @click="onChartClick"
+            @datazoom="onDailyZoom"
           />
         </div>
 
@@ -1043,12 +1070,7 @@ defineExpose({
               <i class="pi pi-times" />
             </button>
           </div>
-          
-          <div v-if="crmHourlyProfileLoading" class="hourly-loading">
-            <i class="pi pi-spinner pi-spin"></i>
-            <span>Buscando registros horários...</span>
-          </div>
-          <div v-else class="hourly-body">
+          <div class="hourly-body" style="position: relative; min-height: 250px;">
             <p class="hourly-subtitle">
               Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia,
               comparando o volume real com a mediana trimestral de cada horário.
@@ -1251,7 +1273,7 @@ defineExpose({
           <table class="ind-table premium-table row-hover">
             <thead class="sticky-thead">
               <tr>
-                <th style="width: 10%">CRM / Médico</th>
+                <th style="width: 160px;">CRM / Médico</th>
                 <th style="width: 34%">Status / Alertas</th>
                 <th class="col-right" style="width: 15%">Volume / Valor</th>
                 <th class="col-center" style="width: 16%">Participação / Acumulado</th>

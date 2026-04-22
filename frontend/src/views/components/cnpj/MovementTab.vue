@@ -53,6 +53,13 @@ const expanded = computed({
   set: (v) => { _expanded.value = v; }
 });
 
+// ── Filtro: exibir apenas linhas irregulares ─────────────────────────────────
+const hasIrregular = (section) =>
+  (section.subtotal?.vendas_irregular ?? 0) > 0 ||
+  section.rows.some(r => r.tipo_linha === 'venda_irregular');
+
+const showOnlyIrregular = ref(true);
+
 // Quando os dados carregam, abre automaticamente os GTINs irregulares
 watch(sections, (newSections) => {
   const irregulares = new Set(
@@ -85,13 +92,6 @@ const toggleRowsExpanded = (gtin) => {
   _rowsExpanded.value = next;
 };
 
-
-// ── Filtro: exibir apenas linhas irregulares ─────────────────────────────────
-const showOnlyIrregular = ref(true);
-
-const hasIrregular = (section) =>
-  (section.subtotal?.vendas_irregular ?? 0) > 0 ||
-  section.rows.some(r => r.tipo_linha === 'venda_irregular');
 
 const filteredRows = (sectionRows) => {
   // Agora não filtramos as linhas individualmente. 

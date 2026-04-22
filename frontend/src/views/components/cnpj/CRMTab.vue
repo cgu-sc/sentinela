@@ -1008,7 +1008,7 @@ defineExpose({
                   <i class="pi pi-search" />
                   <span>RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H</span>
                   <span v-if="!hourlyTransactionsLoading && hourlyTransactions.length > 0" class="raiox-count-badge">
-                    {{ hourlyTransactions.length }} registro{{ hourlyTransactions.length !== 1 ? 's' : '' }}
+                    {{ hourlyTransactions.length }} Autorização{{ hourlyTransactions.length !== 1 ? 'es' : '' }}
                   </span>
                   <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
                 </div>

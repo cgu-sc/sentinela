@@ -1768,11 +1768,17 @@ class AnalyticsService:
         )
 
     @staticmethod
-    def get_crm_daily_profile(cnpj: str) -> "CrmDailyProfileResponse":
+    def get_crm_daily_profile(
+        cnpj: str,
+        data_inicio: str | None = None,
+        data_fim: str | None = None
+    ) -> "CrmDailyProfileResponse":
         """Retorna o perfil diário de dispensação de um CNPJ (lazy parquet cache).
 
         Args:
             cnpj: CNPJ de 14 dígitos sem formatação.
+            data_inicio: Data de início (YYYY-MM-DD ou YYYY-MM).
+            data_fim: Data de fim (YYYY-MM-DD ou YYYY-MM).
 
         Returns:
             CrmDailyProfileResponse com lista de dias ordenada cronologicamente.
@@ -1809,6 +1815,18 @@ class AnalyticsService:
         if df.is_empty():
             return CrmDailyProfileResponse(cnpj=cnpj, days=[])
 
+        # --- Filtro de Período ---
+        if data_inicio:
+            # Garante formato YYYY-MM-DD para comparação
+            d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
+        if data_fim:
+            d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
+
+        if df.is_empty():
+            return CrmDailyProfileResponse(cnpj=cnpj, days=[])
+
         days = [
             {
                 "dt_janela":             str(r["dt_janela"])[:10],
@@ -1826,8 +1844,12 @@ class AnalyticsService:
         return CrmDailyProfileResponse(cnpj=cnpj, days=days)
 
     @staticmethod
-    def get_crm_hourly_profile(cnpj: str) -> CrmHourlyProfileResponse:
-        """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ com cache Parquet."""
+    def get_crm_hourly_profile(
+        cnpj: str,
+        data_inicio: str | None = None,
+        data_fim: str | None = None
+    ) -> CrmHourlyProfileResponse:
+        """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ com cache Parquet e filtro de período."""
         import pandas as pd
         from sqlalchemy import text
         
@@ -1859,6 +1881,17 @@ class AnalyticsService:
             except Exception as e:
                 print(f"⚠️ Erro ao gerar parquet hourly '{cnpj}': {e}")
                 df = pl.DataFrame()
+
+        if df.is_empty():
+            return CrmHourlyProfileResponse(cnpj=cnpj, points=[])
+
+        # --- Filtro de Período ---
+        if data_inicio:
+            d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
+        if data_fim:
+            d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
 
         if df.is_empty():
             return CrmHourlyProfileResponse(cnpj=cnpj, points=[])

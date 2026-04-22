@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from "@/composables/useFormatting";
+import { useFilterParameters } from "@/composables/useFilterParameters";
 import { useChartTheme } from '@/config/chartTheme';
 import { API_ENDPOINTS } from '@/config/api';
 
@@ -29,10 +30,13 @@ const { chartTheme, chartUFAccents } = useChartTheme();
 const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
+const { getApiParams } = useFilterParameters();
+
 onMounted(() => {
   if (props.cnpj) {
-    cnpjDetailStore.fetchCrmDailyProfile(props.cnpj);
-    cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj);
+    const { inicio, fim } = getApiParams();
+    cnpjDetailStore.fetchCrmDailyProfile(props.cnpj, inicio, fim);
+    cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj, inicio, fim);
   }
 });
 

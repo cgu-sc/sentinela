@@ -143,6 +143,8 @@ watch(
       cnpjDetailStore.fetchIndicadores(newCnpj);
       cnpjDetailStore.fetchFalecidos(newCnpj);
       cnpjDetailStore.fetchPrescritores(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmDailyProfile(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmHourlyProfile(newCnpj, inicio, fim);
       if (!cnpjData.value) {
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
@@ -161,6 +163,8 @@ watch(
     const { inicio, fim } = getApiParams();
     cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchPrescritores(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmDailyProfile(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmHourlyProfile(cnpj.value, inicio, fim);
   },
   { deep: true },
 );

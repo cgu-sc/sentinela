@@ -180,13 +180,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Perfil Diário de Dispensações ────────────────────────────────────────
-    async fetchCrmDailyProfile(cnpj) {
-      if (!cnpj || this.crmDailyProfileLoaded === cnpj) return;
+    async fetchCrmDailyProfile(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (!cnpj || this.crmDailyProfileLoaded === key) return;
       this.crmDailyProfileLoading = true;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj));
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj), { params });
         this.crmDailyProfile        = data;
-        this.crmDailyProfileLoaded  = cnpj;
+        this.crmDailyProfileLoaded  = key;
       } catch (e) {
         console.error('Erro ao buscar perfil diário de CRM:', e);
       } finally {
@@ -194,13 +198,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchCrmHourlyProfile(cnpj) {
-      if (!cnpj || this.crmHourlyProfileLoaded === cnpj) return;
+    async fetchCrmHourlyProfile(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (!cnpj || this.crmHourlyProfileLoaded === key) return;
       this.crmHourlyProfileLoading = true;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj));
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj), { params });
         this.crmHourlyProfile       = data;
-        this.crmHourlyProfileLoaded = cnpj;
+        this.crmHourlyProfileLoaded = key;
       } catch (e) {
         console.error('Erro ao buscar perfil horário:', e);
       } finally {

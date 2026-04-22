@@ -142,14 +142,22 @@ def get_prescritores(
     return AnalyticsService.get_crm_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm-daily-profile", response_model=CrmDailyProfileResponse)
-def get_crm_daily_profile(cnpj: str):
+def get_crm_daily_profile(
+    cnpj: str,
+    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
+    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
+):
     """Retorna o perfil diário de dispensações de um CNPJ para o gráfico de histórico."""
-    return AnalyticsService.get_crm_daily_profile(cnpj)
+    return AnalyticsService.get_crm_daily_profile(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm-hourly-profile", response_model=CrmHourlyProfileResponse)
-def get_crm_hourly_profile(cnpj: str):
+def get_crm_hourly_profile(
+    cnpj: str,
+    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
+    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
+):
     """Retorna o detalhamento horário de prescrições para todos os dias anômalos do CNPJ."""
-    return AnalyticsService.get_crm_hourly_profile(cnpj)
+    return AnalyticsService.get_crm_hourly_profile(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm-hourly-transactions", response_model=CrmHourlyTransactionsResponse)
 def get_crm_hourly_transactions(

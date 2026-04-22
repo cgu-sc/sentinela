@@ -289,8 +289,11 @@ function getCRMColor(crm) {
     hash = crm.charCodeAt(i) + ((hash << 5) - hash);
   }
   const h = Math.abs(hash % 360);
-  // No Dark Mode, usamos cores mais vibrantes/claras (65% lightness)
-  return `hsl(${h}, 70%, 65%)`;
+  // Cores dinâmicas que respeitam o tema atual para garantir alto contraste
+  // Dark Mode: mais claras e vibrantes (L=65%)
+  // Light Mode: mais profundas e marcantes (L=35%)
+  const lightness = themeStore.isDark ? 65 : 35;
+  return `hsl(${h}, 75%, ${lightness}%)`;
 }
 
 function toggleRaioxRow(auth) {
@@ -1809,13 +1812,6 @@ defineExpose({
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
   background: transparent;
-  animation: pulse-soft 2.5s infinite;
-}
-
-@keyframes pulse-soft {
-  0% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
-  100% { opacity: 0.7; transform: scale(1); }
 }
 
 .raiox-pagination {

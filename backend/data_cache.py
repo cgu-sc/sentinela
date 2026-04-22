@@ -313,6 +313,9 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             # 3. Detalhamento Horário de Anomalias (Gera _hourly.parquet)
             AnalyticsService.get_crm_hourly_profile(cnpj)
 
+            # 4. Transações Literais (Raio-X) (Gera _hourly_tx.parquet)
+            AnalyticsService.sync_crm_hourly_transactions(cnpj)
+
             if progress_callback:
                 p = int((i / total) * 100)
                 progress_callback(p)

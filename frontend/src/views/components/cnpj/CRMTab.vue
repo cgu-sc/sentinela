@@ -2003,31 +2003,41 @@ defineExpose({
   opacity: 0.45;
 }
 
-/* Estado ativo (Clicado) — Sincronizado com a cor da categoria */
+/* Estado ativo (Clicado) — Destaque com Aura e Tingimento */
 .alert-kpi-card.kpi-active {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px) scale(1.01);
+  z-index: 2;
+  border-left-width: 6px !important;
 }
 
 .alert-kpi-card.highlight-red.kpi-active {
-  background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-high) 5%, var(--card-bg)) 100%);
-  border-color: color-mix(in srgb, var(--risk-high) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--risk-high) 10%, var(--card-bg));
+  border-color: var(--risk-high) !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, var(--risk-high) 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
+
 .alert-kpi-card.highlight-orange.kpi-active {
-  background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-medium) 5%, var(--card-bg)) 100%);
-  border-color: color-mix(in srgb, var(--risk-medium) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--risk-medium) 10%, var(--card-bg));
+  border-color: var(--risk-medium) !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, var(--risk-medium) 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
+
 .alert-kpi-card.highlight-green.kpi-active {
-  background: linear-gradient(to top, color-mix(in srgb, var(--risk-indicator-normal) 25%, var(--card-bg)) 0%, color-mix(in srgb, var(--risk-indicator-normal) 5%, var(--card-bg)) 100%);
-  border-color: color-mix(in srgb, var(--risk-indicator-normal) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--card-bg));
+  border-color: var(--risk-indicator-normal) !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, var(--risk-indicator-normal) 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
+
 .alert-kpi-card.highlight-purple.kpi-active {
-  background: linear-gradient(to top, color-mix(in srgb, #3b82f6 25%, var(--card-bg)) 0%, color-mix(in srgb, #3b82f6 5%, var(--card-bg)) 100%);
-  border-color: color-mix(in srgb, #3b82f6 50%, transparent) !important;
+  background: color-mix(in srgb, #3b82f6 10%, var(--card-bg));
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, #3b82f6 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
+
 .alert-kpi-card.highlight-purple-geo.kpi-active {
-  background: linear-gradient(to top, color-mix(in srgb, #8b5cf6 25%, var(--card-bg)) 0%, color-mix(in srgb, #8b5cf6 5%, var(--card-bg)) 100%);
-  border-color: color-mix(in srgb, #8b5cf6 50%, transparent) !important;
+  background: color-mix(in srgb, #8b5cf6 10%, var(--card-bg));
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, #8b5cf6 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 /* ── Célula Empilhada (Volume / Valor) ─────────────────────────────────── */
@@ -2196,23 +2206,23 @@ defineExpose({
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid color-mix(in srgb, white 5%, transparent);
-  padding: 3px;
-  border-radius: 10px;
+  padding: 4px;
+  border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  gap: 2px;
+  gap: 4px;
 }
 
 .view-mode-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 1.2rem;
+  gap: 0.6rem;
+  padding: 0.55rem 1.4rem;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 9px;
   cursor: pointer;
   transition: all 0.2s ease;
   letter-spacing: 0.02em;
@@ -2229,14 +2239,14 @@ defineExpose({
 }
 
 .view-mode-btn.active {
-  background: color-mix(in srgb, var(--primary-color) 15%, white);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
   color: var(--primary-color);
 }
 
 :global(.dark-mode) .view-mode-btn.active {
-  background: color-mix(in srgb, var(--primary-color) 25%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: none;
 }
 
 .view-mode-btn.active i {

@@ -297,22 +297,12 @@ def _sync_movimentacao(engine, progress_callback):
 
 def _sync_crm_benchmarks(engine, progress_callback=None):
     """Tarefa: Gera bench_uf, bench_regiao e bench_br como parquets."""
-    import sys
-    import os
-    # Garante que o diretório atual está no sys.path para o import funcionar
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    if current_dir not in sys.path:
-        sys.path.append(current_dir)
-        
-    try:
-        # Importação dinâmica para evitar dependência circular se houver
-        import exportar_crms
-        exportar_crms.exportar_benchmarks()
-    except ImportError:
-        # Fallback para import relativo se estiver sendo executado como módulo de pacote
-        from . import exportar_crms
-        exportar_crms.exportar_benchmarks()
-        
+    import importlib, sys as _sys
+    # exportar_crms está no mesmo diretório (backend/)
+    if "exportar_crms" not in _sys.modules:
+        importlib.import_module("exportar_crms")
+    from exportar_crms import exportar_benchmarks
+    exportar_benchmarks()
     if progress_callback:
         progress_callback(100)
 
@@ -405,13 +395,13 @@ def load_cache(engine, force_refresh: bool = False) -> None:
     # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
     # Definimos pesos baseados no tempo estimado de execução (total = 100)
     TASKS = [
+        {"name": "Cadastro Medicamentos", "weight": 5,  "func": lambda cb: _sync_medicamentos(engine, cb)},
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Falecidos",             "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
         {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
-        {"name": "Cadastro Medicamentos", "weight": 5,  "func": lambda cb: _sync_medicamentos(engine, cb)},
         {"name": "Movimentação",          "weight": 66, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 

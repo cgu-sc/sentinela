@@ -1931,7 +1931,12 @@ class AnalyticsService:
                     conn, params={"cnpj": cnpj}
                 )
             if not pdf_tx.empty:
-                df_tx = pl.from_pandas(pdf_tx)
+                df_tx = pl.from_pandas(pdf_tx).with_columns([
+                    pl.col("num_autorizacao").cast(pl.Utf8),
+                    pl.col("crm").cast(pl.Utf8),
+                    pl.col("codigo_barra").cast(pl.Utf8),
+                    pl.col("data_hora").cast(pl.Utf8)
+                ])
                 df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
                 print(f"✅ Cache hourly_tx sincronizado: {cnpj}")
         except Exception as e:
@@ -1985,16 +1990,17 @@ class AnalyticsService:
                 pl.lit(None).alias("principio_ativo")
             ])
 
+        # Garante que os campos que o Pydantic espera como String sejam de fato Strings
+        # (SQL e Parquet frequentemente inferem tipos numéricos para IDs longos)
+        enriched_df = enriched_df.with_columns([
+            pl.col("num_autorizacao").cast(pl.Utf8),
+            pl.col("crm").cast(pl.Utf8),
+            pl.col("codigo_barra").cast(pl.Utf8),
+            pl.col("data_hora").cast(pl.Utf8) # Conversão direta para string no Polars é mais eficiente
+        ])
+
         # Converte para o formato do Schema
-        transactions = []
-        for row in enriched_df.to_dicts():
-            # Formata a data para string se necessário
-            if hasattr(row["data_hora"], "isoformat"):
-                row["data_hora"] = row["data_hora"].isoformat()
-            else:
-                row["data_hora"] = str(row["data_hora"])
-            
-            transactions.append(row)
+        transactions = enriched_df.to_dicts()
         
         return CrmHourlyTransactionsResponse(transactions=transactions)
 

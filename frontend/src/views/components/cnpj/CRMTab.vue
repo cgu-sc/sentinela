@@ -1087,54 +1087,75 @@ defineExpose({
                       <th width="8%" class="col-center">Horário</th>
                       <th width="13%">Nº Autorização</th>
                       <th width="14%">CRM</th>
-                      <th width="50%">Descrição / Princípio Ativo</th>
+                      <th width="8%" class="col-center">Qtd.</th>
+                      <th width="42%">Descrição / Princípio Ativo</th>
                       <th width="15%" class="col-right">Valor Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="tx in raioxPagedTransactions" :key="tx.num_autorizacao">
-                      <td class="col-center raiox-time align-top">
-                        {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
-                      </td>
-                      <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
-                      <td class="align-top">
-                        <div class="crm-badge-container">
-                          <span class="issue-tag raiox-crm-tag" 
-                                :style="crmFrequencies[tx.crm] > 1 ? { 
-                                  borderColor: getCRMColor(tx.crm), 
-                                  color: getCRMColor(tx.crm), 
-                                  background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)` 
-                                } : {}">
-                            {{ tx.crm }}/{{ tx.crm_uf }}
-                          </span>
-                          <span v-if="crmFrequencies[tx.crm] > 1" 
-                                class="crm-recurrence-badge" 
-                                :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }"
-                                v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`"
-                          >
-                            {{ crmFrequencies[tx.crm] }}x
-                          </span>
-                        </div>
-                      </td>
-                      <td class="raiox-description-col">
-                        <div class="raiox-items-flat-list">
-                          <div v-for="(item, idx) in tx.items" :key="idx" 
-                               class="raiox-item-flat"
-                               v-tooltip.top="`${item.produto || 'PRODUTO NÃO IDENTIFICADO'} (${item.principio_ativo || '—'})`"
-                          >
-                            <span class="flat-item-prod">
-                              {{ truncate(item.produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}
+                    <template v-for="tx in raioxPagedTransactions" :key="tx.num_autorizacao">
+                      <tr :class="{ 'row-expanded-main': expandedRaioxRows.has(tx.num_autorizacao) }" 
+                          @click="toggleRaioxRow(tx.num_autorizacao)"
+                          class="cursor-pointer">
+                        <td class="col-center raiox-time align-top">
+                          <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']" 
+                             style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
+                          {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
+                        </td>
+                        <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
+                        <td class="align-top">
+                          <div class="crm-badge-container">
+                            <span class="issue-tag raiox-crm-tag" 
+                                  :style="crmFrequencies[tx.crm] > 1 ? { 
+                                    borderColor: getCRMColor(tx.crm), 
+                                    color: getCRMColor(tx.crm), 
+                                    background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)` 
+                                  } : {}">
+                              {{ tx.crm }}/{{ tx.crm_uf }}
                             </span>
-                            <span class="flat-item-princ">
-                              ({{ truncate(item.principio_ativo || '—', 30) }})
+                            <span v-if="crmFrequencies[tx.crm] > 1" 
+                                  class="crm-recurrence-badge" 
+                                  :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }"
+                                  v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`"
+                            >
+                              {{ crmFrequencies[tx.crm] }}x
                             </span>
                           </div>
-                        </div>
-                      </td>
-                      <td class="col-right raiox-val-cell align-top">
-                        R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
-                      </td>
-                    </tr>
+                        </td>
+                        <td class="col-center align-top">
+                          <span class="count-pill">{{ tx.items.length }}</span>
+                        </td>
+                        <td class="align-top">
+                          <div class="raiox-item-summary">
+                            <span class="flat-item-prod">{{ truncate(tx.items[0].produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}</span>
+                            <span class="flat-item-princ"> ({{ truncate(tx.items[0].principio_ativo || '—', 30) }})</span>
+                            <span v-if="tx.items.length > 1" class="more-items-pill">
+                              <i class="pi pi-plus"></i>
+                              {{ tx.items.length - 1 }}
+                            </span>
+                          </div>
+                        </td>
+                        <td class="col-right raiox-val-cell align-top">
+                          R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
+                        </td>
+                      </tr>
+
+                      <!-- Linha de Detalhes Expandida -->
+                      <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-details-expanded-row">
+                        <td colspan="6" class="p-0">
+                          <div class="expanded-items-list animate-fade-in">
+                            <div v-for="(item, idx) in tx.items" :key="idx" class="expanded-item-entry">
+                              <div class="item-main-info">
+                                <span class="item-name">{{ item.produto }}</span>
+                                <span class="item-active">({{ item.principio_ativo || '—' }})</span>
+                                <span class="item-gtin">GTIN: {{ item.codigo_barra }}</span>
+                              </div>
+                              <div class="item-price">R$ {{ item.valor_pago.toFixed(2) }}</div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
                   </tbody>
                 </table>
               </div>
@@ -1616,40 +1637,99 @@ defineExpose({
   padding-top: 1rem !important;
 }
 
-.raiox-description-col {
-  padding: 0 !important;
-}
-
-.raiox-items-flat-list {
-  display: flex;
-  flex-direction: column;
-  padding-left: 1.25rem; /* Respiro extra em relação à coluna do CRM */
-}
-
-.raiox-item-flat {
-  padding: 0.35rem 0.8rem;
+.raiox-item-summary {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--tabs-border);
-  min-height: 1.8rem;
-}
-
-.raiox-item-flat:last-child {
-  border-bottom: none;
+  gap: 0.5rem;
+  padding-top: 0.85rem;
 }
 
 .flat-item-prod {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  letter-spacing: -0.01em;
+}
+
+.flat-item-princ {
+  font-size: 0.68rem;
+  opacity: 0.5;
+  font-style: italic;
+  color: var(--text-color);
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.more-items-pill {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  padding: 0.1rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.more-items-pill i {
+  font-size: 0.5rem;
+  opacity: 0.8;
+}
+
+.expanded-items-list {
+  background: color-mix(in srgb, var(--card-bg) 95%, white 2%);
+  border-bottom: 2px solid var(--tabs-border);
+}
+
+.expanded-item-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 1.5rem 0.6rem 3rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--tabs-border) 30%, transparent);
+}
+
+.expanded-item-entry:last-child {
+  border-bottom: none;
+}
+
+.item-main-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.item-name {
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--primary-color);
 }
 
-.flat-item-princ {
-  font-size: 0.65rem;
+.item-active {
+  font-size: 0.7rem;
   opacity: 0.6;
   font-style: italic;
-  margin-left: 0.4rem;
-  color: var(--text-color);
+}
+
+.item-gtin {
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  opacity: 0.4;
+}
+
+.item-price {
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.row-expanded-main {
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent) !important;
 }
 
 .raiox-table-wrapper {

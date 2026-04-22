@@ -1210,14 +1210,16 @@ defineExpose({
         >
           Detalhamento dos médicos que mais aprovaram medicamentos nesta
           unidade, ordenados pelo financeiro.
-          <span v-if="activeKpiFilter" class="filter-badge">
-            <i class="pi pi-filter-fill"></i>
-            {{ kpiFilterLabels[activeKpiFilter] }} —
-            {{ filteredCrmsInteresse.length }} de {{ crmsInteresse.length }}
-            <button class="clear-filter-btn" @click.stop="clearFilters">
-              <i class="pi pi-times"></i> Limpar filtro
+          <div v-if="activeKpiFilter" class="filter-badge animate-fade-in" v-tooltip.bottom="'Filtro de KPI Ativo'">
+            <i class="pi pi-filter-fill" />
+            <span class="filter-text">
+              <small style="opacity: 0.8; font-weight: 500; margin-right: 2px; text-transform: uppercase; font-size: 0.6rem;">Filtro:</small>
+              {{ kpiFilterLabels[activeKpiFilter] }} — <strong class="filter-count">{{ filteredCrmsInteresse.length }} de {{ crmsInteresse.length }}</strong>
+            </span>
+            <button class="clear-filter-btn" @click.stop="clearFilters" title="Limpar filtro">
+              <i class="pi pi-times" />
             </button>
-          </span>
+          </div>
           <span
             v-else-if="filterOnlyIssues && filteredCrmsInteresse.length < crmsInteresse.length"
             class="text-orange"
@@ -2072,36 +2074,89 @@ defineExpose({
 .filter-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--primary-color);
-  margin-left: 0.5rem;
+  gap: 0.6rem;
+  padding: 0.25rem 0.4rem 0.25rem 0.75rem;
+  background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-high) 25%, transparent);
+  border-radius: 99px;
+  color: var(--risk-high);
+  font-size: 0.72rem;
+  font-weight: 500;
+  margin-left: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  position: relative;
+  overflow: hidden; /* Essencial para o efeito shimmer */
 }
 
-.filter-badge i {
-  font-size: 0.75rem;
+/* Efeito Shimmer (Brilho dinâmico) */
+.filter-badge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+  animation: shimmer-sweep 4s infinite ease-in-out;
+}
+
+@keyframes shimmer-sweep {
+  0% { left: -100%; }
+  15% { left: 100%; }
+  100% { left: 100%; }
+}
+
+.filter-badge i.pi-filter-fill {
+  font-size: 0.65rem;
+  opacity: 0.8;
+  animation: icon-spin-subtle 4s infinite ease-in-out;
+}
+
+@keyframes icon-spin-subtle {
+  0%, 70% { transform: rotate(0deg); }
+  85% { transform: rotate(-360deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+.filter-text {
+  letter-spacing: 0.02em;
+}
+
+.filter-count {
+  font-weight: 800;
+  margin-left: 0.2rem;
 }
 
 .clear-filter-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  margin-left: 0.25rem;
-  padding: 0.15rem 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text-color) 6%, var(--tabs-bg));
-  border: 1px solid var(--tabs-border);
-  border-radius: 4px;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: color-mix(in srgb, var(--risk-high) 15%, transparent);
+  color: var(--risk-high);
+  border: none;
+  border-radius: 50%;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  padding: 0;
 }
 
 .clear-filter-btn:hover {
-  background: color-mix(in srgb, var(--text-color) 12%, var(--tabs-bg));
-  color: var(--text-color);
+  background: var(--risk-high);
+  color: white;
+}
+
+.clear-filter-btn i {
+  font-size: 0.55rem;
+  font-weight: 900;
 }
 
 .alert-kpi-header {

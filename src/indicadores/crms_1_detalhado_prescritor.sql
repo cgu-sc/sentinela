@@ -62,7 +62,8 @@ SELECT
     data_hora,
     crm,
     crm_uf,
-    num_autorizacao
+    num_autorizacao,
+    valor_pago
 INTO #mov_surto_base
 FROM temp_CGUSC.fp.teste_mov_SC
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
@@ -219,21 +220,25 @@ CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.alertas_cnpj_co
 -- Salva apenas o detalhamento das transações (minutos, segundos, numero nativo) das horas doentes.
 DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe;
 
-SELECT 
+SELECT
     A.cnpj,
     A.competencia,
-    A.dt_alerta AS dt_janela,
+    A.dt_alerta                  AS dt_janela,
     A.hr_janela,
-    M.data_hora,
+    MIN(M.data_hora)             AS data_hora,
     M.num_autorizacao,
     M.crm,
-    M.crm_uf
+    M.crm_uf,
+    COUNT(*)                     AS nu_medicamentos,
+    SUM(M.valor_pago)            AS vl_autorizacao
 INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe
 FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial A
-INNER JOIN #mov_surto_base M 
-    ON  M.cnpj = A.cnpj 
-    AND CAST(M.data_hora AS DATE) = A.dt_alerta 
-    AND DATEPART(HOUR, M.data_hora) = A.hr_janela;
+INNER JOIN #mov_surto_base M
+    ON  M.cnpj = A.cnpj
+    AND CAST(M.data_hora AS DATE) = A.dt_alerta
+    AND DATEPART(HOUR, M.data_hora) = A.hr_janela
+GROUP BY A.cnpj, A.competencia, A.dt_alerta, A.hr_janela,
+         M.num_autorizacao, M.crm, M.crm_uf;
 
 CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe(cnpj, dt_janela, hr_janela);
 

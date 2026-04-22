@@ -1917,7 +1917,7 @@ class AnalyticsService:
             os.makedirs(CRMS_DIR, exist_ok=True)
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf "
+                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, nu_medicamentos, vl_autorizacao "
                          "FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
@@ -1966,7 +1966,9 @@ class AnalyticsService:
                 "data_hora": str(row["data_hora"]),
                 "num_autorizacao": str(row["num_autorizacao"]),
                 "crm": str(row["crm"]),
-                "crm_uf": str(row["crm_uf"])
+                "crm_uf": str(row["crm_uf"]),
+                "nu_medicamentos": int(row["nu_medicamentos"] or 0),
+                "vl_autorizacao": float(row["vl_autorizacao"] or 0)
             }
             for row in filtered_df.iter_rows(named=True)
         ]

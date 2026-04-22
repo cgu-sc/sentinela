@@ -98,7 +98,8 @@ const chartOptionDaily = computed(() => {
     animation: true,
     animationDuration: 1000,
     animationEasing: 'cubicOut',
-    grid: { top: 32, right: 20, bottom: 80, left: 50, containLabel: false },
+    legend: { show: false },
+    grid: { top: 16, right: 20, bottom: 80, left: 50, containLabel: false },
     xAxis: {
       type: 'category',
       data: dailyDates.value,
@@ -163,7 +164,7 @@ const chartOptionDaily = computed(() => {
             <div style="display:flex; flex-direction:column; gap:8px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume Total</span>
-                <span style="font-weight:700; font-size:13px;">${day.nu_prescricoes_dia} <small>presc.</small></span>
+                <span style="font-weight:700; font-size:13px;">${day.nu_prescricoes_dia} <small>autorizações</small></span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
@@ -311,16 +312,9 @@ const chartOptionHourly = computed(() => {
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: 'Inter, sans-serif' },
 
-    legend: {
-      top: 6,
-      left: 'center',
-      textStyle: { color: c.muted, fontSize: 11, fontWeight: 600 },
-      itemGap: 20,
-      itemWidth: 12,
-      itemHeight: 8,
-    },
+    legend: { show: false },
 
-    grid: { top: 44, left: 54, right: 20, bottom: 42, containLabel: false },
+    grid: { top: 16, left: 54, right: 20, bottom: 42, containLabel: false },
 
     xAxis: {
       type: 'category',
@@ -364,7 +358,7 @@ const chartOptionHourly = computed(() => {
         const dataIndex = params[0]?.dataIndex ?? 0;
         const ptInfo = fullPoints[dataIndex];
         
-        const volItem = params.find(p => p.seriesName === 'Prescrições (Volume)');
+        const volItem = params.find(p => p.seriesName === 'Autorizações (Volume)');
         const vol  = volItem?.value ?? 0;
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
@@ -381,7 +375,7 @@ const chartOptionHourly = computed(() => {
                   <span style="width:10px;height:10px;border-radius:2px;background:#ef4444;display:inline-block;"></span>
                   <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Volume</span>
                 </span>
-                <span style="font-weight:700; font-size:13px;">${vol} <small>presc.</small></span>
+                <span style="font-weight:700; font-size:13px;">${vol} <small>autorizações</small></span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="display:flex;align-items:center;gap:6px;">
@@ -402,7 +396,7 @@ const chartOptionHourly = computed(() => {
 
     series: [
       {
-        name: 'Prescrições (Volume)',
+        name: 'Autorizações (Volume)',
         type: 'bar',
         barMaxWidth: 28,
         data: fullPoints.map((p, i) => ({ 
@@ -935,13 +929,28 @@ defineExpose({
           <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
           <span>Sem dados de perfil diário disponíveis.</span>
         </div>
-        <VChart
-          v-else
-          :option="chartOptionDaily"
-          autoresize
-          class="daily-dispensacao-chart"
-          @click="onChartClick"
-        />
+        <div v-else class="daily-chart-wrapper">
+          <div class="chart-legend-html">
+            <span class="legend-item">
+              <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
+              Autorizações (anomalia)
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
+              Autorizações (normal)
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch legend-dashed"></span>
+              Mediana Referência
+            </span>
+          </div>
+          <VChart
+            :option="chartOptionDaily"
+            autoresize
+            class="daily-dispensacao-chart"
+            @click="onChartClick"
+          />
+        </div>
 
         <!-- Detalhamento Horário (Drill-down) -->
         <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in" :class="{ 'is-refreshing': showRefreshingHourly }">
@@ -969,12 +978,28 @@ defineExpose({
               Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia,
               comparando o volume real com a mediana trimestral de cada horário.
             </p>
-            <VChart
-              :option="chartOptionHourly"
-              autoresize
-              class="hourly-chart"
-              @click="onHourlyChartClick"
-            />
+            <div class="daily-chart-wrapper">
+              <div class="chart-legend-html">
+                <span class="legend-item">
+                  <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
+                  Autorizações (anomalia)
+                </span>
+                <span class="legend-item">
+                  <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
+                  Autorizações (normal)
+                </span>
+                <span class="legend-item">
+                  <span class="legend-swatch legend-dashed"></span>
+                  Mediana Referência
+                </span>
+              </div>
+              <VChart
+                :option="chartOptionHourly"
+                autoresize
+                class="hourly-chart"
+                @click="onHourlyChartClick"
+              />
+            </div>
 
             <!-- Tabela Raio-X Sub-horário (Transactions Literal) -->
             <div v-if="selectedHourlyHour !== null" class="raiox-wrapper animate-fade-in">
@@ -1001,9 +1026,11 @@ defineExpose({
                 <table class="premium-table row-hover raiox-table">
                   <thead class="sticky-thead">
                     <tr>
-                      <th class="col-center">Horário Exato</th>
-                      <th>Nº Autorização Nativa</th>
-                      <th>CRM Prescritor (UF)</th>
+                      <th class="col-center">Horário</th>
+                      <th>Nº Autorização</th>
+                      <th>CRM Prescritor</th>
+                      <th class="col-center">Medicamentos</th>
+                      <th class="col-right">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1013,6 +1040,8 @@ defineExpose({
                       <td>
                         <span class="issue-tag raiox-crm-tag">{{ tx.crm_uf }} {{ tx.crm }}</span>
                       </td>
+                      <td class="col-center">{{ tx.nu_medicamentos }}</td>
+                      <td class="col-right">{{ tx.vl_autorizacao != null ? `R$ ${tx.vl_autorizacao.toFixed(2)}` : '—' }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2296,6 +2325,44 @@ input:checked + .toggle-slider:before {
   font-weight: 500;
   color: var(--text-color);
   text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color);
+}
+
+.daily-chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.chart-legend-html {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0.35rem 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-dashed {
+  background: none;
+  border-top: 2px dashed #f59e0b;
+  height: 0;
+  width: 18px;
+  border-radius: 0;
 }
 
 .daily-dispensacao-chart {

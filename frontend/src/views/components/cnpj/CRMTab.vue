@@ -249,6 +249,26 @@ const groupedRaiox = computed(() => {
   return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
 });
 
+// Inteligência de Recorrência de CRM
+const crmFrequencies = computed(() => {
+  const freqs = {};
+  groupedRaiox.value.forEach(tx => {
+    freqs[tx.crm] = (freqs[tx.crm] || 0) + 1;
+  });
+  return freqs;
+});
+
+function getCRMColor(crm) {
+  if (!crm) return 'var(--primary-color)';
+  let hash = 0;
+  for (let i = 0; i < crm.length; i++) {
+    hash = crm.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash % 360);
+  // No Dark Mode, usamos cores mais vibrantes/claras (65% lightness)
+  return `hsl(${h}, 70%, 65%)`;
+}
+
 const raioxTotalPages = computed(() => Math.ceil(groupedRaiox.value.length / RAIOX_PAGE_SIZE));
 const raioxPagedTransactions = computed(() =>
   groupedRaiox.value.slice(raioxPage.value * RAIOX_PAGE_SIZE, (raioxPage.value + 1) * RAIOX_PAGE_SIZE)
@@ -301,6 +321,12 @@ async function onHourlyChartClick(params) {
   } finally {
     hourlyTransactionsLoading.value = false;
   }
+}
+
+// Helper para truncar texto
+function truncate(str, n) {
+  if (!str) return '';
+  return str.length > n ? str.substring(0, n - 1) + '...' : str;
 }
 
 const chartOptionHourly = computed(() => {
@@ -1055,66 +1081,66 @@ defineExpose({
               </div>
 
               <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': hourlyTransactionsLoading }">
-                <table class="premium-table row-hover raiox-table">
+                <table class="premium-table row-hover raiox-table flat-mode">
                   <thead class="sticky-thead">
                     <tr>
-                      <th class="col-center">Horário</th>
-                      <th>Nº Autorização</th>
-                      <th>CRM</th>
-                      <th class="col-center">nº Medicamentos</th>
-                      <th class="col-right">Valor</th>
+                      <th width="8%" class="col-center">Horário</th>
+                      <th width="13%">Nº Autorização</th>
+                      <th width="14%">CRM</th>
+                      <th width="50%">Descrição / Princípio Ativo</th>
+                      <th width="15%" class="col-right">Valor Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <template v-for="(tx, idx) in raioxPagedTransactions" :key="tx.num_autorizacao">
-                      <tr :class="{ 'row-expanded': expandedRaioxRows.has(tx.num_autorizacao) }" @click="toggleRaioxRow(tx.num_autorizacao)">
-                        <td class="col-center raiox-time">
-                          <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']" style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
-                          {{ tx.data_hora.split(' ')[1] || tx.data_hora }}
-                        </td>
-                        <td class="raiox-auth">{{ tx.num_autorizacao }}</td>
-                        <td>
-                          <span class="issue-tag raiox-crm-tag">{{ tx.crm }}/{{ tx.crm_uf }}</span>
-                        </td>
-                        <td class="col-center">
-                          <span class="count-pill">{{ tx.nu_medicamentos }}</span>
-                        </td>
-                        <td class="col-right raiox-val-cell">R$ {{ tx.vl_autorizacao.toFixed(2) }}</td>
-                      </tr>
-                      
-                      <!-- Detalhes dos Itens (Expandido) -->
-                      <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-detail-row">
-                        <td colspan="5">
-                          <div class="raiox-items-container animate-fade-in">
-                            <table class="raiox-items-table">
-                              <thead>
-                                <tr>
-                                  <th>Medicamento / GTIN</th>
-                                  <th>Princípio Ativo</th>
-                                  <th class="col-right">Valor Item</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr v-for="item in tx.items" :key="item.codigo_barra">
-                                  <td>
-                                    <div class="item-name">{{ item.produto || 'PRODUTO NÃO IDENTIFICADO' }}</div>
-                                    <div class="item-gtin">{{ item.codigo_barra }}</div>
-                                  </td>
-                                  <td class="item-active">{{ item.principio_ativo || '—' }}</td>
-                                  <td class="col-right item-val">R$ {{ item.valor_pago.toFixed(2) }}</td>
-                                </tr>
-                              </tbody>
-                            </table>
+                    <tr v-for="tx in raioxPagedTransactions" :key="tx.num_autorizacao">
+                      <td class="col-center raiox-time align-top">
+                        {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
+                      </td>
+                      <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
+                      <td class="align-top">
+                        <div class="crm-badge-container">
+                          <span class="issue-tag raiox-crm-tag" 
+                                :style="crmFrequencies[tx.crm] > 1 ? { 
+                                  borderColor: getCRMColor(tx.crm), 
+                                  color: getCRMColor(tx.crm), 
+                                  background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)` 
+                                } : {}">
+                            {{ tx.crm }}/{{ tx.crm_uf }}
+                          </span>
+                          <span v-if="crmFrequencies[tx.crm] > 1" 
+                                class="crm-recurrence-badge" 
+                                :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }"
+                                v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`"
+                          >
+                            {{ crmFrequencies[tx.crm] }}x
+                          </span>
+                        </div>
+                      </td>
+                      <td class="raiox-description-col">
+                        <div class="raiox-items-flat-list">
+                          <div v-for="(item, idx) in tx.items" :key="idx" 
+                               class="raiox-item-flat"
+                               v-tooltip.top="`${item.produto || 'PRODUTO NÃO IDENTIFICADO'} (${item.principio_ativo || '—'})`"
+                          >
+                            <span class="flat-item-prod">
+                              {{ truncate(item.produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}
+                            </span>
+                            <span class="flat-item-princ">
+                              ({{ truncate(item.principio_ativo || '—', 30) }})
+                            </span>
                           </div>
-                        </td>
-                      </tr>
-                    </template>
+                        </div>
+                      </td>
+                      <td class="col-right raiox-val-cell align-top">
+                        R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
 
               <div v-if="raioxTotalPages > 1" class="raiox-pagination">
-                <span>{{ raioxPage * RAIOX_PAGE_SIZE + 1 }}–{{ Math.min((raioxPage + 1) * RAIOX_PAGE_SIZE, hourlyTransactions.length) }} de {{ hourlyTransactions.length }}</span>
+                <span>{{ raioxPage * RAIOX_PAGE_SIZE + 1 }}–{{ Math.min((raioxPage + 1) * RAIOX_PAGE_SIZE, groupedRaiox.length) }} de {{ groupedRaiox.length }}</span>
                 <div class="raiox-pagination-controls">
                   <button class="raiox-page-btn" :disabled="raioxPage === 0" @click="raioxPage--">
                     <i class="pi pi-chevron-left" /> Anterior
@@ -1584,125 +1610,152 @@ defineExpose({
   font-size: 0.75rem;
 }
 
-.raiox-detail-row {
-  background: color-mix(in srgb, var(--bg-color) 95%, black) !important;
-}
-:global(.dark-mode) .raiox-detail-row {
-  background: color-mix(in srgb, var(--card-bg) 98%, white) !important;
-}
-
-.raiox-items-container {
-  padding: 0.75rem 1rem 1.25rem 3rem;
+/* Estilos de Detalhamento Flat */
+.align-top {
+  vertical-align: top !important;
+  padding-top: 1rem !important;
 }
 
-.raiox-items-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.75rem;
-  border: 1px solid var(--tabs-border);
-  border-radius: 6px;
-  overflow: hidden;
+.raiox-description-col {
+  padding: 0 !important;
 }
 
-.raiox-items-table th {
-  padding: 0.4rem 0.75rem;
-  background: color-mix(in srgb, var(--text-color) 4%, transparent);
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-secondary);
+.raiox-items-flat-list {
+  display: flex;
+  flex-direction: column;
+  padding-left: 1.25rem; /* Respiro extra em relação à coluna do CRM */
+}
+
+.raiox-item-flat {
+  padding: 0.35rem 0.8rem;
+  display: flex;
+  align-items: center;
   border-bottom: 1px solid var(--tabs-border);
+  min-height: 1.8rem;
 }
 
-.raiox-items-table td {
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--tabs-border);
-  background: var(--card-bg);
+.raiox-item-flat:last-child {
+  border-bottom: none;
 }
 
-.item-name {
+.flat-item-prod {
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--primary-color);
 }
 
-.item-gtin {
+.flat-item-princ {
   font-size: 0.65rem;
   opacity: 0.6;
-  font-family: monospace;
-}
-
-.item-active {
-  color: var(--text-secondary);
   font-style: italic;
+  margin-left: 0.4rem;
+  color: var(--text-color);
 }
 
-.item-val {
-  font-weight: 600;
+.raiox-table-wrapper {
+  border-radius: 6px;
+  max-height: 480px; /* Limite máximo de altura */
+  overflow-y: auto;  /* Habilita scroll interno */
+  background: color-mix(in srgb, var(--card-bg) 40%, transparent);
+  border: 1px solid var(--tabs-border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) transparent;
 }
 
-.raiox-table { font-size: 0.75rem; }
+.raiox-table { 
+  font-size: 0.75rem; 
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: separate; /* Necessário para sticky header funcionar bem */
+  border-spacing: 0;
+}
+
+.sticky-thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card-bg) !important; /* Fundo sólido para cobrir os itens ao rolar */
+  box-shadow: inset 0 -1px 0 var(--tabs-border);
+}
+
 .raiox-table .col-center { text-align: center; }
 
-.raiox-time {
-  font-weight: 600;
-  color: var(--risk-medium);
+.crm-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-right: 0.8rem; /* Espaço para não encostar na descrição */
 }
 
-.raiox-auth {
-  opacity: 0.85;
-  font-size: 0.78rem;
+.crm-recurrence-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: transparent;
+  animation: pulse-soft 2.5s infinite;
 }
 
-.raiox-crm-tag {
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--surface-card));
-  color: var(--text-color);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+@keyframes pulse-soft {
+  0% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.7; transform: scale(1); }
 }
 
 .raiox-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.5rem;
+  padding: 0.85rem 0.5rem 0.25rem 0.5rem;
+  margin-top: 0.5rem;
   border-top: 1px solid var(--tabs-border);
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .raiox-pagination-controls {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.75rem;
 }
 
 .raiox-page-btn {
-  background: var(--surface-card);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--card-bg) 60%, white 5%);
+  border: 1px solid var(--tabs-border);
+  color: var(--text-color);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
   cursor: pointer;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
-  transition: all 0.15s ease;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .raiox-page-btn:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-color);
+  background: var(--primary-color);
+  color: white;
   border-color: var(--primary-color);
+  transform: translateY(-1px);
 }
 
 .raiox-page-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .raiox-page-info {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
   color: var(--text-muted);
-  padding: 0 0.25rem;
+  background: var(--tabs-border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
 }
 
 .empty-icon {

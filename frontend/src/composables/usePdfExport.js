@@ -983,7 +983,7 @@ export function usePdfExport() {
             const issues = [];
             if (m.flag_robo > 0) issues.push('>30 presc/dia local');
             if (m.flag_robo_oculto > 0 && !m.flag_robo) issues.push('>30 presc/dia Brasil');
-            if (m.alerta2_tempo_concentrado || m.alerta2) issues.push('Lançamentos sequenciais');
+            if (m.alerta_concentracao_mesmo_crm) issues.push('Lançamentos sequenciais');
             if (m.flag_crm_invalido > 0) issues.push('CRM Inexistente');
             if (m.flag_prescricao_antes_registro > 0) issues.push('CRM Irregular (Autor. antes do Registro)');
             if (m.qtd_estabelecimentos_atua === 1) issues.push('Exclusivo do CNPJ');

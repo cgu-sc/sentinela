@@ -337,8 +337,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
     qtd_alerta_geo = sum(1 for p in top20_prescritores
                          if p.get('alerta5_geografico', '') or p.get('alerta_geografico', '') or p.get('alerta5', ''))
     qtd_multi_farmacia = sum(1 for p in top20_prescritores if p.get('flag_multi_farmacia', 0) == 1)
-    qtd_tempo_concentrado = sum(1 for p in top20_prescritores
-                                if p.get('alerta2_tempo_concentrado', '') or p.get('alerta2', ''))
+    qtd_tempo_concentrado = sum(1 for p in top20_prescritores if p.get('alerta_concentracao_mesmo_crm', ''))
     qtd_prescricao_antes_registro = sum(1 for p in top20_prescritores
                                         if p.get('flag_prescricao_antes_registro', 0) == 1)
 
@@ -616,7 +615,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
             dt_inscricao_crm = presc.get('dt_inscricao_crm', None)
 
             alerta1 = presc.get('alerta1_crm_invalido', '') or presc.get('alerta1', '') or ''
-            alerta2 = presc.get('alerta2_tempo_concentrado', '') or presc.get('alerta2', '') or ''
+            alerta2 = presc.get('alerta_concentracao_mesmo_crm', '') or ''
             alerta3 = presc.get('alerta3_robo_estabelecimento', '') or presc.get('alerta3', '') or ''
             alerta4 = presc.get('alerta4_robo_rede', '') or presc.get('alerta4', '') or ''
             alerta_geo = presc.get('alerta5_geografico', '') or presc.get('alerta_geografico', '') or presc.get(
@@ -862,12 +861,12 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
             # Lista dos CRMs com tempo concentrado
             prescritores_com_tempo_conc = [
                 p for p in top20_prescritores
-                if p.get('alerta2_tempo_concentrado', '') or p.get('alerta2', '')
+                if p.get('alerta_concentracao_mesmo_crm', '')
             ]
 
             for p in prescritores_com_tempo_conc:
                 id_medico = p.get('id_medico', '')
-                alerta2 = p.get('alerta2_tempo_concentrado', '') or p.get('alerta2', '')
+                alerta2 = p.get('alerta_concentracao_mesmo_crm', '')
 
                 # Escreve o detalhe do alerta (pode ocupar múltiplas linhas se necessário)
                 ws.merge_range(row_alertas, 1, row_alertas, 7,

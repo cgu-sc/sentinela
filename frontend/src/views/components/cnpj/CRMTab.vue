@@ -519,14 +519,10 @@ const qtdPrescrIntensivaTotal = computed(() => {
 
 // CRMs Inválidos e Irregulares
 const qtdCrmInvalido = computed(
-  () =>
-    summary.value.qtd_crm_invalido ??
-    crmsInteresse.value.filter((m) => m.flag_crm_invalido > 0).length,
+  () => crmsInteresse.value.filter((m) => m.flag_crm_invalido > 0).length,
 );
 const qtdPrescrAntesRegistro = computed(
-  () =>
-    summary.value.qtd_crm_antes_registro ??
-    crmsInteresse.value.filter((m) => m.flag_prescricao_antes_registro > 0).length,
+  () => crmsInteresse.value.filter((m) => m.flag_prescricao_antes_registro > 0).length,
 );
 const totalIrregularesCfm = computed(
   () => qtdCrmInvalido.value + qtdPrescrAntesRegistro.value,
@@ -548,9 +544,7 @@ const qtdCrmExclusivo = computed(
 );
 
 const qtdLancamentosAgrupados = computed(
-  () =>
-    summary.value.qtd_prescritores_conc_temporal ||
-    crmsInteresse.value.filter((m) => m.alerta2_tempo_concentrado || m.alerta2).length,
+  () => crmsInteresse.value.filter((m) => m.alerta_concentracao_mesmo_crm).length,
 );
 
 // Surtos de Lançamento (Frequência horária do Estabelecimento)
@@ -608,7 +602,7 @@ const viewMode = ref('medicos'); // 'medicos' ou 'cronologia'
 const kpiFilters = {
   top1: (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
   top5: (m) => crmsInteresse.value.slice(0, 5).some((t) => t.id_medico === m.id_medico),
-  agrupamento: (m) => !!(m.alerta2_tempo_concentrado || m.alerta2),
+  agrupamento: (m) => !!m.alerta_concentracao_mesmo_crm,
   intensiva: (m) => m.flag_robo > 0 || m.flag_robo_oculto > 0,
   exclusivo: (m) => m.flag_crm_exclusivo > 0,
   fraude_crm: (m) =>
@@ -620,12 +614,12 @@ const kpiFilters = {
 const kpiFilterLabels = {
   top1: "Concentração TOP 1",
   top5: "Concentração TOP 5",
-  agrupamento: "Prescrição Bloco",
+  agrupamento: "CONCENTRAÇÃO MESMO CRM",
   intensiva: ">30 Prescrições/Dia",
   exclusivo: "CRM Exclusivo",
   fraude_crm: "Fraudes CRM",
   distancia: "Distância (>400km)",
-  surtos_cnpj: "Concentração Horária",
+  surtos_cnpj: "CONCENTRAÇÃO CRMs DIVERSOS",
 };
 
 function setKpiFilter(key) {
@@ -645,8 +639,7 @@ function clearFilters() {
 const hasAnyIssue = (m) =>
   m.flag_robo > 0 ||
   m.flag_robo_oculto > 0 ||
-  m.alerta2_tempo_concentrado ||
-  m.alerta2 ||
+  m.alerta_concentracao_mesmo_crm ||
   m.flag_crm_invalido > 0 ||
   m.flag_prescricao_antes_registro > 0 ||
   m.alerta5_geografico ||
@@ -828,7 +821,7 @@ defineExpose({
             @click="setKpiFilter('agrupamento')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">PRESCRIÇÃO BLOCO</span>
+              <span class="alert-kpi-label">CONCENTRAÇÃO MESMO CRM</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -967,7 +960,7 @@ defineExpose({
             @click="setKpiFilter('surtos_cnpj')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">CONCENTRAÇÃO HORÁRIA</span>
+              <span class="alert-kpi-label">CONCENTRAÇÃO CRMs DIVERSOS</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -1273,8 +1266,8 @@ defineExpose({
                 :key="i"
               >
               <tr
-                :class="{ 'row-expandable': m.alerta2_tempo_concentrado || m.alerta2 }"
-                @click="(m.alerta2_tempo_concentrado || m.alerta2) && toggleAlertasDiarios(m.id_medico)"
+                :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm }"
+                @click="m.alerta_concentracao_mesmo_crm && toggleAlertasDiarios(m.id_medico)"
               >
                 <td>
                   <div class="med-id">{{ m.id_medico }}</div>
@@ -1296,7 +1289,7 @@ defineExpose({
                       <i class="pi pi-globe"></i> >30 Presc/dia BR
                     </span>
                     <span
-                      v-if="m.alerta2_tempo_concentrado || m.alerta2"
+                      v-if="m.alerta_concentracao_mesmo_crm"
                       class="issue-tag green-ok clickable-badge"
                       v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                       @click.stop="toggleAlertasDiarios(m.id_medico)"

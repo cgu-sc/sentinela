@@ -1536,7 +1536,7 @@ class AnalyticsService:
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
-                pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta2_tempo_concentrado"),
+                pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_mesmo_crm"),
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
             ])
             .with_columns([

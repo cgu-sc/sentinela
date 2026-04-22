@@ -555,7 +555,7 @@ const kpiFilters = {
 const kpiFilterLabels = {
   top1: "Concentração TOP 1",
   top5: "Concentração TOP 5",
-  agrupamento: "Prescrição em Bloco",
+  agrupamento: "Prescrição Bloco",
   intensiva: ">30 Prescrições/Dia",
   exclusivo: "CRM Exclusivo",
   fraude_crm: "Fraudes CRM",
@@ -741,7 +741,7 @@ defineExpose({
             @click="setKpiFilter('agrupamento')"
           >
             <div class="alert-kpi-header">
-              <span class="alert-kpi-label">PRESCRIÇÃO EM BLOCO</span>
+              <span class="alert-kpi-label">PRESCRIÇÃO BLOCO</span>
               <i
                 class="pi pi-info-circle kpi-info-icon"
                 v-tooltip.top="
@@ -1078,16 +1078,14 @@ defineExpose({
           <table class="ind-table premium-table row-hover">
             <thead class="sticky-thead">
               <tr>
-                <th>CRM / Médico</th>
-                <th>Status / Alertas</th>
-                <th class="col-right">Qtd. Total</th>
-                <th class="col-right">Valor Total</th>
-                <th class="col-center">% Vendas</th>
-                <th class="col-center">% Acum.</th>
-                <th class="col-center">Rede (Network)</th>
-                <th class="col-center">Presc/Dia (Local)</th>
-                <th class="col-center">Presc/Dia (Brasil)</th>
-                <th class="col-center">% Exclusividade</th>
+                <th style="width: 10%">CRM / Médico</th>
+                <th style="width: 34%">Status / Alertas</th>
+                <th class="col-right" style="width: 15%">Volume / Valor</th>
+                <th class="col-center" style="width: 16%">Participação / Acumulado</th>
+                <th class="col-center" style="width: 8%">Rede</th>
+                <th class="col-center" style="width: 6%">P/D Loc.</th>
+                <th class="col-center" style="width: 6%">P/D BR</th>
+                <th class="col-center" style="width: 5%">Excl.</th>
               </tr>
             </thead>
             <tbody>
@@ -1121,7 +1119,7 @@ defineExpose({
                       v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                       @click.stop="toggleAlertasDiarios(m.id_medico)"
                     >
-                      <i class="pi pi-stopwatch"></i> Prescrição em Bloco
+                      <i class="pi pi-stopwatch"></i> Prescrição Bloco
                       <span v-if="m.alertas_diarios?.length > 1" class="badge-count">
                         ({{ m.alertas_diarios.length }}x)
                       </span>
@@ -1159,35 +1157,27 @@ defineExpose({
                   </div>
                 </td>
                 <td class="col-right">
-                  {{ formatNumberFull(m.nu_prescricoes) }}
-                </td>
-                <td class="col-right text-primary">
-                  {{ formatCurrencyFull(m.vl_total_prescricoes) }}
-                </td>
-                <td class="col-center">
-                  <div class="bar-container">
-                    <div
-                      class="bar-fill"
-                      :style="{
-                        width: Math.min(m.pct_participacao, 100) + '%',
-                      }"
-                    ></div>
-                    <span class="bar-text">{{
-                      formatPct(m.pct_participacao)
-                    }}</span>
+                  <div class="cell-stacked">
+                    <span class="cell-main text-primary">{{ formatCurrencyFull(m.vl_total_prescricoes) }}</span>
+                    <span class="cell-sub">{{ formatNumberFull(m.nu_prescricoes) }} autorizações</span>
                   </div>
                 </td>
                 <td class="col-center">
-                  <div class="bar-container">
-                    <div
-                      class="bar-fill"
-                      :style="{
-                        width: Math.min(m.pct_acumulado, 100) + '%',
-                      }"
-                    ></div>
-                    <span class="bar-text text-sm">{{
-                      formatPct(m.pct_acumulado)
-                    }}</span>
+                  <div class="multi-bar-container">
+                    <div class="bar-row">
+                      <span class="bar-label">part.</span>
+                      <div class="bar-container">
+                        <div class="bar-fill part-fill" :style="{ width: Math.min(m.pct_participacao, 100) + '%' }"></div>
+                        <span class="bar-text">{{ formatPct(m.pct_participacao) }}</span>
+                      </div>
+                    </div>
+                    <div class="bar-row">
+                      <span class="bar-label">acum.</span>
+                      <div class="bar-container">
+                        <div class="bar-fill acum-fill" :style="{ width: Math.min(m.pct_acumulado, 100) + '%' }"></div>
+                        <span class="bar-text">{{ formatPct(m.pct_acumulado) }}</span>
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td class="col-center">
@@ -1698,6 +1688,67 @@ defineExpose({
   border-color: color-mix(in srgb, #8b5cf6 50%, transparent) !important;
 }
 
+/* ── Célula Empilhada (Volume / Valor) ─────────────────────────────────── */
+.cell-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  line-height: 1.2;
+}
+
+.cell-main {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.cell-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* ── Multi-Bar Layout (Part. / Acum.) ─────────────────────────────────── */
+.multi-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 120px;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.bar-row .bar-container {
+  flex: 1;
+}
+
+.bar-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  min-width: 36px; /* Aumentado levemente para acomodar "acum." com folga */
+  text-align: left;
+  opacity: 0.7;
+}
+
+.part-fill {
+  background: #6366f1 !important; /* Indigo 500 */
+  opacity: 0.7 !important;
+}
+
+.acum-fill {
+  background: #f59e0b !important; /* Amber 500 */
+  opacity: 0.7 !important;
+}
+
 .filter-badge {
   display: inline-flex;
   align-items: center;
@@ -1938,6 +1989,7 @@ input:checked + .toggle-slider:before {
 .premium-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .premium-table th {
@@ -1966,8 +2018,9 @@ input:checked + .toggle-slider:before {
 /* Coluna de Status mais larga */
 .premium-table th:nth-child(2),
 .premium-table td:nth-child(2) {
-  min-width: 320px;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .premium-table tbody tr:last-child td {

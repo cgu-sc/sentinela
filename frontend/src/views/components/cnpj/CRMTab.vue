@@ -1699,7 +1699,7 @@ defineExpose({
 
 .cell-main {
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .cell-sub {
@@ -1740,13 +1740,13 @@ defineExpose({
 }
 
 .part-fill {
-  background: #6366f1 !important; /* Indigo 500 */
-  opacity: 0.7 !important;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.55), rgba(129, 140, 248, 0.82)) !important;
+  opacity: 1 !important;
 }
 
 .acum-fill {
-  background: #f59e0b !important; /* Amber 500 */
-  opacity: 0.7 !important;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.55), rgba(251, 191, 36, 0.82)) !important;
+  opacity: 1 !important;
 }
 
 .filter-badge {
@@ -2212,24 +2212,40 @@ input:checked + .toggle-slider:before {
 
 .bar-container {
   position: relative;
-  height: 1.1rem; /* Levemente mais baixa */
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+  height: 1.2rem;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
   overflow: hidden;
   display: flex;
   align-items: center;
-  min-width: 45px; /* Reduzido de 60 para 45 */
+  min-width: 45px;
+  border: 1px solid rgba(128, 128, 128, 0.12);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 :global(.dark-mode) .bar-container {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 .bar-fill {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  background: var(--primary-color);
-  opacity: 0.2;
+  border-radius: 0 5px 5px 0;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.04) 55%,
+    rgba(0, 0, 0, 0.06) 100%
+  );
+  border-radius: inherit;
+  pointer-events: none;
 }
 .bar-text {
   position: relative;

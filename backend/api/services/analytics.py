@@ -1472,7 +1472,7 @@ class AnalyticsService:
         import pandas as pd
 
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_crms.parquet")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dados_crms.parquet")
 
         # ── helpers de competência ────────────────────────────────────────────
         def _to_comp(date_str: str) -> int:
@@ -1644,7 +1644,7 @@ class AnalyticsService:
         }
 
         # ── 7. Alertas diários — injeta em cada médico ────────────────────────
-        ALERTAS_DIARIOS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_alertas_diarios.parquet")
+        ALERTAS_DIARIOS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_mesmo_crm.parquet")
         df_ad: pl.DataFrame | None = None
         
         # Tenta carregar do cache parquet
@@ -1702,7 +1702,7 @@ class AnalyticsService:
             m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
-        CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_cnpj_alerts.parquet")
+        CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_crm_estabelecimento.parquet")
         df_ca: pl.DataFrame | None = None
         if os.path.exists(CNPJ_ALERTS_PATH):
             try:
@@ -1771,7 +1771,7 @@ class AnalyticsService:
         import pandas as pd
 
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_daily.parquet")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dispensacao_diaria.parquet")
 
         df: pl.DataFrame | None = None
         if os.path.exists(PARQUET_PATH):
@@ -1839,7 +1839,7 @@ class AnalyticsService:
         from sqlalchemy import text
         
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly.parquet")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dispensacao_horaria.parquet")
 
         df: pl.DataFrame | None = None
         if os.path.exists(PARQUET_PATH):
@@ -1908,7 +1908,7 @@ class AnalyticsService:
         from database import engine as _engine
         
         CRMS_DIR = os.path.join(get_cache_dir(), "crms")
-        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly_tx.parquet")
+        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
 
         if os.path.exists(TX_PARQUET_PATH):
             return
@@ -1940,7 +1940,7 @@ class AnalyticsService:
         from api.schemas.analytics import CrmHourlyTransactionsResponse
         
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_hourly_tx.parquet")
+        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
 
         df = pl.DataFrame()
         if not os.path.exists(PARQUET_PATH):

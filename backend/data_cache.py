@@ -484,10 +484,10 @@ def get_df_dados_farmacia() -> pl.DataFrame:
     return _df_dados_farmacia
 
 def get_medicamentos_df() -> pl.DataFrame:
+    global _df_medicamentos
     if _df_medicamentos is None:
         # Se não carregado, tentamos ler do parquet direto se existir
         if os.path.exists(_MEDICAMENTOS_PARQUET_PATH):
-            global _df_medicamentos
             _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
             return _df_medicamentos
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")

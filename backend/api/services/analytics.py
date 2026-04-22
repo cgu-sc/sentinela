@@ -1503,7 +1503,7 @@ class AnalyticsService:
                 if pdf.empty:
                     return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
                 df = pl.from_pandas(pdf)
-                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "flag_surto"]:
+                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "flag_concentracao_estabelecimento"]:
                     if col in df.columns:
                         df = df.with_columns(pl.col(col).cast(pl.Int8))
                 df.write_parquet(PARQUET_PATH, compression="lz4")
@@ -1524,20 +1524,6 @@ class AnalyticsService:
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
 
-        df = df.with_columns(
-            pl.when(pl.col("alerta_concentracao_temporal").is_not_null())
-            .then(
-                pl.concat_str([
-                    pl.col("competencia").cast(pl.Utf8)
-                      .str.replace_all(r"(\d{4})(\d{2})", "${2}/${1}"),
-                    pl.lit(": "),
-                    pl.col("alerta_concentracao_temporal"),
-                ])
-            )
-            .otherwise(None)
-            .alias("alerta_temporal_com_periodo")
-        )
-
         df_med = (
             df.group_by("id_medico")
             .agg([
@@ -1549,8 +1535,8 @@ class AnalyticsService:
                 pl.max("nu_estabelecimentos").alias("qtd_estabelecimentos_atua"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
-                pl.max("flag_surto").alias("flag_surto"),
-                pl.col("alerta_temporal_com_periodo").drop_nulls().str.join(" | ").alias("alerta2_tempo_concentrado"),
+                pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
+                pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta2_tempo_concentrado"),
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
             ])
             .with_columns([
@@ -1589,7 +1575,7 @@ class AnalyticsService:
         qtd_robos_ocultos = int(df_med["flag_robo_oculto"].sum() or 0)
         qtd_invalido      = int(df_med["flag_crm_invalido"].sum() or 0)
         qtd_antes_reg     = int(df_med["flag_prescricao_antes_registro"].sum() or 0)
-        qtd_conc_temp     = int(df["alerta_concentracao_temporal"].is_not_null().sum())
+        qtd_conc_temp     = int(df["flag_concentracao_mesmo_crm"].sum() or 0)
 
         vl_invalido  = float(df_med.filter(pl.col("flag_crm_invalido") == 1)["vl_total_prescricoes"].sum() or 0)
         vl_antes_reg = float(df_med.filter(pl.col("flag_prescricao_antes_registro") == 1)["vl_total_prescricoes"].sum() or 0)
@@ -1648,7 +1634,7 @@ class AnalyticsService:
             "pct_valor_crm_invalido":         pct_invalido,
             "pct_valor_crm_antes_registro":   pct_antes_reg,
             "qtd_prescritores_conc_temporal": qtd_conc_temp,
-            "qtd_prescritores_surto":         int(df_med["flag_surto"].sum() or 0),
+            "qtd_prescritores_surto":         int(df_med["flag_concentracao_estabelecimento"].sum() or 0),
             "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
             "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
             "razaoSocial":                    razao_social,
@@ -1675,7 +1661,7 @@ class AnalyticsService:
                 os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT id_medico, competencia, dt_alerta, nivel, descricao, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
+                        text("SELECT id_medico, competencia, dt_alerta, nivel, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
                              " FROM temp_CGUSC.fp.alertas_crm_concentracao WHERE cnpj = :cnpj"
                              " ORDER BY dt_alerta, id_medico"),
                         conn,
@@ -1705,9 +1691,8 @@ class AnalyticsService:
             for row in df_ad.iter_rows(named=True):
                 mid = row["id_medico"]
                 alertas_por_medico.setdefault(mid, []).append({
-                    "dt":       str(row["dt_alerta"]),
-                    "nivel":    row["nivel"],
-                    "descricao": row["descricao"],
+                    "dt":             str(row["dt_alerta"]),
+                    "nivel":          row["nivel"],
                     "nu_prescricoes": row["nu_prescricoes_dia"],
                     "nu_minutos":     row["nu_minutos_dia"],
                     "taxa_hora":      float(row["taxa_hora"] or 0),

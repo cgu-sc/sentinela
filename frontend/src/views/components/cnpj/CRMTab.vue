@@ -537,6 +537,18 @@ function formatarJanela(minutos) {
   return `${Math.floor(minutos / 60)}h ${minutos % 60}min`;
 }
 
+function formatDescricao(a) {
+  const num = `<span class="desc-num">${a.nu_prescricoes}</span>`;
+  if (!a.nu_minutos || a.nu_minutos === 0) {
+    return `${num} autorizações de venda <span class="desc-janela">no mesmo instante</span> para o mesmo CRM`;
+  }
+  const h = Math.floor(a.nu_minutos / 60);
+  const min = a.nu_minutos % 60;
+  const janela = h > 0 ? `${h}h ${min}min` : `${min}min`;
+  const taxa = a.taxa_hora?.toFixed(1) ?? '—';
+  return `${num} autorizações de venda <span class="desc-janela">em ${janela} (${taxa}/hora)</span> para o mesmo CRM`;
+}
+
 const filterOnlyIssues = ref(false);
 const activeKpiFilter = ref(null);
 
@@ -549,7 +561,7 @@ const kpiFilters = {
   fraude_crm: (m) =>
     m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia: (m) => !!m.alerta5_geografico,
-  surtos_cnpj: (m) => m.flag_surto > 0,
+  surtos_cnpj: (m) => m.flag_concentracao_estabelecimento > 0,
 };
 
 const kpiFilterLabels = {
@@ -1093,7 +1105,10 @@ defineExpose({
                 v-for="(m, i) in visibleCrms"
                 :key="i"
               >
-              <tr>
+              <tr
+                :class="{ 'row-expandable': m.alerta2_tempo_concentrado || m.alerta2 }"
+                @click="(m.alerta2_tempo_concentrado || m.alerta2) && toggleAlertasDiarios(m.id_medico)"
+              >
                 <td>
                   <div class="med-id">{{ m.id_medico }}</div>
                   <div class="med-sub">
@@ -1125,19 +1140,19 @@ defineExpose({
                       </span>
                       <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                     </span>
-                    <span v-if="m.flag_crm_invalido" class="issue-tag dark-red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
+                    <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
                       <i class="pi pi-ban"></i> CRM Inexistente
                     </span>
                     <span v-if="m.flag_prescricao_antes_registro" class="issue-tag dark-red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
                       <i class="pi pi-calendar-times"></i> CRM Irregular
                     </span>
-                    <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag orange" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
+                    <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
                       <i class="pi pi-lock"></i> CRM Exclusivo
                     </span>
                     <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
                       <i class="pi pi-map-marker"></i> >400km
                     </span>
-                    <span v-if="m.flag_surto" class="issue-tag red" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
+                    <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag red" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
                       <i class="pi pi-bolt"></i> Concentração Horária
                     </span>
                     <i
@@ -1147,7 +1162,7 @@ defineExpose({
                         !m.flag_crm_invalido &&
                         !m.flag_prescricao_antes_registro &&
                         !m.alerta5_geografico &&
-                        !m.flag_surto &&
+                        !m.flag_concentracao_estabelecimento &&
                         (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)
                       "
                       class="pi pi-check-circle"
@@ -1219,28 +1234,30 @@ defineExpose({
                 class="alertas-diarios-row"
               >
                 <td colspan="10" class="alertas-diarios-cell">
+                  <div class="alertas-wrapper">
                   <table class="alertas-diarios-table">
                     <thead>
                       <tr>
-                        <th>Data</th>
-                        <th>Nível</th>
-                        <th>Prescrições</th>
-                        <th>Janela</th>
-                        <th>Taxa/hora</th>
-                        <th>Descrição</th>
+                        <th><i class="pi pi-calendar" /> Data</th>
+                        <th><i class="pi pi-id-card" /> CRM</th>
+                        <th class="col-right"><i class="pi pi-chart-bar" /> Autorizações</th>
+                        <th class="col-center"><i class="pi pi-clock" /> Janela</th>
+                        <th class="col-right"><i class="pi pi-chart-line" /> Taxa/hora</th>
+                        <th><i class="pi pi-align-left" /> Descrição</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="(a, j) in m.alertas_diarios" :key="j" class="alerta-diario-item">
                         <td class="col-date">{{ formatarDataAlerta(a.dt) }}</td>
-                        <td><span class="nivel-badge" :class="`nivel-${a.nivel?.toLowerCase().replace(' ', '-')}`">{{ a.nivel }}</span></td>
+                        <td class="col-crm">{{ m.id_medico }}</td>
                         <td class="col-right">{{ a.nu_prescricoes }}</td>
                         <td class="col-center">{{ formatarJanela(a.nu_minutos) }}</td>
                         <td class="col-right">{{ a.taxa_hora?.toFixed(1) }}/h</td>
-                        <td class="col-descricao">{{ a.descricao }}</td>
+                        <td class="col-descricao" v-html="formatDescricao(a)" />
                       </tr>
                     </tbody>
                   </table>
+                  </div>
                 </td>
               </tr>
               </template>
@@ -2147,31 +2164,52 @@ input:checked + .toggle-slider:before {
   user-select: none;
 }
 
-.alertas-diarios-row {
+.row-expandable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.alertas-diarios-row,
+.premium-table.row-hover tbody tr.alertas-diarios-row:hover {
+  background: transparent !important;
+  cursor: default !important;
+}
+.alertas-diarios-table tr:hover {
   background: transparent !important;
 }
 
 .alertas-diarios-cell {
-  padding: 0 !important;
-  border-bottom: 2px solid color-mix(in srgb, var(--risk-indicator-normal) 30%, transparent) !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 2px solid var(--tabs-border) !important;
+  background: transparent !important;
+}
+
+.alertas-wrapper {
+  background: v-bind(raioxBg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid color-mix(in srgb, var(--risk-high) 50%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .alertas-diarios-table {
   width: 100%;
   border-collapse: collapse;
-  background: color-mix(in srgb, var(--risk-indicator-normal) 5%, var(--card-bg));
+  background: transparent;
   font-size: 0.78rem;
 }
 
 .alertas-diarios-table thead tr {
-  background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent);
+  background: color-mix(in srgb, var(--text-color) 4%, transparent);
 }
 
 .alertas-diarios-table th {
   padding: 0.35rem 0.75rem;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--risk-indicator-normal);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   text-align: left;
@@ -2179,35 +2217,37 @@ input:checked + .toggle-slider:before {
 
 .alertas-diarios-table td {
   padding: 0.4rem 0.75rem;
-  border-top: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 10%, transparent);
+  border-top: 1px solid var(--tabs-border);
   color: var(--text-color);
+  opacity: 0.8;
 }
 
-.col-date { font-weight: 600; white-space: nowrap; }
+.col-date { font-weight: 400; white-space: nowrap; }
+.col-crm { white-space: nowrap; color: var(--text-secondary); font-size: 0.75rem; }
 .col-descricao { color: var(--text-secondary); font-size: 0.75rem; }
+.col-descricao .desc-num { color: var(--primary-color); font-weight: 500; }
+.col-descricao .desc-janela { color: var(--risk-high); font-weight: 500; }
 
 .nivel-badge {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 4px;
   font-size: 0.7rem;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--risk-indicator-normal) 15%, transparent);
-  color: var(--risk-indicator-normal);
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 25%, transparent);
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  min-width: 85px;
+  letter-spacing: normal;
+  text-transform: none !important;
+  border: 1px solid transparent;
 }
 
-.nivel-badge.nivel-rajada,
-.nivel-badge.nivel-volume-extremo {
-  background: color-mix(in srgb, var(--risk-critical) 15%, transparent);
-  color: var(--risk-critical);
-  border-color: color-mix(in srgb, var(--risk-critical) 25%, transparent);
-}
-
-.nivel-badge.nivel-concentração {
-  background: color-mix(in srgb, var(--risk-high) 15%, transparent);
+.nivel-badge.nivel-autorizacoes-em-sequencia {
+  background: color-mix(in srgb, var(--risk-high) 10%, var(--tabs-bg));
   color: var(--risk-high);
-  border-color: color-mix(in srgb, var(--risk-high) 25%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 20%, transparent);
 }
 
 .bar-container {

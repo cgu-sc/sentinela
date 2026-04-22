@@ -363,8 +363,7 @@ SELECT
     C.dt_venda_inicial_estabelecimento,
     C.dt_venda_final_estabelecimento,
     TRY_CAST(A.nu_prescricoes_medico AS DECIMAL(10,2)) /
-        NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10,2)), 0) AS percentual,
-    CAST(NULL AS VARCHAR(800)) AS alerta_concentracao_temporal
+        NULLIF(TRY_CAST(C.nu_autorizacoes_estabelecimento AS DECIMAL(10,2)), 0) AS percentual
 INTO #lista_alertas_temp
 FROM #base_agregada_crm_cnpj A
 INNER JOIN #tb_info_estabelecimento C ON C.cnpj = A.nu_cnpj AND C.competencia = A.competencia
@@ -383,65 +382,6 @@ WHERE (A.nu_prescricoes_medico >= 5)
    );
 
 
--- ============================================================================
--- ALERTA CONCENTRAÇÃO TEMPORAL: detecção por taxa e janela (Opção B)
--- Critério primário  : taxa = prescrições / horas de janela ativa
--- Critério secundário: janela absoluta ≤ 120 min (lançamento em bloco)
---
--- Nível 1 — Rajada       : taxa ≥ 6/hora ou aprovação simultânea (nu_minutos = 0)
--- Nível 2 — Concentração : taxa ≥ 3/hora  OU  janela ≤ 120 min
--- ============================================================================
-
--- Auxiliar: formata a janela como "Xh Ymin" ou "Z min"
--- (usado inline nas mensagens abaixo)
-
--- Nível 1a: Simultâneo (aprovações no mesmo instante)
-UPDATE #lista_alertas_temp
-SET alerta_concentracao_temporal =
-    CAST(nu_prescricoes_alerta AS VARCHAR(10)) + ' prescrições aprovadas no mesmo instante'
-WHERE nu_minutos = 0
-  AND nu_prescricoes_alerta >= 5;
-
--- Nível 1b: Rajada — janela curta (≤ 24h, taxa >= 6/h)
-UPDATE #lista_alertas_temp
-SET alerta_concentracao_temporal =
-    'Rajada: ' + CAST(nu_prescricoes_alerta AS VARCHAR(10)) + ' prescrições em ' +
-    CASE WHEN nu_minutos < 60
-         THEN CAST(nu_minutos AS VARCHAR(10)) + ' min'
-         ELSE CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
-              CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min'
-    END +
-    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-WHERE alerta_concentracao_temporal IS NULL
-  AND nu_minutos BETWEEN 1 AND 1440
-  AND taxa_prescricoes_hora >= 6
-  AND nu_prescricoes_alerta >= 5;
-
--- Nível 1c: Volume Extremo — janela longa (> 24h, taxa >= 6/h sustentada)
-UPDATE #lista_alertas_temp
-SET alerta_concentracao_temporal =
-    'Volume extremo: ' + CAST(nu_prescricoes_alerta AS VARCHAR(10)) + ' prescrições em ' +
-    CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
-    CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min' +
-    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-WHERE alerta_concentracao_temporal IS NULL
-  AND nu_minutos > 1440
-  AND taxa_prescricoes_hora >= 6
-  AND nu_prescricoes_alerta >= 5;
-
--- Nível 2: Concentração (taxa >= 3/hora ou janela <= 120 min, não classificado no nível 1)
-UPDATE #lista_alertas_temp
-SET alerta_concentracao_temporal =
-    'Concentração: ' + CAST(nu_prescricoes_alerta AS VARCHAR(10)) + ' prescrições em ' +
-    CASE WHEN nu_minutos < 60
-         THEN CAST(nu_minutos AS VARCHAR(10)) + ' min'
-         ELSE CAST(nu_minutos / 60 AS VARCHAR(10)) + 'h ' +
-              CAST(nu_minutos % 60 AS VARCHAR(10)) + 'min'
-    END +
-    ' (' + CAST(CAST(taxa_prescricoes_hora AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-WHERE alerta_concentracao_temporal IS NULL
-  AND (taxa_prescricoes_hora >= 3 OR nu_minutos <= 120)
-  AND nu_prescricoes_alerta >= 10;
 GO
 
 
@@ -550,29 +490,11 @@ alertas AS (
         nu_minutos_dia,
         CAST(taxa_dia AS DECIMAL(5,1))                   AS taxa_hora,
         CASE
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0                                                                                             THEN 'Simultâneo'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6                                                            THEN 'Rajada'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 6                                                            THEN 'Volume Extremo'
-            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 3 OR nu_minutos_dia <= 120)                                                                       THEN 'Concentração'
-        END AS nivel,
-        CASE
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0
-                THEN CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições no mesmo instante'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6
-                THEN 'Rajada: ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições em ' +
-                     CASE WHEN nu_minutos_dia < 60 THEN CAST(nu_minutos_dia AS VARCHAR(10)) + 'min'
-                          ELSE CAST(nu_minutos_dia / 60 AS VARCHAR(10)) + 'h ' + CAST(nu_minutos_dia % 60 AS VARCHAR(10)) + 'min' END +
-                     ' (' + CAST(CAST(taxa_dia AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 6
-                THEN 'Volume extremo: ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições em ' +
-                     CAST(nu_minutos_dia / 60 AS VARCHAR(10)) + 'h ' + CAST(nu_minutos_dia % 60 AS VARCHAR(10)) + 'min' +
-                     ' (' + CAST(CAST(taxa_dia AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 3 OR nu_minutos_dia <= 120)
-                THEN 'Concentração: ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições em ' +
-                     CASE WHEN nu_minutos_dia < 60 THEN CAST(nu_minutos_dia AS VARCHAR(10)) + 'min'
-                          ELSE CAST(nu_minutos_dia / 60 AS VARCHAR(10)) + 'h ' + CAST(nu_minutos_dia % 60 AS VARCHAR(10)) + 'min' END +
-                     ' (' + CAST(CAST(taxa_dia AS DECIMAL(5,1)) AS VARCHAR(10)) + '/hora)'
-        END AS descricao
+            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0                                                                                             THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6                                                            THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 6                                                            THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 3 OR nu_minutos_dia <= 120)                                                                       THEN 'Autorizações em Sequência'
+        END AS nivel
     FROM base_com_taxa
     WHERE
         (nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0)
@@ -774,7 +696,7 @@ SELECT
     CAST(CASE WHEN CA.cnpj      IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao,
     CAST(CASE WHEN GC.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_geografico,
     CAST(CASE WHEN RE.cnpj      IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_registro,
-    CAST(CASE WHEN SR.id_medico  IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_surto,
+    CAST(CASE WHEN SR.id_medico  IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao_estabelecimento,
     ISNULL(CA.qtd_dias, 0)                                             AS qtd_dias_concentracao
 INTO temp_CGUSC.fp.alertas_crm
 FROM base B
@@ -821,8 +743,7 @@ SELECT
     ISNULL(P.nu_prescricoes_medico_em_todos_estabelecimentos,
            A.nu_prescricoes_medico)                                   AS prescricoes_total_brasil,
     ISNULL(P.nu_estabelecimentos_com_registro_mesmo_crm, 1)           AS nu_estabelecimentos,
-    -- Texto temporal: pior dia do mês (nível mais grave, depois maior taxa)
-    CONC.alerta_concentracao_temporal,
+    CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
     -- Texto geográfico: gerado inline da master para este CNPJ
     CASE WHEN G.id_medico IS NOT NULL THEN
         'Em ' + RIGHT('0' + CAST(G.competencia % 100 AS VARCHAR(2)), 2) + '/' +
@@ -852,7 +773,7 @@ SELECT
     -- Flags CFM por competência (v5: grain mensal via alertas_crm_registro)
     CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_crm_invalido,
     CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_prescricao_antes_registro,
-    ISNULL(AL.flag_surto, 0)                                           AS flag_surto
+    ISNULL(AL.flag_concentracao_estabelecimento, 0)                                           AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM #lista_alertas_temp A
 LEFT JOIN temp_CGUSC.fp.alertas_crm AL
@@ -862,28 +783,11 @@ INNER JOIN #prescricoes_todos_estabelecimentos P
     AND P.sg_uf_crm   = A.sg_uf_crm
     AND P.competencia = A.competencia
 LEFT JOIN (
-    SELECT cnpj, id_medico, competencia, descricao AS alerta_concentracao_temporal
-    FROM (
-        SELECT cnpj, id_medico, competencia, descricao, taxa_hora, nu_prescricoes_dia,
-               ROW_NUMBER() OVER (
-                   PARTITION BY cnpj, id_medico, competencia
-                   ORDER BY
-                       CASE nivel
-                           WHEN 'Simultâneo'     THEN 1
-                           WHEN 'Rajada'         THEN 2
-                           WHEN 'Volume Extremo' THEN 3
-                           WHEN 'Concentração'   THEN 4
-                           ELSE 99
-                       END ASC,
-                       taxa_hora DESC,
-                       nu_prescricoes_dia DESC
-               ) AS rn
-        FROM temp_CGUSC.fp.alertas_crm_concentracao
-    ) ranked
-    WHERE rn = 1
+    SELECT DISTINCT cnpj, id_medico, competencia
+    FROM temp_CGUSC.fp.alertas_crm_concentracao
 ) CONC
-    ON  CONC.cnpj       = A.nu_cnpj
-    AND CONC.id_medico  = A.id_medico
+    ON  CONC.cnpj        = A.nu_cnpj
+    AND CONC.id_medico   = A.id_medico
     AND CONC.competencia = A.competencia
 LEFT JOIN temp_CGUSC.fp.alertas_crm_geografico G
     ON  G.id_medico   = A.id_medico

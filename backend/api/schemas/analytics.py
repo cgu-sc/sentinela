@@ -410,6 +410,8 @@ class CrmHourlyTransactionSchema(BaseModel):
     num_autorizacao: str
     crm: str
     crm_uf: str
+    nu_medicamentos: int
+    vl_autorizacao: float
 
 class CrmHourlyTransactionsResponse(BaseModel):
     """Lista cronológica de prescrições aprovadas numa hora anômala."""

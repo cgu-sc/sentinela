@@ -1911,7 +1911,14 @@ class AnalyticsService:
         TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
 
         if os.path.exists(TX_PARQUET_PATH):
-            return
+            try:
+                # Verifica se as novas colunas de medicamentos/valor existem no cache atual
+                header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
+                if "nu_medicamentos" in header.columns and "vl_autorizacao" in header.columns:
+                    return
+                print(f"🔄 Cache hourly_tx desatualizado para {cnpj}, recriando...")
+            except Exception:
+                pass # Prossegue para recriação em caso de erro na leitura do schema
 
         try:
             os.makedirs(CRMS_DIR, exist_ok=True)

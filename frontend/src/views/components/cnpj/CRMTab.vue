@@ -223,7 +223,7 @@ const selectedHourlyHour = ref(null);
 const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 
-const RAIOX_PAGE_SIZE = 10;
+const RAIOX_PAGE_SIZE = 8;
 const raioxPage = ref(0);
 const raioxTotalPages = computed(() => Math.ceil(hourlyTransactions.value.length / RAIOX_PAGE_SIZE));
 const raioxPagedTransactions = computed(() =>
@@ -1028,8 +1028,8 @@ defineExpose({
                     <tr>
                       <th class="col-center">Horário</th>
                       <th>Nº Autorização</th>
-                      <th>CRM Prescritor</th>
-                      <th class="col-center">Medicamentos</th>
+                      <th>CRM</th>
+                      <th class="col-center">nº Medicamentos</th>
                       <th class="col-right">Valor</th>
                     </tr>
                   </thead>
@@ -1038,7 +1038,7 @@ defineExpose({
                       <td class="col-center raiox-time">{{ tx.data_hora.split(' ')[1] || tx.data_hora }}</td>
                       <td class="raiox-auth">{{ tx.num_autorizacao }}</td>
                       <td>
-                        <span class="issue-tag raiox-crm-tag">{{ tx.crm_uf }} {{ tx.crm }}</span>
+                        <span class="issue-tag raiox-crm-tag">{{ tx.crm }}/{{ tx.crm_uf }}</span>
                       </td>
                       <td class="col-center">{{ tx.nu_medicamentos }}</td>
                       <td class="col-right">{{ tx.vl_autorizacao != null ? `R$ ${tx.vl_autorizacao.toFixed(2)}` : '—' }}</td>
@@ -1048,7 +1048,7 @@ defineExpose({
               </div>
 
               <div v-if="raioxTotalPages > 1" class="raiox-pagination">
-                <span>{{ raioxPage * 10 + 1 }}–{{ Math.min((raioxPage + 1) * 10, hourlyTransactions.length) }} de {{ hourlyTransactions.length }}</span>
+                <span>{{ raioxPage * RAIOX_PAGE_SIZE + 1 }}–{{ Math.min((raioxPage + 1) * RAIOX_PAGE_SIZE, hourlyTransactions.length) }} de {{ hourlyTransactions.length }}</span>
                 <div class="raiox-pagination-controls">
                   <button class="raiox-page-btn" :disabled="raioxPage === 0" @click="raioxPage--">
                     <i class="pi pi-chevron-left" /> Anterior
@@ -1481,6 +1481,7 @@ defineExpose({
   padding: 2rem 1rem;
   color: var(--text-muted);
   font-size: 0.85rem;
+  min-height: 390px;
 }
 
 .raiox-empty-icon {
@@ -1490,6 +1491,7 @@ defineExpose({
 
 .raiox-table-wrapper {
   border-radius: 6px;
+  min-height: 390px;
 }
 
 .raiox-table-wrapper.is-loading {

@@ -774,10 +774,12 @@ SELECT
                   ' pares de estabelecimentos com distância maior que 400km no mesmo período.'
              ELSE '' END
     END                                                               AS alerta_distancia_geografica,
+    A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
+    TRY_CONVERT(DATE, CFM_ALL.DT_INSCRICAO, 103)                      AS dt_inscricao_crm,
     -- Flags CFM por competência (v5: grain mensal via alertas_crm_registro)
     CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_crm_invalido,
     CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_prescricao_antes_registro,
-    ISNULL(AL.flag_concentracao_estabelecimento, 0)                                           AS flag_concentracao_estabelecimento
+    ISNULL(AL.flag_concentracao_estabelecimento, 0)                   AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM #lista_alertas_temp A
 LEFT JOIN temp_CGUSC.fp.alertas_crm AL
@@ -786,6 +788,9 @@ INNER JOIN #prescricoes_todos_estabelecimentos P
     ON  P.nu_crm      = A.nu_crm
     AND P.sg_uf_crm   = A.sg_uf_crm
     AND P.competencia = A.competencia
+LEFT JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM_ALL
+    ON  TRY_CAST(CFM_ALL.NU_CRM AS BIGINT) = TRY_CAST(A.nu_crm AS BIGINT)
+    AND CFM_ALL.SG_uf = A.sg_uf_crm
 LEFT JOIN (
     SELECT DISTINCT cnpj, id_medico, competencia
     FROM temp_CGUSC.fp.alertas_crm_concentracao

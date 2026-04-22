@@ -643,7 +643,8 @@ const hasAnyIssue = (m) =>
   m.flag_crm_invalido > 0 ||
   m.flag_prescricao_antes_registro > 0 ||
   m.alerta5_geografico ||
-  m.flag_crm_exclusivo > 0;
+  m.flag_crm_exclusivo > 0 ||
+  m.flag_concentracao_estabelecimento > 0;
 
 const filteredCrmsInteresse = computed(() => {
   let list = crmsInteresse.value;
@@ -1283,10 +1284,10 @@ defineExpose({
                 <td class="flags-cell">
                   <div class="tags-container">
                     <span v-if="m.flag_robo" class="issue-tag red" v-tooltip.top="'>30 Prescrições/dia neste CNPJ'">
-                      <i class="pi pi-history"></i> >30 Presc/dia (Local)
+                      <i class="pi pi-history"></i> >30 PRESC/DIA (LOCAL)
                     </span>
                     <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="'>30 Prescrições/dia em todo o Brasil (Robô Oculto)'">
-                      <i class="pi pi-globe"></i> >30 Presc/dia BR
+                      <i class="pi pi-globe"></i> >30 PRESC/DIA (BRASIL)
                     </span>
                     <span
                       v-if="m.alerta_concentracao_mesmo_crm"
@@ -1294,26 +1295,26 @@ defineExpose({
                       v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                       @click.stop="toggleAlertasDiarios(m.id_medico)"
                     >
-                      <i class="pi pi-stopwatch"></i> Prescrição Bloco
+                      <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO MESMO CRM
                       <span v-if="m.alertas_diarios?.length > 1" class="badge-count">
                         ({{ m.alertas_diarios.length }}x)
                       </span>
                       <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                     </span>
                     <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
-                      <i class="pi pi-ban"></i> CRM Inexistente
+                      <i class="pi pi-ban"></i> CRM INEXISTENTE
                     </span>
                     <span v-if="m.flag_prescricao_antes_registro" class="issue-tag dark-red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
-                      <i class="pi pi-calendar-times"></i> CRM Irregular
+                      <i class="pi pi-calendar-times"></i> CRM IRREGULAR
                     </span>
                     <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
-                      <i class="pi pi-lock"></i> CRM Exclusivo
+                      <i class="pi pi-lock"></i> CRM EXCLUSIVO
                     </span>
                     <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
-                      <i class="pi pi-map-marker"></i> >400km
+                      <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
                     </span>
                     <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag red" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
-                      <i class="pi pi-bolt"></i> Concentração Horária
+                      <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
                     </span>
                     <i
                       v-if="
@@ -2548,56 +2549,64 @@ input:checked + .toggle-slider:before {
 }
 .issue-tag {
   font-size: 0.7rem;
-  font-weight: 500;
-  padding: 0.2rem 0.6rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   white-space: nowrap;
   min-width: 85px;
-  letter-spacing: normal;
+  letter-spacing: 0.02em;
   text-transform: none !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+.issue-tag:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 .issue-tag i {
   font-size: 0.7rem;
 }
 .issue-tag.red {
-  background: color-mix(in srgb, var(--risk-high) 10%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--risk-high) 12%, transparent);
   color: var(--risk-high);
-  border: 1px solid color-mix(in srgb, var(--risk-high) 20%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 25%, transparent);
 }
 .issue-tag.dark-red {
-  background: color-mix(in srgb, var(--risk-high) 4%, var(--tabs-bg));
-  color: color-mix(in srgb, var(--risk-high) 60%, var(--text-muted));
-  border: 1px solid color-mix(in srgb, var(--risk-high) 10%, transparent);
-  font-weight: 500;
+  background: color-mix(in srgb, var(--risk-critical) 12%, transparent);
+  color: var(--risk-critical);
+  border-color: color-mix(in srgb, var(--risk-critical) 25%, transparent);
 }
 .issue-tag.orange {
-  background: color-mix(in srgb, var(--risk-medium) 10%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--risk-medium) 12%, transparent);
   color: var(--risk-medium);
-  border: 1px solid color-mix(in srgb, var(--risk-medium) 20%, transparent);
+  border-color: color-mix(in srgb, var(--risk-medium) 25%, transparent);
 }
 .issue-tag.yellow {
-  background: color-mix(in srgb, var(--risk-low) 10%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--risk-low) 12%, transparent);
   color: var(--risk-low);
-  border: 1px solid color-mix(in srgb, var(--risk-low) 20%, transparent);
+  border-color: color-mix(in srgb, var(--risk-low) 25%, transparent);
 }
 .issue-tag.blue-network {
-  background: color-mix(in srgb, #3b82f6 8%, var(--tabs-bg));
+  background: color-mix(in srgb, #3b82f6 12%, transparent);
   color: #3b82f6;
-  border: 1px solid color-mix(in srgb, #3b82f6 20%, transparent);
+  border-color: color-mix(in srgb, #3b82f6 25%, transparent);
 }
 .issue-tag.purple-geo {
-  background: color-mix(in srgb, #8b5cf6 8%, var(--tabs-bg));
+  background: color-mix(in srgb, #8b5cf6 12%, transparent);
   color: #8b5cf6;
-  border: 1px solid color-mix(in srgb, #8b5cf6 20%, transparent);
+  border-color: color-mix(in srgb, #8b5cf6 25%, transparent);
 }
 .issue-tag.green-ok {
-  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--tabs-bg));
+  background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent);
   color: var(--risk-indicator-normal);
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 20%, transparent);
+  border-color: color-mix(in srgb, var(--risk-indicator-normal) 25%, transparent);
 }
 
 .badge-count {

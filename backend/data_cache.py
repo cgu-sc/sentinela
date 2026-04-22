@@ -36,6 +36,7 @@ _BENCH_CRM_UF_PATH     = os.path.join(_CACHE_DIR, "benchmarks", "bench_crm_uf.pa
 _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "benchmarks", "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "benchmarks", "bench_crm_br.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
+_MEDICAMENTOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -50,6 +51,7 @@ _df_bench_crm_uf: pl.DataFrame | None = None
 _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
+_df_medicamentos: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
@@ -214,6 +216,26 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="lz4")
 
 
+def _sync_medicamentos(engine, progress_callback=None):
+    """Tarefa 9: Sincroniza a tabela mestra de medicamentos e patologias."""
+    global _df_medicamentos
+    print("Sincronizando Cadastro de Medicamentos (Dicionário GTIN)...")
+    sql = "SELECT codigo_barra, principio_ativo, produto, descricao, laboratorio, Patologia as patologia FROM [temp_CGUSC].[fp].[medicamentos_patologia]"
+    
+    pdf = pd.read_sql(sql, engine)
+    print(f"   -> Cadastro carregado: {len(pdf):,} medicamentos.")
+    if progress_callback: progress_callback(100)
+    
+    _df_medicamentos = pl.from_pandas(pdf).with_columns([
+        pl.col("codigo_barra").cast(pl.String),
+        pl.col("principio_ativo").cast(pl.Categorical),
+        pl.col("produto").cast(pl.Categorical),
+        pl.col("laboratorio").cast(pl.Categorical),
+        pl.col("patologia").cast(pl.Categorical),
+    ])
+    _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="lz4")
+
+
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
     global _df_movimentacao
@@ -357,6 +379,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_regiao= _try_load("bench_crm_regiao", _BENCH_CRM_REGIAO_PATH)
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
+        _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
 
         if missing:
             print(f"⚠️  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -378,7 +401,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Falecidos",             "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
         {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
-        {"name": "Movimentação",          "weight": 71, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Cadastro Medicamentos", "weight": 5,  "func": lambda cb: _sync_medicamentos(engine, cb)},
+        {"name": "Movimentação",          "weight": 66, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -459,6 +483,16 @@ def get_df_dados_farmacia() -> pl.DataFrame:
         raise RuntimeError("Cache de Dados das Farmácias não carregado. Execute uma sincronização.")
     return _df_dados_farmacia
 
+def get_medicamentos_df() -> pl.DataFrame:
+    if _df_medicamentos is None:
+        # Se não carregado, tentamos ler do parquet direto se existir
+        if os.path.exists(_MEDICAMENTOS_PARQUET_PATH):
+            global _df_medicamentos
+            _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
+            return _df_medicamentos
+        raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
+    return _df_medicamentos
+
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     modules = {
@@ -471,6 +505,7 @@ def get_cache_status() -> dict:
         "bench_crm_regiao":{"label": "Benchmark CRM (Região)", "path": _BENCH_CRM_REGIAO_PATH,    "loaded": _df_bench_crm_regiao is not None},
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH, "loaded": _df_dados_farmacia is not None},
+        "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,   "loaded": _df_medicamentos is not None},
     }
     modules_status = {
         key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}

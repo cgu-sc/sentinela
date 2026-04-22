@@ -63,6 +63,7 @@ SELECT
     crm,
     crm_uf,
     num_autorizacao,
+    codigo_barra,
     valor_pago
 INTO #mov_surto_base
 FROM temp_CGUSC.fp.teste_mov_SC
@@ -225,20 +226,18 @@ SELECT
     A.competencia,
     A.dt_alerta                  AS dt_janela,
     A.hr_janela,
-    MIN(M.data_hora)             AS data_hora,
+    M.data_hora,
     M.num_autorizacao,
     M.crm,
     M.crm_uf,
-    COUNT(*)                     AS nu_medicamentos,
-    SUM(M.valor_pago)            AS vl_autorizacao
+    M.codigo_barra,
+    M.valor_pago
 INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe
 FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial A
 INNER JOIN #mov_surto_base M
     ON  M.cnpj = A.cnpj
     AND CAST(M.data_hora AS DATE) = A.dt_alerta
-    AND DATEPART(HOUR, M.data_hora) = A.hr_janela
-GROUP BY A.cnpj, A.competencia, A.dt_alerta, A.hr_janela,
-         M.num_autorizacao, M.crm, M.crm_uf;
+    AND DATEPART(HOUR, M.data_hora) = A.hr_janela;
 
 CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe(cnpj, dt_janela, hr_janela);
 

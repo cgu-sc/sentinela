@@ -225,10 +225,42 @@ const hourlyTransactionsLoading = ref(false);
 
 const RAIOX_PAGE_SIZE = 8;
 const raioxPage = ref(0);
-const raioxTotalPages = computed(() => Math.ceil(hourlyTransactions.value.length / RAIOX_PAGE_SIZE));
+const expandedRaioxRows = ref(new Set());
+
+const groupedRaiox = computed(() => {
+  const groups = {};
+  hourlyTransactions.value.forEach(item => {
+    const key = item.num_autorizacao;
+    if (!groups[key]) {
+      groups[key] = {
+        num_autorizacao: key,
+        data_hora: item.data_hora,
+        crm: item.crm,
+        crm_uf: item.crm_uf,
+        nu_medicamentos: 0,
+        vl_autorizacao: 0,
+        items: []
+      };
+    }
+    groups[key].nu_medicamentos += 1;
+    groups[key].vl_autorizacao += (item.valor_pago || 0);
+    groups[key].items.push(item);
+  });
+  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+});
+
+const raioxTotalPages = computed(() => Math.ceil(groupedRaiox.value.length / RAIOX_PAGE_SIZE));
 const raioxPagedTransactions = computed(() =>
-  hourlyTransactions.value.slice(raioxPage.value * RAIOX_PAGE_SIZE, (raioxPage.value + 1) * RAIOX_PAGE_SIZE)
+  groupedRaiox.value.slice(raioxPage.value * RAIOX_PAGE_SIZE, (raioxPage.value + 1) * RAIOX_PAGE_SIZE)
 );
+
+function toggleRaioxRow(auth) {
+  if (expandedRaioxRows.value.has(auth)) {
+    expandedRaioxRows.value.delete(auth);
+  } else {
+    expandedRaioxRows.value.add(auth);
+  }
+}
 
 async function onChartClick(params) {
   const day = filteredDailyDays.value?.[params.dataIndex];
@@ -1007,8 +1039,8 @@ defineExpose({
                 <div class="raiox-title">
                   <i class="pi pi-search" />
                   <span>RAIO-X: TRANSAÇÕES ÀS {{ String(selectedHourlyHour).padStart(2, '0') }}H</span>
-                  <span v-if="!hourlyTransactionsLoading && hourlyTransactions.length > 0" class="raiox-count-badge">
-                    {{ hourlyTransactions.length }} Autorização{{ hourlyTransactions.length !== 1 ? 'es' : '' }}
+                  <span v-if="!hourlyTransactionsLoading && groupedRaiox.length > 0" class="raiox-count-badge">
+                    {{ groupedRaiox.length }} Autorização{{ groupedRaiox.length !== 1 ? 'es' : '' }}
                   </span>
                   <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
                 </div>
@@ -1034,15 +1066,49 @@ defineExpose({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="(tx, idx) in raioxPagedTransactions" :key="idx">
-                      <td class="col-center raiox-time">{{ tx.data_hora.split(' ')[1] || tx.data_hora }}</td>
-                      <td class="raiox-auth">{{ tx.num_autorizacao }}</td>
-                      <td>
-                        <span class="issue-tag raiox-crm-tag">{{ tx.crm }}/{{ tx.crm_uf }}</span>
-                      </td>
-                      <td class="col-center">{{ tx.nu_medicamentos }}</td>
-                      <td class="col-right">{{ tx.vl_autorizacao != null ? `R$ ${tx.vl_autorizacao.toFixed(2)}` : '—' }}</td>
-                    </tr>
+                    <template v-for="(tx, idx) in raioxPagedTransactions" :key="tx.num_autorizacao">
+                      <tr :class="{ 'row-expanded': expandedRaioxRows.has(tx.num_autorizacao) }" @click="toggleRaioxRow(tx.num_autorizacao)">
+                        <td class="col-center raiox-time">
+                          <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']" style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
+                          {{ tx.data_hora.split(' ')[1] || tx.data_hora }}
+                        </td>
+                        <td class="raiox-auth">{{ tx.num_autorizacao }}</td>
+                        <td>
+                          <span class="issue-tag raiox-crm-tag">{{ tx.crm }}/{{ tx.crm_uf }}</span>
+                        </td>
+                        <td class="col-center">
+                          <span class="count-pill">{{ tx.nu_medicamentos }}</span>
+                        </td>
+                        <td class="col-right raiox-val-cell">R$ {{ tx.vl_autorizacao.toFixed(2) }}</td>
+                      </tr>
+                      
+                      <!-- Detalhes dos Itens (Expandido) -->
+                      <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-detail-row">
+                        <td colspan="5">
+                          <div class="raiox-items-container animate-fade-in">
+                            <table class="raiox-items-table">
+                              <thead>
+                                <tr>
+                                  <th>Medicamento / GTIN</th>
+                                  <th>Princípio Ativo</th>
+                                  <th class="col-right">Valor Item</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr v-for="item in tx.items" :key="item.codigo_barra">
+                                  <td>
+                                    <div class="item-name">{{ item.produto || 'PRODUTO NÃO IDENTIFICADO' }}</div>
+                                    <div class="item-gtin">{{ item.codigo_barra }}</div>
+                                  </td>
+                                  <td class="item-active">{{ item.principio_ativo || '—' }}</td>
+                                  <td class="col-right item-val">R$ {{ item.valor_pago.toFixed(2) }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
                   </tbody>
                 </table>
               </div>
@@ -1498,6 +1564,79 @@ defineExpose({
   opacity: 0.4;
   pointer-events: none;
   transition: opacity 0.25s ease;
+}
+
+/* Estilos de Detalhamento de Itens */
+.row-expanded {
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent) !important;
+}
+
+.raiox-val-cell {
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.count-pill {
+  background: var(--tabs-border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.raiox-detail-row {
+  background: color-mix(in srgb, var(--bg-color) 95%, black) !important;
+}
+:global(.dark-mode) .raiox-detail-row {
+  background: color-mix(in srgb, var(--card-bg) 98%, white) !important;
+}
+
+.raiox-items-container {
+  padding: 0.75rem 1rem 1.25rem 3rem;
+}
+
+.raiox-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.raiox-items-table th {
+  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, var(--text-color) 4%, transparent);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--tabs-border);
+}
+
+.raiox-items-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--tabs-border);
+  background: var(--card-bg);
+}
+
+.item-name {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.item-gtin {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  font-family: monospace;
+}
+
+.item-active {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.item-val {
+  font-weight: 600;
 }
 
 .raiox-table { font-size: 0.75rem; }

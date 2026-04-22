@@ -1912,19 +1912,19 @@ class AnalyticsService:
 
         if os.path.exists(TX_PARQUET_PATH):
             try:
-                # Verifica se as novas colunas de medicamentos/valor existem no cache atual
+                # Verifica se as novas colunas granulares (item/gtin) existem no cache atual
                 header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
-                if "nu_medicamentos" in header.columns and "vl_autorizacao" in header.columns:
+                if "codigo_barra" in header.columns and "valor_pago" in header.columns:
                     return
-                print(f"🔄 Cache hourly_tx desatualizado para {cnpj}, recriando...")
+                print(f"🔄 Cache hourly_tx desatualizado (faltando gtin/valor) para {cnpj}, recriando...")
             except Exception:
-                pass # Prossegue para recriação em caso de erro na leitura do schema
+                pass 
 
         try:
             os.makedirs(CRMS_DIR, exist_ok=True)
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, nu_medicamentos, vl_autorizacao "
+                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
                          "FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
@@ -1968,17 +1968,33 @@ class AnalyticsService:
             (pl.col("hr_janela") == hour)
         )
 
-        transactions = [
-            {
-                "data_hora": str(row["data_hora"]),
-                "num_autorizacao": str(row["num_autorizacao"]),
-                "crm": str(row["crm"]),
-                "crm_uf": str(row["crm_uf"]),
-                "nu_medicamentos": int(row["nu_medicamentos"] or 0),
-                "vl_autorizacao": float(row["vl_autorizacao"] or 0)
-            }
-            for row in filtered_df.iter_rows(named=True)
-        ]
+        if filtered_df.is_empty():
+            return CrmHourlyTransactionsResponse(transactions=[])
+
+        # Join com o cache de medicamentos para trazer nomes e princípios ativos
+        from data_cache import get_medicamentos_df
+        try:
+            df_med = get_medicamentos_df()
+            # Selecionamos apenas as colunas necessárias para o join
+            df_med_subset = df_med.select(["codigo_barra", "produto", "principio_ativo"])
+            enriched_df = filtered_df.join(df_med_subset, on="codigo_barra", how="left")
+        except Exception as e:
+            print(f"⚠️ Erro ao cruzar com cadastro de medicamentos no Raio-X: {e}")
+            enriched_df = filtered_df.with_columns([
+                pl.lit(None).alias("produto"),
+                pl.lit(None).alias("principio_ativo")
+            ])
+
+        # Converte para o formato do Schema
+        transactions = []
+        for row in enriched_df.to_dicts():
+            # Formata a data para string se necessário
+            if hasattr(row["data_hora"], "isoformat"):
+                row["data_hora"] = row["data_hora"].isoformat()
+            else:
+                row["data_hora"] = str(row["data_hora"])
+            
+            transactions.append(row)
         
         return CrmHourlyTransactionsResponse(transactions=transactions)
 

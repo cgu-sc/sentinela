@@ -625,6 +625,19 @@ const filterOnlyIssues = ref(false);
 const activeKpiFilter = ref(null);
 const viewMode = ref('medicos'); // 'medicos' ou 'cronologia'
 
+// Auto-selecionar o dia mais anômalo ao entrar na aba de cronologia
+watch(viewMode, (newMode) => {
+  if (newMode === 'cronologia' && !selectedDay.value) {
+    const anomalousDays = filteredDailyDays.value.filter(d => d.is_anomalo === 1);
+    if (anomalousDays.length > 0) {
+      const maxDay = anomalousDays.reduce((max, d) => d.nu_prescricoes_dia > max.nu_prescricoes_dia ? d : max, anomalousDays[0]);
+      selectedDay.value = maxDay;
+      selectedHourlyHour.value = null;
+    }
+  }
+});
+
+
 const kpiFilters = {
   top1: (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
   top5: (m) => crmsInteresse.value.slice(0, 5).some((t) => t.id_medico === m.id_medico),

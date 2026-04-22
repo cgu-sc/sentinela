@@ -603,6 +603,7 @@ function formatDescricao(a) {
 
 const filterOnlyIssues = ref(false);
 const activeKpiFilter = ref(null);
+const viewMode = ref('medicos'); // 'medicos' ou 'cronologia'
 
 const kpiFilters = {
   top1: (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
@@ -715,8 +716,30 @@ defineExpose({
     </div>
 
     <div v-else class="content-wrapper" :class="{ 'is-refreshing': showRefreshingKPIs }">
-      <!-- 1. KPIs -->
-      <div class="no-padding-mobile">
+      <!-- SELETOR DE VISÃO (TOP LEVEL) -->
+      <div class="view-mode-container animate-fade-in">
+        <div class="view-mode-selector">
+          <button 
+            class="view-mode-btn" 
+            :class="{ active: viewMode === 'medicos' }" 
+            @click="viewMode = 'medicos'"
+          >
+            <i class="pi pi-users" />
+            <span>PERFIL DE CRMs</span>
+          </button>
+          <button 
+            class="view-mode-btn" 
+            :class="{ active: viewMode === 'cronologia' }" 
+            @click="viewMode = 'cronologia'"
+          >
+            <i class="pi pi-chart-line" />
+            <span>LINHA DO TEMPO & RAIO-X</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1. KPIs (EXIBIDOS APENAS NA VISÃO MÉDICOS) -->
+      <div v-if="viewMode === 'medicos'" class="no-padding-mobile animate-fade-in">
         <div class="alerts-kpi-grid">
           <!-- Concentração TOP 1 -->
           <div
@@ -962,8 +985,8 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 2. GRÁFICO — PERFIL DIÁRIO DE DISPENSAÇÕES -->
-      <div class="section-container daily-chart-section" :class="{ 'is-refreshing': showRefreshingDaily }">
+      <!-- 2. GRÁFICO — PERFIL DIÁRIO DE DISPENSAÇÕES (VISÃO CRONOLOGIA) -->
+      <div v-if="viewMode === 'cronologia'" class="section-container daily-chart-section animate-fade-in" :class="{ 'is-refreshing': showRefreshingDaily }">
         <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; width: 100%">
           <div style="display: flex; align-items: center; gap: 0.75rem">
             <i class="pi pi-chart-bar" />
@@ -1177,8 +1200,8 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 3. TOP 20 CRMs (TABELA DETALHADA) -->
-      <div class="section-container">
+      <!-- 3. TOP 20 CRMs (TABELA DETALHADA) (VISÃO MEDICOS) -->
+      <div v-if="viewMode === 'medicos'" class="section-container animate-fade-in">
         <div
           class="section-title"
           style="border-bottom: none; margin-bottom: 0"
@@ -1936,9 +1959,6 @@ defineExpose({
 }
 
 .alert-kpi-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
   padding: 0.9rem 1.1rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -2076,16 +2096,18 @@ defineExpose({
   align-items: center;
   gap: 0.6rem;
   padding: 0.25rem 0.4rem 0.25rem 0.75rem;
-  background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-high) 25%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--risk-high) 35%, transparent);
   border-radius: 99px;
   color: var(--risk-high);
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: 600;
   margin-left: 1rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   position: relative;
-  overflow: hidden; /* Essencial para o efeito shimmer */
+  overflow: hidden;
+  backdrop-filter: blur(8px); /* Efeito Glassmorphism */
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Efeito Shimmer (Brilho dinâmico) */
@@ -2159,6 +2181,76 @@ defineExpose({
   font-weight: 900;
 }
 
+/* SELETOR DE VISÃO */
+.view-mode-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0.5rem 0 1.5rem;
+  padding: 0 1rem;
+}
+
+.view-mode-selector {
+  display: flex;
+  background: color-mix(in srgb, var(--card-bg) 40%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, white 5%, transparent);
+  padding: 3px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  gap: 2px;
+}
+
+.view-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1.2rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.02em;
+}
+
+.view-mode-btn i {
+  font-size: 1rem;
+  opacity: 0.6;
+}
+
+.view-mode-btn:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 5%, transparent);
+}
+
+.view-mode-btn.active {
+  background: color-mix(in srgb, var(--primary-color) 15%, white);
+  color: var(--primary-color);
+}
+
+:global(.dark-mode) .view-mode-btn.active {
+  background: color-mix(in srgb, var(--primary-color) 25%, transparent);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.view-mode-btn.active i {
+  opacity: 1;
+}
+
+.view-mode-hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 0.75rem;
+  opacity: 0.7;
+  font-style: italic;
+}
+
 .alert-kpi-header {
   display: flex;
   justify-content: space-between;
@@ -2221,36 +2313,31 @@ defineExpose({
 .highlight-red {
   background: linear-gradient(to top, color-mix(in srgb, var(--risk-high) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-high) 15%, var(--card-border));
-  border-left: none;
-  border-bottom: 3px solid color-mix(in srgb, var(--risk-high) 65%, transparent) !important;
+  border-left: 4px solid var(--risk-high) !important;
 }
 
 .highlight-orange {
   background: linear-gradient(to top, color-mix(in srgb, var(--risk-medium) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-medium) 15%, var(--card-border));
-  border-left: none;
-  border-bottom: 3px solid color-mix(in srgb, var(--risk-medium) 65%, transparent) !important;
+  border-left: 4px solid var(--risk-medium) !important;
 }
 
 .highlight-purple {
   background: linear-gradient(to top, color-mix(in srgb, #3b82f6 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, #3b82f6 15%, var(--card-border));
-  border-left: none;
-  border-bottom: 3px solid color-mix(in srgb, #3b82f6 65%, transparent) !important;
+  border-left: 4px solid #3b82f6 !important;
 }
 
 .highlight-purple-geo {
   background: linear-gradient(to top, color-mix(in srgb, #8b5cf6 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, #8b5cf6 15%, var(--card-border));
-  border-left: none;
-  border-bottom: 3px solid color-mix(in srgb, #8b5cf6 65%, transparent) !important;
+  border-left: 4px solid #8b5cf6 !important;
 }
 
 .highlight-green {
   background: linear-gradient(to top, color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
   border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-border));
-  border-left: none;
-  border-bottom: 3px solid color-mix(in srgb, var(--risk-indicator-normal) 65%, transparent) !important;
+  border-left: 4px solid var(--risk-indicator-normal) !important;
 }
 
 /* Filtro Estilizado */

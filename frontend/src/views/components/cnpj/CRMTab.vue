@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, watch } from "vue";
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useThemeStore } from '@/stores/theme';
@@ -30,6 +31,28 @@ const { chartTheme, chartUFAccents } = useChartTheme();
 const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
+// ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
+// Mantém os dados anteriores visíveis para evitar o flash de tela vazia/loading duro
+const cachedPrescritoresData = ref(prescritoresData.value);
+const cachedCrmDailyProfile  = ref(crmDailyProfile.value);
+const cachedCrmHourlyProfile = ref(crmHourlyProfile.value);
+
+const showRefreshingKPIs  = useDelayedLoading(prescritoresLoading);
+const showRefreshingDaily = useDelayedLoading(crmDailyProfileLoading);
+const showRefreshingHourly = useDelayedLoading(crmHourlyProfileLoading);
+
+watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedPrescritoresData.value = newData;
+}, { immediate: true });
+
+watch([crmDailyProfile, crmDailyProfileLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmDailyProfile.value = newData;
+}, { immediate: true });
+
+watch([crmHourlyProfile, crmHourlyProfileLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmHourlyProfile.value = newData;
+}, { immediate: true });
+
 const { getApiParams } = useFilterParameters();
 
 onMounted(() => {
@@ -43,7 +66,7 @@ onMounted(() => {
 const filterDailyOnlyAnomalous = ref(false);
 
 const filteredDailyDays = computed(() => {
-  const days = crmDailyProfile.value?.days ?? [];
+  const days = cachedCrmDailyProfile.value?.days ?? [];
   if (!filterDailyOnlyAnomalous.value) return days;
   return days.filter(d => d.is_anomalo === 1);
 });
@@ -54,7 +77,7 @@ const dailyAnomalous = computed(() => filteredDailyDays.value.map(d => d.is_anom
 const dailyMedians   = computed(() => filteredDailyDays.value.map(d => d.mediana_diaria ?? 0));
 
 const dailyMediana   = computed(() => {
-  const days = crmDailyProfile.value?.days ?? [];
+  const days = cachedCrmDailyProfile.value?.days ?? [];
   if (!days.length) return 0;
   // Para exibir no KPI ou Label geral, pegamos a mediana do mês mais recente
   return days[days.length - 1].mediana_diaria ?? 0;
@@ -72,7 +95,9 @@ const chartOptionDaily = computed(() => {
 
   return {
     ...chartTheme.value,
-    animation: false,
+    animation: true,
+    animationDuration: 1000,
+    animationEasing: 'cubicOut',
     grid: { top: 32, right: 20, bottom: 80, left: 50, containLabel: false },
     xAxis: {
       type: 'category',
@@ -105,7 +130,7 @@ const chartOptionDaily = computed(() => {
         if (!day) return '';
         
         const c = chartTheme.value;
-        const points = crmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
+        const points = cachedCrmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
         
         let sparklineHtml = '';
         if (points.length > 0) {
@@ -246,11 +271,11 @@ async function onHourlyChartClick(params) {
 }
 
 const chartOptionHourly = computed(() => {
-  if (!selectedDay.value || !crmHourlyProfile.value) return {};
+  if (!selectedDay.value || !cachedCrmHourlyProfile.value) return {};
   
   const c = chartTheme.value;
   const targetDate = selectedDay.value.dt_janela;
-  const pointsForDay = crmHourlyProfile.value.points.filter(p => p.dt_janela === targetDate);
+  const pointsForDay = cachedCrmHourlyProfile.value.points.filter(p => p.dt_janela === targetDate);
   const hrPico = selectedDay.value.hr_pico;
 
   // 24 pontos garantidos (0-23)
@@ -403,11 +428,11 @@ const chartOptionHourly = computed(() => {
 });
 
 // isRefreshing: há dados anteriores visíveis enquanto um novo fetch está em curso
-const isRefreshing = computed(() => prescritoresLoading.value && prescritoresData.value !== null);
+const isRefreshing = computed(() => showRefreshingKPIs.value && cachedPrescritoresData.value !== null);
 
 // --- CÁLCULOS DOS KPIs ---
-const summary = computed(() => prescritoresData.value?.summary || {});
-const crmsInteresse = computed(() => prescritoresData.value?.crms_interesse || []);
+const summary = computed(() => cachedPrescritoresData.value?.summary || {});
+const crmsInteresse = computed(() => cachedPrescritoresData.value?.crms_interesse || []);
 
 const concentracaoTop1 = computed(
   () => summary.value.pct_concentracao_top1 || 0,
@@ -477,7 +502,7 @@ const qtdLancamentosAgrupados = computed(
 );
 
 // Surtos de Lançamento (Frequência horária do Estabelecimento)
-const cnpjAlerts = computed(() => prescritoresData.value?.cnpj_alerts || []);
+const cnpjAlerts = computed(() => cachedPrescritoresData.value?.cnpj_alerts || []);
 const totalSurtosCnpj = computed(() => cnpjAlerts.value.length);
 const totalDiasSurtosCnpj = computed(() => {
   const uniqueDays = new Set(cnpjAlerts.value.map(a => a.dt));
@@ -625,7 +650,7 @@ defineExpose({
       </p>
     </div>
 
-    <div v-else class="content-wrapper" :class="{ 'is-refreshing': isRefreshing }">
+    <div v-else class="content-wrapper" :class="{ 'is-refreshing': showRefreshingKPIs }">
       <!-- 1. KPIs -->
       <div class="no-padding-mobile">
         <div class="alerts-kpi-grid">
@@ -874,7 +899,7 @@ defineExpose({
       </div>
 
       <!-- 2. GRÁFICO — PERFIL DIÁRIO DE DISPENSAÇÕES -->
-      <div class="section-container daily-chart-section">
+      <div class="section-container daily-chart-section" :class="{ 'is-refreshing': showRefreshingDaily }">
         <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; width: 100%">
           <div style="display: flex; align-items: center; gap: 0.75rem">
             <i class="pi pi-chart-bar" />
@@ -901,14 +926,13 @@ defineExpose({
         <VChart
           v-else
           :option="chartOptionDaily"
-          :update-options="{ notMerge: true }"
           autoresize
           class="daily-dispensacao-chart"
           @click="onChartClick"
         />
 
         <!-- Detalhamento Horário (Drill-down) -->
-        <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in">
+        <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in" :class="{ 'is-refreshing': showRefreshingHourly }">
           <div class="hourly-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
             <div class="title-group" style="display: flex; align-items: center; gap: 0.75rem;">
               <i class="pi pi-clock" style="color: #6366f1; font-size: 1.1rem;"></i>
@@ -1277,6 +1301,11 @@ defineExpose({
 .daily-dispensacao-chart {
   height: 280px;
   cursor: pointer;
+}
+.is-refreshing {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 /* Hourly Detail Styles */

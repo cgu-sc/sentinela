@@ -291,13 +291,13 @@ const maxPDOverall = computed(() => {
                         <span class="seg-count">{{ m.alertas_diarios.length }}</span>
                       </button>
                       <button
-                        class="segment-btn geo-seg"
-                        :class="{ 'seg-active geo-active': activeAlertTab[m.id_medico] === 'geo' }"
+                        class="segment-btn"
+                        :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'geo' }"
                         @click="setAlertTab(m.id_medico, 'geo')"
                       >
                         <i class="pi pi-map-marker" />
                         Distância &gt;400km
-                        <span class="seg-count geo">{{ m.alertas_geograficos.length }}</span>
+                        <span class="seg-count">{{ m.alertas_geograficos.length }}</span>
                       </button>
                     </div>
                   </div>
@@ -598,8 +598,8 @@ tr:hover .rank-badge {
 tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
 .alertas-diarios-cell {
-  background: var(--table-expansion-bg) !important;
-  padding: 1rem !important;
+  background: var(--card-bg) !important;
+  padding: 1.25rem !important;
   border-bottom: 1px solid var(--tabs-border);
 }
 .alertas-diarios-table { width: 100%; border-collapse: collapse; background: transparent; font-size: 0.78rem; }
@@ -628,8 +628,8 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 }
 
 .geo-cell { line-height: 1.4; padding: 0.6rem 0.75rem !important; }
-.geo-main { font-weight: 700; color: var(--text-color); font-size: 0.8rem; }
-.geo-sub { font-size: 0.68rem; color: var(--text-muted); opacity: 0.8; }
+.geo-main { font-weight: 700; color: var(--text-color); font-size: 0.8rem; opacity: 0.85; }
+.geo-sub { font-size: 0.68rem; color: var(--text-color); opacity: 0.75; }
 
 .dist-badge {
   background: rgba(239, 68, 68, 0.1);
@@ -650,23 +650,22 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
 /* ── Evidence Panel (Design Premium) ───────────────────────────────── */
 .evidence-panel {
-  background: transparent;
+  background: var(--table-expansion-bg);
   border-radius: 8px;
   border: 1px solid var(--card-border);
   border-left: 3px solid var(--primary-color);
   overflow: hidden;
   transition: border-left-color 0.35s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
-.evidence-panel.theme-geo { border-left-color: #8b5cf6; }
-.evidence-panel.theme-conc { border-left-color: var(--primary-color); }
 
 /* Header do painel */
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.55rem 0.75rem 0.55rem 1rem;
-  background: color-mix(in srgb, var(--table-expansion-bg) 85%, var(--text-color) 5%);
+  padding: 0.65rem 1rem;
+  background: color-mix(in srgb, var(--table-expansion-bg) 92%, var(--text-color) 8%);
   border-bottom: 1px solid var(--tabs-border);
   gap: 1rem;
 }
@@ -678,11 +677,9 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 }
 .panel-icon {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--primary-color);
   flex-shrink: 0;
 }
-.evidence-panel.theme-conc .panel-icon { color: var(--primary-color); }
-.evidence-panel.theme-geo  .panel-icon { color: #8b5cf6; }
 
 .panel-title {
   font-size: 0.7rem;
@@ -750,7 +747,6 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   white-space: nowrap;
 }
 .segment-btn.seg-active { color: var(--primary-color); }
-.segment-btn.geo-seg.geo-active { color: #8b5cf6; }
 .segment-btn i { font-size: 0.68rem; }
 
 .seg-count {
@@ -760,15 +756,11 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   min-width: 16px;
   height: 14px;
   padding: 0 4px;
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);
   border-radius: 99px;
   font-size: 0.58rem;
   font-weight: 800;
-}
-.seg-count.geo {
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
 }
 
 /* Tabela de evidências (unificada) */
@@ -778,8 +770,11 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   background: transparent;
   font-size: 0.78rem;
 }
-.evidence-table thead tr {
-  background: color-mix(in srgb, var(--text-color) 3%, transparent);
+.evidence-table thead tr,
+.evidence-table thead tr:hover,
+.evidence-table thead tr th,
+.evidence-table thead tr:hover th {
+  background: color-mix(in srgb, var(--text-color) 4%, transparent) !important;
 }
 .evidence-table th {
   padding: 0.3rem 0.75rem;
@@ -790,6 +785,8 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   letter-spacing: 0.05em;
   text-align: left;
   border-bottom: 1px solid var(--tabs-border);
+  cursor: default;
+  user-select: none;
 }
 .evidence-table td {
   padding: 0.45rem 0.75rem;

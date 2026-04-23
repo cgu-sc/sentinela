@@ -717,10 +717,13 @@ watch(filteredDailyDays, (newDays) => {
 }
 
 .level-daily { border-left: 4px solid var(--primary-color); }
-.level-hourly { border-left: 4px solid #6366f1; background: color-mix(in srgb, var(--surface-card) 60%, transparent); }
+.level-hourly { 
+  border-left: 4px solid #6366f1; 
+  background: color-mix(in srgb, var(--card-bg) 85%, transparent); 
+}
 .level-raiox { 
   border-left: 4px solid #8b5cf6; 
-  background: v-bind(raioxBg);
+  background: color-mix(in srgb, var(--card-bg) 70%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -840,6 +843,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .premium-table th { padding: 0.75rem 0.5rem; background: var(--card-bg); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; border-bottom: 2px solid var(--tabs-border); }
 .premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color); font-size: 0.78rem; }
 .premium-table tbody tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
+.premium-table tbody tr.raiox-details-expanded-row:hover { background: transparent !important; cursor: default; }
 
 .raiox-count-badge { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 99px; font-size: 0.65rem; padding: 1px 8px; margin-left: 0.75rem; }
 .raiox-spinner { font-size: 0.8rem; margin-left: 0.5rem; }

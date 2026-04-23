@@ -285,6 +285,7 @@ const chartOptionDaily = computed(() => {
           const hasSelection = !!selectedDay.value;
           return {
             value: v,
+            cursor: day.is_anomalo ? 'pointer' : 'default',
             itemStyle: {
               opacity: hasSelection && !isSelected ? 0.5 : 1,
               color: dailyAnomalous.value[i]
@@ -302,6 +303,7 @@ const chartOptionDaily = computed(() => {
         data: dailyMedians.value,
         lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5, opacity: 0.8 },
         z: 10,
+        silent: true,
       },
     ],
   };
@@ -498,7 +500,7 @@ watch(filteredDailyDays, (newDays) => {
       </div>
       <div v-if="!selectedDay && crmDailyProfile" class="drill-hint">
         <i class="pi pi-hand-pointer" />
-        <span>Clique em um dia no gráfico para ver a análise horária detalhada</span>
+        <span>Clique em um dia no gráfico para ver a análise horária detalhada (apenas dias com registro de anomalia podem ser visualizados)</span>
       </div>
     </div>
 

@@ -146,20 +146,9 @@ const maxPDOverall = computed(() => {
               @click="m.alerta_concentracao_mesmo_crm && toggleAlertasDiarios(m.id_medico)"
             >
               <td class="col-center">
-                <div class="rank-container">
-                  <div v-if="i === 0" class="rank-medal gold" v-tooltip.top="'Líder de Volume'">
-                    <i class="pi pi-award"></i>
+                  <div class="rank-badge" :class="{ 'gold': i === 0, 'silver': i === 1, 'bronze': i === 2 }">
+                    <span class="rank-val">{{ (i + 1).toString().padStart(2, '0') }}</span>
                   </div>
-                  <div v-else-if="i === 1" class="rank-medal silver">
-                    <span>2</span>
-                  </div>
-                  <div v-else-if="i === 2" class="rank-medal bronze">
-                    <span>3</span>
-                  </div>
-                  <div v-else class="rank-number">
-                    {{ i + 1 }}
-                  </div>
-                </div>
               </td>
               <td>
                 <div class="med-id">{{ m.id_medico }}</div>
@@ -461,32 +450,53 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .alertas-diarios-cell { padding: 0.75rem 1rem !important; border-bottom: 2px solid var(--tabs-border) !important; background: transparent !important; }
 
 /* ── Rank & Medals ──────────────────────────────────────────────────────── */
-.rank-container { display: flex; align-items: center; justify-content: center; }
-.rank-medal {
-  width: 24px;
+/* ── Rank Styling (Modern Squircle) ─────────────────────────────────────── */
+.rank-badge {
+  width: 32px;
   height: 24px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 800;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.1);
   position: relative;
+  transition: all 0.3s ease;
 }
-.rank-medal::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  opacity: 0.3;
-  border: 1px solid currentColor;
+.rank-val {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: -0.02em;
 }
-.rank-medal.gold { background: linear-gradient(135deg, #FFD700, #B8860B); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-.rank-medal.silver { background: linear-gradient(135deg, #C0C0C0, #708090); color: #fff; }
-.rank-medal.bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); color: #fff; }
-.rank-medal i { font-size: 0.85rem; }
-.rank-number { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); opacity: 0.6; }
+
+/* Estilos de Destaque para o Top 3 */
+.rank-badge.gold {
+  background: rgba(255, 215, 0, 0.08);
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.1);
+}
+.rank-badge.gold .rank-val { color: #d4af37; }
+
+.rank-badge.silver {
+  background: rgba(192, 192, 192, 0.1);
+  border-color: rgba(192, 192, 192, 0.4);
+}
+.rank-badge.silver .rank-val { color: #94a3b8; }
+
+.rank-badge.bronze {
+  background: rgba(205, 127, 50, 0.08);
+  border-color: rgba(205, 127, 50, 0.4);
+}
+.rank-badge.bronze .rank-val { color: #a0522d; }
+
+/* Efeito Hover na Linha realça o Rank */
+tr:hover .rank-badge {
+  transform: translateX(2px);
+  border-color: var(--primary-color);
+}
+tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
 .alertas-wrapper {
   background: v-bind(raioxBg);

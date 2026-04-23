@@ -1495,8 +1495,8 @@ class AnalyticsService:
                 os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
-                        text("SELECT id_medico, nu_cnpj, nu_crm, sg_uf_crm, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
-                             " FROM temp_CGUSC.fp.crm_export WHERE nu_cnpj = :cnpj"),
+                        text("SELECT id_medico, cnpj, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
+                             " FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
                     )

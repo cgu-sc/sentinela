@@ -528,16 +528,16 @@ alertas AS (
         CAST(taxa_dia AS DECIMAL(5,1))                   AS taxa_hora,
         CASE
             WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0                                                                                             THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6                                                            THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 6                                                            THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 3 OR nu_minutos_dia <= 120)                                                                       THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 12                                                           THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 12                                                           THEN 'Autorizações em Sequência'
+            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 7 OR nu_minutos_dia <= 60)                                                                        THEN 'Autorizações em Sequência'
         END AS nivel
     FROM base_com_taxa
     WHERE
         (nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0)
-     OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 6)
-     OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 6)
-     OR (nu_prescricoes_dia >= 10 AND (taxa_dia >= 3 OR nu_minutos_dia <= 120))
+     OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 12)
+     OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 12)
+     OR (nu_prescricoes_dia >= 10 AND (taxa_dia >= 7 OR nu_minutos_dia <= 60))
 )
 SELECT * INTO temp_CGUSC.fp.alertas_crm_concentracao
 FROM alertas

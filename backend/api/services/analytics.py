@@ -1695,7 +1695,11 @@ class AnalyticsService:
                         conn,
                         params={"cnpj": cnpj},
                     )
-                df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame()
+                df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame(schema={
+                    "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
+                    "nivel": pl.Utf8, "nu_prescricoes_dia": pl.Int32, 
+                    "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64
+                })
                 df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
             except Exception as e:
                 print(f"❌ Erro ao buscar alertas diários do banco para {cnpj}: {e}")
@@ -1742,7 +1746,13 @@ class AnalyticsService:
                         text("SELECT * FROM temp_CGUSC.fp.alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
                         conn, params={"cnpj": cnpj}
                     )
-                df_geo = pl.from_pandas(pdf_geo) if not pdf_geo.empty else pl.DataFrame()
+                df_geo = pl.from_pandas(pdf_geo) if not pdf_geo.empty else pl.DataFrame(schema={
+                    "id_medico": pl.Utf8, "competencia": pl.Int32, "cnpj_a": pl.Utf8, 
+                    "no_municipio_a": pl.Utf8, "sg_uf_a": pl.Utf8, "dt_ini_a": pl.Utf8, 
+                    "dt_fim_a": pl.Utf8, "nu_prescricoes_a": pl.Int32, "cnpj_b": pl.Utf8, 
+                    "no_municipio_b": pl.Utf8, "sg_uf_b": pl.Utf8, "dt_ini_b": pl.Utf8, 
+                    "dt_fim_b": pl.Utf8, "nu_prescricoes_b": pl.Int32, "distancia_km": pl.Float64
+                })
                 df_geo.write_parquet(ALERTAS_GEO_PATH, compression="lz4")
             except Exception as e:
                 # Se falhar a conexão (comum em modo offline), apenas avisa de forma amigável
@@ -2004,7 +2014,12 @@ class AnalyticsService:
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
                 )
-            df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame()
+            df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
+                "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8, 
+                "num_autorizacao": pl.Utf8, "crm": pl.Utf8, "crm_uf": pl.Utf8, 
+                "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
+            })
+
             if not df_tx.is_empty():
                 df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
@@ -2012,10 +2027,14 @@ class AnalyticsService:
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8)
                 ])
+            
             df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
             print(f"✅ Cache hourly_tx sincronizado: {cnpj}")
         except Exception as e:
-            print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
+            if "IM002" in str(e) or "connection" in str(e).lower():
+                print(f"ℹ️  Modo Offline: Cache de transações para {cnpj} não encontrado e banco inacessível.")
+            else:
+                print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
 
     @staticmethod
     def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmHourlyTransactionsResponse":

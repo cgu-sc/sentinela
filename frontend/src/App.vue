@@ -269,25 +269,30 @@ onBeforeUnmount(() => {
 }
 
 .retry-button {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: color-mix(in srgb, var(--primary-color) 85%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: white;
-  border: none;
-  padding: 0.65rem 1.25rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, white 10%);
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  justify-content: center;
+  gap: 0.6rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px color-mix(in srgb, var(--primary-color) 25%, transparent);
   font-family: inherit;
+  letter-spacing: 0.02em;
 }
 
 .retry-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+  background: var(--primary-color);
+  box-shadow: 0 8px 25px color-mix(in srgb, var(--primary-color) 40%, transparent);
 }
 
 .retry-button:active {

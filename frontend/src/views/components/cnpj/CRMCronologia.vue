@@ -389,6 +389,21 @@ const chartOptionHourly = computed(() => {
     ],
   };
 });
+
+// ── Auto-seleção do Dia Mais Anômalo ──────────────────────────────────────
+watch(filteredDailyDays, (newDays) => {
+  if (newDays.length > 0 && !selectedDay.value) {
+    const anomalousDays = newDays.filter(d => d.is_anomalo === 1);
+    if (anomalousDays.length > 0) {
+      const maxDay = anomalousDays.reduce((max, d) => 
+        (d.nu_prescricoes_dia > max.nu_prescricoes_dia) ? d : max, anomalousDays[0]
+      );
+      selectedDay.value = maxDay;
+      selectedHourlyHour.value = 'all';
+      loadTransactions(maxDay.dt_janela, null);
+    }
+  }
+}, { immediate: true });
 </script>
 
 <template>

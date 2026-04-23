@@ -35,7 +35,9 @@ function toggleAlertasDiarios(idMedico) {
     // Define a aba padrão ao abrir: concentração se existir, senão geográfico
     const m = props.crmsInteresse.find(x => x.id_medico === idMedico);
     if (m && !activeAlertTab.value[idMedico]) {
-      activeAlertTab.value[idMedico] = m.alertas_diarios?.length ? 'conc' : 'geo';
+      if (m.alertas_diarios?.length) activeAlertTab.value[idMedico] = 'conc';
+      else if (m.alertas_geograficos?.length) activeAlertTab.value[idMedico] = 'geo';
+      else if (m.alertas_surto?.length) activeAlertTab.value[idMedico] = 'surto';
     }
   }
   expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
@@ -155,8 +157,8 @@ const maxPDOverall = computed(() => {
         <tbody>
           <template v-for="(m, i) in visibleCrms" :key="i">
             <tr
-              :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm || m.alerta5_geografico }"
-              @click="(m.alertas_diarios?.length || m.alertas_geograficos?.length) ? toggleAlertasDiarios(m.id_medico) : null"
+              :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm || m.alerta5_geografico || m.flag_concentracao_estabelecimento }"
+              @click="(m.alertas_diarios?.length || m.alertas_geograficos?.length || m.alertas_surto?.length) ? toggleAlertasDiarios(m.id_medico) : null"
             >
               <td class="col-center">
                   <div class="rank-badge" :class="{ 'gold': i === 0, 'silver': i === 1, 'bronze': i === 2 }">
@@ -204,8 +206,15 @@ const maxPDOverall = computed(() => {
                     <span v-if="m.alertas_geograficos?.length" class="badge-count">({{ m.alertas_geograficos.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
-                  <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag amber" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
+                  <span
+                    v-if="m.flag_concentracao_estabelecimento"
+                    class="issue-tag amber clickable-badge"
+                    v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios de surto geral'"
+                    @click.stop="toggleAlertasDiarios(m.id_medico)"
+                  >
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
+                    <span v-if="m.alertas_surto?.length" class="badge-count">({{ m.alertas_surto.length }}x)</span>
+                    <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <i
                     v-if="!m.alertas_diarios?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
@@ -262,34 +271,35 @@ const maxPDOverall = computed(() => {
             </tr>
 
             <!-- Linha expandida de alertas (Concentração ou Geográfico) com sistema de abas -->
-            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_diarios?.length || m.alertas_geograficos?.length)" class="alertas-diarios-row">
+            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_diarios?.length || m.alertas_geograficos?.length || m.alertas_surto?.length)" class="alertas-diarios-row">
               <td colspan="11" class="alertas-diarios-cell">
                 <div
                   class="evidence-panel"
                   :class="{
-                    'theme-conc': !m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc',
-                    'theme-geo':  !m.alertas_diarios?.length    || activeAlertTab[m.id_medico] === 'geo'
+                    'theme-conc': activeAlertTab[m.id_medico] === 'conc',
+                    'theme-geo':  activeAlertTab[m.id_medico] === 'geo',
+                    'theme-surto': activeAlertTab[m.id_medico] === 'surto'
                   }"
                 >
                   <!-- PANEL HEADER -->
                   <div class="panel-header">
                     <div class="panel-header-left">
-                      <i :class="(!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc') ? 'pi pi-stopwatch' : 'pi pi-map-marker'" class="panel-icon" />
+                      <i :class="{
+                        'pi pi-stopwatch': activeAlertTab[m.id_medico] === 'conc',
+                        'pi pi-map-marker': activeAlertTab[m.id_medico] === 'geo',
+                        'pi pi-bolt': activeAlertTab[m.id_medico] === 'surto'
+                      }" class="panel-icon" />
                       <span class="panel-title">
-                        {{ (!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc')
-                            ? 'Evidências de Concentração'
-                            : 'Evidências de Distância Geográfica' }}
+                        <template v-if="activeAlertTab[m.id_medico] === 'conc'">Evidências de Concentração</template>
+                        <template v-else-if="activeAlertTab[m.id_medico] === 'geo'">Evidências de Distância Geográfica</template>
+                        <template v-else-if="activeAlertTab[m.id_medico] === 'surto'">Participação em Lançamentos Sequenciais</template>
                       </span>
                       <span class="panel-crm-badge">{{ m.id_medico }}</span>
                     </div>
-
-                    <!-- SEGMENTED CONTROL (só quando tem ambos) -->
-                    <div v-if="m.alertas_diarios?.length && m.alertas_geograficos?.length" class="segmented-control">
-                      <div
-                        class="segment-pill"
-                        :class="activeAlertTab[m.id_medico] === 'geo' ? 'pill-right' : 'pill-left'"
-                      />
+                    <!-- SEGMENTED CONTROL (Abas Dinâmicas) -->
+                    <div class="segmented-control" v-if="(m.alertas_diarios?.length ? 1 : 0) + (m.alertas_geograficos?.length ? 1 : 0) + (m.alertas_surto?.length ? 1 : 0) > 1">
                       <button
+                        v-if="m.alertas_diarios?.length"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'conc' }"
                         @click="setAlertTab(m.id_medico, 'conc')"
@@ -299,20 +309,31 @@ const maxPDOverall = computed(() => {
                         <span class="seg-count">{{ m.alertas_diarios.length }}</span>
                       </button>
                       <button
+                        v-if="m.alertas_geograficos?.length"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'geo' }"
                         @click="setAlertTab(m.id_medico, 'geo')"
                       >
                         <i class="pi pi-map-marker" />
-                        Distância &gt;400km
+                        Distância
                         <span class="seg-count">{{ m.alertas_geograficos.length }}</span>
+                      </button>
+                      <button
+                        v-if="m.alertas_surto?.length"
+                        class="segment-btn"
+                        :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'surto' }"
+                        @click="setAlertTab(m.id_medico, 'surto')"
+                      >
+                        <i class="pi pi-bolt" />
+                        Seq. Lanc.
+                        <span class="seg-count">{{ m.alertas_surto.length }}</span>
                       </button>
                     </div>
                   </div>
 
                   <!-- CONTEÚDO: Tabela de Concentração -->
                   <table
-                    v-if="m.alertas_diarios?.length && (!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc')"
+                    v-if="activeAlertTab[m.id_medico] === 'conc'"
                     class="evidence-table"
                   >
                     <thead>
@@ -339,7 +360,7 @@ const maxPDOverall = computed(() => {
 
                   <!-- CONTEÚDO: Tabela de Distância Geográfica -->
                   <table
-                    v-if="m.alertas_geograficos?.length && (!m.alertas_diarios?.length || activeAlertTab[m.id_medico] === 'geo')"
+                    v-if="activeAlertTab[m.id_medico] === 'geo'"
                     class="evidence-table"
                   >
                     <thead>
@@ -366,6 +387,37 @@ const maxPDOverall = computed(() => {
                           <span class="dist-badge">{{ Math.round(g.distancia_km) }}km</span>
                         </td>
                         <td class="col-center" style="font-size: 0.75rem; color: var(--text-muted);">{{ g.competencia }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <!-- CONTEÚDO: Tabela de Surto Geral -->
+                  <table
+                    v-if="activeAlertTab[m.id_medico] === 'surto'"
+                    class="evidence-table"
+                  >
+                    <thead>
+                      <tr>
+                        <th><i class="pi pi-calendar" /> Data</th>
+                        <th class="col-center"><i class="pi pi-clock" /> Hora</th>
+                        <th class="col-right"><i class="pi pi-user-edit" /> Autorizações CRM</th>
+                        <th class="col-right"><i class="pi pi-users" /> Total Hora (CNPJ)</th>
+                        <th class="col-center"><i class="pi pi-id-card" /> Diversidade</th>
+                        <th><i class="pi pi-align-left" /> Descrição</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(s, l) in m.alertas_surto" :key="'surto-'+l">
+                        <td class="col-date">{{ formatarDataAlerta(s.dt) }}</td>
+                        <td class="col-center">
+                          <span class="time-badge">{{ s.hr.toString().padStart(2, '0') }}:00h</span>
+                        </td>
+                        <td class="col-right" style="font-weight: 600; color: var(--amber-500)">{{ s.nu_presc_crm }}</td>
+                        <td class="col-right">{{ s.nu_presc_total }}</td>
+                        <td class="col-center">{{ s.nu_crms_total }} CRMs</td>
+                        <td class="col-descricao">
+                           <span class="surto-desc">{{ s.descricao.replace('Surto de Volume: ', '') }}</span>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -665,11 +717,11 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   background: var(--table-expansion-bg);
   border-radius: 8px;
   border: 1px solid var(--card-border);
-  border-left: 3px solid var(--primary-color);
-  overflow: hidden;
-  transition: border-left-color 0.35s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
+.theme-conc { border-left-color: var(--risk-medium) !important; }
+.theme-geo { border-left-color: #8b5cf6 !important; }
+.theme-surto { border-left-color: var(--amber-500) !important; }
 
 /* Header do painel */
 .panel-header {
@@ -712,32 +764,17 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   font-family: var(--font-mono, monospace);
 }
 
-/* Segmented Control */
+/* Segmented Control (Refatorado para 3+ abas) */
 .segmented-control {
   display: flex;
   align-items: center;
-  position: relative;
   background: color-mix(in srgb, var(--text-color) 7%, transparent);
   border: 1px solid var(--tabs-border);
   border-radius: 8px;
   padding: 3px;
-  gap: 0;
+  gap: 2px;
   flex-shrink: 0;
 }
-.segment-pill {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  width: calc(50% - 3px);
-  border-radius: 6px;
-  background: var(--card-bg);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-  border: 1px solid var(--tabs-border);
-}
-.segment-pill.pill-left  { left: 3px; }
-.segment-pill.pill-right { left: calc(50%); }
 
 .segment-btn {
   display: flex;
@@ -755,10 +792,16 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   cursor: pointer;
   position: relative;
   z-index: 1;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
   white-space: nowrap;
 }
-.segment-btn.seg-active { color: var(--primary-color); }
+.segment-btn:hover { background: color-mix(in srgb, var(--text-color) 5%, transparent); }
+.segment-btn.seg-active { 
+  background: var(--card-bg);
+  color: var(--primary-color); 
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  border: 1px solid var(--tabs-border);
+}
 .segment-btn i { font-size: 0.68rem; }
 
 .seg-count {
@@ -819,4 +862,28 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   color: var(--primary-color) !important;
   text-decoration: underline;
 }
+
+.time-badge {
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+.surto-desc { 
+  font-size: 0.72rem; 
+  opacity: 0.85; 
+  line-height: 1.3; 
+  display: block; 
+  max-width: 400px;
+  white-space: normal; 
+}
+.theme-surto .panel-icon { color: var(--amber-500); }
+.theme-surto .seg-active { color: var(--amber-500) !important; }
+.theme-geo .panel-icon { color: #8b5cf6; }
+.theme-geo .seg-active { color: #8b5cf6 !important; }
+.theme-conc .panel-icon { color: var(--risk-medium); }
+.theme-conc .seg-active { color: var(--risk-medium) !important; }
+
 </style>

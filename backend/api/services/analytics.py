@@ -1863,6 +1863,70 @@ class AnalyticsService:
                 for r in df_ca.sort(["dt_alerta", "hr_janela"]).iter_rows(named=True)
             ]
 
+        # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
+        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
+        alertas_surto_por_medico: dict[str, list[dict]] = {}
+        
+        if os.path.exists(TX_PARQUET_PATH):
+            try:
+                # Carregamos as transações anômalas (Raio-X) do estabelecimento
+                df_tx = pl.read_parquet(TX_PARQUET_PATH)
+                if not df_tx.is_empty():
+                    # Filtro de período nas transações se necessário
+                    if comp_ini or comp_fim:
+                        # Garantimos que seja Date para os accessors .dt
+                        dt_temp = pl.col("dt_janela")
+                        if df_tx["dt_janela"].dtype == pl.Utf8:
+                            dt_temp = dt_temp.str.to_date("%Y-%m-%d")
+                            
+                        df_tx = df_tx.with_columns(
+                            (dt_temp.dt.year() * 100 + dt_temp.dt.month()).cast(pl.Int32).alias("_comp")
+                        )
+                        if comp_ini: df_tx = df_tx.filter(pl.col("_comp") >= comp_ini)
+                        if comp_fim: df_tx = df_tx.filter(pl.col("_comp") <= comp_fim)
+
+                    # Garantimos que dt_janela seja String para o Join posterior (df_ca usa Utf8)
+                    df_tx = df_tx.with_columns(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10))
+
+                    # Agregamos volume por CRM e Hora de Surto
+                    df_surto_agg = (
+                        df_tx.group_by(["dt_janela", "hr_janela", "crm", "crm_uf"])
+                        .agg([
+                            pl.n_unique("num_autorizacao").alias("nu_prescricoes_crm"),
+                            pl.sum("valor_pago").alias("vl_prescricoes_crm")
+                        ])
+                    )
+                    
+                    # Cruzamos com os alertas do CNPJ para trazer o contexto (descrição/total)
+                    if not df_ca.is_empty():
+                        # Garantimos que dt_alerta também seja String no mesmo formato
+                        df_ca_clean = df_ca.with_columns(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10))
+                        
+                        df_surto_full = df_surto_agg.join(
+                            df_ca_clean.select(["dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms", "descricao"]),
+                            left_on=["dt_janela", "hr_janela"],
+                            right_on=["dt_alerta", "hr_janela"],
+                            how="inner"
+                        )
+                        
+                        for r in df_surto_full.iter_rows(named=True):
+                            mid = f"{r['crm']}/{r['crm_uf']}"
+                            alertas_surto_por_medico.setdefault(mid, []).append({
+                                "dt": str(r["dt_janela"]),
+                                "hr": int(r["hr_janela"]),
+                                "nu_presc_crm": int(r["nu_prescricoes_crm"]),
+                                "nu_presc_total": int(r["nu_prescricoes"]),
+                                "nu_crms_total": int(r["nu_crms"]),
+                                "descricao": r["descricao"]
+                            })
+            except Exception as e:
+                print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
+
+        # Atribuição final aos médicos
+        for m in crms_interesse_list:
+            m["alertas_surto"] = alertas_surto_por_medico.get(m["id_medico"], [])
+
+
         return PrescritoresResponse(
             cnpj=cnpj, 
             summary=summary_dict, 

@@ -1,12 +1,14 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useFormatting } from "@/composables/useFormatting";
+import CRMRedeOverlay from "./CRMRedeOverlay.vue";
 
 const props = defineProps({
   crmsInteresse:    { type: Array,  required: true },
   activeKpiFilter:  { type: String, default: null },
   kpiFilters:       { type: Object, required: true },
   kpiFilterLabels:  { type: Object, required: true },
+  currentCnpj:      { type: String, default: '' },
 });
 
 const emit = defineEmits(['clear-filters']);
@@ -16,9 +18,10 @@ const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 
 const filterOnlyIssues = ref(false);
-const showAllCrms = ref(false);
+const showAllCrms     = ref(false);
+const redeOverlay     = ref(null);
 const expandedAlertasMedico = ref(new Set());
-const activeAlertTab = ref({});
+const activeAlertTab  = ref({});
 
 watch(() => props.activeKpiFilter, (newVal) => {
   if (newVal !== null) filterOnlyIssues.value = false;
@@ -237,7 +240,11 @@ const maxPDOverall = computed(() => {
                 </div>
               </td>
               <td class="col-center">
-                <span :class="{ 'text-purple': m.qtd_estabelecimentos_atua > 50 }">{{ m.qtd_estabelecimentos_atua }}</span> farm.
+                <span
+                  :class="{ 'text-purple': m.qtd_estabelecimentos_atua > 50, 'rede-clickable': m.lista_cnpjs_brasil }"
+                  v-tooltip.top="m.lista_cnpjs_brasil ? 'Clique para ver a lista de farmácias' : null"
+                  @click.stop="m.lista_cnpjs_brasil ? redeOverlay.open($event, m) : null"
+                >{{ m.qtd_estabelecimentos_atua }} farm.</span>
               </td>
               <td class="col-center">
                 <div class="cell-stacked" style="align-items: center; gap: 0.1rem;">
@@ -383,6 +390,10 @@ const maxPDOverall = computed(() => {
         </template>
       </button>
     </div>
+
+    <!-- Overlay de Rede de Farmácias -->
+    <CRMRedeOverlay ref="redeOverlay" :current-cnpj="props.currentCnpj"/>
+
   </div>
 </template>
 
@@ -796,4 +807,16 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   opacity: 0.85;
 }
 .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color) 3%, transparent); }
+
+/* ── Rede: botão de clique ──────────────────────────────────────────── */
+.rede-clickable {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  transition: color 0.2s ease;
+}
+.rede-clickable:hover {
+  color: var(--primary-color) !important;
+  text-decoration: underline;
+}
 </style>

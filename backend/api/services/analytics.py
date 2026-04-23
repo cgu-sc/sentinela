@@ -102,7 +102,7 @@ _INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
 
 class AnalyticsService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None) -> AnalyticsResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: List[str] = None) -> AnalyticsResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -172,6 +172,8 @@ class AnalyticsService:
                     mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
             if razao_social:
                 mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
+            if cnpjs:
+                mask = mask & (pl.col("cnpj").is_in(cnpjs))
 
             period_df = df.filter(mask)
 
@@ -1512,7 +1514,17 @@ class AnalyticsService:
                 print(traceback.format_exc())
                 return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
 
-        # ── 2. Filtro de período ──────────────────────────────────────────────
+        # ── 2. Compatibilidade e Filtro de período ──────────────────────────────
+        # Se o cache for antigo e não tiver as novas colunas, cria com default
+        missing_cols = {
+            "lista_cnpjs_brasil": pl.lit(""),
+            "flag_distancia_geografica": pl.lit(0).cast(pl.Int8),
+            "flag_concentracao_mesmo_crm": pl.lit(0).cast(pl.Int8)
+        }
+        for col, default_val in missing_cols.items():
+            if col not in df.columns:
+                df = df.with_columns(default_val.alias(col))
+
         if comp_ini:
             df = df.filter(pl.col("competencia") >= comp_ini)
         if comp_fim:
@@ -1546,7 +1558,7 @@ class AnalyticsService:
                 pl.sum("_dias_ativos_br").alias("_total_dias_br"),
                 pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
                 # Une as listas de CNPJs de todos os meses do período
-                pl.col("lista_cnpjs_brasil").str.concat(",").alias("_full_cnpj_list"),
+                pl.col("lista_cnpjs_brasil").str.concat(",").alias("lista_cnpjs_brasil"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1571,7 +1583,7 @@ class AnalyticsService:
             ])
             .with_columns([
                 # Processa a string concatenada para contar CNPJs únicos
-                pl.col("_full_cnpj_list")
+                pl.col("lista_cnpjs_brasil")
                 .str.split(",")
                 .list.unique()
                 .list.len()

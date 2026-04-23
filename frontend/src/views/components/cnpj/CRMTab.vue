@@ -192,6 +192,7 @@ defineExpose({
           :active-kpi-filter="activeKpiFilter"
           :kpi-filters="kpiFilters"
           :kpi-filter-labels="kpiFilterLabels"
+          :current-cnpj="cnpj"
           @clear-filters="clearFilters"
         />
       </template>

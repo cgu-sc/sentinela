@@ -38,9 +38,10 @@ def get_analytics_summary(
     cnpj_raiz: Optional[str] = Query(None),
     unidade_pf: Optional[str] = Query(None),
     razao_social: Optional[str] = Query(None),
+    cnpjs: Optional[List[str]] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):

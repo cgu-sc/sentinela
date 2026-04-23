@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { prescritoresData, prescritoresLoading, prescritoresError } = storeToRefs(cnpjDetailStore);
+const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode } = storeToRefs(cnpjDetailStore);
 const { getApiParams } = useFilterParameters();
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const cachedPrescritoresData = ref(prescritoresData.value);
@@ -32,8 +32,7 @@ onMounted(() => {
   }
 });
 
-// ── Estado de Navegação ───────────────────────────────────────────────────
-const viewMode = ref('medicos');
+// ── Estado de Navegação (Agora via Store) ─────────────────────────────────
 const activeKpiFilter = ref(null);
 
 const isRefreshing = computed(() => showRefreshingKPIs.value && cachedPrescritoresData.value !== null);
@@ -169,11 +168,11 @@ defineExpose({
       <!-- Seletor de Visão -->
       <div class="view-mode-container animate-fade-in">
         <div class="view-mode-selector">
-          <button class="view-mode-btn" :class="{ active: viewMode === 'medicos' }" @click="viewMode = 'medicos'">
+          <button class="view-mode-btn" :class="{ active: activeCrmViewMode === 'medicos' }" @click="cnpjDetailStore.setCrmViewMode('medicos')">
             <i class="pi pi-users" />
             <span>PERFIL DE CRMs</span>
           </button>
-          <button class="view-mode-btn" :class="{ active: viewMode === 'cronologia' }" @click="viewMode = 'cronologia'">
+          <button class="view-mode-btn" :class="{ active: activeCrmViewMode === 'cronologia' }" @click="cnpjDetailStore.setCrmViewMode('cronologia')">
             <i class="pi pi-chart-line" />
             <span>LINHA DO TEMPO & RAIO-X</span>
           </button>
@@ -181,7 +180,7 @@ defineExpose({
       </div>
 
       <!-- Visão: KPIs + Tabela de CRMs -->
-      <template v-if="viewMode === 'medicos'">
+      <template v-if="activeCrmViewMode === 'medicos'">
         <CRMKpiGrid
           :kpi-data="kpiData"
           :active-kpi-filter="activeKpiFilter"
@@ -198,7 +197,7 @@ defineExpose({
       </template>
 
       <!-- Visão: Cronologia — v-show preserva estado do drill-down entre troca de abas -->
-      <CRMCronologia v-show="viewMode === 'cronologia'" :cnpj="cnpj" />
+      <CRMCronologia v-show="activeCrmViewMode === 'cronologia'" :cnpj="cnpj" />
     </div>
   </div>
 </template>

@@ -21,7 +21,13 @@ const props = defineProps({
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { crmDailyProfile, crmDailyProfileLoading, crmHourlyProfile, crmHourlyProfileLoading } = storeToRefs(cnpjDetailStore);
+const { 
+  crmDailyProfile, 
+  crmDailyProfileLoading, 
+  crmHourlyProfile, 
+  crmHourlyProfileLoading,
+  selectedTimelineEvent 
+} = storeToRefs(cnpjDetailStore);
 const { formatarData } = useFormatting();
 const { chartTheme, chartUFAccents } = useChartTheme();
 const themeStore = useThemeStore();
@@ -482,6 +488,41 @@ watch(filteredDailyDays, (newDays) => {
     }
   }
 }, { immediate: true });
+
+// ── Watch para Navegação Externa (Deep-Link) ──────────────────────────────
+// Observa AMBOS: o evento de navegação e o cache de dados.
+// Isso garante que mesmo se o evento disparar antes do cache estar pronto,
+// o handler tentará novamente assim que os dados chegarem.
+watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => {
+  if (!evt || !profile) return;
+
+  const dayObj = profile.days.find(d => d.dt_janela === evt.date);
+  if (!dayObj) return;
+
+  // 1. Seleciona o dia — mostra o dia todo sem filtrar por hora
+  selectedDay.value = dayObj;
+  selectedHourlyHour.value = 'all';
+
+  // 2. Carrega as transações do dia inteiro
+  await loadTransactions(evt.date, null);
+
+  // 3. Centraliza o zoom
+  const idx = profile.days.findIndex(d => d.dt_janela === evt.date);
+  if (idx !== -1) {
+    const total = profile.days.length;
+    const windowSize = 30;
+    const halfWindow = windowSize / 2;
+    let startIdx = Math.max(0, idx - halfWindow);
+    let endIdx = Math.min(total, startIdx + windowSize);
+    if (endIdx === total) startIdx = Math.max(0, total - windowSize);
+
+    dailyZoomStart.value = (startIdx / total) * 100;
+    dailyZoomEnd.value = (endIdx / total) * 100;
+  }
+
+  // 4. Limpa o evento para permitir futuras navegações
+  cnpjDetailStore.clearTimelineNavigation();
+});
 </script>
 
 <template>

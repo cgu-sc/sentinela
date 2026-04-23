@@ -1,7 +1,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useFormatting } from "@/composables/useFormatting";
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import CRMRedeOverlay from "./CRMRedeOverlay.vue";
+
+const cnpjDetailStore = useCnpjDetailStore();
 
 const props = defineProps({
   crmsInteresse:    { type: Array,  required: true },
@@ -45,6 +48,10 @@ function toggleAlertasDiarios(idMedico) {
 
 function setAlertTab(idMedico, tab) {
   activeAlertTab.value = { ...activeAlertTab.value, [idMedico]: tab };
+}
+
+function handleTimelineNavigation(date, hour) {
+  cnpjDetailStore.navigateTimeline(date, hour);
 }
 
 function clearAllFilters() {
@@ -407,7 +414,13 @@ const maxPDOverall = computed(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(s, l) in m.alertas_surto" :key="'surto-'+l">
+                      <tr 
+                        v-for="(s, l) in m.alertas_surto" 
+                        :key="'surto-'+l"
+                        class="clickable-surto-row"
+                        v-tooltip.top="'Clique para ver no Raio-X'"
+                        @click="handleTimelineNavigation(s.dt, s.hr)"
+                      >
                         <td class="col-date">{{ formatarDataAlerta(s.dt) }}</td>
                         <td class="col-center">
                           <span class="time-badge">{{ s.hr.toString().padStart(2, '0') }}:00h</span>
@@ -886,4 +899,14 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .theme-conc .panel-icon { color: var(--risk-medium); }
 .theme-conc .seg-active { color: var(--risk-medium) !important; }
 
+.clickable-surto-row {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.clickable-surto-row:hover {
+  background: color-mix(in srgb, var(--amber-500) 10%, transparent) !important;
+}
+.clickable-surto-row:hover td {
+  color: var(--amber-500) !important;
+}
 </style>

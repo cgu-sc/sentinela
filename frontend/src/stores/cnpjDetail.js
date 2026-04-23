@@ -64,6 +64,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     metricPercentiles:        null,
     metricPercentilesLoading: false,
     metricPercentilesLoaded:  false, // Guarda a chave do escopo atual
+    
+    // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
+    selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
+    activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia'
   }),
 
   actions: {
@@ -283,6 +287,20 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    // ── Navegação ─────────────────────────────────────────────────────────────
+    navigateTimeline(date, hour = 'all') {
+      this.selectedTimelineEvent = { date, hour, ts: Date.now() };
+      this.activeCrmViewMode     = 'cronologia';
+    },
+
+    setCrmViewMode(mode) {
+      this.activeCrmViewMode = mode;
+    },
+
+    clearTimelineNavigation() {
+      this.selectedTimelineEvent = null;
+    },
+
     // ── Reset completo ao trocar de CNPJ ──────────────────────────────────────
     resetAll() {
       this.dadosCadastro        = null;
@@ -317,6 +335,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.crmDailyProfile        = null;
       this.crmDailyProfileLoading = false;
       this.crmDailyProfileLoaded  = null;
+
+      this.activeCrmViewMode = 'medicos';
+      this.selectedTimelineEvent = null;
 
       this.cnpjsAvulsos        = new Map();
       this.cnpjsAvulsosLoading = false;

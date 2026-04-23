@@ -1495,8 +1495,8 @@ class AnalyticsService:
                 os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"
-                             " ORDER BY competencia, id_medico"),
+                        text("SELECT id_medico, nu_cnpj, nu_crm, sg_uf_crm, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
+                             " FROM temp_CGUSC.fp.crm_export WHERE nu_cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -1551,6 +1551,7 @@ class AnalyticsService:
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
                 pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_mesmo_crm"),
+                pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta_distancia_geografica"),
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
                 pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
                 pl.col("dt_inscricao_crm").first().alias("dt_inscricao_crm"),

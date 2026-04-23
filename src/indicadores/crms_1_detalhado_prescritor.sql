@@ -808,6 +808,7 @@ SELECT
                   ' pares de estabelecimentos com distância maior que 400km no mesmo período.'
              ELSE '' END
     END                                                               AS alerta_distancia_geografica,
+    CAST(CASE WHEN G.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_distancia_geografica,
     A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
     TRY_CONVERT(DATE, CFM_ALL.DT_INSCRICAO, 103)                      AS dt_inscricao_crm,
     -- Flags CFM por competência (v5: grain mensal via alertas_crm_registro)

@@ -183,9 +183,11 @@ const chartOptionDaily = computed(() => {
       type: 'category',
       data: dailyDates.value,
       axisLabel: {
-        formatter: (v) => v.slice(0, 7),
-        interval: 0, // Mostrar todos os labels se couberem, ou o ECharts decide o melhor
+        formatter: (v) => v ? `${v.slice(8, 10)}/${v.slice(5, 7)}` : '',
+        interval: 'auto', // O ECharts decide quantos labels mostrar para não embolar
+        rotate: 45,       // Inclina para caber mais datas
         fontSize: 10,
+        color: chartTheme.value.muted
       },
       axisLine: { lineStyle: { color: chartTheme.value.border } },
     },

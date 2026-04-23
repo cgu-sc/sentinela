@@ -58,14 +58,7 @@ const dailyValues    = computed(() => filteredDailyDays.value.map(d => d.nu_pres
 const dailyAnomalous = computed(() => filteredDailyDays.value.map(d => d.is_anomalo === 1));
 const dailyMedians   = computed(() => filteredDailyDays.value.map(d => d.mediana_diaria ?? 0));
 
-watch(dailyDates, (newDates) => {
-  if (newDates.length > 0) {
-    const totalDays = newDates.length;
-    const windowSize = 30; // Exibe exatamente 30 dias por padrão
-    dailyZoomStart.value = Math.max(0, 100 - (windowSize / totalDays) * 100);
-    dailyZoomEnd.value = 100;
-  }
-}, { immediate: true });
+// Zoom inicial e centralização são controlados pelo watch(filteredDailyDays) abaixo.
 
 function onDailyZoom(params) {
   if (params.batch) {
@@ -431,17 +424,44 @@ const chartOptionHourly = computed(() => {
   };
 });
 
-// ── Auto-seleção do Dia Mais Anômalo ──────────────────────────────────────
+// ── Auto-seleção do Dia Mais Anômalo e Ajuste de Foco do Gráfico ──
 watch(filteredDailyDays, (newDays) => {
   if (newDays.length > 0 && !selectedDay.value) {
     const anomalousDays = newDays.filter(d => d.is_anomalo === 1);
     if (anomalousDays.length > 0) {
+      // 1. Encontra o pior dia (maior volume)
       const maxDay = anomalousDays.reduce((max, d) => 
         (d.nu_prescricoes_dia > max.nu_prescricoes_dia) ? d : max, anomalousDays[0]
       );
       selectedDay.value = maxDay;
       selectedHourlyHour.value = 'all';
       loadTransactions(maxDay.dt_janela, null);
+
+      // 2. Centraliza o Gráfico no dia selecionado
+      const idx = newDays.findIndex(d => d.dt_janela === maxDay.dt_janela);
+      if (idx !== -1) {
+        const total = newDays.length;
+        const windowSize = 30; // Mostrar 30 dias ao redor
+        const halfWindow = windowSize / 2;
+        
+        // Calcula porcentagens
+        let startIdx = Math.max(0, idx - halfWindow);
+        let endIdx = Math.min(total, startIdx + windowSize);
+        
+        // Ajusta se bater no final
+        if (endIdx === total) {
+          startIdx = Math.max(0, total - windowSize);
+        }
+
+        dailyZoomStart.value = (startIdx / total) * 100;
+        dailyZoomEnd.value = (endIdx / total) * 100;
+      }
+    } else {
+      // 3. Caso não haja anomalia, mostra os últimos 30 dias por padrão
+      const total = newDays.length;
+      const windowSize = 30;
+      dailyZoomStart.value = Math.max(0, 100 - (windowSize / total) * 100);
+      dailyZoomEnd.value = 100;
     }
   }
 }, { immediate: true });

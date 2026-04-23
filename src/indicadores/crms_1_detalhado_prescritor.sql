@@ -1082,41 +1082,6 @@ GO
 -- ============================================================================
 
 
--- ============================================================================
--- ALERTA PICO DE DISPENSAÇÃO: pior dia anômalo por (cnpj, competencia)
--- Derivado do crm_daily_profile — sem recalcular CTEs pesadas.
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_pico;
-
-SELECT
-    cnpj,
-    competencia,
-    dt_janela,
-    nu_prescricoes_dia,
-    nu_crms_distintos,
-    mediana_diaria,
-    CAST(
-        'Anomalia de dispensação detectada em ' + CONVERT(VARCHAR, dt_janela, 103) +
-        ': ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições, ' +
-        CAST(nu_crms_distintos AS VARCHAR(10)) + ' CRMs distintos.'
-    AS VARCHAR(800))                      AS alerta_pico_dispensacao
-INTO temp_CGUSC.fp.alertas_cnpj_pico
-FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (
-            PARTITION BY cnpj, competencia
-            ORDER BY nu_prescricoes_dia DESC
-        ) AS rn
-    FROM temp_CGUSC.fp.crm_daily_profile
-    WHERE is_anomalo = 1
-) X
-WHERE rn = 1;
-
-CREATE CLUSTERED INDEX IDX_PicoDispensacao
-    ON temp_CGUSC.fp.alertas_cnpj_pico(cnpj, competencia);
-GO
-
-
 PRINT '============================================================================';
 PRINT 'SCRIPT v5 EXECUTADO COM SUCESSO:';
 PRINT '  - dados_crm_detalhado          : sem alertas, sem nu_populacao';
@@ -1125,7 +1090,6 @@ PRINT '  - alertas_crm_geografico       : [v5] master geografica — distancia_k
 PRINT '  - alertas_crm                  : [v5] flags BIT — flag_concentracao/geografico/registro + qtd_dias_concentracao';
 PRINT '  - alertas_crm_registro         : [v5] master CFM — INEXISTENTE/IRREGULAR por competencia + valor';
 PRINT '  - crm_export                   : grain plano para exportacao de parquets por CNPJ';
-PRINT '  - alertas_cnpj_pico            : [v5] pior dia anomalo por (cnpj, competencia)';
 PRINT '  - indicador_crm_bench_{uf,regiao,br} : benchmarks de mediana por geografia/competencia';
 PRINT '  - indicador_crm_hhi            : HHI por CNPJ (agregado) para matriz_risco_final.sql';
 PRINT '============================================================================';

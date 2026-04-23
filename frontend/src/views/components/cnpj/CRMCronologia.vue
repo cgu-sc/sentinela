@@ -77,6 +77,28 @@ function onDailyZoom(params) {
   }
 }
 
+// Navegação mensal manual
+function shiftZoom(direction) {
+  const totalDays = dailyDates.value.length;
+  if (totalDays === 0) return;
+
+  const currentSpan = dailyZoomEnd.value - dailyZoomStart.value;
+  const monthPercent = (30 / totalDays) * 100;
+  
+  let newStart, newEnd;
+
+  if (direction === 'next') {
+    newEnd = Math.min(100, dailyZoomEnd.value + monthPercent);
+    newStart = Math.max(0, newEnd - currentSpan);
+  } else {
+    newStart = Math.max(0, dailyZoomStart.value - monthPercent);
+    newEnd = Math.min(100, newStart + currentSpan);
+  }
+
+  dailyZoomStart.value = newStart;
+  dailyZoomEnd.value = newEnd;
+}
+
 // ── Drill-down Horário ────────────────────────────────────────────────────
 const selectedDay = ref(null);
 const selectedHourlyHour = ref(null);
@@ -462,6 +484,15 @@ watch(filteredDailyDays, (newDays) => {
           </span>
         </div>
         <div class="filter-controls">
+          <div class="chart-nav-buttons">
+            <button class="nav-btn" @click="shiftZoom('prev')" title="Mês Anterior">
+              <i class="pi pi-chevron-left" />
+            </button>
+            <button class="nav-btn" @click="shiftZoom('next')" title="Próximo Mês">
+              <i class="pi pi-chevron-right" />
+            </button>
+          </div>
+          <div class="filter-divider"></div>
           <label class="filter-toggle">
             <input type="checkbox" v-model="filterDailyOnlyAnomalous" />
             <span class="toggle-slider"></span>
@@ -846,6 +877,61 @@ watch(filteredDailyDays, (newDays) => {
 
 .filter-controls { display: flex; align-items: center; }
 .filter-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.75rem; color: var(--text-secondary); }
+
+/* ── Botões de Navegação do Gráfico ── */
+.chart-nav-buttons {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+}
+
+:global(.dark-mode) .chart-nav-buttons {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.nav-btn {
+  background: transparent !important;
+  border: none;
+  color: var(--text-color);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:global(.dark-mode) .nav-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.nav-btn:hover {
+  background: var(--primary-color) !important;
+  color: white !important;
+  transform: translateY(-1px);
+}
+
+.nav-btn:active {
+  transform: translateY(0);
+}
+
+.filter-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--card-border);
+  margin: 0 12px;
+  opacity: 0.6;
+}
+
+:global(.dark-mode) .filter-divider {
+  background: rgba(255, 255, 255, 0.1);
+}
 .filter-toggle input { display: none; }
 .toggle-slider { position: relative; width: 32px; height: 18px; background-color: var(--tabs-border); border-radius: 20px; transition: 0.3s; }
 .toggle-slider:before { content: ""; position: absolute; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; }

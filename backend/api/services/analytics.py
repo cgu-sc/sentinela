@@ -1846,10 +1846,7 @@ class AnalyticsService:
                 "competencia":           int(r["competencia"]),
                 "nu_prescricoes_dia":    int(r["nu_prescricoes_dia"]),
                 "nu_crms_distintos":     int(r["nu_crms_distintos"]),
-                "hr_pico":               int(r["hr_pico"]),
-                "nu_prescricoes_hr_pico": int(r["nu_prescricoes_hr_pico"]),
                 "mediana_diaria":        float(r["mediana_diaria"]),
-                "multiplo":              float(r["multiplo"] or 0),
                 "is_anomalo":            int(r["is_anomalo"]),
             }
             for r in df.iter_rows(named=True)

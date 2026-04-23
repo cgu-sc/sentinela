@@ -26,6 +26,7 @@ import TabView from "primevue/tabview";
 import TabPanel from "primevue/tabpanel";
 import Tag from "primevue/tag";
 import Chip from "primevue/chip";
+import ProgressSpinner from "primevue/progressspinner";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
@@ -220,10 +221,39 @@ const formatCnpj = (v) => {
     "$1.$2.$3/$4-$5",
   );
 };
+
+// ── Controle de Carregamento Global ───────────────────────
+const isInitialLoading = computed(() => {
+  // Consideramos carregamento inicial se os dados básicos ou os dashboards principais ainda não voltaram
+  return (
+    cnpjDetailStore.dadosCadastroLoading ||
+    cnpjDetailStore.cnpjsAvulsosLoading ||
+    (cnpjDetailStore.prescritoresLoading && !cnpjDetailStore.prescritoresData) ||
+    (cnpjDetailStore.crmDailyProfileLoading && !cnpjDetailStore.crmDailyProfile) ||
+    (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira)
+  );
+});
 </script>
 
 <template>
   <div class="cnpj-detail-page">
+    <!-- OVERLAY DE CARREGAMENTO GLOBAL -->
+    <Transition name="fade-blur">
+      <div v-if="isInitialLoading" class="global-loading-overlay">
+        <div class="loader-content">
+          <ProgressSpinner 
+            style="width: 60px; height: 60px" 
+            strokeWidth="3" 
+            animationDuration=".8s" 
+          />
+          <div class="loader-text">
+            <h3>Sincronizando dados</h3>
+            <p>Aguardando resposta do banco de dados...</p>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- HEADER (COMPONENTE ISOLADO) -->
     <CnpjHeader
       :cnpj="cnpj"
@@ -317,7 +347,8 @@ const formatCnpj = (v) => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  gap: 0; /* Unificado: header + tabs formam um card único */
+  position: relative; /* Referência para o overlay de loading */
+  gap: 0;
   background: transparent;
 }
 
@@ -476,6 +507,58 @@ const formatCnpj = (v) => {
 }
 .tab-placeholder p {
   font-size: 0.875rem;
+}
+
+/* ── GLOBAL LOADING OVERLAY ── */
+.global-loading-overlay {
+  position: absolute; /* Mudado de fixed para absolute */
+  top: 0;
+  left: 0;
+  width: 100%; /* Mudado de 100vw para 100% */
+  height: 100%; /* Mudado de 100vh para 100% */
+  background: color-mix(in srgb, var(--body-bg) 70%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+.loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.loader-text h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  letter-spacing: -0.01em;
+}
+
+.loader-text p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* Transição suave */
+.fade-blur-enter-active,
+.fade-blur-leave-active {
+  transition: opacity 0.5s ease, backdrop-filter 0.5s ease;
+}
+
+.fade-blur-enter-from,
+.fade-blur-leave-to {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
 </style>
 

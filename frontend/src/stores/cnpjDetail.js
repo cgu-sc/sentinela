@@ -52,7 +52,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     crmHourlyProfileLoaded:  null,
 
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
-    cnpjsAvulsos: new Map(),
+    cnpjsAvulsos:        new Map(),
+    cnpjsAvulsosLoading: false,
 
     // ── Municípios da região do CNPJ (para RegionalTab) ──────────────────────
     municipiosRegiao:        [],
@@ -219,6 +220,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── CNPJs Avulsos ─────────────────────────────────────────────────────────
     async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
       if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
+      this.cnpjsAvulsosLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
@@ -229,6 +231,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (found) this.cnpjsAvulsos.set(cnpj, found);
       } catch (err) {
         console.error('Erro ao carregar CNPJ avulso:', err);
+      } finally {
+        this.cnpjsAvulsosLoading = false;
       }
     },
 
@@ -313,6 +317,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.crmDailyProfile        = null;
       this.crmDailyProfileLoading = false;
       this.crmDailyProfileLoaded  = null;
+
+      this.cnpjsAvulsos        = new Map();
+      this.cnpjsAvulsosLoading = false;
 
       this.municipiosRegiao        = [];
       this.municipiosRegiaoKey     = null;

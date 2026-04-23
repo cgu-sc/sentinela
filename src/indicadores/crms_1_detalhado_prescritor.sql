@@ -54,6 +54,20 @@ GROUP BY M.crm, M.crm_uf, M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
 
 CREATE CLUSTERED INDEX IDX_BaseAgreg_Key ON #base_agregada_crm_cnpj(nu_cnpj, nu_crm, competencia);
 
+-- ============================================================================
+-- PASSO 0.0: FILTRO DE RELEVÂNCIA (Whitelist)
+-- Identifica médicos com >= 5 prescrições no TOTAL do período para este CNPJ.
+-- Evita que médicos constantes mas de baixo volume mensal sejam descartados.
+-- ============================================================================
+DROP TABLE IF EXISTS #whitelist_crms_relevantes;
+SELECT nu_cnpj, nu_crm, sg_uf_crm
+INTO #whitelist_crms_relevantes
+FROM #base_agregada_crm_cnpj
+GROUP BY nu_cnpj, nu_crm, sg_uf_crm
+HAVING SUM(nu_prescricoes_medico) >= 5;
+
+CREATE CLUSTERED INDEX IDX_Whitelist ON #whitelist_crms_relevantes(nu_cnpj, nu_crm, sg_uf_crm);
+
 
 
 -- ============================================================================
@@ -157,15 +171,7 @@ FROM #totais_diarios;
 -- 4. Tabela Final 1: crm_daily_profile (Gráfico Principal)
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_daily_profile;
 
-WITH pico_horario AS (
-    SELECT
-        cnpj, dt_janela,
-        hr_janela AS hr_pico,
-        nu_prescricoes_hora AS nu_prescricoes_hr_pico,
-        ROW_NUMBER() OVER (PARTITION BY cnpj, dt_janela ORDER BY nu_prescricoes_hora DESC, hr_janela ASC) AS rn
-    FROM #base_horaria
-),
-crms_distintos_dia AS (
+WITH crms_distintos_dia AS (
     SELECT
         cnpj, 
         CAST(data_hora AS DATE) AS dt_janela,
@@ -176,15 +182,12 @@ crms_distintos_dia AS (
 SELECT
     T.cnpj, T.competencia, T.dt_janela, T.nu_prescricoes_dia,
     ISNULL(C.nu_crms_distintos, 0) AS nu_crms_distintos,
-    P.hr_pico, P.nu_prescricoes_hr_pico,
     CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
-    CAST(CAST(T.nu_prescricoes_dia AS DECIMAL(10,2)) / NULLIF(M.mediana_diaria, 0) AS DECIMAL(10,2)) AS multiplo,
     -- O dia é anômalo se tiver uma rajada horária (Regra Standard 7x Mediana)
     T.dia_tem_anomalia_hora AS is_anomalo
 INTO temp_CGUSC.fp.crm_daily_profile
 FROM #totais_diarios T
 INNER JOIN #mediana_diaria M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
-INNER JOIN pico_horario P ON P.cnpj = T.cnpj AND P.dt_janela = T.dt_janela AND P.rn = 1
 LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela = T.dt_janela;
 
 CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_daily_profile(cnpj, dt_janela);
@@ -400,8 +403,11 @@ LEFT JOIN #pior_dia_crm P
     AND P.nu_crm      = A.nu_crm
     AND P.sg_uf_crm   = A.sg_uf_crm
     AND P.competencia = A.competencia
--- Piso de 5 prescrições OU participação em surto detectado
-WHERE (A.nu_prescricoes_medico >= 5)
+-- Piso de 5 prescrições NO TOTAL DO PERÍODO OU participação em surto detectado
+WHERE EXISTS (
+        SELECT 1 FROM #whitelist_crms_relevantes W 
+        WHERE W.nu_cnpj = A.nu_cnpj AND W.nu_crm = A.nu_crm AND W.sg_uf_crm = A.sg_uf_crm
+   )
    OR EXISTS (
         SELECT 1 FROM #crms_em_surto SR 
         WHERE SR.nu_cnpj = A.nu_cnpj 
@@ -1086,19 +1092,13 @@ SELECT
     cnpj,
     competencia,
     dt_janela,
-    hr_pico,
     nu_prescricoes_dia,
-    nu_prescricoes_hr_pico,
     nu_crms_distintos,
     mediana_diaria,
-    multiplo,
     CAST(
-        'Pico de dispensação: ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) +
-        ' prescrições em ' + CONVERT(VARCHAR, dt_janela, 103) +
-        ' (pico às ' + RIGHT('0' + CAST(hr_pico AS VARCHAR(2)), 2) + 'h: ' +
-        CAST(nu_prescricoes_hr_pico AS VARCHAR(10)) + ' prescrições), ' +
-        CAST(nu_crms_distintos AS VARCHAR(10)) + ' CRMs distintos, ' +
-        CAST(CAST(multiplo AS DECIMAL(5,1)) AS VARCHAR(10)) + 'x acima do padrão da farmácia'
+        'Anomalia de dispensação detectada em ' + CONVERT(VARCHAR, dt_janela, 103) +
+        ': ' + CAST(nu_prescricoes_dia AS VARCHAR(10)) + ' prescrições, ' +
+        CAST(nu_crms_distintos AS VARCHAR(10)) + ' CRMs distintos.'
     AS VARCHAR(800))                      AS alerta_pico_dispensacao
 INTO temp_CGUSC.fp.alertas_cnpj_pico
 FROM (

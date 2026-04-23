@@ -13,7 +13,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
 import DataTable from 'primevue/datatable';
@@ -21,7 +21,7 @@ import Column from 'primevue/column';
 import ColumnGroup from 'primevue/columngroup';
 import Row from 'primevue/row';
 
-use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
+use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
@@ -31,7 +31,7 @@ const { chartTheme, chartDataColors } = useChartTheme();
 const filterStore = useFilterStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError } = storeToRefs(cnpjDetailStore);
+const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError, evolucaoMensalGtin, evolucaoMensalGtinLoading } = storeToRefs(cnpjDetailStore);
 
 // ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
 // Mantém os dados do semestre anterior visíveis durante a animação de período.
@@ -246,6 +246,190 @@ const chartOption = computed(() => {
   };
 });
 
+
+// ── Gráfico Mensal GTIN ───────────────────────────────────
+
+/**
+ * Retorna true se o mês "YYYY-MM" pertence ao semestre "1S/2024" ou "2S/2024".
+ */
+function mesPertenceAoSemestre(mesStr, semestre) {
+  if (!mesStr || !semestre) return false;
+  const [semPart, anoPart] = semestre.split('/');
+  const semNum = parseInt(semPart);
+  const anoNum = parseInt(anoPart);
+  const [y, m] = mesStr.split('-').map(Number);
+  return y === anoNum && (semNum === 1 ? m <= 6 : m > 6);
+}
+
+function chartOptionMensalGtin(semestre) {
+  const c    = C.value;
+  const meses = evolucaoMensalGtin.value?.meses ?? [];
+
+  const labels    = meses.map(m => m.mes);
+  const regular   = meses.map(m => ({
+    value: parseFloat((m.valor_vendas - m.valor_sem_comprovacao).toFixed(2)),
+    itemStyle: { opacity: mesPertenceAoSemestre(m.mes, semestre) ? 1 : 0.35 },
+  }));
+  const irregular = meses.map(m => ({
+    value: parseFloat(m.valor_sem_comprovacao.toFixed(2)),
+    itemStyle: { opacity: mesPertenceAoSemestre(m.mes, semestre) ? 1 : 0.35 },
+  }));
+
+  // Centraliza o zoom no semestre selecionado
+  const total = meses.length;
+  let zoomStart = 0, zoomEnd = 100;
+  if (total > 0 && semestre) {
+    const [semPart, anoPart] = semestre.split('/');
+    const semNum = parseInt(semPart);
+    const anoNum = parseInt(anoPart);
+    const indices = meses.reduce((acc, m, i) => {
+      const [y, mo] = m.mes.split('-').map(Number);
+      if (y === anoNum && (semNum === 1 ? mo <= 6 : mo > 6)) acc.push(i);
+      return acc;
+    }, []);
+    if (indices.length) {
+      const pad = 2;
+      const first = Math.max(0, indices[0] - pad);
+      const last  = Math.min(total - 1, indices[indices.length - 1] + pad);
+      zoomStart = Math.round((first / total) * 100);
+      zoomEnd   = Math.round(((last + 1) / total) * 100);
+    }
+  }
+
+  const formatLabel = (iso) => {
+    if (!iso) return '';
+    const [y, mo] = iso.split('-');
+    return new Date(parseInt(y), parseInt(mo) - 1)
+      .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+      .replace(' de ', '/');
+  };
+
+  return {
+    backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 600,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+
+    legend: {
+      top: 4,
+      left: 'center',
+      textStyle: { color: c.muted, fontSize: 11, fontWeight: 600 },
+      itemGap: 20,
+      itemWidth: 12,
+      itemHeight: 7,
+    },
+
+    grid: { top: 36, left: 64, right: 16, bottom: 52, containLabel: false },
+
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      formatter: (params) => {
+        const idx = params[0]?.dataIndex ?? 0;
+        const m   = meses[idx];
+        if (!m) return '';
+        const total = m.valor_vendas;
+        const irr   = m.valor_sem_comprovacao;
+        const reg   = total - irr;
+        return `
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatLabel(m.mes)}</div>
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:9px;height:9px;border-radius:2px;background:${c.green};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.04em;">Regulares</span>
+              </div>
+              <div style="font-weight:600;font-size:12px;margin-bottom:2px;">${formatCurrencyFull(reg)}</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:9px;height:9px;border-radius:2px;background:${c.red};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.04em;">Irregulares</span>
+              </div>
+              <div style="font-weight:600;font-size:12px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(irr)} <span style="opacity:.7">(${m.pct_sem_comprovacao.toFixed(1)}%)</span></div>
+              <div style="border-top:1px solid ${c.tooltipBorder};padding-top:5px;margin-top:2px;font-weight:600;font-size:12px;">Total: ${formatCurrencyFull(total)}</div>
+            </div>
+          </div>`;
+      },
+    },
+
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine:  { lineStyle: { color: c.grid } },
+      axisTick:  { show: false },
+      axisLabel: {
+        color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif',
+        formatter: formatLabel,
+        interval: 'auto',
+        rotate: 30,
+      },
+    },
+
+    yAxis: {
+      type: 'value',
+      axisLine:  { show: false },
+      axisTick:  { show: false },
+      splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
+      axisLabel: { color: c.muted, fontSize: 9, formatter: v => formatCurrencyFull(v) },
+    },
+
+    dataZoom: [
+      { type: 'inside', start: zoomStart, end: zoomEnd, zoomLock: false },
+      {
+        type: 'slider', start: zoomStart, end: zoomEnd, height: 14,
+        bottom: 4,
+        borderColor: c.grid,
+        fillerColor: c.axisShadow,
+        handleStyle: { color: c.muted },
+        textStyle: { color: 'transparent' },
+      },
+    ],
+
+    series: [
+      {
+        name: 'Regulares',
+        type: 'bar',
+        stack: 'total',
+        barMaxWidth: 40,
+        data: regular,
+        itemStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: c.greenGrad },
+              { offset: 1, color: c.green + '55' },
+            ],
+          },
+        },
+        emphasis: { focus: 'series' },
+      },
+      {
+        name: 'Irregulares',
+        type: 'bar',
+        stack: 'total',
+        barMaxWidth: 40,
+        data: irregular,
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: c.redGrad },
+              { offset: 1, color: c.red + '55' },
+            ],
+          },
+        },
+        emphasis: { focus: 'series' },
+      },
+    ],
+  };
+}
+
 </script>
 
 <template>
@@ -375,6 +559,17 @@ const chartOption = computed(() => {
                 <div class="mb-3" style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">
                   Detalhamento de {{ slotProps.data.semestre }}
                 </div>
+
+                <!-- Gráfico Mensal de Movimentação -->
+                <div v-if="evolucaoMensalGtin?.meses?.length" class="mensal-gtin-chart-wrapper">
+                  <div class="mensal-gtin-chart-header">
+                    <i class="pi pi-chart-bar" />
+                    <span>Histórico Mensal de Movimentação</span>
+                    <i v-if="evolucaoMensalGtinLoading" class="pi pi-spin pi-spinner" style="margin-left:auto;font-size:0.75rem;opacity:0.5;" />
+                  </div>
+                  <VChart :option="chartOptionMensalGtin(slotProps.data.semestre)" :update-options="{ notMerge: true }" autoresize style="height: 210px;" />
+                </div>
+
                 <DataTable :value="slotProps.data.meses" class="sanfona-table">
                   <Column field="mes" header="Mês" style="width: 15%" headerStyle="text-align: left" bodyStyle="text-align: left">
                     <template #body="{ data }">
@@ -673,4 +868,28 @@ const chartOption = computed(() => {
   color: var(--sidebar-border);
   opacity: 0.7;
 }
+
+.mensal-gtin-chart-wrapper {
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--card-bg) 98%, var(--text-color) 2%);
+}
+
+.mensal-gtin-chart-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--tabs-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.mensal-gtin-chart-header i { color: var(--primary-color); font-size: 0.9rem; }
 </style>

@@ -416,3 +416,17 @@ class CrmHourlyTransactionsResponse(BaseModel):
     """Lista cronológica de prescrições aprovadas numa hora anômala."""
     transactions: List[CrmHourlyTransactionSchema]
 
+
+# ── Evolução Mensal por GTIN ─────────────────────────────────────────────────
+
+class MesMensalGtinItem(BaseModel):
+    mes: str                          # "YYYY-MM"
+    qnt_vendas: int
+    qnt_vendas_sem_comprovacao: int
+    valor_vendas: float
+    valor_sem_comprovacao: float
+    pct_sem_comprovacao: float        # 0–100
+
+class EvolucaoMensalGtinResponse(BaseModel):
+    meses: List[MesMensalGtinItem]
+

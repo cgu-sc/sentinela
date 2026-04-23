@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir, get_df_mov_mensal_gtin
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -47,6 +47,8 @@ from ..schemas.analytics import (
     IndicadorAnaliseResponse,
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
+    MesMensalGtinItem,
+    EvolucaoMensalGtinResponse,
 )
 
 # ── Mapeamento de indicadores: chave → (col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br) ──
@@ -503,6 +505,74 @@ class AnalyticsService:
             print(f"❌ ERRO AO CALCULAR EVOLUÇÃO FINANCEIRA: {e}")
             print(traceback.format_exc())
             return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
+
+    @staticmethod
+    def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoMensalGtinResponse:
+        """
+        Retorna a série mensal de quantidades e valores (por GTIN agregado) para um CNPJ.
+
+        Args:
+            cnpj: CNPJ completo (14 dígitos).
+            data_inicio: Data inicial opcional para recorte do período (date).
+            data_fim: Data final opcional para recorte do período (date).
+
+        Returns:
+            EvolucaoMensalGtinResponse com lista de meses ordenados ASC.
+        """
+        try:
+            df = get_df_mov_mensal_gtin()
+            cnpj_df = df.filter(pl.col("cnpj") == cnpj).select(
+                ["periodo", "qnt_vendas", "qnt_vendas_sem_comprovacao", "valor_vendas", "valor_sem_comprovacao"]
+            )
+
+            if data_inicio:
+                cnpj_df = cnpj_df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+            if data_fim:
+                cnpj_df = cnpj_df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+
+            if cnpj_df.is_empty():
+                return EvolucaoMensalGtinResponse(meses=[])
+
+            agg = (
+                cnpj_df
+                .with_columns(pl.col("periodo").dt.strftime("%Y-%m").alias("mes"))
+                .group_by("mes")
+                .agg([
+                    pl.sum("qnt_vendas").alias("qnt_vendas"),
+                    pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
+                    pl.sum("valor_vendas").alias("valor_vendas"),
+                    pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+                ])
+                .sort("mes")
+                .with_columns([
+                    (
+                        pl.col("valor_sem_comprovacao")
+                        / pl.when(pl.col("valor_vendas") > 0)
+                            .then(pl.col("valor_vendas"))
+                            .otherwise(pl.lit(1.0))
+                        * 100
+                    ).clip(0.0, 100.0).round(2).alias("pct_sem_comprovacao")
+                ])
+            )
+
+            meses = [
+                MesMensalGtinItem(
+                    mes=r["mes"],
+                    qnt_vendas=int(r["qnt_vendas"]),
+                    qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"]),
+                    valor_vendas=round(float(r["valor_vendas"]), 2),
+                    valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"]), 2),
+                    pct_sem_comprovacao=r["pct_sem_comprovacao"],
+                )
+                for r in agg.iter_rows(named=True)
+            ]
+            return EvolucaoMensalGtinResponse(meses=meses)
+
+        except Exception as e:
+            import traceback
+            print(f"❌ ERRO AO CALCULAR EVOLUÇÃO MENSAL GTIN: {e}")
+            print(traceback.format_exc())
+            return EvolucaoMensalGtinResponse(meses=[])
 
     @staticmethod
     def get_indicadores(cnpj: str) -> IndicadoresResponse:

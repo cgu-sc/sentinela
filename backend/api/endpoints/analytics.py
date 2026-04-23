@@ -9,7 +9,7 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
-    CrmHourlyTransactionsResponse
+    CrmHourlyTransactionsResponse, EvolucaoMensalGtinResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -76,6 +76,15 @@ def get_evolucao_financeira(
 ):
     """Retorna a série semestral de valores financeiros para um CNPJ, com recorte temporal opcional."""
     return AnalyticsService.get_evolucao_financeira(cnpj, data_inicio, data_fim)
+
+@router.get("/cnpj/{cnpj}/evolucao-mensal-gtin", response_model=EvolucaoMensalGtinResponse)
+def get_evolucao_mensal_gtin(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna a série mensal de quantidades e valores (agregados por GTIN) para um CNPJ."""
+    return AnalyticsService.get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
 
 @router.get("/cnpj/{cnpj}/indicadores", response_model=IndicadoresResponse)
 def get_indicadores(cnpj: str):

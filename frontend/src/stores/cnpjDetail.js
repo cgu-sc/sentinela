@@ -65,6 +65,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     metricPercentilesLoading: false,
     metricPercentilesLoaded:  false, // Guarda a chave do escopo atual
     
+    // ── Evolução Mensal GTIN ─────────────────────────────────────────────────
+    evolucaoMensalGtin:        null,
+    evolucaoMensalGtinLoading: false,
+    evolucaoMensalGtinKey:     null,
+
     // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
     activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia'
@@ -109,6 +114,25 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.evolucaoError = ERROR_MSG;
       } finally {
         this.evolucaoLoading = false;
+      }
+    },
+
+    // ── Evolução Mensal GTIN ─────────────────────────────────────────────────
+    async fetchEvolucaoMensalGtin(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.evolucaoMensalGtinKey === key) return;
+      this.evolucaoMensalGtinLoading = true;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucaoMensalGtin(cnpj), { params });
+        this.evolucaoMensalGtin    = data;
+        this.evolucaoMensalGtinKey = key;
+      } catch (e) {
+        console.error('Erro ao buscar evolução mensal GTIN:', e);
+      } finally {
+        this.evolucaoMensalGtinLoading = false;
       }
     },
 
@@ -311,6 +335,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.evolucaoLoaded     = false;
       this.evolucaoError      = null;
       this.evolucaoKey        = null;
+
+      this.evolucaoMensalGtin        = null;
+      this.evolucaoMensalGtinLoading = false;
+      this.evolucaoMensalGtinKey     = null;
 
       this.movimentacaoData    = null;
       this.movimentacaoLoading = false;

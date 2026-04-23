@@ -37,6 +37,7 @@ _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
 _MEDICAMENTOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "medicamentos.parquet")
+_MOV_MENSAL_GTIN_PARQUET_PATH = os.path.join(_CACHE_DIR, "movimentacao_mensal_gtin.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -52,6 +53,7 @@ _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
 _df_medicamentos: pl.DataFrame | None = None
+_df_mov_mensal_gtin: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
@@ -236,6 +238,38 @@ def _sync_medicamentos(engine, progress_callback=None):
     _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="lz4")
 
 
+def _sync_mov_mensal_gtin(engine, progress_callback=None):
+    """Tarefa: Sincroniza movimentação mensal por GTIN (barcode), em nível de CNPJ + barcode + período."""
+    global _df_mov_mensal_gtin
+    print("Sincronizando Movimentação Mensal por GTIN...")
+    sql = """
+        SELECT p.cnpj,
+               m.codigo_barra,
+               m.periodo,
+               m.qnt_vendas,
+               m.qnt_vendas_sem_comprovacao,
+               CAST(m.valor_vendas AS FLOAT)          AS valor_vendas,
+               CAST(m.valor_sem_comprovacao AS FLOAT)  AS valor_sem_comprovacao
+        FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
+        INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
+        WHERE p.situacao = 1
+    """
+    pdf = pd.read_sql(sql, engine)
+    print(f"   -> Movimentação GTIN carregada: {len(pdf):,} registros.")
+    if progress_callback:
+        progress_callback(100)
+    _df_mov_mensal_gtin = pl.from_pandas(pdf).with_columns([
+        pl.col("cnpj").cast(pl.String),
+        pl.col("codigo_barra").cast(pl.String),
+        pl.col("periodo").cast(pl.Date),
+        pl.col("qnt_vendas").cast(pl.Int64),
+        pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64),
+        pl.col("valor_vendas").cast(pl.Float64),
+        pl.col("valor_sem_comprovacao").cast(pl.Float64),
+    ])
+    _df_mov_mensal_gtin.write_parquet(_MOV_MENSAL_GTIN_PARQUET_PATH, compression="lz4")
+
+
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
     global _df_movimentacao
@@ -351,7 +385,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_medicamentos, _df_mov_mensal_gtin, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -380,6 +414,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
+        _df_mov_mensal_gtin = _try_load("mov_mensal_gtin", _MOV_MENSAL_GTIN_PARQUET_PATH)
 
         if missing:
             print(f"⚠️  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -402,7 +437,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Falecidos",             "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
         {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
-        {"name": "Movimentação",          "weight": 66, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Movimentação",          "weight": 62, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Movimentação GTIN",     "weight": 4,  "func": lambda cb: _sync_mov_mensal_gtin(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -493,6 +529,15 @@ def get_medicamentos_df() -> pl.DataFrame:
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 
+def get_df_mov_mensal_gtin() -> pl.DataFrame:
+    global _df_mov_mensal_gtin
+    if _df_mov_mensal_gtin is None:
+        if os.path.exists(_MOV_MENSAL_GTIN_PARQUET_PATH):
+            _df_mov_mensal_gtin = pl.read_parquet(_MOV_MENSAL_GTIN_PARQUET_PATH)
+            return _df_mov_mensal_gtin
+        raise RuntimeError("Cache de Movimentação GTIN não carregado. Execute uma sincronização.")
+    return _df_mov_mensal_gtin
+
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     modules = {
@@ -506,6 +551,7 @@ def get_cache_status() -> dict:
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH, "loaded": _df_dados_farmacia is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,   "loaded": _df_medicamentos is not None},
+        "mov_mensal_gtin":{"label": "Movimentação GTIN",       "path": _MOV_MENSAL_GTIN_PARQUET_PATH,"loaded": _df_mov_mensal_gtin is not None},
     }
     modules_status = {
         key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}

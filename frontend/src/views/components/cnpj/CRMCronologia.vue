@@ -61,7 +61,7 @@ const dailyMedians   = computed(() => filteredDailyDays.value.map(d => d.mediana
 watch(dailyDates, (newDates) => {
   if (newDates.length > 0) {
     const totalDays = newDates.length;
-    const windowSize = Math.min(totalDays, 150);
+    const windowSize = 30; // Exibe exatamente 30 dias por padrão
     dailyZoomStart.value = Math.max(0, 100 - (windowSize / totalDays) * 100);
     dailyZoomEnd.value = 100;
   }
@@ -170,13 +170,13 @@ const chartOptionDaily = computed(() => {
   const totalDays = dailyDates.value.length;
   const startZoom = dailyZoomStart.value;
   const endZoom = dailyZoomEnd.value;
-  const minSpan = totalDays > 40 ? (40 / totalDays) * 100 : null;
-  const maxSpan = totalDays > 150 ? (150 / totalDays) * 100 : null;
+  const fixedSpan = totalDays > 30 ? (30 / totalDays) * 100 : 100;
 
   return {
     ...chartTheme.value,
     animation: true,
-    animationDuration: 300,
+    animationDuration: 100,
+    animationDurationUpdate: 100,
     legend: { show: false },
     grid: { top: 16, right: 20, bottom: 80, left: 50, containLabel: false },
     xAxis: {
@@ -184,8 +184,8 @@ const chartOptionDaily = computed(() => {
       data: dailyDates.value,
       axisLabel: {
         formatter: (v) => v.slice(0, 7),
-        interval: Math.floor(dailyDates.value.length / 24),
-        fontSize: 11,
+        interval: 0, // Mostrar todos os labels se couberem, ou o ECharts decide o melhor
+        fontSize: 10,
       },
       axisLine: { lineStyle: { color: chartTheme.value.border } },
     },
@@ -256,8 +256,23 @@ const chartOptionDaily = computed(() => {
       },
     },
     dataZoom: [
-      { type: 'inside', start: startZoom, end: endZoom, minSpan, maxSpan },
-      { type: 'slider', start: startZoom, end: endZoom, height: 20, bottom: 8, handleSize: 14, minSpan, maxSpan },
+      { type: 'inside', start: startZoom, end: endZoom, zoomLock: true },
+      { 
+        type: 'slider', 
+        start: startZoom, 
+        end: endZoom, 
+        height: 16, 
+        bottom: 10, 
+        borderColor: 'transparent',
+        backgroundColor: themeStore.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+        fillerColor: themeStore.isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)',
+        handleSize: 0, 
+        showDetail: false,
+        showDataShadow: false,
+        zoomLock: true,
+        brushSelect: false,
+        borderRadius: 8
+      },
     ],
     series: [
       {

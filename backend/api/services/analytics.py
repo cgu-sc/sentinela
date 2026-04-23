@@ -1459,22 +1459,37 @@ class AnalyticsService:
             print(traceback.format_exc(), flush=True)
             return RegionalAnimationResponse(nome_regiao=regiao_saude or "", quarters=[])
 
+    # Conjunto de diretórios de CNPJ já criados nesta sessão — evita syscalls redundantes.
+    _known_cnpj_dirs: set[str] = set()
+
+    @staticmethod
+    def _get_cnpj_cache_dir(cnpj: str) -> str:
+        """Retorna (e garante a existência de) sentinela_cache/{cnpj}/.
+
+        Usa um cache em memória para evitar chamadas redundantes a makedirs
+        em requests frequentes ao mesmo CNPJ.
+        """
+        from data_cache import get_cache_dir
+        cnpj_dir = os.path.join(get_cache_dir(), cnpj)
+        if cnpj_dir not in AnalyticsService._known_cnpj_dirs:
+            os.makedirs(cnpj_dir, exist_ok=True)
+            AnalyticsService._known_cnpj_dirs.add(cnpj_dir)
+        return cnpj_dir
+
+
     @staticmethod
     def get_crm_data(
         cnpj: str,
         data_inicio: str | None = None,
         data_fim: str | None = None,
     ) -> PrescritoresResponse:
-        """Retorna KPIs e top prescritores de um CNPJ a partir do parquet por CNPJ (lazy cache).
-
-        Se o parquet ainda não existir, busca crm_export no SQL Server, salva e retorna.
-        O filtro de período é aplicado em Polars sobre a coluna competencia (INT YYYYMM).
-        """
+        """Retorna KPIs e top prescritores de um CNPJ a partir do parquet por CNPJ (lazy cache)."""
         import traceback
         import pandas as pd
+        from data_cache import get_cache_dir
 
-        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dados_crms.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "prescritores.parquet")
 
         # ── helpers de competência ────────────────────────────────────────────
         def _to_comp(date_str: str) -> int:
@@ -1494,7 +1509,6 @@ class AnalyticsService:
         if df is None:
             try:
                 from database import engine as _engine
-                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
                         text("SELECT id_medico, cnpj, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
@@ -1514,17 +1528,7 @@ class AnalyticsService:
                 print(traceback.format_exc())
                 return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
 
-        # ── 2. Compatibilidade e Filtro de período ──────────────────────────────
-        # Se o cache for antigo e não tiver as novas colunas, cria com default
-        missing_cols = {
-            "lista_cnpjs_brasil": pl.lit(""),
-            "flag_distancia_geografica": pl.lit(0).cast(pl.Int8),
-            "flag_concentracao_mesmo_crm": pl.lit(0).cast(pl.Int8)
-        }
-        for col, default_val in missing_cols.items():
-            if col not in df.columns:
-                df = df.with_columns(default_val.alias(col))
-
+        # ── 2. Filtro de período ───────────────────────────────────────────────
         if comp_ini:
             df = df.filter(pl.col("competencia") >= comp_ini)
         if comp_fim:
@@ -1694,9 +1698,9 @@ class AnalyticsService:
         }
 
         # ── 7. Alertas diários — injeta em cada médico ────────────────────────
-        ALERTAS_DIARIOS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_mesmo_crm.parquet")
+        ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "concentracao_mesmo_crm.parquet")
         df_ad: pl.DataFrame | None = None
-        
+
         # Tenta carregar do cache parquet
         if os.path.exists(ALERTAS_DIARIOS_PATH):
             try:
@@ -1708,7 +1712,6 @@ class AnalyticsService:
         if df_ad is None:
             try:
                 from database import engine as _engine
-                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
                         text("SELECT id_medico, competencia, dt_alerta, nivel, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
@@ -1753,9 +1756,9 @@ class AnalyticsService:
             m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
 
         # ── 7.1 Alertas Geográficos (Distância) ──────────────────────────────
-        ALERTAS_GEO_PATH = os.path.join(CRMS_DIR, f"{cnpj}_geografico.parquet")
+        ALERTAS_GEO_PATH = os.path.join(cnpj_dir, "geografico.parquet")
         df_geo: pl.DataFrame | None = None
-        
+
         if os.path.exists(ALERTAS_GEO_PATH):
             try: df_geo = pl.read_parquet(ALERTAS_GEO_PATH)
             except: pass
@@ -1818,8 +1821,9 @@ class AnalyticsService:
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
-        CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_crm_estabelecimento.parquet")
+        CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "concentracao_crm_estabelecimento.parquet")
         df_ca: pl.DataFrame | None = None
+
         if os.path.exists(CNPJ_ALERTS_PATH):
             try:
                 df_ca = pl.read_parquet(CNPJ_ALERTS_PATH)
@@ -1828,7 +1832,6 @@ class AnalyticsService:
         if df_ca is None:
             try:
                 from database import engine as _engine
-                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf_ca = pd.read_sql(
                         text("SELECT * FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial WHERE cnpj = :cnpj"),
@@ -1864,7 +1867,7 @@ class AnalyticsService:
             ]
 
         # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
-        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
         alertas_surto_por_medico: dict[str, list[dict]] = {}
         
         if os.path.exists(TX_PARQUET_PATH):
@@ -1952,8 +1955,8 @@ class AnalyticsService:
         """
         import pandas as pd
 
-        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dispensacao_diaria.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_diaria.parquet")
 
         df: pl.DataFrame | None = None
         if os.path.exists(PARQUET_PATH):
@@ -1965,7 +1968,6 @@ class AnalyticsService:
         if df is None:
             try:
                 from database import engine as _engine
-                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
                         text("SELECT * FROM temp_CGUSC.fp.crm_daily_profile"
@@ -2017,8 +2019,8 @@ class AnalyticsService:
         import pandas as pd
         from sqlalchemy import text
         
-        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dispensacao_horaria.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_horaria.parquet")
 
         df: pl.DataFrame | None = None
         if os.path.exists(PARQUET_PATH):
@@ -2030,7 +2032,6 @@ class AnalyticsService:
         if df is None:
             try:
                 from database import engine as _engine
-                os.makedirs(CRMS_DIR, exist_ok=True)
                 with _engine.connect() as conn:
                     pdf = pd.read_sql(
                         text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, is_anomalo_hora "
@@ -2086,8 +2087,8 @@ class AnalyticsService:
         from sqlalchemy import text
         from database import engine as _engine
         
-        CRMS_DIR = os.path.join(get_cache_dir(), "crms")
-        TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
 
         if os.path.exists(TX_PARQUET_PATH):
             try:
@@ -2097,9 +2098,6 @@ class AnalyticsService:
             except Exception: pass
 
         try:
-            os.makedirs(CRMS_DIR, exist_ok=True)
-            print(f"📂 [SYNC] Pasta de cache verificada: {CRMS_DIR}")
-            
             print(f"🗄️ [SYNC] Buscando transações no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
@@ -2139,8 +2137,8 @@ class AnalyticsService:
         from database import engine as _engine
         from api.schemas.analytics import CrmHourlyTransactionsResponse
         
-        CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
-        PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
 
         df = pl.DataFrame()
         if not os.path.exists(PARQUET_PATH):
@@ -2211,23 +2209,14 @@ class AnalyticsService:
     def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> MovimentacaoResponse:
         """
         Retorna a memória de cálculo processada (Movimentação por GTIN) de um CNPJ.
-
-        Estratégia de cache em 2 camadas:
-          1. Se existir `sentinela_cache/mov_cache_{cnpj}.parquet`, carrega direto (< 1s).
-          2. Se não existir, busca `memoria_calculo_consolidada` do SQL Server,
-             descompacta via zlib, processa a lógica de linhas e salva o Parquet.
-
-        Args:
-            cnpj: CNPJ de 14 dígitos (sem formatação).
-            engine: Instância SQLAlchemy Engine para conexão ao banco.
+        Estratégia de cache em 2 camadas.
         """
         import traceback
         from pathlib import Path
-
         from data_cache import get_cache_dir
         
-        CACHE_DIR = get_cache_dir()
-        CACHE_PATH = os.path.join(CACHE_DIR, f"{cnpj}.parquet")
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        CACHE_PATH = os.path.join(cnpj_dir, "movimentacao_detalhada.parquet")
 
         empty_summary = MovimentacaoSummarySchema()
 

@@ -226,6 +226,9 @@ class FalecidosResponse(BaseModel):
     summary: FalecidosSummarySchema
     ranking: List[FalecidosRankingSchema]
     transacoes: List[FalecidoTransactionSchema]
+    from_cache: bool = False
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
 
 class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None

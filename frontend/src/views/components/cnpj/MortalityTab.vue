@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useFilterStore } from '@/stores/filters';
+import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
@@ -16,7 +18,17 @@ const props = defineProps({
   }
 });
 
+const filterStore = useFilterStore();
 const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
+
+// Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
+const cachedFalecidosData = useFrozenData(falecidosData, falecidosLoading);
+
+const isRefreshing = computed(() =>
+  falecidosLoading.value &&
+  cachedFalecidosData.value !== null &&
+  !filterStore.isAnimating
+);
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
 const analyticsStore = useAnalyticsStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -80,7 +92,7 @@ function getDayStepClass(days) {
 
 
 const falecidosAgrupados = computed(() => {
-  const transacoes = falecidosData.value?.transacoes ?? [];
+  const transacoes = cachedFalecidosData.value?.transacoes ?? [];
   const grupos = new Map();
   for (const t of transacoes) {
     if (!grupos.has(t.cpf)) {
@@ -108,10 +120,10 @@ const falecidosAgrupados = computed(() => {
 const timelineOverlay = ref(null);
 
 defineExpose({
-  getSummary:  () => falecidosData.value?.summary ?? null,
+  getSummary:  () => cachedFalecidosData.value?.summary ?? null,
   getAgrupados: () => falecidosAgrupados.value ?? [],
-  getRanking:  () => falecidosData.value?.ranking ?? [],
-  hasData:     () => !!(falecidosLoaded.value && falecidosData.value?.transacoes?.length),
+  getRanking:  () => cachedFalecidosData.value?.ranking ?? [],
+  hasData:     () => !!(falecidosLoaded.value && cachedFalecidosData.value?.transacoes?.length),
 });
 
 const toggleMultiCnpj = (event, grupo) => {
@@ -126,7 +138,7 @@ const openEstablishment = (estabStr) => {
 
 const isRankingExpanded = ref(false);
 const visibleRanking = computed(() => {
-  const r = falecidosData.value?.ranking || [];
+  const r = cachedFalecidosData.value?.ranking || [];
   if (isRankingExpanded.value || r.length <= 3) return r;
   return r.slice(0, 3);
 });
@@ -147,8 +159,8 @@ const falecidosAgrupadosFiltrados = computed(() => {
 </script>
 
 <template>
-  <div class="tab-content falecidos-tab">
-    <div v-if="falecidosLoading" class="tab-placeholder">
+  <div class="tab-content falecidos-tab" :class="{ 'is-refreshing': isRefreshing }">
+    <div v-if="falecidosLoading && !cachedFalecidosData" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Analisando base de óbitos...</p>
     </div>
@@ -158,7 +170,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
       <p>{{ falecidosError }}</p>
     </div>
 
-    <div v-else-if="falecidosLoaded && !falecidosData?.transacoes?.length" class="tab-placeholder">
+    <div v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length" class="tab-placeholder">
       <i class="pi pi-check-circle placeholder-icon" style="color: var(--green-500)" />
       <p>Nenhuma venda para falecidos encontrada neste estabelecimento.</p>
     </div>
@@ -166,40 +178,40 @@ const falecidosAgrupadosFiltrados = computed(() => {
     <template v-else-if="falecidosLoaded">
       <!-- 7 CARDS DE KPI -->
       <div class="falecidos-kpi-grid">
-        <div class="f-kpi-card" :class="falecidosData.summary.cpfs_distintos > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.cpfs_distintos > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">CPFs Distintos</span>
-          <span class="f-kpi-val">{{ falecidosData.summary.cpfs_distintos }}</span>
+          <span class="f-kpi-val">{{ cachedFalecidosData.summary.cpfs_distintos }}</span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.total_autorizacoes > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.total_autorizacoes > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Núm. Autorizações</span>
-          <span class="f-kpi-val">{{ falecidosData.summary.total_autorizacoes }}</span>
+          <span class="f-kpi-val">{{ cachedFalecidosData.summary.total_autorizacoes }}</span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.valor_total > 0 ? 'highlight-red highlight-prejuizo' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.valor_total > 0 ? 'highlight-red highlight-prejuizo' : ''">
           <span class="f-kpi-label">Prejuízo Estimado</span>
           <div class="f-kpi-val-container">
-            <span class="f-kpi-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</span>
+            <span class="f-kpi-val">{{ formatCurrencyFull(cachedFalecidosData.summary.valor_total) }}</span>
           </div>
         </div>
-        <div class="f-kpi-card" :class="(falecidosData.summary.media_dias || 0) > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="(cachedFalecidosData.summary.media_dias || 0) > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Média Dias Pós-Óbito</span>
-          <span class="f-kpi-val">{{ falecidosData.summary.media_dias.toFixed(1) }} <small>dias</small></span>
+          <span class="f-kpi-val">{{ cachedFalecidosData.summary.media_dias.toFixed(1) }} <small>dias</small></span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.max_dias > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.max_dias > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">Máximo Dias Pós-Óbito</span>
-          <span class="f-kpi-val">{{ falecidosData.summary.max_dias }} <small>dias</small></span>
+          <span class="f-kpi-val">{{ cachedFalecidosData.summary.max_dias }} <small>dias</small></span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.pct_faturamento > 0 ? 'highlight-orange' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.pct_faturamento > 0 ? 'highlight-orange' : ''">
           <span class="f-kpi-label">% do Faturamento</span>
-          <span class="f-kpi-val">{{ (falecidosData.summary.pct_faturamento * 100).toFixed(3) }}%</span>
+          <span class="f-kpi-val">{{ (cachedFalecidosData.summary.pct_faturamento * 100).toFixed(3) }}%</span>
         </div>
-        <div class="f-kpi-card" :class="falecidosData.summary.cpfs_multi_cnpj > 0 ? 'highlight-red' : ''">
+        <div class="f-kpi-card" :class="cachedFalecidosData.summary.cpfs_multi_cnpj > 0 ? 'highlight-red' : ''">
           <span class="f-kpi-label">CPFs Multi-CNPJ</span>
-          <span class="f-kpi-val">{{ falecidosData.summary.cpfs_multi_cnpj }} <small>({{ (falecidosData.summary.pct_multi_cnpj * 100).toFixed(1) }}%)</small></span>
+          <span class="f-kpi-val">{{ cachedFalecidosData.summary.cpfs_multi_cnpj }} <small>({{ (cachedFalecidosData.summary.pct_multi_cnpj * 100).toFixed(1) }}%)</small></span>
         </div>
       </div>
 
       <!-- PAINEL MULTI-CNPJ (REDE DE COINCIDÊNCIA) -->
-      <div class="falecidos-ranking-panel" v-if="falecidosData.ranking?.length">
+      <div class="falecidos-ranking-panel" v-if="cachedFalecidosData.ranking?.length">
         <div class="ranking-header-flex">
           <div class="title-wrap">
             <i class="pi pi-sitemap" />
@@ -269,10 +281,10 @@ const falecidosAgrupadosFiltrados = computed(() => {
           </div>
         </div>
 
-        <div v-if="falecidosData.ranking?.length > 3" class="ranking-expand-action">
+        <div v-if="cachedFalecidosData.ranking?.length > 3" class="ranking-expand-action">
            <Button 
               :icon="isRankingExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" 
-              :label="isRankingExpanded ? 'Recolher Lista' : `Ver Mais ${falecidosData.ranking.length - 3} Farmácias Conectadas`" 
+              :label="isRankingExpanded ? 'Recolher Lista' : `Ver Mais ${cachedFalecidosData.ranking.length - 3} Farmácias Conectadas`" 
               class="p-button-text p-button-sm p-button-secondary"
               @click="isRankingExpanded = !isRankingExpanded" 
            />
@@ -383,9 +395,9 @@ const falecidosAgrupadosFiltrados = computed(() => {
             <tfoot>
               <tr class="f-grand-total">
                 <td colspan="8">
-                  TOTAL GERAL — {{ falecidosAgrupados.length }} CPF(s) distintos — {{ falecidosData.transacoes.length }} autorização(ões)
+                  TOTAL GERAL — {{ falecidosAgrupados.length }} CPF(s) distintos — {{ cachedFalecidosData.transacoes.length }} autorização(ões)
                 </td>
-                <td class="f-val">{{ formatCurrencyFull(falecidosData.summary.valor_total) }}</td>
+                <td class="f-val">{{ formatCurrencyFull(cachedFalecidosData.summary.valor_total) }}</td>
                 <td></td>
               </tr>
             </tfoot>

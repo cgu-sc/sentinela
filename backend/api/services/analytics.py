@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -964,26 +964,98 @@ class AnalyticsService:
             raise HTTPException(status_code=500, detail="Erro interno ao processar análise de indicadores.")
 
     @staticmethod
-    def get_falecidos_data(cnpj: str) -> FalecidosResponse:
+    def get_falecidos_data(
+        cnpj: str,
+        data_inicio: date | None = None,
+        data_fim:    date | None = None,
+    ) -> FalecidosResponse:
         """
-        Retorna os dados detalhados de vendas para falecidos para um CNPJ.
-        Utiliza motor Polars para calcular KPIs e ranking Multi-CNPJ em tempo real.
+        Retorna os dados detalhados de vendas para falecidos de um CNPJ.
+
+        O parquet por CNPJ armazena as transações do próprio estabelecimento e de todos
+        os demais CNPJs onde os mesmos CPFs compraram, permitindo calcular o ranking
+        Multi-CNPJ a partir do cache local sem depender do dataset global.
         """
+        import time
+        import pandas as pd
+        from sqlalchemy import text
+
+        PARQUET_PATH = os.path.join(AnalyticsService._get_cnpj_cache_dir(cnpj), "falecidos.parquet")
+        from_cache    = False
+        query_time_ms: float | None = None
+        save_time_ms:  float | None = None
+        df_all = None
+
+        # ── 1. Tentar carregar do cache local ────────────────────────────────
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df_all = pl.read_parquet(PARQUET_PATH)
+                from_cache = True
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet falecidos '{cnpj}': {e}")
+
+        # ── 2. Gerar parquet via SQL (primeira vez ou cache corrompido) ──────
+        if df_all is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    t0 = time.perf_counter()
+                    pdf = pd.read_sql(
+                        text("""
+                            SELECT f.*
+                            FROM [temp_CGUSC].[fp].[falecidos_por_farmacia] f
+                            WHERE f.cpf IN (
+                                SELECT DISTINCT cpf
+                                FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]
+                                WHERE cnpj = :cnpj
+                            )
+                        """),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                    query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+                df_all = pl.from_pandas(pdf).with_columns([
+                    pl.col("dt_nascimento").cast(pl.Date, strict=False),
+                    pl.col("dt_obito").cast(pl.Date, strict=False),
+                    pl.col("data_autorizacao").cast(pl.Date, strict=False),
+                ])
+                t1 = time.perf_counter()
+                df_all.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"⏱  Falecidos {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
+
+            except Exception as e:
+                import traceback
+                print(f"⚠️ Erro ao gerar parquet falecidos '{cnpj}': {e}")
+                print(traceback.format_exc())
+                df_all = pl.DataFrame()
+
+        # ── 3. Filtro de período ─────────────────────────────────────────────
+        if data_inicio:
+            df_all = df_all.filter(pl.col("data_autorizacao") >= pl.lit(data_inicio).cast(pl.Date))
+        if data_fim:
+            df_all = df_all.filter(pl.col("data_autorizacao") <= pl.lit(data_fim).cast(pl.Date))
+
+        _empty_response = FalecidosResponse(
+            cnpj=cnpj,
+            summary=FalecidosSummarySchema(
+                cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
+                media_dias=0.0, max_dias=0, pct_faturamento=0.0,
+                cpfs_multi_cnpj=0, pct_multi_cnpj=0.0,
+            ),
+            ranking=[],
+            transacoes=[],
+            from_cache=from_cache,
+            query_time_ms=query_time_ms,
+            save_time_ms=save_time_ms,
+        )
+
         try:
-            df_all = get_df_falecidos()
             df_target = df_all.filter(pl.col("cnpj") == cnpj)
 
             if df_target.is_empty():
-                return FalecidosResponse(
-                    cnpj=cnpj,
-                    summary=FalecidosSummarySchema(
-                        cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
-                        media_dias=0.0, max_dias=0, pct_faturamento=0.0,
-                        cpfs_multi_cnpj=0, pct_multi_cnpj=0.0
-                    ),
-                    ranking=[],
-                    transacoes=[]
-                )
+                return _empty_response
 
             # 1. KPIs Básicos
             cpfs_distintos = df_target["cpf"].n_unique()
@@ -1089,26 +1161,20 @@ class AnalyticsService:
                     max_dias=max_dias,
                     pct_faturamento=pct_faturamento,
                     cpfs_multi_cnpj=cpfs_multi_cnpj,
-                    pct_multi_cnpj=pct_multi_cnpj
+                    pct_multi_cnpj=pct_multi_cnpj,
                 ),
                 ranking=ranking,
-                transacoes=transacoes
+                transacoes=transacoes,
+                from_cache=from_cache,
+                query_time_ms=query_time_ms,
+                save_time_ms=save_time_ms,
             )
 
         except Exception as e:
             import traceback
             print(f"❌ ERRO AO CALCULAR DADOS DE FALECIDOS: {e}")
             print(traceback.format_exc())
-            return FalecidosResponse(
-                cnpj=cnpj,
-                summary=FalecidosSummarySchema(
-                    cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
-                    media_dias=0.0, max_dias=0, pct_faturamento=0.0,
-                    cpfs_multi_cnpj=0, pct_multi_cnpj=0.0
-                ),
-                ranking=[],
-                transacoes=[]
-            )
+            return _empty_response
 
     @staticmethod
     def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineResponse:
@@ -1123,7 +1189,17 @@ class AnalyticsService:
             cpf: O CPF do paciente falecido a ser pesquisado.
         """
         try:
-            df_all = get_df_falecidos()
+            # O parquet por CNPJ contém todas as transações dos CPFs do estabelecimento
+            # (incluindo outras farmácias), suficiente para montar a linha do tempo.
+            PARQUET_PATH = os.path.join(
+                AnalyticsService._get_cnpj_cache_dir(cnpj_referencia), "falecidos.parquet"
+            )
+            if not os.path.exists(PARQUET_PATH):
+                return MultiCnpjTimelineResponse(
+                    cpf=cpf, nome_falecido=None, dt_obito=None, events=[], cnpjs_envolvidos=[]
+                )
+            df_all = pl.read_parquet(PARQUET_PATH)
+
             # Normaliza o CPF (remove zeros à esquerda para comparação segura)
             cpf_clean = cpf.strip().lstrip('0').zfill(11)
             df_cpf = df_all.filter(pl.col("cpf").cast(pl.Utf8).str.zfill(11) == cpf_clean)

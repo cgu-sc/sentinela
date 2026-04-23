@@ -143,7 +143,7 @@ watch(
       cnpjDetailStore.fetchEvolucaoMensalGtin(newCnpj, inicio, fim);
       cnpjDetailStore.fetchMovimentacao(newCnpj);
       cnpjDetailStore.fetchIndicadores(newCnpj);
-      cnpjDetailStore.fetchFalecidos(newCnpj);
+      cnpjDetailStore.fetchFalecidos(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmDailyProfile(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmHourlyProfile(newCnpj, inicio, fim);
@@ -165,6 +165,7 @@ watch(
     const { inicio, fim } = getApiParams();
     cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchEvolucaoMensalGtin(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchFalecidos(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmDailyProfile(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmHourlyProfile(cnpj.value, inicio, fim);

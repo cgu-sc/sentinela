@@ -32,7 +32,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── Falecidos ─────────────────────────────────────────────────────────────
     falecidosData:    null,
     falecidosLoading: false,
-    falecidosLoaded:  false,
+    falecidosLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     falecidosError:   null,
 
     // ── Prescritores / CRMs ───────────────────────────────────────────────────
@@ -188,16 +188,29 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Falecidos ─────────────────────────────────────────────────────────────
-    async fetchFalecidos(cnpj) {
-      if (this.falecidosLoaded) return;
+    async fetchFalecidos(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.falecidosLoaded === key) return;
+
       this.falecidosLoading = true;
       this.falecidosError   = null;
       try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj));
-        this.requestTimes['falecidos'] = { label: 'Falecidos', ms: Math.round(performance.now() - t0) };
+        const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj), { params });
+        const ms = Math.round(performance.now() - t0);
+        const detail = data.from_cache
+          ? 'cache'
+          : [data.query_time_ms != null ? `SQL ${data.query_time_ms}ms` : null,
+             data.save_time_ms  != null ? `parquet ${data.save_time_ms}ms` : null]
+              .filter(Boolean).join(' + ') || null;
+        this.requestTimes['falecidos'] = { label: 'Falecidos', ms, detail };
+
         this.falecidosData   = data;
-        this.falecidosLoaded = true;
+        this.falecidosLoaded = key;
       } catch (e) {
         console.error('Erro ao buscar dados de falecidos:', e);
         this.falecidosError = ERROR_MSG;
@@ -377,7 +390,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
       this.falecidosData    = null;
       this.falecidosLoading = false;
-      this.falecidosLoaded  = false;
+      this.falecidosLoaded  = null;
       this.falecidosError   = null;
 
       this.prescritoresData    = null;

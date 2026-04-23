@@ -92,9 +92,13 @@ def get_indicadores(cnpj: str):
     return AnalyticsService.get_indicadores(cnpj)
 
 @router.get("/cnpj/{cnpj}/falecidos", response_model=FalecidosResponse)
-def get_falecidos(cnpj: str):
-    """Retorna os dados detalhados de vendas para falecidos para um CNPJ."""
-    return AnalyticsService.get_falecidos_data(cnpj)
+def get_falecidos(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim:    Optional[date] = Query(None),
+):
+    """Retorna os dados detalhados de vendas para falecidos de um CNPJ."""
+    return AnalyticsService.get_falecidos_data(cnpj, data_inicio, data_fim)
 
 @router.get("/rede/{cnpj_raiz}", response_model=List[RedeEstabelecimentoSchema])
 def get_rede_estabelecimentos(cnpj_raiz: str):

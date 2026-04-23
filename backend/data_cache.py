@@ -31,7 +31,6 @@ _PARQUET_PATH = os.path.join(_CACHE_DIR, "movimentacao.parquet")
 _LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "localidades.parquet")
 _REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "redes_farmaceuticas.parquet")
 _MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "matriz_risco.parquet")
-_FALECIDOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "falecidos.parquet")
 _BENCH_CRM_UF_PATH     = os.path.join(_CACHE_DIR, "bench_crm_uf.parquet")
 _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
@@ -46,7 +45,6 @@ _df_movimentacao: pl.DataFrame | None = None
 _df_localidades: pl.DataFrame | None = None
 _df_rede: pl.DataFrame | None = None
 _df_matriz_risco: pl.DataFrame | None = None
-_df_falecidos: pl.DataFrame | None = None
 _df_bench_crm_uf: pl.DataFrame | None = None
 _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
@@ -132,37 +130,6 @@ def _sync_matriz_risco(engine, progress_callback=None):
     pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
     _df_matriz_risco = pl.from_pandas(pdf)
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="lz4")
-
-def _sync_falecidos(engine, progress_callback=None):
-    """Tarefa 5: Sincroniza a tabela de falecidos por farmácia em chunks."""
-    global _df_falecidos
-    print("Sincronizando Dados de Falecidos...")
-    sql = "SELECT * FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]"
-    
-    with engine.connect() as conn:
-        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]")).scalar()
-    
-    print(f"   -> Registros Falecidos: {total_rows:,}")
-    chunk_list = []
-    rows_processed = 0
-    CHUNK_SIZE = 2_000
-    
-    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(chunk)
-        rows_processed += len(chunk)
-        p = int((rows_processed / total_rows) * 100)
-        print(f"   -> Progresso Falecidos: {p}% ({rows_processed:,} / {total_rows:,})")
-        if progress_callback:
-            progress_callback(p)
-            
-    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
-    _df_falecidos = pl.from_pandas(pdf).with_columns([
-        pl.col("dt_nascimento").cast(pl.Date, strict=False),
-        pl.col("dt_obito").cast(pl.Date, strict=False),
-        pl.col("data_autorizacao").cast(pl.Date, strict=False),
-    ])
-    _df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="lz4")
-
 
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
@@ -351,7 +318,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_falecidos, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -374,7 +341,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_localidades     = _try_load("localidades",     _LOCALIDADES_PARQUET_PATH)
         _df_rede            = _try_load("rede",            _REDE_PARQUET_PATH)
         _df_matriz_risco    = _try_load("matriz_risco",    _MATRIZ_PARQUET_PATH)
-        _df_falecidos       = _try_load("falecidos",       _FALECIDOS_PARQUET_PATH)
         _df_bench_crm_uf    = _try_load("bench_crm_uf",   _BENCH_CRM_UF_PATH)
         _df_bench_crm_regiao= _try_load("bench_crm_regiao", _BENCH_CRM_REGIAO_PATH)
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
@@ -399,7 +365,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
-        {"name": "Falecidos",             "weight": 5,  "func": lambda cb: _sync_falecidos(engine, cb)},
         {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Movimentação",          "weight": 66, "func": lambda cb: _sync_movimentacao(engine, cb)},
@@ -458,11 +423,6 @@ def get_df_matriz_risco() -> pl.DataFrame:
         raise RuntimeError("Cache de Matriz de Risco não carregado. Execute uma sincronização.")
     return _df_matriz_risco
 
-def get_df_falecidos() -> pl.DataFrame:
-    if _df_falecidos is None:
-        raise RuntimeError("Cache de Falecidos não carregado. Execute uma sincronização.")
-    return _df_falecidos
-
 def get_df_bench_crm_uf() -> pl.DataFrame:
     if _df_bench_crm_uf is None:
         raise RuntimeError("Cache de Benchmark CRM (UF) não carregado. Execute uma sincronização.")
@@ -500,7 +460,6 @@ def get_cache_status() -> dict:
         "localidades":    {"label": "Localidades (IBGE)",      "path": _LOCALIDADES_PARQUET_PATH, "loaded": _df_localidades is not None},
         "rede":           {"label": "Rede de Estabelecimentos","path": _REDE_PARQUET_PATH,        "loaded": _df_rede is not None},
         "matriz_risco":   {"label": "Matriz de Risco",         "path": _MATRIZ_PARQUET_PATH,      "loaded": _df_matriz_risco is not None},
-        "falecidos":      {"label": "Falecidos por Farmácia",  "path": _FALECIDOS_PARQUET_PATH,   "loaded": _df_falecidos is not None},
         "bench_crm_uf":    {"label": "Benchmark CRM (UF)",      "path": _BENCH_CRM_UF_PATH,        "loaded": _df_bench_crm_uf is not None},
         "bench_crm_regiao":{"label": "Benchmark CRM (Região)", "path": _BENCH_CRM_REGIAO_PATH,    "loaded": _df_bench_crm_regiao is not None},
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},

@@ -129,6 +129,7 @@ const maxPDOverall = computed(() => {
       <table class="ind-table premium-table row-hover">
         <thead class="sticky-thead">
           <tr>
+            <th style="width: 45px;" class="col-center">#</th>
             <th style="width: 160px;">CRM / Médico</th>
             <th style="width: 34%">Status / Alertas</th>
             <th class="col-right" style="width: 15%">Volume / Valor</th>
@@ -144,6 +145,22 @@ const maxPDOverall = computed(() => {
               :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm }"
               @click="m.alerta_concentracao_mesmo_crm && toggleAlertasDiarios(m.id_medico)"
             >
+              <td class="col-center">
+                <div class="rank-container">
+                  <div v-if="i === 0" class="rank-medal gold" v-tooltip.top="'Líder de Volume'">
+                    <i class="pi pi-award"></i>
+                  </div>
+                  <div v-else-if="i === 1" class="rank-medal silver">
+                    <span>2</span>
+                  </div>
+                  <div v-else-if="i === 2" class="rank-medal bronze">
+                    <span>3</span>
+                  </div>
+                  <div v-else class="rank-number">
+                    {{ i + 1 }}
+                  </div>
+                </div>
+              </td>
               <td>
                 <div class="med-id">{{ m.id_medico }}</div>
                 <div class="med-sub">Registro: {{ m.dt_inscricao_crm ? formatarData(m.dt_inscricao_crm) : 'ND' }}</div>
@@ -233,7 +250,7 @@ const maxPDOverall = computed(() => {
 
             <!-- Linha expandida de alertas diários -->
             <tr v-if="expandedAlertasMedico.has(m.id_medico) && m.alertas_diarios?.length" class="alertas-diarios-row">
-              <td colspan="10" class="alertas-diarios-cell">
+              <td colspan="11" class="alertas-diarios-cell">
                 <div class="alertas-wrapper">
                   <table class="alertas-diarios-table">
                     <thead>
@@ -391,8 +408,15 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .pd-loc-fill { background: linear-gradient(90deg, #f43f5e, #fb7185) !important; opacity: 0.8 !important; }
 .pd-br-fill { background: linear-gradient(90deg, #64748b, #94a3b8) !important; opacity: 0.8 !important; }
 
-.med-id { font-weight: 500; font-size: 0.78rem; color: var(--text-color); }
-.med-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
+.med-id {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.1rem;
+}
+.med-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; opacity: 0.8; }
 
 .tags-container { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .issue-tag {
@@ -435,6 +459,35 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .premium-table.row-hover tbody tr.alertas-diarios-row:hover { background: transparent !important; cursor: default !important; }
 .alertas-diarios-table tr:hover { background: transparent !important; }
 .alertas-diarios-cell { padding: 0.75rem 1rem !important; border-bottom: 2px solid var(--tabs-border) !important; background: transparent !important; }
+
+/* ── Rank & Medals ──────────────────────────────────────────────────────── */
+.rank-container { display: flex; align-items: center; justify-content: center; }
+.rank-medal {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  position: relative;
+}
+.rank-medal::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  opacity: 0.3;
+  border: 1px solid currentColor;
+}
+.rank-medal.gold { background: linear-gradient(135deg, #FFD700, #B8860B); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.rank-medal.silver { background: linear-gradient(135deg, #C0C0C0, #708090); color: #fff; }
+.rank-medal.bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); color: #fff; }
+.rank-medal i { font-size: 0.85rem; }
+.rank-number { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); opacity: 0.6; }
+
 .alertas-wrapper {
   background: v-bind(raioxBg);
   backdrop-filter: blur(8px);

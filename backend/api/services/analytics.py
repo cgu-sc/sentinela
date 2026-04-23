@@ -1572,7 +1572,7 @@ class AnalyticsService:
                 (
                     (pl.col("prescricoes_dia_total_brasil") > 30) & (pl.col("nu_prescricoes_dia") <= 30)
                 ).cast(pl.Int8).alias("flag_robo_oculto"),
-                (pl.col("qtd_estabelecimentos_atua") >= 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
+                (pl.col("qtd_estabelecimentos_atua") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
             ])
             .sort("vl_total_prescricoes", descending=True)
             .with_row_index("ranking")

@@ -242,13 +242,13 @@ const isInitialLoading = computed(() => {
       <div v-if="isInitialLoading" class="global-loading-overlay">
         <div class="loader-content">
           <ProgressSpinner 
-            style="width: 60px; height: 60px" 
+            style="width: 64px; height: 64px" 
             strokeWidth="3" 
             animationDuration=".8s" 
           />
           <div class="loader-text">
-            <h3>Sincronizando dados</h3>
-            <p>Aguardando resposta do banco de dados...</p>
+            <h3>Sincronizando Dados</h3>
+            <p>Buscando indicadores e perfil cronológico...</p>
           </div>
         </div>
       </div>
@@ -509,21 +509,25 @@ const isInitialLoading = computed(() => {
   font-size: 0.875rem;
 }
 
-/* ── GLOBAL LOADING OVERLAY ── */
+/* ── GLOBAL LOADING OVERLAY (PREMIUM & ESTÁVEL) ── */
 .global-loading-overlay {
-  position: absolute; /* Mudado de fixed para absolute */
-  top: 0;
-  left: 0;
-  width: 100%; /* Mudado de 100vw para 100% */
-  height: 100%; /* Mudado de 100vh para 100% */
-  background: color-mix(in srgb, var(--body-bg) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  position: fixed;
+  inset: 0;
   z-index: 9999;
+  background: color-mix(in srgb, var(--body-bg) 75%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: all;
+  
+  /* Ajuste de contexto de layout: compensa sidebar e navbar */
+  padding-left: var(--sidebar-width, 280px);
+  padding-top: 56px;
+  
+  /* Sincronização com as transições do layout global */
+  transition: padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
 }
 
 .loader-content {

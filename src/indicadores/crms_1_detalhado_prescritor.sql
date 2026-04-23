@@ -40,13 +40,13 @@ SELECT
     MIN(M.data_hora)                              AS dt_prescricao_inicial_medico,
     MAX(M.data_hora)                              AS dt_prescricao_final_medico
 INTO #base_agregada_crm_cnpj
-FROM (
+FROM temp_CGUSC.fp.teste_mov_SC M /* (
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
     UNION ALL
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-) M
+) */
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
@@ -86,13 +86,13 @@ SELECT
     codigo_barra,
     valor_pago
 INTO #mov_surto_base
-FROM (
+FROM temp_CGUSC.fp.teste_mov_SC M /* (
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
     UNION ALL
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-) M
+) M */
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
   AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR';
 
@@ -275,13 +275,13 @@ SELECT
     MAX(M.data_hora)                                  AS dt_fim_dia,
     DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS nu_minutos_dia
 INTO #base_diaria_crm
-FROM (
+FROM temp_CGUSC.fp.teste_mov_SC M /* (
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
     UNION ALL
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-) M
+) */
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
@@ -348,13 +348,13 @@ SELECT
     MIN(data_hora)                            AS dt_venda_inicial_estabelecimento,
     MAX(data_hora)                            AS dt_venda_final_estabelecimento
 INTO #tb_info_estabelecimento
-FROM (
+FROM temp_CGUSC.fp.teste_mov_SC M /* (
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
     UNION ALL
     SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
-) M
+) */
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora);
 GO
@@ -430,6 +430,8 @@ SELECT
     competencia,
     SUM(nu_prescricoes_medico)                                    AS nu_prescricoes_medico_em_todos_estabelecimentos,
     COUNT(DISTINCT nu_cnpj)                                       AS nu_estabelecimentos_com_registro_mesmo_crm,
+    -- Opção 1: Lista de CNPJs para cálculo de únicos no backend
+    STRING_AGG(CAST(nu_cnpj AS VARCHAR(MAX)), ',')                AS lista_cnpjs_brasil,
     CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
         NULLIF(CAST(
             DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
@@ -466,6 +468,7 @@ SELECT
     AS DECIMAL(18,2))                                              AS nu_prescricoes_dia,
     P.nu_prescricoes_dia_em_todos_estabelecimentos,
     P.nu_estabelecimentos_com_registro_mesmo_crm,
+    P.lista_cnpjs_brasil,
     A.nu_autorizacoes_estabelecimento,
     A.dt_prescricao_inicial_medico,
     A.dt_prescricao_final_medico,
@@ -777,6 +780,7 @@ SELECT
     ISNULL(P.nu_prescricoes_medico_em_todos_estabelecimentos,
            A.nu_prescricoes_medico)                                   AS prescricoes_total_brasil,
     ISNULL(P.nu_estabelecimentos_com_registro_mesmo_crm, 1)           AS nu_estabelecimentos,
+    P.lista_cnpjs_brasil,
     CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
     -- Texto geográfico: gerado inline da master para este CNPJ
     CASE WHEN G.id_medico IS NOT NULL THEN

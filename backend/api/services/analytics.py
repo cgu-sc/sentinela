@@ -1545,7 +1545,8 @@ class AnalyticsService:
                 pl.sum("_dias_ativos_loc").alias("_total_dias_loc"),
                 pl.sum("_dias_ativos_br").alias("_total_dias_br"),
                 pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
-                pl.mean("nu_estabelecimentos").round(1).alias("qtd_estabelecimentos_atua"),
+                # Une as listas de CNPJs de todos os meses do período
+                pl.col("lista_cnpjs_brasil").str.concat(",").alias("_full_cnpj_list"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1568,10 +1569,18 @@ class AnalyticsService:
                   .alias("prescricoes_dia_total_brasil"),
             ])
             .with_columns([
+                # Processa a string concatenada para contar CNPJs únicos
+                pl.col("_full_cnpj_list")
+                .str.split(",")
+                .list.unique()
+                .list.len()
+                .alias("qtd_estabelecimentos_atua"),
                 (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
                 (
                     (pl.col("prescricoes_dia_total_brasil") > 30) & (pl.col("nu_prescricoes_dia") <= 30)
                 ).cast(pl.Int8).alias("flag_robo_oculto"),
+            ])
+            .with_columns([
                 (pl.col("qtd_estabelecimentos_atua") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
             ])
             .sort("vl_total_prescricoes", descending=True)

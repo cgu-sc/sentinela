@@ -1524,15 +1524,28 @@ class AnalyticsService:
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
 
+        # Para médias ponderadas reais (ritmo médio), precisamos do total de dias ativos.
+        # nu_prescricoes_dia = nu_prescricoes / dias_ativos => dias_ativos = nu_prescricoes / nu_prescricoes_dia
+        df = df.with_columns([
+            pl.when(pl.col("nu_prescricoes_dia") > 0)
+              .then(pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("nu_prescricoes_dia"))
+              .otherwise(pl.lit(0.0))
+              .alias("_dias_ativos_loc"),
+            pl.when(pl.col("prescricoes_dia_brasil") > 0)
+              .then(pl.col("prescricoes_total_brasil").cast(pl.Float64) / pl.col("prescricoes_dia_brasil"))
+              .otherwise(pl.lit(0.0))
+              .alias("_dias_ativos_br")
+        ])
+
         df_med = (
             df.group_by("id_medico")
             .agg([
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
                 pl.sum("nu_prescricoes").alias("nu_prescricoes"),
-                pl.max("nu_prescricoes_dia").alias("nu_prescricoes_dia"),
-                pl.max("prescricoes_dia_brasil").alias("prescricoes_dia_total_brasil"),
+                pl.sum("_dias_ativos_loc").alias("_total_dias_loc"),
+                pl.sum("_dias_ativos_br").alias("_total_dias_br"),
                 pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
-                pl.max("nu_estabelecimentos").alias("qtd_estabelecimentos_atua"),
+                pl.mean("nu_estabelecimentos").round(1).alias("qtd_estabelecimentos_atua"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1542,11 +1555,24 @@ class AnalyticsService:
                 pl.col("dt_inscricao_crm").first().alias("dt_inscricao_crm"),
             ])
             .with_columns([
+                # Cálculo da Média Real (Volume Total / Total de Dias Ativos no Período)
+                pl.when(pl.col("_total_dias_loc") > 0)
+                  .then(pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_total_dias_loc"))
+                  .otherwise(pl.lit(0.0))
+                  .round(2)
+                  .alias("nu_prescricoes_dia"),
+                pl.when(pl.col("_total_dias_br") > 0)
+                  .then(pl.col("prescricoes_total_brasil").cast(pl.Float64) / pl.col("_total_dias_br"))
+                  .otherwise(pl.lit(0.0))
+                  .round(2)
+                  .alias("prescricoes_dia_total_brasil"),
+            ])
+            .with_columns([
                 (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
                 (
                     (pl.col("prescricoes_dia_total_brasil") > 30) & (pl.col("nu_prescricoes_dia") <= 30)
                 ).cast(pl.Int8).alias("flag_robo_oculto"),
-                (pl.col("qtd_estabelecimentos_atua") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
+                (pl.col("qtd_estabelecimentos_atua") >= 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
             ])
             .sort("vl_total_prescricoes", descending=True)
             .with_row_index("ranking")

@@ -378,8 +378,8 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .bar-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 0 5px 5px 0; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
 .bar-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 55%, rgba(0,0,0,0.06) 100%); border-radius: inherit; pointer-events: none; }
 .bar-text { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.78rem; font-weight: 500; color: var(--text-color); text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color); }
-.part-fill { background: linear-gradient(90deg, rgba(99, 102, 241, 0.55), rgba(129, 140, 248, 0.82)) !important; opacity: 1 !important; }
-.acum-fill { background: linear-gradient(90deg, rgba(245, 158, 11, 0.55), rgba(251, 191, 36, 0.82)) !important; opacity: 1 !important; }
+.part-fill { background: linear-gradient(90deg, rgba(20, 184, 166, 0.5), rgba(45, 212, 191, 0.7)) !important; opacity: 1 !important; }
+.acum-fill { background: linear-gradient(90deg, rgba(129, 140, 248, 0.65), rgba(99, 102, 241, 0.85)) !important; opacity: 1 !important; }
 
 .med-id { font-weight: 500; font-size: 0.78rem; color: var(--text-color); }
 .med-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }

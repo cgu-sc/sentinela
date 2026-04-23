@@ -1453,8 +1453,8 @@ class AnalyticsService:
 
         except Exception as e:
             import traceback
-            print(f"❌ ERRO AO CALCULAR ANIMAÇÃO REGIONAL: {e}")
-            print(traceback.format_exc())
+            print(f"❌ ERRO AO CALCULAR ANIMAÇÃO REGIONAL: {e}", flush=True)
+            print(traceback.format_exc(), flush=True)
             return RegionalAnimationResponse(nome_regiao=regiao_saude or "", quarters=[])
 
     @staticmethod
@@ -1472,6 +1472,7 @@ class AnalyticsService:
         import pandas as pd
 
         CRMS_DIR     = os.path.join(get_cache_dir(), "crms")
+        print(f"📂 [DEBUG-PATH] CRMS_DIR absoluto: {os.path.abspath(CRMS_DIR)}")
         PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_dados_crms.parquet")
 
         # ── helpers de competência ────────────────────────────────────────────
@@ -1486,8 +1487,9 @@ class AnalyticsService:
         if os.path.exists(PARQUET_PATH):
             try:
                 df = pl.read_parquet(PARQUET_PATH)
+                print(f"✅ [CACHE] Carregado arquivo principal: {PARQUET_PATH}", flush=True)
             except Exception as e:
-                print(f"⚠️ Erro ao ler parquet CRM '{cnpj}': {e}")
+                print(f"⚠️ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
 
         if df is None:
             try:
@@ -1789,6 +1791,14 @@ class AnalyticsService:
         for m in crms_interesse_list:
             m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
+        # ── 7.2 Pré-Sincronização do Raio-X (Transações Horárias) ─────────────
+        # Garante que o arquivo _transacoes_horarias.parquet exista para uso offline
+        print(f"🔄 [BATCH] Verificando Raio-X para {cnpj}...", flush=True)
+        try:
+            AnalyticsService.sync_crm_hourly_transactions(cnpj)
+        except Exception as batch_error:
+            print(f"⚠️ [BATCH] Erro: {batch_error}", flush=True)
+
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
         CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_crm_estabelecimento.parquet")
         df_ca: pl.DataFrame | None = None
@@ -1806,7 +1816,10 @@ class AnalyticsService:
                         text("SELECT * FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial WHERE cnpj = :cnpj"),
                         conn, params={"cnpj": cnpj}
                     )
-                df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame()
+                df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={
+                    "cnpj": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
+                    "nu_prescricoes_hr_pico": pl.Int32, "taxa_hora": pl.Float64
+                })
                 df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
             except Exception as e:
                 print(f"❌ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
@@ -1994,18 +2007,21 @@ class AnalyticsService:
         CRMS_DIR = os.path.join(get_cache_dir(), "crms")
         TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
 
+        print(f"🔍 [SYNC] Analisando {cnpj}...", flush=True)
+        
         if os.path.exists(TX_PARQUET_PATH):
             try:
-                # Verifica se as novas colunas granulares (item/gtin) existem no cache atual
                 header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
-                if "codigo_barra" in header.columns and "valor_pago" in header.columns:
+                if "codigo_barra" in header.columns and len(header.columns) > 5:
+                    print(f"ℹ️  [SYNC] Arquivo já existe e está OK: {TX_PARQUET_PATH}", flush=True)
                     return
-                print(f"🔄 Cache hourly_tx desatualizado (faltando gtin/valor) para {cnpj}, recriando...")
-            except Exception:
-                pass 
+            except Exception: pass
 
         try:
             os.makedirs(CRMS_DIR, exist_ok=True)
+            print(f"📂 [SYNC] Pasta de cache verificada: {CRMS_DIR}")
+            
+            print(f"🗄️ [SYNC] Buscando transações no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
                     text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
@@ -2014,6 +2030,8 @@ class AnalyticsService:
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
                 )
+            
+            print(f"📊 [SYNC] {len(pdf_tx)} registros encontrados. Convertendo para Polars...")
             df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
                 "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8, 
                 "num_autorizacao": pl.Utf8, "crm": pl.Utf8, "crm_uf": pl.Utf8, 
@@ -2028,13 +2046,14 @@ class AnalyticsService:
                     pl.col("data_hora").cast(pl.Utf8)
                 ])
             
+            print(f"💾 [SYNC] Gravando arquivo: {TX_PARQUET_PATH}")
             df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
-            print(f"✅ Cache hourly_tx sincronizado: {cnpj}")
+            print(f"✅ [SYNC] Cache Raio-X concluído com sucesso para {cnpj}")
         except Exception as e:
             if "IM002" in str(e) or "connection" in str(e).lower():
-                print(f"ℹ️  Modo Offline: Cache de transações para {cnpj} não encontrado e banco inacessível.")
+                print(f"ℹ️  [SYNC] Modo Offline: Banco inacessível para {cnpj}.")
             else:
-                print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
+                print(f"❌ [SYNC] ERRO FATAL ao sincronizar {cnpj}: {str(e)}")
 
     @staticmethod
     def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmHourlyTransactionsResponse":

@@ -2003,13 +2003,10 @@ class AnalyticsService:
         CRMS_DIR = os.path.join(get_cache_dir(), "crms")
         TX_PARQUET_PATH = os.path.join(CRMS_DIR, f"{cnpj}_transacoes_horarias.parquet")
 
-        print(f"🔍 [SYNC] Analisando {cnpj}...", flush=True)
-        
         if os.path.exists(TX_PARQUET_PATH):
             try:
                 header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
                 if "codigo_barra" in header.columns and len(header.columns) > 5:
-                    print(f"ℹ️  [SYNC] Arquivo já existe e está OK: {TX_PARQUET_PATH}", flush=True)
                     return
             except Exception: pass
 

@@ -160,7 +160,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Prescritores / CRMs ───────────────────────────────────────────────────
-    async fetchPrescritores(cnpj, inicio = null, fim = null) {
+    async fetchCrmData(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.prescritoresLoaded === key) return;
       this.prescritoresLoading = true;
@@ -169,7 +169,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        const { data } = await axios.get(API_ENDPOINTS.analyticsPrescritores(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(cnpj), { params });
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
       } catch (e) {

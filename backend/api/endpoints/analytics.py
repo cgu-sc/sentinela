@@ -132,8 +132,8 @@ def get_regional_benchmarking_animation(
     return AnalyticsService.get_regional_benchmarking_animation(regiao_saude, uf, data_inicio, data_fim)
 
 
-@router.get("/cnpj/{cnpj}/prescritores", response_model=PrescritoresResponse)
-def get_prescritores(
+@router.get("/cnpj/{cnpj}/crm-data", response_model=PrescritoresResponse)
+def get_crm_data_endpoint(
     cnpj: str,
     data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM)"),
     data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM)"),

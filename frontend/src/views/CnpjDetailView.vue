@@ -143,7 +143,7 @@ watch(
       cnpjDetailStore.fetchMovimentacao(newCnpj);
       cnpjDetailStore.fetchIndicadores(newCnpj);
       cnpjDetailStore.fetchFalecidos(newCnpj);
-      cnpjDetailStore.fetchPrescritores(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmDailyProfile(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmHourlyProfile(newCnpj, inicio, fim);
       if (!cnpjData.value) {

@@ -1,6 +1,5 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from "@/composables/useFormatting";
 
 const props = defineProps({
@@ -12,8 +11,6 @@ const props = defineProps({
 
 const emit = defineEmits(['clear-filters']);
 
-const themeStore = useThemeStore();
-const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
@@ -21,15 +18,28 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 const filterOnlyIssues = ref(false);
 const showAllCrms = ref(false);
 const expandedAlertasMedico = ref(new Set());
+const activeAlertTab = ref({});
 
 watch(() => props.activeKpiFilter, (newVal) => {
   if (newVal !== null) filterOnlyIssues.value = false;
 });
 
 function toggleAlertasDiarios(idMedico) {
-  if (expandedAlertasMedico.value.has(idMedico)) { expandedAlertasMedico.value.delete(idMedico); }
-  else { expandedAlertasMedico.value.add(idMedico); }
+  if (expandedAlertasMedico.value.has(idMedico)) {
+    expandedAlertasMedico.value.delete(idMedico);
+  } else {
+    expandedAlertasMedico.value.add(idMedico);
+    // Define a aba padrão ao abrir: concentração se existir, senão geográfico
+    const m = props.crmsInteresse.find(x => x.id_medico === idMedico);
+    if (m && !activeAlertTab.value[idMedico]) {
+      activeAlertTab.value[idMedico] = m.alertas_diarios?.length ? 'conc' : 'geo';
+    }
+  }
   expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
+}
+
+function setAlertTab(idMedico, tab) {
+  activeAlertTab.value = { ...activeAlertTab.value, [idMedico]: tab };
 }
 
 function clearAllFilters() {
@@ -243,11 +253,60 @@ const maxPDOverall = computed(() => {
               </td>
             </tr>
 
-            <!-- Linha expandida de alertas (Concentração ou Geográfico) -->
+            <!-- Linha expandida de alertas (Concentração ou Geográfico) com sistema de abas -->
             <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_diarios?.length || m.alertas_geograficos?.length)" class="alertas-diarios-row">
               <td colspan="11" class="alertas-diarios-cell">
-                <div class="alertas-wrapper">
-                  <table class="alertas-diarios-table">
+                <div
+                  class="evidence-panel"
+                  :class="{
+                    'theme-conc': !m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc',
+                    'theme-geo':  !m.alertas_diarios?.length    || activeAlertTab[m.id_medico] === 'geo'
+                  }"
+                >
+                  <!-- PANEL HEADER -->
+                  <div class="panel-header">
+                    <div class="panel-header-left">
+                      <i :class="(!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc') ? 'pi pi-stopwatch' : 'pi pi-map-marker'" class="panel-icon" />
+                      <span class="panel-title">
+                        {{ (!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc')
+                            ? 'Evidências de Concentração'
+                            : 'Evidências de Distância Geográfica' }}
+                      </span>
+                      <span class="panel-crm-badge">{{ m.id_medico }}</span>
+                    </div>
+
+                    <!-- SEGMENTED CONTROL (só quando tem ambos) -->
+                    <div v-if="m.alertas_diarios?.length && m.alertas_geograficos?.length" class="segmented-control">
+                      <div
+                        class="segment-pill"
+                        :class="activeAlertTab[m.id_medico] === 'geo' ? 'pill-right' : 'pill-left'"
+                      />
+                      <button
+                        class="segment-btn"
+                        :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'conc' }"
+                        @click="setAlertTab(m.id_medico, 'conc')"
+                      >
+                        <i class="pi pi-stopwatch" />
+                        Concentração
+                        <span class="seg-count">{{ m.alertas_diarios.length }}</span>
+                      </button>
+                      <button
+                        class="segment-btn geo-seg"
+                        :class="{ 'seg-active geo-active': activeAlertTab[m.id_medico] === 'geo' }"
+                        @click="setAlertTab(m.id_medico, 'geo')"
+                      >
+                        <i class="pi pi-map-marker" />
+                        Distância &gt;400km
+                        <span class="seg-count geo">{{ m.alertas_geograficos.length }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- CONTEÚDO: Tabela de Concentração -->
+                  <table
+                    v-if="m.alertas_diarios?.length && (!m.alertas_geograficos?.length || activeAlertTab[m.id_medico] === 'conc')"
+                    class="evidence-table"
+                  >
                     <thead>
                       <tr>
                         <th><i class="pi pi-calendar" /> Data</th>
@@ -270,17 +329,17 @@ const maxPDOverall = computed(() => {
                     </tbody>
                   </table>
 
-                  <!-- TABELA 2: Detalhamento Geográfico (Distância) -->
-                  <table v-if="m.alertas_geograficos?.length" class="alertas-diarios-table geo-detail-table" :style="m.alertas_diarios?.length ? { borderTop: '2px dashed var(--tabs-border)', marginTop: '1rem' } : {}">
+                  <!-- CONTEÚDO: Tabela de Distância Geográfica -->
+                  <table
+                    v-if="m.alertas_geograficos?.length && (!m.alertas_diarios?.length || activeAlertTab[m.id_medico] === 'geo')"
+                    class="evidence-table"
+                  >
                     <thead>
                       <tr>
-                        <th colspan="4" class="table-subgroup-title"><i class="pi pi-map" /> Evidências de Longa Distância (>400km)</th>
-                      </tr>
-                      <tr>
-                        <th style="width: 40%">Estabelecimento A (Referência)</th>
-                        <th style="width: 40%">Estabelecimento B (Outro)</th>
-                        <th style="width: 10%" class="col-center">Distância</th>
-                        <th style="width: 10%" class="col-center">Comp.</th>
+                        <th style="width: 40%"><i class="pi pi-building" /> Estabelecimento A</th>
+                        <th style="width: 40%"><i class="pi pi-building" /> Estabelecimento B</th>
+                        <th style="width: 10%" class="col-center"><i class="pi pi-arrows-h" /> Distância</th>
+                        <th style="width: 10%" class="col-center"><i class="pi pi-calendar" /> Comp.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -288,20 +347,21 @@ const maxPDOverall = computed(() => {
                         <td class="geo-cell">
                           <div class="geo-main">{{ g.municipio_a }}/{{ g.uf_a }}</div>
                           <div class="geo-sub">{{ g.cnpj_a }} · {{ g.nu_presc_a }} presc.</div>
-                          <div class="geo-sub">Período: {{ formatarDataAlerta(g.dt_ini_a) }} a {{ formatarDataAlerta(g.dt_fim_a) }}</div>
+                          <div class="geo-sub">{{ formatarDataAlerta(g.dt_ini_a) }} → {{ formatarDataAlerta(g.dt_fim_a) }}</div>
                         </td>
                         <td class="geo-cell">
                           <div class="geo-main">{{ g.municipio_b }}/{{ g.uf_b }}</div>
                           <div class="geo-sub">{{ g.cnpj_b }} · {{ g.nu_presc_b }} presc.</div>
-                          <div class="geo-sub">Período: {{ formatarDataAlerta(g.dt_ini_b) }} a {{ formatarDataAlerta(g.dt_fim_b) }}</div>
+                          <div class="geo-sub">{{ formatarDataAlerta(g.dt_ini_b) }} → {{ formatarDataAlerta(g.dt_fim_b) }}</div>
                         </td>
                         <td class="col-center">
                           <span class="dist-badge">{{ Math.round(g.distancia_km) }}km</span>
                         </td>
-                        <td class="col-center">{{ g.competencia }}</td>
+                        <td class="col-center" style="font-size: 0.75rem; color: var(--text-muted);">{{ g.competencia }}</td>
                       </tr>
                     </tbody>
                   </table>
+
                 </div>
               </td>
             </tr>
@@ -537,14 +597,10 @@ tr:hover .rank-badge {
 }
 tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
-.alertas-wrapper {
-  background: v-bind(raioxBg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--card-border);
-  border-left: 3px solid color-mix(in srgb, var(--risk-high) 50%, transparent);
-  border-radius: 8px;
-  overflow: hidden;
+.alertas-diarios-cell {
+  background: var(--table-expansion-bg) !important;
+  padding: 1rem !important;
+  border-bottom: 1px solid var(--tabs-border);
 }
 .alertas-diarios-table { width: 100%; border-collapse: collapse; background: transparent; font-size: 0.78rem; }
 .alertas-diarios-table thead tr { background: color-mix(in srgb, var(--text-color) 4%, transparent); }
@@ -589,4 +645,157 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   border-radius: 6px;
   overflow: hidden;
 }
+
+
+
+/* ── Evidence Panel (Design Premium) ───────────────────────────────── */
+.evidence-panel {
+  background: transparent;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--primary-color);
+  overflow: hidden;
+  transition: border-left-color 0.35s ease;
+}
+.evidence-panel.theme-geo { border-left-color: #8b5cf6; }
+.evidence-panel.theme-conc { border-left-color: var(--primary-color); }
+
+/* Header do painel */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem 0.55rem 1rem;
+  background: color-mix(in srgb, var(--table-expansion-bg) 85%, var(--text-color) 5%);
+  border-bottom: 1px solid var(--tabs-border);
+  gap: 1rem;
+}
+.panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.panel-icon {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.evidence-panel.theme-conc .panel-icon { color: var(--primary-color); }
+.evidence-panel.theme-geo  .panel-icon { color: #8b5cf6; }
+
+.panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.panel-crm-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  border: 1px solid var(--tabs-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: var(--font-mono, monospace);
+}
+
+/* Segmented Control */
+.segmented-control {
+  display: flex;
+  align-items: center;
+  position: relative;
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+  border: 1px solid var(--tabs-border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 0;
+  flex-shrink: 0;
+}
+.segment-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: calc(50% - 3px);
+  border-radius: 6px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  border: 1px solid var(--tabs-border);
+}
+.segment-pill.pill-left  { left: 3px; }
+.segment-pill.pill-right { left: calc(50%); }
+
+.segment-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+.segment-btn.seg-active { color: var(--primary-color); }
+.segment-btn.geo-seg.geo-active { color: #8b5cf6; }
+.segment-btn i { font-size: 0.68rem; }
+
+.seg-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+  border-radius: 99px;
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+.seg-count.geo {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+/* Tabela de evidências (unificada) */
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+  font-size: 0.78rem;
+}
+.evidence-table thead tr {
+  background: color-mix(in srgb, var(--text-color) 3%, transparent);
+}
+.evidence-table th {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 1px solid var(--tabs-border);
+}
+.evidence-table td {
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--tabs-border);
+  color: var(--text-color);
+  opacity: 0.85;
+}
+.evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color) 3%, transparent); }
 </style>

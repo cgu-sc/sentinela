@@ -152,8 +152,8 @@ const maxPDOverall = computed(() => {
         <tbody>
           <template v-for="(m, i) in visibleCrms" :key="i">
             <tr
-              :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm }"
-              @click="m.alerta_concentracao_mesmo_crm && toggleAlertasDiarios(m.id_medico)"
+              :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm || m.alerta5_geografico }"
+              @click="(m.alertas_diarios?.length || m.alertas_geograficos?.length) ? toggleAlertasDiarios(m.id_medico) : null"
             >
               <td class="col-center">
                   <div class="rank-badge" :class="{ 'gold': i === 0, 'silver': i === 1, 'bronze': i === 2 }">
@@ -179,7 +179,7 @@ const maxPDOverall = computed(() => {
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO MESMO CRM
-                    <span v-if="m.alertas_diarios?.length > 1" class="badge-count">({{ m.alertas_diarios.length }}x)</span>
+                    <span v-if="m.alertas_diarios?.length" class="badge-count">({{ m.alertas_diarios.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
@@ -198,13 +198,14 @@ const maxPDOverall = computed(() => {
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
+                    <span v-if="m.alertas_geograficos?.length" class="badge-count">({{ m.alertas_geograficos.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag amber" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
                   </span>
                   <i
-                    v-if="!m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
+                    v-if="!m.alertas_diarios?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
                     class="pi pi-check-circle"
                     style="color: var(--text-muted); font-size: 0.85rem;"
                     v-tooltip.top="'Sem ocorrências identificadas'"

@@ -163,7 +163,7 @@ watch(
     if (filterStore.isAnimating) return;
     const { inicio, fim } = getApiParams();
     cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchPrescritores(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmDailyProfile(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmHourlyProfile(cnpj.value, inicio, fim);
   },

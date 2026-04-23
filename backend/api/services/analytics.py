@@ -521,14 +521,20 @@ class AnalyticsService:
             EvolucaoMensalGtinResponse com lista de meses ordenados ASC.
         """
         import pandas as pd
+        import time
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin.parquet")
 
         df: pl.DataFrame | None = None
+        from_cache = False
+        query_time_ms: float | None = None
+        save_time_ms: float | None = None
+
         if os.path.exists(PARQUET_PATH):
             try:
                 df = pl.read_parquet(PARQUET_PATH)
+                from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet gtin '{cnpj}': {e}")
 
@@ -536,6 +542,7 @@ class AnalyticsService:
             try:
                 from database import engine as _engine
                 with _engine.connect() as conn:
+                    t0 = time.perf_counter()
                     pdf = pd.read_sql(
                         text("""
                             SELECT m.codigo_barra, m.periodo,
@@ -549,6 +556,8 @@ class AnalyticsService:
                         conn,
                         params={"cnpj": cnpj},
                     )
+                    query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
+
                 df = pl.from_pandas(pdf).with_columns([
                     pl.col("codigo_barra").cast(pl.String),
                     pl.col("periodo").cast(pl.Date),
@@ -557,7 +566,11 @@ class AnalyticsService:
                     pl.col("valor_vendas").cast(pl.Float64),
                     pl.col("valor_sem_comprovacao").cast(pl.Float64),
                 ])
+                t1 = time.perf_counter()
                 df.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+
+                print(f"⏱  GTIN {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
             except Exception as e:
                 import traceback
                 print(f"⚠️ Erro ao gerar parquet gtin '{cnpj}': {e}")
@@ -565,7 +578,12 @@ class AnalyticsService:
                 df = pl.DataFrame()
 
         if df.is_empty():
-            return EvolucaoMensalGtinResponse(meses=[])
+            return EvolucaoMensalGtinResponse(
+                meses=[],
+                from_cache=from_cache,
+                query_time_ms=query_time_ms,
+                save_time_ms=save_time_ms,
+            )
 
         # Filtro de período (opera sobre a coluna Date)
         if data_inicio:
@@ -574,7 +592,12 @@ class AnalyticsService:
             df = df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
 
         if df.is_empty():
-            return EvolucaoMensalGtinResponse(meses=[])
+            return EvolucaoMensalGtinResponse(
+                meses=[],
+                from_cache=from_cache,
+                query_time_ms=query_time_ms,
+                save_time_ms=save_time_ms,
+            )
 
         agg = (
             df
@@ -608,7 +631,12 @@ class AnalyticsService:
             )
             for r in agg.iter_rows(named=True)
         ]
-        return EvolucaoMensalGtinResponse(meses=meses)
+        return EvolucaoMensalGtinResponse(
+            meses=meses,
+            from_cache=from_cache,
+            query_time_ms=query_time_ms,
+            save_time_ms=save_time_ms,
+        )
 
     @staticmethod
     def get_indicadores(cnpj: str) -> IndicadoresResponse:
@@ -1595,7 +1623,7 @@ class AnalyticsService:
         from data_cache import get_cache_dir
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "prescritores.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "dados_crms.parquet")
 
         # ── helpers de competência ────────────────────────────────────────────
         def _to_comp(date_str: str) -> int:

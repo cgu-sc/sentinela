@@ -9,12 +9,28 @@ import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
+import { useCnpjDetailStore } from "@/stores/cnpjDetail";
+import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
 const geoStore = useGeoStore();
+
+const cnpjDetailStore = useCnpjDetailStore();
+const { evolucaoMensalGtin, evolucaoMensalGtinLoading } = storeToRefs(cnpjDetailStore);
+
+const gtinTimingTooltip = computed(() => {
+  if (evolucaoMensalGtinLoading.value) return 'Carregando movimentação mensal…';
+  const d = evolucaoMensalGtin.value;
+  if (!d) return null;
+  if (d.from_cache) return 'Movimentação mensal · Cache local';
+  const parts = ['Movimentação mensal · Consulta SQL'];
+  if (d.query_time_ms != null) parts[0] += `: ${d.query_time_ms}ms`;
+  if (d.save_time_ms  != null) parts.push(`Gravação parquet: ${d.save_time_ms}ms`);
+  return parts.join(' · ');
+});
 
 const qtdMunicipiosRegiao = computed(() =>
   geoStore.qtdMunicipiosPorRegiao(props.geoData?.no_regiao_saude),
@@ -279,6 +295,14 @@ const filterNetwork = () => {
 
       <div class="header-right-col">
         <div class="list-actions">
+          <button
+            v-if="gtinTimingTooltip"
+            class="list-btn list-btn--icon-only list-btn--timing"
+            v-tooltip.bottom="gtinTimingTooltip"
+            style="cursor: default;"
+          >
+            <i :class="evolucaoMensalGtinLoading ? 'pi pi-spin pi-spinner' : 'pi pi-stopwatch'" />
+          </button>
           <button
             class="list-btn list-btn--icon-only list-btn--export"
             @click="emit('export')"
@@ -553,6 +577,17 @@ const filterNetwork = () => {
 
 .list-btn--icon-only i {
   font-size: 1rem;
+}
+
+.list-btn--timing {
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+.list-btn--timing:hover {
+  opacity: 1;
 }
 
 .list-btn--export {

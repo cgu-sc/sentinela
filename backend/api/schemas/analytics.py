@@ -429,4 +429,7 @@ class MesMensalGtinItem(BaseModel):
 
 class EvolucaoMensalGtinResponse(BaseModel):
     meses: List[MesMensalGtinItem]
+    from_cache: bool = False
+    query_time_ms: Optional[float] = None   # tempo da consulta SQL (apenas na geração)
+    save_time_ms: Optional[float] = None    # tempo de escrita do parquet (apenas na geração)
 

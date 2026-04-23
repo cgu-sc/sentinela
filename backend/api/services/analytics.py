@@ -1604,11 +1604,13 @@ class AnalyticsService:
             .with_row_index("ranking")
             .with_columns([
                 (pl.col("ranking") + 1).alias("ranking"),
-                (pl.col("vl_total_prescricoes") / total_valor * 100).round(2).alias("pct_participacao")
-                if total_valor > 0 else pl.lit(0.0).alias("pct_participacao"),
+                # Mantemos o pct_participacao com alta precisão para o acumulado
+                (pl.col("vl_total_prescricoes") / total_valor * 100).alias("_pct_raw")
+                if total_valor > 0 else pl.lit(0.0).alias("_pct_raw"),
             ])
             .with_columns([
-                pl.col("pct_participacao").cum_sum().round(2).alias("pct_acumulado"),
+                pl.col("_pct_raw").round(2).alias("pct_participacao"),
+                pl.col("_pct_raw").cum_sum().clip(0, 100).round(2).alias("pct_acumulado"),
                 pl.when(pl.col("prescricoes_total_brasil") > 0)
                 .then(
                     (pl.col("nu_prescricoes").cast(pl.Float64) /

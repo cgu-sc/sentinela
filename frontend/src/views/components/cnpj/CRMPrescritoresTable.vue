@@ -79,6 +79,11 @@ function formatDescricao(a) {
   const taxa = a.taxa_hora?.toFixed(1) ?? '—';
   return `${num} autorizações de venda <span class="desc-janela">em ${janela} (${taxa}/hora)</span> para o mesmo CRM`;
 }
+const maxPDOverall = computed(() => {
+  if (!props.crmsInteresse?.length) return 40;
+  const vals = props.crmsInteresse.flatMap(m => [m.nu_prescricoes_dia, m.prescricoes_dia_total_brasil]);
+  return Math.max(...vals, 40);
+});
 </script>
 
 <template>
@@ -129,8 +134,7 @@ function formatDescricao(a) {
             <th class="col-right" style="width: 15%">Volume / Valor</th>
             <th class="col-center" style="width: 16%">Participação / Acumulado</th>
             <th class="col-center" style="width: 8%">Rede</th>
-            <th class="col-center" style="width: 6%">P/D Loc.</th>
-            <th class="col-center" style="width: 6%">P/D BR</th>
+            <th class="col-center" style="width: 12%">Prescrições por Dia</th>
             <th class="col-center" style="width: 5%">Excl.</th>
           </tr>
         </thead>
@@ -154,7 +158,7 @@ function formatDescricao(a) {
                   </span>
                   <span
                     v-if="m.alerta_concentracao_mesmo_crm"
-                    class="issue-tag green-ok clickable-badge"
+                    class="issue-tag violet clickable-badge"
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
@@ -165,7 +169,7 @@ function formatDescricao(a) {
                   <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
                     <i class="pi pi-ban"></i> CRM INEXISTENTE
                   </span>
-                  <span v-if="m.flag_prescricao_antes_registro" class="issue-tag dark-red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
+                  <span v-if="m.flag_prescricao_antes_registro" class="issue-tag red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
                     <i class="pi pi-calendar-times"></i> CRM IRREGULAR
                   </span>
                   <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
@@ -174,7 +178,7 @@ function formatDescricao(a) {
                   <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
                     <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
                   </span>
-                  <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag red" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
+                  <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag amber" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
                   </span>
                   <i
@@ -213,10 +217,14 @@ function formatDescricao(a) {
                 <span :class="{ 'text-purple': m.qtd_estabelecimentos_atua > 50 }">{{ m.qtd_estabelecimentos_atua }}</span> farm.
               </td>
               <td class="col-center">
-                <span :class="{ 'text-red': m.nu_prescricoes_dia > 30 }">{{ formatNumberFull(m.nu_prescricoes_dia) }}</span>/dia
-              </td>
-              <td class="col-center">
-                <span :class="{ 'text-red': m.prescricoes_dia_total_brasil > 30 }">{{ formatNumberFull(m.prescricoes_dia_total_brasil) }}</span>/dia
+                <div class="cell-stacked" style="align-items: center; gap: 0.1rem;">
+                  <div :class="{ 'text-red': m.nu_prescricoes_dia > 30 }" style="font-weight: 600; font-size: 0.85rem;">
+                    {{ formatNumberFull(m.nu_prescricoes_dia) }} <span style="font-size: 0.68rem; color: var(--text-muted); font-weight: 400">local</span>
+                  </div>
+                  <div :class="{ 'text-red': m.prescricoes_dia_total_brasil > 30 }" style="font-size: 0.75rem; color: var(--text-secondary);">
+                    {{ formatNumberFull(m.prescricoes_dia_total_brasil) }} <span style="font-size: 0.68rem; color: var(--text-muted); font-weight: 400">brasil</span>
+                  </div>
+                </div>
               </td>
               <td class="col-center">
                 <span :class="{ 'text-purple': m.pct_volume_aqui_vs_total > 90 }">{{ formatPct(m.pct_volume_aqui_vs_total) }}</span>
@@ -380,38 +388,40 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .bar-text { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.78rem; font-weight: 500; color: var(--text-color); text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color); }
 .part-fill { background: linear-gradient(90deg, rgba(20, 184, 166, 0.5), rgba(45, 212, 191, 0.7)) !important; opacity: 1 !important; }
 .acum-fill { background: linear-gradient(90deg, rgba(129, 140, 248, 0.65), rgba(99, 102, 241, 0.85)) !important; opacity: 1 !important; }
+.pd-loc-fill { background: linear-gradient(90deg, #f43f5e, #fb7185) !important; opacity: 0.8 !important; }
+.pd-br-fill { background: linear-gradient(90deg, #64748b, #94a3b8) !important; opacity: 0.8 !important; }
 
 .med-id { font-weight: 500; font-size: 0.78rem; color: var(--text-color); }
 .med-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
 
 .tags-container { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .issue-tag {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   white-space: nowrap;
-  min-width: 85px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   text-transform: none !important;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   border: 1px solid transparent;
 }
-.issue-tag:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.issue-tag i { font-size: 0.7rem; }
-.issue-tag.red { background: color-mix(in srgb, var(--risk-high) 12%, transparent); color: var(--risk-high); border-color: color-mix(in srgb, var(--risk-high) 25%, transparent); }
-.issue-tag.dark-red { background: color-mix(in srgb, var(--risk-critical) 12%, transparent); color: var(--risk-critical); border-color: color-mix(in srgb, var(--risk-critical) 25%, transparent); }
-.issue-tag.orange { background: color-mix(in srgb, var(--risk-medium) 12%, transparent); color: var(--risk-medium); border-color: color-mix(in srgb, var(--risk-medium) 25%, transparent); }
-.issue-tag.yellow { background: color-mix(in srgb, var(--risk-low) 12%, transparent); color: var(--risk-low); border-color: color-mix(in srgb, var(--risk-low) 25%, transparent); }
-.issue-tag.blue-network { background: color-mix(in srgb, #3b82f6 12%, transparent); color: #3b82f6; border-color: color-mix(in srgb, #3b82f6 25%, transparent); }
-.issue-tag.purple-geo { background: color-mix(in srgb, #8b5cf6 12%, transparent); color: #8b5cf6; border-color: color-mix(in srgb, #8b5cf6 25%, transparent); }
-.issue-tag.green-ok { background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent); color: var(--risk-indicator-normal); border-color: color-mix(in srgb, var(--risk-indicator-normal) 25%, transparent); }
+.issue-tag:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.issue-tag i { font-size: 0.65rem; opacity: 0.7; }
+
+.issue-tag.red { background: rgba(239, 68, 68, 0.08); color: #ef4444; border-color: rgba(239, 68, 68, 0.15); }
+.issue-tag.orange { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: rgba(245, 158, 11, 0.15); }
+.issue-tag.blue-network { background: rgba(59, 130, 246, 0.08); color: #3b82f6; border-color: rgba(59, 130, 246, 0.15); }
+.issue-tag.purple-geo { background: rgba(139, 92, 246, 0.08); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.15); }
+.issue-tag.amber { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: rgba(245, 158, 11, 0.15); }
+.issue-tag.violet { background: rgba(129, 140, 248, 0.08); color: #818cf8; border-color: rgba(129, 140, 248, 0.15); }
+.issue-tag.green-ok { background: rgba(16, 185, 129, 0.08); color: #10b981; border-color: rgba(16, 185, 129, 0.15); }
 
 .badge-count { font-size: 0.7rem; font-weight: 600; opacity: 0.8; margin-left: 0.1rem; }
 .clickable-badge { cursor: pointer; user-select: none; }

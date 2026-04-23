@@ -62,7 +62,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     <div
       class="alert-kpi-card"
       :class="[
-        kpiData.qtdLancamentosAgrupados > 0 ? 'highlight-green' : 'kpi-disabled',
+        kpiData.qtdLancamentosAgrupados > 0 ? 'highlight-violet' : 'kpi-disabled',
         activeKpiFilter === 'agrupamento' ? 'kpi-active' : '',
       ]"
       @click="emit('kpi-click', 'agrupamento')"
@@ -167,7 +167,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     <div
       class="alert-kpi-card"
       :class="[
-        kpiData.totalSurtosCnpj > 0 ? 'highlight-red' : 'kpi-disabled',
+        kpiData.totalSurtosCnpj > 0 ? 'highlight-amber' : 'kpi-disabled',
         activeKpiFilter === 'surtos_cnpj' ? 'kpi-active' : '',
       ]"
       @click="emit('kpi-click', 'surtos_cnpj')"
@@ -224,13 +224,17 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
   border-color: color-mix(in srgb, var(--risk-medium) 45%, var(--card-border));
   box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--risk-medium) 20%, transparent);
 }
-.alert-kpi-card.highlight-green:hover {
-  border-color: color-mix(in srgb, var(--risk-indicator-normal) 45%, var(--card-border));
-  box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--risk-indicator-normal) 20%, transparent);
+.alert-kpi-card.highlight-violet:hover {
+  border-color: color-mix(in srgb, #818cf8 45%, var(--card-border));
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, #818cf8 20%, transparent);
 }
 .alert-kpi-card.highlight-purple:hover {
   border-color: color-mix(in srgb, #3b82f6 45%, var(--card-border));
   box-shadow: 0 8px 16px -8px color-mix(in srgb, #3b82f6 20%, transparent);
+}
+.alert-kpi-card.highlight-amber:hover {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--card-border));
+  box-shadow: 0 8px 16px -8px color-mix(in srgb, #f59e0b 20%, transparent);
 }
 .alert-kpi-card.highlight-purple-geo:hover {
   border-color: color-mix(in srgb, #8b5cf6 45%, var(--card-border));
@@ -259,15 +263,20 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
   border-color: var(--risk-medium) !important;
   box-shadow: 0 0 25px -5px color-mix(in srgb, var(--risk-medium) 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
-.alert-kpi-card.highlight-green.kpi-active {
-  background: color-mix(in srgb, var(--risk-indicator-normal) 10%, var(--card-bg));
-  border-color: var(--risk-indicator-normal) !important;
-  box-shadow: 0 0 25px -5px color-mix(in srgb, var(--risk-indicator-normal) 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
+.alert-kpi-card.highlight-violet.kpi-active {
+  background: color-mix(in srgb, #818cf8 10%, var(--card-bg));
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, #818cf8 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 .alert-kpi-card.highlight-purple.kpi-active {
   background: color-mix(in srgb, #3b82f6 10%, var(--card-bg));
   border-color: #3b82f6 !important;
   box-shadow: 0 0 25px -5px color-mix(in srgb, #3b82f6 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.alert-kpi-card.highlight-amber.kpi-active {
+  background: color-mix(in srgb, #f59e0b 10%, var(--card-bg));
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 25px -5px color-mix(in srgb, #f59e0b 60%, transparent), 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 .alert-kpi-card.highlight-purple-geo.kpi-active {
   background: color-mix(in srgb, #8b5cf6 10%, var(--card-bg));
@@ -295,10 +304,15 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
   border: 1px solid color-mix(in srgb, #8b5cf6 15%, var(--card-border));
   border-left: 4px solid #8b5cf6 !important;
 }
-.highlight-green {
-  background: linear-gradient(to top, color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-normal) 15%, var(--card-border));
-  border-left: 4px solid var(--risk-indicator-normal) !important;
+.highlight-amber {
+  background: linear-gradient(to top, color-mix(in srgb, #f59e0b 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
+  border: 1px solid color-mix(in srgb, #f59e0b 15%, var(--card-border));
+  border-left: 4px solid #f59e0b !important;
+}
+.highlight-violet {
+  background: linear-gradient(to top, color-mix(in srgb, #818cf8 15%, var(--card-bg)) 0%, var(--card-bg) 80%);
+  border: 1px solid color-mix(in srgb, #818cf8 15%, var(--card-border));
+  border-left: 4px solid #818cf8 !important;
 }
 
 .alert-kpi-header {

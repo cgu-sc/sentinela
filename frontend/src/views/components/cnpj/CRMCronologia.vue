@@ -853,7 +853,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .close-detail-btn:hover { background: var(--surface-hover); color: #ef4444; }
 
 /* ── Raio-X Table Styling ───────────────────────────────────────────────── */
-.raiox-table-wrapper { border-radius: 8px; background: rgba(0,0,0,0.1); border: 1px solid var(--tabs-border); overflow: hidden; }
+.raiox-table-wrapper { border-radius: 8px; background: transparent; border: 1px solid var(--tabs-border); overflow: hidden; }
 .premium-table { width: 100%; border-collapse: collapse; }
 .premium-table th { padding: 0.75rem 0.5rem; background: var(--card-bg); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; border-bottom: 2px solid var(--tabs-border); }
 .premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color); font-size: 0.78rem; }
@@ -875,7 +875,8 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .more-items-pill { background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); padding: 1px 6px; border-radius: 99px; font-size: 0.6rem; }
 .raiox-val-cell { font-weight: 700; font-family: var(--font-mono); }
 
-.expanded-items-list { background: rgba(0,0,0,0.15); padding: 0.5rem 0; }
+.expanded-items-list { background: rgba(0,0,0,0.04); padding: 0.5rem 0; }
+:global(.dark-mode) .expanded-items-list { background: rgba(255,255,255,0.04); }
 .expanded-item-entry { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 2rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
 .item-name { font-size: 0.75rem; font-weight: 600; color: var(--primary-color); }
 .item-active { font-size: 0.68rem; opacity: 0.6; margin-left: 0.5rem; }

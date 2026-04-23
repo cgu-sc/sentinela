@@ -73,6 +73,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
     activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia'
+
+    // ── Timing de Requisições (diagnóstico de performance) ───────────────────
+    // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
+    requestTimes: {},
   }),
 
   actions: {
@@ -93,19 +97,19 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── Evolução Financeira ───────────────────────────────────────────────────
     async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (this.evolucaoKey === key) return;   // Já carregado para este escopo exato
+      if (this.evolucaoKey === key) return;
 
       this.evolucaoLoading = true;
       this.evolucaoError   = null;
-      // Não limpa evolucaoFinanceira/evolucaoLoaded aqui — mantém o dado
-      // anterior visível enquanto o novo carrega (evita flash na troca de período).
 
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
 
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });
+        this.requestTimes['evolucao'] = { label: 'Evolução Financeira', ms: Math.round(performance.now() - t0) };
         this.evolucaoFinanceira = data;
         this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
@@ -126,7 +130,16 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucaoMensalGtin(cnpj), { params });
+        const ms = Math.round(performance.now() - t0);
+        // Detalhe extra: breakdown SQL vs parquet (retornado pelo backend)
+        const detail = data.from_cache
+          ? 'cache'
+          : [data.query_time_ms != null ? `SQL ${data.query_time_ms}ms` : null,
+             data.save_time_ms  != null ? `parquet ${data.save_time_ms}ms` : null]
+              .filter(Boolean).join(' + ') || null;
+        this.requestTimes['movimentacao-gtin'] = { label: 'Movimentação GTIN', ms, detail };
         this.evolucaoMensalGtin    = data;
         this.evolucaoMensalGtinKey = key;
       } catch (e) {
@@ -142,7 +155,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.movimentacaoLoading = true;
       this.movimentacaoError   = null;
       try {
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
+        this.requestTimes['movimentacao'] = { label: 'Movimentação', ms: Math.round(performance.now() - t0) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
       } catch (e) {
@@ -159,7 +174,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.indicadoresLoading = true;
       this.indicadoresError   = null;
       try {
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(cnpj));
+        this.requestTimes['indicadores'] = { label: 'Indicadores de Risco', ms: Math.round(performance.now() - t0) };
         this.indicadoresData   = data;
         this.indicadoresLoaded = true;
       } catch (e) {
@@ -176,7 +193,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.falecidosLoading = true;
       this.falecidosError   = null;
       try {
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj));
+        this.requestTimes['falecidos'] = { label: 'Falecidos', ms: Math.round(performance.now() - t0) };
         this.falecidosData   = data;
         this.falecidosLoaded = true;
       } catch (e) {
@@ -197,7 +216,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(cnpj), { params });
+        this.requestTimes['crm-data'] = { label: 'CRM Data', ms: Math.round(performance.now() - t0) };
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
       } catch (e) {
@@ -217,7 +238,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj), { params });
+        this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms: Math.round(performance.now() - t0) };
         this.crmDailyProfile        = data;
         this.crmDailyProfileLoaded  = key;
       } catch (e) {
@@ -235,7 +258,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj), { params });
+        this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms: Math.round(performance.now() - t0) };
         this.crmHourlyProfile       = data;
         this.crmHourlyProfileLoaded = key;
       } catch (e) {
@@ -366,6 +391,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;
+
+      this.requestTimes = {};
 
       this.cnpjsAvulsos        = new Map();
       this.cnpjsAvulsosLoading = false;

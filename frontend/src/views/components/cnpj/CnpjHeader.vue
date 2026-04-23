@@ -19,17 +19,17 @@ const farmaciaLists = useFarmaciaListsStore();
 const geoStore = useGeoStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { evolucaoMensalGtin, evolucaoMensalGtinLoading } = storeToRefs(cnpjDetailStore);
+const { requestTimes } = storeToRefs(cnpjDetailStore);
 
-const gtinTimingTooltip = computed(() => {
-  if (evolucaoMensalGtinLoading.value) return 'Carregando movimentação mensal…';
-  const d = evolucaoMensalGtin.value;
-  if (!d) return null;
-  if (d.from_cache) return 'Movimentação mensal · Cache local';
-  const parts = ['Movimentação mensal · Consulta SQL'];
-  if (d.query_time_ms != null) parts[0] += `: ${d.query_time_ms}ms`;
-  if (d.save_time_ms  != null) parts.push(`Gravação parquet: ${d.save_time_ms}ms`);
-  return parts.join(' · ');
+const requestTimesTooltip = computed(() => {
+  const entries = Object.values(requestTimes.value);
+  if (!entries.length) return null;
+  const rows = entries.map(e => {
+    let line = `<b>${e.label}:</b> ${e.ms}ms`;
+    if (e.detail) line += ` <span style="opacity:0.7">(${e.detail})</span>`;
+    return `<div style="line-height:1.7">${line}</div>`;
+  }).join('');
+  return { value: `<div style="font-size:0.8rem;min-width:200px">${rows}</div>`, escape: false };
 });
 
 const qtdMunicipiosRegiao = computed(() =>
@@ -296,12 +296,12 @@ const filterNetwork = () => {
       <div class="header-right-col">
         <div class="list-actions">
           <button
-            v-if="gtinTimingTooltip"
+            v-if="requestTimesTooltip"
             class="list-btn list-btn--icon-only list-btn--timing"
-            v-tooltip.bottom="gtinTimingTooltip"
+            v-tooltip.bottom="requestTimesTooltip"
             style="cursor: default;"
           >
-            <i :class="evolucaoMensalGtinLoading ? 'pi pi-spin pi-spinner' : 'pi pi-stopwatch'" />
+            <i class="pi pi-stopwatch" />
           </button>
           <button
             class="list-btn list-btn--icon-only list-btn--export"

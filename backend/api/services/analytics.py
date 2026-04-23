@@ -1695,11 +1695,8 @@ class AnalyticsService:
                         conn,
                         params={"cnpj": cnpj},
                     )
-                if not pdf_ad.empty:
-                    df_ad = pl.from_pandas(pdf_ad)
-                    df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
-                else:
-                    df_ad = pl.DataFrame()
+                df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame()
+                df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
             except Exception as e:
                 print(f"❌ Erro ao buscar alertas diários do banco para {cnpj}: {e}")
                 df_ad = pl.DataFrame()
@@ -1800,7 +1797,6 @@ class AnalyticsService:
                         conn, params={"cnpj": cnpj}
                     )
                 df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame()
-                # Salva sempre para confirmar sincronia (mesmo vazio)
                 df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
             except Exception as e:
                 print(f"❌ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
@@ -2008,15 +2004,16 @@ class AnalyticsService:
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
                 )
-            if not pdf_tx.empty:
-                df_tx = pl.from_pandas(pdf_tx).with_columns([
+            df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame()
+            if not df_tx.is_empty():
+                df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
                     pl.col("crm").cast(pl.Utf8),
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8)
                 ])
-                df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
-                print(f"✅ Cache hourly_tx sincronizado: {cnpj}")
+            df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+            print(f"✅ Cache hourly_tx sincronizado: {cnpj}")
         except Exception as e:
             print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
 

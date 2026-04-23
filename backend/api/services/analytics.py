@@ -1729,6 +1729,59 @@ class AnalyticsService:
         for m in crms_interesse_list:
             m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
 
+        # ── 7.1 Alertas Geográficos (Distância) ──────────────────────────────
+        ALERTAS_GEO_PATH = os.path.join(CRMS_DIR, f"{cnpj}_geografico.parquet")
+        df_geo: pl.DataFrame | None = None
+        
+        if os.path.exists(ALERTAS_GEO_PATH):
+            try: df_geo = pl.read_parquet(ALERTAS_GEO_PATH)
+            except: pass
+            
+        if df_geo is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf_geo = pd.read_sql(
+                        text("SELECT * FROM temp_CGUSC.fp.alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
+                        conn, params={"cnpj": cnpj}
+                    )
+                df_geo = pl.from_pandas(pdf_geo) if not pdf_geo.empty else pl.DataFrame()
+                df_geo.write_parquet(ALERTAS_GEO_PATH, compression="lz4")
+            except Exception as e:
+                # Se falhar a conexão (comum em modo offline), apenas avisa de forma amigável
+                if "IM002" in str(e) or "connection" in str(e).lower():
+                    print(f"ℹ️  Modo Offline: Alertas geográficos para {cnpj} não encontrados no cache e banco inacessível.")
+                else:
+                    print(f"⚠️ Erro ao buscar alertas geográficos para {cnpj}: {e}")
+                df_geo = pl.DataFrame()
+
+        alertas_geo_por_medico: dict[str, list[dict]] = {}
+        if not df_geo.is_empty():
+            if comp_ini: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+            if comp_fim: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+            
+            for row in df_geo.iter_rows(named=True):
+                mid = row["id_medico"]
+                alertas_geo_por_medico.setdefault(mid, []).append({
+                    "competencia":    row["competencia"],
+                    "cnpj_a":         row["cnpj_a"],
+                    "municipio_a":    row["no_municipio_a"],
+                    "uf_a":           row["sg_uf_a"],
+                    "dt_ini_a":       str(row["dt_ini_a"]),
+                    "dt_fim_a":       str(row["dt_fim_a"]),
+                    "nu_presc_a":     row["nu_prescricoes_a"],
+                    "cnpj_b":         row["cnpj_b"],
+                    "municipio_b":    row["no_municipio_b"],
+                    "uf_b":           row["sg_uf_b"],
+                    "dt_ini_b":       str(row["dt_ini_b"]),
+                    "dt_fim_b":       str(row["dt_fim_b"]),
+                    "nu_presc_b":     row["nu_prescricoes_b"],
+                    "distancia_km":   float(row["distancia_km"] or 0),
+                })
+
+        for m in crms_interesse_list:
+            m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
+
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
         CNPJ_ALERTS_PATH = os.path.join(CRMS_DIR, f"{cnpj}_concentracao_crm_estabelecimento.parquet")
         df_ca: pl.DataFrame | None = None

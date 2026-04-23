@@ -181,8 +181,14 @@ const maxPDOverall = computed(() => {
                   <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
                     <i class="pi pi-lock"></i> CRM EXCLUSIVO
                   </span>
-                  <span v-if="m.alerta5_geografico" class="issue-tag purple-geo" v-tooltip.top="'Distância superior a 400km entre prescritor e farmácia'">
+                  <span 
+                    v-if="m.alerta5_geografico" 
+                    class="issue-tag purple-geo clickable-badge" 
+                    v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver evidências de distância'"
+                    @click.stop="toggleAlertasDiarios(m.id_medico)"
+                  >
                     <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
+                    <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span v-if="m.flag_concentracao_estabelecimento" class="issue-tag amber" v-tooltip.top="'O registro deste médico ocorreu durante uma concentração horária anômala no estabelecimento'">
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
@@ -237,8 +243,8 @@ const maxPDOverall = computed(() => {
               </td>
             </tr>
 
-            <!-- Linha expandida de alertas diários -->
-            <tr v-if="expandedAlertasMedico.has(m.id_medico) && m.alertas_diarios?.length" class="alertas-diarios-row">
+            <!-- Linha expandida de alertas (Concentração ou Geográfico) -->
+            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_diarios?.length || m.alertas_geograficos?.length)" class="alertas-diarios-row">
               <td colspan="11" class="alertas-diarios-cell">
                 <div class="alertas-wrapper">
                   <table class="alertas-diarios-table">
@@ -260,6 +266,39 @@ const maxPDOverall = computed(() => {
                         <td class="col-center">{{ formatarJanela(a.nu_minutos) }}</td>
                         <td class="col-right">{{ a.taxa_hora?.toFixed(1) }}/h</td>
                         <td class="col-descricao" v-html="formatDescricao(a)" />
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <!-- TABELA 2: Detalhamento Geográfico (Distância) -->
+                  <table v-if="m.alertas_geograficos?.length" class="alertas-diarios-table geo-detail-table" :style="m.alertas_diarios?.length ? { borderTop: '2px dashed var(--tabs-border)', marginTop: '1rem' } : {}">
+                    <thead>
+                      <tr>
+                        <th colspan="4" class="table-subgroup-title"><i class="pi pi-map" /> Evidências de Longa Distância (>400km)</th>
+                      </tr>
+                      <tr>
+                        <th style="width: 40%">Estabelecimento A (Referência)</th>
+                        <th style="width: 40%">Estabelecimento B (Outro)</th>
+                        <th style="width: 10%" class="col-center">Distância</th>
+                        <th style="width: 10%" class="col-center">Comp.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(g, k) in m.alertas_geograficos" :key="'geo-'+k">
+                        <td class="geo-cell">
+                          <div class="geo-main">{{ g.municipio_a }}/{{ g.uf_a }}</div>
+                          <div class="geo-sub">{{ g.cnpj_a }} · {{ g.nu_presc_a }} presc.</div>
+                          <div class="geo-sub">Período: {{ formatarDataAlerta(g.dt_ini_a) }} a {{ formatarDataAlerta(g.dt_fim_a) }}</div>
+                        </td>
+                        <td class="geo-cell">
+                          <div class="geo-main">{{ g.municipio_b }}/{{ g.uf_b }}</div>
+                          <div class="geo-sub">{{ g.cnpj_b }} · {{ g.nu_presc_b }} presc.</div>
+                          <div class="geo-sub">Período: {{ formatarDataAlerta(g.dt_ini_b) }} a {{ formatarDataAlerta(g.dt_fim_b) }}</div>
+                        </td>
+                        <td class="col-center">
+                          <span class="dist-badge">{{ Math.round(g.distancia_km) }}km</span>
+                        </td>
+                        <td class="col-center">{{ g.competencia }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -521,4 +560,33 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .crm-more-btn { background: none; border: none; font-size: 0.65rem; font-weight: 500; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 1rem; border-radius: 4px; transition: all 0.2s; opacity: 0.85; }
 .crm-more-btn:hover { opacity: 1; background: color-mix(in srgb, var(--primary-color) 8%, transparent); letter-spacing: 0.08em; }
 .crm-more-btn i { font-size: 0.7rem; }
+
+/* Estilos da Tabela Geográfica */
+.table-subgroup-title {
+  background: rgba(139, 92, 246, 0.08) !important;
+  color: #8b5cf6 !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  padding: 0.5rem !important;
+  letter-spacing: 0.1em;
+}
+
+.geo-cell { line-height: 1.4; padding: 0.6rem 0.75rem !important; }
+.geo-main { font-weight: 700; color: var(--text-color); font-size: 0.8rem; }
+.geo-sub { font-size: 0.68rem; color: var(--text-muted); opacity: 0.8; }
+
+.dist-badge {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 800;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.geo-detail-table {
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+}
 </style>

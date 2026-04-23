@@ -119,6 +119,10 @@ const crmFrequencies = computed(() => {
   return freqs;
 });
 
+const raioxTotalValue = computed(() => {
+  return groupedRaiox.value.reduce((sum, tx) => sum + tx.vl_autorizacao, 0);
+});
+
 function getCRMColor(crm) {
   if (!crm) return 'var(--primary-color)';
   let hash = 0;
@@ -654,9 +658,19 @@ watch(filteredDailyDays, (newDays) => {
           </span>
           <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
         </div>
-        <button class="close-detail-btn" @click="selectedHourlyHour = null">
-          <i class="pi pi-times" />
-        </button>
+      </div>
+      
+      <!-- Legenda de Apoio Visual -->
+      <div class="raiox-legend-tip animate-fade-in">
+        <div class="legend-tip-item">
+          <i class="pi pi-palette" />
+          <span>Cores identificam <strong>médicos diferentes</strong> para destacar padrões de concentração.</span>
+        </div>
+        <div class="legend-tip-divider" />
+        <div class="legend-tip-item">
+          <span class="sample-badge">2x</span>
+          <span>Indica a <strong>recorrência</strong> deste médico na mesma janela horária.</span>
+        </div>
       </div>
 
       <div v-if="!hourlyTransactionsLoading && hourlyTransactions.length === 0" class="raiox-empty">
@@ -739,6 +753,12 @@ watch(filteredDailyDays, (newDays) => {
               </tr>
             </template>
           </tbody>
+          <tfoot v-if="groupedRaiox.length > 0">
+            <tr class="raiox-footer-row">
+              <td colspan="5" class="col-right footer-label">VALOR TOTAL DO PERÍODO SELECIONADO:</td>
+              <td class="col-right footer-value">R$ {{ raioxTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -1029,8 +1049,67 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 .raiox-count-badge { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 99px; font-size: 0.65rem; padding: 1px 8px; margin-left: 0.75rem; }
 .raiox-spinner { font-size: 0.8rem; margin-left: 0.5rem; }
+.raiox-legend-tip {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px dashed rgba(139, 92, 246, 0.2);
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+}
+
+.legend-tip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.legend-tip-item i {
+  color: #8b5cf6;
+  font-size: 0.85rem;
+}
+
+.legend-tip-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.sample-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #8b5cf6;
+  border: 1px solid #8b5cf6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(139, 92, 246, 0.1);
+}
+
 .raiox-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 3rem; color: var(--text-muted); }
 .raiox-empty-icon { font-size: 2rem; opacity: 0.3; }
+
+.raiox-footer-row {
+  background: rgba(139, 92, 246, 0.08);
+  border-top: 2px solid var(--primary-color);
+}
+
+.footer-label {
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.footer-value {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--primary-color);
+  font-family: var(--font-mono);
+}
 
 .crm-badge-container { display: flex; align-items: center; gap: 0.4rem; }
 .issue-tag { font-size: 0.68rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px; }

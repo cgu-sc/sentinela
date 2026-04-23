@@ -408,7 +408,20 @@ const chartOptionHourly = computed(() => {
         name: 'Autorizações (Volume)',
         type: 'bar',
         barMaxWidth: 28,
-        data: fullPoints.map((p, i) => ({ value: p.nu_prescricoes, nu_crms: p.nu_crms_diferentes, is_anomalo_hora: p.is_anomalo_hora, cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default', itemStyle: { color: barColors[i] } })),
+        data: fullPoints.map((p, i) => {
+          const isSelected = selectedHourlyHour.value === p.hr_janela;
+          const hasSelection = selectedHourlyHour.value !== 'all' && selectedHourlyHour.value !== null;
+          return { 
+            value: p.nu_prescricoes, 
+            nu_crms: p.nu_crms_diferentes, 
+            is_anomalo_hora: p.is_anomalo_hora, 
+            cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default', 
+            itemStyle: { 
+              color: barColors[i],
+              opacity: hasSelection && !isSelected ? 0.3 : 1
+            } 
+          };
+        }),
         emphasis: { itemStyle: { opacity: 1 } },
       },
       {
@@ -574,9 +587,19 @@ watch(filteredDailyDays, (newDays) => {
           <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
           <span v-if="selectedDay.is_anomalo" class="anomalo-badge">ANOMALIA DETECTADA</span>
         </div>
-        <button class="close-detail-btn" @click="selectedDay = null; selectedHourlyHour = null">
-          <i class="pi pi-times" />
-        </button>
+        <div class="drill-panel-actions">
+          <button 
+            v-if="selectedHourlyHour !== 'all'" 
+            class="reset-filter-btn animate-fade-in"
+            @click="selectedHourlyHour = 'all'; loadTransactions(selectedDay.dt_janela, null)"
+          >
+            <i class="pi pi-filter-slash" />
+            <span>Ver Dia Todo</span>
+          </button>
+          <button class="close-detail-btn" @click="selectedDay = null; selectedHourlyHour = null">
+            <i class="pi pi-times" />
+          </button>
+        </div>
       </div>
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
         Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} autorizações</strong> ao longo do dia.
@@ -961,6 +984,40 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .anomalo-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
 .close-detail-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s; }
 .close-detail-btn:hover { background: var(--surface-hover); color: #ef4444; }
+
+.drill-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.reset-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.reset-filter-btn:hover {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+}
+
+.reset-filter-btn i {
+  font-size: 0.75rem;
+}
 
 /* ── Raio-X Table Styling ───────────────────────────────────────────────── */
 .raiox-table-wrapper { border-radius: 8px; background: transparent; border: 1px solid var(--tabs-border); overflow: hidden; }

@@ -407,393 +407,464 @@ watch(filteredDailyDays, (newDays) => {
 </script>
 
 <template>
-  <div class="section-container daily-chart-section animate-fade-in" :class="{ 'is-refreshing': showRefreshingDaily }">
-    <!-- Cabeçalho -->
-    <div class="section-title" style="border-bottom: none; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; width: 100%">
-      <div style="display: flex; align-items: center; gap: 0.75rem">
-        <i class="pi pi-chart-bar" />
-        <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
-        <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
-          <i class="pi pi-spinner pi-spin"></i> Carregando...
+  <div class="cronologia-flow animate-fade-in">
+    
+    <!-- Breadcrumb de Navegação Dinâmico -->
+    <div class="drill-breadcrumb">
+      <span class="crumb-item" :class="{ 'is-current': !selectedDay }">
+        <i class="pi pi-chart-bar crumb-icon" />
+        <span>Histórico Diário</span>
+      </span>
+      <template v-if="selectedDay">
+        <i class="pi pi-chevron-right crumb-arrow" />
+        <span class="crumb-item" :class="{ 'is-current': selectedDay && selectedHourlyHour === null }">
+          <i class="pi pi-calendar crumb-icon" />
+          <span>{{ formatarData(selectedDay.dt_janela) }}</span>
+          <span v-if="selectedDay.is_anomalo" class="crumb-anomaly-dot" />
         </span>
-      </div>
-      <div class="filter-controls" style="margin-right: 0.5rem">
-        <label class="filter-toggle">
-          <input type="checkbox" v-model="filterDailyOnlyAnomalous" />
-          <span class="toggle-slider"></span>
-          <span class="toggle-label">Apenas Anomalias</span>
-        </label>
-      </div>
-    </div>
-    <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.25rem; margin-bottom: 0.75rem">
-      Evolução diária de autorizações. Dias com volume anômalo (detecção de lançamentos em sequência ≥ 7× a mediana trimestral) destacados em vermelho.
-    </p>
-
-    <!-- Gráfico Diário -->
-    <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
-      <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
-      <span>Sem dados de perfil diário disponíveis.</span>
-    </div>
-    <div v-else class="daily-chart-wrapper">
-      <div class="chart-legend-html">
-        <span class="legend-item">
-          <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
-          Autorizações (anomalia)
+      </template>
+      <template v-if="selectedHourlyHour !== null">
+        <i class="pi pi-chevron-right crumb-arrow" />
+        <span class="crumb-item is-current">
+          <i class="pi pi-search crumb-icon" />
+          <span>Raio-X · {{ selectedHourlyHour === 'all' ? 'Dia Todo' : `${String(selectedHourlyHour).padStart(2, '0')}h` }}</span>
         </span>
-        <span class="legend-item">
-          <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
-          Autorizações (normal)
-        </span>
-        <span class="legend-item">
-          <span class="legend-swatch legend-dashed"></span>
-          Mediana Referência
-        </span>
-      </div>
-      <VChart
-        :option="chartOptionDaily"
-        autoresize
-        class="daily-dispensacao-chart"
-        @click="onChartClick"
-        @datazoom="onDailyZoom"
-      />
+      </template>
     </div>
 
-    <!-- Detalhamento Horário (Drill-down) -->
-    <div v-if="selectedDay" class="hourly-detail-wrapper animate-fade-in" :class="{ 'is-refreshing': showRefreshingHourly }">
-      <div class="hourly-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
-        <div class="title-group" style="display: flex; align-items: center; gap: 0.75rem;">
-          <i class="pi pi-clock" style="color: #6366f1; font-size: 1.1rem;"></i>
-          <h3 style="margin:0; font-size: 0.9rem; letter-spacing: 0.05em; font-weight: 700; white-space: nowrap; color: white; opacity: 0.8;">
-            ANÁLISE HORÁRIA: {{ formatarData(selectedDay.dt_janela) }}
-          </h3>
+    <!-- NÍVEL 1: Histórico Diário -->
+    <div class="drill-panel level-daily" :class="{ 'is-refreshing': showRefreshingDaily }">
+      <div class="drill-panel-header">
+        <div class="drill-panel-title">
+          <i class="pi pi-chart-bar" />
+          <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
+          <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
+            <i class="pi pi-spinner pi-spin"></i> Carregando...
+          </span>
+        </div>
+        <div class="filter-controls">
+          <label class="filter-toggle">
+            <input type="checkbox" v-model="filterDailyOnlyAnomalous" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Apenas Anomalias</span>
+          </label>
+        </div>
+      </div>
+      <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
+        Evolução diária de autorizações. Dias com volume anômalo (lançamentos ≥ 7× a mediana) destacados em vermelho.
+      </p>
+      
+      <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
+        <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
+        <span>Sem dados de perfil diário disponíveis.</span>
+      </div>
+      <div v-else class="daily-chart-wrapper">
+        <div class="chart-legend-html">
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
+            Autorizações (anomalia)
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
+            Autorizações (normal)
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-dashed"></span>
+            Mediana Referência
+          </span>
+        </div>
+        <VChart
+          :option="chartOptionDaily"
+          autoresize
+          class="daily-dispensacao-chart"
+          @click="onChartClick"
+          @datazoom="onDailyZoom"
+        />
+      </div>
+      <div v-if="!selectedDay && crmDailyProfile" class="drill-hint">
+        <i class="pi pi-hand-pointer" />
+        <span>Clique em um dia no gráfico para ver a análise horária detalhada</span>
+      </div>
+    </div>
+
+    <!-- Conector Diário → Horário -->
+    <div v-if="selectedDay" class="drill-connector">
+      <div class="connector-line" />
+      <div class="connector-dot">
+        <i class="pi pi-clock" />
+      </div>
+    </div>
+
+    <!-- NÍVEL 2: Análise Horária -->
+    <div v-if="selectedDay" class="drill-panel level-hourly animate-fade-in" :class="{ 'is-refreshing': showRefreshingHourly }">
+      <div class="drill-panel-header">
+        <div class="drill-panel-title">
+          <i class="pi pi-clock" style="color: #6366f1;" />
+          <span>ANÁLISE HORÁRIA</span>
+          <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
           <span v-if="selectedDay.is_anomalo" class="anomalo-badge">ANOMALIA DETECTADA</span>
         </div>
-        <button class="close-detail-btn" @click="selectedDay = null" style="background: transparent; border: none; color: white; opacity: 0.5; cursor: pointer; padding: 5px;">
+        <button class="close-detail-btn" @click="selectedDay = null; selectedHourlyHour = null">
+          <i class="pi pi-times" />
+        </button>
+      </div>
+      <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
+        Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} autorizações</strong> ao longo do dia.
+      </p>
+      <div class="daily-chart-wrapper">
+        <div class="chart-legend-html">
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
+            Autorizações (anomalia)
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
+            Autorizações (normal)
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-dashed"></span>
+            Mediana Referência
+          </span>
+        </div>
+        <VChart
+          :option="chartOptionHourly"
+          autoresize
+          class="hourly-chart"
+          @click="onHourlyChartClick"
+        />
+      </div>
+      <div v-if="selectedHourlyHour === null" class="drill-hint">
+        <i class="pi pi-hand-pointer" />
+        <span>Clique em uma barra para ver as transações detalhadas no Raio-X</span>
+      </div>
+    </div>
+
+    <!-- Conector Horário → Raio-X -->
+    <div v-if="selectedHourlyHour !== null" class="drill-connector">
+      <div class="connector-line" />
+      <div class="connector-dot connector-dot-raiox">
+        <i class="pi pi-search" />
+      </div>
+    </div>
+
+    <!-- NÍVEL 3: Raio-X -->
+    <div v-if="selectedHourlyHour !== null" class="drill-panel level-raiox animate-fade-in">
+      <div class="drill-panel-header">
+        <div class="drill-panel-title">
+          <i class="pi pi-search" style="color: #8b5cf6;" />
+          <span>RAIO-X: TRANSAÇÕES</span>
+          <span class="drill-context-tag drill-context-tag-raiox">
+            {{ selectedHourlyHour === 'all' ? 'Dia Todo' : `${String(selectedHourlyHour).padStart(2, '0')}h` }}
+          </span>
+          <span v-if="!hourlyTransactionsLoading && groupedRaiox.length > 0" class="raiox-count-badge">
+            {{ groupedRaiox.length }} Autorização{{ groupedRaiox.length !== 1 ? 'es' : '' }}
+          </span>
+          <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
+        </div>
+        <button class="close-detail-btn" @click="selectedHourlyHour = null">
           <i class="pi pi-times" />
         </button>
       </div>
 
-      <div class="hourly-body" style="position: relative; min-height: 250px;">
-        <p class="hourly-subtitle">
-          Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} prescrições</strong> ao longo do dia,
-          comparando o volume real com a mediana trimestral de cada horário.
-        </p>
-        <div class="daily-chart-wrapper">
-          <div class="chart-legend-html">
-            <span class="legend-item">
-              <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
-              Autorizações (anomalia)
-            </span>
-            <span class="legend-item">
-              <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
-              Autorizações (normal)
-            </span>
-            <span class="legend-item">
-              <span class="legend-swatch legend-dashed"></span>
-              Mediana Referência
-            </span>
-          </div>
-          <VChart
-            :option="chartOptionHourly"
-            autoresize
-            class="hourly-chart"
-            @click="onHourlyChartClick"
-          />
-        </div>
+      <div v-if="!hourlyTransactionsLoading && hourlyTransactions.length === 0" class="raiox-empty">
+        <i class="pi pi-inbox raiox-empty-icon" />
+        <span>Nenhuma transação encontrada para este horário.</span>
+      </div>
 
-        <!-- Raio-X Sub-horário -->
-        <div v-if="selectedHourlyHour !== null" class="raiox-wrapper animate-fade-in">
-          <div class="raiox-header">
-            <div class="raiox-title">
-              <i class="pi pi-search" />
-              <span>RAIO-X: TRANSAÇÕES {{ selectedHourlyHour === 'all' ? 'DO DIA TODO' : `ÀS ${String(selectedHourlyHour).padStart(2, '0')}H` }}</span>
-              <span v-if="!hourlyTransactionsLoading && groupedRaiox.length > 0" class="raiox-count-badge">
-                {{ groupedRaiox.length }} Autorização{{ groupedRaiox.length !== 1 ? 'es' : '' }}
-              </span>
-              <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
-            </div>
-            <button class="close-detail-btn" @click="selectedHourlyHour = null">
-              <i class="pi pi-times" />
-            </button>
-          </div>
-
-          <div v-if="!hourlyTransactionsLoading && hourlyTransactions.length === 0" class="raiox-empty">
-            <i class="pi pi-inbox raiox-empty-icon" />
-            <span>Nenhuma transação encontrada para este horário.</span>
-          </div>
-
-          <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': hourlyTransactionsLoading }">
-            <table class="premium-table row-hover raiox-table flat-mode">
-              <thead class="sticky-thead">
-                <tr>
-                  <th width="8%" class="col-center">Horário</th>
-                  <th width="13%">Nº Autorização</th>
-                  <th width="14%">CRM</th>
-                  <th width="8%" class="col-center">Qtd.</th>
-                  <th width="42%">Descrição / Princípio Ativo</th>
-                  <th width="15%" class="col-right">Valor Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="tx in groupedRaiox" :key="tx.num_autorizacao">
-                  <tr
-                    :class="{ 'row-expanded-main': expandedRaioxRows.has(tx.num_autorizacao) }"
-                    @click="toggleRaioxRow(tx.num_autorizacao)"
-                    class="cursor-pointer"
-                  >
-                    <td class="col-center raiox-time align-top">
-                      <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']" style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
-                      {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
-                    </td>
-                    <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
-                    <td class="align-top">
-                      <div class="crm-badge-container">
-                        <span
-                          class="issue-tag raiox-crm-tag"
-                          :style="crmFrequencies[tx.crm] > 1 ? { borderColor: getCRMColor(tx.crm), color: getCRMColor(tx.crm), background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)` } : {}"
-                        >
-                          {{ tx.crm }}/{{ tx.crm_uf }}
-                        </span>
-                        <span
-                          v-if="crmFrequencies[tx.crm] > 1"
+      <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': hourlyTransactionsLoading }">
+        <table class="premium-table row-hover raiox-table flat-mode">
+          <thead class="sticky-thead">
+            <tr>
+              <th width="8%" class="col-center">Horário</th>
+              <th width="13%">Nº Autorização</th>
+              <th width="14%">CRM</th>
+              <th width="8%" class="col-center">Qtd.</th>
+              <th width="42%">Descrição / Princípio Ativo</th>
+              <th width="15%" class="col-right">Valor Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="tx in groupedRaiox" :key="tx.num_autorizacao">
+              <tr :class="{ 'row-expanded-main': expandedRaioxRows.has(tx.num_autorizacao) }"
+                  @click="toggleRaioxRow(tx.num_autorizacao)"
+                  class="cursor-pointer">
+                <td class="col-center raiox-time align-top">
+                  <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']"
+                     style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
+                  {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
+                </td>
+                <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
+                <td class="align-top">
+                  <div class="crm-badge-container">
+                    <span class="issue-tag raiox-crm-tag"
+                          :style="crmFrequencies[tx.crm] > 1 ? {
+                            borderColor: getCRMColor(tx.crm),
+                            color: getCRMColor(tx.crm),
+                            background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)`
+                          } : {}">
+                      {{ tx.crm }}/{{ tx.crm_uf }}
+                    </span>
+                    <span v-if="crmFrequencies[tx.crm] > 1"
                           class="crm-recurrence-badge"
                           :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }"
-                          v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`"
-                        >
-                          {{ crmFrequencies[tx.crm] }}x
-                        </span>
+                          v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`">
+                      {{ crmFrequencies[tx.crm] }}x
+                    </span>
+                  </div>
+                </td>
+                <td class="col-center align-top">
+                  <span class="count-pill">{{ tx.items.length }}</span>
+                </td>
+                <td class="align-top">
+                  <div class="raiox-item-summary">
+                    <span class="flat-item-prod">{{ truncate(tx.items[0].produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}</span>
+                    <span class="flat-item-princ"> ({{ truncate(tx.items[0].principio_ativo || '—', 30) }})</span>
+                    <span v-if="tx.items.length > 1" class="more-items-pill">
+                      <i class="pi pi-plus"></i>
+                      {{ tx.items.length - 1 }}
+                    </span>
+                  </div>
+                </td>
+                <td class="col-right raiox-val-cell align-top">
+                  R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
+                </td>
+              </tr>
+              <!-- Detalhes Expandidos -->
+              <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-details-expanded-row">
+                <td colspan="6" class="p-0">
+                  <div class="expanded-items-list animate-fade-in">
+                    <div v-for="(item, idx) in tx.items" :key="idx" class="expanded-item-entry">
+                      <div class="item-main-info">
+                        <span class="item-name">{{ item.produto }}</span>
+                        <span class="item-active">({{ item.principio_ativo || '—' }})</span>
+                        <span class="item-gtin">GTIN: {{ item.codigo_barra }}</span>
                       </div>
-                    </td>
-                    <td class="col-center align-top">
-                      <span class="count-pill">{{ tx.items.length }}</span>
-                    </td>
-                    <td class="align-top">
-                      <div class="raiox-item-summary">
-                        <span class="flat-item-prod">{{ truncate(tx.items[0].produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}</span>
-                        <span class="flat-item-princ"> ({{ truncate(tx.items[0].principio_ativo || '—', 30) }})</span>
-                        <span v-if="tx.items.length > 1" class="more-items-pill">
-                          <i class="pi pi-plus"></i>
-                          {{ tx.items.length - 1 }}
-                        </span>
-                      </div>
-                    </td>
-                    <td class="col-right raiox-val-cell align-top">
-                      R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
-                    </td>
-                  </tr>
-
-                  <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-details-expanded-row">
-                    <td colspan="6" class="p-0">
-                      <div class="expanded-items-list animate-fade-in">
-                        <div v-for="(item, idx) in tx.items" :key="idx" class="expanded-item-entry">
-                          <div class="item-main-info">
-                            <span class="item-name">{{ item.produto }}</span>
-                            <span class="item-active">({{ item.principio_ativo || '—' }})</span>
-                            <span class="item-gtin">GTIN: {{ item.codigo_barra }}</span>
-                          </div>
-                          <div class="item-price">R$ {{ item.valor_pago.toFixed(2) }}</div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <div class="item-price">R$ {{ item.valor_pago.toFixed(2) }}</div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </div>
     </div>
+
   </div>
 </template>
 
 <style scoped>
+/* ── Layout Base (Cronologia Flow) ───────────────────────────────────────── */
+.cronologia-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(15px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.section-container {
+/* ── Breadcrumb Dinâmico ─────────────────────────────────────────────────── */
+.drill-breadcrumb {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--card-border);
+  border-radius: 99px;
+  margin-bottom: 1.5rem;
+  width: fit-content;
+  align-self: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  backdrop-filter: blur(8px);
+}
+.crumb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+.crumb-item.is-current { color: var(--primary-color); font-weight: 700; }
+.crumb-icon { font-size: 0.85rem; }
+.crumb-arrow { font-size: 0.6rem; opacity: 0.3; }
+.crumb-anomaly-dot {
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+/* ── Painéis de Detalhamento (Drill Panels) ──────────────────────────────── */
+.drill-panel {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 1rem;
-  width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
+  padding: 1.25rem;
+  position: relative;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
-.section-title {
+
+.level-daily { border-left: 4px solid var(--primary-color); }
+.level-hourly { border-left: 4px solid #6366f1; background: color-mix(in srgb, var(--surface-card) 60%, transparent); }
+.level-raiox { 
+  border-left: 4px solid #8b5cf6; 
+  background: v-bind(raioxBg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.drill-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.drill-panel-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-color);
-  margin-bottom: 1rem;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--tabs-border);
-  padding-bottom: 0.5rem;
-  width: 100%;
-  opacity: 0.85;
 }
-.section-title i { color: var(--primary-color); font-size: 1rem; }
-.subtitle { margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-muted); }
+.drill-panel-title i { font-size: 1.1rem; }
 
-.is-refreshing { opacity: 0.5; pointer-events: none; transition: opacity 0.3s ease; }
+.drill-context-tag {
+  font-size: 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  margin-left: 0.5rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.drill-context-tag-raiox { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border-color: rgba(139, 92, 246, 0.3); }
 
-.daily-chart-wrapper { display: flex; flex-direction: column; gap: 0; }
-.chart-legend-html {
+/* ── Conectores Visuais ─────────────────────────────────────────────────── */
+.drill-connector {
+  height: 40px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.connector-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--card-border), var(--primary-color), var(--card-border));
+  opacity: 0.5;
+}
+.connector-dot {
+  width: 28px;
+  height: 28px;
+  background: var(--surface-card);
+  border: 2px solid var(--primary-color);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.25rem;
-  padding: 0.35rem 0;
+  z-index: 2;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
 }
+.connector-dot i { font-size: 0.75rem; color: var(--primary-color); }
+.connector-dot-raiox { border-color: #8b5cf6; box-shadow: 0 0 15px rgba(139, 92, 246, 0.3); }
+.connector-dot-raiox i { color: #8b5cf6; }
+
+/* ── Elementos Internos ─────────────────────────────────────────────────── */
+.drill-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.drill-hint i { color: var(--primary-color); font-size: 0.9rem; animation: pulseHand 2s infinite; }
+@keyframes pulseHand {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+.subtitle { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+.is-refreshing { opacity: 0.6; pointer-events: none; }
+
+.daily-chart-wrapper { display: flex; flex-direction: column; gap: 0.5rem; }
+.chart-legend-html { display: flex; align-items: center; justify-content: center; gap: 1.25rem; padding: 0.5rem 0; }
 .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--text-secondary); }
-.legend-swatch { width: 14px; height: 8px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
-.legend-dashed { background: none; border-top: 2px dashed #f59e0b; height: 0; width: 18px; border-radius: 0; }
-.daily-dispensacao-chart { width: 100%; height: 280px; cursor: pointer; }
+.legend-swatch { width: 14px; height: 8px; border-radius: 2px; }
+.legend-dashed { background: none; border-top: 2px dashed #f59e0b; height: 0; width: 18px; }
+.daily-dispensacao-chart { width: 100%; height: 280px; }
+.hourly-chart { width: 100%; height: 240px; }
 
-.chart-loading-badge { margin-left: 0.75rem; font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
-.chart-empty { display: flex; align-items: center; gap: 0.6rem; padding: 1.5rem 1.75rem; color: var(--text-muted); font-size: 0.88rem; }
+.chart-loading-badge { margin-left: 0.75rem; font-size: 0.78rem; color: var(--text-muted); }
+.chart-empty { display: flex; align-items: center; gap: 0.6rem; padding: 2rem; color: var(--text-muted); justify-content: center; }
 
-.filter-controls { display: flex; align-items: center; gap: 1rem; }
-.filter-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; font-size: 0.75rem; text-transform: none; font-weight: 600; color: var(--text-secondary); }
+.filter-controls { display: flex; align-items: center; }
+.filter-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.75rem; color: var(--text-secondary); }
 .filter-toggle input { display: none; }
-.toggle-slider { position: relative; width: 32px; height: 18px; background-color: var(--tabs-border); border: 1px solid var(--tabs-border); border-radius: 20px; transition: 0.3s; }
+.toggle-slider { position: relative; width: 32px; height: 18px; background-color: var(--tabs-border); border-radius: 20px; transition: 0.3s; }
 .toggle-slider:before { content: ""; position: absolute; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; }
 input:checked + .toggle-slider { background-color: var(--primary-color); }
 input:checked + .toggle-slider:before { transform: translateX(14px); }
-.toggle-label { letter-spacing: normal; }
 
-/* Hourly Detail */
-.hourly-detail-wrapper {
-  margin-top: 1.5rem;
-  padding: 1.25rem;
-  background: var(--surface-card);
-  border: 1px solid var(--border-color);
-  border-left: 4px solid #ef4444;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-}
-.anomalo-badge {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 99px;
-  letter-spacing: 0.5px;
-}
+.anomalo-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
 .close-detail-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s; }
 .close-detail-btn:hover { background: var(--surface-hover); color: #ef4444; }
-.hourly-subtitle { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4; }
-.hourly-chart { height: 240px; }
 
-/* Raio-X */
-.raiox-wrapper {
-  margin-top: 1.5rem;
-  background: v-bind(raioxBg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.raiox-header { display: flex; justify-content: space-between; align-items: center; }
-.raiox-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--risk-high); }
-.raiox-title .pi-search { font-size: 0.85rem; }
-.raiox-count-badge {
-  background: color-mix(in srgb, var(--risk-high) 15%, transparent);
-  color: var(--risk-high);
-  border: 1px solid color-mix(in srgb, var(--risk-high) 30%, transparent);
-  border-radius: 99px;
-  font-size: 0.68rem;
-  font-weight: 500;
-  padding: 0.1rem 0.55rem;
-  letter-spacing: 0.03em;
-}
-.raiox-spinner { font-size: 0.8rem; color: var(--text-muted); }
-.raiox-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.85rem; min-height: 390px; }
-.raiox-empty-icon { font-size: 1.75rem; opacity: 0.4; }
-.raiox-table-wrapper { border-radius: 6px; min-height: 390px; background: color-mix(in srgb, var(--card-bg) 40%, transparent); border: 1px solid var(--tabs-border); }
-.raiox-table-wrapper.is-loading { opacity: 0.4; pointer-events: none; transition: opacity 0.25s ease; }
+/* ── Raio-X Table Styling ───────────────────────────────────────────────── */
+.raiox-table-wrapper { border-radius: 8px; background: rgba(0,0,0,0.1); border: 1px solid var(--tabs-border); overflow: hidden; }
+.premium-table { width: 100%; border-collapse: collapse; }
+.premium-table th { padding: 0.75rem 0.5rem; background: var(--card-bg); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; border-bottom: 2px solid var(--tabs-border); }
+.premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color); font-size: 0.78rem; }
+.premium-table tbody tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
 
-.premium-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.premium-table th { padding: 0.6rem 0.5rem; background: transparent; color: color-mix(in srgb, var(--text-secondary) 85%, transparent); font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; border-bottom: 2px solid var(--tabs-border); text-align: center; }
-.premium-table th:first-child { text-align: left; }
-.premium-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--tabs-border); vertical-align: middle; color: color-mix(in srgb, var(--text-color) 85%, transparent); font-size: 0.8rem; text-transform: none !important; }
-.premium-table tbody tr:last-child td { border-bottom: none; }
-.premium-table.row-hover tbody tr:hover { background: var(--table-hover) !important; cursor: pointer; }
+.raiox-count-badge { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 99px; font-size: 0.65rem; padding: 1px 8px; margin-left: 0.75rem; }
+.raiox-spinner { font-size: 0.8rem; margin-left: 0.5rem; }
+.raiox-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 3rem; color: var(--text-muted); }
+.raiox-empty-icon { font-size: 2rem; opacity: 0.3; }
 
-.raiox-table { font-size: 0.75rem; table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0; }
-.sticky-thead th { position: sticky; top: 0; z-index: 10; background: var(--card-bg) !important; box-shadow: inset 0 -1px 0 var(--tabs-border); }
-.raiox-table .col-center { text-align: center; }
+.crm-badge-container { display: flex; align-items: center; gap: 0.4rem; }
+.issue-tag { font-size: 0.68rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px; }
+.crm-recurrence-badge { font-size: 0.6rem; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
+.count-pill { background: var(--tabs-border); padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 0.7rem; }
+.raiox-item-summary { display: flex; align-items: center; gap: 0.5rem; }
+.flat-item-prod { font-weight: 700; color: var(--primary-color); }
+.flat-item-princ { opacity: 0.5; font-size: 0.65rem; }
+.more-items-pill { background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); padding: 1px 6px; border-radius: 99px; font-size: 0.6rem; }
+.raiox-val-cell { font-weight: 700; font-family: var(--font-mono); }
+
+.expanded-items-list { background: rgba(0,0,0,0.15); padding: 0.5rem 0; }
+.expanded-item-entry { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 2rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.item-name { font-size: 0.75rem; font-weight: 600; color: var(--primary-color); }
+.item-active { font-size: 0.68rem; opacity: 0.6; margin-left: 0.5rem; }
+.item-gtin { font-size: 0.6rem; opacity: 0.3; margin-left: 0.5rem; }
+.item-price { font-size: 0.75rem; font-weight: 700; font-family: var(--font-mono); }
+
 .col-center { text-align: center; }
 .col-right { text-align: right; }
-.align-top { vertical-align: top !important; padding-top: 1rem !important; }
-
-.crm-badge-container { display: flex; align-items: center; gap: 0.4rem; padding-right: 0.8rem; }
-.crm-recurrence-badge { font-size: 0.62rem; font-weight: 800; padding: 0.1rem 0.35rem; border-radius: 4px; background: transparent; }
-
-.issue-tag {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-  min-width: 85px;
-  letter-spacing: 0.02em;
-  text-transform: none !important;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid transparent;
-}
-
-.count-pill { background: var(--tabs-border); padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-
-.raiox-item-summary { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.85rem; }
-.flat-item-prod { font-size: 0.78rem; font-weight: 700; color: var(--primary-color); letter-spacing: -0.01em; }
-.flat-item-princ { font-size: 0.68rem; opacity: 0.5; font-style: italic; color: var(--text-color); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.more-items-pill {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  color: var(--primary-color);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
-  padding: 0.1rem 0.5rem;
-  border-radius: 99px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.more-items-pill i { font-size: 0.5rem; opacity: 0.8; }
-
-.raiox-val-cell { font-weight: 700; color: var(--text-color); }
-.row-expanded-main { background: color-mix(in srgb, var(--primary-color) 5%, transparent) !important; }
-
-.expanded-items-list { background: color-mix(in srgb, var(--card-bg) 95%, white 2%); border-bottom: 2px solid var(--tabs-border); }
-.expanded-item-entry { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1.5rem 0.6rem 3rem; border-bottom: 1px solid color-mix(in srgb, var(--tabs-border) 30%, transparent); }
-.expanded-item-entry:last-child { border-bottom: none; }
-.item-main-info { display: flex; align-items: center; gap: 0.6rem; }
-.item-name { font-size: 0.75rem; font-weight: 600; color: var(--primary-color); }
-.item-active { font-size: 0.7rem; opacity: 0.6; font-style: italic; }
-.item-gtin { font-size: 0.6rem; font-family: var(--font-mono); opacity: 0.4; }
-.item-price { font-size: 0.75rem; font-weight: 700; font-family: var(--font-mono); }
+.sticky-thead th { position: sticky; top: 0; z-index: 10; }
+.cursor-pointer { cursor: pointer; }
 </style>

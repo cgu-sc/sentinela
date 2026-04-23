@@ -148,9 +148,14 @@ async function loadTransactions(dt_janela, hourInt = null) {
   hourlyTransactionsLoading.value = true;
   try {
     const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, dt_janela, hourInt);
+    const t0 = performance.now();
     const res = await fetch(url);
     if (!res.ok) throw new Error('Falha HTTP');
     const data = await res.json();
+    cnpjDetailStore.requestTimes['transacoes-horarias'] = {
+      label: 'Transações Horárias',
+      ms: Math.round(performance.now() - t0),
+    };
     hourlyTransactions.value = data.transactions || [];
   } catch (err) {
     console.error("Erro ao buscar Raio-X Sub-horário:", err);

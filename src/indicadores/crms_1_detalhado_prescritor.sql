@@ -40,7 +40,13 @@ SELECT
     MIN(M.data_hora)                              AS dt_prescricao_inicial_medico,
     MAX(M.data_hora)                              AS dt_prescricao_final_medico
 INTO #base_agregada_crm_cnpj
-FROM temp_CGUSC.fp.teste_mov_SC M
+FROM (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
@@ -66,7 +72,13 @@ SELECT
     codigo_barra,
     valor_pago
 INTO #mov_surto_base
-FROM temp_CGUSC.fp.teste_mov_SC
+FROM (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
   AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR';
 
@@ -260,7 +272,13 @@ SELECT
     MAX(M.data_hora)                                  AS dt_fim_dia,
     DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS nu_minutos_dia
 INTO #base_diaria_crm
-FROM temp_CGUSC.fp.teste_mov_SC M
+FROM (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
@@ -327,7 +345,13 @@ SELECT
     MIN(data_hora)                            AS dt_venda_inicial_estabelecimento,
     MAX(data_hora)                            AS dt_venda_final_estabelecimento
 INTO #tb_info_estabelecimento
-FROM temp_CGUSC.fp.teste_mov_SC M
+FROM (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
 WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
 GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora);
 GO

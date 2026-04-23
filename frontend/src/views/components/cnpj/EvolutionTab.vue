@@ -249,6 +249,15 @@ const chartOption = computed(() => {
 
 // ── Gráfico Mensal GTIN ───────────────────────────────────
 
+/** Formata "YYYY-MM" para label compacto de eixo X, ex: "jan/24". */
+function formatMesLabel(iso) {
+  if (!iso) return '';
+  const [y, mo] = iso.split('-');
+  return new Date(parseInt(y), parseInt(mo) - 1)
+    .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+    .replace(' de ', '/');
+}
+
 /**
  * Retorna true se o mês "YYYY-MM" pertence ao semestre "1S/2024" ou "2S/2024".
  */
@@ -267,7 +276,7 @@ function chartOptionMensalGtin(semestre) {
 
   const labels    = meses.map(m => m.mes);
   const regular   = meses.map(m => ({
-    value: parseFloat((m.valor_vendas - m.valor_sem_comprovacao).toFixed(2)),
+    value: Math.max(0, parseFloat((m.valor_vendas - m.valor_sem_comprovacao).toFixed(2))),
     itemStyle: { opacity: mesPertenceAoSemestre(m.mes, semestre) ? 1 : 0.35 },
   }));
   const irregular = meses.map(m => ({
@@ -295,14 +304,6 @@ function chartOptionMensalGtin(semestre) {
       zoomEnd   = Math.round(((last + 1) / total) * 100);
     }
   }
-
-  const formatLabel = (iso) => {
-    if (!iso) return '';
-    const [y, mo] = iso.split('-');
-    return new Date(parseInt(y), parseInt(mo) - 1)
-      .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
-      .replace(' de ', '/');
-  };
 
   return {
     backgroundColor: 'transparent',
@@ -339,7 +340,7 @@ function chartOptionMensalGtin(semestre) {
         const reg   = total - irr;
         return `
           <div style="color:${c.tooltipText}">
-            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatLabel(m.mes)}</div>
+            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatMesLabel(m.mes)}</div>
             <div style="display:flex;flex-direction:column;gap:5px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:9px;height:9px;border-radius:2px;background:${c.green};display:inline-block;"></span>
@@ -364,7 +365,7 @@ function chartOptionMensalGtin(semestre) {
       axisTick:  { show: false },
       axisLabel: {
         color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif',
-        formatter: formatLabel,
+        formatter: formatMesLabel,
         interval: 'auto',
         rotate: 30,
       },

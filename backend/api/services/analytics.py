@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir, get_df_mov_mensal_gtin
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_falecidos, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ..schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -510,6 +510,7 @@ class AnalyticsService:
     def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoMensalGtinResponse:
         """
         Retorna a série mensal de quantidades e valores (por GTIN agregado) para um CNPJ.
+        Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin.parquet na primeira chamada.
 
         Args:
             cnpj: CNPJ completo (14 dígitos).
@@ -519,60 +520,95 @@ class AnalyticsService:
         Returns:
             EvolucaoMensalGtinResponse com lista de meses ordenados ASC.
         """
-        try:
-            df = get_df_mov_mensal_gtin()
-            cnpj_df = df.filter(pl.col("cnpj") == cnpj).select(
-                ["periodo", "qnt_vendas", "qnt_vendas_sem_comprovacao", "valor_vendas", "valor_sem_comprovacao"]
-            )
+        import pandas as pd
 
-            if data_inicio:
-                cnpj_df = cnpj_df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
-            if data_fim:
-                cnpj_df = cnpj_df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin.parquet")
 
-            if cnpj_df.is_empty():
-                return EvolucaoMensalGtinResponse(meses=[])
+        df: pl.DataFrame | None = None
+        if os.path.exists(PARQUET_PATH):
+            try:
+                df = pl.read_parquet(PARQUET_PATH)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet gtin '{cnpj}': {e}")
 
-            agg = (
-                cnpj_df
-                .with_columns(pl.col("periodo").dt.strftime("%Y-%m").alias("mes"))
-                .group_by("mes")
-                .agg([
-                    pl.sum("qnt_vendas").alias("qnt_vendas"),
-                    pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
-                    pl.sum("valor_vendas").alias("valor_vendas"),
-                    pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+        if df is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf = pd.read_sql(
+                        text("""
+                            SELECT m.codigo_barra, m.periodo,
+                                   m.qnt_vendas, m.qnt_vendas_sem_comprovacao,
+                                   CAST(m.valor_vendas AS FLOAT)         AS valor_vendas,
+                                   CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
+                            FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
+                            INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
+                            WHERE p.cnpj = :cnpj AND p.situacao = 1
+                        """),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                df = pl.from_pandas(pdf).with_columns([
+                    pl.col("codigo_barra").cast(pl.String),
+                    pl.col("periodo").cast(pl.Date),
+                    pl.col("qnt_vendas").cast(pl.Int64),
+                    pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64),
+                    pl.col("valor_vendas").cast(pl.Float64),
+                    pl.col("valor_sem_comprovacao").cast(pl.Float64),
                 ])
-                .sort("mes")
-                .with_columns([
-                    (
-                        pl.col("valor_sem_comprovacao")
-                        / pl.when(pl.col("valor_vendas") > 0)
-                            .then(pl.col("valor_vendas"))
-                            .otherwise(pl.lit(1.0))
-                        * 100
-                    ).clip(0.0, 100.0).round(2).alias("pct_sem_comprovacao")
-                ])
-            )
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                import traceback
+                print(f"⚠️ Erro ao gerar parquet gtin '{cnpj}': {e}")
+                print(traceback.format_exc())
+                df = pl.DataFrame()
 
-            meses = [
-                MesMensalGtinItem(
-                    mes=r["mes"],
-                    qnt_vendas=int(r["qnt_vendas"]),
-                    qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"]),
-                    valor_vendas=round(float(r["valor_vendas"]), 2),
-                    valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"]), 2),
-                    pct_sem_comprovacao=r["pct_sem_comprovacao"],
-                )
-                for r in agg.iter_rows(named=True)
-            ]
-            return EvolucaoMensalGtinResponse(meses=meses)
-
-        except Exception as e:
-            import traceback
-            print(f"❌ ERRO AO CALCULAR EVOLUÇÃO MENSAL GTIN: {e}")
-            print(traceback.format_exc())
+        if df.is_empty():
             return EvolucaoMensalGtinResponse(meses=[])
+
+        # Filtro de período (opera sobre a coluna Date)
+        if data_inicio:
+            df = df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+        if data_fim:
+            df = df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+
+        if df.is_empty():
+            return EvolucaoMensalGtinResponse(meses=[])
+
+        agg = (
+            df
+            .with_columns(pl.col("periodo").dt.strftime("%Y-%m").alias("mes"))
+            .group_by("mes")
+            .agg([
+                pl.sum("qnt_vendas").alias("qnt_vendas"),
+                pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
+                pl.sum("valor_vendas").alias("valor_vendas"),
+                pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+            ])
+            .sort("mes")
+            .with_columns(
+                pl.when(pl.col("valor_vendas") > 0)
+                  .then(pl.col("valor_sem_comprovacao") / pl.col("valor_vendas") * 100)
+                  .otherwise(pl.lit(0.0))
+                  .clip(0.0, 100.0)
+                  .round(2)
+                  .alias("pct_sem_comprovacao")
+            )
+        )
+
+        meses = [
+            MesMensalGtinItem(
+                mes=r["mes"],
+                qnt_vendas=int(r["qnt_vendas"] or 0),
+                qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"] or 0),
+                valor_vendas=round(float(r["valor_vendas"] or 0.0), 2),
+                valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"] or 0.0), 2),
+                pct_sem_comprovacao=float(r["pct_sem_comprovacao"] or 0.0),
+            )
+            for r in agg.iter_rows(named=True)
+        ]
+        return EvolucaoMensalGtinResponse(meses=meses)
 
     @staticmethod
     def get_indicadores(cnpj: str) -> IndicadoresResponse:

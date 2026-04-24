@@ -1748,8 +1748,20 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT id_medico, cnpj, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
-                             " FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"),
+                        text("SELECT E.id_medico, E.cnpj, E.competencia, E.vl_total_prescricoes, E.nu_prescricoes, "
+                             "E.nu_prescricoes_dia, E.prescricoes_total_brasil, E.prescricoes_dia_brasil, "
+                             "E.nu_estabelecimentos, R.lista_cnpjs_brasil, E.flag_crm_invalido, "
+                             "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
+                             "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
+                             "E.alerta_distancia_geografica, E.dt_primeira_prescricao, E.dt_inscricao_crm"
+                             " FROM temp_CGUSC.fp.crm_export E"
+                             " OUTER APPLY ("
+                             "     SELECT STRING_AGG(DC.nu_cnpj, ',') AS lista_cnpjs_brasil"
+                             "     FROM temp_CGUSC.fp.crm_atendimento A"
+                             "     JOIN temp_CGUSC.fp.dim_cnpj DC ON DC.cnpj_id = A.cnpj_id"
+                             "     WHERE A.id_crm_id = E.id_crm_id AND A.competencia = E.competencia"
+                             " ) R"
+                             " WHERE E.cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -1803,7 +1815,7 @@ class AnalyticsService:
                 pl.sum("_dias_ativos_br").alias("_total_dias_br"),
                 pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
                 # Une as listas de CNPJs de todos os meses do período
-                pl.col("lista_cnpjs_brasil").str.concat(",").alias("lista_cnpjs_brasil"),
+                pl.col("lista_cnpjs_brasil").fill_null(pl.col("cnpj")).str.concat(",").alias("lista_cnpjs_brasil"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),

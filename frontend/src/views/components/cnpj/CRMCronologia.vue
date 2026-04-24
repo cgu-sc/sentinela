@@ -48,6 +48,17 @@ watch([crmHourlyProfile, crmHourlyProfileLoading], ([newData, loading]) => {
   if (newData && !loading) cachedCrmHourlyProfile.value = newData;
 }, { immediate: true });
 
+// Índice por data para lookup O(1) no tooltip (evita scan linear a cada hover)
+const hourlyByDate = computed(() => {
+  const map = new Map();
+  for (const pt of cachedCrmHourlyProfile.value?.points ?? []) {
+    const key = String(pt.dt_janela).slice(0, 10);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(pt);
+  }
+  return map;
+});
+
 // ── Filtro e Zoom do Gráfico Diário ───────────────────────────────────────
 const filterDailyOnlyAnomalous = ref(false);
 const dailyZoomStart = ref(0);
@@ -243,15 +254,15 @@ const chartOptionDaily = computed(() => {
         const day = filteredDailyDays.value?.[p.dataIndex];
         if (!day) return '';
         const c = chartTheme.value;
-        const points = cachedCrmHourlyProfile.value?.points.filter(pt => pt.dt_janela === day.dt_janela) || [];
+        const points = hourlyByDate.value.get(day.dt_janela) ?? [];
         let sparklineHtml = '';
         if (points.length > 0) {
           const maxVal = Math.max(...points.map(pt => pt.nu_prescricoes), 1);
           const bars = Array.from({ length: 24 }, (_, h) => {
             const pt = points.find(x => x.hr_janela === h);
             const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
-            const isPico = pt && pt.hr_janela === day.hr_pico;
-            const color = isPico ? '#ef4444' : c.muted;
+            const isAnomalo = pt?.is_anomalo_hora === 1;
+            const color = isAnomalo ? '#ef4444' : c.muted;
             const opacity = hPerc > 0 ? 1 : 0.3;
             return `<div style="flex:1; height:${Math.max(hPerc, 2)}%; background:${color}; border-radius:1px; opacity:${opacity};"></div>`;
           }).join('');
@@ -278,10 +289,6 @@ const chartOptionDaily = computed(() => {
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
                 <span style="font-weight:700; font-size:13px;">${day.nu_crms_distintos}</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Horário de Pico</span>
-                <span style="font-weight:700; font-size:13px;">${String(day.hr_pico).padStart(2,'0')}h <small style="color:${day.is_anomalo ? '#ef4444' : c.muted}">(${day.nu_prescricoes_hr_pico})</small></span>
               </div>
             </div>
             ${sparklineHtml}
@@ -396,8 +403,10 @@ const chartOptionHourly = computed(() => {
         const vol  = volItem?.value ?? 0;
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
-        const alertaHtml = (ptInfo && ptInfo.is_anomalo_hora === 1)
-          ? `<div style="margin-top:8px; font-size:12px; color:#ef4444; font-weight:600;">${(vol / med).toFixed(1)}× acima da mediana</div>`
+        const ratio = med > 0 ? (vol / med).toFixed(1) : null;
+        const isAnomalo = ptInfo?.is_anomalo_hora === 1;
+        const alertaHtml = ratio !== null
+          ? `<div style="margin-top:8px; font-size:12px; color:${isAnomalo ? '#ef4444' : c.muted}; font-weight:${isAnomalo ? '600' : '400'};">${ratio}× ${isAnomalo ? 'acima da mediana' : 'da mediana'}</div>`
           : '';
         return `
           <div style="color:${c.tooltipText}; min-width:190px;">

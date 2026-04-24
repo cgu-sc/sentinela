@@ -62,6 +62,7 @@ function formatMesRange(mesInicio, mesFim) {
 // NOTA: Durante a animação (autoplay), mantemos a opacidade total para evitar flicker.
 const isRefreshing = computed(() => evolucaoLoading.value && cachedEvolucaoData.value !== null && !filterStore.isAnimating);
 const isMonthlyChartExpanded = ref(false);
+const hoveredSemestre = ref(null);
 
 const expandedRows = ref([]);
 const selectedSemestre = ref(null);
@@ -154,6 +155,16 @@ function onMensalChartClick(params) {
   const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const sem = semestres.find(s => mesPertenceAoSemestre(mesStr, s.semestre));
   if (sem) selectedSemestre.value = sem;
+}
+
+// Hover sync: quando passa o mouse em um semestre no gráfico de cima
+function onChartMouseOver(params) {
+  if (params.componentType === 'series' && params.name) {
+    hoveredSemestre.value = params.name;
+  }
+}
+function onChartMouseOut() {
+  hoveredSemestre.value = null;
 }
 
 defineExpose({
@@ -266,7 +277,7 @@ const chartOption = computed(() => {
             ],
           },
         },
-        emphasis: { focus: 'series' },
+        emphasis: { disabled: false },
       },
       {
         name: 'Irregulares',
@@ -284,7 +295,7 @@ const chartOption = computed(() => {
             ],
           },
         },
-        emphasis: { focus: 'series' },
+        emphasis: { disabled: false },
       },
     ],
   };
@@ -321,11 +332,19 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   const labels    = meses.map(m => m.mes);
   const regular   = meses.map(m => ({
     value: Math.max(0, parseFloat((m.total - m.irregular).toFixed(2))),
-    itemStyle: { opacity: isMesSelecionado(m.semestre) ? 1 : 0.25 },
+    itemStyle: { 
+      opacity: hoveredSemestre.value 
+        ? (m.semestre === hoveredSemestre.value ? 1 : 0.25) 
+        : (isMesSelecionado(m.semestre) ? 1 : 0.25) 
+    },
   }));
   const irregular = meses.map(m => ({
     value: parseFloat(m.irregular.toFixed(2)),
-    itemStyle: { opacity: isMesSelecionado(m.semestre) ? 1 : 0.25 },
+    itemStyle: { 
+      opacity: hoveredSemestre.value 
+        ? (m.semestre === hoveredSemestre.value ? 1 : 0.25) 
+        : (isMesSelecionado(m.semestre) ? 1 : 0.25) 
+    },
   }));
 
   // O usuário quer que SEMPRE mostre todos os meses, sem zoom automático.
@@ -496,7 +515,16 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           </div>
         </div>
         <div class="evolucao-chart-wrap">
-          <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" @click="onChartClick" />
+          <VChart 
+            ref="chartRef" 
+            :option="chartOption" 
+            :update-options="{ notMerge: true }" 
+            autoresize 
+            class="evolucao-chart" 
+            @click="onChartClick" 
+            @mouseover="onChartMouseOver"
+            @mouseout="onChartMouseOut"
+          />
         </div>
       </div>
 

@@ -169,11 +169,13 @@ const chartOption = computed(() => {
   const labels    = semestres.map(s => s.semestre);
   const regular   = semestres.map(s => ({
     value: s.regular,
-    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 }
+    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 },
+    emphasis: { itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 } },
   }));
   const irregular = semestres.map(s => ({
     value: s.irregular,
-    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 }
+    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 },
+    emphasis: { itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 } },
   }));
 
   return {

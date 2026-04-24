@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, nextTick } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
@@ -104,7 +104,6 @@ function toggleRow(event) {
     current[key] = row;
   }
   expandedRows.value = current;
-  selectedSemestre.value = row;
 }
 
 /**
@@ -114,26 +113,10 @@ function toggleRow(event) {
 function onChartClick(params) {
   if (!params || !params.name) return;
   const semestre = params.name;
-  
   if (!cachedEvolucaoData.value?.semestres) return;
-  
   const rowData = cachedEvolucaoData.value.semestres.find(s => s.semestre === semestre);
   if (!rowData) return;
-
-  // Auto-expande a sanfona do respectivo semestre (fechando as outras se existirem)
-  expandedRows.value = { [semestre]: rowData };
-  selectedSemestre.value = rowData;
-
-  // Localiza o elemento renderizado da tabela no DOM para rolar a tela suavemente até ele
-  nextTick(() => {
-    const labels = document.querySelectorAll('.sem-label');
-    for (let el of labels) {
-      if (el.textContent.includes(semestre)) {
-        el.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        break;
-      }
-    }
-  });
+  selectedSemestre.value = selectedSemestre.value?.semestre === semestre ? null : rowData;
 }
 
 function formatMonth(mesIso) {
@@ -325,6 +308,8 @@ function mesPertenceAoSemestre(mesStr, semestre) {
   return y === anoNum && (semNum === 1 ? m <= 6 : m > 6);
 }
 
+const mensalChartOption = computed(() => chartOptionMensalGtin(selectedSemestre.value?.semestre));
+
 function chartOptionMensalGtin(semestre, showZoom = false) {
   const c     = C.value;
   const meses = todosMeses.value; // Usa todos os meses de todos os semestres
@@ -353,7 +338,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
   return {
     backgroundColor: 'transparent',
-    animation: true,
+    animation: !hoveredSemestre.value,
     animationDuration: 600,
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: 'Inter, sans-serif' },
@@ -552,8 +537,8 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </div>
         <div v-if="todosMeses.length" class="evolucao-chart-wrap">
           <VChart
-            :option="chartOptionMensalGtin(selectedSemestre?.semestre)"
-            :update-options="{ notMerge: false }"
+            :option="mensalChartOption"
+            :update-options="{ notMerge: true }"
             autoresize
             class="evolucao-chart"
             @click="onMensalChartClick"
@@ -564,6 +549,51 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           <p style="font-size: 0.8rem;">Carregando dados mensais...</p>
         </div>
       </div>
+
+      <!-- Painel contextual: detalhe do semestre selecionado -->
+      <Transition name="context-slide">
+        <div v-if="selectedSemestre" class="evolucao-card evolucao-card-highlight context-detail-card">
+          <div class="evolucao-card-header">
+            <div class="header-title">
+              <i class="pi pi-calendar-clock" />
+              <span>{{ selectedSemestre.semestre }} — Detalhamento Mensal</span>
+            </div>
+            <div class="header-actions">
+              <button class="btn-close-context" @click="limparFiltro" title="Fechar">
+                <i class="pi pi-times" />
+              </button>
+            </div>
+          </div>
+          <DataTable :value="selectedSemestre.meses ?? []" class="sanfona-table" :show-gridlines="false">
+            <Column field="mes" header="Mês" style="width: 20%">
+              <template #body="{ data: m }">{{ formatMonth(m.mes) }}</template>
+            </Column>
+            <Column field="total" header="Total Movimentado" style="width: 20%">
+              <template #body="{ data: m }">{{ formatCurrencyFull(m.total) }}</template>
+            </Column>
+            <Column field="regular" header="Total Regular" style="width: 20%">
+              <template #body="{ data: m }">
+                {{ formatCurrencyFull(m.total - m.irregular) }}
+              </template>
+            </Column>
+            <Column field="irregular" header="Sem Comprovação" style="width: 20%">
+              <template #body="{ data: m }">
+                <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
+              </template>
+            </Column>
+            <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
+              <template #body="{ data: m }">
+                <span :class="{
+                  'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                  'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                  'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
+                  'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                }">{{ m.pct_irregular.toFixed(1) }}%</span>
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+      </Transition>
 
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
@@ -603,7 +633,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
             <Column field="regular" header="Total Regular" style="width: 18%">
               <template #body="{ data }">
-                <span class="col-regular">{{ formatCurrencyFull(data.regular) }}</span>
+                {{ formatCurrencyFull(data.regular) }}
               </template>
             </Column>
 
@@ -661,6 +691,39 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
               </template>
             </Column>
 
+            <template #expansion="{ data: sem }">
+              <div class="meses-expansion-box">
+                <DataTable :value="sem.meses ?? []" class="sanfona-table" :show-gridlines="false">
+                  <Column field="mes" header="Mês" style="width: 20%">
+                    <template #body="{ data: m }">{{ formatMonth(m.mes) }}</template>
+                  </Column>
+                  <Column field="total" header="Total Movimentado" style="width: 20%">
+                    <template #body="{ data: m }">{{ formatCurrencyFull(m.total) }}</template>
+                  </Column>
+                  <Column field="regular" header="Total Regular" style="width: 20%">
+                    <template #body="{ data: m }">
+                      {{ formatCurrencyFull(m.total - m.irregular) }}
+                    </template>
+                  </Column>
+                  <Column field="irregular" header="Sem Comprovação" style="width: 20%">
+                    <template #body="{ data: m }">
+                      <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
+                    </template>
+                  </Column>
+                  <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
+                    <template #body="{ data: m }">
+                      <span :class="{
+                        'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                        'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                        'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
+                        'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                      }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                    </template>
+                  </Column>
+                </DataTable>
+              </div>
+            </template>
+
             <ColumnGroup type="footer">
               <Row>
                 <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" />
@@ -685,7 +748,8 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
       >
         <div style="height: 65vh; min-height: 450px; padding: 1rem 0;">
           <VChart
-            v-if="isMonthlyChartExpanded"            :option="chartOptionMensalGtin(selectedSemestre?.semestre, true)"
+            v-if="isMonthlyChartExpanded"
+            :option="chartOptionMensalGtin(selectedSemestre?.semestre, true)"
             :update-options="{ notMerge: true }"
             autoresize
             style="width: 100%; height: 100%;"
@@ -861,7 +925,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   cursor: default;
 }
 :deep(.p-datatable.evolucao-table .p-datatable-tbody > tr.p-datatable-row-expansion > td) {
-  background: var(--table-expansion-bg) !important;
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg)) !important;
   padding: 0 !important;
   border-bottom: 2px solid var(--tabs-border);
 }
@@ -906,7 +970,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 }
 
 .meses-expansion-box {
-  border-bottom: 1px solid var(--tabs-border);
+  border-left: 3px solid var(--primary-color);
   padding: 1.5rem 2.5rem;
 }
 
@@ -1050,6 +1114,42 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 }
 
 .mensal-gtin-chart-header i { color: var(--primary-color); font-size: 0.9rem; }
+
+/* ── Painel contextual de detalhe mensal ─────────────────────────────── */
+.context-detail-card {
+  border-left: 3px solid var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
+}
+
+.btn-close-context {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-close-context:hover {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+}
+.btn-close-context i { font-size: 0.7rem; }
+
+/* ── Transição slide-down ────────────────────────────────────────────── */
+.context-slide-enter-active,
+.context-slide-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.context-slide-enter-from,
+.context-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
 
 .evolucao-zoom-dialog :deep(.p-dialog-header) {
   border-bottom: 1px solid var(--tabs-border);

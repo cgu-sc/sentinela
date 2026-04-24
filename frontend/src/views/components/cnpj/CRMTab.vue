@@ -179,8 +179,8 @@ defineExpose({
         </div>
       </div>
 
-      <!-- Visão: KPIs + Tabela de CRMs -->
-      <template v-if="activeCrmViewMode === 'medicos'">
+      <!-- Visão: KPIs + Tabela de CRMs — v-show preserva estado expandido entre troca de abas -->
+      <div v-show="activeCrmViewMode === 'medicos'">
         <CRMKpiGrid
           :kpi-data="kpiData"
           :active-kpi-filter="activeKpiFilter"
@@ -194,7 +194,7 @@ defineExpose({
           :current-cnpj="cnpj"
           @clear-filters="clearFilters"
         />
-      </template>
+      </div>
 
       <!-- Visão: Cronologia — v-show preserva estado do drill-down entre troca de abas -->
       <CRMCronologia v-show="activeCrmViewMode === 'cronologia'" :cnpj="cnpj" />

@@ -129,9 +129,9 @@ const timelineChartOption = computed(() => {
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
-        color: textColor,
+        color: textColor + 'cc',
         fontSize: 12,
-        fontWeight: 700,
+        fontWeight: 600,
         width: 180,
         overflow: 'truncate'
       },
@@ -147,11 +147,22 @@ const timelineChartOption = computed(() => {
 });
 
 const outrosCnpjList = computed(() => {
-  if (timelineData.value?.cnpjs_envolvidos?.length) {
-    return timelineData.value.cnpjs_envolvidos.filter(c => c !== props.currentCnpj);
+  if (timelineData.value?.events?.length) {
+    const seen = new Map();
+    for (const e of timelineData.value.events) {
+      if (e.cnpj !== props.currentCnpj && !seen.has(e.cnpj)) {
+        seen.set(e.cnpj, {
+          cnpj: e.cnpj,
+          razao_social: e.razao_social ?? null,
+          municipio: e.municipio ?? null,
+          uf: e.uf ?? null,
+        });
+      }
+    }
+    return [...seen.values()];
   }
   if (!selectedMultiCpf.value) return [];
-  return parseCnpjs(selectedMultiCpf.value.outros_cnpj);
+  return parseCnpjs(selectedMultiCpf.value.outros_cnpj).map(c => ({ cnpj: c, razao_social: null, municipio: null, uf: null }));
 });
 
 // Método exposto para abrir o overlay
@@ -212,12 +223,19 @@ defineExpose({ open });
           <span>CNPJs vinculados ao mesmo CPF</span>
         </div>
         <ul class="multi-list">
-          <li v-for="(c, i) in outrosCnpjList" :key="c" class="multi-item">
+          <li v-for="(item, i) in outrosCnpjList" :key="item.cnpj" class="multi-item">
             <span class="multi-idx">#{{ i + 1 }}</span>
-            <a :href="`/estabelecimento/${c}`" target="_blank" class="multi-cnpj-link">
-              {{ formatCnpj(c) }}
-              <i class="pi pi-external-link" style="font-size: 0.6rem; margin-left: 0.3rem; opacity: 0.5;" />
-            </a>
+            <div class="multi-item-body">
+              <a :href="`/estabelecimento/${item.cnpj}`" target="_blank" class="multi-cnpj-link">
+                {{ formatCnpj(item.cnpj) }}
+                <i class="pi pi-external-link" style="font-size: 0.6rem; margin-left: 0.3rem; opacity: 0.5;" />
+              </a>
+              <span v-if="item.razao_social" class="multi-razao">{{ item.razao_social }}</span>
+              <span v-if="item.municipio || item.uf" class="multi-localizacao">
+                <i class="pi pi-map-marker" />
+                {{ [item.municipio, item.uf].filter(Boolean).join('/') }}
+              </span>
+            </div>
           </li>
         </ul>
       </div>
@@ -277,20 +295,49 @@ defineExpose({ open });
   padding: 0.75rem 1rem 1rem;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.5rem;
 }
 
 .multi-item {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.6rem;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
   background: color-mix(in srgb, var(--text-color) 4%, transparent);
   border: 1px solid var(--card-border);
-  border-radius: 4px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
   color: var(--text-secondary);
+}
+
+.multi-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.multi-razao {
+  font-size: 0.78rem;
+  color: var(--text-color);
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.multi-localizacao {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.multi-localizacao .pi {
+  font-size: 0.65rem;
+  opacity: 0.7;
 }
 
 .multi-cnpj-link {

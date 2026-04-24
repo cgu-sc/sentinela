@@ -152,9 +152,11 @@ async function loadTransactions(dt_janela, hourInt = null) {
     const res = await fetch(url);
     if (!res.ok) throw new Error('Falha HTTP');
     const data = await res.json();
+    const ms = Math.round(performance.now() - t0);
     cnpjDetailStore.requestTimes['transacoes-horarias'] = {
       label: 'Transações Horárias',
-      ms: Math.round(performance.now() - t0),
+      ms,
+      detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
     };
     hourlyTransactions.value = data.transactions || [];
   } catch (err) {

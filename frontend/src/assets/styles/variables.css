@@ -51,6 +51,9 @@
 
   /* Accent Indigo — paginadores e ícones de tabela */
   --accent-indigo: #6366f1;
+
+  /* Amber — alertas de surto/concentração */
+  --amber-500: #f59e0b;
 }
 
 :root.dark-mode {
@@ -96,4 +99,7 @@
 
   /* Accent Indigo dark */
   --accent-indigo: #818cf8;
+
+  /* Amber — alertas de surto/concentração */
+  --amber-500: #f59e0b;
 }

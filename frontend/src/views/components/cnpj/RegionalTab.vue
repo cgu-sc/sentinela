@@ -1,13 +1,15 @@
 <script setup>
 import { computed, ref, watch, onMounted, nextTick } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
 import { useGeoStore } from '@/stores/geo';
+import { useFilterStore } from '@/stores/filters';
+import { useFilterParameters } from '@/composables/useFilterParameters';
+import { useFrozenData } from '@/composables/useFrozenData';
 import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
 import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
 import MunicipalMap from '../maps/MunicipalMap.vue';
-import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-
 const props = defineProps({
   cnpj: { type: String, required: true },
   geoData: { type: Object, default: null },
@@ -16,8 +18,15 @@ const props = defineProps({
 
 const cnpjNav = useCnpjNavStore();
 const geoStore = useGeoStore();
-const cnpjDetailStore = useCnpjDetailStore();
+const filterStore = useFilterStore();
+const { isAnimating } = storeToRefs(filterStore);
+const { getApiParams } = useFilterParameters();
 const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
+
+const cachedRegionalData = useFrozenData(regionalData, regionalLoading);
+const isRefreshing = computed(() =>
+  regionalLoading.value && cachedRegionalData.value !== null && !isAnimating.value
+);
 
 // ibge7 do município atual do CNPJ (para pré-selecionar no mapa)
 const norm = s => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -42,22 +51,23 @@ function toggleMunicipioFilter(ibge7) {
 }
 
 const filteredFarmacias = computed(() => {
-  const farmacias = regionalData.value?.farmacias ?? [];
+  const farmacias = cachedRegionalData.value?.farmacias ?? [];
   if (!filterMunicipioId.value) return farmacias;
-  
-  const targetMun = regionalData.value?.municipios?.find(m => m.id_ibge7 === filterMunicipioId.value);
+
+  const targetMun = cachedRegionalData.value?.municipios?.find(m => m.id_ibge7 === filterMunicipioId.value);
   if (!targetMun) return farmacias;
 
-  return farmacias.filter(f => 
+  return farmacias.filter(f =>
     f.municipio?.toLowerCase() === targetMun.municipio?.toLowerCase()
   );
 });
 
 const loadData = () => {
-    if (props.geoData?.no_regiao_saude) {
-        fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf);
-    }
-}
+  if (props.geoData?.no_regiao_saude) {
+    const { inicio, fim } = getApiParams();
+    fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf, inicio, fim);
+  }
+};
 
 onMounted(() => {
   if (props.geoData?.no_regiao_saude) {
@@ -66,8 +76,17 @@ onMounted(() => {
 });
 
 watch(() => props.geoData?.no_regiao_saude, (newVal) => {
-    if (newVal) loadData();
+  if (newVal) loadData();
 });
+
+watch(
+  () => filterStore.periodo,
+  () => {
+    if (isAnimating.value) return;
+    loadData();
+  },
+  { deep: true }
+);
 
 watch(
   () => cnpjNav.pendingMunicipio,
@@ -105,27 +124,27 @@ watch(
 </script>
 
 <template>
-  <div class="tab-content regional-tab">
+  <div class="tab-content regional-tab" :class="{ 'is-refreshing': isRefreshing }">
     <!-- Sem geo data -->
     <div v-if="!geoData?.no_regiao_saude" class="tab-placeholder">
       <i class="pi pi-map-marker placeholder-icon" />
       <p>Não foi possível identificar a Região de Saúde deste estabelecimento.</p>
     </div>
 
-    <!-- Carregando -->
-    <div v-else-if="regionalLoading" class="tab-placeholder">
+    <!-- Carregando (apenas na 1ª carga, sem dados prévios) -->
+    <div v-else-if="regionalLoading && !cachedRegionalData" class="tab-placeholder">
       <i class="pi pi-spin pi-spinner placeholder-icon" />
       <p>Carregando ranking regional — <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
     </div>
 
-    <!-- Sem dados carregados ainda -->
-    <div v-else-if="!regionalLoaded" class="tab-placeholder">
+    <!-- Sem dados carregados ainda (edge case antes do onMounted) -->
+    <div v-else-if="!regionalLoaded && !cachedRegionalData" class="tab-placeholder">
       <i class="pi pi-globe placeholder-icon" />
       <p>Carregando o ranking comparativo da <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
     </div>
 
     <!-- Sem resultados -->
-    <div v-else-if="!regionalData?.farmacias?.length" class="tab-placeholder">
+    <div v-else-if="!cachedRegionalData?.farmacias?.length" class="tab-placeholder">
       <i class="pi pi-exclamation-triangle placeholder-icon" />
       <p>Nenhuma farmácia encontrada para a região <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>.</p>
     </div>
@@ -135,7 +154,7 @@ watch(
       <div class="regional-top-row">
         <div class="table-wrapper-col">
           <RegionalMunicipalTable
-            :municipios="regionalData.municipios"
+            :municipios="cachedRegionalData.municipios"
             :municipio-atual="geoData.no_municipio"
             :uf-atual="geoData.sg_uf"
             :regiao-nome="geoData.no_regiao_saude"
@@ -148,7 +167,7 @@ watch(
             :prop-uf="geoData.sg_uf"
             :prop-regiao="geoData.no_regiao_saude"
             :prop-municipio-ibge7="filterMunicipioId ?? currentIbge7"
-            :prop-municipios-data="regionalData.municipios"
+            :prop-municipios-data="cachedRegionalData.municipios"
             @select-municipio="(ibge7) => toggleMunicipioFilter(ibge7)"
           />
         </div>
@@ -213,6 +232,12 @@ watch(
 
 .tab-placeholder p {
   font-size: 0.875rem;
+}
+
+.regional-tab.is-refreshing {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 :deep(.municipio-chip) {

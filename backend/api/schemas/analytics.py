@@ -229,6 +229,7 @@ class FalecidosResponse(BaseModel):
     from_cache: bool = False
     query_time_ms: Optional[float] = None
     save_time_ms: Optional[float] = None
+    read_time_ms: Optional[float] = None
 
 class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None
@@ -247,6 +248,8 @@ class IndicadoresResponse(BaseModel):
 class TimelineEventSchema(BaseModel):
     cnpj: str
     razao_social: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
     data_autorizacao: Optional[date] = None
     valor_total_autorizacao: float = 0.0
     num_autorizacao: Optional[str] = None
@@ -265,6 +268,10 @@ class PrescritoresResponse(BaseModel):
     summary: dict
     crms_interesse: list
     cnpj_alerts: List[dict] = []
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
 
 class CrmDailyProfileItem(BaseModel):
     dt_janela: str
@@ -277,6 +284,10 @@ class CrmDailyProfileItem(BaseModel):
 class CrmDailyProfileResponse(BaseModel):
     cnpj: str
     days: List[CrmDailyProfileItem]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
 
 class CrmHourlyPointSchema(BaseModel):
     dt_janela: date
@@ -290,6 +301,9 @@ class CrmHourlyProfileResponse(BaseModel):
     cnpj: str
     points: List[CrmHourlyPointSchema]
     from_cache: bool = False
+    read_time_ms: Optional[float] = None
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
 
 # ── Dados Cadastrais e Geográficos ─────────────────────
 class DadosFarmaciaSchema(BaseModel):
@@ -348,6 +362,10 @@ class MovimentacaoResponse(BaseModel):
     cnpj: str
     summary: MovimentacaoSummarySchema
     rows: List[MovimentacaoRowSchema]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
 
 
 # ── Análise de Indicadores (Vista /indicadores) ──────────────────────────────
@@ -418,6 +436,8 @@ class CrmHourlyTransactionSchema(BaseModel):
 class CrmHourlyTransactionsResponse(BaseModel):
     """Lista cronológica de prescrições aprovadas numa hora anômala."""
     transactions: List[CrmHourlyTransactionSchema]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
 
 
 # ── Evolução Mensal por GTIN ─────────────────────────────────────────────────
@@ -433,6 +453,7 @@ class MesMensalGtinItem(BaseModel):
 class EvolucaoMensalGtinResponse(BaseModel):
     meses: List[MesMensalGtinItem]
     from_cache: bool = False
-    query_time_ms: Optional[float] = None   # tempo da consulta SQL (apenas na geração)
-    save_time_ms: Optional[float] = None    # tempo de escrita do parquet (apenas na geração)
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
+    read_time_ms: Optional[float] = None
 

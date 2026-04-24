@@ -4,6 +4,17 @@ import { API_ENDPOINTS } from '@/config/api';
 
 const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
 
+function buildTimingDetail(data) {
+  if (!('from_cache' in data)) return null;
+  if (data.from_cache) {
+    return data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : 'cache';
+  }
+  return [
+    data.query_time_ms != null ? `servidor: SQL ${data.query_time_ms}ms` : null,
+    data.save_time_ms  != null ? `disco ${data.save_time_ms}ms`          : null,
+  ].filter(Boolean).join(' | ') || null;
+}
+
 export const useCnpjDetailStore = defineStore('cnpjDetail', {
   state: () => ({
     // ── Cadastro ──────────────────────────────────────────────────────────────
@@ -133,13 +144,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucaoMensalGtin(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
-        // Detalhe extra: breakdown SQL vs parquet (retornado pelo backend)
-        const detail = data.from_cache
-          ? 'cache'
-          : [data.query_time_ms != null ? `SQL ${data.query_time_ms}ms` : null,
-             data.save_time_ms  != null ? `parquet ${data.save_time_ms}ms` : null]
-              .filter(Boolean).join(' + ') || null;
-        this.requestTimes['movimentacao-gtin'] = { label: 'Movimentação GTIN', ms, detail };
+        this.requestTimes['movimentacao-gtin'] = { label: 'Movimentação GTIN', ms, detail: buildTimingDetail(data) };
         this.evolucaoMensalGtin    = data;
         this.evolucaoMensalGtinKey = key;
       } catch (e) {
@@ -157,7 +162,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       try {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
-        this.requestTimes['movimentacao'] = { label: 'Movimentação', ms: Math.round(performance.now() - t0) };
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['movimentacao'] = { label: 'Movimentação', ms, detail: buildTimingDetail(data) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
       } catch (e) {
@@ -202,12 +208,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
-        const detail = data.from_cache
-          ? 'cache'
-          : [data.query_time_ms != null ? `SQL ${data.query_time_ms}ms` : null,
-             data.save_time_ms  != null ? `parquet ${data.save_time_ms}ms` : null]
-              .filter(Boolean).join(' + ') || null;
-        this.requestTimes['falecidos'] = { label: 'Falecidos', ms, detail };
+        this.requestTimes['falecidos'] = { label: 'Falecidos', ms, detail: buildTimingDetail(data) };
 
         this.falecidosData   = data;
         this.falecidosLoaded = key;
@@ -231,7 +232,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(cnpj), { params });
-        this.requestTimes['crm-data'] = { label: 'CRM Data', ms: Math.round(performance.now() - t0) };
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['crm-data'] = { label: 'CRM Data', ms, detail: buildTimingDetail(data) };
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
       } catch (e) {
@@ -253,7 +255,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj), { params });
-        this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms: Math.round(performance.now() - t0) };
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms, detail: buildTimingDetail(data) };
         this.crmDailyProfile        = data;
         this.crmDailyProfileLoaded  = key;
       } catch (e) {
@@ -273,7 +276,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj), { params });
-        this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms: Math.round(performance.now() - t0) };
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms, detail: buildTimingDetail(data) };
         this.crmHourlyProfile       = data;
         this.crmHourlyProfileLoaded = key;
       } catch (e) {

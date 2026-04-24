@@ -529,11 +529,14 @@ class AnalyticsService:
         df: pl.DataFrame | None = None
         from_cache = False
         query_time_ms: float | None = None
-        save_time_ms: float | None = None
+        save_time_ms:  float | None = None
+        read_time_ms:  float | None = None
 
         if os.path.exists(PARQUET_PATH):
             try:
+                t0 = time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
                 from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet gtin '{cnpj}': {e}")
@@ -583,6 +586,7 @@ class AnalyticsService:
                 from_cache=from_cache,
                 query_time_ms=query_time_ms,
                 save_time_ms=save_time_ms,
+                read_time_ms=read_time_ms,
             )
 
         # Filtro de período (opera sobre a coluna Date)
@@ -597,6 +601,7 @@ class AnalyticsService:
                 from_cache=from_cache,
                 query_time_ms=query_time_ms,
                 save_time_ms=save_time_ms,
+                read_time_ms=read_time_ms,
             )
 
         agg = (
@@ -636,6 +641,7 @@ class AnalyticsService:
             from_cache=from_cache,
             query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
+            read_time_ms=read_time_ms,
         )
 
     @staticmethod
@@ -984,12 +990,15 @@ class AnalyticsService:
         from_cache    = False
         query_time_ms: float | None = None
         save_time_ms:  float | None = None
+        read_time_ms:  float | None = None
         df_all = None
 
         # ── 1. Tentar carregar do cache local ────────────────────────────────
         if os.path.exists(PARQUET_PATH):
             try:
+                t0 = time.perf_counter()
                 df_all = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
                 from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet falecidos '{cnpj}': {e}")
@@ -1049,6 +1058,7 @@ class AnalyticsService:
             from_cache=from_cache,
             query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
+            read_time_ms=read_time_ms,
         )
 
         try:
@@ -1168,6 +1178,7 @@ class AnalyticsService:
                 from_cache=from_cache,
                 query_time_ms=query_time_ms,
                 save_time_ms=save_time_ms,
+                read_time_ms=read_time_ms,
             )
 
         except Exception as e:
@@ -1217,10 +1228,14 @@ class AnalyticsService:
 
             # Enriquece com razão social via rede_df
             try:
-                rede_df = get_rede_df().select(["cnpj", "razao_social"])
+                rede_df = get_rede_df().select(["cnpj", "razao_social", "municipio", "uf"])
                 df_enrich = df_cpf.join(rede_df, on="cnpj", how="left")
             except Exception:
-                df_enrich = df_cpf.with_columns(pl.lit(None).cast(pl.Utf8).alias("razao_social"))
+                df_enrich = df_cpf.with_columns([
+                    pl.lit(None).cast(pl.Utf8).alias("razao_social"),
+                    pl.lit(None).cast(pl.Utf8).alias("municipio"),
+                    pl.lit(None).cast(pl.Utf8).alias("uf"),
+                ])
 
             # Monta os eventos
             events = []
@@ -1228,6 +1243,8 @@ class AnalyticsService:
                 events.append(TimelineEventSchema(
                     cnpj=str(r["cnpj"]),
                     razao_social=r.get("razao_social"),
+                    municipio=r.get("municipio"),
+                    uf=r.get("uf"),
                     data_autorizacao=r.get("data_autorizacao"),
                     valor_total_autorizacao=float(r.get("valor_total_autorizacao") or 0.0),
                     num_autorizacao=str(r.get("num_autorizacao") or ""),
@@ -1709,10 +1726,19 @@ class AnalyticsService:
         comp_fim = _to_comp(data_fim)    if data_fim    else None
 
         # ── 1. Carrega ou gera o parquet ──────────────────────────────────────
+        import time as _time
         df: pl.DataFrame | None = None
+        from_cache    = False
+        read_time_ms: float | None = None
+        query_time_ms: float | None = None
+        save_time_ms:  float | None = None
+
         if os.path.exists(PARQUET_PATH):
             try:
+                _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
 
@@ -1720,23 +1746,27 @@ class AnalyticsService:
             try:
                 from database import engine as _engine
                 with _engine.connect() as conn:
+                    _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT id_medico, cnpj, competencia, vl_total_prescricoes, nu_prescricoes, nu_prescricoes_dia, prescricoes_total_brasil, prescricoes_dia_brasil, nu_estabelecimentos, lista_cnpjs_brasil, flag_crm_invalido, flag_prescricao_antes_registro, flag_concentracao_estabelecimento, flag_concentracao_mesmo_crm, flag_distancia_geografica, alerta_distancia_geografica, dt_primeira_prescricao, dt_inscricao_crm"
                              " FROM temp_CGUSC.fp.crm_export WHERE cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
                     )
+                    query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 if pdf.empty:
-                    return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
+                    return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=False, query_time_ms=query_time_ms)
                 df = pl.from_pandas(pdf)
                 for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "flag_concentracao_estabelecimento"]:
                     if col in df.columns:
                         df = df.with_columns(pl.col(col).cast(pl.Int8))
+                _t1 = _time.perf_counter()
                 df.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
             except Exception as e:
                 print(f"❌ ERRO ao buscar CRM do banco para {cnpj}: {e}")
                 print(traceback.format_exc())
-                return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
+                return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], query_time_ms=query_time_ms)
 
         # ── 2. Filtro de período ───────────────────────────────────────────────
         if comp_ini:
@@ -1745,7 +1775,8 @@ class AnalyticsService:
             df = df.filter(pl.col("competencia") <= comp_fim)
 
         if df.is_empty():
-            return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[])
+            return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache,
+                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
@@ -2143,10 +2174,14 @@ class AnalyticsService:
 
 
         return PrescritoresResponse(
-            cnpj=cnpj, 
-            summary=summary_dict, 
+            cnpj=cnpj,
+            summary=summary_dict,
             crms_interesse=crms_interesse_list,
-            cnpj_alerts=cnpj_alerts_list
+            cnpj_alerts=cnpj_alerts_list,
+            from_cache=from_cache,
+            read_time_ms=read_time_ms,
+            query_time_ms=query_time_ms,
+            save_time_ms=save_time_ms,
         )
 
     @staticmethod
@@ -2170,10 +2205,19 @@ class AnalyticsService:
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_diaria.parquet")
 
+        import time as _time
         df: pl.DataFrame | None = None
+        from_cache    = False
+        read_time_ms: float | None = None
+        query_time_ms: float | None = None
+        save_time_ms:  float | None = None
+
         if os.path.exists(PARQUET_PATH):
             try:
+                _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet daily '{cnpj}': {e}")
 
@@ -2181,24 +2225,28 @@ class AnalyticsService:
             try:
                 from database import engine as _engine
                 with _engine.connect() as conn:
+                    _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT * FROM temp_CGUSC.fp.crm_daily_profile"
                              " WHERE cnpj = :cnpj ORDER BY dt_janela"),
                         conn,
                         params={"cnpj": cnpj},
                     )
+                    query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 df = pl.from_pandas(pdf)
+                _t1 = _time.perf_counter()
                 df.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
             except Exception as e:
                 print(f"⚠️ Erro ao gerar parquet daily '{cnpj}': {e}")
                 df = pl.DataFrame()
 
         if df.is_empty():
-            return CrmDailyProfileResponse(cnpj=cnpj, days=[])
+            return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
+                                           read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
         # --- Filtro de Período ---
         if data_inicio:
-            # Garante formato YYYY-MM-DD para comparação
             d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
             df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
         if data_fim:
@@ -2206,7 +2254,8 @@ class AnalyticsService:
             df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
 
         if df.is_empty():
-            return CrmDailyProfileResponse(cnpj=cnpj, days=[])
+            return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
+                                           read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
         days = [
             {
@@ -2219,7 +2268,8 @@ class AnalyticsService:
             }
             for r in df.iter_rows(named=True)
         ]
-        return CrmDailyProfileResponse(cnpj=cnpj, days=days)
+        return CrmDailyProfileResponse(cnpj=cnpj, days=days, from_cache=from_cache,
+                                       read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod
     def get_crm_hourly_profile(
@@ -2234,10 +2284,19 @@ class AnalyticsService:
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_horaria.parquet")
 
+        import time as _time
         df: pl.DataFrame | None = None
+        from_cache    = False
+        read_time_ms: float | None = None
+        query_time_ms: float | None = None
+        save_time_ms:  float | None = None
+
         if os.path.exists(PARQUET_PATH):
             try:
+                _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                from_cache = True
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet hourly '{cnpj}': {e}")
 
@@ -2245,6 +2304,7 @@ class AnalyticsService:
             try:
                 from database import engine as _engine
                 with _engine.connect() as conn:
+                    _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, is_anomalo_hora "
                              "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
@@ -2253,14 +2313,18 @@ class AnalyticsService:
                         conn,
                         params={"cnpj": cnpj},
                     )
+                    query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 df = pl.from_pandas(pdf)
+                _t1 = _time.perf_counter()
                 df.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
             except Exception as e:
                 print(f"⚠️ Erro ao gerar parquet hourly '{cnpj}': {e}")
                 df = pl.DataFrame()
 
         if df.is_empty():
-            return CrmHourlyProfileResponse(cnpj=cnpj, points=[])
+            return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
+                                            read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
         # --- Filtro de Período ---
         if data_inicio:
@@ -2271,7 +2335,8 @@ class AnalyticsService:
             df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
 
         if df.is_empty():
-            return CrmHourlyProfileResponse(cnpj=cnpj, points=[])
+            return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
+                                            read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
         points = [
             {
@@ -2286,10 +2351,10 @@ class AnalyticsService:
         ]
 
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X)
-        # Isso garante que o cache de drill-down esteja pronto antes mesmo do auditor clicar
         AnalyticsService.sync_crm_hourly_transactions(cnpj)
 
-        return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=os.path.exists(PARQUET_PATH))
+        return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=from_cache,
+                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod
     def sync_crm_hourly_transactions(cnpj: str) -> None:
@@ -2352,18 +2417,23 @@ class AnalyticsService:
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
 
+        import time as _time
         df = pl.DataFrame()
+        read_time_ms: float | None = None
+
         if not os.path.exists(PARQUET_PATH):
             AnalyticsService.sync_crm_hourly_transactions(cnpj)
 
         if os.path.exists(PARQUET_PATH):
             try:
+                _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             except Exception as e:
                 print(f"⚠️ Erro ao ler parquet hourly_tx '{cnpj}': {e}")
 
         if df.is_empty():
-            return CrmHourlyTransactionsResponse(transactions=[])
+            return CrmHourlyTransactionsResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
 
         # O Filtro Rápido do Polars na memória (por Dia e Hora opcional)
         filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
@@ -2373,7 +2443,7 @@ class AnalyticsService:
         filtered_df = df.filter(filter_expr)
 
         if filtered_df.is_empty():
-            return CrmHourlyTransactionsResponse(transactions=[])
+            return CrmHourlyTransactionsResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
 
         # Join com o cache de medicamentos para trazer nomes e princípios ativos
         from data_cache import get_medicamentos_df
@@ -2401,7 +2471,7 @@ class AnalyticsService:
         # Converte para o formato do Schema
         transactions = enriched_df.to_dicts()
         
-        return CrmHourlyTransactionsResponse(transactions=transactions)
+        return CrmHourlyTransactionsResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
@@ -2432,7 +2502,8 @@ class AnalyticsService:
 
         empty_summary = MovimentacaoSummarySchema()
 
-        def _build_response_from_df(df: pl.DataFrame, from_cache: bool) -> MovimentacaoResponse:
+        def _build_response_from_df(df: pl.DataFrame, from_cache: bool,
+                                    read_time_ms=None, query_time_ms=None, save_time_ms=None) -> MovimentacaoResponse:
             """Converte DataFrame Polars para o schema de resposta."""
             rows = [
                 MovimentacaoRowSchema(
@@ -2472,13 +2543,21 @@ class AnalyticsService:
                     from_cache=from_cache,
                 ),
                 rows=rows,
+                from_cache=from_cache,
+                read_time_ms=read_time_ms,
+                query_time_ms=query_time_ms,
+                save_time_ms=save_time_ms,
             )
+
+        import time as _time
 
         # ── 1. Tenta carregar do cache Parquet ─────────────────────────────
         if os.path.exists(CACHE_PATH):
             try:
+                _t0 = _time.perf_counter()
                 df_cached = pl.read_parquet(CACHE_PATH)
-                return _build_response_from_df(df_cached, from_cache=True)
+                _read_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                return _build_response_from_df(df_cached, from_cache=True, read_time_ms=_read_ms)
             except Exception as e:
                 import traceback
                 print(f"⚠️ Erro ao ler Parquet '{cnpj}': {e}")
@@ -2488,16 +2567,19 @@ class AnalyticsService:
             return MovimentacaoResponse(cnpj=cnpj, summary=MovimentacaoSummarySchema(), rows=[])
 
         # ── 2. Busca e processa a memória de cálculo do SQL Server ─────────
+        _query_ms = None
         try:
             from sqlalchemy.exc import InterfaceError as SQLAInterfaceError
             with engine.connect() as conn:
                 # 2a. Busca dados comprimidos
+                _tq0 = _time.perf_counter()
                 result = conn.execute(text("""
                     SELECT TOP 1 dados_comprimidos, id_processamento
                     FROM temp_CGUSC.fp.memoria_calculo_consolidada
                     WHERE cnpj = :cnpj
                     ORDER BY id_processamento DESC
                 """), {"cnpj": cnpj}).fetchone()
+                _query_ms = round((_time.perf_counter() - _tq0) * 1000, 1)
 
                 if not result or not result[0]:
                     print(f"⚠️ Nenhum dado no banco para CNPJ {cnpj}")
@@ -2705,11 +2787,14 @@ class AnalyticsService:
                         pl.col("valor_irregular").cast(pl.Float64, strict=False),
                     ])
                 )
+                _t1 = _time.perf_counter()
                 df_result.write_parquet(CACHE_PATH, compression="lz4")
+                _save_ms = round((_time.perf_counter() - _t1) * 1000, 1)
                 print(f"✅ Cache Parquet salvo: {CACHE_PATH}")
             except Exception as e:
                 print(f"⚠️ Erro ao criar/salvar Parquet para {cnpj}: {e}")
                 print(traceback.format_exc())
+                _save_ms = None
                 # Fallback sem persistir: entrega os dados sem cache
                 try:
                     df_result = pl.DataFrame(lista_linhas).select(SCHEMA_COLS)
@@ -2717,8 +2802,9 @@ class AnalyticsService:
                     df_result = pl.DataFrame([])
         else:
             df_result = pl.DataFrame([])
+            _save_ms = None
 
-        return _build_response_from_df(df_result, from_cache=False)
+        return _build_response_from_df(df_result, from_cache=False, query_time_ms=_query_ms, save_time_ms=_save_ms)
 
 
     @staticmethod

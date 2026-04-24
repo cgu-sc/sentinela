@@ -292,14 +292,14 @@ const maxPDOverall = computed(() => {
                   <div class="panel-header">
                     <div class="panel-header-left">
                       <i :class="{
-                        'pi pi-stopwatch': activeAlertTab[m.id_medico] === 'conc',
+                        'pi pi-user': activeAlertTab[m.id_medico] === 'conc',
                         'pi pi-map-marker': activeAlertTab[m.id_medico] === 'geo',
-                        'pi pi-bolt': activeAlertTab[m.id_medico] === 'surto'
+                        'pi pi-users': activeAlertTab[m.id_medico] === 'surto'
                       }" class="panel-icon" />
                       <span class="panel-title">
-                        <template v-if="activeAlertTab[m.id_medico] === 'conc'">Evidências de Concentração</template>
+                        <template v-if="activeAlertTab[m.id_medico] === 'conc'">Lançamentos Sequenciais para um único CRM</template>
                         <template v-else-if="activeAlertTab[m.id_medico] === 'geo'">Evidências de Distância Geográfica</template>
-                        <template v-else-if="activeAlertTab[m.id_medico] === 'surto'">Participação em Lançamentos Sequenciais</template>
+                        <template v-else-if="activeAlertTab[m.id_medico] === 'surto'">Lançamentos Sequenciais com múltiplos CRMs</template>
                       </span>
                       <span class="panel-crm-badge">{{ m.id_medico }}</span>
                     </div>
@@ -311,8 +311,7 @@ const maxPDOverall = computed(() => {
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'conc' }"
                         @click="setAlertTab(m.id_medico, 'conc')"
                       >
-                        <i class="pi pi-stopwatch" />
-                        Concentração
+                        CRM Único
                         <span class="seg-count">{{ m.alertas_diarios.length }}</span>
                       </button>
                       <button
@@ -331,8 +330,7 @@ const maxPDOverall = computed(() => {
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'surto' }"
                         @click="setAlertTab(m.id_medico, 'surto')"
                       >
-                        <i class="pi pi-bolt" />
-                        Seq. Lanc.
+                        CRMs Múltiplos
                         <span class="seg-count">{{ m.alertas_surto.length }}</span>
                       </button>
                     </div>

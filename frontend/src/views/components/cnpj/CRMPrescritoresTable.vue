@@ -355,9 +355,9 @@ const maxPDOverall = computed(() => {
                       <tr v-for="(a, j) in m.alertas_diarios" :key="j" class="alerta-diario-item">
                         <td class="col-date">{{ formatarDataAlerta(a.dt) }}</td>
                         <td class="col-crm">{{ m.id_medico }}</td>
-                        <td class="col-right">{{ a.nu_prescricoes }}</td>
+                        <td class="col-right td-metric">{{ a.nu_prescricoes }}</td>
                         <td class="col-center">{{ formatarJanela(a.nu_minutos) }}</td>
-                        <td class="col-right">{{ a.taxa_hora?.toFixed(1) }}/h</td>
+                        <td class="col-right td-metric">{{ a.taxa_hora?.toFixed(1) }}/h</td>
                         <td class="col-descricao" v-html="formatDescricao(a)" />
                       </tr>
                     </tbody>
@@ -423,7 +423,7 @@ const maxPDOverall = computed(() => {
                         <td class="col-center">
                           <span class="time-badge">{{ s.hr.toString().padStart(2, '0') }}:00h</span>
                         </td>
-                        <td class="col-right" style="font-weight: 600; color: var(--amber-500)">{{ s.nu_presc_crm }}</td>
+                        <td class="col-right td-metric">{{ s.nu_presc_crm }}</td>
                         <td class="col-right">{{ s.nu_presc_total }}</td>
                         <td class="col-center">{{ s.nu_crms_total }} CRMs</td>
                         <td class="col-descricao">
@@ -533,7 +533,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .filter-badge i.pi-filter-fill { font-size: 0.65rem; opacity: 0.8; animation: icon-spin-subtle 4s infinite ease-in-out; }
 @keyframes icon-spin-subtle { 0%, 70% { transform: rotate(0deg); } 85% { transform: rotate(-360deg); } 100% { transform: rotate(-360deg); } }
 .filter-text { letter-spacing: 0.02em; }
-.filter-count { font-weight: 800; margin-left: 0.2rem; }
+.filter-count { font-weight: 600; margin-left: 0.2rem; }
 .clear-filter-btn { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: color-mix(in srgb, var(--risk-high) 15%, transparent); color: var(--risk-high); border: none; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; padding: 0; }
 .clear-filter-btn:hover { background: var(--risk-high); color: white; }
 .clear-filter-btn i { font-size: 0.55rem; font-weight: 900; }
@@ -703,7 +703,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 }
 
 .geo-cell { line-height: 1.4; padding: 0.6rem 0.75rem !important; }
-.geo-main { font-weight: 700; color: var(--text-color); font-size: 0.8rem; opacity: 0.85; }
+.geo-main { font-weight: 600; color: var(--text-color); font-size: 0.8rem; opacity: 0.85; }
 .geo-sub { font-size: 0.68rem; color: var(--text-color); opacity: 0.75; }
 
 .dist-badge {
@@ -711,7 +711,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   color: #ef4444;
   padding: 2px 6px;
   border-radius: 4px;
-  font-weight: 800;
+  font-weight: 600;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
@@ -758,7 +758,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
 .panel-title {
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-secondary);
@@ -826,7 +826,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   color: var(--primary-color);
   border-radius: 99px;
   font-size: 0.58rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 /* Tabela de evidências (unificada) */
@@ -860,7 +860,10 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   color: var(--text-color);
   opacity: 0.85;
 }
-.evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color) 3%, transparent); }
+.evidence-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text-color) 2%, transparent); }
+.evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color) 5%, transparent); }
+.theme-conc .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--risk-medium) 8%, transparent); }
+.theme-surto .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--amber-500) 8%, transparent); }
 
 /* ── Rede: botão de clique ──────────────────────────────────────────── */
 .rede-clickable {
@@ -880,7 +883,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   border-radius: 4px;
   font-weight: 600;
   font-size: 0.72rem;
-  font-family: var(--font-mono);
+  font-family: monospace;
 }
 .surto-desc { 
   font-size: 0.72rem; 
@@ -892,19 +895,15 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 }
 .theme-surto .panel-icon { color: var(--amber-500); }
 .theme-surto .seg-active { color: var(--amber-500) !important; }
+.theme-surto .td-metric { color: var(--amber-500); font-weight: 600; }
 .theme-geo .panel-icon { color: #8b5cf6; }
 .theme-geo .seg-active { color: #8b5cf6 !important; }
 .theme-conc .panel-icon { color: var(--risk-medium); }
 .theme-conc .seg-active { color: var(--risk-medium) !important; }
+.theme-conc .td-metric { color: var(--risk-medium); font-weight: 600; }
 
 .clickable-surto-row {
   cursor: pointer;
   transition: background 0.2s ease;
-}
-.clickable-surto-row:hover {
-  background: color-mix(in srgb, var(--amber-500) 10%, transparent) !important;
-}
-.clickable-surto-row:hover td {
-  color: var(--amber-500) !important;
 }
 </style>

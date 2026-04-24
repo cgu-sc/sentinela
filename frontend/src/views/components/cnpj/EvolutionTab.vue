@@ -20,6 +20,8 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import ColumnGroup from 'primevue/columngroup';
 import Row from 'primevue/row';
+import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
 
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
@@ -59,12 +61,37 @@ function formatMesRange(mesInicio, mesFim) {
 // Usado para dimir os cards suavemente em vez de exibir o spinner novamente.
 // NOTA: Durante a animação (autoplay), mantemos a opacidade total para evitar flicker.
 const isRefreshing = computed(() => evolucaoLoading.value && cachedEvolucaoData.value !== null && !filterStore.isAnimating);
+const isMonthlyChartExpanded = ref(false);
 
 const expandedRows = ref([]);
+const selectedSemestre = ref(null);
+
+// Inicializa com o semestre de MAIOR taxa de não comprovação
+watch(cachedEvolucaoData, (newVal) => {
+  if (newVal?.semestres?.length && !selectedSemestre.value) {
+    selectedSemestre.value = [...newVal.semestres]
+      .sort((a, b) => b.pct_irregular - a.pct_irregular)[0];
+  }
+}, { immediate: true });
+
+// Todos os meses de todos os semestres (exibição global no card permanente)
+const todosMeses = computed(() => {
+  const semestres = cachedEvolucaoData.value?.semestres ?? [];
+  return semestres.flatMap(sem =>
+    (sem.meses ?? []).map(m => ({ ...m, semestre: sem.semestre }))
+  );
+});
+
+// Verifica se um mês pertence ao semestre selecionado (ou se nada está selecionado)
+const isMesSelecionado = (semestre) => !selectedSemestre.value || semestre === selectedSemestre.value?.semestre;
+
+function limparFiltro() {
+  selectedSemestre.value = null;
+  expandedRows.value = [];
+}
 
 /**
  * Alterna a expansão da linha ao clicar em qualquer célula da linha pai.
- * O PrimeVue usa um objeto { [dataKey]: rowData } para controlar as linhas expandidas.
  */
 function toggleRow(event) {
   const row = event.data;
@@ -76,6 +103,7 @@ function toggleRow(event) {
     current[key] = row;
   }
   expandedRows.value = current;
+  selectedSemestre.value = row;
 }
 
 /**
@@ -93,6 +121,7 @@ function onChartClick(params) {
 
   // Auto-expande a sanfona do respectivo semestre (fechando as outras se existirem)
   expandedRows.value = { [semestre]: rowData };
+  selectedSemestre.value = rowData;
 
   // Localiza o elemento renderizado da tabela no DOM para rolar a tela suavemente até ele
   nextTick(() => {
@@ -118,6 +147,15 @@ function abrirInfratores(mes) {
   // Futuro: abrir um dialog/sidebar com os top N medicamentes do mês.
 }
 
+// Ao clicar em uma barra do gráfico mensal, seleciona o semestre correspondente
+function onMensalChartClick(params) {
+  if (!params?.name) return;
+  const mesStr = params.name; // "YYYY-MM"
+  const semestres = cachedEvolucaoData.value?.semestres ?? [];
+  const sem = semestres.find(s => mesPertenceAoSemestre(mesStr, s.semestre));
+  if (sem) selectedSemestre.value = sem;
+}
+
 defineExpose({
   getChartImage: (pixelRatio = 2) =>
     chartRef.value?.chart?.getDataURL({ type: 'jpeg', pixelRatio, backgroundColor: '#ffffff', quality: 0.85 }) ?? null,
@@ -135,8 +173,14 @@ const chartOption = computed(() => {
   const c         = C.value;
   const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const labels    = semestres.map(s => s.semestre);
-  const regular   = semestres.map(s => s.regular);
-  const irregular = semestres.map(s => s.irregular);
+  const regular   = semestres.map(s => ({
+    value: s.regular,
+    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 }
+  }));
+  const irregular = semestres.map(s => ({
+    value: s.irregular,
+    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 }
+  }));
 
   return {
     backgroundColor: c.bg,
@@ -270,40 +314,23 @@ function mesPertenceAoSemestre(mesStr, semestre) {
   return y === anoNum && (semNum === 1 ? m <= 6 : m > 6);
 }
 
-function chartOptionMensalGtin(semestre) {
-  const c    = C.value;
-  const meses = evolucaoMensalGtin.value?.meses ?? [];
+function chartOptionMensalGtin(semestre, showZoom = false) {
+  const c     = C.value;
+  const meses = todosMeses.value; // Usa todos os meses de todos os semestres
 
   const labels    = meses.map(m => m.mes);
   const regular   = meses.map(m => ({
-    value: Math.max(0, parseFloat((m.valor_vendas - m.valor_sem_comprovacao).toFixed(2))),
-    itemStyle: { opacity: mesPertenceAoSemestre(m.mes, semestre) ? 1 : 0.35 },
+    value: Math.max(0, parseFloat((m.total - m.irregular).toFixed(2))),
+    itemStyle: { opacity: isMesSelecionado(m.semestre) ? 1 : 0.25 },
   }));
   const irregular = meses.map(m => ({
-    value: parseFloat(m.valor_sem_comprovacao.toFixed(2)),
-    itemStyle: { opacity: mesPertenceAoSemestre(m.mes, semestre) ? 1 : 0.35 },
+    value: parseFloat(m.irregular.toFixed(2)),
+    itemStyle: { opacity: isMesSelecionado(m.semestre) ? 1 : 0.25 },
   }));
 
-  // Centraliza o zoom no semestre selecionado
-  const total = meses.length;
-  let zoomStart = 0, zoomEnd = 100;
-  if (total > 0 && semestre) {
-    const [semPart, anoPart] = semestre.split('/');
-    const semNum = parseInt(semPart);
-    const anoNum = parseInt(anoPart);
-    const indices = meses.reduce((acc, m, i) => {
-      const [y, mo] = m.mes.split('-').map(Number);
-      if (y === anoNum && (semNum === 1 ? mo <= 6 : mo > 6)) acc.push(i);
-      return acc;
-    }, []);
-    if (indices.length) {
-      const pad = 2;
-      const first = Math.max(0, indices[0] - pad);
-      const last  = Math.min(total - 1, indices[indices.length - 1] + pad);
-      zoomStart = Math.round((first / total) * 100);
-      zoomEnd   = Math.round(((last + 1) / total) * 100);
-    }
-  }
+  // O usuário quer que SEMPRE mostre todos os meses, sem zoom automático.
+  let zoomStart = 0;
+  let zoomEnd   = 100;
 
   return {
     backgroundColor: 'transparent',
@@ -335,24 +362,24 @@ function chartOptionMensalGtin(semestre) {
         const idx = params[0]?.dataIndex ?? 0;
         const m   = meses[idx];
         if (!m) return '';
-        const total = m.valor_vendas;
-        const irr   = m.valor_sem_comprovacao;
-        const reg   = total - irr;
+        const totalVal = m.total;
+        const irrVal   = m.irregular;
+        const regVal   = totalVal - irrVal;
         return `
           <div style="color:${c.tooltipText}">
-            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatMesLabel(m.mes)}</div>
+            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatMesLabel(m.mes)} <span style="opacity: 0.5; font-size: 11px;">(${m.semestre})</span></div>
             <div style="display:flex;flex-direction:column;gap:5px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:9px;height:9px;border-radius:2px;background:${c.green};display:inline-block;"></span>
                 <span style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.04em;">Regulares</span>
               </div>
-              <div style="font-weight:600;font-size:12px;margin-bottom:2px;">${formatCurrencyFull(reg)}</div>
+              <div style="font-weight:600;font-size:12px;margin-bottom:2px;">${formatCurrencyFull(regVal)}</div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:9px;height:9px;border-radius:2px;background:${c.red};display:inline-block;"></span>
                 <span style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.04em;">Irregulares</span>
               </div>
-              <div style="font-weight:600;font-size:12px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(irr)} <span style="opacity:.7">(${m.pct_sem_comprovacao.toFixed(1)}%)</span></div>
-              <div style="border-top:1px solid ${c.tooltipBorder};padding-top:5px;margin-top:2px;font-weight:600;font-size:12px;">Total: ${formatCurrencyFull(total)}</div>
+              <div style="font-weight:600;font-size:12px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(irrVal)} <span style="opacity:.7">(${m.pct_irregular.toFixed(1)}%)</span></div>
+              <div style="border-top:1px solid ${c.tooltipBorder};padding-top:5px;margin-top:2px;font-weight:600;font-size:12px;">Total: ${formatCurrencyFull(totalVal)}</div>
             </div>
           </div>`;
       },
@@ -379,7 +406,7 @@ function chartOptionMensalGtin(semestre) {
       axisLabel: { color: c.muted, fontSize: 9, formatter: v => formatCurrencyFull(v) },
     },
 
-    dataZoom: [
+    dataZoom: showZoom ? [
       { type: 'inside', start: zoomStart, end: zoomEnd, zoomLock: false },
       {
         type: 'slider', start: zoomStart, end: zoomEnd, height: 14,
@@ -389,7 +416,7 @@ function chartOptionMensalGtin(semestre) {
         handleStyle: { color: c.muted },
         textStyle: { color: 'transparent' },
       },
-    ],
+    ] : [],
 
     series: [
       {
@@ -453,17 +480,69 @@ function chartOptionMensalGtin(semestre) {
     <template v-else-if="cachedEvolucaoData">
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
-          <i class="pi pi-chart-bar" /><span>Volume Financeiro por Semestre</span>
-          <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
+          <div class="header-title">
+            <i class="pi pi-chart-bar" />
+            <span>Volume Financeiro por Semestre</span>
+          </div>
+          <div class="header-actions">
+            <Button 
+              v-if="selectedSemestre" 
+              icon="pi pi-filter-slash" 
+              label="Limpar Filtro" 
+              class="p-button-text p-button-sm btn-clear-filter"
+              @click="limparFiltro" 
+            />
+            <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
+          </div>
         </div>
         <div class="evolucao-chart-wrap">
           <VChart ref="chartRef" :option="chartOption" :update-options="{ notMerge: true }" autoresize class="evolucao-chart" @click="onChartClick" />
         </div>
       </div>
 
+      <!-- Card permanente: Histórico Mensal de Movimentação -->
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
-          <i class="pi pi-table" /><span>Detalhamento Semestral</span>
+          <div class="header-title">
+            <i class="pi pi-chart-bar" />
+            <span>Histórico Mensal de Movimentação</span>
+          </div>
+          <div class="header-actions">
+            <span v-if="selectedSemestre" class="sem-badge">
+              <i class="pi pi-star-fill" />
+              {{ selectedSemestre.semestre }}
+            </span>
+            <Button 
+              v-if="cachedEvolucaoData"
+              icon="pi pi-external-link" 
+              label="AMPLIAR" 
+              class="p-button-outlined p-button-xs btn-zoom"
+              @click="isMonthlyChartExpanded = true" 
+            />
+            <i v-if="evolucaoMensalGtinLoading" class="pi pi-spin pi-spinner refresh-spinner" />
+          </div>
+        </div>
+        <div v-if="todosMeses.length" class="evolucao-chart-wrap">
+          <VChart
+            :option="chartOptionMensalGtin(selectedSemestre?.semestre)"
+            :update-options="{ notMerge: false }"
+            autoresize
+            class="evolucao-chart"
+            @click="onMensalChartClick"
+          />
+        </div>
+        <div v-else class="tab-placeholder" style="padding: 2rem;">
+          <i class="pi pi-spin pi-spinner placeholder-icon" style="font-size: 1.5rem; opacity: 0.4;" />
+          <p style="font-size: 0.8rem;">Carregando dados mensais...</p>
+        </div>
+      </div>
+
+      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
+        <div class="evolucao-card-header">
+          <div class="header-title">
+            <i class="pi pi-table" />
+            <span>Detalhamento Semestral</span>
+          </div>
         </div>
         <div class="evolucao-table-wrap">
           <DataTable 
@@ -554,76 +633,6 @@ function chartOptionMensalGtin(semestre) {
               </template>
             </Column>
 
-            <!-- Expanded content (Meses) -->
-            <template #expansion="slotProps">
-              <div class="meses-expansion-box p-3">
-                <div class="mb-3" style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">
-                  Detalhamento de {{ slotProps.data.semestre }}
-                </div>
-
-                <!-- Gráfico Mensal de Movimentação -->
-                <div v-if="evolucaoMensalGtin?.meses?.length" class="mensal-gtin-chart-wrapper">
-                  <div class="mensal-gtin-chart-header">
-                    <i class="pi pi-chart-bar" />
-                    <span>Histórico Mensal de Movimentação</span>
-                    <i v-if="evolucaoMensalGtinLoading" class="pi pi-spin pi-spinner" style="margin-left:auto;font-size:0.75rem;opacity:0.5;" />
-                  </div>
-                  <VChart :option="chartOptionMensalGtin(slotProps.data.semestre)" :update-options="{ notMerge: true }" autoresize style="height: 210px;" />
-                </div>
-
-                <DataTable :value="slotProps.data.meses" class="sanfona-table">
-                  <Column field="mes" header="Mês" style="width: 15%" headerStyle="text-align: left" bodyStyle="text-align: left">
-                    <template #body="{ data }">
-                      <span style="font-weight: 500;">{{ formatMonth(data.mes) }}</span>
-                    </template>
-                  </Column>
-                  <Column field="total" header="Total Movimentado" style="width: 20%" headerStyle="text-align: right" bodyStyle="text-align: right">
-                    <template #body="{ data }">{{ formatCurrencyFull(data.total) }}</template>
-                  </Column>
-                  <Column field="irregular" header="Sem Comprovação" style="width: 20%" headerStyle="text-align: right" bodyStyle="text-align: right">
-                    <template #body="{ data }">
-                      <a 
-                        v-if="data.irregular > 0" 
-                        @click.prevent="abrirInfratores(data.mes)" 
-                        style="color: var(--risk-high); cursor: pointer; text-decoration: none; font-weight: 600; transition: opacity 0.2s;"
-                        onmouseover="this.style.opacity=0.8; this.style.textDecoration='underline'"
-                        onmouseout="this.style.opacity=1; this.style.textDecoration='none'"
-                      >
-                        {{ formatCurrencyFull(data.irregular) }} <i class="pi pi-search" style="font-size: 0.7rem; margin-left: 4px;"></i>
-                      </a>
-                      <span v-else>{{ formatCurrencyFull(data.irregular) }}</span>
-                    </template>
-                  </Column>
-                  <Column field="pct_irregular" header="% SEM COMPROVAÇÃO" style="width: 45%" headerStyle="text-align: right" bodyStyle="text-align: right">
-                    <template #body="{ data }">
-                      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: 100%;">
-                        <div style="flex: 1; max-width: 250px; height: 5px; background: color-mix(in srgb, var(--text-color) 8%, var(--tabs-border)); border-radius: 99px; overflow: hidden; display: flex;">
-                          <div
-                            :style="{
-                              width: Math.min(data.pct_irregular, 100) + '%',
-                              height: '100%',
-                              background: data.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
-                                        : data.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
-                                        : data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
-                                        : 'var(--risk-low)'
-                            }"
-                          ></div>
-                        </div>
-                        <span :class="{
-                          'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                          'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                          'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
-                          'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                        }" style="font-weight: 600; font-size: 0.8rem; min-width: 42px; text-align: right;">
-                          {{ data.pct_irregular.toFixed(1) }}%
-                        </span>
-                      </div>
-                    </template>
-                  </Column>
-                </DataTable>
-              </div>
-            </template>
-
             <ColumnGroup type="footer">
               <Row>
                 <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" />
@@ -636,6 +645,34 @@ function chartOptionMensalGtin(semestre) {
           </DataTable>
         </div>
       </div>
+
+      <!-- Modal de Zoom do Histórico Mensal -->
+      <Dialog 
+        v-model:visible="isMonthlyChartExpanded" 
+        modal 
+        header="Histórico Mensal de Movimentação (Detalhamento)" 
+        :style="{ width: '90vw', maxWidth: '1400px' }"
+        :breakpoints="{ '960px': '95vw' }"
+        class="evolucao-zoom-dialog"
+      >
+        <div style="height: 65vh; min-height: 450px; padding: 1rem 0;">
+          <VChart
+            v-if="isMonthlyChartExpanded"            :option="chartOptionMensalGtin(selectedSemestre?.semestre, true)"
+            :update-options="{ notMerge: true }"
+            autoresize
+            style="width: 100%; height: 100%;"
+          />
+        </div>
+        <template #footer>
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-top: 0.5rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              <i class="pi pi-info-circle" style="margin-right: 6px; font-size: 0.8rem;" />
+              Utilize o mouse ou o slider inferior para navegar pelo histórico.
+            </div>
+            <Button label="Fechar" icon="pi pi-times" class="p-button-outlined p-button-sm" @click="isMonthlyChartExpanded = false" />
+          </div>
+        </template>
+      </Dialog>
     </template>
     <div v-else class="tab-placeholder">
       <i class="pi pi-chart-bar placeholder-icon" />
@@ -683,16 +720,29 @@ function chartOptionMensalGtin(semestre) {
 .evolucao-card-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--tabs-border);
   margin-bottom: 1rem;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-color);
   opacity: 0.85;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .evolucao-card-header i { font-size: 1rem; color: var(--primary-color); }
@@ -702,7 +752,44 @@ function chartOptionMensalGtin(semestre) {
   font-size: 0.8rem;
   opacity: 0.5;
 }
-.evolucao-chart-wrap { height: 350px; padding: 0.5rem 0 0 0; }
+
+.btn-clear-filter {
+  margin-left: auto;
+  margin-right: 1rem;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  color: var(--primary-color) !important;
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  transition: all 0.2s ease !important;
+}
+.btn-clear-filter:hover {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  transform: translateY(-1px);
+}
+.btn-zoom {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  color: var(--primary-color) !important;
+  padding: 0.25rem 0.75rem !important;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap;
+  height: auto !important;
+  line-height: 1 !important;
+}
+.btn-zoom:hover {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  transform: translateY(-1px);
+}
+.evolucao-chart-wrap { 
+  height: 25vh; 
+  min-height: 200px; 
+  padding: 0.5rem 0 0 0; 
+}
 .evolucao-chart { width: 100%; height: 100%; }
 
 .evolucao-table-wrap { overflow-x: auto; padding-top: 0.5rem; }
@@ -836,6 +923,48 @@ function chartOptionMensalGtin(semestre) {
   opacity: 0.7;
   letter-spacing: 0.01em;
 }
+
+.sem-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sem-badge i { font-size: 0.6rem !important; }
+
+/* Label de semestre clicável dentro da tabela mensal */
+.mes-sem-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 99px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  opacity: 0.55;
+}
+.mes-sem-label:hover {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--primary-color);
+  opacity: 1;
+}
+.mes-sem-selected {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color) !important;
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  opacity: 1 !important;
+}
 .col-regular { color: var(--risk-low); }
 .col-irregular { color: var(--risk-high); }
 
@@ -893,4 +1022,18 @@ function chartOptionMensalGtin(semestre) {
 }
 
 .mensal-gtin-chart-header i { color: var(--primary-color); font-size: 0.9rem; }
+
+.evolucao-zoom-dialog :deep(.p-dialog-header) {
+  border-bottom: 1px solid var(--tabs-border);
+  padding: 1.25rem 1.5rem;
+  background: var(--card-bg);
+}
+.evolucao-zoom-dialog :deep(.p-dialog-content) {
+  background: var(--card-bg);
+}
+.evolucao-zoom-dialog :deep(.p-dialog-footer) {
+  border-top: 1px solid var(--tabs-border);
+  padding: 1rem 1.5rem;
+  background: var(--card-bg);
+}
 </style>

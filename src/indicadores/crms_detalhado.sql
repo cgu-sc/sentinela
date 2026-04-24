@@ -430,8 +430,6 @@ SELECT
     competencia,
     SUM(nu_prescricoes_medico)                                    AS nu_prescricoes_medico_em_todos_estabelecimentos,
     COUNT(DISTINCT nu_cnpj)                                       AS nu_estabelecimentos_com_registro_mesmo_crm,
-    -- Opção 1: Lista de CNPJs para cálculo de únicos no backend
-    STRING_AGG(CAST(nu_cnpj AS VARCHAR(MAX)), ',')                AS lista_cnpjs_brasil,
     CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
         NULLIF(CAST(
             DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
@@ -439,6 +437,62 @@ SELECT
 INTO #prescricoes_todos_estabelecimentos
 FROM #base_agregada_crm_cnpj
 GROUP BY nu_crm, sg_uf_crm, competencia;
+GO
+
+
+-- ============================================================================
+-- NORMALIZAÇÃO: DIMENSÕES E FATO (Para resolver explosão de storage)
+-- ============================================================================
+
+-- 1. Dicionário de Médicos (Dimensão)
+DROP TABLE IF EXISTS temp_CGUSC.fp.dim_crm;
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY id_medico) AS id_crm_id,
+    id_medico
+INTO temp_CGUSC.fp.dim_crm 
+FROM (SELECT DISTINCT CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm AS id_medico FROM #base_agregada_crm_cnpj) t;
+
+-- Remove índices antigos se existirem para evitar erro 1902
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCrm_ID' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm;
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCrm' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm ON temp_CGUSC.fp.dim_crm;
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCrm_String' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm;
+
+CREATE CLUSTERED INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm(id_crm_id);
+CREATE NONCLUSTERED INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm(id_medico);
+
+-- 2. Dicionário de CNPJs (Dimensão)
+DROP TABLE IF EXISTS temp_CGUSC.fp.dim_cnpj;
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY nu_cnpj) AS cnpj_id,
+    nu_cnpj
+INTO temp_CGUSC.fp.dim_cnpj 
+FROM (SELECT DISTINCT nu_cnpj FROM #base_agregada_crm_cnpj) t;
+
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCnpj_ID' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj_ID ON temp_CGUSC.fp.dim_cnpj;
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCnpj' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj ON temp_CGUSC.fp.dim_cnpj;
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_DimCnpj_String' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj_String ON temp_CGUSC.fp.dim_cnpj;
+
+CREATE CLUSTERED INDEX IDX_DimCnpj_ID ON temp_CGUSC.fp.dim_cnpj(cnpj_id);
+CREATE NONCLUSTERED INDEX IDX_DimCnpj_String ON temp_CGUSC.fp.dim_cnpj(nu_cnpj);
+
+-- 3. Tabela Fato de Atendimento (Magra)
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_atendimento;
+SELECT 
+    M.id_crm_id,
+    C.cnpj_id,
+    B.competencia
+INTO temp_CGUSC.fp.crm_atendimento
+FROM #base_agregada_crm_cnpj B
+JOIN temp_CGUSC.fp.dim_crm M ON M.id_medico = CAST(B.nu_crm AS VARCHAR(10)) + '/' + B.sg_uf_crm
+JOIN temp_CGUSC.fp.dim_cnpj C ON C.nu_cnpj   = B.nu_cnpj;
+
+-- 4. Índice Columnstore para Alta Compressão
+CREATE CLUSTERED COLUMNSTORE INDEX IX_Atendimento_CS ON temp_CGUSC.fp.crm_atendimento;
+
+-- 5. Índice de Busca Rápida (B-Tree) para performance de Dashboard (Singleton Lookups)
+CREATE NONCLUSTERED INDEX IDX_Atendimento_Lookups 
+    ON temp_CGUSC.fp.crm_atendimento(id_crm_id, competencia) 
+    INCLUDE (cnpj_id);
 GO
 
 
@@ -468,7 +522,6 @@ SELECT
     AS DECIMAL(18,2))                                              AS nu_prescricoes_dia,
     P.nu_prescricoes_dia_em_todos_estabelecimentos,
     P.nu_estabelecimentos_com_registro_mesmo_crm,
-    P.lista_cnpjs_brasil,
     A.nu_autorizacoes_estabelecimento,
     A.dt_prescricao_inicial_medico,
     A.dt_prescricao_final_medico,
@@ -769,6 +822,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 SELECT
     A.nu_cnpj                                                         AS cnpj,
     A.id_medico,
+    M.id_crm_id,
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes,
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
@@ -780,7 +834,6 @@ SELECT
     ISNULL(P.nu_prescricoes_medico_em_todos_estabelecimentos,
            A.nu_prescricoes_medico)                                   AS prescricoes_total_brasil,
     ISNULL(P.nu_estabelecimentos_com_registro_mesmo_crm, 1)           AS nu_estabelecimentos,
-    P.lista_cnpjs_brasil,
     CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
     -- Texto geográfico: gerado inline da master para este CNPJ
     CASE WHEN G.id_medico IS NOT NULL THEN
@@ -817,6 +870,7 @@ SELECT
     ISNULL(AL.flag_concentracao_estabelecimento, 0)                   AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM #lista_alertas_temp A
+JOIN temp_CGUSC.fp.dim_crm M ON M.id_medico = A.id_medico
 LEFT JOIN temp_CGUSC.fp.alertas_crm AL
     ON AL.nu_cnpj = A.nu_cnpj AND AL.id_medico = A.id_medico AND AL.competencia = A.competencia
 INNER JOIN #prescricoes_todos_estabelecimentos P
@@ -848,8 +902,12 @@ LEFT JOIN temp_CGUSC.fp.alertas_crm_registro REG_IRR
     AND REG_IRR.competencia   = A.competencia
     AND REG_IRR.tipo_anomalia = 'IRREGULAR';
 
+-- Remove o índice antigo se existir (garante que não haverá erro 1902 se rodar apenas este bloco)
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key' AND object_id = OBJECT_ID('temp_CGUSC.fp.crm_export'))
+    DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
+
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(cnpj, competencia, id_medico);
+    ON temp_CGUSC.fp.crm_export(cnpj, id_crm_id, competencia);
 GO
 
 

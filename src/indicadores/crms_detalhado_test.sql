@@ -461,7 +461,7 @@ CREATE NONCLUSTERED INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm(id_medico);
 -- 2. Dicionário de CNPJs (Dimensão)
 DROP TABLE IF EXISTS temp_CGUSC.fp.dim_cnpj;
 SELECT 
-    ROW_NUMBER() OVER (ORDER BY nu_cnpj) AS cnpj_id, 
+    ROW_NUMBER() OVER (ORDER BY nu_cnpj) AS cnpj_id,
     nu_cnpj
 INTO temp_CGUSC.fp.dim_cnpj 
 FROM (SELECT DISTINCT nu_cnpj FROM #base_agregada_crm_cnpj) t;

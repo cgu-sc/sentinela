@@ -68,7 +68,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
       @click="emit('kpi-click', 'agrupamento')"
     >
       <div class="alert-kpi-header">
-        <span class="alert-kpi-label">CONCENTRAÇÃO MESMO CRM</span>
+        <span class="alert-kpi-label">CONCENTRAÇÃO CRM ÚNICO</span>
         <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos que emitiram todas as suas prescrições em um curtíssimo espaço de tempo.'" />
       </div>
       <div class="alert-kpi-body">
@@ -173,7 +173,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
       @click="emit('kpi-click', 'surtos_cnpj')"
     >
       <div class="alert-kpi-header">
-        <span class="alert-kpi-label">CONCENTRAÇÃO CRMs DIVERSOS</span>
+        <span class="alert-kpi-label">CONCENTRAÇÃO CRMs MÚLTIPLOS</span>
         <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Identifica se a farmácia registrou volume atípico de dispensações concentrado em poucas horas.'" />
       </div>
       <div class="alert-kpi-body">

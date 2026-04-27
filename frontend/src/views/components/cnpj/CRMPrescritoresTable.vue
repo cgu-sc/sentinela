@@ -187,7 +187,7 @@ const maxPDOverall = computed(() => {
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
-                    <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO MESMO CRM
+                    <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO CRM ÚNICO
                     <span v-if="m.alertas_diarios?.length" class="badge-count">({{ m.alertas_diarios.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
@@ -216,7 +216,7 @@ const maxPDOverall = computed(() => {
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios de surto geral'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
-                    <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
+                    <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs MÚLTIPLOS
                     <span v-if="m.alertas_surto?.length" class="badge-count">({{ m.alertas_surto.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>

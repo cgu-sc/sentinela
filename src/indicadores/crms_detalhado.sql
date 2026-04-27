@@ -585,6 +585,96 @@ GO
 
 
 -- ============================================================================
+-- VISUALIZAÇÃO CRM ÚNICO: crm_unico_perfil_diario
+-- Grain: (cnpj, id_medico, dt_dia)
+-- Série diária de prescrições por médico nesta farmácia, com flag de anomalia
+-- e mediana trimestral de referência para o gráfico de histórico.
+-- Contém apenas médicos com pelo menos um dia flagado em crm_unico_alertas.
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_perfil_diario;
+
+WITH mediana_por_medico AS (
+    SELECT DISTINCT
+        nu_cnpj,
+        CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm AS id_medico,
+        competencia,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
+            OVER (
+                PARTITION BY nu_cnpj,
+                             CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm,
+                             (competencia / 100),
+                             ((competencia % 100 - 1) / 3)
+            ) AS mediana_prescricoes_dia
+    FROM #base_diaria_crm
+)
+SELECT
+    D.nu_cnpj                                            AS cnpj,
+    CAST(D.nu_crm AS VARCHAR(10)) + '/' + D.sg_uf_crm   AS id_medico,
+    D.dt_dia,
+    D.competencia,
+    D.nu_prescricoes_dia,
+    D.nu_minutos_dia,
+    CAST(
+        CASE WHEN D.nu_minutos_dia = 0
+             THEN 999.0
+             ELSE CAST(D.nu_prescricoes_dia AS DECIMAL(10,2))
+                  / (CAST(D.nu_minutos_dia  AS DECIMAL(10,2)) / 60.0)
+        END AS DECIMAL(5,1)
+    )                                                    AS taxa_hora,
+    CAST(ISNULL(M.mediana_prescricoes_dia, 0) AS DECIMAL(10,2)) AS mediana_diaria,
+    CAST(CASE WHEN A.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_anomalo
+INTO temp_CGUSC.fp.crm_unico_perfil_diario
+FROM #base_diaria_crm D
+INNER JOIN (
+    SELECT DISTINCT cnpj, id_medico
+    FROM temp_CGUSC.fp.crm_unico_alertas
+) MEDICOS_COM_ALERTA
+    ON  MEDICOS_COM_ALERTA.cnpj      = D.nu_cnpj
+    AND MEDICOS_COM_ALERTA.id_medico = CAST(D.nu_crm AS VARCHAR(10)) + '/' + D.sg_uf_crm
+LEFT JOIN mediana_por_medico M
+    ON  M.nu_cnpj     = D.nu_cnpj
+    AND M.id_medico   = CAST(D.nu_crm AS VARCHAR(10)) + '/' + D.sg_uf_crm
+    AND M.competencia = D.competencia
+LEFT JOIN temp_CGUSC.fp.crm_unico_alertas A
+    ON  A.cnpj      = D.nu_cnpj
+    AND A.id_medico = CAST(D.nu_crm AS VARCHAR(10)) + '/' + D.sg_uf_crm
+    AND A.dt_alerta = D.dt_dia;
+
+CREATE CLUSTERED INDEX IDX_CrmUnicoPerfil
+    ON temp_CGUSC.fp.crm_unico_perfil_diario(cnpj, id_medico, dt_dia);
+
+
+-- ============================================================================
+-- VISUALIZAÇÃO CRM ÚNICO: crm_unico_detalhe
+-- Grain: (cnpj, id_medico_alerta, dt_alerta) → todas as transações da farmácia
+-- Armazena TODOS os lançamentos do dia flagado, não apenas os do CRM âncora,
+-- para que o auditor veja o contexto sequencial completo (outros CRMs incluídos).
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_detalhe;
+
+SELECT
+    A.cnpj,
+    A.id_medico        AS id_medico_alerta,
+    A.dt_alerta,
+    M.data_hora,
+    M.num_autorizacao,
+    M.crm,
+    M.crm_uf,
+    M.codigo_barra,
+    M.valor_pago
+INTO temp_CGUSC.fp.crm_unico_detalhe
+FROM temp_CGUSC.fp.crm_unico_alertas A
+INNER JOIN #mov_surto_base M
+    ON  M.cnpj                    = A.cnpj
+    AND CAST(M.data_hora AS DATE) = A.dt_alerta;
+
+CREATE CLUSTERED INDEX IDX_CrmUnicoDetalhe
+    ON temp_CGUSC.fp.crm_unico_detalhe(cnpj, id_medico_alerta, dt_alerta);
+
+GO
+
+
+-- ============================================================================
 -- MOTOR GEOGRÁFICO: alertas_crm_geografico (v5 — Tabela Master)
 -- Grain: (id_medico, competencia) — par mais crítico por médico/mês.
 -- Armazena distancia_km como DECIMAL e os dois CNPJs como colunas estruturadas,
@@ -1147,7 +1237,9 @@ GO
 PRINT '============================================================================';
 PRINT 'SCRIPT v5 EXECUTADO COM SUCESSO:';
 PRINT '  - dados_crm_detalhado          : sem alertas, sem nu_populacao';
-PRINT '  - crm_unico_alertas     : [v5] master diaria de alertas temporais (com competencia)';
+PRINT '  - crm_unico_alertas            : [v5] master diaria de alertas temporais (com competencia)';
+PRINT '  - crm_unico_perfil_diario      : serie diaria por medico, com flag de anomalia e mediana';
+PRINT '  - crm_unico_detalhe            : todas as transacoes da farmacia nos dias flagados';
 PRINT '  - alertas_crm_geografico       : [v5] master geografica — distancia_km numerico + pares de CNPJs';
 PRINT '  - alertas_crm                  : [v5] flags BIT — flag_concentracao/geografico/registro + qtd_dias_concentracao';
 PRINT '  - alertas_crm_registro         : [v5] master CFM — INEXISTENTE/IRREGULAR por competencia + valor';

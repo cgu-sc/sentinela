@@ -2,21 +2,30 @@ import logging
 from decimal import Decimal
 
 
-def buscar_dados_prescritores(cursor, cnpj):
+def buscar_dados_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
     """
-    Busca os indicadores consolidados de prescritores para um CNPJ a partir da crm_export (v5).
-    Agrega os dados mensais para o período total.
+    Busca os KPIs consolidados de prescritores para a farmácia no período.
+    Utiliza a crm_export (v5) para garantir consistência com o Dashboard.
     """
     try:
-        # 1. Busca totais e Top 1 / Top 5
-        cursor.execute('''
+        # Converte datas para formato de competência (YYYYMM) de forma segura
+        def to_comp(d):
+            if not d: return None
+            if isinstance(d, str): return int(d.replace('-', '')[:6])
+            return int(d.strftime('%Y%m'))
+
+        comp_ini = to_comp(data_inicio) or 201501
+        comp_fim = to_comp(data_fim) or 203012
+
+        cursor.execute(f'''
             WITH Totais AS (
+                -- Calcula o faturamento total da farmácia e total de médicos no período
                 SELECT 
+                    SUM(vl_total_prescricoes) as total_valor, 
                     SUM(nu_prescricoes) as total_prescricoes,
-                    SUM(vl_total_prescricoes) as total_valor,
                     COUNT(DISTINCT id_medico) as total_prescritores_distintos
                 FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ?
+                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
             ),
             Ranking AS (
                 SELECT 
@@ -24,7 +33,7 @@ def buscar_dados_prescritores(cursor, cnpj):
                     SUM(vl_total_prescricoes) as vl_medico,
                     ROW_NUMBER() OVER (ORDER BY SUM(vl_total_prescricoes) DESC) as rk
                 FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ?
+                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                 GROUP BY id_medico
             ),
             Exclusivos AS (
@@ -33,7 +42,7 @@ def buscar_dados_prescritores(cursor, cnpj):
                 FROM (
                     SELECT id_medico
                     FROM temp_CGUSC.fp.crm_export
-                    WHERE cnpj = ?
+                    WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                     GROUP BY id_medico
                     HAVING MAX(nu_estabelecimentos) = 1
                 ) t
@@ -52,7 +61,7 @@ def buscar_dados_prescritores(cursor, cnpj):
                     -- Média Brasil
                     SUM(prescricoes_total_brasil) / NULLIF(SUM(prescricoes_total_brasil / NULLIF(prescricoes_dia_brasil, 0)), 0) as avg_br
                 FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ?
+                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                 GROUP BY id_medico
             ),
             Contagens AS (
@@ -110,14 +119,23 @@ def buscar_dados_prescritores(cursor, cnpj):
         return None
 
 
-def buscar_top20_prescritores(cursor, cnpj):
+def buscar_top20_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
     """
     Busca a lista dos prescritores de interesse a partir da crm_export (v5).
     Agrega os meses para mostrar o volume total e os piores alertas do período.
     """
     try:
+        # Converte datas para formato de competência (YYYYMM) de forma segura
+        def to_comp(d):
+            if not d: return None
+            if isinstance(d, str): return int(d.replace('-', '')[:6])
+            return int(d.strftime('%Y%m'))
+
+        comp_ini = to_comp(data_inicio) or 201501
+        comp_fim = to_comp(data_fim) or 203012
+
         # Busca e agrega por médico
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT 
                 id_medico,
                 SUM(nu_prescricoes) as nu_prescricoes,
@@ -142,7 +160,7 @@ def buscar_top20_prescritores(cursor, cnpj):
                 MAX(CAST(flag_concentracao_estabelecimento AS INT)) as flag_surto_geral,
                 MAX(alerta_distancia_geografica) as alerta_geografico
             FROM temp_CGUSC.fp.crm_export
-            WHERE cnpj = ?
+            WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
             GROUP BY id_medico
             ORDER BY nu_prescricoes DESC
         ''', cnpj)
@@ -184,7 +202,7 @@ def _get_valor(dados, campo, default=0):
     return val
 
 
-def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
+def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cursor=None, data_inicio=None, data_fim=None):
     """
     Gera a aba 'análise de crms' no workbook Excel.
 
@@ -761,28 +779,86 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores):
         row_top += 1
 
     # =================================================================
-    # AJUSTE DE LARGURA DAS COLUNAS
+    # SEÇÃO DE EVIDÊNCIAS (DETALHAMENTO TEXTUAL)
     # =================================================================
+    # row_top já está no final da tabela, pois foi incrementado no loop
+    row_evidencias = row_top + 3 
+    ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⚠️ DETALHAMENTO DE EVIDÊNCIAS DOS ALERTAS", fmt_secao_titulo)
+    row_evidencias += 2
+
+    # --- 1. EVIDÊNCIAS DE DISTÂNCIA GEOGRÁFICA ---
+    evidencias_geo = [m.get('alerta_geografico') for m in top20_prescritores if m.get('alerta_geografico')]
+    if evidencias_geo:
+        ws.merge_range(row_evidencias, 1, row_evidencias, 19, "📍 DISTÂNCIA GEOGRÁFICA (>400KM)", wb.add_format({'bold': True, 'font_color': '#8b5cf6', 'font_size': 11}))
+        row_evidencias += 1
+        for txt in list(set(evidencias_geo)): # distinct
+            ws.merge_range(row_evidencias, 1, row_evidencias + 1, 19, f"• {txt}", wb.add_format({'text_wrap': True, 'valign': 'top', 'font_size': 9, 'italic': True}))
+            row_evidencias += 2
+        row_evidencias += 1
+
+    # --- 2. EVIDÊNCIAS DE RAJADAS (CONCENTRAÇÃO MESMO CRM) ---
+    if cursor:
+        try:
+            # Função auxiliar para extrair YYYYMM de string 'YYYY-MM-DD' ou objeto date
+            def to_comp(d):
+                if not d: return None
+                if isinstance(d, str): return int(d.replace('-', '')[:6])
+                return int(d.strftime('%Y%m'))
+
+            comp_ini = to_comp(data_inicio) or 201501
+            comp_fim = to_comp(data_fim) or 203012
+
+            # Busca todas as rajadas detalhadas no período (lista completa)
+            cursor.execute(f"""
+                SELECT id_medico, dt_alerta, nu_prescricoes_dia, nu_minutos_dia, taxa_hora
+                FROM temp_CGUSC.fp.alertas_crm_concentracao 
+                WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
+                ORDER BY dt_alerta DESC, taxa_hora DESC
+            """, (cnpj, data_inicio, data_fim))
+            
+            rajadas = cursor.fetchall()
+            if rajadas:
+                ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⏱️ LANÇAMENTOS SEQUENCIAIS (MESMO CRM)", wb.add_format({'bold': True, 'font_color': COR_LARANJA, 'font_size': 11}))
+                row_evidencias += 1
+                for r in rajadas:
+                    dt_f = r[1].strftime('%d/%m/%Y') if hasattr(r[1], 'strftime') else str(r[1])
+                    txt = f"Médico {r[0]} em {dt_f}: {r[2]} prescrições em uma janela de {r[3]} minutos (Ritmo: {r[4]:.1f}/hora)."
+                    ws.merge_range(row_evidencias, 1, row_evidencias, 19, f"• {txt}", wb.add_format({'font_size': 9, 'font_color': '#555555'}))
+                    row_evidencias += 1
+                row_evidencias += 1
+
+            # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
+            cursor.execute(f"""
+                SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, descricao
+                FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial
+                WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
+                ORDER BY dt_alerta DESC, hr_janela DESC
+            """, (cnpj, data_inicio, data_fim))
+            
+            surtos = cursor.fetchall()
+            if surtos:
+                ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⚡ CONCENTRAÇÃO DE CRMs DIVERSOS (SURTOS)", wb.add_format({'bold': True, 'font_color': '#D97706', 'font_size': 11}))
+                row_evidencias += 1
+                for s in surtos:
+                    dt_f = s[0].strftime('%d/%m/%Y') if hasattr(s[0], 'strftime') else str(s[0])
+                    txt = f"Em {dt_f} às {s[1]}:00h: {s[4]} ({s[2]} prescrições de {s[3]} médicos diferentes)."
+                    ws.merge_range(row_evidencias, 1, row_evidencias, 19, f"• {txt}", wb.add_format({'font_size': 9, 'font_color': '#555555'}))
+                    row_evidencias += 1
+        except Exception as e:
+            logging.error(f"Erro ao buscar evidências detalhadas para {cnpj}: {e}")
+            pass
+
+    # Ajuste final de colunas para legibilidade
     ws.set_column('A:A', 2)   # Margem
-    ws.set_column('B:B', 24)  # # (Ranking) / INDICADOR
-    ws.set_column('C:C', 14)  # CRM/UF
-    ws.set_column('D:D', 12)  # 1ª Prescrição
-    ws.set_column('E:E', 14)  # Data Reg. CRM
-    ws.set_column('F:F', 12)  # Prescrições
-    ws.set_column('G:G', 14)  # Valor
-    ws.set_column('H:H', 10)  # % Part
-    ws.set_column('I:I', 10)  # % Acum
-    ws.set_column('J:J', 10)  # Presc/Dia
-    ws.set_column('K:K', 14)  # Presc Total BR
-    ws.set_column('L:L', 11)  # Presc/Dia BR
-    ws.set_column('M:M', 10)  # % Aqui
-    ws.set_column('N:N', 10)  # >30 Aqui?
-    ws.set_column('O:O', 10)  # >30 Rede?
-    ws.set_column('P:P', 11)  # Tempo Conc.
-    ws.set_column('Q:Q', 10)  # Exclusivo?
-    ws.set_column('R:R', 10)  # Detalhe Geo
+    ws.set_column('B:B', 6)   # Rank
+    ws.set_column('C:C', 18)  # CRM
+    ws.set_column('D:E', 15)  # Datas
+    ws.set_column('F:G', 12)  # Presc/Valor
+    ws.set_column('H:I', 10)  # Part/Acum
+    ws.set_column('J:L', 10)  # Presc/Dia e BR
+    ws.set_column('M:M', 8)   # % Aqui
+    ws.set_column('N:T', 15)  # Flags e Alertas
 
     ws.freeze_panes(6, 0)
-
     logging.info(f"Aba 'Análise de CRMs' v5.0 gerada com sucesso para CNPJ {cnpj}")
 

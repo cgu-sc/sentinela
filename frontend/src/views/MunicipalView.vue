@@ -8,7 +8,7 @@ import MunicipalTable from './components/tables/MunicipalTable.vue';
 import { useFilterStore } from '@/stores/filters';
 
 const filterStore = useFilterStore();
-useFetchAnalytics({ includeFatorRisco: true });
+useFetchAnalytics({ includeFatorRisco: true, includeNationalContext: false });
 </script>
 
 <template>

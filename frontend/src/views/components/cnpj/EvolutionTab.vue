@@ -5,7 +5,6 @@ import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
 import { useFilterStore } from '@/stores/filters';
 import { useFrozenData } from '@/composables/useFrozenData';
-import { watch } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
@@ -66,14 +65,6 @@ const hoveredSemestre = ref(null);
 
 const expandedRows = ref([]);
 const selectedSemestre = ref(null);
-
-// Inicializa com o semestre de MAIOR taxa de não comprovação
-watch(cachedEvolucaoData, (newVal) => {
-  if (newVal?.semestres?.length && !selectedSemestre.value) {
-    selectedSemestre.value = [...newVal.semestres]
-      .sort((a, b) => b.pct_irregular - a.pct_irregular)[0];
-  }
-}, { immediate: true });
 
 // Todos os meses de todos os semestres (exibição global no card permanente)
 const todosMeses = computed(() => {

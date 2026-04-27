@@ -5,12 +5,11 @@ import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
 import { FILTER_ALL_VALUE, KPI_LABEL_MAP, KPI_PRIORITY_ORDER } from '@/config/constants';
 import { RISK_COLORS } from '@/config/colors';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
-
 /**
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null) {
+export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null) {
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -41,16 +40,20 @@ export const useAnalyticsStore = defineStore('analytics', {
     isLoading: false,
     fatorRiscoLoading: false,
     error: null,
-    lastSync: null
+    lastSync: null,
+    lastParamsHash: null
   }),
 
   actions: {
     async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null) {
+      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
+      
+      // Gera um hash simples (string JSON) dos parâmetros para comparar
+      const currentParamsHash = JSON.stringify(params);
+      
       this.isLoading = true;
       this.error = null;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
-
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
@@ -60,6 +63,7 @@ export const useAnalyticsStore = defineStore('analytics', {
         this.resultadoMunicipios = response.data.resultado_municipios || [];
         this.resultadoCnpjs = response.data.resultado_cnpjs || [];
         this.lastSync = new Date();
+        this.lastParamsHash = currentParamsHash;
       } catch (err) {
         console.error('Erro ao buscar resumo do dashboard:', err);
         this.error = 'Não foi possível carregar as métricas estratégicas.';

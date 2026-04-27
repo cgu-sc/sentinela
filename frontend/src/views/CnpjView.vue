@@ -8,7 +8,7 @@ import UFDrillMap from './components/maps/UFDrillMap.vue';
 import CnpjTable from './components/tables/CnpjTable.vue';
 
 const filterStore = useFilterStore();
-useFetchAnalytics({ includeFatorRisco: true });
+useFetchAnalytics({ includeFatorRisco: true, includeNationalContext: false });
 </script>
 
 <template>

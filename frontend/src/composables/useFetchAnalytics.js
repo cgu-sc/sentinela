@@ -7,10 +7,10 @@
  */
 import { watch } from 'vue';
 import { useFilterStore } from '@/stores/filters';
-import { useAnalyticsStore } from '@/stores/analytics';
+import { useAnalyticsStore, buildAnalyticsParams } from '@/stores/analytics';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 
-export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
+export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true } = {}) {
   const filterStore    = useFilterStore();
   const analyticsStore = useAnalyticsStore();
   const { getApiParams, isPeriodoValido } = useFilterParameters();
@@ -29,13 +29,29 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
 
   // Filtros que afetam os dados nacionais do mapa do Brasil (sem UF/região/município)
   const fetchNacionalIfNeeded = () => {
-    if (!isPeriodoValido() || !filterStore.selectedUF) return;
+    // Só buscamos os dados nacionais (mapa) separadamente se houver um filtro de UF/Região/Mun ativo
+    // e se o componente solicitar explicitamente esse contexto (ex: telas que mantêm o mapa do Brasil visível).
+    if (!includeNationalContext || !isPeriodoValido() || !filterStore.selectedUF || filterStore.selectedUF === 'Todos') return;
     const p = getApiParams();
     analyticsStore.fetchSentinelaUFNacional(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede, p.unidadePf,
     );
   };
+
+  const isFresh = () => {
+    const p = getApiParams();
+    // Usamos a mesma função do store para garantir que o hash das chaves seja idêntico (ex: data_inicio vs inicio)
+    const apiReadyParams = buildAnalyticsParams(
+      p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
+      p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
+      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial
+    );
+    const currentHash = JSON.stringify(apiReadyParams);
+    return analyticsStore.lastParamsHash === currentHash;
+  };
+  
+  let isFirstRun = true;
 
   watch(
     () => [
@@ -51,7 +67,12 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedGrandeRede,
       filterStore.selectedUnidadePf,
     ],
-    () => { if (isPeriodoValido()) fetchAll(); },
+    () => { 
+      const skip = isFirstRun && isFresh();
+      if (isPeriodoValido() && !skip) {
+        fetchAll(); 
+      }
+    },
     { deep: true, immediate: true }
   );
 
@@ -66,7 +87,13 @@ export function useFetchAnalytics({ includeFatorRisco = false } = {}) {
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
     ],
-    fetchNacionalIfNeeded,
+    () => {
+      const skip = isFirstRun && isFresh();
+      if (isPeriodoValido() && !skip) {
+        fetchNacionalIfNeeded();
+      }
+      isFirstRun = false; // Após a primeira execução de ambos, liberamos o bloqueio
+    },
     { deep: true, immediate: true }
   );
 

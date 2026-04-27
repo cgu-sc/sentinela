@@ -438,66 +438,27 @@ INTO #prescricoes_todos_estabelecimentos
 FROM #base_agregada_crm_cnpj
 GROUP BY nu_crm, sg_uf_crm, competencia;
 
+
+
+
+
 -- ============================================================================
--- ARQUITETURA DE REDE NORMALIZADA (COLUMNSTORE)
+-- NORMALIZAÇÃO: DIMENSÕES (Apenas Médicos para ID numérico)
 -- ============================================================================
 
--- 1. Dicionário de CRMs (Dimensão)
+-- 1. Dicionário de Médicos (Dimensão)
 DROP TABLE IF EXISTS temp_CGUSC.fp.dim_crm;
 SELECT 
-    ROW_NUMBER() OVER (ORDER BY id_medico) AS id_crm_id, 
+    CAST(ROW_NUMBER() OVER (ORDER BY id_medico) AS INT) AS id_crm_id,
     id_medico
 INTO temp_CGUSC.fp.dim_crm 
 FROM (SELECT DISTINCT CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm AS id_medico FROM #base_agregada_crm_cnpj) t;
 
--- Remove índices antigos se existirem para evitar erro 1902
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCrm_ID' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm;
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCrm' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm ON temp_CGUSC.fp.dim_crm;
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCrm_String' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_crm')) DROP INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm;
-
 CREATE CLUSTERED INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm(id_crm_id);
 CREATE NONCLUSTERED INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm(id_medico);
 
--- 2. Dicionário de CNPJs (Dimensão)
-DROP TABLE IF EXISTS temp_CGUSC.fp.dim_cnpj;
-SELECT 
-    ROW_NUMBER() OVER (ORDER BY nu_cnpj) AS cnpj_id,
-    nu_cnpj
-INTO temp_CGUSC.fp.dim_cnpj 
-FROM (SELECT DISTINCT nu_cnpj FROM #base_agregada_crm_cnpj) t;
-
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCnpj_ID' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj_ID ON temp_CGUSC.fp.dim_cnpj;
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCnpj' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj ON temp_CGUSC.fp.dim_cnpj;
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_DimCnpj_String' AND object_id = OBJECT_ID('temp_CGUSC.fp.dim_cnpj')) DROP INDEX IDX_DimCnpj_String ON temp_CGUSC.fp.dim_cnpj;
-
-CREATE CLUSTERED INDEX IDX_DimCnpj_ID ON temp_CGUSC.fp.dim_cnpj(cnpj_id);
-CREATE NONCLUSTERED INDEX IDX_DimCnpj_String ON temp_CGUSC.fp.dim_cnpj(nu_cnpj);
-
--- 3. Tabela Fato de Atendimento (Magra)
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_atendimento;
-SELECT 
-    M.id_crm_id,
-    C.cnpj_id,
-    B.competencia
-INTO temp_CGUSC.fp.crm_atendimento
-FROM #base_agregada_crm_cnpj B
-JOIN temp_CGUSC.fp.dim_crm M ON M.id_medico = CAST(B.nu_crm AS VARCHAR(10)) + '/' + B.sg_uf_crm
-JOIN temp_CGUSC.fp.dim_cnpj C ON C.nu_cnpj   = B.nu_cnpj;
-
--- 4. Índice Columnstore para Alta Compressão
-CREATE CLUSTERED COLUMNSTORE INDEX IX_Atendimento_CS ON temp_CGUSC.fp.crm_atendimento;
-
--- 5. Índice de Busca Rápida (B-Tree) para performance de Dashboard (Singleton Lookups)
-CREATE NONCLUSTERED INDEX IDX_Atendimento_Lookups 
-    ON temp_CGUSC.fp.crm_atendimento(id_crm_id, competencia) 
-    INCLUDE (cnpj_id);
-GO
-
-
 -- ============================================================================
 -- TABELA FINAL: dados_crm_detalhado
--- Sem colunas de alerta (ficam em alertas_crm) e sem nu_populacao.
--- Elimina a necessidade de #lista_medicos_farmacia_popularFP_temp2.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.dados_crm_detalhado;
 

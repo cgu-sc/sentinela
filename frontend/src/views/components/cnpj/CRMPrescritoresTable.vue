@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { useFormatting } from "@/composables/useFormatting";
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-import CRMRedeOverlay from "./CRMRedeOverlay.vue";
 
 const cnpjDetailStore = useCnpjDetailStore();
 
@@ -22,7 +21,6 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 
 const filterOnlyIssues = ref(false);
 const showAllCrms     = ref(false);
-const redeOverlay     = ref(null);
 const expandedAlertasMedico = ref(new Set());
 const activeAlertTab  = ref({});
 
@@ -153,10 +151,9 @@ const maxPDOverall = computed(() => {
           <tr>
             <th style="width: 45px;" class="col-center">#</th>
             <th style="width: 160px;">CRM / Médico</th>
-            <th style="width: 34%">Status / Alertas</th>
+            <th style="width: 42%">Status / Alertas</th>
             <th class="col-right" style="width: 15%">Volume / Valor</th>
             <th class="col-center" style="width: 16%">Participação / Acumulado</th>
-            <th class="col-center" style="width: 8%">Rede</th>
             <th class="col-center" style="width: 12%">Prescrições por Dia</th>
             <th class="col-center" style="width: 5%">Excl.</th>
           </tr>
@@ -254,13 +251,6 @@ const maxPDOverall = computed(() => {
                     </div>
                   </div>
                 </div>
-              </td>
-              <td class="col-center">
-                <span
-                  :class="{ 'text-purple': m.qtd_estabelecimentos_atua > 50, 'rede-clickable': m.lista_cnpjs_brasil }"
-                  v-tooltip.top="m.lista_cnpjs_brasil ? 'Clique para ver a lista de farmácias' : null"
-                  @click.stop="m.lista_cnpjs_brasil ? redeOverlay.open($event, m) : null"
-                >{{ m.qtd_estabelecimentos_atua }} farm.</span>
               </td>
               <td class="col-center">
                 <div class="cell-stacked" style="align-items: center; gap: 0.1rem;">
@@ -454,8 +444,6 @@ const maxPDOverall = computed(() => {
       </button>
     </div>
 
-    <!-- Overlay de Rede de Farmácias -->
-    <CRMRedeOverlay ref="redeOverlay" :current-cnpj="props.currentCnpj"/>
 
   </div>
 </template>
@@ -865,17 +853,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .theme-conc .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--risk-medium) 8%, transparent); }
 .theme-surto .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--amber-500) 8%, transparent); }
 
-/* ── Rede: botão de clique ──────────────────────────────────────────── */
-.rede-clickable {
-  cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 2px;
-  transition: color 0.2s ease;
-}
-.rede-clickable:hover {
-  color: var(--primary-color) !important;
-  text-decoration: underline;
-}
+
 
 .time-badge {
   background: color-mix(in srgb, var(--text-color) 7%, transparent);

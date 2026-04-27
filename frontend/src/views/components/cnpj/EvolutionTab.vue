@@ -131,12 +131,17 @@ function onMensalChartClick(params) {
   if (sem) selectedSemestre.value = sem;
 }
 
-// Hover sync: quando passa o mouse em um semestre no gráfico de cima
-function onChartMouseOver(params) {
-  if (params.componentType === 'series' && params.name) {
-    hoveredSemestre.value = params.name;
+// Hover sync: disparado quando o cursor entra na área de uma categoria (quadro translúcido)
+function onAxisPointerUpdate(event) {
+  if (event.axesInfo && event.axesInfo[0]) {
+    const idx = event.axesInfo[0].value;
+    const semestres = cachedEvolucaoData.value?.semestres ?? [];
+    if (semestres[idx]) {
+      hoveredSemestre.value = semestres[idx].semestre;
+    }
   }
 }
+
 function onChartMouseOut() {
   hoveredSemestre.value = null;
 }
@@ -500,7 +505,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             autoresize 
             class="evolucao-chart" 
             @click="onChartClick" 
-            @mouseover="onChartMouseOver"
+            @updateAxisPointer="onAxisPointerUpdate"
             @mouseout="onChartMouseOut"
           />
         </div>

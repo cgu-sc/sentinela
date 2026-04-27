@@ -217,9 +217,10 @@ watch(
   () => route.path,
   (path) => {
     const locked = isLockedRoute(path);
+    const isEstab = path.startsWith("/estabelecimentos/");
     filterStore.filtersLocked = locked;
     if (!filterStore.sidebarLocked) {
-      filterStore.sidebarCollapsed = locked;
+      filterStore.sidebarCollapsed = locked || isEstab;
     }
   },
   { immediate: true },

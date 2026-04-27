@@ -899,70 +899,56 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 """
             def get_limiares_indicador(nome):
                 """
-                Busca os limiares dinamicamente do AnalyticsService (Single Source of Truth).
-                Mapeia os nomes amigáveis do relatório para as chaves do dicionário mestre.
+                Define os limiares de risco (Atenção e Crítico) para cada indicador.
+                Valores sincronizados com o arquivo frontend/src/config/riskConfig.js
                 """
-                # Tenta importar os limiares do backend. Se falhar (ex: rodando isolado), usa fallback.
-                try:
-                    import sys
-                    import os
-                    # Adiciona a raiz do projeto ao path para achar o backend
-                    projeto_raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    backend_path = os.path.join(projeto_raiz, 'backend')
-                    if backend_path not in sys.path:
-                        sys.path.append(backend_path)
-                    
-                    from api.services.analytics import _INDICATOR_THRESHOLDS
-                except Exception:
-                    # Fallback de segurança caso o ambiente python não consiga importar o backend
-                    return (2.0, 3.0)
-
-                # Mapeamento de Nome do Relatório -> Chave Técnica do Backend
-                _MAPA_CHAVES = {
-                    "Percentual de Não Comprovação":        "percentual_nao_comprovacao",
-                    "Vendas p/ Falecidos":                  "falecidos",
-                    "Incompatibilidade Patológica":         "incompatibilidade_patologica",
-                    "Dispensação em Teto Máximo":           "teto",
-                    "4+ Itens por Autorização":             "polimedicamento",
-                    "Valor do Ticket Médio":                "ticket_medio",
-                    "Faturamento Médio Mensal por Cliente": "receita_paciente",
-                    "Venda Per Capita Mensal Municipal":    "per_capita",
-                    "Medicamentos de Alto Custo":           "alto_custo",
-                    "Vendas Rápidas (<60s)":                "vendas_rapidas",
-                    "Volume Atípico":                       "volume_atipico",
-                    "Recorrência Sistêmica":                "recorrencia_sistemica",
-                    "Concentração em Dias de Pico":         "dias_pico",
-                    "Dispersão Geográfica Interestadual":   "dispersao_geografica",
-                    "Compra Única":                     "compra_unica",
-                    "Concentração de CRMs (HHI)":           "hhi_crm",
-                    "Exclusividade de CRMs":                "exclusividade_crm",
-                    "Irregularidade de CRMs":               "crms_irregulares",
+                # Mapeamento de Nome do Relatório -> (Limiar Atenção, Limiar Crítico)
+                # Ratio = Valor da Farmácia / Mediana Regional
+                _THRESHOLDS = {
+                    "Percentual de Não Comprovação":        (2.0, 3.0),
+                    "Vendas p/ Falecidos":                  (2.0, 3.0),
+                    "Incompatibilidade Patológica":         (2.0, 3.0),
+                    "Dispensação em Teto Máximo":           (1.2, 1.39),
+                    "4+ Itens por Autorização":             (2.0, 3.0),
+                    "Valor do Ticket Médio":                (2.0, 3.0),
+                    "Faturamento Médio por Cliente":        (2.0, 3.0),
+                    "Venda Per Capita Mensal":              (2.0, 3.0),
+                    "Medicamentos de Alto Custo":           (1.4, 1.7),
+                    "Vendas Rápidas (<60s)":                (2.0, 3.0),
+                    "Volume Atípico":                       (2.0, 3.0),
+                    "Recorrência Sistêmica":                (1.4, 1.7),
+                    "Concentração em Dias de Pico":         (1.4, 1.7),
+                    "Dispersão Geográfica Interestadual":   (2.0, 3.0),
+                    "Compra Única":                         (1.4, 1.7),
+                    "Concentração de CRMs (HHI)":           (2.0, 3.0),
+                    "Exclusividade de CRMs":                (2.0, 3.0),
+                    "Faturamento Atrelado a CRMs Irregulares": (2.0, 3.0),
                 }
 
-                chave = _MAPA_CHAVES.get(nome)
-                return _INDICATOR_THRESHOLDS.get(chave, (2.0, 3.0))
+                return _THRESHOLDS.get(nome.strip(), (2.0, 3.0))
             
             # --- DEFINIÇÃO ÚNICA DOS GRUPOS DE INDICADORES ---
             # Formato: (Nome amigável, col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br, tipo_fmt)
+            # Sincronizado com INDICATOR_GROUPS do riskConfig.js
             grupos_sentinela = [
-                ("1. RESULTADO DA AUDITORIA FINANCEIRA", [
+                ("1. Auditoria Financeira", [
                     ("Percentual de Não Comprovação", "pct_auditado", "med_auditado_reg", "med_auditado_uf", "med_auditado_br", "risco_auditado_reg", "risco_auditado_uf", "risco_auditado_br", "pct"),
                 ]),
-                ("2. ELEGIBILIDADE & CLÍNICA", [
-                    ("Vendas p/ Falecidos", "pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br", "pct"),
+                ("2. Elegibilidade & Clínica", [
+                    ("Vendas p/ Falecidos", "pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br", "pct3"),
                     ("Incompatibilidade Patológica", "pct_clinico", "med_clinico_reg", "med_clinico_uf", "med_clinico_br", "risco_clinico_reg", "risco_clinico_uf", "risco_clinico_br", "pct"),
                 ]),
-                ("3. PADRÕES DE QUANTIDADE", [
+                ("3. Padrões de Quantidade", [
                     ("Dispensação em Teto Máximo", "pct_teto", "med_teto_reg", "med_teto_uf", "med_teto_br", "risco_teto_reg", "risco_teto_uf", "risco_teto_br", "pct"),
                     ("4+ Itens por Autorização", "pct_polimedicamento", "med_polimedicamento_reg", "med_polimedicamento_uf", "med_polimedicamento_br", "risco_polimedicamento_reg", "risco_polimedicamento_uf", "risco_polimedicamento_br", "pct"),
                 ]),
-                ("4. PADRÕES FINANCEIROS", [
+                ("4. Padrões Financeiros", [
                     ("Valor do Ticket Médio", "val_ticket_medio", "med_ticket_reg", "med_ticket_uf", "med_ticket_br", "risco_ticket_reg", "risco_ticket_uf", "risco_ticket_br", "val"),
-                    ("Faturamento Médio Mensal por Cliente", "val_receita_paciente", "med_receita_paciente_reg", "med_receita_paciente_uf", "med_receita_paciente_br", "risco_receita_paciente_reg", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
-                    ("Venda Per Capita Mensal Municipal", "val_per_capita", "med_per_capita_reg", "med_per_capita_uf", "med_per_capita_br", "risco_per_capita_reg", "risco_per_capita_uf", "risco_per_capita_br", "val"),
+                    ("Faturamento Médio por Cliente", "val_receita_paciente", "med_receita_paciente_reg", "med_receita_paciente_uf", "med_receita_paciente_br", "risco_receita_paciente_reg", "risco_receita_paciente_uf", "risco_receita_paciente_br", "val"),
+                    ("Venda Per Capita Mensal", "val_per_capita", "med_per_capita_reg", "med_per_capita_uf", "med_per_capita_br", "risco_per_capita_reg", "risco_per_capita_uf", "risco_per_capita_br", "val"),
                     ("Medicamentos de Alto Custo", "pct_alto_custo", "med_alto_custo_reg", "med_alto_custo_uf", "med_alto_custo_br", "risco_alto_custo_reg", "risco_alto_custo_uf", "risco_alto_custo_br", "pct"),
                 ]),
-                ("5. AUTOMAÇÃO & GEOGRAFIA", [
+                ("5. Automação & Geografia", [
                     ("Vendas Rápidas (<60s)", "pct_vendas_rapidas", "med_vendas_rapidas_reg", "med_vendas_rapidas_uf", "med_vendas_rapidas_br", "risco_vendas_rapidas_reg", "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br", "pct"),
                     ("Volume Atípico", "val_volume_atipico", "med_volume_atipico_reg", "med_volume_atipico_uf", "med_volume_atipico_br", "risco_volume_atipico_reg", "risco_volume_atipico_uf", "risco_volume_atipico_br", "dec"),
                     ("Recorrência Sistêmica", "pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg", "med_recorrencia_sistemica_uf", "med_recorrencia_sistemica_br", "risco_recorrencia_sistemica_reg", "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br", "pct"),
@@ -970,10 +956,10 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ("Dispersão Geográfica Interestadual", "pct_geografico", "med_geografico_reg", "med_geografico_uf", "med_geografico_br", "risco_geografico_reg", "risco_geografico_uf", "risco_geografico_br", "pct"),
                     ("Compra Única", "pct_compra_unica", "med_compra_unica_reg", "med_compra_unica_uf", "med_compra_unica_br", "risco_compra_unica_reg", "risco_compra_unica_uf", "risco_compra_unica_br", "pct"),
                 ]),
-                ("6. INTEGRIDADE MÉDICA", [
-                    ("Concentração de CRMs (HHI)", "val_hhi_crm", "avg_hhi_crm_reg", "avg_hhi_crm_uf", "avg_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br", "dec"),
+                ("6. Integridade Médica", [
+                    ("Concentração de CRMs (HHI)", "val_hhi_crm", "med_hhi_crm_reg", "med_hhi_crm_uf", "med_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br", "dec"),
                     ("Exclusividade de CRMs", "pct_exclusividade_crm", "med_exclusividade_crm_reg", "med_exclusividade_crm_uf", "med_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
-                    ("Irregularidade de CRMs", "pct_crms_irregulares", "med_crms_irregulares_reg", "med_crms_irregulares_uf", "med_crms_irregulares_br", "risco_crms_irregulares_reg", "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct"),
+                    ("Faturamento Atrelado a CRMs Irregulares", "pct_crms_irregulares", "med_crms_irregulares_reg", "med_crms_irregulares_uf", "med_crms_irregulares_br", "risco_crms_irregulares_reg", "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct"),
                 ]),
             ]
 
@@ -986,8 +972,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             pop_fmt = f"{pop_mun:,.0f}".replace(",", ".")
 
             # Movemos os dados de Score para o topo para uso no cabeçalho
-            score = float(dados_risco.get('SCORE_RISCO_FINAL', 0))
-            classificacao = dados_risco.get('CLASSIFICACAO_RISCO', 'RISCO BAIXO')
+            score = float(dados_risco.get('score_risco_final', 0))
+            classificacao = dados_risco.get('classificacao_risco', 'RISCO BAIXO')
 
             rank_mun = int(dados_risco.get('rank_municipio') or 0)
             total_mun_estab = int(dados_risco.get('total_municipio') or 0)
@@ -1018,7 +1004,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             texto_ranking = (
                 f"🏆 RANKINGS:  Nacional: #{rank_nacional:,}  |  Estadual: #{rank_uf:,}  |  "
                 f"Regional: #{rank_regiao} de {total_regiao}  |  Municipal: {rank_mun}º de {total_mun_estab}  "
-                f"|  📊 Risco: {vezes_pior:.1f}x a Mediana{txt_status_reg}"
+                f"|  📊 Score: {score:.1f}"
             ).replace(',', '.')
 
             ws_ind.write('B5', texto_ranking, fmt_subtitulo)
@@ -1376,7 +1362,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         r_uf    = float(raw_r_uf    or 0)
                         r_br    = float(raw_r_br    or 0)
 
-                        if tipo_fmt == 'pct':
+                        if tipo_fmt in ['pct', 'pct3']:
                             valor   /= 100.0
                             med_mun /= 100.0
                             med_uf  /= 100.0
@@ -1386,7 +1372,8 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                         limiar_atencao, limiar_critico = get_limiares_indicador(nome)
 
                         # Arredondamos para 1 casa decimal para bater com o visual do Excel (1.49 -> 1.5)
-                        risco_base = round(r_uf, 1) 
+                        # IMPORTANTE: O status é baseado no Risco REGIONAL (r_mun)
+                        risco_base = round(r_mun, 1) 
                         
                         fmt_risco_usado = fmt_risco_verde
                         texto_status = "NORMAL"
@@ -1397,7 +1384,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                             fmt_risco_usado = fmt_risco_vermelho
                             texto_status = "CRÍTICO"
 
-                        if nome == "Vendas p/ Falecidos":
+                        if tipo_fmt == 'pct3':
                             fmt_usado = fmt_pct_ind_3
                         else:
                             fmt_usado = fmt_pct_ind if tipo_fmt == 'pct' else fmt_val if tipo_fmt == 'val' else fmt_dec
@@ -1429,7 +1416,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     ws_ind.write(row, 6, r_mun,         fmt_risco_usado)
                     ws_ind.write(row, 7, r_uf,          fmt_risco_usado)
                     ws_ind.write(row, 8, r_br,          fmt_risco_usado)
-                    ws_ind.write(row, 9, texto_status,  fmt_header_col)
+                    ws_ind.write(row, 9, texto_status,  fmt_risco_usado)
 
                     if nome in explicacoes:
                         ws_ind.write_comment(row, 1, explicacoes[nome],
@@ -1452,7 +1439,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
         if dados_prescritores:
             try:
-                gerar_aba_prescritores(wb, cnpj_analise, dados_prescritores, top20_prescritores or [])
+                gerar_aba_prescritores(wb, cnpj_analise, dados_prescritores, top20_prescritores or [], cursor=cursor, data_inicio=DATA_INICIAL_ANALISE, data_fim=DATA_FINAL_ANALISE)
                 print("   ✅ Aba 'Prescritores' gerada")
             except Exception as e:
                 logging.error(f"Erro ao gerar aba de prescritores: {e}")

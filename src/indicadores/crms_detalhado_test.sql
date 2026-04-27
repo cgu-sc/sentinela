@@ -2,7 +2,7 @@
 -- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 5
 -- ============================================================================
 -- ALTERAÇÕES v5 (sobre v4):
---   1. alertas_crm_concentracao: tabela master diária, fonte única de verdade
+--   1. crm_unico_alertas: tabela master diária, fonte única de verdade
 --      para alertas temporais. Inclui competencia para joins diretos.
 --      Elimina alertas_crm_diario e a duplicação com #lista_alertas_temp.
 --   2. alertas_crm_registro: unifica crm_invalido + crm_irregular_registro.
@@ -194,8 +194,8 @@ SELECT DISTINCT
 INTO #mediana_diaria
 FROM #totais_diarios;
 
--- 4. Tabela Final 1: crm_daily_profile (Gráfico Principal)
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_daily_profile;
+-- 4. Tabela Final 1: crm_multiplos_perfil_diario (Gráfico Principal)
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_perfil_diario;
 
 WITH crms_distintos_dia AS (
     SELECT
@@ -211,15 +211,15 @@ SELECT
     CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
     -- O dia é anômalo se tiver uma rajada horária (Regra Standard 7x Mediana)
     T.dia_tem_anomalia_hora AS is_anomalo
-INTO temp_CGUSC.fp.crm_daily_profile
+INTO temp_CGUSC.fp.crm_multiplos_perfil_diario
 FROM #totais_diarios T
 INNER JOIN #mediana_diaria M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
 LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela = T.dt_janela;
 
-CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_daily_profile(cnpj, dt_janela);
+CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_multiplos_perfil_diario(cnpj, dt_janela);
 
--- 5. Tabela Final 2: crm_hourly_profile_anomalo (Drill-down)
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_hourly_profile_anomalo;
+-- 5. Tabela Final 2: crm_multiplos_perfil_horario (Drill-down)
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_perfil_horario;
 
 SELECT 
     H.cnpj,
@@ -229,15 +229,15 @@ SELECT
     H.nu_crms_distintos_hora AS nu_crms_diferentes,
     H.mediana_hora AS mediana_hora,
     H.is_anomalo_hora
-INTO temp_CGUSC.fp.crm_hourly_profile_anomalo
+INTO temp_CGUSC.fp.crm_multiplos_perfil_horario
 FROM #anomalias_horarias H
-INNER JOIN temp_CGUSC.fp.crm_daily_profile D ON D.cnpj = H.cnpj AND D.dt_janela = H.dt_janela
+INNER JOIN temp_CGUSC.fp.crm_multiplos_perfil_diario D ON D.cnpj = H.cnpj AND D.dt_janela = H.dt_janela
 WHERE D.is_anomalo = 1;
 
-CREATE CLUSTERED INDEX IDX_HourlyAnomalo ON temp_CGUSC.fp.crm_hourly_profile_anomalo(cnpj, dt_janela, hr_janela);
+CREATE CLUSTERED INDEX IDX_HourlyAnomalo ON temp_CGUSC.fp.crm_multiplos_perfil_horario(cnpj, dt_janela, hr_janela);
 
--- 6. Tabela Final 3: alertas_cnpj_concentracao_sequencial (Mestre de Surtos)
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial;
+-- 6. Tabela Final 3: crm_multiplos_alertas (Mestre de Surtos)
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_alertas;
 
 SELECT
     cnpj, competencia, dt_janela AS dt_alerta, hr_janela,
@@ -252,15 +252,15 @@ SELECT
         CAST(CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS VARCHAR(10)) + 
         'x acima da mediana trimestral da farmácia: ' + CAST(CAST(mediana_hora AS DECIMAL(10,1)) AS VARCHAR(10)) + '/h).'
     AS VARCHAR(800)) AS descricao
-INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial
+INTO temp_CGUSC.fp.crm_multiplos_alertas
 FROM #anomalias_horarias
 WHERE is_anomalo_hora = 1;
 
-CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial(cnpj, dt_alerta, hr_janela);
+CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.crm_multiplos_alertas(cnpj, dt_alerta, hr_janela);
 
--- 7. Tabela Final 4: alertas_cnpj_concentracao_sequencial_detalhe (Raio-X Sub-horário)
+-- 7. Tabela Final 4: crm_multiplos_detalhe (Raio-X Sub-horário)
 -- Salva apenas o detalhamento das transações (minutos, segundos, numero nativo) das horas doentes.
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_detalhe;
 
 SELECT
     A.cnpj,
@@ -273,14 +273,14 @@ SELECT
     M.crm_uf,
     M.codigo_barra,
     M.valor_pago
-INTO temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe
-FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial A
+INTO temp_CGUSC.fp.crm_multiplos_detalhe
+FROM temp_CGUSC.fp.crm_multiplos_alertas A
 INNER JOIN #mov_surto_base M
     ON  M.cnpj = A.cnpj
     AND CAST(M.data_hora AS DATE) = A.dt_alerta
     AND DATEPART(HOUR, M.data_hora) = A.hr_janela;
 
-CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe(cnpj, dt_janela, hr_janela);
+CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.crm_multiplos_detalhe(cnpj, dt_janela, hr_janela);
 
 -- ============================================================================
 -- PASSO 0.2: AGREGAÇÃO DIÁRIA POR MÉDICO / FARMÁCIA
@@ -533,13 +533,13 @@ GO
 
 
 -- ============================================================================
--- MOTOR TEMPORAL: alertas_crm_concentracao (v5 — Tabela Master Diária)
+-- MOTOR TEMPORAL: crm_unico_alertas (v5 — Tabela Master Diária)
 -- Grain: (cnpj, id_medico, dt_alerta)
 -- Fonte única de verdade para alertas de concentração temporal.
 -- Inclui competencia para joins diretos com a tabela de flags (Passo 4).
 -- Elimina a duplicação de lógica entre #lista_alertas_temp e alertas_crm_diario.
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_concentracao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
 
 WITH base_com_taxa AS (
     SELECT
@@ -577,11 +577,11 @@ alertas AS (
      OR (nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 12)
      OR (nu_prescricoes_dia >= 10 AND (taxa_dia >= 7 OR nu_minutos_dia <= 60))
 )
-SELECT * INTO temp_CGUSC.fp.alertas_crm_concentracao
+SELECT * INTO temp_CGUSC.fp.crm_unico_alertas
 FROM alertas
 WHERE nivel IS NOT NULL;
 
-CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.alertas_crm_concentracao(cnpj, id_medico, dt_alerta);
+CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(cnpj, id_medico, dt_alerta);
 
 GO
 
@@ -740,7 +740,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 
 WITH base AS (
     SELECT DISTINCT cnpj AS nu_cnpj, id_medico, competencia
-    FROM temp_CGUSC.fp.alertas_crm_concentracao
+    FROM temp_CGUSC.fp.crm_unico_alertas
     UNION
     SELECT cnpj_a AS nu_cnpj, id_medico, competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico
@@ -756,7 +756,7 @@ WITH base AS (
 ),
 conc_agg AS (
     SELECT cnpj, id_medico, competencia, COUNT(*) AS qtd_dias
-    FROM temp_CGUSC.fp.alertas_crm_concentracao
+    FROM temp_CGUSC.fp.crm_unico_alertas
     GROUP BY cnpj, id_medico, competencia
 ),
 geo_cnpj AS (
@@ -867,7 +867,7 @@ LEFT JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM_ALL
     AND CFM_ALL.SG_uf = A.sg_uf_crm
 LEFT JOIN (
     SELECT DISTINCT cnpj, id_medico, competencia
-    FROM temp_CGUSC.fp.alertas_crm_concentracao
+    FROM temp_CGUSC.fp.crm_unico_alertas
 ) CONC
     ON  CONC.cnpj        = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico
@@ -1133,7 +1133,7 @@ GO
 PRINT '============================================================================';
 PRINT 'SCRIPT v5 EXECUTADO COM SUCESSO:';
 PRINT '  - dados_crm_detalhado          : sem alertas, sem nu_populacao';
-PRINT '  - alertas_crm_concentracao     : [v5] master diaria de alertas temporais (com competencia)';
+PRINT '  - crm_unico_alertas     : [v5] master diaria de alertas temporais (com competencia)';
 PRINT '  - alertas_crm_geografico       : [v5] master geografica — distancia_km numerico + pares de CNPJs';
 PRINT '  - alertas_crm                  : [v5] flags BIT — flag_concentracao/geografico/registro + qtd_dias_concentracao';
 PRINT '  - alertas_crm_registro         : [v5] master CFM — INEXISTENTE/IRREGULAR por competencia + valor';

@@ -811,7 +811,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
             # Busca todas as rajadas detalhadas no período (lista completa)
             cursor.execute(f"""
                 SELECT id_medico, dt_alerta, nu_prescricoes_dia, nu_minutos_dia, taxa_hora
-                FROM temp_CGUSC.fp.alertas_crm_concentracao 
+                FROM temp_CGUSC.fp.crm_unico_alertas
                 WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
                 ORDER BY dt_alerta DESC, taxa_hora DESC
             """, (cnpj, data_inicio, data_fim))
@@ -830,7 +830,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
             # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
             cursor.execute(f"""
                 SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, descricao
-                FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial
+                FROM temp_CGUSC.fp.crm_multiplos_alertas
                 WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
                 ORDER BY dt_alerta DESC, hr_janela DESC
             """, (cnpj, data_inicio, data_fim))

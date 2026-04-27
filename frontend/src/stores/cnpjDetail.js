@@ -53,14 +53,14 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     prescritoresError:   null,
 
     // ── Perfil Diário de Dispensações (gráfico CRM) ──────────────────────────
-    crmDailyProfile:        null,
-    crmDailyProfileLoading: false,
-    crmDailyProfileLoaded:  null,
+    crmMultiplosPerfil:        null,
+    crmMultiplosPerfilLoading: false,
+    crmMultiplosPerfilLoaded:  null,
 
     // ── Perfil Horário de Detalhamento (Drill-down pré-carregado) ─────────────
-    crmHourlyProfile:        null,
-    crmHourlyProfileLoading: false,
-    crmHourlyProfileLoaded:  null,
+    crmMultiplosHorario:        null,
+    crmMultiplosHorarioLoading: false,
+    crmMultiplosHorarioLoaded:  null,
 
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos:        new Map(),
@@ -244,46 +244,46 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Perfil Diário de Dispensações ────────────────────────────────────────
-    async fetchCrmDailyProfile(cnpj, inicio = null, fim = null) {
+    // ── Perfil Diário de Dispensações (CRM Múltiplos) ────────────────────────
+    async fetchCrmMultiplosPerfil(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmDailyProfileLoaded === key) return;
-      this.crmDailyProfileLoading = true;
+      if (!cnpj || this.crmMultiplosPerfilLoaded === key) return;
+      this.crmMultiplosPerfilLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmDailyProfile(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMultiplosPerfil(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmDailyProfile        = data;
-        this.crmDailyProfileLoaded  = key;
+        this.crmMultiplosPerfil        = data;
+        this.crmMultiplosPerfilLoaded  = key;
       } catch (e) {
         console.error('Erro ao buscar perfil diário de CRM:', e);
       } finally {
-        this.crmDailyProfileLoading = false;
+        this.crmMultiplosPerfilLoading = false;
       }
     },
 
-    async fetchCrmHourlyProfile(cnpj, inicio = null, fim = null) {
+    async fetchCrmMultiplosHorario(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmHourlyProfileLoaded === key) return;
-      this.crmHourlyProfileLoading = true;
+      if (!cnpj || this.crmMultiplosHorarioLoaded === key) return;
+      this.crmMultiplosHorarioLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmHourlyProfile(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMultiplosHorario(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmHourlyProfile       = data;
-        this.crmHourlyProfileLoaded = key;
+        this.crmMultiplosHorario        = data;
+        this.crmMultiplosHorarioLoaded  = key;
       } catch (e) {
         console.error('Erro ao buscar perfil horário:', e);
       } finally {
-        this.crmHourlyProfileLoading = false;
+        this.crmMultiplosHorarioLoading = false;
       }
     },
 
@@ -402,9 +402,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.prescritoresLoaded  = null;
       this.prescritoresError   = null;
 
-      this.crmDailyProfile        = null;
-      this.crmDailyProfileLoading = false;
-      this.crmDailyProfileLoaded  = null;
+      this.crmMultiplosPerfil        = null;
+      this.crmMultiplosPerfilLoading = false;
+      this.crmMultiplosPerfilLoaded  = null;
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;

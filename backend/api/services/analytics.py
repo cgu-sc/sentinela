@@ -1958,7 +1958,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
                         text("SELECT id_medico, competencia, dt_alerta, nivel, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
-                             " FROM temp_CGUSC.fp.alertas_crm_concentracao WHERE cnpj = :cnpj"
+                             " FROM temp_CGUSC.fp.crm_unico_alertas WHERE cnpj = :cnpj"
                              " ORDER BY dt_alerta, id_medico"),
                         conn,
                         params={"cnpj": cnpj},
@@ -1996,7 +1996,7 @@ class AnalyticsService:
                 })
 
         for m in crms_interesse_list:
-            m["alertas_diarios"] = alertas_por_medico.get(m["id_medico"], [])
+            m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
 
         # ── 7.1 Alertas Geográficos (Distância) ──────────────────────────────
         ALERTAS_GEO_PATH = os.path.join(cnpj_dir, "geografico.parquet")
@@ -2060,7 +2060,7 @@ class AnalyticsService:
         # ── 7.2 Pré-Sincronização do Raio-X (Transações Horárias) ─────────────
         # Garante que o arquivo _transacoes_horarias.parquet exista para uso offline
         try:
-            AnalyticsService.sync_crm_hourly_transactions(cnpj)
+            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
@@ -2077,7 +2077,7 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ca = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial WHERE cnpj = :cnpj"),
+                        text("SELECT * FROM temp_CGUSC.fp.crm_multiplos_alertas WHERE cnpj = :cnpj"),
                         conn, params={"cnpj": cnpj}
                     )
                 df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={
@@ -2111,8 +2111,8 @@ class AnalyticsService:
 
         # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
         TX_PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
-        alertas_surto_por_medico: dict[str, list[dict]] = {}
-        
+        alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
+
         if os.path.exists(TX_PARQUET_PATH):
             try:
                 # Carregamos as transações anômalas (Raio-X) do estabelecimento
@@ -2157,7 +2157,7 @@ class AnalyticsService:
                         
                         for r in df_surto_full.iter_rows(named=True):
                             mid = f"{r['crm']}/{r['crm_uf']}"
-                            alertas_surto_por_medico.setdefault(mid, []).append({
+                            alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
                                 "dt": str(r["dt_janela"]),
                                 "hr": int(r["hr_janela"]),
                                 "nu_presc_crm": int(r["nu_prescricoes_crm"]),
@@ -2170,7 +2170,7 @@ class AnalyticsService:
 
         # Atribuição final aos médicos
         for m in crms_interesse_list:
-            m["alertas_surto"] = alertas_surto_por_medico.get(m["id_medico"], [])
+            m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
 
 
         return PrescritoresResponse(
@@ -2185,7 +2185,7 @@ class AnalyticsService:
         )
 
     @staticmethod
-    def get_crm_daily_profile(
+    def get_crm_multiplos_perfil_diario(
         cnpj: str,
         data_inicio: str | None = None,
         data_fim: str | None = None
@@ -2227,7 +2227,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_daily_profile"
+                        text("SELECT * FROM temp_CGUSC.fp.crm_multiplos_perfil_diario"
                              " WHERE cnpj = :cnpj ORDER BY dt_janela"),
                         conn,
                         params={"cnpj": cnpj},
@@ -2272,7 +2272,7 @@ class AnalyticsService:
                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod
-    def get_crm_hourly_profile(
+    def get_crm_multiplos_perfil_horario(
         cnpj: str,
         data_inicio: str | None = None,
         data_fim: str | None = None
@@ -2307,7 +2307,7 @@ class AnalyticsService:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, is_anomalo_hora "
-                             "FROM temp_CGUSC.fp.crm_hourly_profile_anomalo "
+                             "FROM temp_CGUSC.fp.crm_multiplos_perfil_horario "
                              "WHERE cnpj = :cnpj "
                              "ORDER BY dt_janela, hr_janela"),
                         conn,
@@ -2351,13 +2351,13 @@ class AnalyticsService:
         ]
 
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X)
-        AnalyticsService.sync_crm_hourly_transactions(cnpj)
+        AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
 
         return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=from_cache,
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod
-    def sync_crm_hourly_transactions(cnpj: str) -> None:
+    def sync_crm_multiplos_raio_x(cnpj: str) -> None:
         """Sincroniza o cache parquet de transações literais (Raio-X) para um CNPJ."""
         import pandas as pd
         import polars as pl
@@ -2379,7 +2379,7 @@ class AnalyticsService:
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
                     text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.alertas_cnpj_concentracao_sequencial_detalhe "
+                         "FROM temp_CGUSC.fp.crm_multiplos_detalhe "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
@@ -2406,13 +2406,13 @@ class AnalyticsService:
                 print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
 
     @staticmethod
-    def get_crm_hourly_transactions(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmHourlyTransactionsResponse":
+    def get_crm_multiplos_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmMultiplosRaioXResponse":
         """Busca as transações literais e sequenciais de uma hora anômala, utilizando cache Parquet."""
         import pandas as pd
         import polars as pl
         from sqlalchemy import text
         from database import engine as _engine
-        from api.schemas.analytics import CrmHourlyTransactionsResponse
+        from api.schemas.analytics import CrmMultiplosRaioXResponse
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
@@ -2422,7 +2422,7 @@ class AnalyticsService:
         read_time_ms: float | None = None
 
         if not os.path.exists(PARQUET_PATH):
-            AnalyticsService.sync_crm_hourly_transactions(cnpj)
+            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
 
         if os.path.exists(PARQUET_PATH):
             try:
@@ -2433,7 +2433,7 @@ class AnalyticsService:
                 print(f"⚠️ Erro ao ler parquet hourly_tx '{cnpj}': {e}")
 
         if df.is_empty():
-            return CrmHourlyTransactionsResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
+            return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
 
         # O Filtro Rápido do Polars na memória (por Dia e Hora opcional)
         filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
@@ -2443,7 +2443,7 @@ class AnalyticsService:
         filtered_df = df.filter(filter_expr)
 
         if filtered_df.is_empty():
-            return CrmHourlyTransactionsResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
+            return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
 
         # Join com o cache de medicamentos para trazer nomes e princípios ativos
         from data_cache import get_medicamentos_df
@@ -2471,7 +2471,7 @@ class AnalyticsService:
         # Converte para o formato do Schema
         transactions = enriched_df.to_dicts()
         
-        return CrmHourlyTransactionsResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
+        return CrmMultiplosRaioXResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

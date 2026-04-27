@@ -36,9 +36,9 @@ function toggleAlertasDiarios(idMedico) {
     // Define a aba padrão ao abrir: concentração se existir, senão geográfico
     const m = props.crmsInteresse.find(x => x.id_medico === idMedico);
     if (m && !activeAlertTab.value[idMedico]) {
-      if (m.alertas_diarios?.length) activeAlertTab.value[idMedico] = 'conc';
+      if (m.alertas_crm_unico?.length) activeAlertTab.value[idMedico] = 'conc';
       else if (m.alertas_geograficos?.length) activeAlertTab.value[idMedico] = 'geo';
-      else if (m.alertas_surto?.length) activeAlertTab.value[idMedico] = 'surto';
+      else if (m.alertas_crm_multiplos?.length) activeAlertTab.value[idMedico] = 'surto';
     }
   }
   expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
@@ -162,7 +162,7 @@ const maxPDOverall = computed(() => {
           <template v-for="(m, i) in visibleCrms" :key="i">
             <tr
               :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm || m.alerta5_geografico || m.flag_concentracao_estabelecimento }"
-              @click="(m.alertas_diarios?.length || m.alertas_geograficos?.length || m.alertas_surto?.length) ? toggleAlertasDiarios(m.id_medico) : null"
+              @click="(m.alertas_crm_unico?.length || m.alertas_geograficos?.length || m.alertas_crm_multiplos?.length) ? toggleAlertasDiarios(m.id_medico) : null"
             >
               <td class="col-center">
                   <div class="rank-badge" :class="{ 'gold': i === 0, 'silver': i === 1, 'bronze': i === 2 }">
@@ -187,8 +187,8 @@ const maxPDOverall = computed(() => {
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
-                    <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO MESMO CRM
-                    <span v-if="m.alertas_diarios?.length" class="badge-count">({{ m.alertas_diarios.length }}x)</span>
+                    <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO CRM ÚNICO
+                    <span v-if="m.alertas_crm_unico?.length" class="badge-count">({{ m.alertas_crm_unico.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
@@ -216,12 +216,12 @@ const maxPDOverall = computed(() => {
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios de surto geral'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
-                    <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs DIVERSOS
-                    <span v-if="m.alertas_surto?.length" class="badge-count">({{ m.alertas_surto.length }}x)</span>
+                    <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs MÚLTIPLOS
+                    <span v-if="m.alertas_crm_multiplos?.length" class="badge-count">({{ m.alertas_crm_multiplos.length }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <i
-                    v-if="!m.alertas_diarios?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
+                    v-if="!m.alertas_crm_unico?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
                     class="pi pi-check-circle"
                     style="color: var(--text-muted); font-size: 0.85rem;"
                     v-tooltip.top="'Sem ocorrências identificadas'"
@@ -268,7 +268,7 @@ const maxPDOverall = computed(() => {
             </tr>
 
             <!-- Linha expandida de alertas (Concentração ou Geográfico) com sistema de abas -->
-            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_diarios?.length || m.alertas_geograficos?.length || m.alertas_surto?.length)" class="alertas-diarios-row">
+            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_crm_unico?.length || m.alertas_geograficos?.length || m.alertas_crm_multiplos?.length)" class="alertas-diarios-row">
               <td colspan="11" class="alertas-diarios-cell">
                 <div
                   class="evidence-panel"
@@ -294,15 +294,15 @@ const maxPDOverall = computed(() => {
                       <span class="panel-crm-badge">{{ m.id_medico }}</span>
                     </div>
                     <!-- SEGMENTED CONTROL (Abas Dinâmicas) -->
-                    <div class="segmented-control" v-if="(m.alertas_diarios?.length ? 1 : 0) + (m.alertas_geograficos?.length ? 1 : 0) + (m.alertas_surto?.length ? 1 : 0) > 1">
+                    <div class="segmented-control" v-if="(m.alertas_crm_unico?.length ? 1 : 0) + (m.alertas_geograficos?.length ? 1 : 0) + (m.alertas_crm_multiplos?.length ? 1 : 0) > 1">
                       <button
-                        v-if="m.alertas_diarios?.length"
+                        v-if="m.alertas_crm_unico?.length"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'conc' }"
                         @click="setAlertTab(m.id_medico, 'conc')"
                       >
                         CRM Único
-                        <span class="seg-count">{{ m.alertas_diarios.length }}</span>
+                        <span class="seg-count">{{ m.alertas_crm_unico.length }}</span>
                       </button>
                       <button
                         v-if="m.alertas_geograficos?.length"
@@ -315,13 +315,13 @@ const maxPDOverall = computed(() => {
                         <span class="seg-count">{{ m.alertas_geograficos.length }}</span>
                       </button>
                       <button
-                        v-if="m.alertas_surto?.length"
+                        v-if="m.alertas_crm_multiplos?.length"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'surto' }"
                         @click="setAlertTab(m.id_medico, 'surto')"
                       >
                         CRMs Múltiplos
-                        <span class="seg-count">{{ m.alertas_surto.length }}</span>
+                        <span class="seg-count">{{ m.alertas_crm_multiplos.length }}</span>
                       </button>
                     </div>
                   </div>
@@ -342,7 +342,7 @@ const maxPDOverall = computed(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(a, j) in m.alertas_diarios" :key="j" class="alerta-diario-item">
+                      <tr v-for="(a, j) in m.alertas_crm_unico" :key="j" class="alerta-diario-item">
                         <td class="col-date">{{ formatarDataAlerta(a.dt) }}</td>
                         <td class="col-crm">{{ m.id_medico }}</td>
                         <td class="col-right td-metric">{{ a.nu_prescricoes }}</td>
@@ -403,7 +403,7 @@ const maxPDOverall = computed(() => {
                     </thead>
                     <tbody>
                       <tr 
-                        v-for="(s, l) in m.alertas_surto" 
+                        v-for="(s, l) in m.alertas_crm_multiplos" 
                         :key="'surto-'+l"
                         class="clickable-surto-row"
                         v-tooltip.top="'Clique para ver no Raio-X'"

@@ -21,12 +21,12 @@ const props = defineProps({
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { 
-  crmDailyProfile, 
-  crmDailyProfileLoading, 
-  crmHourlyProfile, 
-  crmHourlyProfileLoading,
-  selectedTimelineEvent 
+const {
+  crmMultiplosPerfil,
+  crmMultiplosPerfilLoading,
+  crmMultiplosHorario,
+  crmMultiplosHorarioLoading,
+  selectedTimelineEvent
 } = storeToRefs(cnpjDetailStore);
 const { formatarData } = useFormatting();
 const { chartTheme, chartUFAccents } = useChartTheme();
@@ -34,24 +34,24 @@ const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
-const cachedCrmDailyProfile  = ref(crmDailyProfile.value);
-const cachedCrmHourlyProfile = ref(crmHourlyProfile.value);
+const cachedCrmMultiplosPerfil  = ref(crmMultiplosPerfil.value);
+const cachedCrmMultiplosHorario = ref(crmMultiplosHorario.value);
 
-const showRefreshingDaily  = useDelayedLoading(crmDailyProfileLoading);
-const showRefreshingHourly = useDelayedLoading(crmHourlyProfileLoading);
+const showRefreshingDaily  = useDelayedLoading(crmMultiplosPerfilLoading);
+const showRefreshingHourly = useDelayedLoading(crmMultiplosHorarioLoading);
 
-watch([crmDailyProfile, crmDailyProfileLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmDailyProfile.value = newData;
+watch([crmMultiplosPerfil, crmMultiplosPerfilLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmMultiplosPerfil.value = newData;
 }, { immediate: true });
 
-watch([crmHourlyProfile, crmHourlyProfileLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmHourlyProfile.value = newData;
+watch([crmMultiplosHorario, crmMultiplosHorarioLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmMultiplosHorario.value = newData;
 }, { immediate: true });
 
 // Índice por data para lookup O(1) no tooltip (evita scan linear a cada hover)
 const hourlyByDate = computed(() => {
   const map = new Map();
-  for (const pt of cachedCrmHourlyProfile.value?.points ?? []) {
+  for (const pt of cachedCrmMultiplosHorario.value?.points ?? []) {
     const key = String(pt.dt_janela).slice(0, 10);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(pt);
@@ -65,7 +65,7 @@ const dailyZoomStart = ref(0);
 const dailyZoomEnd = ref(100);
 
 const filteredDailyDays = computed(() => {
-  const days = cachedCrmDailyProfile.value?.days ?? [];
+  const days = cachedCrmMultiplosPerfil.value?.days ?? [];
   if (!filterDailyOnlyAnomalous.value) return days;
   return days.filter(d => d.is_anomalo === 1);
 });
@@ -158,7 +158,7 @@ function toggleRaioxRow(auth) {
 async function loadTransactions(dt_janela, hourInt = null) {
   hourlyTransactionsLoading.value = true;
   try {
-    const url = API_ENDPOINTS.analyticsCrmHourlyTransactions(props.cnpj, dt_janela, hourInt);
+    const url = API_ENDPOINTS.analyticsCrmMultiplosRaioX(props.cnpj, dt_janela, hourInt);
     const t0 = performance.now();
     const res = await fetch(url);
     if (!res.ok) throw new Error('Falha HTTP');
@@ -351,10 +351,10 @@ const chartOptionDaily = computed(() => {
 });
 
 const chartOptionHourly = computed(() => {
-  if (!selectedDay.value || !cachedCrmHourlyProfile.value) return {};
+  if (!selectedDay.value || !cachedCrmMultiplosHorario.value) return {};
   const c = chartTheme.value;
   const targetDate = selectedDay.value.dt_janela;
-  const pointsForDay = cachedCrmHourlyProfile.value.points.filter(p => p.dt_janela === targetDate);
+  const pointsForDay = cachedCrmMultiplosHorario.value.points.filter(p => p.dt_janela === targetDate);
 
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
@@ -509,7 +509,7 @@ watch(filteredDailyDays, (newDays) => {
 // Observa AMBOS: o evento de navegação e o cache de dados.
 // Isso garante que mesmo se o evento disparar antes do cache estar pronto,
 // o handler tentará novamente assim que os dados chegarem.
-watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => {
+watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) => {
   if (!evt || !profile) return;
 
   const dayObj = profile.days.find(d => d.dt_janela === evt.date);
@@ -573,7 +573,7 @@ watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => 
         <div class="drill-panel-title">
           <i class="pi pi-chart-bar" />
           <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
-          <span v-if="crmDailyProfileLoading" class="chart-loading-badge">
+          <span v-if="crmMultiplosPerfilLoading" class="chart-loading-badge">
             <i class="pi pi-spinner pi-spin"></i> Carregando...
           </span>
         </div>
@@ -598,7 +598,7 @@ watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => 
         Evolução diária de autorizações. Dias com volume anômalo detectado por Modified Z-Score destacados em vermelho.
       </p>
       
-      <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">
+      <div v-if="!crmMultiplosPerfil && !crmMultiplosPerfilLoading" class="chart-empty">
         <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
         <span>Sem dados de perfil diário disponíveis.</span>
       </div>
@@ -625,7 +625,7 @@ watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => 
           @datazoom="onDailyZoom"
         />
       </div>
-      <div v-if="!selectedDay && crmDailyProfile" class="drill-hint">
+      <div v-if="!selectedDay && crmMultiplosPerfil" class="drill-hint">
         <i class="pi pi-hand-pointer" />
         <span>Clique em um dia no gráfico para ver a análise horária detalhada (apenas dias com registro de anomalia podem ser visualizados)</span>
       </div>

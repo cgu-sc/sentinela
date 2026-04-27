@@ -27,8 +27,8 @@ watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
 onMounted(() => {
   if (props.cnpj) {
     const { inicio, fim } = getApiParams();
-    cnpjDetailStore.fetchCrmDailyProfile(props.cnpj, inicio, fim);
-    cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosPerfil(props.cnpj, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosHorario(props.cnpj, inicio, fim);
   }
 });
 
@@ -108,12 +108,12 @@ const kpiFilters = {
 const kpiFilterLabels = {
   top1:        "Concentração TOP 1",
   top5:        "Concentração TOP 5",
-  agrupamento: "CONCENTRAÇÃO MESMO CRM",
+  agrupamento: "CONCENTRAÇÃO CRM ÚNICO",
   intensiva:   ">30 Prescrições/Dia",
   exclusivo:   "CRM Exclusivo",
   fraude_crm:  "Fraudes CRM",
   distancia:   "Distância (>400km)",
-  surtos_cnpj: "CONCENTRAÇÃO CRMs DIVERSOS",
+  surtos_cnpj: "CONCENTRAÇÃO CRMs MÚLTIPLOS",
 };
 
 function setKpiFilter(key) {

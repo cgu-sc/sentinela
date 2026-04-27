@@ -293,17 +293,17 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 
     for i, cnpj in enumerate(cnpjs, 1):
         try:
-            # 1. Lista de Médicos e Alertas Sequenciais (Gera 3 parquets: _prescritores, _alertas_diarios, _cnpj_alerts)
+            # 1. Lista de Médicos e Alertas (Gera 3 parquets: _prescritores, _crm_unico_alertas, _cnpj_alerts)
             AnalyticsService.get_crm_data(cnpj)
             
             # 2. Histórico Diário (Gera _daily.parquet)
-            AnalyticsService.get_crm_daily_profile(cnpj)
+            AnalyticsService.get_crm_multiplos_perfil_diario(cnpj)
             
             # 3. Detalhamento Horário de Anomalias (Gera _hourly.parquet)
-            AnalyticsService.get_crm_hourly_profile(cnpj)
+            AnalyticsService.get_crm_multiplos_perfil_horario(cnpj)
 
             # 4. Transações Literais (Raio-X) (Gera _hourly_tx.parquet)
-            AnalyticsService.sync_crm_hourly_transactions(cnpj)
+            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
 
             if progress_callback:
                 p = int((i / total) * 100)

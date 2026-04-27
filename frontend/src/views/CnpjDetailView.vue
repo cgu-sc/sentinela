@@ -145,8 +145,8 @@ watch(
       cnpjDetailStore.fetchIndicadores(newCnpj);
       cnpjDetailStore.fetchFalecidos(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchCrmDailyProfile(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchCrmHourlyProfile(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmMultiplosPerfil(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmMultiplosHorario(newCnpj, inicio, fim);
       if (!cnpjData.value) {
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
@@ -167,8 +167,8 @@ watch(
     cnpjDetailStore.fetchEvolucaoMensalGtin(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchFalecidos(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchCrmDailyProfile(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchCrmHourlyProfile(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosPerfil(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosHorario(cnpj.value, inicio, fim);
   },
   { deep: true },
 );
@@ -232,7 +232,7 @@ const isInitialLoading = computed(() => {
     cnpjDetailStore.dadosCadastroLoading ||
     cnpjDetailStore.cnpjsAvulsosLoading ||
     (cnpjDetailStore.prescritoresLoading && !cnpjDetailStore.prescritoresData) ||
-    (cnpjDetailStore.crmDailyProfileLoading && !cnpjDetailStore.crmDailyProfile) ||
+    (cnpjDetailStore.crmMultiplosPerfilLoading && !cnpjDetailStore.crmMultiplosPerfil) ||
     (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira)
   );
 });

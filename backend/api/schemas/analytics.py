@@ -433,7 +433,7 @@ class CrmHourlyTransactionSchema(BaseModel):
     produto: Optional[str] = None
     principio_ativo: Optional[str] = None
 
-class CrmHourlyTransactionsResponse(BaseModel):
+class CrmMultiplosRaioXResponse(BaseModel):
     """Lista cronológica de prescrições aprovadas numa hora anômala."""
     transactions: List[CrmHourlyTransactionSchema]
     from_cache: bool = False

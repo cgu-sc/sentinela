@@ -27,8 +27,8 @@ watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
 onMounted(() => {
   if (props.cnpj) {
     const { inicio, fim } = getApiParams();
-    cnpjDetailStore.fetchCrmDailyProfile(props.cnpj, inicio, fim);
-    cnpjDetailStore.fetchCrmHourlyProfile(props.cnpj, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosPerfil(props.cnpj, inicio, fim);
+    cnpjDetailStore.fetchCrmMultiplosHorario(props.cnpj, inicio, fim);
   }
 });
 

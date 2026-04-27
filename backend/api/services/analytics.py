@@ -1750,17 +1750,12 @@ class AnalyticsService:
                     pdf = pd.read_sql(
                         text("SELECT E.id_medico, E.cnpj, E.competencia, E.vl_total_prescricoes, E.nu_prescricoes, "
                              "E.nu_prescricoes_dia, E.prescricoes_total_brasil, E.prescricoes_dia_brasil, "
-                             "E.nu_estabelecimentos, R.lista_cnpjs_brasil, E.flag_crm_invalido, "
+                             "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
                              "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                             "E.alerta_distancia_geografica, E.dt_primeira_prescricao, E.dt_inscricao_crm"
+                             "E.alerta_distancia_geografica, E.dt_primeira_prescricao, E.dt_inscricao_crm, "
+                             "E.nu_estabelecimentos"
                              " FROM temp_CGUSC.fp.crm_export E"
-                             " OUTER APPLY ("
-                             "     SELECT STRING_AGG(DC.nu_cnpj, ',') AS lista_cnpjs_brasil"
-                             "     FROM temp_CGUSC.fp.crm_atendimento A"
-                             "     JOIN temp_CGUSC.fp.dim_cnpj DC ON DC.cnpj_id = A.cnpj_id"
-                             "     WHERE A.id_crm_id = E.id_crm_id AND A.competencia = E.competencia"
-                             " ) R"
                              " WHERE E.cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
@@ -1814,8 +1809,6 @@ class AnalyticsService:
                 pl.sum("_dias_ativos_loc").alias("_total_dias_loc"),
                 pl.sum("_dias_ativos_br").alias("_total_dias_br"),
                 pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
-                # Une as listas de CNPJs de todos os meses do período
-                pl.col("lista_cnpjs_brasil").fill_null(pl.col("cnpj")).str.concat(",").alias("lista_cnpjs_brasil"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1824,6 +1817,7 @@ class AnalyticsService:
                 pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
                 pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
                 pl.col("dt_inscricao_crm").first().alias("dt_inscricao_crm"),
+                pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
             ])
             .with_columns([
                 # Cálculo da Média Real (Volume Total / Total de Dias Ativos no Período)
@@ -1839,19 +1833,13 @@ class AnalyticsService:
                   .alias("prescricoes_dia_total_brasil"),
             ])
             .with_columns([
-                # Processa a string concatenada para contar CNPJs únicos
-                pl.col("lista_cnpjs_brasil")
-                .str.split(",")
-                .list.unique()
-                .list.len()
-                .alias("qtd_estabelecimentos_atua"),
                 (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
                 (
                     (pl.col("prescricoes_dia_total_brasil") > 30) & (pl.col("nu_prescricoes_dia") <= 30)
                 ).cast(pl.Int8).alias("flag_robo_oculto"),
             ])
             .with_columns([
-                (pl.col("qtd_estabelecimentos_atua") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
+                (pl.col("nu_estabelecimentos") == 1).cast(pl.Int8).alias("flag_crm_exclusivo"),
             ])
             .sort("vl_total_prescricoes", descending=True)
             .with_row_index("ranking")

@@ -1557,8 +1557,8 @@ def main():
 
         # Buscar dados de prescritores
         print("\n👨‍⚕️ Buscando dados de prescritores...")
-        dados_prescritores = buscar_dados_prescritores(cursor, cnpj)
-        top20_prescritores = buscar_top20_prescritores(cursor, cnpj)
+        dados_prescritores = buscar_dados_prescritores(cursor, cnpj, DATA_INICIAL_ANALISE, DATA_FINAL_ANALISE)
+        top20_prescritores = buscar_top20_prescritores(cursor, cnpj, DATA_INICIAL_ANALISE, DATA_FINAL_ANALISE)
         if dados_prescritores:
             print(f"   ✅ Score de prescritores: {dados_prescritores.get('score_prescritores', 'N/A')}")
             print(f"   ✅ Top 20: {len(top20_prescritores)} prescritores encontrados")

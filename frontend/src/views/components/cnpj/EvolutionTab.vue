@@ -497,7 +497,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
           </div>
         </div>
-        <div class="evolucao-chart-wrap">
+        <div class="evolucao-chart-wrap" @mouseleave="onChartMouseOut">
           <VChart 
             ref="chartRef" 
             :option="chartOption" 
@@ -506,7 +506,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             class="evolucao-chart" 
             @click="onChartClick" 
             @updateAxisPointer="onAxisPointerUpdate"
-            @mouseout="onChartMouseOut"
           />
         </div>
       </div>

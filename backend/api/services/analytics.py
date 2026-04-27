@@ -2498,7 +2498,7 @@ class AnalyticsService:
         from data_cache import get_cache_dir
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        CACHE_PATH = os.path.join(cnpj_dir, "movimentacao_detalhada.parquet")
+        CACHE_PATH = os.path.join(cnpj_dir, "memoria_calculo.parquet")
 
         empty_summary = MovimentacaoSummarySchema()
 

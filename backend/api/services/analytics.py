@@ -1698,7 +1698,7 @@ class AnalyticsService:
         """
         from data_cache import get_cache_dir
         cnpj_dir = os.path.join(get_cache_dir(), cnpj)
-        if cnpj_dir not in AnalyticsService._known_cnpj_dirs:
+        if not os.path.exists(cnpj_dir):
             os.makedirs(cnpj_dir, exist_ok=True)
             AnalyticsService._known_cnpj_dirs.add(cnpj_dir)
         return cnpj_dir

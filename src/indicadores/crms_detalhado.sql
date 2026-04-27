@@ -113,7 +113,7 @@ GROUP BY cnpj, YEAR(data_hora), MONTH(data_hora), CAST(data_hora AS DATE), DATEP
 
 CREATE CLUSTERED INDEX IDX_BH ON #base_horaria(cnpj, dt_janela, hr_janela);
 
--- Cálculo de Medianas e Detecção de Surtos (Regra: 7x Mediana e Min 10)
+-- Cálculo de Medianas e Detecção de Surtos (Modified Z-Score — limiar MZS > 4.5)
 DROP TABLE IF EXISTS #mediana_hora;
 SELECT DISTINCT
     cnpj, competencia, hr_janela,
@@ -122,18 +122,44 @@ SELECT DISTINCT
 INTO #mediana_hora
 FROM #base_horaria;
 
+-- MAD (Median Absolute Deviation) por farmácia/trimestre/hora — base do MZS
+DROP TABLE IF EXISTS #mad_hora;
+SELECT DISTINCT
+    H.cnpj, H.competencia, H.hr_janela,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ABS(H.nu_prescricoes_hora - M.mediana_hora))
+        OVER (PARTITION BY H.cnpj, (H.competencia / 100), ((H.competencia % 100 - 1) / 3), H.hr_janela) AS mad_hora
+INTO #mad_hora
+FROM #base_horaria H
+INNER JOIN #mediana_hora M ON M.cnpj = H.cnpj
+                          AND M.competencia = H.competencia
+                          AND M.hr_janela = H.hr_janela;
+
 DROP TABLE IF EXISTS #anomalias_horarias;
 SELECT
     H.*,
     CAST(M.mediana_hora AS DECIMAL(10,2)) AS mediana_hora,
-    CASE WHEN H.nu_prescricoes_hora >= 10 
-          AND H.nu_prescricoes_hora >= CAST(M.mediana_hora AS DECIMAL(10,2)) * 7 
-         THEN 1 ELSE 0 END AS is_anomalo_hora
+    CAST(MAD.mad_hora   AS DECIMAL(10,4)) AS mad_hora,
+    -- MZS = 0.6745 × (xi − mediana) / MAD  →  anômalo se MZS > 4.5 e volume >= 10
+    -- Quando MAD = 0 (farmácia perfeitamente constante): qualquer valor acima da mediana é anômalo
+    CASE
+        WHEN H.nu_prescricoes_hora >= 10
+         AND MAD.mad_hora > 0
+         AND (0.6745 * (H.nu_prescricoes_hora - M.mediana_hora) / MAD.mad_hora) > 4.5
+        THEN 1
+        WHEN H.nu_prescricoes_hora >= 10
+         AND MAD.mad_hora = 0
+         AND H.nu_prescricoes_hora > M.mediana_hora
+        THEN 1
+        ELSE 0
+    END AS is_anomalo_hora
 INTO #anomalias_horarias
 FROM #base_horaria H
-INNER JOIN #mediana_hora M ON M.cnpj = H.cnpj 
-                         AND M.competencia = H.competencia 
-                         AND M.hr_janela = H.hr_janela;
+INNER JOIN #mediana_hora M   ON M.cnpj = H.cnpj
+                            AND M.competencia = H.competencia
+                            AND M.hr_janela = H.hr_janela
+INNER JOIN #mad_hora    MAD  ON MAD.cnpj = H.cnpj
+                            AND MAD.competencia = H.competencia
+                            AND MAD.hr_janela = H.hr_janela;
 
 -- Identifica quais CRMs participaram de algum surto no CNPJ/Competencia
 DROP TABLE IF EXISTS #crms_em_surto;

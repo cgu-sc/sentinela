@@ -595,7 +595,7 @@ watch([selectedTimelineEvent, cachedCrmDailyProfile], async ([evt, profile]) => 
         </div>
       </div>
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
-        Evolução diária de autorizações. Dias com volume anômalo (lançamentos ≥ 7× a mediana) destacados em vermelho.
+        Evolução diária de autorizações. Dias com volume anômalo detectado por Modified Z-Score destacados em vermelho.
       </p>
       
       <div v-if="!crmDailyProfile && !crmDailyProfileLoading" class="chart-empty">

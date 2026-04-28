@@ -12,11 +12,14 @@ import Skeleton from 'primevue/skeleton';
 import VChart from 'vue-echarts';
 import SelectButton from 'primevue/selectbutton';
 import InputSwitch from 'primevue/inputswitch';
+import Button from 'primevue/button';
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
   cnpj: { type: String, required: true },
   periodo: { type: String, default: null }, // 'YYYY-MM' or 'YYYY-S1'
+  minPeriodo: { type: String, default: null },
+  maxPeriodo: { type: String, default: null },
 });
 
 const emit = defineEmits(['update:visible']);
@@ -27,14 +30,7 @@ const { gtinDetalhamentoMensalData: data, gtinDetalhamentoMensalLoading: loading
 const { formatCurrencyFull } = useFormatting();
 const { chartTheme } = useChartTheme();
 
-// Buscar dados ao abrir ou ao trocar o período
-watch(() => props.visible, (newVal) => {
-  if (newVal && props.cnpj && props.periodo) {
-    store.fetchGtinDetalhamentoMensal(props.cnpj, props.periodo);
-  }
-});
-
-const isVisible = computed({
+const localVisible = computed({
   get: () => props.visible,
   set: (val) => emit('update:visible', val)
 });
@@ -47,6 +43,137 @@ watch(() => data.value, (newVal) => {
 const groupMode = ref('GTIN');
 const groupOptions = ref(['GTIN', 'Princípio Ativo']);
 const showOnlyIrregular = ref(false);
+
+const viewRange = ref('Mês');
+const rangeOptions = ref(['Mês', 'Semestre']);
+
+const overriddenPeriod = ref(null);
+
+watch(() => props.periodo, () => {
+  overriddenPeriod.value = null;
+});
+
+const currentActivePeriod = computed(() => overriddenPeriod.value || props.periodo);
+
+// Calcula o período efetivo (seja o mês original ou o semestre correspondente)
+const effectivePeriod = computed(() => {
+  const base = currentActivePeriod.value;
+  if (!base) return null;
+  
+  const isSem = base.includes('-S') || base.includes('S/');
+  
+  if (viewRange.value === 'Mês') {
+    if (isSem) {
+       const parts = base.includes('-S') ? base.split('-S') : base.split('S/');
+       const y = base.includes('-S') ? parts[0] : parts[1];
+       const s = base.includes('-S') ? parts[1].replace('S', '') : parts[0].replace('S', '');
+       return `${y}-${s === '1' ? '01' : '07'}`;
+    }
+    return base;
+  }
+  
+  // Modo Semestre
+  if (!isSem) {
+    const parts = base.split('-');
+    if (parts.length < 2) return base;
+    const y = parts[0];
+    const m = parseInt(parts[1]);
+    const s = m <= 6 ? '1' : '2';
+    return `${y}-S${s}`;
+  }
+  
+  // Normaliza formato S/ para -S
+  if (base.includes('S/')) {
+    const [s, y] = base.split('S/');
+    return `${y}-S${s}`;
+  }
+  
+  return base;
+});
+
+// Função para avançar ou voltar no tempo
+const changePeriod = (direction) => {
+  const base = effectivePeriod.value;
+  if (!base) return;
+
+  if (viewRange.value === 'Mês') {
+    const [year, month] = base.split('-').map(Number);
+    const d = new Date(year, month - 1 + direction, 1);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    
+    // Check bounds
+    if (props.minPeriodo && next < props.minPeriodo && direction < 0) return;
+    if (props.maxPeriodo && next > props.maxPeriodo && direction > 0) return;
+    
+    overriddenPeriod.value = next;
+  } else {
+    // Ex: 2019-S1
+    const [year, sStr] = base.split('-S');
+    let y = parseInt(year);
+    let s = parseInt(sStr.replace('S', ''));
+    
+    s += direction;
+    if (s > 2) { s = 1; y++; }
+    else if (s < 1) { s = 2; y--; }
+    
+    const next = `${y}-S${s}`;
+    
+    // Check bounds for semester
+    if (props.minPeriodo && props.maxPeriodo) {
+      const semMin = `${y}-${s === 1 ? '01' : '07'}`;
+      const semMax = `${y}-${s === 1 ? '06' : '12'}`;
+      if (direction < 0 && props.minPeriodo > semMax) return;
+      if (direction > 0 && props.maxPeriodo < semMin) return;
+    }
+    
+    overriddenPeriod.value = next;
+  }
+};
+
+const canGoPrev = computed(() => {
+  const base = effectivePeriod.value;
+  if (!base || !props.minPeriodo) return true;
+  
+  if (viewRange.value === 'Mês') {
+    const [year, month] = base.split('-').map(Number);
+    const d = new Date(year, month - 2, 1);
+    const prev = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return prev >= props.minPeriodo;
+  } else {
+    const [year, sStr] = base.split('-S');
+    let py = parseInt(year);
+    let ps = parseInt(sStr) - 1;
+    if (ps < 1) { ps = 2; py--; }
+    const prevSemMax = `${py}-${ps === 1 ? '06' : '12'}`;
+    return prevSemMax >= props.minPeriodo;
+  }
+});
+
+const canGoNext = computed(() => {
+  const base = effectivePeriod.value;
+  if (!base || !props.maxPeriodo) return true;
+  
+  if (viewRange.value === 'Mês') {
+    const [year, month] = base.split('-').map(Number);
+    const d = new Date(year, month, 1);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return next <= props.maxPeriodo;
+  } else {
+    const [year, sStr] = base.split('-S');
+    let ny = parseInt(year);
+    let ns = parseInt(sStr) + 1;
+    if (ns > 2) { ns = 1; ny++; }
+    const nextSemMin = `${ny}-${ns === 1 ? '01' : '07'}`;
+    return nextSemMin <= props.maxPeriodo;
+  }
+});
+
+// Buscar dados ao abrir ou ao trocar o período (ou abrangência)
+watch([() => props.visible, effectivePeriod], ([visible, period]) => {
+  if (visible && props.cnpj && period) {
+    store.fetchGtinDetalhamentoMensal(props.cnpj, period);
+  }
+});
 
 const dynamicSummary = computed(() => {
   const list = ranking.value;
@@ -212,7 +339,16 @@ const chartOption = computed(() => {
 
 const formatMesLabel = (periodoStr) => {
   if (!periodoStr) return '';
-  if (periodoStr.includes('S')) return periodoStr.replace('-', ' — ');
+  
+  // Trata formato de semestre (ex: 2019-S1 ou 1S/2019)
+  if (periodoStr.includes('S')) {
+    const isYearFirst = periodoStr.includes('-S');
+    const parts = isYearFirst ? periodoStr.split('-S') : periodoStr.split('S/');
+    const year = isYearFirst ? parts[0] : parts[1];
+    const sem = isYearFirst ? parts[1] : parts[0];
+    return `${sem}º Semestre de ${year}`;
+  }
+
   const parts = periodoStr.split('-');
   if (parts.length === 2) {
     const d = new Date(parts[0], parseInt(parts[1]) - 1, 1);
@@ -221,28 +357,43 @@ const formatMesLabel = (periodoStr) => {
   return periodoStr;
 };
 
-const periodoFormatado = computed(() => formatMesLabel(props.periodo));
+const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 </script>
 
 <template>
-  <Sidebar v-model:visible="isVisible" position="right" class="insight-sidebar" :showCloseIcon="false">
+  <Sidebar v-model:visible="localVisible" position="right" class="insight-sidebar" :showCloseIcon="false">
     <template #header>
       <div class="sidebar-header">
         <div class="sh-title">
-          <i class="pi pi-bolt" />
-          <span>Detalhamento Mensal</span>
+          <span>Detalhamento {{ viewRange === 'Mês' ? 'Mensal' : 'Semestral' }}</span>
         </div>
-        <button class="sh-close" @click="isVisible = false"><i class="pi pi-times" /></button>
+        <button class="sh-close" @click="localVisible = false"><i class="pi pi-times" /></button>
       </div>
     </template>
 
     <div class="sidebar-content">
-      <div class="sc-title-area" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-        <div>
-          <h2>{{ periodoFormatado }}</h2>
-          <p>Análise de concentração de irregularidades.</p>
+      <div class="sc-header-row">
+        <!-- Toolbar de Filtros no Topo -->
+        <div class="filter-toolbar">
+          <div class="filter-item">
+            <span class="filter-label">Abrangência:</span>
+            <SelectButton v-model="viewRange" :options="rangeOptions" class="p-button-sm custom-select-button" :allowEmpty="false" />
+          </div>
+          <div class="filter-item">
+            <span class="filter-label">Agrupar:</span>
+            <SelectButton v-model="groupMode" :options="groupOptions" class="p-button-sm custom-select-button" :allowEmpty="false" />
+          </div>
         </div>
-        <SelectButton v-model="groupMode" :options="groupOptions" class="p-button-sm custom-select-button" :allowEmpty="false" />
+
+        <!-- Título e Navegação Abaixo -->
+        <div class="title-group-main">
+          <div class="nav-wrapper">
+            <Button icon="pi pi-chevron-left" class="p-button-text p-button-sm nav-btn" @click="changePeriod(-1)" :disabled="!canGoPrev" v-tooltip.bottom="'Voltar período'" />
+            <h2 class="current-period">{{ periodoFormatado }}</h2>
+            <Button icon="pi pi-chevron-right" class="p-button-text p-button-sm nav-btn" @click="changePeriod(1)" :disabled="!canGoNext" v-tooltip.bottom="'Avançar período'" />
+          </div>
+          <p class="sc-subtitle">Análise de concentração de irregularidades.</p>
+        </div>
       </div>
 
       <div v-if="error" class="error-state">
@@ -274,7 +425,7 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
               <span class="subtitle">Itens com maior valor de não comprovação.</span>
             </div>
             <div class="chart-container">
-              <VChart class="chart" :option="chartOption" autoresize />
+              <VChart v-if="localVisible && top5.length > 0" class="chart" :option="chartOption" autoresize />
             </div>
           </div>
 
@@ -351,7 +502,7 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .content-wrapper.is-loading {
@@ -386,7 +537,7 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 1rem 1.5rem;
+  padding: 0.5rem 1.5rem;
   flex-shrink: 0;
 }
 
@@ -396,8 +547,8 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   gap: 0.75rem;
   font-weight: 700;
   color: var(--primary-color);
-  font-size: 1rem;
-  letter-spacing: 0.03em;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -421,10 +572,10 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 }
 
 .sidebar-content {
-  padding: 1.5rem;
+  padding: 0.75rem 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
   flex: 1;
   min-height: 0; /* Important for nested flex scrolling */
 }
@@ -436,12 +587,91 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   min-height: 0; /* Fixes PrimeVue table flex scrolling */
 }
 
-.sc-title-area h2 {
+.sc-header-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 0 !important;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 40%, transparent);
+}
+
+.filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: color-mix(in srgb, var(--primary-color) 3%, transparent);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
+}
+
+.title-group-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.nav-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.current-period {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text-color);
+  letter-spacing: -0.03em;
+  min-width: 280px;
+}
+
+.sc-subtitle {
+  margin: 0 !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.85rem !important;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.filter-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
   font-weight: 700;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
-  text-transform: capitalize;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+.nav-btn {
+  color: var(--text-muted) !important;
+  opacity: 0.4;
+  transition: all 0.2s;
+}
+
+.nav-btn:disabled {
+  opacity: 0.1 !important;
+  cursor: default;
+}
+
+.nav-btn:not(:disabled):hover {
+  opacity: 1;
+  color: var(--primary-color) !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+}
+
+.nav-btn:focus,
+.nav-btn.p-focus {
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 .sc-title-area p {

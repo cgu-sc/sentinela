@@ -119,6 +119,25 @@ function formatMonth(mesIso) {
   return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(' de ', '/').toUpperCase();
 }
 
+/**
+ * Formata o semestre (ex: "1S/2024") para um modo amigável (ex: "1º Semestre de 2024").
+ */
+function formatSemestreLabel(semStr) {
+  if (!semStr) return '';
+  // Formato "1S/2015"
+  if (semStr.includes('S/')) {
+    const [s, year] = semStr.split('S/');
+    return `${s}º Semestre de ${year}`;
+  }
+  // Formato "2015-S1"
+  if (semStr.includes('-S')) {
+    const [year, s] = semStr.split('-S');
+    const semNum = s.replace('S', '');
+    return `${semNum}º Semestre de ${year}`;
+  }
+  return semStr;
+}
+
 const insightSidebarVisible = ref(false);
 const insightSelectedPeriod = ref(null);
 
@@ -213,7 +232,7 @@ const chartOption = computed(() => {
         if (!s) return '';
         return `
           <div style="color: ${c.tooltipText}">
-            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${s.semestre}</div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${formatSemestreLabel(s.semestre)}</div>
             <div style="display:flex;flex-direction:column;gap:6px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:10px;height:10px;border-radius:2px;background:${c.green};display:inline-block;"></span>
@@ -374,7 +393,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         const regVal   = totalVal - irrVal;
         return `
           <div style="color:${c.tooltipText}">
-            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatMesLabel(m.mes)} <span style="opacity: 0.5; font-size: 11px;">(${m.semestre})</span></div>
+            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">${formatMesLabel(m.mes)} <span style="opacity: 0.5; font-size: 11px;">(${formatSemestreLabel(m.semestre)})</span></div>
             <div style="display:flex;flex-direction:column;gap:5px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:9px;height:9px;border-radius:2px;background:${c.green};display:inline-block;"></span>
@@ -525,7 +544,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           <div class="header-actions">
             <span v-if="selectedSemestre" class="sem-badge">
               <i class="pi pi-star-fill" />
-              {{ selectedSemestre.semestre }}
+              {{ formatSemestreLabel(selectedSemestre.semestre) }}
             </span>
             <Button 
               v-if="cachedEvolucaoData"
@@ -558,7 +577,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           <div class="evolucao-card-header">
             <div class="header-title">
               <i class="pi pi-calendar-clock" />
-              <span>{{ selectedSemestre.semestre }} — Detalhamento Mensal</span>
+              <span>{{ formatSemestreLabel(selectedSemestre.semestre) }} — Detalhamento Mensal</span>
             </div>
             <div class="header-actions">
               <button class="btn-close-context" @click="limparFiltro" title="Fechar">
@@ -566,7 +585,12 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
               </button>
             </div>
           </div>
-          <DataTable :value="selectedSemestre.meses ?? []" class="sanfona-table" :show-gridlines="false">
+          <DataTable 
+            :value="selectedSemestre.meses ?? []" 
+            class="sanfona-table p-datatable-sm" 
+            :show-gridlines="false"
+            @row-click="(e) => abrirInfratores(e.data.mes)"
+          >
             <Column field="mes" header="Mês" style="width: 20%">
               <template #body="{ data: m }">{{ formatMonth(m.mes) }}</template>
             </Column>
@@ -614,14 +638,14 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           >
 
             <Column field="semestre" header="Semestre" style="width: 15%">
-              <template #body="{ data }">
+              <template #body="slotProps">
                 <div class="sem-label">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <i class="pi" :class="expandedRows[data.semestre] ? 'pi-chevron-down' : 'pi-chevron-right'" style="font-size: 0.70rem; color: var(--text-muted); opacity: 0.8;"></i>
-                    {{ data.semestre }}
+                    <i class="pi" :class="expandedRows[slotProps.data.semestre] ? 'pi-chevron-down' : 'pi-chevron-right'" style="font-size: 0.70rem; color: var(--text-muted); opacity: 0.8;"></i>
+                    <span class="sem-badge"><i class="pi pi-calendar" /> {{ formatSemestreLabel(slotProps.data.semestre) }}</span>
                   </div>
-                  <span v-if="formatMesRange(data.mes_inicio, data.mes_fim)" class="sem-months" style="margin-left: 20px;">
-                    {{ formatMesRange(data.mes_inicio, data.mes_fim) }}
+                  <span v-if="formatMesRange(slotProps.data.mes_inicio, slotProps.data.mes_fim)" class="sem-months" style="margin-left: 20px;">
+                    {{ formatMesRange(slotProps.data.mes_inicio, slotProps.data.mes_fim) }}
                   </span>
                 </div>
               </template>
@@ -695,7 +719,12 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
             <template #expansion="{ data: sem }">
               <div class="meses-expansion-box">
-                <DataTable :value="sem.meses ?? []" class="sanfona-table" :show-gridlines="false">
+                <DataTable 
+                  :value="sem.meses ?? []" 
+                  class="sanfona-table p-datatable-sm" 
+                  :show-gridlines="false"
+                  @row-click="(e) => abrirInfratores(e.data.mes)"
+                >
                   <Column field="mes" header="Mês" style="width: 20%">
                     <template #body="{ data: m }">{{ formatMonth(m.mes) }}</template>
                   </Column>
@@ -787,6 +816,8 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
       v-model:visible="insightSidebarVisible"
       :cnpj="cnpj"
       :periodo="insightSelectedPeriod"
+      :minPeriodo="todosMeses[0]?.mes"
+      :maxPeriodo="todosMeses[todosMeses.length - 1]?.mes"
     />
   </div>
 </template>
@@ -989,12 +1020,18 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
 .meses-expansion-box {
   border-left: 3px solid var(--primary-color);
-  padding: 1.5rem 2.5rem;
+  padding: 0.75rem 1.5rem;
 }
 
 :deep(.sanfona-table.p-datatable) { background: transparent; }
-:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr) { background: transparent; }
-:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr:hover > td) { background: transparent !important; }
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr) { 
+  background: transparent; 
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+:deep(.sanfona-table.p-datatable .p-datatable-tbody > tr:hover > td) { 
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important; 
+}
 :deep(.sanfona-table.p-datatable .p-datatable-thead > tr > th) {
   padding: 0.5rem 1rem;
   background: transparent;

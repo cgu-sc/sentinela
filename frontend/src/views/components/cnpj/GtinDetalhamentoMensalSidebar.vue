@@ -175,6 +175,13 @@ watch([() => props.visible, effectivePeriod], ([visible, period]) => {
   }
 });
 
+// Resetar para "Mês" ao abrir a sidebar
+watch(() => props.visible, (newVisible) => {
+  if (newVisible) {
+    viewRange.value = 'Mês';
+  }
+});
+
 const dynamicSummary = computed(() => {
   const list = ranking.value;
   const total = list.length;

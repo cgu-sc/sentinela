@@ -609,12 +609,36 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             </Column>
             <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
               <template #body="{ data: m }">
-                <span :class="{
-                  'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                  'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                  'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
-                  'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                <div class="pct-cell" style="text-align: right; padding: 0;">
+                  <div class="pct-bar-wrap">
+                    <div
+                      class="pct-bar"
+                      :style="{
+                        width: Math.min(m.pct_irregular, 100) + '%',
+                        background: m.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
+                                  : m.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
+                                  : m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
+                                  : 'var(--risk-low)'
+                      }"
+                    />
+                  </div>
+                  <span class="pct-value" :class="{
+                    'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                    'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                    'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
+                    'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                  }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                </div>
+              </template>
+            </Column>
+            <Column style="width: 5%">
+              <template #body="{ data: m }">
+                <Button
+                  icon="pi pi-search-plus"
+                  class="p-button-text p-button-sm p-button-rounded p-button-danger btn-insight"
+                  v-tooltip.left="'Ver mais detalhes'"
+                  @click="abrirInfratores(m.mes)"
+                />
               </template>
             </Column>
           </DataTable>
@@ -741,22 +765,36 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
                       <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
                     </template>
                   </Column>
-                  <Column field="pct_irregular" header="% S/ Comp" style="width: 15%">
+                  <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
                     <template #body="{ data: m }">
-                      <span :class="{
-                        'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                        'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                        'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
-                        'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                      }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                      <div class="pct-cell" style="text-align: right; padding: 0;">
+                        <div class="pct-bar-wrap">
+                          <div
+                            class="pct-bar"
+                            :style="{
+                              width: Math.min(m.pct_irregular, 100) + '%',
+                              background: m.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
+                                        : m.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
+                                        : m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
+                                        : 'var(--risk-low)'
+                            }"
+                          />
+                        </div>
+                        <span class="pct-value" :class="{
+                          'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
+                          'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
+                          'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
+                          'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
+                        }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                      </div>
                     </template>
                   </Column>
                   <Column style="width: 5%">
                     <template #body="{ data: m }">
                       <Button
-                        icon="pi pi-bolt"
+                        icon="pi pi-search-plus"
                         class="p-button-text p-button-sm p-button-rounded p-button-danger btn-insight"
-                        v-tooltip.left="'Ver medicamentos que causaram o prejuízo'"
+                        v-tooltip.left="'Ver mais detalhes'"
                         @click="abrirInfratores(m.mes)"
                       />
                     </template>
@@ -1223,13 +1261,25 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 .btn-insight {
   opacity: 0.6;
   transition: all 0.2s ease;
+  width: 1.6rem !important;
+  height: 1.6rem !important;
+  padding: 0 !important;
 }
 .btn-insight:hover {
   opacity: 1;
   transform: scale(1.1);
 }
+.btn-insight :deep(.p-button-icon) {
+  font-size: 0.85rem !important;
+}
 
 .evolucao-chart-wrap.is-hovering-axis :deep(canvas) {
   cursor: pointer !important;
 }
+/* Remover borda branca de foco nos botões */
+:deep(.p-button:focus) {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
 </style>

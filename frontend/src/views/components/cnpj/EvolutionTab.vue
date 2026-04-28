@@ -99,12 +99,13 @@ function toggleRow(event) {
 }
 
 /**
- * Disparado ao clicar em uma barra no gráfico ECharts.
- * O `params.name` neste gráfico contém a label do Eixo X (o Semestre, ex: "1S/2021").
+ * Disparado ao clicar em qualquer lugar do gráfico (incluindo o axisPointer).
+ * Usamos a variável hoveredSemestre que já rastreia a posição do cursor.
  */
-function onChartClick(params) {
-  if (!params || !params.name) return;
-  const semestre = params.name;
+function onZrClick() {
+  const semestre = hoveredSemestre.value;
+  if (!semestre) return;
+  
   if (!cachedEvolucaoData.value?.semestres) return;
   const rowData = cachedEvolucaoData.value.semestres.find(s => s.semestre === semestre);
   if (!rowData) return;
@@ -501,14 +502,14 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             <i v-if="isRefreshing" class="pi pi-spin pi-spinner refresh-spinner" />
           </div>
         </div>
-        <div class="evolucao-chart-wrap" @mouseleave="onChartMouseOut">
+        <div class="evolucao-chart-wrap" :class="{ 'is-hovering-axis': hoveredSemestre }" @mouseleave="onChartMouseOut">
           <VChart 
             ref="chartRef" 
             :option="chartOption" 
             :update-options="{ notMerge: true }" 
             autoresize 
             class="evolucao-chart" 
-            @click="onChartClick" 
+            @zr:click="onZrClick" 
             @updateAxisPointer="onAxisPointerUpdate"
           />
         </div>
@@ -1189,5 +1190,9 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 .btn-insight:hover {
   opacity: 1;
   transform: scale(1.1);
+}
+
+.evolucao-chart-wrap.is-hovering-axis :deep(canvas) {
+  cursor: pointer !important;
 }
 </style>

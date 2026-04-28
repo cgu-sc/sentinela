@@ -988,7 +988,7 @@ GO
 -- BASE PARA BENCHMARKS: #indicador_crm (temp)
 -- Grain: (cnpj, competencia) — métricas resumidas por farmácia/mês.
 -- Colapsa os steps 1-12 do crms_2 em CTEs sobre crm_export.
--- existe apenas para alimentar as tabelas de benchmark abaixo.
+-- Não é persistida: existe apenas para alimentar as 4 tabelas de benchmark abaixo.
 -- ============================================================================
 DROP TABLE IF EXISTS #indicador_crm;
 
@@ -1078,7 +1078,7 @@ CREATE CLUSTERED INDEX IDX_IndCrm ON #indicador_crm(nu_cnpj, competencia);
 GO
 
 
-
+-- ============================================================================
 -- BENCHMARK POR UF / COMPETÊNCIA
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_uf;
@@ -1132,22 +1132,6 @@ SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_regiao FROM CTE;
 
 CREATE CLUSTERED INDEX IDX_BenchReg ON temp_CGUSC.fp.indicador_crm_bench_regiao(id_regiao_saude, competencia);
 
-
-
--- ============================================================================
--- NORMALIZAÇÃO: DIMENSÕES (Apenas Médicos para ID numérico)
--- ============================================================================
-
--- 1. Dicionário de Médicos (Dimensão)
-DROP TABLE IF EXISTS temp_CGUSC.fp.dim_crm;
-SELECT 
-    ROW_NUMBER() OVER (ORDER BY id_medico) AS id_crm_id,
-    id_medico
-INTO temp_CGUSC.fp.dim_crm 
-FROM (SELECT DISTINCT CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm AS id_medico FROM #base_agregada_crm_cnpj) t;
-
-CREATE CLUSTERED INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm(id_crm_id);
-CREATE NONCLUSTERED INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm(id_medico);
 
 -- ============================================================================
 -- BENCHMARK NACIONAL / COMPETÊNCIA

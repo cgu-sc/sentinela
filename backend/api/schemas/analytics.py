@@ -462,6 +462,9 @@ class EvolucaoMensalGtinResponse(BaseModel):
 class GtinDetalhamentoMensalItem(BaseModel):
     gtin: str
     medicamento: Optional[str] = None
+    principio_ativo: Optional[str] = None
+    produto: Optional[str] = None
+    laboratorio: Optional[str] = None
     qnt_vendas: int = 0
     qnt_vendas_sem_comprovacao: int = 0
     valor_vendas: float = 0.0

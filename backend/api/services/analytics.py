@@ -699,9 +699,14 @@ class AnalyticsService:
                 if codigo:
                     val_str = str(codigo)
                     clean_val = val_str.split(".")[0] if "." in val_str else val_str
-                    nome = r.get("principio_ativo") or r.get("produto") or "Substância Não Identificada"
-                    medicamentos_map[clean_val] = nome
-                    medicamentos_map[val_str] = nome
+                    info = {
+                        "medicamento": r.get("principio_ativo") or r.get("produto") or "Substância Não Identificada",
+                        "principio_ativo": r.get("principio_ativo"),
+                        "produto": r.get("produto"),
+                        "laboratorio": r.get("laboratorio")
+                    }
+                    medicamentos_map[clean_val] = info
+                    medicamentos_map[val_str] = info
         except Exception as e:
             print(f"⚠️ Erro ao buscar dicionario de medicamentos do cache: {e}")
             
@@ -739,11 +744,14 @@ class AnalyticsService:
         for r in agg.iter_rows(named=True):
             gtin_str = str(r["codigo_barra"])
             clean_gtin = gtin_str.split(".")[0] if "." in gtin_str else gtin_str
-            nome = medicamentos_map.get(clean_gtin) or medicamentos_map.get(gtin_str) or "Substância Não Identificada"
+            info = medicamentos_map.get(clean_gtin) or medicamentos_map.get(gtin_str) or {}
             
             ranking.append(GtinDetalhamentoMensalItem(
                 gtin=clean_gtin,
-                medicamento=nome,
+                medicamento=info.get("medicamento", "Substância Não Identificada"),
+                principio_ativo=info.get("principio_ativo"),
+                produto=info.get("produto"),
+                laboratorio=info.get("laboratorio"),
                 qnt_vendas=int(r["qnt_vendas"]),
                 qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"]),
                 valor_vendas=round(float(r["valor_vendas"]), 2),

@@ -60,13 +60,14 @@ const ranking = computed(() => {
   const raw = localData.value?.ranking || [];
   if (groupMode.value === 'GTIN') return raw;
 
-  // Agrupamento por Princípio Ativo (medicamento)
+  // Agrupamento por Princípio Ativo
   const grouped = {};
   raw.forEach(item => {
-    const key = item.medicamento || 'Substância Não Identificada';
+    const key = item.principio_ativo || item.medicamento || 'Substância Não Identificada';
     if (!grouped[key]) {
       grouped[key] = {
         medicamento: key,
+        principio_ativo: item.principio_ativo,
         gtin_count: 0,
         qnt_vendas: 0,
         qnt_vendas_sem_comprovacao: 0,
@@ -287,19 +288,32 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
               </div>
             </div>
             <DataTable :value="displayedRanking" class="insight-table p-datatable-sm" scrollable scrollHeight="flex" tableStyle="table-layout: fixed; width: 100%">
-              <Column field="medicamento" header="Medicamento / Princípio Ativo" style="width: 50%">
+              <Column field="medicamento" header="Detalhamento do Item" style="width: 50%">
                 <template #body="slotProps">
                   <div class="med-cell">
-                    <span class="med-name" v-tooltip.bottom="formatMedName(slotProps.data.medicamento)">{{ formatMedName(slotProps.data.medicamento) }}</span>
-                    <span class="med-gtin" v-if="groupMode === 'GTIN'">GTIN: {{ slotProps.data.gtin }}</span>
-                    <span class="med-gtin" v-else>{{ slotProps.data.gtin_count }} GTIN(s) associado(s)</span>
+                    <template v-if="groupMode === 'GTIN'">
+                      <span class="med-name" v-tooltip.bottom="formatMedName(slotProps.data.produto || slotProps.data.medicamento)">
+                        {{ formatMedName(slotProps.data.produto || slotProps.data.medicamento) }}
+                        <span v-if="slotProps.data.laboratorio" class="med-lab">({{ slotProps.data.laboratorio }})</span>
+                      </span>
+                      <span class="med-sub" v-if="slotProps.data.principio_ativo && slotProps.data.principio_ativo !== slotProps.data.produto">
+                        {{ slotProps.data.principio_ativo }}
+                      </span>
+                      <span class="med-gtin">GTIN: {{ slotProps.data.gtin }}</span>
+                    </template>
+                    <template v-else>
+                      <span class="med-name" v-tooltip.bottom="formatMedName(slotProps.data.medicamento)">
+                        {{ formatMedName(slotProps.data.medicamento) }}
+                      </span>
+                      <span class="med-gtin">{{ slotProps.data.gtin_count }} GTIN(s) associado(s)</span>
+                    </template>
                   </div>
                 </template>
               </Column>
               <Column field="valor_sem_comprovacao" header="Sem Comprovação" style="width: 25%; text-align: right">
                 <template #body="slotProps">
                   <div class="val-cell">
-                    <span class="val-danger">{{ formatCurrencyFull(slotProps.data.valor_sem_comprovacao) }}</span>
+                    <span :class="slotProps.data.valor_sem_comprovacao > 0 ? 'val-danger' : 'val-regular'">{{ formatCurrencyFull(slotProps.data.valor_sem_comprovacao) }}</span>
                     <span class="val-pct">{{ slotProps.data.pct_sem_comprovacao }}% (irregular)</span>
                   </div>
                 </template>
@@ -315,7 +329,7 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
               <template #footer>
                 <div class="custom-dt-footer">
                   <div class="cf-label">Total do Período:</div>
-                  <div class="cf-val val-danger">{{ formatCurrencyFull(totalSemComprovacao) }}</div>
+                  <div class="cf-val" :class="totalSemComprovacao > 0 ? 'val-danger' : 'val-regular'">{{ formatCurrencyFull(totalSemComprovacao) }}</div>
                   <div class="cf-val val-regular">{{ formatCurrencyFull(totalComprovado) }}</div>
                 </div>
               </template>
@@ -522,6 +536,22 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 .med-gtin {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.med-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.med-lab {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
 }
 
 .val-cell {

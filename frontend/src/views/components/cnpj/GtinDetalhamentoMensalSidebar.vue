@@ -168,7 +168,7 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
       <div class="sidebar-header">
         <div class="sh-title">
           <i class="pi pi-bolt" />
-          <span>Raio-X de Composição</span>
+          <span>Detalhamento Mensal</span>
         </div>
         <button class="sh-close" @click="isVisible = false"><i class="pi pi-times" /></button>
       </div>
@@ -268,6 +268,11 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 <style scoped>
 .content-wrapper {
   transition: opacity 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 2rem;
 }
 
 .content-wrapper.is-loading {

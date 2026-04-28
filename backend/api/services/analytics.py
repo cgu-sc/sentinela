@@ -2070,7 +2070,7 @@ class AnalyticsService:
         }
 
         # ── 7. Alertas diários — injeta em cada médico ────────────────────────
-        ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "concentracao_mesmo_crm.parquet")
+        ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "crm_unico_alertas.parquet")
         df_ad: pl.DataFrame | None = None
 
         # Tenta carregar do cache parquet
@@ -2193,7 +2193,8 @@ class AnalyticsService:
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
-        CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "concentracao_crm_estabelecimento.parquet")
+        CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "crm_multiplos_alertas.parquet")
+
         df_ca: pl.DataFrame | None = None
 
         if os.path.exists(CNPJ_ALERTS_PATH):
@@ -2229,7 +2230,6 @@ class AnalyticsService:
                 {
                     "dt": str(r["dt_alerta"]),
                     "hr": int(r["hr_janela"]),
-                    "nivel": r["nivel"],
                     "descricao": r["descricao"],
                     "nu_prescricoes": int(r["nu_prescricoes"]),
                     "nu_crms": int(r["nu_crms"]),

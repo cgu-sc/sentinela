@@ -2094,8 +2094,7 @@ class AnalyticsService:
                     )
                 df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame(schema={
                     "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
-                    "nivel": pl.Utf8, "nu_prescricoes_dia": pl.Int32, 
-                    "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64
+                    "nu_prescricoes_dia": pl.Int32, "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64
                 })
                 df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
             except Exception as e:
@@ -2118,7 +2117,6 @@ class AnalyticsService:
                 mid = row["id_medico"]
                 alertas_por_medico.setdefault(mid, []).append({
                     "dt":             str(row["dt_alerta"]),
-                    "nivel":          row["nivel"],
                     "nu_prescricoes": row["nu_prescricoes_dia"],
                     "nu_minutos":     row["nu_minutos_dia"],
                     "taxa_hora":      float(row["taxa_hora"] or 0),
@@ -2190,6 +2188,7 @@ class AnalyticsService:
         # Garante que o arquivo _transacoes_horarias.parquet exista para uso offline
         try:
             AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
+            AnalyticsService.sync_crm_unico_raio_x(cnpj)
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
@@ -2239,7 +2238,7 @@ class AnalyticsService:
             ]
 
         # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
-        TX_PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
         alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
 
         if os.path.exists(TX_PARQUET_PATH):
@@ -2332,7 +2331,7 @@ class AnalyticsService:
         import pandas as pd
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_diaria.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_perfil_diario.parquet")
 
         import time as _time
         df: pl.DataFrame | None = None
@@ -2497,7 +2496,7 @@ class AnalyticsService:
         from database import engine as _engine
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        TX_PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
 
         if os.path.exists(TX_PARQUET_PATH):
             try:
@@ -2546,7 +2545,7 @@ class AnalyticsService:
         from database import engine as _engine
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
 
         import time as _time
         df = pl.DataFrame()
@@ -2625,7 +2624,7 @@ class AnalyticsService:
         import pandas as pd
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_daily.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_perfil_diario.parquet")
 
         import time as _time
         df: pl.DataFrame | None = None
@@ -2691,6 +2690,11 @@ class AnalyticsService:
             }
             for r in df.iter_rows(named=True)
         ]
+        # AUTO-WARMING: Pré-aquece o parquet de Transações (Raio-X) do CRM Único
+        try:
+            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+        except: pass
+
         return CrmUnicoPerfilResponse(cnpj=cnpj, days=days, from_cache=from_cache,
                                       read_time_ms=read_time_ms, query_time_ms=query_time_ms,
                                       save_time_ms=save_time_ms)
@@ -2827,7 +2831,6 @@ class AnalyticsService:
                         "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
                         "nu_minutos_dia":     int(r["nu_minutos_dia"]),
                         "taxa_hora":          float(r["taxa_hora"]),
-                        "nivel":              str(r["nivel"]),
                     }
                     for r in day_alertas.iter_rows(named=True)
                 ]

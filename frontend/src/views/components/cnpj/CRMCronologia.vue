@@ -909,8 +909,6 @@ function toggleActiveRow(auth) {
             <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} prescrições</span>
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>
-            <span class="alerta-sep">·</span>
-            <span class="alerta-nivel">{{ alerta.nivel }}</span>
           </div>
         </div>
       </div>

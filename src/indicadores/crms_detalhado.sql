@@ -682,13 +682,7 @@ alertas AS (
         dt_dia                                           AS dt_alerta,
         nu_prescricoes_dia,
         nu_minutos_dia,
-        CAST(taxa_dia AS DECIMAL(5,1))                   AS taxa_hora,
-        CASE
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0                                                                                             THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia BETWEEN 1 AND 1440 AND taxa_dia >= 12                                                           THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 5  AND nu_minutos_dia > 1440             AND taxa_dia >= 12                                                           THEN 'Autorizações em Sequência'
-            WHEN nu_prescricoes_dia >= 10 AND (taxa_dia >= 7 OR nu_minutos_dia <= 60)                                                                        THEN 'Autorizações em Sequência'
-        END AS nivel
+        CAST(taxa_dia AS DECIMAL(5,1))                   AS taxa_hora
     FROM base_com_taxa
     WHERE
         (nu_prescricoes_dia >= 5  AND nu_minutos_dia = 0)
@@ -697,8 +691,7 @@ alertas AS (
      OR (nu_prescricoes_dia >= 10 AND (taxa_dia >= 7 OR nu_minutos_dia <= 60))
 )
 SELECT * INTO temp_CGUSC.fp.crm_unico_alertas
-FROM alertas
-WHERE nivel IS NOT NULL;
+FROM alertas;
 
 PRINT '   temp_CGUSC.fp.crm_unico_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alert_t, 114);
 

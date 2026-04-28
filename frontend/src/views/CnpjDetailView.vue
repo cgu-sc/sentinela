@@ -147,6 +147,7 @@ watch(
       cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmMultiplosPerfil(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmMultiplosHorario(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchCrmUnicoPerfil(newCnpj, inicio, fim);
       if (!cnpjData.value) {
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
@@ -169,6 +170,7 @@ watch(
     cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmMultiplosPerfil(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmMultiplosHorario(cnpj.value, inicio, fim);
+    cnpjDetailStore.fetchCrmUnicoPerfil(cnpj.value, inicio, fim);
   },
   { deep: true },
 );

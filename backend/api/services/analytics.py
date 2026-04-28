@@ -47,6 +47,9 @@ from ..schemas.analytics import (
     IndicadorAnaliseResponse,
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
+    CrmMultiplosRaioXResponse,
+    CrmUnicoPerfilResponse,
+    CrmUnicoRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -2408,7 +2411,7 @@ class AnalyticsService:
         from sqlalchemy import text
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "dispensacao_horaria.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_horario.parquet")
 
         import time as _time
         df: pl.DataFrame | None = None
@@ -2432,8 +2435,9 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, is_anomalo_hora "
-                             "FROM temp_CGUSC.fp.crm_multiplos_perfil_horario "
+                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, "
+                             "is_anomalo_hora, is_crm_multiplos, is_crm_unico "
+                             "FROM temp_CGUSC.fp.crm_perfil_horario "
                              "WHERE cnpj = :cnpj "
                              "ORDER BY dt_janela, hr_janela"),
                         conn,
@@ -2466,12 +2470,14 @@ class AnalyticsService:
 
         points = [
             {
-                "dt_janela":              str(r["dt_janela"])[:10],
-                "hr_janela":              int(r["hr_janela"]),
-                "nu_prescricoes":         int(r["nu_prescricoes"]),
-                "nu_crms_diferentes":     int(r["nu_crms_diferentes"]),
-                "mediana_hora":           float(r["mediana_hora"]),
-                "is_anomalo_hora":        int(r.get("is_anomalo_hora", 0)),
+                "dt_janela":          str(r["dt_janela"])[:10],
+                "hr_janela":          int(r["hr_janela"]),
+                "nu_prescricoes":     int(r["nu_prescricoes"]),
+                "nu_crms_diferentes": int(r["nu_crms_diferentes"]),
+                "mediana_hora":       float(r["mediana_hora"]),
+                "is_anomalo_hora":    int(r.get("is_anomalo_hora", 0)),
+                "is_crm_multiplos":   int(r.get("is_crm_multiplos", 0)),
+                "is_crm_unico":       int(r.get("is_crm_unico", 0)),
             }
             for r in df.iter_rows(named=True)
         ]
@@ -2538,8 +2544,7 @@ class AnalyticsService:
         import polars as pl
         from sqlalchemy import text
         from database import engine as _engine
-        from api.schemas.analytics import CrmMultiplosRaioXResponse
-        
+
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "transacoes_horarias.parquet")
 
@@ -2598,6 +2603,239 @@ class AnalyticsService:
         transactions = enriched_df.to_dicts()
         
         return CrmMultiplosRaioXResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
+
+    # ── CRM ÚNICO ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def get_crm_unico_perfil(
+        cnpj: str,
+        data_inicio: str | None = None,
+        data_fim: str | None = None
+    ) -> "CrmUnicoPerfilResponse":
+        """Retorna a série diária da farmácia com flag de dias com alerta de concentração por médico.
+
+        Args:
+            cnpj: CNPJ de 14 dígitos sem formatação.
+            data_inicio: Data de início (YYYY-MM-DD ou YYYY-MM).
+            data_fim: Data de fim (YYYY-MM-DD ou YYYY-MM).
+
+        Returns:
+            CrmUnicoPerfilResponse com lista de dias ordenada cronologicamente.
+        """
+        import pandas as pd
+
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_daily.parquet")
+
+        import time as _time
+        df: pl.DataFrame | None = None
+        from_cache    = False
+        read_time_ms: float | None = None
+        query_time_ms: float | None = None
+        save_time_ms:  float | None = None
+
+        if os.path.exists(PARQUET_PATH):
+            try:
+                _t0 = _time.perf_counter()
+                df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                from_cache = True
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet crm_unico_daily '{cnpj}': {e}")
+
+        if df is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    _t0 = _time.perf_counter()
+                    pdf = pd.read_sql(
+                        text("SELECT * FROM temp_CGUSC.fp.crm_unico_perfil_diario"
+                             " WHERE cnpj = :cnpj ORDER BY dt_janela"),
+                        conn,
+                        params={"cnpj": cnpj},
+                    )
+                    query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+                df = pl.from_pandas(pdf)
+                _t1 = _time.perf_counter()
+                df.write_parquet(PARQUET_PATH, compression="lz4")
+                save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
+            except Exception as e:
+                print(f"⚠️ Erro ao gerar parquet crm_unico_daily '{cnpj}': {e}")
+                df = pl.DataFrame()
+
+        if df.is_empty():
+            return CrmUnicoPerfilResponse(cnpj=cnpj, days=[], from_cache=from_cache,
+                                          read_time_ms=read_time_ms, query_time_ms=query_time_ms,
+                                          save_time_ms=save_time_ms)
+
+        if data_inicio:
+            d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
+        if data_fim:
+            d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
+            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
+
+        if df.is_empty():
+            return CrmUnicoPerfilResponse(cnpj=cnpj, days=[], from_cache=from_cache,
+                                          read_time_ms=read_time_ms, query_time_ms=query_time_ms,
+                                          save_time_ms=save_time_ms)
+
+        days = [
+            {
+                "dt_janela":          str(r["dt_janela"])[:10],
+                "competencia":        int(r["competencia"]),
+                "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
+                "nu_crms_distintos":  int(r["nu_crms_distintos"]),
+                "mediana_diaria":     float(r["mediana_diaria"]),
+                "is_anomalo":         int(r["is_anomalo"]),
+            }
+            for r in df.iter_rows(named=True)
+        ]
+        return CrmUnicoPerfilResponse(cnpj=cnpj, days=days, from_cache=from_cache,
+                                      read_time_ms=read_time_ms, query_time_ms=query_time_ms,
+                                      save_time_ms=save_time_ms)
+
+    @staticmethod
+    def sync_crm_unico_raio_x(cnpj: str) -> None:
+        """Sincroniza o cache parquet de transações do CRM ÚNICO (todos os dias com alerta) para um CNPJ."""
+        import pandas as pd
+        import polars as pl
+        from sqlalchemy import text
+        from database import engine as _engine
+
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_tx.parquet")
+
+        if os.path.exists(TX_PARQUET_PATH):
+            try:
+                header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
+                if "codigo_barra" in header.columns and len(header.columns) > 5:
+                    return
+            except Exception:
+                pass
+
+        try:
+            print(f"🗄️ [SYNC] Buscando transações CRM único no banco para {cnpj}...")
+            with _engine.connect() as conn:
+                pdf_tx = pd.read_sql(
+                    text("SELECT dt_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
+                         "FROM temp_CGUSC.fp.crm_unico_detalhe "
+                         "WHERE cnpj = :cnpj "
+                         "ORDER BY data_hora ASC, num_autorizacao ASC"),
+                    conn, params={"cnpj": cnpj}
+                )
+            df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
+                "dt_janela": pl.Utf8, "data_hora": pl.Utf8,
+                "num_autorizacao": pl.Utf8, "crm": pl.Utf8, "crm_uf": pl.Utf8,
+                "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
+            })
+
+            if not df_tx.is_empty():
+                df_tx = df_tx.with_columns([
+                    pl.col("num_autorizacao").cast(pl.Utf8),
+                    pl.col("crm").cast(pl.Utf8),
+                    pl.col("codigo_barra").cast(pl.Utf8),
+                    pl.col("data_hora").cast(pl.Utf8),
+                ])
+
+            df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+        except Exception as e:
+            if "IM002" in str(e) or "connection" in str(e).lower():
+                print(f"ℹ️  Modo Offline: Cache CRM único para {cnpj} não encontrado.")
+            else:
+                print(f"⚠️ Erro ao sincronizar parquet crm_unico_tx '{cnpj}': {e}")
+
+    @staticmethod
+    def get_crm_unico_raio_x(cnpj: str, date_str: str) -> "CrmUnicoRaioXResponse":
+        """Retorna todas as transações da farmácia num dia com alerta de CRM único, mais os médicos-gatilho.
+
+        Args:
+            cnpj: CNPJ de 14 dígitos sem formatação.
+            date_str: Data no formato YYYY-MM-DD.
+
+        Returns:
+            CrmUnicoRaioXResponse com transações (enriquecidas com produto) e lista de alertas do dia.
+        """
+        import pandas as pd
+        import polars as pl
+        from sqlalchemy import text
+        from database import engine as _engine
+        from api.schemas.analytics import CrmUnicoRaioXResponse
+
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_tx.parquet")
+
+        import time as _time
+        df = pl.DataFrame()
+        read_time_ms: float | None = None
+
+        if not os.path.exists(PARQUET_PATH):
+            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+
+        if os.path.exists(PARQUET_PATH):
+            try:
+                _t0 = _time.perf_counter()
+                df = pl.read_parquet(PARQUET_PATH)
+                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+            except Exception as e:
+                print(f"⚠️ Erro ao ler parquet crm_unico_tx '{cnpj}': {e}")
+
+        empty = CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[],
+                                      alertas=[], from_cache=True, read_time_ms=read_time_ms)
+
+        if df.is_empty():
+            return empty
+
+        filtered_df = df.filter(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str)
+        if filtered_df.is_empty():
+            return empty
+
+        # Enriquece com nome do medicamento
+        from data_cache import get_medicamentos_df
+        try:
+            df_med = get_medicamentos_df()
+            df_med_subset = df_med.select(["codigo_barra", "produto", "principio_ativo"])
+            enriched_df = filtered_df.join(df_med_subset, on="codigo_barra", how="left")
+        except Exception as e:
+            print(f"⚠️ Erro ao cruzar medicamentos no Raio-X CRM único: {e}")
+            enriched_df = filtered_df.with_columns([
+                pl.lit(None).alias("produto"),
+                pl.lit(None).alias("principio_ativo"),
+            ])
+
+        enriched_df = enriched_df.with_columns([
+            pl.col("num_autorizacao").cast(pl.Utf8),
+            pl.col("crm").cast(pl.Utf8),
+            pl.col("codigo_barra").cast(pl.Utf8),
+            pl.col("data_hora").cast(pl.Utf8),
+        ])
+
+        transactions = enriched_df.to_dicts()
+
+        # Busca os médicos que dispararam alertas naquele dia (do parquet de alertas já em cache)
+        alertas: list[dict] = []
+        try:
+            alertas_parquet = os.path.join(cnpj_dir, "crm_unico_alertas.parquet")
+            if os.path.exists(alertas_parquet):
+                df_alertas = pl.read_parquet(alertas_parquet)
+                day_alertas = df_alertas.filter(
+                    pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str
+                )
+                alertas = [
+                    {
+                        "id_medico":         str(r["id_medico"]),
+                        "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
+                        "nu_minutos_dia":     int(r["nu_minutos_dia"]),
+                        "taxa_hora":          float(r["taxa_hora"]),
+                        "nivel":              str(r["nivel"]),
+                    }
+                    for r in day_alertas.iter_rows(named=True)
+                ]
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar alertas CRM único para {cnpj}/{date_str}: {e}")
+
+        return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=transactions,
+                                     alertas=alertas, from_cache=True, read_time_ms=read_time_ms)
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

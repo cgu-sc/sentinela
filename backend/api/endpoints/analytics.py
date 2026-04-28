@@ -9,7 +9,8 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse, EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
+    CrmMultiplosRaioXResponse, CrmUnicoPerfilResponse, CrmUnicoRaioXResponse,
+    EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -189,6 +190,23 @@ def get_crm_multiplos_raio_x(
 ):
     """Retorna o raio-x (transação literal) de uma hora específica ou do dia inteiro se a hora for omitida."""
     return AnalyticsService.get_crm_multiplos_raio_x(cnpj, date_str, hour)
+
+@router.get("/cnpj/{cnpj}/crm-unico/perfil", response_model=CrmUnicoPerfilResponse)
+def get_crm_unico_perfil(
+    cnpj: str,
+    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
+    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
+):
+    """Retorna a série diária da farmácia com flag de dias com alerta de concentração por médico."""
+    return AnalyticsService.get_crm_unico_perfil(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/crm-unico/raio-x", response_model=CrmUnicoRaioXResponse)
+def get_crm_unico_raio_x(
+    cnpj: str,
+    date_str: str = Query(..., description="Data do dia anômalo (YYYY-MM-DD)"),
+):
+    """Retorna todas as transações da farmácia num dia com alerta de CRM único, mais os médicos-gatilho."""
+    return AnalyticsService.get_crm_unico_raio_x(cnpj, date_str)
 
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)

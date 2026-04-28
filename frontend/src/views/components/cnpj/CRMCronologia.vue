@@ -26,7 +26,9 @@ const {
   crmMultiplosPerfilLoading,
   crmMultiplosHorario,
   crmMultiplosHorarioLoading,
-  selectedTimelineEvent
+  selectedTimelineEvent,
+  crmUnicoPerfil,
+  crmUnicoPerfilLoading,
 } = storeToRefs(cnpjDetailStore);
 const { formatarData } = useFormatting();
 const { chartTheme, chartUFAccents } = useChartTheme();
@@ -48,6 +50,29 @@ watch([crmMultiplosHorario, crmMultiplosHorarioLoading], ([newData, loading]) =>
   if (newData && !loading) cachedCrmMultiplosHorario.value = newData;
 }, { immediate: true });
 
+// ── CRM Único: cache definido aqui para alimentar unifiedDays antes de filteredDailyDays ──
+const cachedCrmUnicoPerfil = ref(crmUnicoPerfil.value);
+const showRefreshingUnico  = useDelayedLoading(crmUnicoPerfilLoading);
+
+watch([crmUnicoPerfil, crmUnicoPerfilLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmUnicoPerfil.value = newData;
+}, { immediate: true });
+
+// Série unificada: vermelho = surto horário (CRM Múltiplos), âmbar = concentração (CRM Único), azul = normal
+const unifiedDays = computed(() => {
+  const multiDays = cachedCrmMultiplosPerfil.value?.days ?? [];
+  const unicoAnomalousSet = new Set(
+    (cachedCrmUnicoPerfil.value?.days ?? [])
+      .filter(d => d.is_anomalo === 1)
+      .map(d => d.dt_janela)
+  );
+  return multiDays.map(d => ({
+    ...d,
+    is_crm_multiplos: d.is_anomalo,
+    is_crm_unico: unicoAnomalousSet.has(d.dt_janela) ? 1 : 0,
+  }));
+});
+
 // Índice por data para lookup O(1) no tooltip (evita scan linear a cada hover)
 const hourlyByDate = computed(() => {
   const map = new Map();
@@ -65,9 +90,8 @@ const dailyZoomStart = ref(0);
 const dailyZoomEnd = ref(100);
 
 const filteredDailyDays = computed(() => {
-  const days = cachedCrmMultiplosPerfil.value?.days ?? [];
-  if (!filterDailyOnlyAnomalous.value) return days;
-  return days.filter(d => d.is_anomalo === 1);
+  if (!filterDailyOnlyAnomalous.value) return unifiedDays.value;
+  return unifiedDays.value.filter(d => d.is_crm_multiplos === 1 || d.is_crm_unico === 1);
 });
 
 const dailyDates     = computed(() => filteredDailyDays.value.map(d => d.dt_janela));
@@ -179,14 +203,20 @@ async function loadTransactions(dt_janela, hourInt = null) {
 
 async function onChartClick(params) {
   const day = filteredDailyDays.value?.[params.dataIndex];
-  if (!day || !day.is_anomalo) {
+  if (!day || (day.is_crm_multiplos === 0 && day.is_crm_unico === 0)) {
     selectedDay.value = null;
     selectedHourlyHour.value = null;
     return;
   }
   selectedDay.value = day;
   selectedHourlyHour.value = 'all';
-  await loadTransactions(day.dt_janela, null);
+  // CRM Único: fonte rica com todos os registros do dia + gatilhos
+  // CRM Múltiplos only: fonte filtrada por hora via API
+  if (day.is_crm_unico === 1) {
+    await loadUnicoTransactions(day.dt_janela);
+  } else {
+    await loadTransactions(day.dt_janela, null);
+  }
 }
 
 async function onHourlyChartClick(params) {
@@ -196,11 +226,16 @@ async function onHourlyChartClick(params) {
   if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return;
   if (selectedHourlyHour.value === hourInt) {
     selectedHourlyHour.value = 'all';
-    await loadTransactions(selectedDay.value.dt_janela, null);
+    // CRM Único: filtro client-side automático via unicoTransactionsFiltered
+    if (selectedDay.value.is_crm_unico === 0) {
+      await loadTransactions(selectedDay.value.dt_janela, null);
+    }
     return;
   }
   selectedHourlyHour.value = hourInt;
-  await loadTransactions(selectedDay.value.dt_janela, hourInt);
+  if (selectedDay.value.is_crm_unico === 0) {
+    await loadTransactions(selectedDay.value.dt_janela, hourInt);
+  }
 }
 
 function truncate(str, n) {
@@ -272,9 +307,11 @@ const chartOptionDaily = computed(() => {
               <div style="display:flex; align-items:flex-end; gap:2px; height:40px;">${bars}</div>
             </div>`;
         }
-        const flagAnomalo = day.is_anomalo
-          ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:800; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ ANOMALIA</span>`
-          : '';
+        const flagAnomalo = day.is_crm_multiplos === 1
+          ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ SURTO</span>`
+          : day.is_crm_unico === 1
+            ? `<span style="font-size:10px; background:rgba(245, 158, 11, 0.15); color:#f59e0b; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(245, 158, 11, 0.3); margin-left:8px;">⚠ CONCENTRAÇÃO</span>`
+            : '';
         return `
           <div style="color: ${c.tooltipText}; min-width: 200px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -292,7 +329,7 @@ const chartOptionDaily = computed(() => {
               </div>
             </div>
             ${sparklineHtml}
-            <div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>
+            ${(day.is_crm_multiplos === 1 || day.is_crm_unico === 1) ? '<div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>' : ''}
           </div>`;
       },
     },
@@ -324,14 +361,17 @@ const chartOptionDaily = computed(() => {
           const day = filteredDailyDays.value[i];
           const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
           const hasSelection = !!selectedDay.value;
+          const color = day.is_crm_multiplos === 1
+            ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
+            : day.is_crm_unico === 1
+              ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#f59e0b40' }] }
+              : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] };
           return {
             value: v,
-            cursor: day.is_anomalo ? 'pointer' : 'default',
+            cursor: (day.is_crm_multiplos === 1 || day.is_crm_unico === 1) ? 'pointer' : 'default',
             itemStyle: {
               opacity: hasSelection && !isSelected ? 0.5 : 1,
-              color: dailyAnomalous.value[i]
-                ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
-                : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] },
+              color,
             },
           };
         }),
@@ -358,7 +398,7 @@ const chartOptionHourly = computed(() => {
 
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
-    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0, is_anomalo_hora: 0 };
+    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0, is_anomalo_hora: 0, is_crm_multiplos: 0, is_crm_unico: 0 };
   });
 
   const barColors = fullPoints.map(p => {
@@ -438,10 +478,12 @@ const chartOptionHourly = computed(() => {
           const isSelected = selectedHourlyHour.value === p.hr_janela;
           const hasSelection = selectedHourlyHour.value !== 'all' && selectedHourlyHour.value !== null;
           return { 
-            value: p.nu_prescricoes, 
-            nu_crms: p.nu_crms_diferentes, 
-            is_anomalo_hora: p.is_anomalo_hora, 
-            cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default', 
+            value: p.nu_prescricoes,
+            nu_crms: p.nu_crms_diferentes,
+            is_anomalo_hora: p.is_anomalo_hora,
+            is_crm_multiplos: p.is_crm_multiplos,
+            is_crm_unico: p.is_crm_unico,
+            cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default',
             itemStyle: { 
               color: barColors[i],
               opacity: hasSelection && !isSelected ? 0.3 : 1
@@ -539,6 +581,139 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
   // 4. Limpa o evento para permitir futuras navegações
   cnpjDetailStore.clearTimelineNavigation();
 });
+
+// ── CRM ÚNICO: Estado de Raio-X ───────────────────────────────────────────
+const unicoTransactions        = ref([]);
+const unicoTransactionsLoading = ref(false);
+const unicoAlertas             = ref([]);
+const expandedUnicoRows        = ref(new Set());
+
+const groupedUnicoRaiox = computed(() => {
+  const groups = {};
+  unicoTransactions.value.forEach(item => {
+    const key = item.num_autorizacao;
+    if (!groups[key]) {
+      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, crm: item.crm, crm_uf: item.crm_uf, vl_autorizacao: 0, items: [] };
+    }
+    groups[key].vl_autorizacao += (item.valor_pago || 0);
+    groups[key].items.push(item);
+  });
+  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+});
+
+const unicoTotalValue = computed(() =>
+  groupedUnicoRaiox.value.reduce((sum, tx) => sum + tx.vl_autorizacao, 0)
+);
+
+const unicoGatilhoSet = computed(() =>
+  new Set(unicoAlertas.value.map(a => a.id_medico))
+);
+
+const unicoCrmFrequencies = computed(() => {
+  const freqs = {};
+  groupedUnicoRaiox.value.forEach(tx => { freqs[tx.crm] = (freqs[tx.crm] || 0) + 1; });
+  return freqs;
+});
+
+function toggleUnicoRow(auth) {
+  if (expandedUnicoRows.value.has(auth)) expandedUnicoRows.value.delete(auth);
+  else expandedUnicoRows.value.add(auth);
+  expandedUnicoRows.value = new Set(expandedUnicoRows.value);
+}
+
+async function loadUnicoTransactions(dt_janela) {
+  unicoTransactionsLoading.value = true;
+  try {
+    const url = API_ENDPOINTS.analyticsCrmUnicoRaioX(props.cnpj, dt_janela);
+    const t0 = performance.now();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Falha HTTP');
+    const data = await res.json();
+    const ms = Math.round(performance.now() - t0);
+    cnpjDetailStore.requestTimes['transacoes-crm-unico'] = {
+      label: 'Raio-X CRM Único',
+      ms,
+      detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
+    };
+    unicoTransactions.value = data.transactions || [];
+    unicoAlertas.value      = data.alertas || [];
+  } catch (err) {
+    console.error('Erro ao buscar Raio-X CRM Único:', err);
+  } finally {
+    unicoTransactionsLoading.value = false;
+  }
+}
+
+// ── Dados Ativos: fonte unificada para o RAIO-X ───────────────────────────
+// CRM Único como fonte: filtro de hora é client-side (data_hora em cada tx).
+// CRM Múltiplos como fonte: filtro de hora é server-side (API por hora).
+const unicoTransactionsFiltered = computed(() => {
+  if (selectedHourlyHour.value === 'all' || selectedHourlyHour.value === null) {
+    return unicoTransactions.value;
+  }
+  return unicoTransactions.value.filter(t => {
+    const h = parseInt((t.data_hora?.split(' ')[1] || '').split(':')[0], 10);
+    return h === selectedHourlyHour.value;
+  });
+});
+
+const groupedUnicoRaioxFiltered = computed(() => {
+  const groups = {};
+  unicoTransactionsFiltered.value.forEach(item => {
+    const key = item.num_autorizacao;
+    if (!groups[key]) {
+      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, crm: item.crm, crm_uf: item.crm_uf, vl_autorizacao: 0, items: [] };
+    }
+    groups[key].vl_autorizacao += (item.valor_pago || 0);
+    groups[key].items.push(item);
+  });
+  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+});
+
+const activeGroupedRaiox = computed(() => {
+  if (!selectedDay.value) return [];
+  return selectedDay.value.is_crm_unico === 1 ? groupedUnicoRaioxFiltered.value : groupedRaiox.value;
+});
+
+const activeTransactions = computed(() => {
+  if (!selectedDay.value) return [];
+  return selectedDay.value.is_crm_unico === 1 ? unicoTransactionsFiltered.value : hourlyTransactions.value;
+});
+
+const activeRaioxTotalValue = computed(() => {
+  if (!selectedDay.value) return 0;
+  if (selectedDay.value.is_crm_unico === 1) {
+    return unicoTransactionsFiltered.value.reduce((sum, t) => sum + (t.valor_pago || 0), 0);
+  }
+  return raioxTotalValue.value;
+});
+
+const activeCrmFrequencies = computed(() => {
+  if (!selectedDay.value) return {};
+  if (selectedDay.value.is_crm_unico === 1) {
+    const freqs = {};
+    groupedUnicoRaioxFiltered.value.forEach(tx => { freqs[tx.crm] = (freqs[tx.crm] || 0) + 1; });
+    return freqs;
+  }
+  return crmFrequencies.value;
+});
+
+const activeTransactionsLoading = computed(() =>
+  selectedDay.value?.is_crm_unico === 1 ? unicoTransactionsLoading.value : hourlyTransactionsLoading.value
+);
+
+function activeRowExpanded(auth) {
+  if (!selectedDay.value) return false;
+  return selectedDay.value.is_crm_unico === 1
+    ? expandedUnicoRows.value.has(auth)
+    : expandedRaioxRows.value.has(auth);
+}
+
+function toggleActiveRow(auth) {
+  if (!selectedDay.value) return;
+  if (selectedDay.value.is_crm_unico === 1) toggleUnicoRow(auth);
+  else toggleRaioxRow(auth);
+}
 </script>
 
 <template>
@@ -595,7 +770,7 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
         </div>
       </div>
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
-        Evolução diária de autorizações. Dias com volume anômalo detectado por Modified Z-Score destacados em vermelho.
+        Evolução diária de autorizações. Vermelho = surto de volume horário (CRM Múltiplos). Âmbar = médico com concentração elevada no dia (CRM Único). Clique em qualquer anomalia para análise detalhada.
       </p>
       
       <div v-if="!crmMultiplosPerfil && !crmMultiplosPerfilLoading" class="chart-empty">
@@ -606,11 +781,15 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
         <div class="chart-legend-html">
           <span class="legend-item">
             <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
-            Autorizações (anomalia)
+            Surto Horário
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" style="background: #f59e0b;"></span>
+            Concentração Individual
           </span>
           <span class="legend-item">
             <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
-            Autorizações (normal)
+            Normal
           </span>
           <span class="legend-item">
             <span class="legend-swatch legend-dashed"></span>
@@ -627,7 +806,7 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
       </div>
       <div v-if="!selectedDay && crmMultiplosPerfil" class="drill-hint">
         <i class="pi pi-hand-pointer" />
-        <span>Clique em um dia no gráfico para ver a análise horária detalhada (apenas dias com registro de anomalia podem ser visualizados)</span>
+        <span>Clique em uma barra vermelha (surto horário) ou âmbar (concentração individual) para análise detalhada</span>
       </div>
     </div>
 
@@ -646,7 +825,8 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
           <i class="pi pi-clock" style="color: #6366f1;" />
           <span>ANÁLISE HORÁRIA</span>
           <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
-          <span v-if="selectedDay.is_anomalo" class="anomalo-badge">ANOMALIA DETECTADA</span>
+          <span v-if="selectedDay.is_crm_multiplos === 1" class="anomalo-badge">SURTO HORÁRIO</span>
+          <span v-else-if="selectedDay.is_crm_unico === 1" class="concentracao-badge">CONCENTRAÇÃO</span>
         </div>
         <div class="drill-panel-actions">
           <button 
@@ -701,7 +881,7 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
       </div>
     </div>
 
-    <!-- NÍVEL 3: Raio-X -->
+    <!-- NÍVEL 3: Raio-X (unificado: CRM Múltiplos ou CRM Único) -->
     <div v-if="selectedHourlyHour !== null" class="drill-panel level-raiox animate-fade-in">
       <div class="drill-panel-header">
         <div class="drill-panel-title">
@@ -710,13 +890,31 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
           <span class="drill-context-tag drill-context-tag-raiox">
             {{ selectedHourlyHour === 'all' ? 'Dia Todo' : `${String(selectedHourlyHour).padStart(2, '0')}h` }}
           </span>
-          <span v-if="!hourlyTransactionsLoading && groupedRaiox.length > 0" class="raiox-count-badge">
-            {{ groupedRaiox.length }} Autorização{{ groupedRaiox.length !== 1 ? 'es' : '' }}
+          <span v-if="!activeTransactionsLoading && activeGroupedRaiox.length > 0" class="raiox-count-badge">
+            {{ activeGroupedRaiox.length }} Autorização{{ activeGroupedRaiox.length !== 1 ? 'es' : '' }}
           </span>
-          <i v-if="hourlyTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
+          <i v-if="activeTransactionsLoading" class="pi pi-spinner pi-spin raiox-spinner" />
         </div>
       </div>
-      
+
+      <!-- Médicos Gatilho (CRM Único) -->
+      <div v-if="selectedDay?.is_crm_unico === 1 && unicoAlertas.length" class="unico-alertas-section">
+        <div class="unico-alertas-header">
+          <i class="pi pi-exclamation-triangle" />
+          <span>Médicos com Alerta de Concentração neste Dia</span>
+        </div>
+        <div class="unico-alertas-list">
+          <div v-for="alerta in unicoAlertas" :key="alerta.id_medico" class="unico-alerta-chip">
+            <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico.split('/')[0]) }">{{ alerta.id_medico }}</span>
+            <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} prescrições</span>
+            <span class="alerta-sep">·</span>
+            <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>
+            <span class="alerta-sep">·</span>
+            <span class="alerta-nivel">{{ alerta.nivel }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Legenda de Apoio Visual -->
       <div class="raiox-legend-tip animate-fade-in">
         <div class="legend-tip-item">
@@ -724,18 +922,22 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
           <span>Cores identificam <strong>médicos diferentes</strong> para destacar padrões de concentração.</span>
         </div>
         <div class="legend-tip-divider" />
-        <div class="legend-tip-item">
+        <div v-if="selectedDay?.is_crm_unico === 1" class="legend-tip-item">
+          <span class="unico-gatilho-sample">⚠</span>
+          <span>Badge <strong>gatilho</strong> = CRM que disparou o alerta de concentração.</span>
+        </div>
+        <div v-else class="legend-tip-item">
           <span class="sample-badge">2x</span>
           <span>Indica a <strong>recorrência</strong> deste médico na mesma janela horária.</span>
         </div>
       </div>
 
-      <div v-if="!hourlyTransactionsLoading && hourlyTransactions.length === 0" class="raiox-empty">
+      <div v-if="!activeTransactionsLoading && activeTransactions.length === 0" class="raiox-empty">
         <i class="pi pi-inbox raiox-empty-icon" />
-        <span>Nenhuma transação encontrada para este horário.</span>
+        <span>Nenhuma transação encontrada para este período.</span>
       </div>
 
-      <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': hourlyTransactionsLoading }">
+      <div v-else class="raiox-table-wrapper" :class="{ 'is-loading': activeTransactionsLoading }">
         <table class="premium-table row-hover raiox-table flat-mode">
           <thead class="sticky-thead">
             <tr>
@@ -748,32 +950,33 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
             </tr>
           </thead>
           <tbody>
-            <template v-for="tx in groupedRaiox" :key="tx.num_autorizacao">
-              <tr :class="{ 'row-expanded-main': expandedRaioxRows.has(tx.num_autorizacao) }"
-                  @click="toggleRaioxRow(tx.num_autorizacao)"
+            <template v-for="tx in activeGroupedRaiox" :key="tx.num_autorizacao">
+              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.crm + '/' + tx.crm_uf) }"
+                  @click="toggleActiveRow(tx.num_autorizacao)"
                   class="cursor-pointer">
                 <td class="col-center raiox-time align-top">
-                  <i :class="['pi', expandedRaioxRows.has(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']"
+                  <i :class="['pi', activeRowExpanded(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']"
                      style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
                   {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
                 </td>
-                <td class="raiox-auth align-top font-mono">{{ tx.num_autorizacao }}</td>
+                <td class="raiox-auth align-top">{{ tx.num_autorizacao }}</td>
                 <td class="align-top">
                   <div class="crm-badge-container">
                     <span class="issue-tag raiox-crm-tag"
-                          :style="crmFrequencies[tx.crm] > 1 ? {
+                          :style="activeCrmFrequencies[tx.crm] > 1 ? {
                             borderColor: getCRMColor(tx.crm),
                             color: getCRMColor(tx.crm),
                             background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)`
                           } : {}">
                       {{ tx.crm }}/{{ tx.crm_uf }}
                     </span>
-                    <span v-if="crmFrequencies[tx.crm] > 1"
+                    <span v-if="activeCrmFrequencies[tx.crm] > 1"
                           class="crm-recurrence-badge"
-                          :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }"
-                          v-tooltip.top="`Este médico possui ${crmFrequencies[tx.crm]} autorizações nesta hora`">
-                      {{ crmFrequencies[tx.crm] }}x
+                          :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }">
+                      {{ activeCrmFrequencies[tx.crm] }}x
                     </span>
+                    <span v-if="selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.crm + '/' + tx.crm_uf)"
+                          class="gatilho-badge">⚠ gatilho</span>
                   </div>
                 </td>
                 <td class="col-center align-top">
@@ -784,17 +987,15 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
                     <span class="flat-item-prod">{{ truncate(tx.items[0].produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}</span>
                     <span class="flat-item-princ"> ({{ truncate(tx.items[0].principio_ativo || '—', 30) }})</span>
                     <span v-if="tx.items.length > 1" class="more-items-pill">
-                      <i class="pi pi-plus"></i>
-                      {{ tx.items.length - 1 }}
+                      <i class="pi pi-plus"></i> {{ tx.items.length - 1 }}
                     </span>
                   </div>
                 </td>
                 <td class="col-right raiox-val-cell align-top">
-                  R$ {{ tx.vl_autor_formatado || tx.vl_autorizacao.toFixed(2) }}
+                  R$ {{ tx.vl_autorizacao.toFixed(2) }}
                 </td>
               </tr>
-              <!-- Detalhes Expandidos -->
-              <tr v-if="expandedRaioxRows.has(tx.num_autorizacao)" class="raiox-details-expanded-row">
+              <tr v-if="activeRowExpanded(tx.num_autorizacao)" class="raiox-details-expanded-row">
                 <td colspan="6" class="p-0">
                   <div class="expanded-items-list animate-fade-in">
                     <div v-for="(item, idx) in tx.items" :key="idx" class="expanded-item-entry">
@@ -810,15 +1011,16 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
               </tr>
             </template>
           </tbody>
-          <tfoot v-if="groupedRaiox.length > 0">
+          <tfoot v-if="activeGroupedRaiox.length > 0">
             <tr class="raiox-footer-row">
               <td colspan="5" class="col-right footer-label">VALOR TOTAL DO PERÍODO SELECIONADO:</td>
-              <td class="col-right footer-value">R$ {{ raioxTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
+              <td class="col-right footer-value">R$ {{ activeRaioxTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
             </tr>
           </tfoot>
         </table>
       </div>
     </div>
+
 
   </div>
 </template>
@@ -1059,6 +1261,7 @@ input:checked + .toggle-slider { background-color: var(--primary-color); }
 input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 .anomalo-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
+.concentracao-badge { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
 .close-detail-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s; }
 .close-detail-btn:hover { background: var(--surface-hover); color: #ef4444; }
 
@@ -1190,4 +1393,101 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .col-right { text-align: right; }
 .sticky-thead th { position: sticky; top: 0; z-index: 10; }
 .cursor-pointer { cursor: pointer; }
+.align-top { vertical-align: top; }
+
+/* ── CRM ÚNICO ────────────────────────────────────────────────────────────── */
+.section-separator {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0 1.5rem;
+}
+.separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--card-border), transparent);
+}
+.separator-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.level-unico { border-left: 4px solid #f59e0b; }
+.level-raiox-unico {
+  border-left: 4px solid #d97706;
+  background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.connector-dot-unico { border-color: #f59e0b; box-shadow: 0 0 15px rgba(245,158,11,0.3); }
+.connector-dot-unico i { color: #f59e0b; }
+
+.drill-context-tag-unico { background: rgba(245,158,11,0.12); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+.unico-count-badge { background: rgba(245,158,11,0.12); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+
+/* Médicos Gatilho */
+.unico-alertas-section {
+  background: rgba(245,158,11,0.05);
+  border: 1px dashed rgba(245,158,11,0.25);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.unico-alertas-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f59e0b;
+  margin-bottom: 0.75rem;
+}
+.unico-alertas-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.unico-alerta-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.22);
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+}
+.alerta-crm { font-weight: 700; }
+.alerta-stat { color: var(--text-secondary); }
+.alerta-sep { opacity: 0.3; }
+.alerta-nivel { color: #f59e0b; font-size: 0.65rem; font-weight: 600; opacity: 0.8; }
+
+/* Legenda CRM Único */
+.unico-legend-tip {
+  background: rgba(245,158,11,0.05);
+  border-color: rgba(245,158,11,0.2);
+}
+.unico-legend-tip .legend-tip-item i { color: #f59e0b; }
+.unico-gatilho-sample { font-size: 0.85rem; color: #f59e0b; line-height: 1; }
+
+/* Linha gatilho na tabela */
+.row-gatilho { background: rgba(245,158,11,0.05) !important; }
+.row-gatilho td:first-child { border-left: 3px solid #f59e0b; }
+
+.gatilho-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
 </style>

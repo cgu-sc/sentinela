@@ -305,6 +305,12 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             # 4. Transações Literais (Raio-X) (Gera _hourly_tx.parquet)
             AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
 
+            # 5. CRM ÚNICO: Série Diária (Gera crm_unico_daily.parquet)
+            AnalyticsService.get_crm_unico_perfil(cnpj)
+
+            # 6. CRM ÚNICO: Transações Raio-X (Gera crm_unico_tx.parquet)
+            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+
             if progress_callback:
                 p = int((i / total) * 100)
                 progress_callback(p)

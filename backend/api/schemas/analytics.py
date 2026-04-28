@@ -296,6 +296,8 @@ class CrmHourlyPointSchema(BaseModel):
     nu_crms_diferentes: int
     mediana_hora: float
     is_anomalo_hora: int = 0
+    is_crm_multiplos: int = 0
+    is_crm_unico: int = 0
 
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str
@@ -436,6 +438,42 @@ class CrmHourlyTransactionSchema(BaseModel):
 class CrmMultiplosRaioXResponse(BaseModel):
     """Lista cronológica de prescrições aprovadas numa hora anômala."""
     transactions: List[CrmHourlyTransactionSchema]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+
+
+# ── CRM ÚNICO: Concentração Temporal por Médico ──────────────────────────────
+
+class CrmUnicoPerfilDiarioItem(BaseModel):
+    dt_janela: str
+    competencia: int
+    nu_prescricoes_dia: int
+    nu_crms_distintos: int
+    mediana_diaria: float
+    is_anomalo: int
+
+class CrmUnicoPerfilResponse(BaseModel):
+    cnpj: str
+    days: List[CrmUnicoPerfilDiarioItem]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+    query_time_ms: Optional[float] = None
+    save_time_ms: Optional[float] = None
+
+class CrmUnicoAlertaSchema(BaseModel):
+    """Médico que disparou alerta de concentração num dia específico."""
+    id_medico: str
+    nu_prescricoes_dia: int
+    nu_minutos_dia: int
+    taxa_hora: float
+    nivel: str
+
+class CrmUnicoRaioXResponse(BaseModel):
+    """Todas as transações da farmácia num dia com alerta de CRM único, com os médicos-gatilho."""
+    cnpj: str
+    dt_janela: str
+    transactions: List[CrmHourlyTransactionSchema]
+    alertas: List[CrmUnicoAlertaSchema]
     from_cache: bool = False
     read_time_ms: Optional[float] = None
 

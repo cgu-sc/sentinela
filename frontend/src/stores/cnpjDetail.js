@@ -62,6 +62,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     crmMultiplosHorarioLoading: false,
     crmMultiplosHorarioLoaded:  null,
 
+    // ── CRM ÚNICO: Série Diária de Concentração por Médico ───────────────────
+    crmUnicoPerfil:        null,
+    crmUnicoPerfilLoading: false,
+    crmUnicoPerfilLoaded:  null,  // Cache key: "cnpj|inicio|fim"
+
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos:        new Map(),
     cnpjsAvulsosLoading: false,
@@ -289,6 +294,28 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    // ── CRM ÚNICO: Série Diária ───────────────────────────────────────────────
+    async fetchCrmUnicoPerfil(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (!cnpj || this.crmUnicoPerfilLoaded === key) return;
+      this.crmUnicoPerfilLoading = true;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmUnicoPerfil(cnpj), { params });
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['crm-unico-daily'] = { label: 'Perfil Diário CRM Único', ms, detail: buildTimingDetail(data) };
+        this.crmUnicoPerfil       = data;
+        this.crmUnicoPerfilLoaded = key;
+      } catch (e) {
+        console.error('Erro ao buscar perfil diário CRM único:', e);
+      } finally {
+        this.crmUnicoPerfilLoading = false;
+      }
+    },
+
     async fetchCrmMultiplosHorario(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
       if (!cnpj || this.crmMultiplosHorarioLoaded === key) return;
@@ -432,6 +459,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.crmMultiplosPerfil        = null;
       this.crmMultiplosPerfilLoading = false;
       this.crmMultiplosPerfilLoaded  = null;
+
+      this.crmUnicoPerfil        = null;
+      this.crmUnicoPerfilLoading = false;
+      this.crmUnicoPerfilLoaded  = null;
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;

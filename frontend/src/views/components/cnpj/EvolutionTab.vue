@@ -21,6 +21,7 @@ import ColumnGroup from 'primevue/columngroup';
 import Row from 'primevue/row';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
+import GtinDetalhamentoMensalSidebar from './GtinDetalhamentoMensalSidebar.vue';
 
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
@@ -117,9 +118,12 @@ function formatMonth(mesIso) {
   return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(' de ', '/').toUpperCase();
 }
 
+const insightSidebarVisible = ref(false);
+const insightSelectedPeriod = ref(null);
+
 function abrirInfratores(mes) {
-  console.log("Abrir modal de inflatores do mês:", mes);
-  // Futuro: abrir um dialog/sidebar com os top N medicamentes do mês.
+  insightSelectedPeriod.value = mes;
+  insightSidebarVisible.value = true;
 }
 
 // Ao clicar em uma barra do gráfico mensal, seleciona o semestre correspondente
@@ -707,7 +711,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
                       <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
                     </template>
                   </Column>
-                  <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
+                  <Column field="pct_irregular" header="% S/ Comp" style="width: 15%">
                     <template #body="{ data: m }">
                       <span :class="{
                         'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
@@ -715,6 +719,16 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
                         'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
                         'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
                       }">{{ m.pct_irregular.toFixed(1) }}%</span>
+                    </template>
+                  </Column>
+                  <Column style="width: 5%">
+                    <template #body="{ data: m }">
+                      <Button
+                        icon="pi pi-bolt"
+                        class="p-button-text p-button-sm p-button-rounded p-button-danger btn-insight"
+                        v-tooltip.left="'Ver medicamentos que causaram o prejuízo'"
+                        @click="abrirInfratores(m.mes)"
+                      />
                     </template>
                   </Column>
                 </DataTable>
@@ -767,6 +781,12 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
       <i class="pi pi-chart-bar placeholder-icon" />
       <p>Clique na aba para carregar os dados.</p>
     </div>
+    
+    <GtinDetalhamentoMensalSidebar
+      v-model:visible="insightSidebarVisible"
+      :cnpj="cnpj"
+      :periodo="insightSelectedPeriod"
+    />
   </div>
 </template>
 
@@ -1160,5 +1180,14 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   border-top: 1px solid var(--tabs-border);
   padding: 1rem 1.5rem;
   background: var(--card-bg);
+}
+
+.btn-insight {
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+.btn-insight:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 </style>

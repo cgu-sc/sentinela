@@ -457,3 +457,27 @@ class EvolucaoMensalGtinResponse(BaseModel):
     save_time_ms: Optional[float] = None
     read_time_ms: Optional[float] = None
 
+
+# ── Detalhamento Mensal de GTINs (Raio-X Mensal) ─────────────────────────────
+class GtinDetalhamentoMensalItem(BaseModel):
+    gtin: str
+    medicamento: Optional[str] = None
+    qnt_vendas: int = 0
+    qnt_vendas_sem_comprovacao: int = 0
+    valor_vendas: float = 0.0
+    valor_sem_comprovacao: float = 0.0
+    pct_sem_comprovacao: float = 0.0
+
+class GtinDetalhamentoMensalSummary(BaseModel):
+    total_gtins: int = 0
+    gtins_irregulares: int = 0
+    gtins_regulares: int = 0
+
+class GtinDetalhamentoMensalResponse(BaseModel):
+    cnpj: str
+    periodo: str
+    summary: GtinDetalhamentoMensalSummary
+    ranking: List[GtinDetalhamentoMensalItem]
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
+

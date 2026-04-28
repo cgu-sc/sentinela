@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   geoEstabelecimentos:  `${BASE_URL}/api/v1/geo/estabelecimentos`,
   analyticsEvolucao:    (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,
   analyticsEvolucaoMensalGtin: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao-mensal-gtin`,
+  analyticsGtinDetalhamentoMensal: (cnpj, periodo) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/gtin-detalhamento-mensal?periodo=${periodo}`,
   analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   analyticsFalecidos:   (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/falecidos`,
   analyticsCrmData: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-data`,

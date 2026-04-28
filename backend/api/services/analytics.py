@@ -49,6 +49,9 @@ from ..schemas.analytics import (
     CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
+    GtinDetalhamentoMensalResponse,
+    GtinDetalhamentoMensalSummary,
+    GtinDetalhamentoMensalItem
 )
 
 # ── Mapeamento de indicadores: chave → (col_valor, col_med_reg, col_med_uf, col_med_br, col_risco_reg, col_risco_uf, col_risco_br) ──
@@ -642,6 +645,121 @@ class AnalyticsService:
             query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
             read_time_ms=read_time_ms,
+        )
+
+    @staticmethod
+    def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalResponse:
+        """
+        Retorna o ranking de GTINs para um período (ex: '2019-07' ou '2019-S1').
+        Lê do parquet 'movimentacao_mensal_gtin.parquet'.
+        """
+        import time
+        from sqlalchemy import text
+        
+        t0 = time.perf_counter()
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin.parquet")
+        
+        if not os.path.exists(PARQUET_PATH):
+            AnalyticsService.get_evolucao_mensal_gtin(cnpj)
+            
+        if not os.path.exists(PARQUET_PATH):
+            return GtinDetalhamentoMensalResponse(cnpj=cnpj, periodo=periodo, summary=GtinDetalhamentoMensalSummary(), ranking=[])
+            
+        df = pl.read_parquet(PARQUET_PATH)
+        
+        # Filtro de período
+        if len(periodo) == 7 and '-' in periodo:
+            import calendar
+            if 'S' in periodo:
+                ano, sem = periodo.split("-S")
+                m_inicio = 1 if sem == "1" else 7
+                m_fim = 6 if sem == "1" else 12
+                dt_inicio = f"{ano}-{m_inicio:02d}-01"
+                last_day = calendar.monthrange(int(ano), m_fim)[1]
+                dt_fim = f"{ano}-{m_fim:02d}-{last_day}"
+            else:
+                ano, mes = periodo.split("-")
+                dt_inicio = f"{periodo}-01"
+                last_day = calendar.monthrange(int(ano), int(mes))[1]
+                dt_fim = f"{periodo}-{last_day}"
+                
+            df = df.filter((pl.col("periodo") >= pl.lit(dt_inicio).cast(pl.Date)) & 
+                           (pl.col("periodo") <= pl.lit(dt_fim).cast(pl.Date)))
+                           
+        if df.is_empty():
+            return GtinDetalhamentoMensalResponse(cnpj=cnpj, periodo=periodo, summary=GtinDetalhamentoMensalSummary(), ranking=[], read_time_ms=round((time.perf_counter() - t0)*1000, 1))
+            
+        medicamentos_map = {}
+        try:
+            from data_cache import get_medicamentos_df
+            df_med = get_medicamentos_df()
+            for r in df_med.iter_rows(named=True):
+                codigo = r.get("codigo_barra")
+                if codigo:
+                    val_str = str(codigo)
+                    clean_val = val_str.split(".")[0] if "." in val_str else val_str
+                    nome = r.get("principio_ativo") or r.get("produto") or "Substância Não Identificada"
+                    medicamentos_map[clean_val] = nome
+                    medicamentos_map[val_str] = nome
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar dicionario de medicamentos do cache: {e}")
+            
+        agg = (
+            df.group_by("codigo_barra")
+            .agg([
+                pl.sum("qnt_vendas").alias("qnt_vendas"),
+                pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
+                pl.sum("valor_vendas").alias("valor_vendas"),
+                pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+            ])
+            .filter(pl.col("qnt_vendas") > 0)
+            .with_columns(
+                pl.when(pl.col("valor_vendas") > 0)
+                  .then((pl.col("valor_sem_comprovacao") / pl.col("valor_vendas")) * 100)
+                  .otherwise(pl.lit(0.0))
+                  .clip(0.0, 100.0)
+                  .round(2)
+                  .alias("pct_sem_comprovacao")
+            )
+            .sort("valor_sem_comprovacao", descending=True)
+        )
+        
+        total_gtins = agg.height
+        gtins_irreg = agg.filter(pl.col("valor_sem_comprovacao") > 0).height
+        gtins_reg = total_gtins - gtins_irreg
+        
+        summary = GtinDetalhamentoMensalSummary(
+            total_gtins=total_gtins,
+            gtins_irregulares=gtins_irreg,
+            gtins_regulares=gtins_reg
+        )
+        
+        ranking = []
+        for r in agg.iter_rows(named=True):
+            gtin_str = str(r["codigo_barra"])
+            clean_gtin = gtin_str.split(".")[0] if "." in gtin_str else gtin_str
+            nome = medicamentos_map.get(clean_gtin) or medicamentos_map.get(gtin_str) or "Substância Não Identificada"
+            
+            ranking.append(GtinDetalhamentoMensalItem(
+                gtin=clean_gtin,
+                medicamento=nome,
+                qnt_vendas=int(r["qnt_vendas"]),
+                qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"]),
+                valor_vendas=round(float(r["valor_vendas"]), 2),
+                valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"]), 2),
+                pct_sem_comprovacao=float(r["pct_sem_comprovacao"])
+            ))
+            
+        read_time = round((time.perf_counter() - t0) * 1000, 1)
+        
+        return GtinDetalhamentoMensalResponse(
+            cnpj=cnpj,
+            periodo=periodo,
+            summary=summary,
+            ranking=ranking,
+            from_cache=True,
+            read_time_ms=read_time
         )
 
     @staticmethod

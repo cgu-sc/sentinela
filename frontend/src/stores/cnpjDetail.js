@@ -85,6 +85,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
     activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia'
 
+    // ── Ranking GTINs ─────────────────────────────────────────────────────────
+    gtinDetalhamentoMensalData: null,
+    gtinDetalhamentoMensalLoading: false,
+    gtinDetalhamentoMensalError: null,
+
     // ── Timing de Requisições (diagnóstico de performance) ───────────────────
     // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
     requestTimes: {},
@@ -151,6 +156,24 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         console.error('Erro ao buscar evolução mensal GTIN:', e);
       } finally {
         this.evolucaoMensalGtinLoading = false;
+      }
+    },
+
+    // ── Ranking de GTINs Infratores ──────────────────────────────────────────
+    async fetchGtinDetalhamentoMensal(cnpj, periodo) {
+      this.gtinDetalhamentoMensalLoading = true;
+      this.gtinDetalhamentoMensalError = null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsGtinDetalhamentoMensal(cnpj, periodo));
+        // Agrupar os resultados diretamente usando o "periodo" fornecido como chave.
+        // Diferente das outras chamadas que vêm com listas longas, o Raio-X Mensal traz o ranking de um mês específico
+        this.gtinDetalhamentoMensalData = data;
+      } catch (error) {
+        console.error('Erro ao buscar detalhamento mensal de GTINs:', error);
+        this.gtinDetalhamentoMensalError = 'Falha ao carregar o detalhamento mensal de GTINs.';
+        this.gtinDetalhamentoMensalData = null;
+      } finally {
+        this.gtinDetalhamentoMensalLoading = false;
       }
     },
 
@@ -381,6 +404,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.evolucaoMensalGtin        = null;
       this.evolucaoMensalGtinLoading = false;
       this.evolucaoMensalGtinKey     = null;
+
+      this.gtinDetalhamentoMensalData    = null;
+      this.gtinDetalhamentoMensalLoading = false;
+      this.gtinDetalhamentoMensalError   = null;
 
       this.movimentacaoData    = null;
       this.movimentacaoLoading = false;

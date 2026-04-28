@@ -9,7 +9,7 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse, EvolucaoMensalGtinResponse
+    CrmMultiplosRaioXResponse, EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
 )
 from ..services.analytics import AnalyticsService
 
@@ -85,6 +85,14 @@ def get_evolucao_mensal_gtin(
 ):
     """Retorna a série mensal de quantidades e valores (agregados por GTIN) para um CNPJ."""
     return AnalyticsService.get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
+
+@router.get("/cnpj/{cnpj}/gtin-detalhamento-mensal", response_model=GtinDetalhamentoMensalResponse)
+def get_gtin_ranking(
+    cnpj: str,
+    periodo: str = Query(..., description="Período no formato 'YYYY-MM' ou 'YYYY-S1'")
+):
+    """Retorna o ranking de GTINs infratores para um período específico (Raio-X Mensal)."""
+    return AnalyticsService.get_gtin_ranking_periodo(cnpj, periodo)
 
 @router.get("/cnpj/{cnpj}/indicadores", response_model=IndicadoresResponse)
 def get_indicadores(cnpj: str):

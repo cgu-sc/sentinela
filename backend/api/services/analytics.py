@@ -2211,7 +2211,8 @@ class AnalyticsService:
                     )
                 df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={
                     "cnpj": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
-                    "nu_prescricoes_hr_pico": pl.Int32, "taxa_hora": pl.Float64
+                    "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32,
+                    "mediana_hora": pl.Float64, "multiplicador": pl.Float64
                 })
                 df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
             except Exception as e:
@@ -2229,10 +2230,10 @@ class AnalyticsService:
                 {
                     "dt": str(r["dt_alerta"]),
                     "hr": int(r["hr_janela"]),
-                    "descricao": r["descricao"],
                     "nu_prescricoes": int(r["nu_prescricoes"]),
                     "nu_crms": int(r["nu_crms"]),
-                    "multiplicador": float(r["multiplicador"] or 0)
+                    "multiplicador": float(r["multiplicador"] or 0),
+                    "mediana_hora":  float(r.get("mediana_hora", 0))
                 }
                 for r in df_ca.sort(["dt_alerta", "hr_janela"]).iter_rows(named=True)
             ]

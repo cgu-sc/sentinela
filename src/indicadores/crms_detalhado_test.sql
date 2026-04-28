@@ -307,13 +307,7 @@ SELECT
     nu_prescricoes_hora AS nu_prescricoes,
     nu_crms_distintos_hora AS nu_crms,
     mediana_hora,
-    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador,
-    CAST(
-        'Surto de Volume: ' + CAST(nu_prescricoes_hora AS VARCHAR(10)) + 
-        ' prescrições às ' + RIGHT('0' + CAST(hr_janela AS VARCHAR(2)), 2) + 'h (' + 
-        CAST(CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS VARCHAR(10)) + 
-        'x acima da mediana trimestral da farmácia: ' + CAST(CAST(mediana_hora AS DECIMAL(10,1)) AS VARCHAR(10)) + '/h).'
-    AS VARCHAR(800)) AS descricao
+    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador
 INTO temp_CGUSC.fp.crm_multiplos_alertas
 FROM #anomalias_horarias
 WHERE is_anomalo_hora = 1;

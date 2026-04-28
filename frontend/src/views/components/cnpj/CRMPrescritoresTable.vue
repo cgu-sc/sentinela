@@ -99,6 +99,14 @@ function formatDescricao(a) {
   const taxa = a.taxa_hora?.toFixed(1) ?? '—';
   return `${num} autorizações de venda <span class="desc-janela">em ${janela} (${taxa}/hora)</span> para o mesmo CRM`;
 }
+
+function formatDescricaoSurto(s) {
+  const vol = s.nu_presc_total || s.nu_prescricoes || 0;
+  const hr = String(s.hr).padStart(2, '0') + 'h';
+  const mult = s.multiplicador?.toFixed(1) || '0.0';
+  const med = s.mediana_hora?.toFixed(1) || '0.0';
+  return `${vol} prescrições às ${hr} (${mult}x acima da mediana trimestral da farmácia: ${med}/h).`;
+}
 const maxPDOverall = computed(() => {
   if (!props.crmsInteresse?.length) return 40;
   const vals = props.crmsInteresse.flatMap(m => [m.nu_prescricoes_dia, m.prescricoes_dia_total_brasil]);
@@ -417,7 +425,7 @@ const maxPDOverall = computed(() => {
                         <td class="col-right">{{ s.nu_presc_total }}</td>
                         <td class="col-center">{{ s.nu_crms_total }} CRMs</td>
                         <td class="col-descricao">
-                           <span class="surto-desc">{{ s.descricao.replace('Surto de Volume: ', '') }}</span>
+                           <span class="surto-desc">{{ formatDescricaoSurto(s) }}</span>
                         </td>
                       </tr>
                     </tbody>

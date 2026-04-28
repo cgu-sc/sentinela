@@ -473,7 +473,7 @@ GO
 -- 1. Dicionário de Médicos (Dimensão)
 DROP TABLE IF EXISTS temp_CGUSC.fp.dim_crm;
 SELECT 
-    ROW_NUMBER() OVER (ORDER BY id_medico) AS id_crm_id,
+    CAST(ROW_NUMBER() OVER (ORDER BY id_medico) AS INT) AS id_crm_id,
     id_medico
 INTO temp_CGUSC.fp.dim_crm 
 FROM (SELECT DISTINCT CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf_crm AS id_medico FROM #base_agregada_crm_cnpj) t;

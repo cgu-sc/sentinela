@@ -463,7 +463,7 @@ SELECT
 INTO #prescricoes_todos_estabelecimentos
 FROM #base_agregada_crm_cnpj
 GROUP BY nu_crm, sg_uf_crm, competencia;
-
+GO
 
 
 -- ============================================================================

@@ -10,6 +10,8 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Skeleton from 'primevue/skeleton';
 import VChart from 'vue-echarts';
+import SelectButton from 'primevue/selectbutton';
+import InputSwitch from 'primevue/inputswitch';
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -42,8 +44,58 @@ watch(() => data.value, (newVal) => {
   if (newVal) localData.value = newVal;
 }, { immediate: true });
 
-const summary = computed(() => localData.value?.summary);
-const ranking = computed(() => localData.value?.ranking || []);
+const groupMode = ref('GTIN');
+const groupOptions = ref(['GTIN', 'Princípio Ativo']);
+const showOnlyIrregular = ref(false);
+
+const dynamicSummary = computed(() => {
+  const list = ranking.value;
+  const total = list.length;
+  const irregulares = list.filter(item => item.valor_sem_comprovacao > 0).length;
+  const regulares = total - irregulares;
+  return { total, regulares, irregulares };
+});
+
+const ranking = computed(() => {
+  const raw = localData.value?.ranking || [];
+  if (groupMode.value === 'GTIN') return raw;
+
+  // Agrupamento por Princípio Ativo (medicamento)
+  const grouped = {};
+  raw.forEach(item => {
+    const key = item.medicamento || 'Substância Não Identificada';
+    if (!grouped[key]) {
+      grouped[key] = {
+        medicamento: key,
+        gtin_count: 0,
+        qnt_vendas: 0,
+        qnt_vendas_sem_comprovacao: 0,
+        valor_vendas: 0,
+        valor_sem_comprovacao: 0
+      };
+    }
+    grouped[key].gtin_count += 1;
+    grouped[key].qnt_vendas += item.qnt_vendas;
+    grouped[key].qnt_vendas_sem_comprovacao += item.qnt_vendas_sem_comprovacao;
+    grouped[key].valor_vendas += item.valor_vendas;
+    grouped[key].valor_sem_comprovacao += item.valor_sem_comprovacao;
+  });
+
+  return Object.values(grouped).map(g => {
+    // Recalcular a porcentagem
+    g.pct_sem_comprovacao = g.valor_vendas > 0 
+      ? parseFloat(((g.valor_sem_comprovacao / g.valor_vendas) * 100).toFixed(2))
+      : 0;
+    return g;
+  }).sort((a, b) => b.valor_sem_comprovacao - a.valor_sem_comprovacao);
+});
+
+const displayedRanking = computed(() => {
+  if (showOnlyIrregular.value) {
+    return ranking.value.filter(item => item.valor_sem_comprovacao > 0);
+  }
+  return ranking.value;
+});
 
 const formatMedName = (name) => {
   if (!name) return 'Substância Não Identificada';
@@ -75,7 +127,10 @@ const chartOption = computed(() => {
   // Pareto Inverso (para mostrar o maior em cima no ECharts bar-horizontal, a ordem deve ser inversa no data)
   const items = [...top5.value].reverse();
 
-  const labels = items.map(item => formatMedName(item.medicamento));
+  const labels = items.map(item => {
+    const name = formatMedName(item.medicamento);
+    return groupMode.value === 'GTIN' ? name : `${name} (${item.gtin_count})`;
+  });
 
   const values = items.map(item => item.valor_sem_comprovacao);
 
@@ -90,8 +145,14 @@ const chartOption = computed(() => {
       textStyle: { color: c.tooltipText, fontSize: 12 },
       formatter: (params) => {
         const item = items[params[0].dataIndex];
+        const isGrouped = groupMode.value === 'Princípio Ativo';
+        const subInfo = isGrouped 
+          ? `<div style="font-size:10px;color:var(--primary-color);font-weight:600;margin-bottom:4px;">${item.gtin_count} GTIN(s) agrupados</div>`
+          : `<div style="font-size:10px;opacity:0.6;margin-bottom:4px;">GTIN: ${item.gtin}</div>`;
+
         return `
-          <div style="font-weight:600;margin-bottom:6px;max-width:250px;white-space:normal;">${formatMedName(item.medicamento)}</div>
+          <div style="font-weight:600;margin-bottom:2px;max-width:250px;white-space:normal;">${formatMedName(item.medicamento)}</div>
+          ${subInfo}
           <div style="color:#ef4444;font-weight:700;">Prejuízo: ${formatCurrencyFull(item.valor_sem_comprovacao)}</div>
           <div style="font-size:11px;opacity:0.7;">Vendas Totais: ${formatCurrencyFull(item.valor_vendas)}</div>
           <div style="font-size:11px;opacity:0.7;">Irregularidade: ${item.pct_sem_comprovacao}%</div>
@@ -175,9 +236,12 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
     </template>
 
     <div class="sidebar-content">
-      <div class="sc-title-area">
-        <h2>{{ periodoFormatado }}</h2>
-        <p>Análise de concentração de irregularidades por GTIN.</p>
+      <div class="sc-title-area" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+        <div>
+          <h2>{{ periodoFormatado }}</h2>
+          <p>Análise de concentração de irregularidades.</p>
+        </div>
+        <SelectButton v-model="groupMode" :options="groupOptions" class="p-button-sm custom-select-button" :allowEmpty="false" />
       </div>
 
       <div v-if="error" class="error-state">
@@ -185,28 +249,28 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
         <p>{{ error }}</p>
       </div>
 
-      <div v-else-if="summary" class="content-wrapper" :class="{ 'is-loading': loading }">
+      <div v-else-if="localData" class="content-wrapper" :class="{ 'is-loading': loading }">
           <!-- KPIs -->
           <div class="kpi-grid">
             <div class="kpi-card">
-              <span class="kpi-label">GTINs</span>
-              <span class="kpi-val">{{ summary.total_gtins }}</span>
+              <span class="kpi-label">{{ groupMode === 'GTIN' ? 'GTINs' : 'Princípios Ativos' }}</span>
+              <span class="kpi-val">{{ dynamicSummary.total }}</span>
             </div>
             <div class="kpi-card">
               <span class="kpi-label">100% Regulares</span>
-              <span class="kpi-val text-green">{{ summary.gtins_regulares }}</span>
+              <span class="kpi-val">{{ dynamicSummary.regulares }}</span>
             </div>
             <div class="kpi-card is-danger">
               <span class="kpi-label">Com Irregularidade</span>
-              <span class="kpi-val">{{ summary.gtins_irregulares }}</span>
+              <span class="kpi-val">{{ dynamicSummary.irregulares }}</span>
             </div>
           </div>
 
           <!-- Pareto Chart -->
           <div class="chart-section" v-if="top5.length > 0">
             <div class="section-title">
-              <h3>Top 5 GTINs sem Comprovação</h3>
-              <span class="subtitle">GTINs com maior valor de não comprovação.</span>
+              <h3>Top 5</h3>
+              <span class="subtitle">Itens com maior valor de não comprovação.</span>
             </div>
             <div class="chart-container">
               <VChart class="chart" :option="chartOption" autoresize />
@@ -215,20 +279,20 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 
           <!-- Table -->
           <div class="table-section" v-if="ranking.length > 0">
-            <div class="section-title">
-              <h3>Detalhamento ({{ ranking.length }} itens)</h3>
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: flex-end;">
+              <h3>Detalhamento ({{ displayedRanking.length }} itens)</h3>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="filter-irregular" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; cursor: pointer;">Apenas Irregulares</label>
+                <InputSwitch inputId="filter-irregular" v-model="showOnlyIrregular" />
+              </div>
             </div>
-            <DataTable :value="ranking" class="insight-table p-datatable-sm" scrollable scrollHeight="flex" tableStyle="table-layout: fixed; width: 100%">
-              <Column field="medicamento" header="Medicamento" style="width: 50%">
+            <DataTable :value="displayedRanking" class="insight-table p-datatable-sm" scrollable scrollHeight="flex" tableStyle="table-layout: fixed; width: 100%">
+              <Column field="medicamento" header="Medicamento / Princípio Ativo" style="width: 50%">
                 <template #body="slotProps">
                   <div class="med-cell">
                     <span class="med-name" v-tooltip.bottom="formatMedName(slotProps.data.medicamento)">{{ formatMedName(slotProps.data.medicamento) }}</span>
-                    <span class="med-gtin">{{ slotProps.data.gtin }}</span>
-                  </div>
-                </template>
-                <template #footer>
-                  <div style="text-align: right; font-weight: 700; color: color-mix(in srgb, var(--text-color) 85%, transparent); padding-right: 0.5rem; font-size: 0.85rem;">
-                    Total do Período:
+                    <span class="med-gtin" v-if="groupMode === 'GTIN'">GTIN: {{ slotProps.data.gtin }}</span>
+                    <span class="med-gtin" v-else>{{ slotProps.data.gtin_count }} GTIN(s) associado(s)</span>
                   </div>
                 </template>
               </Column>
@@ -239,9 +303,6 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
                     <span class="val-pct">{{ slotProps.data.pct_sem_comprovacao }}% (irregular)</span>
                   </div>
                 </template>
-                <template #footer>
-                  <span class="val-danger" style="font-size: 0.95rem;">{{ formatCurrencyFull(totalSemComprovacao) }}</span>
-                </template>
               </Column>
               <Column header="Comprovado" style="width: 25%; text-align: right">
                 <template #body="slotProps">
@@ -250,10 +311,14 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
                     <span class="val-pct">{{ (100 - slotProps.data.pct_sem_comprovacao).toFixed(1).replace('.0', '') }}% (regular)</span>
                   </div>
                 </template>
-                <template #footer>
-                  <span class="val-regular" style="font-size: 0.95rem;">{{ formatCurrencyFull(totalComprovado) }}</span>
-                </template>
               </Column>
+              <template #footer>
+                <div class="custom-dt-footer">
+                  <div class="cf-label">Total do Período:</div>
+                  <div class="cf-val val-danger">{{ formatCurrencyFull(totalSemComprovacao) }}</div>
+                  <div class="cf-val val-regular">{{ formatCurrencyFull(totalComprovado) }}</div>
+                </div>
+              </template>
             </DataTable>
           </div>
           
@@ -478,6 +543,28 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   font-size: 0.85rem;
 }
 
+.custom-dt-footer {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.cf-label {
+  width: 50%;
+  text-align: right;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  padding-right: 1.5rem;
+  font-size: 0.85rem;
+}
+
+.cf-val {
+  width: 25%;
+  text-align: right;
+  font-size: 0.95rem;
+  padding: 0 0.5rem;
+}
+
 .val-pct {
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -507,6 +594,10 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 /* Tabelas nativas para integrar com o tema Arbflow */
 :global(.insight-table.p-datatable) {
   background: transparent;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 :global(.insight-table.p-datatable .p-datatable-tbody > tr) {
   background: transparent;
@@ -531,6 +622,13 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
   border-top: 1px solid var(--card-border);
 }
 
+:global(.insight-table.p-datatable .p-datatable-footer) {
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--card-border);
+  margin-top: auto;
+}
+
 :global(.insight-table.p-datatable .p-datatable-tbody > tr > td) {
   padding: 0.5rem;
   background: transparent;
@@ -539,5 +637,48 @@ const periodoFormatado = computed(() => formatMesLabel(props.periodo));
 
 :global(.insight-table.p-datatable .p-datatable-wrapper) {
   overflow-x: hidden !important;
+}
+
+:global(.insight-sidebar .custom-select-button .p-button) {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--card-bg) 50%, transparent);
+  border-color: var(--card-border);
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+:global(.insight-sidebar .custom-select-button .p-button.p-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  border: 1px solid var(--primary-color) !important;
+  color: var(--primary-color);
+  position: relative;
+  z-index: 2 !important;
+}
+
+:global(.insight-sidebar .custom-select-button .p-button:not(.p-highlight):hover) {
+  background: color-mix(in srgb, var(--text-color) 5%, transparent);
+  color: var(--text-color);
+}
+
+:global(.insight-sidebar .custom-select-button .p-button:focus),
+:global(.insight-sidebar .custom-select-button .p-button.p-focus) {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+:global(.insight-sidebar .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider),
+:global(.insight-sidebar .p-inputswitch.p-highlight .p-inputswitch-slider),
+:global(.insight-sidebar .p-inputswitch:has(input:checked) .p-inputswitch-slider) {
+  background: var(--primary-color) !important;
+}
+
+:global(.insight-sidebar .p-inputswitch .p-inputswitch-slider) {
+  background: color-mix(in srgb, var(--text-muted) 30%, transparent);
+}
+
+:global(.insight-sidebar .p-inputswitch.p-focus .p-inputswitch-slider) {
+  box-shadow: none !important;
 }
 </style>

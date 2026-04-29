@@ -101,11 +101,7 @@ function formatDescricao(a) {
 }
 
 function formatDescricaoSurto(s) {
-  const vol = s.nu_presc_total || s.nu_prescricoes || 0;
-  const hr = String(s.hr).padStart(2, '0') + 'h';
-  const mult = s.multiplicador?.toFixed(1) || '0.0';
-  const med = s.mediana_hora?.toFixed(1) || '0.0';
-  return `${vol} prescrições às ${hr} (${mult}x acima da mediana trimestral da farmácia: ${med}/h).`;
+  return s.descricao || 'Dados não disponíveis';
 }
 const maxPDOverall = computed(() => {
   if (!props.crmsInteresse?.length) return 40;

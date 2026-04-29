@@ -1877,8 +1877,8 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT E.id_medico, E.cnpj, E.competencia, E.vl_total_prescricoes, E.nu_prescricoes, "
-                             "E.nu_prescricoes_dia, E.prescricoes_total_brasil, E.prescricoes_dia_brasil, "
+                        text("SELECT E.id_medico, E.cnpj, E.competencia, E.vl_total_prescricoes, "
+                             "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
                              "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
                              "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
@@ -1917,27 +1917,29 @@ class AnalyticsService:
         # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
         total_valor = float(df["vl_total_prescricoes"].sum() or 0)
 
-        # Para médias ponderadas reais (ritmo médio), precisamos do total de dias ativos.
-        # nu_prescricoes_dia = nu_prescricoes / dias_ativos => dias_ativos = nu_prescricoes / nu_prescricoes_dia
-        df = df.with_columns([
-            pl.when(pl.col("nu_prescricoes_dia") > 0)
-              .then(pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("nu_prescricoes_dia"))
-              .otherwise(pl.lit(0.0))
-              .alias("_dias_ativos_loc"),
-            pl.when(pl.col("prescricoes_dia_brasil") > 0)
-              .then(pl.col("prescricoes_total_brasil").cast(pl.Float64) / pl.col("prescricoes_dia_brasil"))
-              .otherwise(pl.lit(0.0))
-              .alias("_dias_ativos_br")
-        ])
+        # Cálculo de dias no período para o ritmo diário real
+        from datetime import datetime
+        import calendar
+        try:
+            # Assume formato YYYY-MM ou YYYY-MM-DD
+            d_ini_str = data_inicio if data_inicio else "2015-01"
+            d_fim_str = data_fim if data_fim else datetime.now().strftime("%Y-%m")
+            
+            d_ini = datetime.strptime(d_ini_str[:7], "%Y-%m")
+            d_fim_base = datetime.strptime(d_fim_str[:7], "%Y-%m")
+            last_day = calendar.monthrange(d_fim_base.year, d_fim_base.month)[1]
+            d_fim = d_fim_base.replace(day=last_day)
+            
+            dias_periodo = max((d_fim - d_ini).days + 1, 1)
+        except Exception:
+            dias_periodo = 30
 
         df_med = (
             df.group_by("id_medico")
             .agg([
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
-                pl.sum("nu_prescricoes").alias("nu_prescricoes"),
-                pl.sum("_dias_ativos_loc").alias("_total_dias_loc"),
-                pl.sum("_dias_ativos_br").alias("_total_dias_br"),
-                pl.sum("prescricoes_total_brasil").alias("prescricoes_total_brasil"),
+                pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
+                pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1949,17 +1951,8 @@ class AnalyticsService:
                 pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
             ])
             .with_columns([
-                # Cálculo da Média Real (Volume Total / Total de Dias Ativos no Período)
-                pl.when(pl.col("_total_dias_loc") > 0)
-                  .then(pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_total_dias_loc"))
-                  .otherwise(pl.lit(0.0))
-                  .round(2)
-                  .alias("nu_prescricoes_dia"),
-                pl.when(pl.col("_total_dias_br") > 0)
-                  .then(pl.col("prescricoes_total_brasil").cast(pl.Float64) / pl.col("_total_dias_br"))
-                  .otherwise(pl.lit(0.0))
-                  .round(2)
-                  .alias("prescricoes_dia_total_brasil"),
+                (pl.col("nu_prescricoes").cast(pl.Float64) / dias_periodo).round(2).alias("nu_prescricoes_dia"),
+                (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / dias_periodo).round(2).alias("prescricoes_dia_total_brasil"),
             ])
             .with_columns([
                 (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
@@ -1981,10 +1974,10 @@ class AnalyticsService:
             .with_columns([
                 pl.col("_pct_raw").round(2).alias("pct_participacao"),
                 pl.col("_pct_raw").cum_sum().clip(0, 100).round(2).alias("pct_acumulado"),
-                pl.when(pl.col("prescricoes_total_brasil") > 0)
+                pl.when(pl.col("nu_prescricoes_total_brasil") > 0)
                 .then(
                     (pl.col("nu_prescricoes").cast(pl.Float64) /
-                     pl.col("prescricoes_total_brasil").cast(pl.Float64) * 100).round(2)
+                     pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) * 100).round(2)
                 )
                 .otherwise(pl.lit(0.0))
                 .alias("pct_volume_aqui_vs_total"),
@@ -2086,14 +2079,14 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT id_medico, competencia, dt_alerta, nivel, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
+                        text("SELECT id_medico, competencia, dt_alerta, hr_janela, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
                              " FROM temp_CGUSC.fp.crm_unico_alertas WHERE cnpj = :cnpj"
                              " ORDER BY dt_alerta, id_medico"),
                         conn,
                         params={"cnpj": cnpj},
                     )
                 df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame(schema={
-                    "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
+                    "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, "hr_janela": pl.Int32,
                     "nu_prescricoes_dia": pl.Int32, "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64
                 })
                 df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
@@ -2278,7 +2271,7 @@ class AnalyticsService:
                         df_ca_clean = df_ca.with_columns(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10))
                         
                         df_surto_full = df_surto_agg.join(
-                            df_ca_clean.select(["dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms", "descricao"]),
+                            df_ca_clean.select(["dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms", "multiplicador", "mediana_hora"]),
                             left_on=["dt_janela", "hr_janela"],
                             right_on=["dt_alerta", "hr_janela"],
                             how="inner"
@@ -2286,13 +2279,23 @@ class AnalyticsService:
                         
                         for r in df_surto_full.iter_rows(named=True):
                             mid = f"{r['crm']}/{r['crm_uf']}"
+                            vol = int(r.get("nu_prescricoes", 0))
+                            hr  = int(r.get("hr_janela", 0))
+                            mult = r.get("multiplicador", 0)
+                            med = r.get("mediana_hora", 0)
+                            
+                            # Frase técnica padronizada (Backend-only)
+                            desc = f"{vol} prescrições às {hr:02d}h ({mult}x a mediana da farmácia: {med}/h)"
+                            
                             alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
                                 "dt": str(r["dt_janela"]),
-                                "hr": int(r["hr_janela"]),
+                                "hr": hr,
                                 "nu_presc_crm": int(r["nu_prescricoes_crm"]),
-                                "nu_presc_total": int(r["nu_prescricoes"]),
+                                "nu_presc_total": vol,
                                 "nu_crms_total": int(r["nu_crms"]),
-                                "descricao": r["descricao"]
+                                "multiplicador": mult,
+                                "mediana_hora": med,
+                                "descricao": desc
                             })
             except Exception as e:
                 print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")

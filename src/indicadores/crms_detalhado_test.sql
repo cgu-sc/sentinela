@@ -307,11 +307,12 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
 alertas AS (
     SELECT
         nu_cnpj                                          AS cnpj,
-        nu_crm, sg_uf_crm, competencia,
+        CAST(nu_crm AS VARCHAR) + '/' + sg_uf_crm        AS id_medico,
+        competencia,
         dt_dia                                           AS dt_alerta,
-        hr_janela                                        AS hr_alerta,
-        nu_prescricoes_hora                              AS nu_prescricoes,
-        nu_minutos_hora                                  AS nu_minutos,
+        hr_janela,
+        nu_prescricoes_hora                              AS nu_prescricoes_dia,
+        nu_minutos_hora                                  AS nu_minutos_dia,
         CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora
     FROM base_com_taxa
     WHERE
@@ -1005,7 +1006,7 @@ SELECT
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
     A.nu_prescricoes_pico_h,
     A.taxa_pico_h,
-    P.nu_prescricoes_medico_em_todos_estabelecimentos                 AS prescricoes_total_brasil,
+    P.nu_prescricoes_medico_em_todos_estabelecimentos                 AS nu_prescricoes_total_brasil,
     P.nu_estabelecimentos_com_registro_mesmo_crm                      AS nu_estabelecimentos,
     CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
     -- Texto geográfico

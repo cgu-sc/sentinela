@@ -23,34 +23,105 @@ DECLARE @DataFim    DATE = '2024-12-31';
 
 
 -- ============================================================================
--- PASSO 0: AGREGAÇÃO POR MÉDICO / FARMÁCIA / MÊS
--- Fonte dupla: histórico (até 2020) + recente (2021-2024)
+-- PASSO 0: CONSOLIDAÇÃO HORÁRIA MESTRA (SCAN ÚNICO)
+-- Agrupa 1 Bilhão de linhas em buckets horários para reduzir volume em ~95%.
+-- Todas as agregações seguintes (Mensal, Diária, Estabelecimento) lerão daqui.
 -- ============================================================================
-PRINT '>> Passo 0: Criando #base_agregada_crm_cnpj (Agregação Mensal)...';
-DECLARE @t_agreg_mensal DATETIME = GETDATE();
-DROP TABLE IF EXISTS #base_agregada_crm_cnpj;
+PRINT '>> Passo 0: Criando #base_horaria_mestra (Único Scan de 1 Bi de linhas)...';
+DECLARE @t_passo0 DATETIME = GETDATE();
+DROP TABLE IF EXISTS #base_horaria_mestra;
 
 SELECT
-    CONCAT(M.cnpj, '|', M.crm, '|', M.crm_uf, '|',
-           CAST(YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS VARCHAR(6))) AS chave,
-    M.crm                                         AS nu_crm,
-    M.crm_uf                                      AS sg_uf_crm,
-    M.cnpj                                        AS nu_cnpj,
-    YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS competencia,
-    COUNT(DISTINCT M.num_autorizacao)             AS nu_prescricoes_medico,
-    SUM(M.valor_pago)                             AS vl_autorizacoes_medico,
-    MIN(M.data_hora)                              AS dt_prescricao_inicial_medico,
-    MAX(M.data_hora)                              AS dt_prescricao_final_medico
-INTO #base_agregada_crm_cnpj
+    M.cnpj                                            AS nu_cnpj,
+    M.crm                                             AS nu_crm,
+    M.crm_uf                                          AS sg_uf_crm,
+    YEAR(M.data_hora) * 100 + MONTH(M.data_hora)     AS competencia,
+    CAST(M.data_hora AS DATE)                         AS dt_dia,
+    DATEPART(HOUR, M.data_hora)                       AS hr_janela,
+    -- Métricas Agregadas (Somáveis para as próximas etapas)
+    COUNT(DISTINCT M.num_autorizacao)                 AS nu_prescricoes_hora,
+    SUM(M.valor_pago)                                 AS vl_autorizacoes_hora,
+    MIN(M.data_hora)                                  AS dt_ini_hora,
+    MAX(M.data_hora)                                  AS dt_fim_hora,
+    DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS nu_minutos_hora
+INTO #base_horaria_mestra
 FROM temp_CGUSC.fp.teste_mov_SC M 
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.crm, M.crm_uf, M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
+GROUP BY 
+    M.cnpj, M.crm, M.crm_uf, 
+    YEAR(M.data_hora), MONTH(M.data_hora), 
+    CAST(M.data_hora AS DATE), DATEPART(HOUR, M.data_hora);
 
-PRINT '   #base_agregada_crm_cnpj concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_agreg_mensal, 114);
+CREATE CLUSTERED INDEX IDX_Mestra ON #base_horaria_mestra(nu_cnpj, nu_crm, competencia);
+PRINT '   #base_horaria_mestra concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_passo0, 114);
+
+-- ----------------------------------------------------------------------------
+-- DERIVAÇÃO: #base_agregada_crm_cnpj (Agregação Mensal)
+-- Gerada a partir da Mestra para manter compatibilidade com o restante do script.
+-- ----------------------------------------------------------------------------
+PRINT '>> Derivando #base_agregada_crm_cnpj (Mensal)...';
+DROP TABLE IF EXISTS #base_agregada_crm_cnpj;
+
+SELECT
+    CONCAT(nu_cnpj, '|', nu_crm, '|', sg_uf_crm, '|', CAST(competencia AS VARCHAR(6))) AS chave,
+    nu_crm, sg_uf_crm, nu_cnpj, competencia,
+    SUM(nu_prescricoes_hora)  AS nu_prescricoes_medico,
+    SUM(vl_autorizacoes_hora) AS vl_autorizacoes_medico,
+    MIN(dt_ini_hora)          AS dt_prescricao_inicial_medico,
+    MAX(dt_fim_hora)          AS dt_prescricao_final_medico
+INTO #base_agregada_crm_cnpj
+FROM #base_horaria_mestra
+GROUP BY nu_crm, sg_uf_crm, nu_cnpj, competencia;
 
 CREATE CLUSTERED INDEX IDX_BaseAgreg_Key ON #base_agregada_crm_cnpj(nu_cnpj, nu_crm, competencia);
+
+-- ----------------------------------------------------------------------------
+-- DERIVAÇÃO: #base_diaria_crm (Agregação Diária)
+-- ----------------------------------------------------------------------------
+PRINT '>> Derivando #base_diaria_crm (Diária)...';
+DROP TABLE IF EXISTS #base_diaria_crm;
+SELECT
+    nu_crm, sg_uf_crm, nu_cnpj, competencia, dt_dia,
+    SUM(nu_prescricoes_hora)  AS nu_prescricoes_dia,
+    MIN(dt_ini_hora)          AS dt_ini_dia,
+    MAX(dt_fim_hora)          AS dt_fim_dia,
+    DATEDIFF(MINUTE, MIN(dt_ini_hora), MAX(dt_fim_hora)) AS nu_minutos_dia
+INTO #base_diaria_crm
+FROM #base_horaria_mestra
+GROUP BY nu_crm, sg_uf_crm, nu_cnpj, competencia, dt_dia;
+
+CREATE CLUSTERED INDEX IDX_BaseDiaria ON #base_diaria_crm(nu_cnpj, nu_crm, sg_uf_crm, competencia);
+
+-- ----------------------------------------------------------------------------
+-- DERIVAÇÃO: #base_horaria_crm (Agregação Horária)
+-- ----------------------------------------------------------------------------
+PRINT '>> Derivando #base_horaria_crm (Horária)...';
+DROP TABLE IF EXISTS #base_horaria_crm;
+SELECT * INTO #base_horaria_crm FROM #base_horaria_mestra;
+
+CREATE CLUSTERED INDEX IDX_BaseHora_Mestra ON #base_horaria_crm(nu_cnpj, nu_crm, dt_dia, hr_janela);
+
+-- ----------------------------------------------------------------------------
+-- DERIVAÇÃO: #tb_info_estabelecimento (Estabelecimento)
+-- ----------------------------------------------------------------------------
+PRINT '>> Derivando #tb_info_estabelecimento...';
+DROP TABLE IF EXISTS #tb_info_estabelecimento;
+SELECT
+    nu_cnpj                                   AS cnpj,
+    competencia,
+    SUM(nu_prescricoes_hora)                  AS nu_autorizacoes_estabelecimento,
+    SUM(vl_autorizacoes_hora)                 AS vl_autorizacoes_estabelecimento,
+    MIN(dt_ini_hora)                          AS dt_venda_inicial_estabelecimento,
+    MAX(dt_fim_hora)                          AS dt_venda_final_estabelecimento
+INTO #tb_info_estabelecimento
+FROM #base_horaria_mestra
+GROUP BY nu_cnpj, competencia;
+
+CREATE CLUSTERED INDEX IDX_InfoEst ON #tb_info_estabelecimento(cnpj, competencia);
+
+
 
 -- ============================================================================
 -- PASSO 0.0: FILTRO DE RELEVÂNCIA (Whitelist)
@@ -74,50 +145,33 @@ CREATE CLUSTERED INDEX IDX_Whitelist ON #whitelist_crms_relevantes(nu_cnpj, nu_c
 
 -- ============================================================================
 -- PASSO 0.1: ESTABELECIMENTO - PERFIL HORÁRIO E DIÁRIO (Detecção de Surtos)
--- Necessário calcular antes para identificar quais médicos participaram dos surtos.
+-- Agora derivado da Mestra, sem ler a tabela de 1 Bilhão de novo!
 -- ============================================================================
-
--- Scan Único na movimentação para base horária
-PRINT '>> Passo 0.1: Criando #mov_surto_base (Scan de Movimentação)...';
+PRINT '>> Passo 0.1: Criando #base_horaria (Derivado da Mestra)...';
 DECLARE @t_scan_mov DATETIME = GETDATE();
-DROP TABLE IF EXISTS #mov_surto_base;
-SELECT
-    cnpj,
-    data_hora,
-    crm,
-    crm_uf,
-    num_autorizacao,
-    codigo_barra,
-    valor_pago
-INTO #mov_surto_base
-FROM temp_CGUSC.fp.teste_mov_SC M 
-WHERE data_hora >= @DataInicio AND data_hora <= @DataFim
-  AND crm IS NOT NULL AND crm_uf IS NOT NULL AND crm_uf <> 'BR';
-
-PRINT '   #mov_surto_base concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_scan_mov, 114);
-
-CREATE CLUSTERED INDEX IDX_TempMov ON #mov_surto_base(cnpj, data_hora);
-
--- Materialização da base horária com volume e diversidade de CRMs
-PRINT '>> Criando #base_horaria...';
-DECLARE @t_horaria DATETIME = GETDATE();
 DROP TABLE IF EXISTS #base_horaria;
+
+-- Consolidamos os médicos para ter o volume total da farmácia/hora (apenas medicamentos patologia)
 SELECT
-    cnpj,
-    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
-    CAST(data_hora AS DATE)                   AS dt_janela,
-    DATEPART(HOUR, data_hora)                 AS hr_janela,
-    COUNT(DISTINCT num_autorizacao)           AS nu_prescricoes_hora,
-    COUNT(DISTINCT crm)                       AS nu_crms_distintos_hora
+    nu_cnpj                               AS cnpj,
+    competencia,
+    dt_dia                                AS dt_janela,
+    hr_janela,
+    SUM(nu_prescricoes_hora)              AS nu_prescricoes_hora,
+    COUNT(DISTINCT nu_crm)                AS nu_crms_distintos_hora
 INTO #base_horaria
-FROM #mov_surto_base
-GROUP BY cnpj, YEAR(data_hora) * 100 + MONTH(data_hora), CAST(data_hora AS DATE), DATEPART(HOUR, data_hora);
+FROM #base_horaria_mestra
+GROUP BY nu_cnpj, competencia, dt_dia, hr_janela;
 
-PRINT '   #base_horaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_horaria, 114);
+CREATE CLUSTERED INDEX IDX_BH_Surto ON #base_horaria(cnpj, dt_janela, hr_janela);
+PRINT '   #base_horaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_scan_mov, 114);
 
 
 
-CREATE CLUSTERED INDEX IDX_BH ON #base_horaria(cnpj, dt_janela, hr_janela);
+
+
+-- (Removido índice duplicado)
+
 
 -- Cálculo de Medianas e Detecção de Surtos (Modified Z-Score — limiar MZS > 4.5)
 PRINT '>> Calculando #mediana_hora...';
@@ -189,25 +243,104 @@ PRINT '   #anomalias_horarias concluída em: ' + CONVERT(VARCHAR(20), GETDATE() 
 
 CREATE CLUSTERED INDEX IDX_AnomaliaH ON #anomalias_horarias(cnpj, dt_janela, hr_janela);
 
+-- ============================================================================
+-- PASSO 0.4: PIOR HORA/DIA POR (CNPJ / CRM / MÊS)
+-- Seleciona a janela (hora) com maior potencial de alerta dentro do mês.
+-- ============================================================================
+PRINT '>> Passo 0.4: Selecionando #pior_dia_crm (Baseado em Picos Horários)...';
+DECLARE @t_pior_dia DATETIME = GETDATE();
+DROP TABLE IF EXISTS #pior_dia_crm;
+
+;WITH calc_taxa AS (
+    SELECT
+        nu_cnpj, nu_crm, sg_uf_crm, competencia,
+        dt_dia, hr_janela, nu_prescricoes_hora, dt_ini_hora, dt_fim_hora, nu_minutos_hora,
+        CASE
+            WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
+            ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
+        END AS taxa_hora
+    FROM #base_horaria_crm
+    WHERE nu_prescricoes_hora >= 5
+),
+ranked AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY nu_cnpj, nu_crm, sg_uf_crm, competencia
+            ORDER BY
+                CASE
+                    WHEN nu_prescricoes_hora >= 5  AND nu_minutos_hora <= 5                                                                                                   THEN 1
+                    WHEN nu_prescricoes_hora >= 5  AND taxa_hora >= 12                                                                                                       THEN 2
+                    WHEN nu_prescricoes_hora >= 10 AND (taxa_hora >= 7 OR nu_minutos_hora <= 60)                                                                             THEN 3
+                    ELSE 99
+                END ASC,
+                taxa_hora DESC,
+                nu_prescricoes_hora DESC
+        ) AS rn
+    FROM calc_taxa
+)
+SELECT nu_cnpj, nu_crm, sg_uf_crm, competencia,
+       dt_dia, nu_prescricoes_hora AS nu_prescricoes_pico_h, dt_ini_hora AS dt_ini_dia, dt_fim_hora AS dt_fim_dia, 
+       nu_minutos_hora AS nu_minutos_dia, taxa_hora AS taxa_dia
+INTO #pior_dia_crm
+FROM ranked
+WHERE rn = 1;
+
+CREATE CLUSTERED INDEX IDX_PiorDia ON #pior_dia_crm(nu_cnpj, nu_crm, sg_uf_crm, competencia);
+
+-- ============================================================================
+-- MOTOR TEMPORAL: crm_unico_alertas (Master Temporal)
+-- ============================================================================
+PRINT '>> Criando temp_CGUSC.fp.crm_unico_alertas (Master Temporal)...';
+DECLARE @t_alert_t DATETIME = GETDATE();
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
+
+;WITH base_com_taxa AS (
+    SELECT
+        nu_cnpj, nu_crm, sg_uf_crm, competencia,
+        dt_dia, hr_janela, nu_prescricoes_hora, nu_minutos_hora,
+        CASE WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
+             ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
+        END AS taxa_hora
+    FROM #base_horaria_crm
+),
+alertas AS (
+    SELECT
+        nu_cnpj                                          AS cnpj,
+        nu_crm, sg_uf_crm, competencia,
+        dt_dia                                           AS dt_alerta,
+        hr_janela                                        AS hr_alerta,
+        nu_prescricoes_hora                              AS nu_prescricoes,
+        nu_minutos_hora                                  AS nu_minutos,
+        CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora
+    FROM base_com_taxa
+    WHERE
+        (nu_prescricoes_hora >= 5  AND (taxa_hora >= 12 OR nu_minutos_hora <= 5))
+     OR (nu_prescricoes_hora >= 10 AND (taxa_hora >= 7 OR nu_minutos_hora <= 60))
+)
+SELECT * INTO temp_CGUSC.fp.crm_unico_alertas FROM alertas;
+
+CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(cnpj, nu_crm, sg_uf_crm, dt_alerta);
+
+
 -- Identifica quais CRMs participaram de algum surto no CNPJ/Competencia
 PRINT '>> Identificando médicos em surto (#crms_em_surto)...';
 DECLARE @t_crms_surto DATETIME = GETDATE();
 DROP TABLE IF EXISTS #crms_em_surto_raw;
 SELECT DISTINCT
-    M.cnpj                                        AS nu_cnpj,
-    M.crm                                         AS nu_crm,
-    M.crm_uf                                      AS sg_uf_crm,
-    YEAR(M.data_hora) * 100 + MONTH(M.data_hora)  AS competencia
+    M.nu_cnpj,
+    M.nu_crm,
+    M.sg_uf_crm,
+    M.competencia
 INTO #crms_em_surto_raw
-FROM #mov_surto_base M
-INNER JOIN #anomalias_horarias A ON A.cnpj = M.cnpj
-    AND A.dt_janela = CAST(M.data_hora AS DATE)
-    AND A.hr_janela = DATEPART(HOUR, M.data_hora)
+FROM #base_horaria_mestra M
+INNER JOIN #anomalias_horarias A ON A.cnpj = M.nu_cnpj
+    AND A.dt_janela = M.dt_dia
+    AND A.hr_janela = M.hr_janela
 WHERE A.is_anomalo_hora = 1;
 
 PRINT '   #crms_em_surto concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_crms_surto, 114);
 
-CREATE CLUSTERED INDEX IDX_SurtoCRM ON #crms_em_surto_raw(nu_cnpj, nu_crm, sg_uf_crm, competencia);
 
 -- TOTAIS DIARIOS PARA MEDIANA DIARIA
 PRINT '>> Criando #totais_diarios...';
@@ -244,12 +377,13 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_perfil_diario;
 
 ;WITH crms_distintos_dia AS (
     SELECT
-        cnpj, 
-        CAST(data_hora AS DATE) AS dt_janela,
-        COUNT(DISTINCT crm) AS nu_crms_distintos
-    FROM #mov_surto_base
-    GROUP BY cnpj, CAST(data_hora AS DATE)
+        nu_cnpj AS cnpj, 
+        dt_dia AS dt_janela,
+        COUNT(DISTINCT nu_crm) AS nu_crms_distintos
+    FROM #base_horaria_mestra
+    GROUP BY nu_cnpj, dt_dia
 )
+
 SELECT
     T.cnpj, T.competencia, T.dt_janela, T.nu_prescricoes_dia,
     ISNULL(C.nu_crms_distintos, 0) AS nu_crms_distintos,
@@ -322,11 +456,11 @@ PRINT '   crm_multiplos_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE(
 CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.crm_multiplos_alertas(cnpj, dt_alerta, hr_janela);
 
 -- 7. Tabela Final 4: crm_multiplos_detalhe (Raio-X Sub-horário)
--- Salva apenas o detalhamento das transações (minutos, segundos, numero nativo) das horas doentes.
-PRINT '>> Passo 7: Criando crm_multiplos_detalhe (Raio-X Sub-horário)...';
+-- Busca cirúrgica direto na fonte para as horas doentes detectadas.
+-- ============================================================================
+PRINT '>> Passo 7: Criando crm_multiplos_detalhe (Busca Cirúrgica)...';
 DECLARE @t_detalhe_m DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_detalhe;
-
 
 SELECT
     A.cnpj,
@@ -341,159 +475,29 @@ SELECT
     M.valor_pago
 INTO temp_CGUSC.fp.crm_multiplos_detalhe
 FROM temp_CGUSC.fp.crm_multiplos_alertas A
-INNER JOIN #mov_surto_base M
+INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
     ON  M.cnpj = A.cnpj
     AND CAST(M.data_hora AS DATE) = A.dt_alerta
-    AND DATEPART(HOUR, M.data_hora) = A.hr_janela;
+    AND DATEPART(HOUR, M.data_hora) = A.hr_janela
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
 
 PRINT '   crm_multiplos_detalhe concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_detalhe_m, 114);
 
 CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.crm_multiplos_detalhe(cnpj, dt_janela, hr_janela);
 
--- ============================================================================
--- PASSO 0.2: AGREGAÇÃO DIÁRIA POR MÉDICO / FARMÁCIA
--- O grain mensal do #base_agregada dilui rajadas intra-mês quando há
--- prescrições esparsas no mesmo mês (MIN/MAX do mês inteiro → taxa baixa).
--- Este passo detecta o pior dia de cada combinação (cnpj, crm, mês).
--- ============================================================================
-PRINT '>> Passo 0.2: Criando #base_diaria_crm (Agregação Diária)...';
-DECLARE @t_base_diaria DATETIME = GETDATE();
-DROP TABLE IF EXISTS #base_diaria_crm;
+
+-- (As derivações foram movidas para o início do script para evitar erros de dependência)
 
 
 
-SELECT
-    M.crm                                             AS nu_crm,
-    M.crm_uf                                          AS sg_uf_crm,
-    M.cnpj                                            AS nu_cnpj,
-    YEAR(M.data_hora) * 100 + MONTH(M.data_hora)     AS competencia,
-    CAST(M.data_hora AS DATE)                         AS dt_dia,
-    COUNT(DISTINCT M.num_autorizacao)                 AS nu_prescricoes_dia,
-    MIN(M.data_hora)                                  AS dt_ini_dia,
-    MAX(M.data_hora)                                  AS dt_fim_dia,
-    DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS nu_minutos_dia
-INTO #base_diaria_crm
-FROM temp_CGUSC.fp.teste_mov_SC M 
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.crm, M.crm_uf, M.cnpj,
-         YEAR(M.data_hora), MONTH(M.data_hora),
-         CAST(M.data_hora AS DATE);
-
-PRINT '   #base_diaria_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_base_diaria, 114);
+-- (Removido daqui e movido para antes das visualizações)
 
 
 
-CREATE CLUSTERED INDEX IDX_BaseDiaria ON #base_diaria_crm(nu_cnpj, nu_crm, sg_uf_crm, competencia);
-
--- ============================================================================
--- PASSO 0.3: AGREGAÇÃO HORÁRIA POR MÉDICO / FARMÁCIA
--- Evita que uma venda isolada à tarde dilua um surto ocorrido de manhã.
--- ============================================================================
-DECLARE @t_base_horaria_crm DATETIME = GETDATE();
-PRINT '>> Passo 0.3: Criando #base_horaria_crm (Agregação Horária)...';
-DROP TABLE IF EXISTS #base_horaria_crm;
-SELECT
-    M.crm                                             AS nu_crm,
-    M.crm_uf                                          AS sg_uf_crm,
-    M.cnpj                                            AS nu_cnpj,
-    YEAR(M.data_hora) * 100 + MONTH(M.data_hora)     AS competencia,
-    CAST(M.data_hora AS DATE)                         AS dt_dia,
-    DATEPART(HOUR, M.data_hora)                       AS hr_janela,
-    COUNT(DISTINCT M.num_autorizacao)                 AS nu_prescricoes_hora,
-    MIN(M.data_hora)                                  AS dt_ini_hora,
-    MAX(M.data_hora)                                  AS dt_fim_hora,
-    DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS nu_minutos_hora
-INTO #base_horaria_crm
-FROM temp_CGUSC.fp.teste_mov_SC M 
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.crm, M.crm_uf, M.cnpj,
-         YEAR(M.data_hora), MONTH(M.data_hora),
-         CAST(M.data_hora AS DATE),
-         DATEPART(HOUR, M.data_hora);
-
-CREATE CLUSTERED INDEX IDX_BaseHora ON #base_horaria_crm(nu_cnpj, nu_crm, dt_dia, hr_janela);
-PRINT '   #base_horaria_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_base_horaria_crm, 114);
-
--- ============================================================================
--- PASSO 0.4: PIOR HORA/DIA POR (CNPJ / CRM / MÊS)
--- Seleciona a janela (hora) com maior potencial de alerta dentro do mês.
--- Isso garante que picos curtos não sejam diluídos no resumo mensal.
--- ============================================================================
-PRINT '>> Passo 0.4: Selecionando #pior_dia_crm (Baseado em Picos Horários)...';
-DECLARE @t_pior_dia DATETIME = GETDATE();
-DROP TABLE IF EXISTS #pior_dia_crm;
+-- (O Passo 0.5 foi movido para o início para alimentar a #lista_alertas_temp)
 
 
-
-;WITH calc_taxa AS (
-    SELECT
-        nu_cnpj, nu_crm, sg_uf_crm, competencia,
-        dt_dia, hr_janela, nu_prescricoes_hora, dt_ini_hora, dt_fim_hora, nu_minutos_hora,
-        CASE
-            WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
-            ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
-        END AS taxa_hora
-    FROM #base_horaria_crm
-    WHERE nu_prescricoes_hora >= 5
-),
-ranked AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY nu_cnpj, nu_crm, sg_uf_crm, competencia
-            ORDER BY
-                CASE
-                    WHEN nu_prescricoes_hora >= 5  AND nu_minutos_hora <= 5                                                                                                   THEN 1
-                    WHEN nu_prescricoes_hora >= 5  AND taxa_hora >= 12                                                                                                       THEN 2
-                    WHEN nu_prescricoes_hora >= 10 AND (taxa_hora >= 7 OR nu_minutos_hora <= 60)                                                                             THEN 3
-                    ELSE 99
-                END ASC,
-                taxa_hora DESC,
-                nu_prescricoes_hora DESC
-        ) AS rn
-    FROM calc_taxa
-)
-SELECT nu_cnpj, nu_crm, sg_uf_crm, competencia,
-       dt_dia, nu_prescricoes_hora AS nu_prescricoes_pico_h, dt_ini_hora AS dt_ini_dia, dt_fim_hora AS dt_fim_dia, 
-       nu_minutos_hora AS nu_minutos_dia, taxa_hora AS taxa_dia
-INTO #pior_dia_crm
-FROM ranked
-WHERE rn = 1;
-
-PRINT '   #pior_dia_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_pior_dia, 114);
-
-
-
-CREATE CLUSTERED INDEX IDX_PiorDia ON #pior_dia_crm(nu_cnpj, nu_crm, sg_uf_crm, competencia);
-
-
--- ============================================================================
--- PASSO 0.5: TOTAIS POR ESTABELECIMENTO / MÊS
--- ============================================================================
-PRINT '>> Passo 0.5 (Estabelecimento): Criando #tb_info_estabelecimento...';
-DECLARE @t_info_est DATETIME = GETDATE();
-DROP TABLE IF EXISTS #tb_info_estabelecimento;
-
-
-
-SELECT
-    cnpj,
-    YEAR(data_hora) * 100 + MONTH(data_hora) AS competencia,
-    COUNT(DISTINCT num_autorizacao)           AS nu_autorizacoes_estabelecimento,
-    SUM(valor_pago)                           AS vl_autorizacoes_estabelecimento,
-    MIN(data_hora)                            AS dt_venda_inicial_estabelecimento,
-    MAX(data_hora)                            AS dt_venda_final_estabelecimento
-INTO #tb_info_estabelecimento
-FROM temp_CGUSC.fp.teste_mov_SC M
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
-GROUP BY M.cnpj, YEAR(M.data_hora), MONTH(M.data_hora);
-
-PRINT '   #tb_info_estabelecimento concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_info_est, 114);
 
 
 GO
@@ -653,57 +657,8 @@ GO
 
 
 
--- ============================================================================
--- MOTOR TEMPORAL: crm_unico_alertas (v5 — Tabela Master Diária)
--- Grain: (cnpj, nu_crm, sg_uf_crm, dt_alerta)
--- Fonte única de verdade para alertas de concentração temporal.
--- Inclui competencia para joins diretos com a tabela de flags (Passo 4).
--- ============================================================================
-PRINT '>> Criando temp_CGUSC.fp.crm_unico_alertas (Master Temporal)...';
-DECLARE @t_alert_t DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
+-- (Removido daqui e movido para antes das visualizações)
 
-
-
-;WITH base_com_taxa AS (
-    SELECT
-        nu_cnpj,
-        nu_crm,
-        sg_uf_crm,
-        competencia,
-        dt_dia,
-        hr_janela,
-        nu_prescricoes_hora,
-        nu_minutos_hora,
-        CASE WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
-             ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
-        END AS taxa_hora
-    FROM #base_horaria_crm
-),
-alertas AS (
-    SELECT
-        nu_cnpj                                          AS cnpj,
-        nu_crm,
-        sg_uf_crm,
-        competencia,
-        dt_dia                                           AS dt_alerta,
-        hr_janela                                        AS hr_alerta,
-        nu_prescricoes_hora                              AS nu_prescricoes,
-        nu_minutos_hora                                  AS nu_minutos,
-        CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora
-    FROM base_com_taxa
-    WHERE
-        (nu_prescricoes_hora >= 5  AND (taxa_hora >= 12 OR nu_minutos_hora <= 5))
-     OR (nu_prescricoes_hora >= 10 AND (taxa_hora >= 7 OR nu_minutos_hora <= 60))
-)
-SELECT * INTO temp_CGUSC.fp.crm_unico_alertas
-FROM alertas;
-
-PRINT '   temp_CGUSC.fp.crm_unico_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alert_t, 114);
-
-
-
-CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(cnpj, nu_crm, sg_uf_crm, dt_alerta);
 
 
 
@@ -759,7 +714,7 @@ CREATE CLUSTERED INDEX IDX_UnicoDaily ON temp_CGUSC.fp.crm_unico_perfil_diario(c
 -- de CRM único, para permitir visualizar as rajadas no contexto do dia.
 -- ============================================================================
 
-PRINT '>> Criando temp_CGUSC.fp.crm_unico_detalhe (Raio-X)...';
+PRINT '>> Criando temp_CGUSC.fp.crm_unico_detalhe (Busca Cirúrgica Raio-X)...';
 DECLARE @t_detalhe_u DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_detalhe;
 
@@ -778,11 +733,14 @@ SELECT
     M.valor_pago
 INTO temp_CGUSC.fp.crm_unico_detalhe
 FROM dias_alerta D
-INNER JOIN #mov_surto_base M
+INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
     ON  M.cnpj = D.cnpj
-    AND CAST(M.data_hora AS DATE) = D.dt_alerta;
+    AND CAST(M.data_hora AS DATE) = D.dt_alerta
+INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
 
 PRINT '   temp_CGUSC.fp.crm_unico_detalhe concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_detalhe_u, 114);
+
 
 
 
@@ -799,6 +757,7 @@ GO
 PRINT '>> Criando temp_CGUSC.fp.alertas_crm_geografico (Master Geográfica)...';
 DECLARE @t_geo DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_geografico;
+-- Seleciona apenas registros que atendem ao piso de 30 prescrições (pré-filtro para evitar explosão no self-join)
 DROP TABLE IF EXISTS #base_com_geo;
 SELECT 
     D.*,
@@ -806,7 +765,8 @@ SELECT
     G.longitude
 INTO #base_com_geo
 FROM temp_CGUSC.fp.dados_crm_detalhado D
-LEFT JOIN temp_CGUSC.sus.tb_ibge G ON G.id_ibge7 = D.codibge;
+LEFT JOIN temp_CGUSC.sus.tb_ibge G ON G.id_ibge7 = D.codibge
+WHERE D.nu_prescricoes_medico >= 30;
 
 CREATE CLUSTERED INDEX IDX_GeoBase ON #base_com_geo(nu_crm, sg_uf_crm, competencia);
 
@@ -841,7 +801,7 @@ CREATE CLUSTERED INDEX IDX_GeoBase ON #base_com_geo(nu_crm, sg_uf_crm, competenc
 ),
 ParesFiltrados AS (
     SELECT * FROM PairedWithDistance
-    WHERE distancia_km > 400 AND nu_prescricoes_a >= 30 AND nu_prescricoes_b >= 30
+    WHERE distancia_km > 400
 ),
 ParesPriorizados AS (
     SELECT *,

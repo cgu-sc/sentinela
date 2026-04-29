@@ -145,7 +145,7 @@ const groupedRaiox = computed(() => {
   hourlyTransactions.value.forEach(item => {
     const key = item.num_autorizacao;
     if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, crm: item.crm, crm_uf: item.crm_uf, nu_medicamentos: 0, vl_autorizacao: 0, items: [] };
+      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, nu_medicamentos: 0, vl_autorizacao: 0, items: [] };
     }
     groups[key].nu_medicamentos += 1;
     groups[key].vl_autorizacao += (item.valor_pago || 0);
@@ -156,7 +156,7 @@ const groupedRaiox = computed(() => {
 
 const crmFrequencies = computed(() => {
   const freqs = {};
-  groupedRaiox.value.forEach(tx => { freqs[tx.crm] = (freqs[tx.crm] || 0) + 1; });
+  groupedRaiox.value.forEach(tx => { freqs[tx.id_medico] = (freqs[tx.id_medico] || 0) + 1; });
   return freqs;
 });
 
@@ -164,10 +164,10 @@ const raioxTotalValue = computed(() => {
   return groupedRaiox.value.reduce((sum, tx) => sum + tx.vl_autorizacao, 0);
 });
 
-function getCRMColor(crm) {
-  if (!crm) return 'var(--primary-color)';
+function getCRMColor(idMedico) {
+  if (!idMedico) return 'var(--primary-color)';
   let hash = 0;
-  for (let i = 0; i < crm.length; i++) { hash = crm.charCodeAt(i) + ((hash << 5) - hash); }
+  for (let i = 0; i < idMedico.length; i++) { hash = idMedico.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash % 360);
   const lightness = themeStore.isDark ? 65 : 35;
   return `hsl(${h}, 75%, ${lightness}%)`;
@@ -593,7 +593,7 @@ const groupedUnicoRaiox = computed(() => {
   unicoTransactions.value.forEach(item => {
     const key = item.num_autorizacao;
     if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, crm: item.crm, crm_uf: item.crm_uf, vl_autorizacao: 0, items: [] };
+      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, vl_autorizacao: 0, items: [] };
     }
     groups[key].vl_autorizacao += (item.valor_pago || 0);
     groups[key].items.push(item);
@@ -611,7 +611,7 @@ const unicoGatilhoSet = computed(() =>
 
 const unicoCrmFrequencies = computed(() => {
   const freqs = {};
-  groupedUnicoRaiox.value.forEach(tx => { freqs[tx.crm] = (freqs[tx.crm] || 0) + 1; });
+  groupedUnicoRaiox.value.forEach(tx => { freqs[tx.id_medico] = (freqs[tx.id_medico] || 0) + 1; });
   return freqs;
 });
 
@@ -662,7 +662,7 @@ const groupedUnicoRaioxFiltered = computed(() => {
   unicoTransactionsFiltered.value.forEach(item => {
     const key = item.num_autorizacao;
     if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, crm: item.crm, crm_uf: item.crm_uf, vl_autorizacao: 0, items: [] };
+      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, vl_autorizacao: 0, items: [] };
     }
     groups[key].vl_autorizacao += (item.valor_pago || 0);
     groups[key].items.push(item);
@@ -692,7 +692,7 @@ const activeCrmFrequencies = computed(() => {
   if (!selectedDay.value) return {};
   if (selectedDay.value.is_crm_unico === 1) {
     const freqs = {};
-    groupedUnicoRaioxFiltered.value.forEach(tx => { freqs[tx.crm] = (freqs[tx.crm] || 0) + 1; });
+    groupedUnicoRaioxFiltered.value.forEach(tx => { freqs[tx.id_medico] = (freqs[tx.id_medico] || 0) + 1; });
     return freqs;
   }
   return crmFrequencies.value;
@@ -949,7 +949,7 @@ function toggleActiveRow(auth) {
           </thead>
           <tbody>
             <template v-for="tx in activeGroupedRaiox" :key="tx.num_autorizacao">
-              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.crm + '/' + tx.crm_uf) }"
+              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.id_medico) }"
                   @click="toggleActiveRow(tx.num_autorizacao)"
                   class="cursor-pointer">
                 <td class="col-center raiox-time align-top">
@@ -961,19 +961,19 @@ function toggleActiveRow(auth) {
                 <td class="align-top">
                   <div class="crm-badge-container">
                     <span class="issue-tag raiox-crm-tag"
-                          :style="activeCrmFrequencies[tx.crm] > 1 ? {
-                            borderColor: getCRMColor(tx.crm),
-                            color: getCRMColor(tx.crm),
-                            background: `color-mix(in srgb, ${getCRMColor(tx.crm)} 15%, transparent)`
+                          :style="activeCrmFrequencies[tx.id_medico] > 1 ? {
+                            borderColor: getCRMColor(tx.id_medico),
+                            color: getCRMColor(tx.id_medico),
+                            background: `color-mix(in srgb, ${getCRMColor(tx.id_medico)} 15%, transparent)`
                           } : {}">
-                      {{ tx.crm }}/{{ tx.crm_uf }}
+                      {{ tx.id_medico }}
                     </span>
-                    <span v-if="activeCrmFrequencies[tx.crm] > 1"
+                    <span v-if="activeCrmFrequencies[tx.id_medico] > 1"
                           class="crm-recurrence-badge"
-                          :style="{ border: `1px solid ${getCRMColor(tx.crm)}`, color: getCRMColor(tx.crm) }">
-                      {{ activeCrmFrequencies[tx.crm] }}x
+                          :style="{ border: `1px solid ${getCRMColor(tx.id_medico)}`, color: getCRMColor(tx.id_medico) }">
+                      {{ activeCrmFrequencies[tx.id_medico] }}x
                     </span>
-                    <span v-if="selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.crm + '/' + tx.crm_uf)"
+                    <span v-if="selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.id_medico)"
                           class="gatilho-badge">⚠ gatilho</span>
                   </div>
                 </td>

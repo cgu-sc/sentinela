@@ -1934,12 +1934,26 @@ class AnalyticsService:
         except Exception:
             dias_periodo = 30
 
+        # ── Dias ativos por médico (vetorizado, sem Python callback) ─────────
+        # Calcula quantos dias tem cada competência (YYYYMM) criando o 1º dia do
+        # próximo mês e subtraindo 1 dia. Trata a virada de ano (dez → jan).
+        _ano  = pl.col("competencia") // 100
+        _mes  = pl.col("competencia") % 100
+        _prox_ano = pl.when(_mes == 12).then(_ano + 1).otherwise(_ano)
+        _prox_mes = pl.when(_mes == 12).then(pl.lit(1)).otherwise(_mes + 1)
+        df = df.with_columns([
+            (
+                pl.date(_prox_ano, _prox_mes, pl.lit(1)) - pl.duration(days=1)
+            ).dt.day().alias("dias_competencia")
+        ])
+
         df_med = (
             df.group_by("id_medico")
             .agg([
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
                 pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
                 pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
+                pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do médico
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
@@ -1951,8 +1965,9 @@ class AnalyticsService:
                 pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
             ])
             .with_columns([
-                (pl.col("nu_prescricoes").cast(pl.Float64) / dias_periodo).round(2).alias("nu_prescricoes_dia"),
-                (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / dias_periodo).round(2).alias("prescricoes_dia_total_brasil"),
+                # Divide pelo total de dias dos meses em que o médico de fato prescreveu
+                (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
+                (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("prescricoes_dia_total_brasil"),
             ])
             .with_columns([
                 (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
@@ -2258,7 +2273,7 @@ class AnalyticsService:
 
                     # Agregamos volume por CRM e Hora de Surto
                     df_surto_agg = (
-                        df_tx.group_by(["dt_janela", "hr_janela", "crm", "crm_uf"])
+                        df_tx.group_by(["dt_janela", "hr_janela", "id_medico"])
                         .agg([
                             pl.n_unique("num_autorizacao").alias("nu_prescricoes_crm"),
                             pl.sum("valor_pago").alias("vl_prescricoes_crm")
@@ -2278,7 +2293,7 @@ class AnalyticsService:
                         )
                         
                         for r in df_surto_full.iter_rows(named=True):
-                            mid = f"{r['crm']}/{r['crm_uf']}"
+                            mid = r['id_medico']
                             vol = int(r.get("nu_prescricoes", 0))
                             hr  = int(r.get("hr_janela", 0))
                             mult = r.get("multiplicador", 0)
@@ -2513,7 +2528,7 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando transações no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
+                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
                          "FROM temp_CGUSC.fp.crm_multiplos_detalhe "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
@@ -2521,14 +2536,14 @@ class AnalyticsService:
                 )
             df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
                 "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8, 
-                "num_autorizacao": pl.Utf8, "crm": pl.Utf8, "crm_uf": pl.Utf8, 
+                "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8, 
                 "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
             })
 
             if not df_tx.is_empty():
                 df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
-                    pl.col("crm").cast(pl.Utf8),
+                    pl.col("id_medico").cast(pl.Utf8),
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8)
                 ])
@@ -2597,9 +2612,9 @@ class AnalyticsService:
         # (SQL e Parquet frequentemente inferem tipos numéricos para IDs longos)
         enriched_df = enriched_df.with_columns([
             pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("crm").cast(pl.Utf8),
+            pl.col("id_medico").cast(pl.Utf8),
             pl.col("codigo_barra").cast(pl.Utf8),
-            pl.col("data_hora").cast(pl.Utf8) # Conversão direta para string no Polars é mais eficiente
+            pl.col("data_hora").cast(pl.Utf8)
         ])
 
         # Converte para o formato do Schema
@@ -2726,7 +2741,7 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando transações CRM único no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, data_hora, num_autorizacao, crm, crm_uf, codigo_barra, valor_pago "
+                    text("SELECT dt_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
                          "FROM temp_CGUSC.fp.crm_unico_detalhe "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
@@ -2734,14 +2749,14 @@ class AnalyticsService:
                 )
             df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
                 "dt_janela": pl.Utf8, "data_hora": pl.Utf8,
-                "num_autorizacao": pl.Utf8, "crm": pl.Utf8, "crm_uf": pl.Utf8,
+                "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8,
                 "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
             })
 
             if not df_tx.is_empty():
                 df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
-                    pl.col("crm").cast(pl.Utf8),
+                    pl.col("id_medico").cast(pl.Utf8),
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8),
                 ])
@@ -2813,7 +2828,7 @@ class AnalyticsService:
 
         enriched_df = enriched_df.with_columns([
             pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("crm").cast(pl.Utf8),
+            pl.col("id_medico").cast(pl.Utf8),
             pl.col("codigo_barra").cast(pl.Utf8),
             pl.col("data_hora").cast(pl.Utf8),
         ])

@@ -428,8 +428,7 @@ class CrmHourlyTransactionSchema(BaseModel):
     """Uma prescrição real capturada no Data Mart de anomalias horárias."""
     data_hora: str
     num_autorizacao: str
-    crm: str
-    crm_uf: str
+    id_medico: str
     codigo_barra: str
     valor_pago: float
     produto: Optional[str] = None

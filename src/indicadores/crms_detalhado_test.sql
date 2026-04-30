@@ -990,32 +990,6 @@ SELECT
     P.nu_prescricoes_medico_em_todos_estabelecimentos                 AS nu_prescricoes_total_brasil,
     P.nu_estabelecimentos_com_registro_mesmo_crm                      AS nu_estabelecimentos,
     CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
-    -- Texto geográfico
-    CASE WHEN G.id_medico IS NOT NULL THEN
-        'Em ' + RIGHT('0' + CAST(G.competencia % 100 AS VARCHAR(2)), 2) + '/' +
-                CAST(G.competencia / 100 AS VARCHAR(4)) + ': ' +
-        'A distância entre a farmácia ' +
-            CASE WHEN LEN(G.cnpj_a) = 14
-                 THEN SUBSTRING(G.cnpj_a,1,2)+'.'+SUBSTRING(G.cnpj_a,3,3)+'.'+
-                      SUBSTRING(G.cnpj_a,6,3)+'/'+SUBSTRING(G.cnpj_a,9,4)+'-'+SUBSTRING(G.cnpj_a,13,2)
-                 ELSE ISNULL(G.cnpj_a,'N/I') END +
-        ' (' + ISNULL(G.no_municipio_a,'N/I') + '/' + ISNULL(G.sg_uf_a,'N/I') + ')' +
-        ' - ' + CONVERT(VARCHAR, G.dt_ini_a, 103) + ' a ' + CONVERT(VARCHAR, G.dt_fim_a, 103) +
-        ' (' + CAST(G.nu_prescricoes_a AS VARCHAR(10)) + ' prescrições)' +
-        ' e a farmácia ' +
-            CASE WHEN LEN(G.cnpj_b) = 14
-                 THEN SUBSTRING(G.cnpj_b,1,2)+'.'+SUBSTRING(G.cnpj_b,3,3)+'.'+
-                      SUBSTRING(G.cnpj_b,6,3)+'/'+SUBSTRING(G.cnpj_b,9,4)+'-'+SUBSTRING(G.cnpj_b,13,2)
-                 ELSE ISNULL(G.cnpj_b,'N/I') END +
-        ' (' + ISNULL(G.no_municipio_b,'N/I') + '/' + ISNULL(G.sg_uf_b,'N/I') + ')' +
-        ' - ' + CONVERT(VARCHAR, G.dt_ini_b, 103) + ' a ' + CONVERT(VARCHAR, G.dt_fim_b, 103) +
-        ' (' + CAST(G.nu_prescricoes_b AS VARCHAR(10)) + ' prescrições)' +
-        ' é de ' + CAST(G.distancia_km AS VARCHAR(20)) + ' km.' +
-        CASE WHEN G.total_pares > 1
-             THEN ' Há também outros ' + CAST(G.total_pares - 1 AS VARCHAR(10)) +
-                  ' pares de estabelecimentos com distância maior que 400km no mesmo período.'
-             ELSE '' END
-    END                                                               AS alerta_distancia_geografica,
     CAST(CASE WHEN G.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_distancia_geografica,
     A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
     TRY_CONVERT(DATE, CFM_ALL.DT_INSCRICAO, 103)                      AS dt_inscricao_crm,

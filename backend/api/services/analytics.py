@@ -1958,7 +1958,7 @@ class AnalyticsService:
                 pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
                 pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_mesmo_crm"),
                 pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta_distancia_geografica"),
-                pl.col("alerta_distancia_geografica").drop_nulls().first().alias("alerta5_geografico"),
+                pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta5_geografico"),
                 pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
                 pl.col("dt_inscricao_crm").first().alias("dt_inscricao_crm"),
                 pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),

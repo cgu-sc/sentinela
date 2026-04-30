@@ -1881,7 +1881,7 @@ class AnalyticsService:
                              "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
                              "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                             "E.alerta_distancia_geografica, E.dt_primeira_prescricao, E.dt_inscricao_crm, "
+                             "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
                              "E.nu_estabelecimentos"
                              " FROM temp_CGUSC.fp.crm_export E"
                              " WHERE E.cnpj = :cnpj"),

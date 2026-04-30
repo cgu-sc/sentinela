@@ -360,16 +360,21 @@ const chartOptionDaily = computed(() => {
   };
 });
 
-const chartOptionHourly = computed(() => {
-  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return {};
-  const c = chartTheme.value;
+const hourlyPoints = computed(() => {
+  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
   const targetDate = selectedDay.value.dt_janela;
   const pointsForDay = cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
 
-  const fullPoints = Array.from({ length: 24 }, (_, h) => {
+  return Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
     return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0, is_anomalo_hora: 0, is_crm_multiplos: 0, is_crm_unico: 0 };
   });
+});
+
+const chartOptionHourly = computed(() => {
+  if (!selectedDay.value || !hourlyPoints.value.length) return {};
+  const c = chartTheme.value;
+  const fullPoints = hourlyPoints.value;
 
   const barColors = fullPoints.map(p => {
     if (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) {
@@ -465,7 +470,7 @@ const chartOptionHourly = computed(() => {
         data: fullPoints.map(p => ({
           value: 1,
           itemStyle: { color: 'transparent' },
-          cursor: 'pointer'
+          cursor: (p.nu_prescricoes || 0) > 0 ? 'pointer' : 'default'
         })),
         tooltip: { show: false },
         silent: false
@@ -610,6 +615,9 @@ async function onHourlyZrClick() {
   if (hoveredHourlyHour.value === null || !selectedDay.value) return;
   
   const hourInt = hoveredHourlyHour.value;
+  
+  const point = hourlyPoints.value.find(p => p.hr_janela === hourInt);
+  if (!point || (point.nu_prescricoes || 0) === 0) return;
   
   // Toggle do filtro
   if (selectedHourlyHour.value === hourInt) {

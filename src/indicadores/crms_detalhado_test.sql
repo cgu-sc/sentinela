@@ -435,9 +435,9 @@ PRINT '   crm_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - 
 CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(cnpj, dt_janela);
 
 -- 5. Tabela Final 2: crm_perfil_horario (Drill-down unificado: CRM Múltiplos + CRM Único)
+-- is_anomalo_hora = 1  → hora específica com Surto (MZS) OU Alerta de CRM Único
 -- is_crm_multiplos = 1 → dia tem surto horário detectado (volume MZS > 4.5)
 -- is_crm_unico     = 1 → dia tem alerta de concentração temporal (médico com taxa/dia elevada)
--- Um dia pode ter ambos os flags ativos simultaneamente.
 PRINT '>> Passo 5: Criando crm_perfil_horario (Drill-down Unificado)...';
 DECLARE @t_perfil_h DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_horario;
@@ -449,7 +449,11 @@ SELECT
     H.nu_prescricoes_hora    AS nu_prescricoes,
     H.nu_crms_distintos_hora AS nu_crms_diferentes,
     H.mediana_hora,
-    H.is_anomalo_hora,
+    CAST(CASE 
+        WHEN H.is_anomalo_hora = 1 THEN 1
+        WHEN U.hr_janela IS NOT NULL THEN 1
+        ELSE 0
+    END AS BIT) AS is_anomalo_hora,
     CAST(D.is_anomalo_multiplos AS BIT) AS is_crm_multiplos,
     CAST(D.is_anomalo_unico     AS BIT) AS is_crm_unico
 INTO temp_CGUSC.fp.crm_perfil_horario
@@ -457,6 +461,10 @@ FROM #anomalias_horarias H
 INNER JOIN temp_CGUSC.fp.crm_perfil_diario D
     ON  D.cnpj      = H.cnpj
     AND D.dt_janela = H.dt_janela
+LEFT JOIN temp_CGUSC.fp.crm_unico_alertas U
+    ON  U.cnpj      = H.cnpj
+    AND U.dt_alerta = H.dt_janela
+    AND U.hr_janela = H.hr_janela
 WHERE D.is_anomalo_multiplos = 1 OR D.is_anomalo_unico = 1;
 
 PRINT '   crm_perfil_horario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_h, 114);

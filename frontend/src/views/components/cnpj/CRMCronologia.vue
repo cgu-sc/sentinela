@@ -811,7 +811,7 @@ function toggleActiveRow(auth) {
           <span>ANÁLISE HORÁRIA</span>
           <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
           <span v-if="selectedDay.is_crm_multiplos === 1" class="anomalo-badge">SURTO HORÁRIO</span>
-          <span v-else-if="selectedDay.is_crm_unico === 1" class="concentracao-badge">CONCENTRAÇÃO</span>
+          <span v-if="selectedDay.is_crm_unico === 1" class="concentracao-badge">CONCENTRAÇÃO</span>
         </div>
         <div class="drill-panel-actions">
           <button 

@@ -211,7 +211,7 @@ async function onHourlyChartClick(params) {
   const hourStr = params.name.replace('h', '');
   const hourInt = parseInt(hourStr, 10);
   if (!selectedDay.value || isNaN(hourInt)) return;
-  if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return;
+  if (!params.data || params.data.value === 0) return;
   
   if (selectedHourlyHour.value === hourInt) {
     selectedHourlyHour.value = 'all';
@@ -476,7 +476,7 @@ const chartOptionHourly = computed(() => {
             is_anomalo_hora: p.is_anomalo_hora,
             is_crm_multiplos: p.is_crm_multiplos,
             is_crm_unico: p.is_crm_unico,
-            cursor: (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) ? 'pointer' : 'default',
+            cursor: p.nu_prescricoes > 0 ? 'pointer' : 'default',
             itemStyle: { 
               color: barColors[i],
               opacity: hasSelection && !isSelected ? 0.3 : 1
@@ -826,7 +826,7 @@ function toggleActiveRow(auth) {
           <button 
             v-if="selectedHourlyHour !== 'all'" 
             class="reset-filter-btn animate-fade-in"
-            @click="selectedHourlyHour = 'all'; loadTransactions(selectedDay.dt_janela, null)"
+            @click="selectedHourlyHour = 'all'; selectedDay.is_crm_unico === 1 ? loadUnicoTransactions(selectedDay.dt_janela, null) : loadTransactions(selectedDay.dt_janela, null)"
           >
             <i class="pi pi-filter-slash" />
             <span>Ver Dia Todo</span>
@@ -1083,6 +1083,8 @@ function toggleActiveRow(auth) {
   position: relative;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
 }
 
 .level-daily { border-left: 4px solid var(--primary-color); }
@@ -1095,6 +1097,7 @@ function toggleActiveRow(auth) {
   background: color-mix(in srgb, var(--card-bg) 70%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  min-height: 650px !important;
 }
 
 .drill-panel-header {
@@ -1297,7 +1300,15 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 }
 
 /* ── Raio-X Table Styling ───────────────────────────────────────────────── */
-.raiox-table-wrapper { border-radius: 8px; background: transparent; border: 1px solid var(--tabs-border); overflow: hidden; }
+.raiox-table-wrapper { 
+  border-radius: 8px; 
+  background: transparent; 
+  border: 1px solid var(--tabs-border); 
+  overflow: hidden; 
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
 .premium-table { width: 100%; border-collapse: collapse; }
 .premium-table th { padding: 0.75rem 0.5rem; background: var(--card-bg); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; border-bottom: 2px solid var(--tabs-border); }
 .premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color); font-size: 0.78rem; }
@@ -1346,7 +1357,16 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   background: rgba(139, 92, 246, 0.1);
 }
 
-.raiox-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 3rem; color: var(--text-muted); }
+.raiox-empty { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 1rem; 
+  padding: 3rem; 
+  color: var(--text-muted); 
+  flex: 1;
+}
 .raiox-empty-icon { font-size: 2rem; opacity: 0.3; }
 
 .raiox-footer-row {

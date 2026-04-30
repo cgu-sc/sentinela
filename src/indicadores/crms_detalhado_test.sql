@@ -594,20 +594,7 @@ GO
 -- NORMALIZAÇÃO: DIMENSÕES (Apenas Médicos para ID numérico)
 -- ============================================================================
 
--- 1. Dicionário de Médicos (Dimensão)
-PRINT '>> Criando temp_CGUSC.fp.dim_crm (Dicionário de Médicos)...';
-DECLARE @t_dim_crm DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.dim_crm;
-SELECT 
-    CAST(ROW_NUMBER() OVER (ORDER BY id_medico) AS INT) AS id_crm_id,
-    id_medico
-INTO temp_CGUSC.fp.dim_crm 
-FROM (SELECT DISTINCT id_medico FROM #base_agregada_crm_cnpj) t;
-
-PRINT '   temp_CGUSC.fp.dim_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_dim_crm, 114);
-
-CREATE CLUSTERED INDEX IDX_DimCrm_ID ON temp_CGUSC.fp.dim_crm(id_crm_id);
-CREATE NONCLUSTERED INDEX IDX_DimCrm_String ON temp_CGUSC.fp.dim_crm(id_medico);
+-- (Removido: dim_crm não é mais utilizado)
 
 -- ============================================================================
 -- TABELA FINAL: dados_crm_detalhado
@@ -995,7 +982,6 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 SELECT
     A.nu_cnpj                                                         AS cnpj,
     A.id_medico,
-    M.id_crm_id,
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes_mes,
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
@@ -1039,7 +1025,6 @@ SELECT
     ISNULL(AL.flag_concentracao_estabelecimento, 0)                   AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM temp_CGUSC.fp.dados_crm_detalhado A
-JOIN temp_CGUSC.fp.dim_crm M ON M.id_medico = A.id_medico
 LEFT JOIN temp_CGUSC.fp.alertas_crm AL
     ON  AL.nu_cnpj    = A.nu_cnpj 
     AND AL.id_medico  = A.id_medico 
@@ -1083,7 +1068,7 @@ IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key'
     DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
 
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(cnpj, id_crm_id, competencia);
+    ON temp_CGUSC.fp.crm_export(cnpj, id_medico, competencia);
 GO
 
 

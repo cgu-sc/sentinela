@@ -26,14 +26,13 @@ export const API_ENDPOINTS = {
   analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   analyticsFalecidos:   (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/falecidos`,
   analyticsCrmData: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-data`,
-  analyticsCrmMultiplosPerfil: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-multiplos/perfil-diario`,
-  analyticsCrmMultiplosHorario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-multiplos/perfil-horario`,
+  analyticsCrmPerfilDiario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-diario`,
+  analyticsCrmPerfilHorario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-horario`,
   analyticsCrmMultiplosRaioX: (cnpj, dateStr, hour) => {
     let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-multiplos/raio-x?date_str=${dateStr}`;
     if (hour != null) url += `&hour=${hour}`;
     return url;
   },
-  analyticsCrmUnicoPerfil: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-unico/perfil`,
   analyticsCrmUnicoRaioX: (cnpj, dateStr) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-unico/raio-x?date_str=${dateStr}`,
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,

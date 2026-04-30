@@ -22,13 +22,11 @@ const props = defineProps({
 
 const cnpjDetailStore = useCnpjDetailStore();
 const {
-  crmMultiplosPerfil,
-  crmMultiplosPerfilLoading,
-  crmMultiplosHorario,
-  crmMultiplosHorarioLoading,
+  crmPerfilDiario,
+  crmPerfilDiarioLoading,
+  crmPerfilHorario,
+  crmPerfilHorarioLoading,
   selectedTimelineEvent,
-  crmUnicoPerfil,
-  crmUnicoPerfilLoading,
 } = storeToRefs(cnpjDetailStore);
 const { formatarData } = useFormatting();
 const { chartTheme, chartUFAccents } = useChartTheme();
@@ -36,47 +34,37 @@ const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
-const cachedCrmMultiplosPerfil  = ref(crmMultiplosPerfil.value);
-const cachedCrmMultiplosHorario = ref(crmMultiplosHorario.value);
+const cachedCrmPerfilDiario  = ref(crmPerfilDiario.value);
+const cachedCrmPerfilHorario = ref(crmPerfilHorario.value);
 
-const showRefreshingDaily  = useDelayedLoading(crmMultiplosPerfilLoading);
-const showRefreshingHourly = useDelayedLoading(crmMultiplosHorarioLoading);
+const showRefreshingDaily  = useDelayedLoading(crmPerfilDiarioLoading);
+const showRefreshingHourly = useDelayedLoading(crmPerfilHorarioLoading);
 
-watch([crmMultiplosPerfil, crmMultiplosPerfilLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmMultiplosPerfil.value = newData;
+watch([crmPerfilDiario, crmPerfilDiarioLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmPerfilDiario.value = newData;
 }, { immediate: true });
 
-watch([crmMultiplosHorario, crmMultiplosHorarioLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmMultiplosHorario.value = newData;
+watch([crmPerfilHorario, crmPerfilHorarioLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmPerfilHorario.value = newData;
 }, { immediate: true });
 
-// ── CRM Único: cache definido aqui para alimentar unifiedDays antes de filteredDailyDays ──
-const cachedCrmUnicoPerfil = ref(crmUnicoPerfil.value);
-const showRefreshingUnico  = useDelayedLoading(crmUnicoPerfilLoading);
-
-watch([crmUnicoPerfil, crmUnicoPerfilLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmUnicoPerfil.value = newData;
-}, { immediate: true });
-
-// Série unificada: vermelho = surto horário (CRM Múltiplos), âmbar = concentração (CRM Único), azul = normal
-const unifiedDays = computed(() => {
-  const multiDays = cachedCrmMultiplosPerfil.value?.days ?? [];
-  const unicoAnomalousSet = new Set(
-    (cachedCrmUnicoPerfil.value?.days ?? [])
-      .filter(d => d.is_anomalo === 1)
-      .map(d => d.dt_janela)
-  );
-  return multiDays.map(d => ({
+// Série unificada: cada dia já traz is_anomalo_multiplos e is_anomalo_unico
+// Não há mais necessidade de merge entre dois caches distintos.
+const unifiedDays = computed(() =>
+  (cachedCrmPerfilDiario.value?.days ?? []).map(d => ({
     ...d,
-    is_crm_multiplos: d.is_anomalo,
-    is_crm_unico: unicoAnomalousSet.has(d.dt_janela) ? 1 : 0,
-  }));
-});
+    is_crm_multiplos: d.is_anomalo_multiplos,
+    is_crm_unico:     d.is_anomalo_unico,
+    // Compatibilidade retroativa: is_anomalo usado pelo watch de auto-seleção
+    is_anomalo: d.is_anomalo_multiplos || d.is_anomalo_unico ? 1 : 0,
+  }))
+);
+
 
 // Índice por data para lookup O(1) no tooltip (evita scan linear a cada hover)
 const hourlyByDate = computed(() => {
   const map = new Map();
-  for (const pt of cachedCrmMultiplosHorario.value?.points ?? []) {
+  for (const pt of cachedCrmPerfilHorario.value?.points ?? []) {
     const key = String(pt.dt_janela).slice(0, 10);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(pt);
@@ -391,10 +379,10 @@ const chartOptionDaily = computed(() => {
 });
 
 const chartOptionHourly = computed(() => {
-  if (!selectedDay.value || !cachedCrmMultiplosHorario.value) return {};
+  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return {};
   const c = chartTheme.value;
   const targetDate = selectedDay.value.dt_janela;
-  const pointsForDay = cachedCrmMultiplosHorario.value.points.filter(p => p.dt_janela === targetDate);
+  const pointsForDay = cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
 
   const fullPoints = Array.from({ length: 24 }, (_, h) => {
     const found = pointsForDay.find(p => p.hr_janela === h);
@@ -551,7 +539,7 @@ watch(filteredDailyDays, (newDays) => {
 // Observa AMBOS: o evento de navegação e o cache de dados.
 // Isso garante que mesmo se o evento disparar antes do cache estar pronto,
 // o handler tentará novamente assim que os dados chegarem.
-watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) => {
+watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => {
   if (!evt || !profile) return;
 
   const dayObj = profile.days.find(d => d.dt_janela === evt.date);
@@ -581,6 +569,7 @@ watch([selectedTimelineEvent, cachedCrmMultiplosPerfil], async ([evt, profile]) 
   // 4. Limpa o evento para permitir futuras navegações
   cnpjDetailStore.clearTimelineNavigation();
 });
+
 
 // ── CRM ÚNICO: Estado de Raio-X ───────────────────────────────────────────
 const unicoTransactions        = ref([]);
@@ -748,7 +737,7 @@ function toggleActiveRow(auth) {
         <div class="drill-panel-title">
           <i class="pi pi-chart-bar" />
           <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
-          <span v-if="crmMultiplosPerfilLoading" class="chart-loading-badge">
+          <span v-if="crmPerfilDiarioLoading" class="chart-loading-badge">
             <i class="pi pi-spinner pi-spin"></i> Carregando...
           </span>
         </div>
@@ -773,7 +762,7 @@ function toggleActiveRow(auth) {
         Evolução diária de autorizações. Vermelho = surto de volume horário (CRM Múltiplos). Âmbar = médico com concentração elevada no dia (CRM Único). Clique em qualquer anomalia para análise detalhada.
       </p>
       
-      <div v-if="!crmMultiplosPerfil && !crmMultiplosPerfilLoading" class="chart-empty">
+      <div v-if="!crmPerfilDiario && !crmPerfilDiarioLoading" class="chart-empty">
         <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
         <span>Sem dados de perfil diário disponíveis.</span>
       </div>
@@ -804,7 +793,7 @@ function toggleActiveRow(auth) {
           @datazoom="onDailyZoom"
         />
       </div>
-      <div v-if="!selectedDay && crmMultiplosPerfil" class="drill-hint">
+      <div v-if="!selectedDay && crmPerfilDiario" class="drill-hint">
         <i class="pi pi-hand-pointer" />
         <span>Clique em uma barra vermelha (surto horário) ou âmbar (concentração individual) para análise detalhada</span>
       </div>

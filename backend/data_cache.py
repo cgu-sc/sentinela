@@ -296,19 +296,16 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             # 1. Lista de Médicos e Alertas (Gera 3 parquets: _prescritores, _crm_unico_alertas, _cnpj_alerts)
             AnalyticsService.get_crm_data(cnpj)
             
-            # 2. Histórico Diário (Gera _daily.parquet)
-            AnalyticsService.get_crm_multiplos_perfil_diario(cnpj)
+            # 2. Perfil Diário Unificado (is_anomalo_multiplos + is_anomalo_unico)
+            AnalyticsService.get_crm_perfil_diario(cnpj)
             
-            # 3. Detalhamento Horário de Anomalias (Gera _hourly.parquet)
-            AnalyticsService.get_crm_multiplos_perfil_horario(cnpj)
+            # 3. Detalhamento Horário de Anomalias
+            AnalyticsService.get_crm_perfil_horario(cnpj)
 
-            # 4. Transações Literais (Raio-X) (Gera _hourly_tx.parquet)
+            # 4. Transações Literais CRM Múltiplos (Raio-X)
             AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
 
-            # 5. CRM ÚNICO: Série Diária (Gera crm_unico_daily.parquet)
-            AnalyticsService.get_crm_unico_perfil(cnpj)
-
-            # 6. CRM ÚNICO: Transações Raio-X (Gera crm_unico_tx.parquet)
+            # 5. CRM ÚNICO: Transações Raio-X
             AnalyticsService.sync_crm_unico_raio_x(cnpj)
 
             if progress_callback:

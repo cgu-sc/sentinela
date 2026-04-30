@@ -279,7 +279,8 @@ class CrmDailyProfileItem(BaseModel):
     nu_prescricoes_dia: int
     nu_crms_distintos: int
     mediana_diaria: float
-    is_anomalo: int
+    is_anomalo_multiplos: int
+    is_anomalo_unico: int
 
 class CrmDailyProfileResponse(BaseModel):
     cnpj: str
@@ -440,24 +441,6 @@ class CrmMultiplosRaioXResponse(BaseModel):
     from_cache: bool = False
     read_time_ms: Optional[float] = None
 
-
-# ── CRM ÚNICO: Concentração Temporal por Médico ──────────────────────────────
-
-class CrmUnicoPerfilDiarioItem(BaseModel):
-    dt_janela: str
-    competencia: int
-    nu_prescricoes_dia: int
-    nu_crms_distintos: int
-    mediana_diaria: float
-    is_anomalo: int
-
-class CrmUnicoPerfilResponse(BaseModel):
-    cnpj: str
-    days: List[CrmUnicoPerfilDiarioItem]
-    from_cache: bool = False
-    read_time_ms: Optional[float] = None
-    query_time_ms: Optional[float] = None
-    save_time_ms: Optional[float] = None
 
 class CrmUnicoAlertaSchema(BaseModel):
     """Médico que disparou alerta de concentração num dia específico."""

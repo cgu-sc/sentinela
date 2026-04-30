@@ -52,20 +52,15 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     prescritoresError:   null,
 
-    // ── Perfil Diário de Dispensações (gráfico CRM) ──────────────────────────
-    crmMultiplosPerfil:        null,
-    crmMultiplosPerfilLoading: false,
-    crmMultiplosPerfilLoaded:  null,
+    // ── Perfil Diário Unificado (CRM Múltiplos + CRM Único) ──────────────────
+    crmPerfilDiario:        null,
+    crmPerfilDiarioLoading: false,
+    crmPerfilDiarioLoaded:  null,  // Cache key: "cnpj|inicio|fim"
 
-    // ── Perfil Horário de Detalhamento (Drill-down pré-carregado) ─────────────
-    crmMultiplosHorario:        null,
-    crmMultiplosHorarioLoading: false,
-    crmMultiplosHorarioLoaded:  null,
-
-    // ── CRM ÚNICO: Série Diária de Concentração por Médico ───────────────────
-    crmUnicoPerfil:        null,
-    crmUnicoPerfilLoading: false,
-    crmUnicoPerfilLoaded:  null,  // Cache key: "cnpj|inicio|fim"
+    // ── Perfil Horário Unificado (CRM Múltiplos + CRM Único) ──────────────────
+    crmPerfilHorario:        null,
+    crmPerfilHorarioLoading: false,
+    crmPerfilHorarioLoaded:  null,  // Cache key: "cnpj|inicio|fim"
 
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos:        new Map(),
@@ -272,68 +267,47 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Perfil Diário de Dispensações (CRM Múltiplos) ────────────────────────
-    async fetchCrmMultiplosPerfil(cnpj, inicio = null, fim = null) {
+    // ── Perfil Diário Unificado ─────────────────────────────────────────────────
+    async fetchCrmPerfilDiario(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmMultiplosPerfilLoaded === key) return;
-      this.crmMultiplosPerfilLoading = true;
+      if (!cnpj || this.crmPerfilDiarioLoaded === key) return;
+      this.crmPerfilDiarioLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMultiplosPerfil(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmPerfilDiario(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmMultiplosPerfil        = data;
-        this.crmMultiplosPerfilLoaded  = key;
+        this.crmPerfilDiario        = data;
+        this.crmPerfilDiarioLoaded  = key;
       } catch (e) {
         console.error('Erro ao buscar perfil diário de CRM:', e);
       } finally {
-        this.crmMultiplosPerfilLoading = false;
+        this.crmPerfilDiarioLoading = false;
       }
     },
 
-    // ── CRM ÚNICO: Série Diária ───────────────────────────────────────────────
-    async fetchCrmUnicoPerfil(cnpj, inicio = null, fim = null) {
+
+    async fetchCrmPerfilHorario(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmUnicoPerfilLoaded === key) return;
-      this.crmUnicoPerfilLoading = true;
+      if (!cnpj || this.crmPerfilHorarioLoaded === key) return;
+      this.crmPerfilHorarioLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmUnicoPerfil(cnpj), { params });
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['crm-unico-daily'] = { label: 'Perfil Diário CRM Único', ms, detail: buildTimingDetail(data) };
-        this.crmUnicoPerfil       = data;
-        this.crmUnicoPerfilLoaded = key;
-      } catch (e) {
-        console.error('Erro ao buscar perfil diário CRM único:', e);
-      } finally {
-        this.crmUnicoPerfilLoading = false;
-      }
-    },
-
-    async fetchCrmMultiplosHorario(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmMultiplosHorarioLoaded === key) return;
-      this.crmMultiplosHorarioLoading = true;
-      try {
-        const params = {};
-        if (inicio) params.data_inicio = inicio;
-        if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMultiplosHorario(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmPerfilHorario(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmMultiplosHorario        = data;
-        this.crmMultiplosHorarioLoaded  = key;
+        this.crmPerfilHorario        = data;
+        this.crmPerfilHorarioLoaded  = key;
       } catch (e) {
         console.error('Erro ao buscar perfil horário:', e);
       } finally {
-        this.crmMultiplosHorarioLoading = false;
+        this.crmPerfilHorarioLoading = false;
       }
     },
 
@@ -456,13 +430,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.prescritoresLoaded  = null;
       this.prescritoresError   = null;
 
-      this.crmMultiplosPerfil        = null;
-      this.crmMultiplosPerfilLoading = false;
-      this.crmMultiplosPerfilLoaded  = null;
-
-      this.crmUnicoPerfil        = null;
-      this.crmUnicoPerfilLoading = false;
-      this.crmUnicoPerfilLoaded  = null;
+      this.crmPerfilDiario        = null;
+      this.crmPerfilDiarioLoading = false;
+      this.crmPerfilDiarioLoaded  = null;
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;

@@ -9,7 +9,7 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse, CrmUnicoPerfilResponse, CrmUnicoRaioXResponse,
+    CrmMultiplosRaioXResponse, CrmUnicoRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
 )
 from ..services.analytics import AnalyticsService
@@ -164,23 +164,23 @@ def get_crm_data_endpoint(
     """Retorna KPIs e top prescritores (CRMs) de um CNPJ, com filtro opcional de período."""
     return AnalyticsService.get_crm_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
-@router.get("/cnpj/{cnpj}/crm-multiplos/perfil-diario", response_model=CrmDailyProfileResponse)
-def get_crm_multiplos_perfil_diario(
+@router.get("/cnpj/{cnpj}/crm/perfil-diario", response_model=CrmDailyProfileResponse)
+def get_crm_perfil_diario(
     cnpj: str,
     data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
     data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
 ):
-    """Retorna o perfil diário de dispensações de um CNPJ para o gráfico de histórico."""
-    return AnalyticsService.get_crm_multiplos_perfil_diario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+    """Retorna o perfil diário unificado de dispensações (flags de surto horário e concentração individual)."""
+    return AnalyticsService.get_crm_perfil_diario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
-@router.get("/cnpj/{cnpj}/crm-multiplos/perfil-horario", response_model=CrmHourlyProfileResponse)
-def get_crm_multiplos_perfil_horario(
+@router.get("/cnpj/{cnpj}/crm/perfil-horario", response_model=CrmHourlyProfileResponse)
+def get_crm_perfil_horario(
     cnpj: str,
     data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
     data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
 ):
-    """Retorna o detalhamento horário de prescrições para todos os dias anômalos do CNPJ."""
-    return AnalyticsService.get_crm_multiplos_perfil_horario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+    """Retorna o detalhamento horário unificado (CRM Múltiplos + CRM Único) de um CNPJ."""
+    return AnalyticsService.get_crm_perfil_horario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm-multiplos/raio-x", response_model=CrmMultiplosRaioXResponse)
 def get_crm_multiplos_raio_x(
@@ -190,15 +190,6 @@ def get_crm_multiplos_raio_x(
 ):
     """Retorna o raio-x (transação literal) de uma hora específica ou do dia inteiro se a hora for omitida."""
     return AnalyticsService.get_crm_multiplos_raio_x(cnpj, date_str, hour)
-
-@router.get("/cnpj/{cnpj}/crm-unico/perfil", response_model=CrmUnicoPerfilResponse)
-def get_crm_unico_perfil(
-    cnpj: str,
-    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
-    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
-):
-    """Retorna a série diária da farmácia com flag de dias com alerta de concentração por médico."""
-    return AnalyticsService.get_crm_unico_perfil(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm-unico/raio-x", response_model=CrmUnicoRaioXResponse)
 def get_crm_unico_raio_x(

@@ -48,7 +48,6 @@ from ..schemas.analytics import (
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
     CrmMultiplosRaioXResponse,
-    CrmUnicoPerfilResponse,
     CrmUnicoRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
@@ -2332,25 +2331,24 @@ class AnalyticsService:
         )
 
     @staticmethod
-    def get_crm_multiplos_perfil_diario(
+    def get_crm_perfil_diario(
         cnpj: str,
         data_inicio: str | None = None,
         data_fim: str | None = None
     ) -> "CrmDailyProfileResponse":
-        """Retorna o perfil diário de dispensação de um CNPJ (lazy parquet cache).
+        """Retorna o perfil diário unificado de dispensação de um CNPJ.
 
-        Args:
-            cnpj: CNPJ de 14 dígitos sem formatação.
-            data_inicio: Data de início (YYYY-MM-DD ou YYYY-MM).
-            data_fim: Data de fim (YYYY-MM-DD ou YYYY-MM).
+        Cada dia inclui duas flags independentes:
+          - is_anomalo_multiplos: surto horário (vários CRMs simultâneos)
+          - is_anomalo_unico:     concentração temporal de médico individual
 
-        Returns:
-            CrmDailyProfileResponse com lista de dias ordenada cronologicamente.
+        Fonte: temp_CGUSC.fp.crm_perfil_diario
+        Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
         """
         import pandas as pd
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_perfil_diario.parquet")
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_perfil_diario.parquet")
 
         import time as _time
         df: pl.DataFrame | None = None
@@ -2366,7 +2364,7 @@ class AnalyticsService:
                 read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 from_cache = True
             except Exception as e:
-                print(f"⚠️ Erro ao ler parquet daily '{cnpj}': {e}")
+                print(f"⚠️ Erro ao ler parquet crm_perfil_diario '{cnpj}': {e}")
 
         if df is None:
             try:
@@ -2374,7 +2372,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_multiplos_perfil_diario"
+                        text("SELECT * FROM temp_CGUSC.fp.crm_perfil_diario"
                              " WHERE cnpj = :cnpj ORDER BY dt_janela"),
                         conn,
                         params={"cnpj": cnpj},
@@ -2385,7 +2383,7 @@ class AnalyticsService:
                 df.write_parquet(PARQUET_PATH, compression="lz4")
                 save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
             except Exception as e:
-                print(f"⚠️ Erro ao gerar parquet daily '{cnpj}': {e}")
+                print(f"⚠️ Erro ao gerar parquet crm_perfil_diario '{cnpj}': {e}")
                 df = pl.DataFrame()
 
         if df.is_empty():
@@ -2411,20 +2409,27 @@ class AnalyticsService:
                 "nu_prescricoes_dia":    int(r["nu_prescricoes_dia"]),
                 "nu_crms_distintos":     int(r["nu_crms_distintos"]),
                 "mediana_diaria":        float(r["mediana_diaria"]),
-                "is_anomalo":            int(r["is_anomalo"]),
+                "is_anomalo_multiplos":  int(r["is_anomalo_multiplos"]),
+                "is_anomalo_unico":      int(r["is_anomalo_unico"]),
             }
             for r in df.iter_rows(named=True)
         ]
         return CrmDailyProfileResponse(cnpj=cnpj, days=days, from_cache=from_cache,
                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
+
     @staticmethod
-    def get_crm_multiplos_perfil_horario(
+    def get_crm_perfil_horario(
         cnpj: str,
         data_inicio: str | None = None,
         data_fim: str | None = None
     ) -> CrmHourlyProfileResponse:
-        """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ com cache Parquet e filtro de período."""
+        """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
+
+        Inclui is_crm_multiplos (surto de volume) e is_crm_unico (concentração individual)
+        por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
+        Cache: sentinela_cache/<cnpj>/crm_horario.parquet
+        """
         import pandas as pd
         from sqlalchemy import text
         
@@ -2623,100 +2628,6 @@ class AnalyticsService:
         return CrmMultiplosRaioXResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
 
     # ── CRM ÚNICO ─────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def get_crm_unico_perfil(
-        cnpj: str,
-        data_inicio: str | None = None,
-        data_fim: str | None = None
-    ) -> "CrmUnicoPerfilResponse":
-        """Retorna a série diária da farmácia com flag de dias com alerta de concentração por médico.
-
-        Args:
-            cnpj: CNPJ de 14 dígitos sem formatação.
-            data_inicio: Data de início (YYYY-MM-DD ou YYYY-MM).
-            data_fim: Data de fim (YYYY-MM-DD ou YYYY-MM).
-
-        Returns:
-            CrmUnicoPerfilResponse com lista de dias ordenada cronologicamente.
-        """
-        import pandas as pd
-
-        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_perfil_diario.parquet")
-
-        import time as _time
-        df: pl.DataFrame | None = None
-        from_cache    = False
-        read_time_ms: float | None = None
-        query_time_ms: float | None = None
-        save_time_ms:  float | None = None
-
-        if os.path.exists(PARQUET_PATH):
-            try:
-                _t0 = _time.perf_counter()
-                df = pl.read_parquet(PARQUET_PATH)
-                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-                from_cache = True
-            except Exception as e:
-                print(f"⚠️ Erro ao ler parquet crm_unico_daily '{cnpj}': {e}")
-
-        if df is None:
-            try:
-                from database import engine as _engine
-                with _engine.connect() as conn:
-                    _t0 = _time.perf_counter()
-                    pdf = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_unico_perfil_diario"
-                             " WHERE cnpj = :cnpj ORDER BY dt_janela"),
-                        conn,
-                        params={"cnpj": cnpj},
-                    )
-                    query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-                df = pl.from_pandas(pdf)
-                _t1 = _time.perf_counter()
-                df.write_parquet(PARQUET_PATH, compression="lz4")
-                save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-            except Exception as e:
-                print(f"⚠️ Erro ao gerar parquet crm_unico_daily '{cnpj}': {e}")
-                df = pl.DataFrame()
-
-        if df.is_empty():
-            return CrmUnicoPerfilResponse(cnpj=cnpj, days=[], from_cache=from_cache,
-                                          read_time_ms=read_time_ms, query_time_ms=query_time_ms,
-                                          save_time_ms=save_time_ms)
-
-        if data_inicio:
-            d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
-            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
-        if data_fim:
-            d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
-            df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
-
-        if df.is_empty():
-            return CrmUnicoPerfilResponse(cnpj=cnpj, days=[], from_cache=from_cache,
-                                          read_time_ms=read_time_ms, query_time_ms=query_time_ms,
-                                          save_time_ms=save_time_ms)
-
-        days = [
-            {
-                "dt_janela":          str(r["dt_janela"])[:10],
-                "competencia":        int(r["competencia"]),
-                "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
-                "nu_crms_distintos":  int(r["nu_crms_distintos"]),
-                "mediana_diaria":     float(r["mediana_diaria"]),
-                "is_anomalo":         int(r["is_anomalo"]),
-            }
-            for r in df.iter_rows(named=True)
-        ]
-        # AUTO-WARMING: Pré-aquece o parquet de Transações (Raio-X) do CRM Único
-        try:
-            AnalyticsService.sync_crm_unico_raio_x(cnpj)
-        except: pass
-
-        return CrmUnicoPerfilResponse(cnpj=cnpj, days=days, from_cache=from_cache,
-                                      read_time_ms=read_time_ms, query_time_ms=query_time_ms,
-                                      save_time_ms=save_time_ms)
 
     @staticmethod
     def sync_crm_unico_raio_x(cnpj: str) -> None:

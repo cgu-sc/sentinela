@@ -393,35 +393,46 @@ PRINT '   #mediana_diaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t
 
 CREATE CLUSTERED INDEX IDX_MedianaDia ON #mediana_diaria(cnpj, competencia);
 
--- 4. Tabela Final 1: crm_multiplos_perfil_diario (Gráfico Principal)
-PRINT '>> Passo 4: Criando crm_multiplos_perfil_diario (Gráfico Principal)...';
+-- 4. Tabela Unificada: crm_perfil_diario (Gráfico Principal — substitui crm_multiplos_perfil_diario + crm_unico_perfil_diario)
+-- is_anomalo_multiplos = 1 → dia com surto horário detectado por volume (MZS > 4.5)
+-- is_anomalo_unico     = 1 → dia com alerta de concentração temporal de CRM individual
+-- As duas flags podem estar ativas no mesmo dia simultaneamente.
+PRINT '>> Passo 4: Criando crm_perfil_diario (Perfil Diário Unificado)...';
 DECLARE @t_perfil_d DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_perfil_diario;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_diario;
 
 ;WITH crms_distintos_dia AS (
     SELECT
-        nu_cnpj AS cnpj, 
-        dt_dia AS dt_janela,
+        nu_cnpj AS cnpj,
+        dt_dia  AS dt_janela,
         CAST(COUNT(DISTINCT id_medico) AS SMALLINT) AS nu_crms_distintos
     FROM #base_horaria_mestra
     GROUP BY nu_cnpj, dt_dia
+),
+anomalias_unico_dia AS (
+    SELECT DISTINCT cnpj, dt_alerta
+    FROM temp_CGUSC.fp.crm_unico_alertas
 )
-
 SELECT
-    T.cnpj, T.competencia, T.dt_janela, 
+    T.cnpj,
+    T.competencia,
+    T.dt_janela,
     T.nu_prescricoes_dia,
     ISNULL(C.nu_crms_distintos, CAST(0 AS SMALLINT)) AS nu_crms_distintos,
     M.mediana_diaria,
-    -- O dia é anômalo se tiver uma rajada horária (Regra Standard 7x Mediana)
-    T.dia_tem_anomalia_hora AS is_anomalo
-INTO temp_CGUSC.fp.crm_multiplos_perfil_diario
+    -- Flag Múltiplos: rajada horária detectada pelo MZS
+    CAST(T.dia_tem_anomalia_hora AS BIT)                                       AS is_anomalo_multiplos,
+    -- Flag Único: médico individual com concentração anômala no dia
+    CAST(CASE WHEN U.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT)           AS is_anomalo_unico
+INTO temp_CGUSC.fp.crm_perfil_diario
 FROM #totais_diarios T
-INNER JOIN #mediana_diaria M ON M.cnpj = T.cnpj AND M.competencia = T.competencia
-LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela = T.dt_janela;
+INNER JOIN #mediana_diaria M   ON M.cnpj = T.cnpj AND M.competencia = T.competencia
+LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela  = T.dt_janela
+LEFT JOIN anomalias_unico_dia U ON U.cnpj = T.cnpj AND U.dt_alerta = T.dt_janela;
 
-PRINT '   crm_multiplos_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_d, 114);
+PRINT '   crm_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_d, 114);
 
-CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_multiplos_perfil_diario(cnpj, dt_janela);
+CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(cnpj, dt_janela);
 
 -- 5. Tabela Final 2: crm_perfil_horario (Drill-down unificado: CRM Múltiplos + CRM Único)
 -- is_crm_multiplos = 1 → dia tem surto horário detectado (volume MZS > 4.5)
@@ -439,18 +450,14 @@ SELECT
     H.nu_crms_distintos_hora AS nu_crms_diferentes,
     H.mediana_hora,
     H.is_anomalo_hora,
-    CAST(CASE WHEN D.is_anomalo = 1   THEN 1 ELSE 0 END AS BIT) AS is_crm_multiplos,
-    CAST(CASE WHEN U.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_crm_unico
+    CAST(D.is_anomalo_multiplos AS BIT) AS is_crm_multiplos,
+    CAST(D.is_anomalo_unico     AS BIT) AS is_crm_unico
 INTO temp_CGUSC.fp.crm_perfil_horario
 FROM #anomalias_horarias H
-LEFT JOIN temp_CGUSC.fp.crm_multiplos_perfil_diario D
-    ON  D.cnpj     = H.cnpj
+INNER JOIN temp_CGUSC.fp.crm_perfil_diario D
+    ON  D.cnpj      = H.cnpj
     AND D.dt_janela = H.dt_janela
-    AND D.is_anomalo = 1
-LEFT JOIN (SELECT DISTINCT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas) U
-    ON  U.cnpj     = H.cnpj
-    AND U.dt_alerta = H.dt_janela
-WHERE D.is_anomalo = 1 OR U.cnpj IS NOT NULL;
+WHERE D.is_anomalo_multiplos = 1 OR D.is_anomalo_unico = 1;
 
 PRINT '   crm_perfil_horario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_h, 114);
 
@@ -655,49 +662,9 @@ GO
 
 
 -- ============================================================================
--- VISUALIZAÇÃO CRM ÚNICO: crm_unico_perfil_diario
--- Grain: (cnpj, dt_dia)
--- Série diária de prescrições da farmácia, com flag se houve anomalia
--- de QUALQUER médico naquele dia (Sequência/Concentração).
+-- NOTA: crm_unico_perfil_diario foi eliminada.
+-- Os flags is_anomalo_multiplos e is_anomalo_unico agora vivem em crm_perfil_diario.
 -- ============================================================================
-PRINT '>> Criando temp_CGUSC.fp.crm_unico_perfil_diario (Perfil Diário)...';
-DECLARE @t_perfil_u DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_perfil_diario;
-
-
-
-;WITH anomalias_dia AS (
-    SELECT DISTINCT cnpj, dt_alerta
-    FROM temp_CGUSC.fp.crm_unico_alertas
-),
-daily_stats AS (
-    SELECT 
-        nu_cnpj AS cnpj,
-        competencia,
-        dt_dia AS dt_janela,
-        CAST(SUM(nu_prescricoes_dia) AS SMALLINT) AS nu_prescricoes_dia,
-        CAST(COUNT(DISTINCT id_medico) AS SMALLINT) AS nu_crms_distintos
-    FROM #base_diaria_crm
-    GROUP BY nu_cnpj, competencia, dt_dia
-)
-SELECT
-    S.cnpj,
-    S.competencia,
-    S.dt_janela,
-    S.nu_prescricoes_dia,
-    S.nu_crms_distintos,
-    M.mediana_diaria,
-    CAST(CASE WHEN A.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_anomalo
-INTO temp_CGUSC.fp.crm_unico_perfil_diario
-FROM daily_stats S
-INNER JOIN #mediana_diaria M ON M.cnpj = S.cnpj AND M.competencia = S.competencia
-LEFT JOIN anomalias_dia A ON A.cnpj = S.cnpj AND A.dt_alerta = S.dt_janela;
-
-PRINT '   temp_CGUSC.fp.crm_unico_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_u, 114);
-
-
-
-CREATE CLUSTERED INDEX IDX_UnicoDaily ON temp_CGUSC.fp.crm_unico_perfil_diario(cnpj, dt_janela);
 
 -- ============================================================================
 -- DETALHAMENTO RAIO-X: crm_unico_tx

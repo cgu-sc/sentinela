@@ -425,8 +425,12 @@ FROM #tempDadosFarmacias2          AS f
 LEFT JOIN #tempDatasMovimentacao   AS mov ON mov.cnpj = f.cnpj;
 
 -- Índices na tabela final
--- PK de negócio: CNPJ
-CREATE INDEX ix_dadosFarmacia_cnpj
+-- PK de negócio: ID (Clustered para máxima performance de JOINs numéricos)
+CREATE CLUSTERED INDEX ix_dadosFarmacia_id
+    ON temp_CGUSC.fp.dados_farmacia (id);
+
+-- Chave de negócio: CNPJ
+CREATE NONCLUSTERED INDEX ix_dadosFarmacia_cnpj
     ON temp_CGUSC.fp.dados_farmacia (cnpj);
 
 -- Filtros geográficos frequentes: UF e município

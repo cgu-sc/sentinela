@@ -377,7 +377,7 @@ CROSS APPLY (
 ) AS outras;
 
 -- Colunas de controle e georreferenciamento
-ALTER TABLE #tempDadosFarmacias2 ADD id        BIGINT IDENTITY;
+ALTER TABLE #tempDadosFarmacias2 ADD id        INT IDENTITY;
 ALTER TABLE #tempDadosFarmacias2 ADD latitude  DECIMAL(9, 6);
 ALTER TABLE #tempDadosFarmacias2 ADD longitude DECIMAL(9, 6);
 

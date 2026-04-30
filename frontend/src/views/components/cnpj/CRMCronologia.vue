@@ -1004,7 +1004,7 @@ function toggleActiveRow(auth) {
           <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
             <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico.split('/')[0]) }">{{ alerta.id_medico }}</span>
             <span class="alerta-sep">·</span>
-            <span class="alerta-stat">{{ String(alerta.hr_janela).padStart(2, '0') }}h</span>
+            <span class="alerta-stat">{{ alerta.dt_ini_hora }} → {{ alerta.dt_fim_hora }}</span>
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} prescrições</span>
             <span class="alerta-sep">·</span>

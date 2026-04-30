@@ -449,6 +449,8 @@ class CrmUnicoAlertaSchema(BaseModel):
     nu_prescricoes_dia: int
     nu_minutos_dia: int
     taxa_hora: float
+    dt_ini_hora: Optional[str] = None
+    dt_fim_hora: Optional[str] = None
 
 class CrmUnicoRaioXResponse(BaseModel):
     """Todas as transações da farmácia num dia com alerta de CRM único, com os médicos-gatilho."""

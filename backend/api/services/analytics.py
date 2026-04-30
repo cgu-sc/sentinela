@@ -2093,7 +2093,7 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT id_medico, competencia, dt_alerta, hr_janela, nu_prescricoes_dia, nu_minutos_dia, taxa_hora"
+                        text("SELECT id_medico, competencia, dt_alerta, hr_janela, nu_prescricoes_dia, nu_minutos_dia, taxa_hora, dt_ini_hora, dt_fim_hora"
                              " FROM temp_CGUSC.fp.crm_unico_alertas WHERE cnpj = :cnpj"
                              " ORDER BY dt_alerta, id_medico"),
                         conn,
@@ -2101,7 +2101,8 @@ class AnalyticsService:
                     )
                 df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame(schema={
                     "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, "hr_janela": pl.Int32,
-                    "nu_prescricoes_dia": pl.Int32, "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64
+                    "nu_prescricoes_dia": pl.Int32, "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64,
+                    "dt_ini_hora": pl.Datetime, "dt_fim_hora": pl.Datetime
                 })
                 df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
             except Exception as e:
@@ -2678,6 +2679,8 @@ class AnalyticsService:
                         "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
                         "nu_minutos_dia":     int(r["nu_minutos_dia"]),
                         "taxa_hora":          float(r["taxa_hora"]),
+                        "dt_ini_hora":        r["dt_ini_hora"].strftime("%H:%M") if r.get("dt_ini_hora") else None,
+                        "dt_fim_hora":        r["dt_fim_hora"].strftime("%H:%M") if r.get("dt_fim_hora") else None,
                     }
                     for r in day_alertas.iter_rows(named=True)
                 ]

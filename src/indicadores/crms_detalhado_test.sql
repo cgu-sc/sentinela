@@ -322,6 +322,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
     SELECT
         nu_cnpj, id_medico, competencia,
         dt_dia, hr_janela, nu_prescricoes_hora, nu_minutos_hora,
+        dt_ini_hora, dt_fim_hora,
         CASE WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
              ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
         END AS taxa_hora
@@ -336,7 +337,9 @@ alertas AS (
         hr_janela,
         nu_prescricoes_hora                              AS nu_prescricoes_dia,
         nu_minutos_hora                                  AS nu_minutos_dia,
-        CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora
+        CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora,
+        dt_ini_hora,
+        dt_fim_hora
     FROM base_com_taxa
     WHERE
         (nu_prescricoes_hora >= 5  AND (taxa_hora >= 12 OR nu_minutos_hora <= 5))

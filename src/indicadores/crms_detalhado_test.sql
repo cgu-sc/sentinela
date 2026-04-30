@@ -55,7 +55,7 @@ SELECT
     CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20)) AS id_medico,
     YEAR(M.data_hora) * 100 + MONTH(M.data_hora)     AS competencia,
     CAST(M.data_hora AS DATE)                         AS dt_dia,
-    DATEPART(HOUR, M.data_hora)                       AS hr_janela,
+    CAST(DATEPART(HOUR, M.data_hora) AS TINYINT)      AS hr_janela,
     -- Métricas Agregadas (Somáveis para as próximas etapas)
     COUNT(DISTINCT M.num_autorizacao)                 AS nu_prescricoes_hora,
     SUM(M.valor_pago)                                 AS vl_autorizacoes_hora,
@@ -371,8 +371,8 @@ DECLARE @t_totais_d DATETIME = GETDATE();
 DROP TABLE IF EXISTS #totais_diarios;
 SELECT
     cnpj, competencia, dt_janela,
-    SUM(nu_prescricoes_hora) AS nu_prescricoes_dia,
-    MAX(is_anomalo_hora)     AS dia_tem_anomalia_hora
+    CAST(SUM(nu_prescricoes_hora) AS SMALLINT) AS nu_prescricoes_dia,
+    CAST(MAX(is_anomalo_hora) AS BIT)          AS dia_tem_anomalia_hora
 INTO #totais_diarios
 FROM #anomalias_horarias
 GROUP BY cnpj, competencia, dt_janela;
@@ -384,8 +384,8 @@ DECLARE @t_mediana_d DATETIME = GETDATE();
 DROP TABLE IF EXISTS #mediana_diaria;
 SELECT DISTINCT
     cnpj, competencia,
-    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
-        OVER (PARTITION BY cnpj, (competencia / 100), ((competencia % 100 - 1) / 3)) AS mediana_diaria
+    CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nu_prescricoes_dia)
+        OVER (PARTITION BY cnpj, (competencia / 100), ((competencia % 100 - 1) / 3)) AS DECIMAL(7,2)) AS mediana_diaria
 INTO #mediana_diaria
 FROM #totais_diarios;
 
@@ -402,15 +402,16 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_perfil_diario;
     SELECT
         nu_cnpj AS cnpj, 
         dt_dia AS dt_janela,
-        COUNT(DISTINCT id_medico) AS nu_crms_distintos
+        CAST(COUNT(DISTINCT id_medico) AS SMALLINT) AS nu_crms_distintos
     FROM #base_horaria_mestra
     GROUP BY nu_cnpj, dt_dia
 )
 
 SELECT
-    T.cnpj, T.competencia, T.dt_janela, T.nu_prescricoes_dia,
-    ISNULL(C.nu_crms_distintos, 0) AS nu_crms_distintos,
-    CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
+    T.cnpj, T.competencia, T.dt_janela, 
+    T.nu_prescricoes_dia,
+    ISNULL(C.nu_crms_distintos, CAST(0 AS SMALLINT)) AS nu_crms_distintos,
+    M.mediana_diaria,
     -- O dia é anômalo se tiver uma rajada horária (Regra Standard 7x Mediana)
     T.dia_tem_anomalia_hora AS is_anomalo
 INTO temp_CGUSC.fp.crm_multiplos_perfil_diario
@@ -494,7 +495,7 @@ SELECT
     M.num_autorizacao,
     CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS id_medico,
     M.codigo_barra,
-    M.valor_pago
+    CAST(M.valor_pago AS DECIMAL(9,2)) AS valor_pago
 INTO temp_CGUSC.fp.crm_multiplos_detalhe
 FROM temp_CGUSC.fp.crm_multiplos_alertas A
 INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
@@ -673,8 +674,8 @@ daily_stats AS (
         nu_cnpj AS cnpj,
         competencia,
         dt_dia AS dt_janela,
-        SUM(nu_prescricoes_dia) AS nu_prescricoes_dia,
-        COUNT(DISTINCT id_medico) AS nu_crms_distintos
+        CAST(SUM(nu_prescricoes_dia) AS SMALLINT) AS nu_prescricoes_dia,
+        CAST(COUNT(DISTINCT id_medico) AS SMALLINT) AS nu_crms_distintos
     FROM #base_diaria_crm
     GROUP BY nu_cnpj, competencia, dt_dia
 )
@@ -684,8 +685,8 @@ SELECT
     S.dt_janela,
     S.nu_prescricoes_dia,
     S.nu_crms_distintos,
-    CAST(M.mediana_diaria AS DECIMAL(10,2)) AS mediana_diaria,
-    CASE WHEN A.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS is_anomalo
+    M.mediana_diaria,
+    CAST(CASE WHEN A.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_anomalo
 INTO temp_CGUSC.fp.crm_unico_perfil_diario
 FROM daily_stats S
 INNER JOIN #mediana_diaria M ON M.cnpj = S.cnpj AND M.competencia = S.competencia
@@ -719,7 +720,7 @@ SELECT
     M.num_autorizacao,
     CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS id_medico,
     M.codigo_barra,
-    M.valor_pago
+    CAST(M.valor_pago AS DECIMAL(9,2)) AS valor_pago
 INTO temp_CGUSC.fp.crm_unico_detalhe
 FROM dias_alerta D
 INNER JOIN temp_CGUSC.fp.teste_mov_SC M 

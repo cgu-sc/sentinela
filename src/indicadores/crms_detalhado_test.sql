@@ -51,7 +51,7 @@ DECLARE @t_passo0 DATETIME = GETDATE();
 DROP TABLE IF EXISTS #base_horaria_mestra;
 
 SELECT
-    M.cnpj                                            AS nu_cnpj,
+    CAST(M.cnpj AS CHAR(14))                          AS nu_cnpj,
     CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20)) AS id_medico,
     YEAR(M.data_hora) * 100 + MONTH(M.data_hora)     AS competencia,
     CAST(M.data_hora AS DATE)                         AS dt_dia,
@@ -88,7 +88,7 @@ SELECT
     CONCAT(nu_cnpj, '|', id_medico, '|', CAST(competencia AS VARCHAR(6))) AS chave,
     id_medico, nu_cnpj, competencia,
     CAST(SUM(nu_prescricoes_hora) AS SMALLINT)  AS nu_prescricoes_medico,
-    SUM(vl_autorizacoes_hora) AS vl_autorizacoes_medico,
+    CAST(SUM(vl_autorizacoes_hora) AS DECIMAL(9,2)) AS vl_autorizacoes_medico,
     CAST(MIN(dt_ini_hora) AS DATE)          AS dt_prescricao_inicial_medico,
     CAST(MAX(dt_fim_hora) AS DATE)          AS dt_prescricao_final_medico
 INTO #base_agregada_crm_cnpj
@@ -593,12 +593,8 @@ DROP TABLE IF EXISTS #prescricoes_todos_estabelecimentos;
 SELECT
     id_medico,
     competencia,
-    SUM(nu_prescricoes_medico)                                    AS nu_prescricoes_medico_em_todos_estabelecimentos,
-    COUNT(DISTINCT nu_cnpj)                                       AS nu_estabelecimentos_com_registro_mesmo_crm,
-    CAST(SUM(nu_prescricoes_medico) AS DECIMAL(18,2)) /
-        NULLIF(CAST(
-            DATEDIFF(DAY, MIN(dt_prescricao_inicial_medico), MAX(dt_prescricao_final_medico)) + 1
-        AS DECIMAL(18,2)), 0)                                     AS nu_prescricoes_pico_h_em_todos_estabelecimentos
+    CAST(SUM(nu_prescricoes_medico) AS SMALLINT)                  AS nu_prescricoes_medico_em_todos_estabelecimentos,
+    CAST(COUNT(DISTINCT nu_cnpj) AS SMALLINT)                     AS nu_estabelecimentos_com_registro_mesmo_crm
 INTO #prescricoes_todos_estabelecimentos
 FROM #base_agregada_crm_cnpj
 GROUP BY id_medico, competencia;
@@ -997,9 +993,9 @@ SELECT
     A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
     M.dt_inscricao                                                     AS dt_inscricao_crm,
     -- Flags CFM por competência
-    CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_crm_invalido,
-    CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_prescricao_antes_registro,
-    ISNULL(AL.flag_concentracao_estabelecimento, 0)                   AS flag_concentracao_estabelecimento
+    CAST(CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_crm_invalido,
+    CAST(CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_prescricao_antes_registro,
+    ISNULL(AL.flag_concentracao_estabelecimento, CAST(0 AS BIT))      AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM temp_CGUSC.fp.dados_crm_detalhado A
 LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico

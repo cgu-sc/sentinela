@@ -207,29 +207,6 @@ async function onChartClick(params) {
   }
 }
 
-async function onHourlyChartClick(params) {
-  const hourStr = params.name.replace('h', '');
-  const hourInt = parseInt(hourStr, 10);
-  if (!selectedDay.value || isNaN(hourInt)) return;
-  if (!params.data || params.data.value === 0) return;
-  
-  if (selectedHourlyHour.value === hourInt) {
-    selectedHourlyHour.value = 'all';
-    if (selectedDay.value.is_crm_unico === 1) {
-      await loadUnicoTransactions(selectedDay.value.dt_janela, null);
-    } else {
-      await loadTransactions(selectedDay.value.dt_janela, null);
-    }
-    return;
-  }
-  
-  selectedHourlyHour.value = hourInt;
-  if (selectedDay.value.is_crm_unico === 1) {
-    await loadUnicoTransactions(selectedDay.value.dt_janela, hourInt);
-  } else {
-    await loadTransactions(selectedDay.value.dt_janela, hourInt);
-  }
-}
 
 function truncate(str, n) {
   if (!str) return '';
@@ -416,7 +393,22 @@ const chartOptionHourly = computed(() => {
       axisTick: { show: false },
       axisLabel: { color: c.muted, fontSize: 10, fontWeight: 600, fontFamily: 'Inter, sans-serif', interval: 1, formatter: (v, i) => (i % 2 === 0 ? v : '') },
     },
-    yAxis: [{ type: 'value', minInterval: 1, axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: c.grid, type: 'dashed' } }, axisLabel: { color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif' } }],
+    yAxis: [
+      { 
+        type: 'value', 
+        minInterval: 1, 
+        axisLine: { show: false }, 
+        axisTick: { show: false }, 
+        splitLine: { lineStyle: { color: c.grid, type: 'dashed' } }, 
+        axisLabel: { color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif' } 
+      },
+      {
+        type: 'value',
+        min: 0,
+        max: 1,
+        show: false
+      }
+    ],
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltip,
@@ -464,9 +456,27 @@ const chartOptionHourly = computed(() => {
     },
     series: [
       {
+        name: 'Área de Clique',
+        type: 'bar',
+        barGap: '-100%',
+        barWidth: '100%',
+        yAxisIndex: 1,
+        z: 1,
+        data: fullPoints.map(p => ({
+          value: 1,
+          itemStyle: { color: 'transparent' },
+          cursor: 'pointer'
+        })),
+        tooltip: { show: false },
+        silent: false
+      },
+      {
         name: 'Autorizações (Volume)',
         type: 'bar',
+        barGap: '-100%',
+        barWidth: '100%',
         barMaxWidth: 28,
+        z: 2,
         data: fullPoints.map((p, i) => {
           const isSelected = selectedHourlyHour.value === p.hr_janela;
           const hasSelection = selectedHourlyHour.value !== 'all' && selectedHourlyHour.value !== null;
@@ -476,7 +486,7 @@ const chartOptionHourly = computed(() => {
             is_anomalo_hora: p.is_anomalo_hora,
             is_crm_multiplos: p.is_crm_multiplos,
             is_crm_unico: p.is_crm_unico,
-            cursor: p.nu_prescricoes > 0 ? 'pointer' : 'default',
+            cursor: 'pointer',
             itemStyle: { 
               color: barColors[i],
               opacity: hasSelection && !isSelected ? 0.3 : 1
@@ -489,6 +499,7 @@ const chartOptionHourly = computed(() => {
         name: 'Mediana Referência (Hora)',
         type: 'line',
         step: 'middle',
+        z: 3,
         data: fullPoints.map(p => p.mediana_hora),
         lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
         symbol: 'none',
@@ -576,6 +587,8 @@ watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => 
 });
 
 const hourlyChartRef = ref(null);
+const hoveredHourlyHour = ref(null);
+
 watch(selectedHourlyHour, () => {
   if (hourlyChartRef.value) {
     setTimeout(() => {
@@ -583,6 +596,39 @@ watch(selectedHourlyHour, () => {
     }, 100);
   }
 });
+
+function onHourlyAxisPointerUpdate(params) {
+  if (params.axesInfo && params.axesInfo.length > 0) {
+    // O value aqui é o index (0-23) que coincide com hr_janela
+    hoveredHourlyHour.value = params.axesInfo[0].value;
+  } else {
+    hoveredHourlyHour.value = null;
+  }
+}
+
+async function onHourlyZrClick() {
+  if (hoveredHourlyHour.value === null || !selectedDay.value) return;
+  
+  const hourInt = hoveredHourlyHour.value;
+  
+  // Toggle do filtro
+  if (selectedHourlyHour.value === hourInt) {
+    selectedHourlyHour.value = 'all';
+    if (selectedDay.value.is_crm_unico === 1) {
+      await loadUnicoTransactions(selectedDay.value.dt_janela, null);
+    } else {
+      await loadTransactions(selectedDay.value.dt_janela, null);
+    }
+    return;
+  }
+  
+  selectedHourlyHour.value = hourInt;
+  if (selectedDay.value.is_crm_unico === 1) {
+    await loadUnicoTransactions(selectedDay.value.dt_janela, hourInt);
+  } else {
+    await loadTransactions(selectedDay.value.dt_janela, hourInt);
+  }
+}
 
 
 // ── CRM ÚNICO: Estado de Raio-X ───────────────────────────────────────────
@@ -839,7 +885,7 @@ function toggleActiveRow(auth) {
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
         Distribuição das <strong>{{ selectedDay.nu_prescricoes_dia }} autorizações</strong> ao longo do dia.
       </p>
-      <div class="daily-chart-wrapper">
+      <div class="daily-chart-wrapper" :class="{ 'cursor-pointer-active': hoveredHourlyHour !== null }">
         <div class="chart-legend-html">
           <span class="legend-item">
             <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
@@ -860,7 +906,8 @@ function toggleActiveRow(auth) {
           :option="chartOptionHourly"
           autoresize
           class="hourly-chart"
-          @click="onHourlyChartClick"
+          @zr:click="onHourlyZrClick"
+          @updateAxisPointer="onHourlyAxisPointerUpdate"
         />
       </div>
       <div v-if="selectedHourlyHour === null" class="drill-hint">
@@ -1411,6 +1458,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .sticky-thead th { position: sticky; top: 0; z-index: 10; }
 .cursor-pointer { cursor: pointer; }
 .align-top { vertical-align: top; }
+.cursor-pointer-active, .cursor-pointer-active canvas { cursor: pointer !important; }
 
 /* ── CRM ÚNICO ────────────────────────────────────────────────────────────── */
 .section-separator {

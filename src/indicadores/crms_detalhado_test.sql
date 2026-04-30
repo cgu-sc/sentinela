@@ -23,6 +23,25 @@ DECLARE @DataFim    DATE = '2024-12-31';
 
 
 -- ============================================================================
+-- PASSO -1: MAPA DE MÉDICOS PARA ID INT
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_medico;
+
+SELECT 
+    CAST(CAST(TRY_CAST(NU_CRM AS BIGINT) AS VARCHAR(10)) + '/' + SG_UF AS VARCHAR(20)) AS id_medico,
+    TRY_CAST(NU_CRM AS BIGINT)                             AS nu_crm,
+    SG_UF                                                  AS sg_uf,
+    NM_MEDICO                                              AS no_medico,
+    TRY_CONVERT(DATE, DT_INSCRICAO, 103)                   AS dt_inscricao
+INTO temp_CGUSC.fp.dados_medico
+FROM temp_CFM.dbo.medicos_jul_2025_mod
+WHERE NU_CRM IS NOT NULL
+  AND TRY_CAST(NU_CRM AS BIGINT) > 0;
+
+CREATE CLUSTERED INDEX IDX_Join_Medico ON temp_CGUSC.fp.dados_medico(id_medico);
+
+
+-- ============================================================================
 -- PASSO 0: CONSOLIDAÇÃO HORÁRIA MESTRA (SCAN ÚNICO)
 -- Agrupa 1 Bilhão de linhas em buckets horários para reduzir volume em ~95%.
 -- Todas as agregações seguintes (Mensal, Diária, Estabelecimento) lerão daqui.
@@ -68,10 +87,10 @@ DROP TABLE IF EXISTS #base_agregada_crm_cnpj;
 SELECT
     CONCAT(nu_cnpj, '|', id_medico, '|', CAST(competencia AS VARCHAR(6))) AS chave,
     id_medico, nu_cnpj, competencia,
-    SUM(nu_prescricoes_hora)  AS nu_prescricoes_medico,
+    CAST(SUM(nu_prescricoes_hora) AS SMALLINT)  AS nu_prescricoes_medico,
     SUM(vl_autorizacoes_hora) AS vl_autorizacoes_medico,
-    MIN(dt_ini_hora)          AS dt_prescricao_inicial_medico,
-    MAX(dt_fim_hora)          AS dt_prescricao_final_medico
+    CAST(MIN(dt_ini_hora) AS DATE)          AS dt_prescricao_inicial_medico,
+    CAST(MAX(dt_fim_hora) AS DATE)          AS dt_prescricao_final_medico
 INTO #base_agregada_crm_cnpj
 FROM #base_horaria_mestra
 GROUP BY nu_cnpj, id_medico, competencia;
@@ -283,8 +302,8 @@ ranked AS (
     FROM calc_taxa
 )
 SELECT nu_cnpj, id_medico, competencia,
-       dt_dia, nu_prescricoes_hora AS nu_prescricoes_pico_h, dt_ini_hora AS dt_ini_dia, dt_fim_hora AS dt_fim_dia, 
-       nu_minutos_hora AS nu_minutos_dia, taxa_hora AS taxa_dia
+       dt_dia, CAST(nu_prescricoes_hora AS SMALLINT) AS nu_prescricoes_pico_h, dt_ini_hora AS dt_ini_dia, dt_fim_hora AS dt_fim_dia, 
+       nu_minutos_hora AS nu_minutos_dia, CAST(taxa_hora AS DECIMAL(7,2)) AS taxa_dia
 INTO #pior_dia_crm
 FROM ranked
 WHERE rn = 1;
@@ -608,9 +627,6 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.dados_crm_detalhado;
 SELECT
     A.nu_cnpj,
     A.competencia,
-    GEO.no_municipio,
-    F.codibge,
-    CAST(GEO.sg_uf AS VARCHAR(2))                                  AS sg_uf,
     A.id_medico,
     A.nu_prescricoes_medico,
     A.vl_autorizacoes_medico,
@@ -621,7 +637,6 @@ SELECT
 INTO temp_CGUSC.fp.dados_crm_detalhado
 FROM #lista_alertas_temp A
 LEFT JOIN temp_CGUSC.fp.dados_farmacia            F   ON F.cnpj     = A.nu_cnpj
-LEFT JOIN temp_CGUSC.sus.tb_ibge                  GEO ON GEO.id_ibge7 = F.codibge
 INNER JOIN #prescricoes_todos_estabelecimentos    P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia;
@@ -629,10 +644,6 @@ INNER JOIN #prescricoes_todos_estabelecimentos    P
 PRINT '   temp_CGUSC.fp.dados_crm_detalhado concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_dados_det, 114);
 
 
-
-CREATE INDEX IDX_DadosDet_IBGE ON temp_CGUSC.fp.dados_crm_detalhado(codibge) 
-    INCLUDE (dt_prescricao_inicial_medico, dt_prescricao_final_medico,
-             no_municipio, sg_uf, nu_prescricoes_medico);
 
 CREATE CLUSTERED INDEX IDX_DadosDet ON temp_CGUSC.fp.dados_crm_detalhado(nu_cnpj, id_medico, competencia);
 GO
@@ -745,16 +756,16 @@ SELECT
     D.nu_cnpj,
     D.id_medico,
     D.competencia,
-    D.no_municipio,
-    D.sg_uf,
     D.nu_prescricoes_medico,
     D.dt_prescricao_inicial_medico,
     D.dt_prescricao_final_medico,
     G.latitude,
-    G.longitude
+    G.longitude,
+    F.uf                             AS sg_uf
 INTO #base_com_geo
 FROM temp_CGUSC.fp.dados_crm_detalhado D
-LEFT JOIN temp_CGUSC.sus.tb_ibge G ON G.id_ibge7 = D.codibge
+LEFT JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = D.nu_cnpj
+LEFT JOIN temp_CGUSC.sus.tb_ibge G ON G.id_ibge7 = F.codibge
 WHERE D.nu_prescricoes_medico >= 30;
 
 CREATE CLUSTERED INDEX IDX_GeoBase ON #base_com_geo(id_medico, competencia);
@@ -766,13 +777,11 @@ CREATE CLUSTERED INDEX IDX_GeoBase ON #base_com_geo(id_medico, competencia);
         T1.nu_cnpj                      AS cnpj_a,
         T1.dt_prescricao_inicial_medico  AS dt_ini_a,
         T1.dt_prescricao_final_medico    AS dt_fim_a,
-        T1.no_municipio                  AS no_municipio_a,
         T1.sg_uf                         AS sg_uf_a,
         T1.nu_prescricoes_medico         AS nu_prescricoes_a,
         T2.nu_cnpj                      AS cnpj_b,
         T2.dt_prescricao_inicial_medico  AS dt_ini_b,
         T2.dt_prescricao_final_medico    AS dt_fim_b,
-        T2.no_municipio                  AS no_municipio_b,
         T2.sg_uf                         AS sg_uf_b,
         T2.nu_prescricoes_medico         AS nu_prescricoes_b,
         CASE
@@ -807,13 +816,11 @@ SELECT
     P.id_medico,
     P.competencia,
     P.cnpj_a,
-    P.no_municipio_a,
     CAST(P.sg_uf_a AS VARCHAR(2))          AS sg_uf_a,
     P.dt_ini_a,
     P.dt_fim_a,
     P.nu_prescricoes_a,
     P.cnpj_b,
-    P.no_municipio_b,
     CAST(P.sg_uf_b AS VARCHAR(2))          AS sg_uf_b,
     P.dt_ini_b,
     P.dt_fim_b,
@@ -845,7 +852,7 @@ PRINT '>> Criando temp_CGUSC.fp.alertas_crm_registro (Master Registro)...';
 DECLARE @t_reg DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_registro;
 
--- INEXISTENTE: CRM não encontrado no CFM
+-- INEXISTENTE: CRM não encontrado no mapeamento CFM
 SELECT
     A.nu_cnpj                                                       AS cnpj,
     A.id_medico,
@@ -857,16 +864,14 @@ SELECT
     SUM(A.vl_autorizacoes_medico)                                    AS vl_prescricoes
 INTO temp_CGUSC.fp.alertas_crm_registro
 FROM temp_CGUSC.fp.dados_crm_detalhado A
-LEFT JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM
-    ON  TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(LEFT(A.id_medico, CHARINDEX('/', A.id_medico) - 1) AS BIGINT)
-    AND CFM.SG_uf = RIGHT(A.id_medico, LEN(A.id_medico) - CHARINDEX('/', A.id_medico))
-WHERE CFM.NU_CRM IS NULL
+LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico
+WHERE M.id_medico IS NULL
 GROUP BY A.nu_cnpj, A.id_medico, A.competencia;
 
 GO
 
 DECLARE @t_reg DATETIME = GETDATE();
--- IRREGULAR: CRM existe no CFM mas prescrição ocorreu antes da data de inscrição
+-- IRREGULAR: CRM existe mas prescrição ocorreu antes da data de inscrição
 INSERT INTO temp_CGUSC.fp.alertas_crm_registro
     (cnpj, id_medico, competencia,
      dt_primeira_presc, dt_registro_crm, tipo_anomalia,
@@ -876,16 +881,14 @@ SELECT
     A.id_medico,
     A.competencia,
     CONVERT(VARCHAR(20), MIN(A.dt_prescricao_inicial_medico), 103)         AS dt_primeira_presc,
-    CONVERT(VARCHAR(20), TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103), 103)   AS dt_registro_crm,
+    CONVERT(VARCHAR(20), M.dt_inscricao, 103)                              AS dt_registro_crm,
     'IRREGULAR'                                                            AS tipo_anomalia,
     SUM(A.nu_prescricoes_medico)                                           AS nu_prescricoes,
     SUM(A.vl_autorizacoes_medico)                                          AS vl_prescricoes
 FROM temp_CGUSC.fp.dados_crm_detalhado A
-INNER JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM
-    ON  TRY_CAST(CFM.NU_CRM AS BIGINT) = TRY_CAST(LEFT(A.id_medico, CHARINDEX('/', A.id_medico) - 1) AS BIGINT)
-    AND CFM.SG_uf = RIGHT(A.id_medico, LEN(A.id_medico) - CHARINDEX('/', A.id_medico))
-WHERE TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103) > A.dt_prescricao_inicial_medico
-GROUP BY A.nu_cnpj, A.id_medico, A.competencia, TRY_CONVERT(DATE, CFM.DT_INSCRICAO, 103);
+INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico
+WHERE M.dt_inscricao > A.dt_prescricao_inicial_medico
+GROUP BY A.nu_cnpj, A.id_medico, A.competencia, M.dt_inscricao;
 
 PRINT '   temp_CGUSC.fp.alertas_crm_registro concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_reg, 114);
 
@@ -980,8 +983,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 
 
 SELECT
-    A.nu_cnpj                                                         AS cnpj,
     A.id_medico,
+    A.nu_cnpj                                                         AS cnpj,
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes_mes,
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
@@ -992,13 +995,14 @@ SELECT
     CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
     CAST(CASE WHEN G.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_distancia_geografica,
     A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
-    TRY_CONVERT(DATE, CFM_ALL.DT_INSCRICAO, 103)                      AS dt_inscricao_crm,
+    M.dt_inscricao                                                     AS dt_inscricao_crm,
     -- Flags CFM por competência
     CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_crm_invalido,
     CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END              AS flag_prescricao_antes_registro,
     ISNULL(AL.flag_concentracao_estabelecimento, 0)                   AS flag_concentracao_estabelecimento
 INTO temp_CGUSC.fp.crm_export
 FROM temp_CGUSC.fp.dados_crm_detalhado A
+LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico
 LEFT JOIN temp_CGUSC.fp.alertas_crm AL
     ON  AL.nu_cnpj    = A.nu_cnpj 
     AND AL.id_medico  = A.id_medico 
@@ -1006,9 +1010,6 @@ LEFT JOIN temp_CGUSC.fp.alertas_crm AL
 LEFT JOIN #prescricoes_todos_estabelecimentos P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia
-LEFT JOIN temp_CFM.dbo.medicos_jul_2025_mod CFM_ALL
-    ON  TRY_CAST(CFM_ALL.NU_CRM AS BIGINT) = TRY_CAST(LEFT(A.id_medico, CHARINDEX('/', A.id_medico) - 1) AS BIGINT)
-    AND CFM_ALL.SG_uf = RIGHT(A.id_medico, LEN(A.id_medico) - CHARINDEX('/', A.id_medico))
 LEFT JOIN (
     SELECT DISTINCT cnpj, id_medico, competencia
     FROM temp_CGUSC.fp.crm_unico_alertas

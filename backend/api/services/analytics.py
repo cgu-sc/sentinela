@@ -2529,7 +2529,7 @@ class AnalyticsService:
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
                     text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.crm_multiplos_detalhe "
+                         "FROM temp_CGUSC.fp.crm_multiplos_tx "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
@@ -2742,7 +2742,7 @@ class AnalyticsService:
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
                     text("SELECT dt_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.crm_unico_detalhe "
+                         "FROM temp_CGUSC.fp.crm_unico_tx "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}

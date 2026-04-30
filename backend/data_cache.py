@@ -298,15 +298,12 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             
             # 2. Perfil Diário Unificado (is_anomalo_multiplos + is_anomalo_unico)
             AnalyticsService.get_crm_perfil_diario(cnpj)
-            
-            # 3. Detalhamento Horário de Anomalias
+
+            # 3. Detalhamento Horário de Anomalias (auto-warms medianas internamente)
             AnalyticsService.get_crm_perfil_horario(cnpj)
 
-            # 4. Transações Literais CRM Múltiplos (Raio-X)
-            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
-
-            # 5. CRM ÚNICO: Transações Raio-X
-            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+            # 4. Transações Raio-X (unificado: múltiplos + único)
+            AnalyticsService.sync_crm_raiox_tx(cnpj)
 
             if progress_callback:
                 p = int((i / total) * 100)

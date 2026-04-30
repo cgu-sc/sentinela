@@ -474,6 +474,27 @@ PRINT '   crm_perfil_horario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() -
 
 CREATE CLUSTERED INDEX IDX_PerfilHorario ON temp_CGUSC.fp.crm_perfil_horario(cnpj, dt_janela, hr_janela);
 
+-- 5.1 Tabela Auxiliar: mediana_autorizacoes_horaria (referência histórica por hora)
+-- Compacta: 1 linha por (cnpj × ano × trimestre × hr_janela).
+-- Usada pelo backend para preencher mediana em horas sem atividade no dia selecionado.
+PRINT '>> Passo 5.1: Criando mediana_autorizacoes_horaria...';
+DECLARE @t_mediana_ref DATETIME = GETDATE();
+DROP TABLE IF EXISTS temp_CGUSC.fp.mediana_autorizacoes_horaria;
+
+SELECT DISTINCT
+    cnpj,
+    competencia / 100            AS ano,
+    (competencia % 100 - 1) / 3 AS trimestre,
+    hr_janela,
+    mediana_hora
+INTO temp_CGUSC.fp.mediana_autorizacoes_horaria
+FROM #mediana_hora;
+
+CREATE CLUSTERED INDEX IDX_MedianaHoraria
+    ON temp_CGUSC.fp.mediana_autorizacoes_horaria(cnpj, ano, trimestre, hr_janela);
+
+PRINT '   mediana_autorizacoes_horaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_mediana_ref, 114);
+
 -- 6. Tabela Final 3: crm_multiplos_alertas (Mestre de Surtos)
 PRINT '>> Passo 6: Criando crm_multiplos_alertas (Mestre de Surtos)...';
 DECLARE @t_alertas_m DATETIME = GETDATE();

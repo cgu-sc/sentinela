@@ -2491,19 +2491,55 @@ class AnalyticsService:
             return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
                                             read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-        points = [
-            {
-                "dt_janela":          str(r["dt_janela"])[:10],
-                "hr_janela":          int(r["hr_janela"]),
-                "nu_prescricoes":     int(r["nu_prescricoes"]),
-                "nu_crms_diferentes": int(r["nu_crms_diferentes"]),
-                "mediana_hora":       float(r["mediana_hora"]),
-                "is_anomalo_hora":    int(r.get("is_anomalo_hora", 0)),
-                "is_crm_multiplos":   int(r.get("is_crm_multiplos", 0)),
-                "is_crm_unico":       int(r.get("is_crm_unico", 0)),
-            }
-            for r in df.iter_rows(named=True)
-        ]
+        # Garante que o parquet de medianas existe (auto-warming)
+        AnalyticsService.sync_mediana_autorizacoes_horaria(cnpj)
+
+        # Carrega lookup de medianas: (ano, trimestre, hr_janela) → mediana_hora
+        from datetime import datetime as _dt
+        MEDIANA_PATH = os.path.join(cnpj_dir, "mediana_autorizacoes_horaria.parquet")
+        mediana_lookup: dict = {}
+        if os.path.exists(MEDIANA_PATH):
+            try:
+                df_med = pl.read_parquet(MEDIANA_PATH)
+                for r in df_med.iter_rows(named=True):
+                    mediana_lookup[(int(r["ano"]), int(r["trimestre"]), int(r["hr_janela"]))] = float(r["mediana_hora"])
+            except Exception:
+                pass
+
+        # Indexa atividade real e flags de anomalia por (data, hora)
+        activity: dict = {}
+        dates_flags: dict = {}
+        for r in df.iter_rows(named=True):
+            dt = str(r["dt_janela"])[:10]
+            activity[(dt, int(r["hr_janela"]))] = r
+            if dt not in dates_flags:
+                dates_flags[dt] = {
+                    "is_crm_multiplos": int(r.get("is_crm_multiplos", 0)),
+                    "is_crm_unico":     int(r.get("is_crm_unico", 0)),
+                }
+
+        # Expande para 24 horas por dia anômalo com mediana real para todas as horas
+        points = []
+        for dt in sorted(dates_flags):
+            flags = dates_flags[dt]
+            try:
+                d = _dt.strptime(dt, "%Y-%m-%d")
+                ano, trimestre = d.year, (d.month - 1) // 3
+            except Exception:
+                ano, trimestre = 0, 0
+            for h in range(24):
+                row = activity.get((dt, h))
+                mediana = mediana_lookup.get((ano, trimestre, h), 0.0)
+                points.append({
+                    "dt_janela":          dt,
+                    "hr_janela":          h,
+                    "nu_prescricoes":     int(row["nu_prescricoes"])     if row else 0,
+                    "nu_crms_diferentes": int(row["nu_crms_diferentes"]) if row else 0,
+                    "mediana_hora":       mediana,
+                    "is_anomalo_hora":    int(row.get("is_anomalo_hora", 0)) if row else 0,
+                    "is_crm_multiplos":   flags["is_crm_multiplos"],
+                    "is_crm_unico":       flags["is_crm_unico"],
+                })
 
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)
         AnalyticsService.sync_crm_raiox_tx(cnpj)
@@ -2561,6 +2597,53 @@ class AnalyticsService:
                 print(f"ℹ️  Modo Offline: Tabela de transações crm_raiox_tx não disponível.")
             else:
                 print(f"⚠️ Erro ao sincronizar parquet de transações Raio-X '{cnpj}': {e}")
+
+    @staticmethod
+    def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
+        """Sincroniza o cache parquet de medianas horárias de autorizações para um CNPJ.
+
+        Lê temp_CGUSC.fp.mediana_autorizacoes_horaria e grava
+        sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.parquet.
+        Usado pelo get_crm_perfil_horario para preencher a mediana de referência
+        em horas sem atividade no dia selecionado.
+        """
+        import pandas as pd
+        import polars as pl
+        from sqlalchemy import text
+        from database import engine as _engine
+
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        PARQUET_PATH = os.path.join(cnpj_dir, "mediana_autorizacoes_horaria.parquet")
+
+        if os.path.exists(PARQUET_PATH):
+            try:
+                header = pl.scan_parquet(PARQUET_PATH).limit(0).collect()
+                if "mediana_hora" in header.columns:
+                    return
+            except Exception:
+                pass
+
+        try:
+            print(f"🗄️ [SYNC] Buscando medianas horárias para {cnpj}...")
+            with _engine.connect() as conn:
+                pdf = pd.read_sql(
+                    text("SELECT ano, trimestre, hr_janela, mediana_hora "
+                         "FROM temp_CGUSC.fp.mediana_autorizacoes_horaria "
+                         "WHERE cnpj = :cnpj "
+                         "ORDER BY ano, trimestre, hr_janela"),
+                    conn, params={"cnpj": cnpj}
+                )
+            df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema={
+                "ano": pl.Int32, "trimestre": pl.Int32,
+                "hr_janela": pl.Int32, "mediana_hora": pl.Float64
+            })
+            df.write_parquet(PARQUET_PATH, compression="lz4")
+            print(f"✅ Cache medianas horárias salvo para {cnpj}")
+        except Exception as e:
+            if "IM002" in str(e) or "connection" in str(e).lower():
+                print(f"ℹ️  Modo Offline: Tabela mediana_autorizacoes_horaria não disponível.")
+            else:
+                print(f"⚠️ Erro ao sincronizar parquet de medianas horárias '{cnpj}': {e}")
 
     @staticmethod
     def get_crm_multiplos_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmMultiplosRaioXResponse":

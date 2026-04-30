@@ -128,6 +128,13 @@ const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 const expandedRaioxRows = ref(new Set());
 
+// CRM Único: refs declaradas aqui (antes dos watches) para evitar TDZ quando o
+// watch com immediate:true dispara durante o setup com dados já em cache.
+const unicoTransactions        = ref([]);
+const unicoTransactionsLoading = ref(false);
+const unicoAlertas             = ref([]);
+const expandedUnicoRows        = ref(new Set());
+
 const groupedRaiox = computed(() => {
   const groups = {};
   hourlyTransactions.value.forEach(item => {
@@ -197,8 +204,8 @@ async function onDailyZrClick() {
   if (selectedDay.value?.dt_janela === day.dt_janela) return;
 
   selectedDay.value = day;
-  selectedHourlyHour.value = null;
-  
+  selectedHourlyHour.value = 'all';
+
   if (day.is_crm_unico === 1) {
     await loadUnicoTransactions(day.dt_janela, null);
   } else {
@@ -275,7 +282,8 @@ const chartOptionDaily = computed(() => {
       shadowBlur: 10,
       shadowColor: 'rgba(0,0,0,0.15)',
       formatter: (p) => {
-        const day = filteredDailyDays.value?.[p.dataIndex];
+        const idx = Array.isArray(p) ? p[0]?.dataIndex : p.dataIndex;
+        const day = filteredDailyDays.value?.[idx];
         if (!day) return '';
         const c = chartTheme.value;
         const points = hourlyByDate.value.get(day.dt_janela) ?? [];
@@ -368,11 +376,10 @@ const chartOptionDaily = computed(() => {
           const day = filteredDailyDays.value[i];
           const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
           const hasSelection = !!selectedDay.value;
-          const color = day.is_crm_multiplos === 1
+          const isAnomalo = day.is_crm_multiplos === 1 || day.is_crm_unico === 1;
+          const color = isAnomalo
             ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
-            : day.is_crm_unico === 1
-              ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#f59e0b40' }] }
-              : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: chartUFAccents.value.bar1 }, { offset: 1, color: chartUFAccents.value.bar1 + '55' }] };
+            : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(148,163,184,0.6)' }, { offset: 1, color: 'rgba(148,163,184,0.15)' }] };
           return {
             value: v,
             cursor: (day.is_crm_multiplos === 1 || day.is_crm_unico === 1) ? 'pointer' : 'default',
@@ -400,12 +407,8 @@ const chartOptionDaily = computed(() => {
 const hourlyPoints = computed(() => {
   if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
   const targetDate = selectedDay.value.dt_janela;
-  const pointsForDay = cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
-
-  return Array.from({ length: 24 }, (_, h) => {
-    const found = pointsForDay.find(p => p.hr_janela === h);
-    return found || { hr_janela: h, nu_prescricoes: 0, nu_crms_diferentes: 0, mediana_hora: 0, is_anomalo_hora: 0, is_crm_multiplos: 0, is_crm_unico: 0 };
-  });
+  // Backend já retorna as 24 horas por dia anômalo com medianas reais preenchidas
+  return cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
 });
 
 const chartOptionHourly = computed(() => {
@@ -468,6 +471,7 @@ const chartOptionHourly = computed(() => {
         const ptInfo = fullPoints[dataIndex];
         const volItem = params.find(p => p.seriesName === 'Autorizações (Volume)');
         const vol  = volItem?.value ?? 0;
+        if (vol === 0) return '';
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
         const ratio = med > 0 ? (vol / med).toFixed(1) : null;
@@ -562,7 +566,11 @@ watch(filteredDailyDays, (newDays) => {
       );
       selectedDay.value = maxDay;
       selectedHourlyHour.value = 'all';
-      loadTransactions(maxDay.dt_janela, null);
+      if (maxDay.is_crm_unico === 1) {
+        loadUnicoTransactions(maxDay.dt_janela, null);
+      } else {
+        loadTransactions(maxDay.dt_janela, null);
+      }
 
       // 2. Centraliza o Gráfico no dia selecionado
       const idx = newDays.findIndex(d => d.dt_janela === maxDay.dt_janela);
@@ -593,6 +601,27 @@ watch(filteredDailyDays, (newDays) => {
   }
 }, { immediate: true });
 
+// ── Retrigger quando parquet fica pronto (race condition com auto-seleção) ──
+// get_crm_perfil_horario cria o parquet via sync_crm_raiox_tx ANTES de responder,
+// então quando crmPerfilHorarioLoading vai a false o arquivo já existe.
+watch(crmPerfilHorarioLoading, (loading) => {
+  if (!loading && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
+    const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
+    if (selectedDay.value.is_crm_unico === 1) loadUnicoTransactions(selectedDay.value.dt_janela, hour);
+    else loadTransactions(selectedDay.value.dt_janela, hour);
+  }
+});
+
+// Belt-and-suspenders: quando o usuário abre a aba Cronologia e o dado ainda está vazio
+const { activeCrmViewMode } = storeToRefs(cnpjDetailStore);
+watch(activeCrmViewMode, (mode) => {
+  if (mode === 'cronologia' && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
+    const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
+    if (selectedDay.value.is_crm_unico === 1) loadUnicoTransactions(selectedDay.value.dt_janela, hour);
+    else loadTransactions(selectedDay.value.dt_janela, hour);
+  }
+});
+
 // ── Watch para Navegação Externa (Deep-Link) ──────────────────────────────
 // Observa AMBOS: o evento de navegação e o cache de dados.
 // Isso garante que mesmo se o evento disparar antes do cache estar pronto,
@@ -608,7 +637,11 @@ watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => 
   selectedHourlyHour.value = 'all';
 
   // 2. Carrega as transações do dia inteiro
-  await loadTransactions(evt.date, null);
+  if (dayObj.is_crm_unico === 1) {
+    await loadUnicoTransactions(evt.date, null);
+  } else {
+    await loadTransactions(evt.date, null);
+  }
 
   // 3. Centraliza o zoom
   const idx = profile.days.findIndex(d => d.dt_janela === evt.date);
@@ -684,11 +717,8 @@ async function onHourlyZrClick() {
 }
 
 
-// ── CRM ÚNICO: Estado de Raio-X ───────────────────────────────────────────
-const unicoTransactions        = ref([]);
-const unicoTransactionsLoading = ref(false);
-const unicoAlertas             = ref([]);
-const expandedUnicoRows        = ref(new Set());
+// ── CRM ÚNICO: Estado de Raio-X ─────────────────────────────────────────────
+// (refs declaradas no topo do script para evitar TDZ com watch immediate:true)
 
 const groupedUnicoRaiox = computed(() => {
   const groups = {};
@@ -707,9 +737,22 @@ const unicoTotalValue = computed(() =>
   groupedUnicoRaiox.value.reduce((sum, tx) => sum + tx.vl_autorizacao, 0)
 );
 
-const unicoGatilhoSet = computed(() =>
-  new Set(unicoAlertas.value.map(a => a.id_medico))
-);
+const unicoGatilhoMap = computed(() => {
+  const map = {};
+  unicoAlertas.value.forEach(a => {
+    if (!map[a.id_medico]) map[a.id_medico] = [];
+    map[a.id_medico].push({ dt_ini_hora: a.dt_ini_hora, dt_fim_hora: a.dt_fim_hora });
+  });
+  return map;
+});
+
+function isGatilhoTx(tx) {
+  if (selectedDay.value?.is_crm_unico !== 1) return false;
+  const intervals = unicoGatilhoMap.value[tx.id_medico];
+  if (!intervals?.length) return false;
+  const txTime = (tx.data_hora.split(' ')[1] || '').slice(0, 5);
+  return intervals.some(a => txTime >= a.dt_ini_hora && txTime <= a.dt_fim_hora);
+}
 
 const unicoCrmFrequencies = computed(() => {
   const freqs = {};
@@ -1006,7 +1049,7 @@ function toggleActiveRow(auth) {
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.dt_ini_hora }} → {{ alerta.dt_fim_hora }}</span>
             <span class="alerta-sep">·</span>
-            <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} prescrições</span>
+            <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} autorizações</span>
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>
           </div>
@@ -1049,7 +1092,7 @@ function toggleActiveRow(auth) {
           </thead>
           <tbody>
             <template v-for="tx in activeGroupedRaiox" :key="tx.num_autorizacao">
-              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.id_medico) }"
+              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': isGatilhoTx(tx) }"
                   @click="toggleActiveRow(tx.num_autorizacao)"
                   class="cursor-pointer">
                 <td class="col-center raiox-time align-top">
@@ -1073,7 +1116,7 @@ function toggleActiveRow(auth) {
                           :style="{ border: `1px solid ${getCRMColor(tx.id_medico)}`, color: getCRMColor(tx.id_medico) }">
                       {{ activeCrmFrequencies[tx.id_medico] }}x
                     </span>
-                    <span v-if="selectedDay?.is_crm_unico === 1 && unicoGatilhoSet.has(tx.id_medico)"
+                    <span v-if="isGatilhoTx(tx)"
                           class="gatilho-badge">⚠ gatilho</span>
                   </div>
                 </td>

@@ -199,9 +199,9 @@ async function onChartClick(params) {
   selectedDay.value = day;
   selectedHourlyHour.value = 'all';
   // CRM Único: fonte rica com todos os registros do dia + gatilhos
-  // CRM Múltiplos only: fonte filtrada por hora via API
+  // CRM Múltiplos: fonte filtrada por hora via API
   if (day.is_crm_unico === 1) {
-    await loadUnicoTransactions(day.dt_janela);
+    await loadUnicoTransactions(day.dt_janela, null);
   } else {
     await loadTransactions(day.dt_janela, null);
   }
@@ -212,16 +212,21 @@ async function onHourlyChartClick(params) {
   const hourInt = parseInt(hourStr, 10);
   if (!selectedDay.value || isNaN(hourInt)) return;
   if (!params.data || params.data.value === 0 || params.data.is_anomalo_hora !== 1) return;
+  
   if (selectedHourlyHour.value === hourInt) {
     selectedHourlyHour.value = 'all';
-    // CRM Único: filtro client-side automático via unicoTransactionsFiltered
-    if (selectedDay.value.is_crm_unico === 0) {
+    if (selectedDay.value.is_crm_unico === 1) {
+      await loadUnicoTransactions(selectedDay.value.dt_janela, null);
+    } else {
       await loadTransactions(selectedDay.value.dt_janela, null);
     }
     return;
   }
+  
   selectedHourlyHour.value = hourInt;
-  if (selectedDay.value.is_crm_unico === 0) {
+  if (selectedDay.value.is_crm_unico === 1) {
+    await loadUnicoTransactions(selectedDay.value.dt_janela, hourInt);
+  } else {
     await loadTransactions(selectedDay.value.dt_janela, hourInt);
   }
 }
@@ -610,10 +615,10 @@ function toggleUnicoRow(auth) {
   expandedUnicoRows.value = new Set(expandedUnicoRows.value);
 }
 
-async function loadUnicoTransactions(dt_janela) {
+async function loadUnicoTransactions(dt_janela, hourInt = null) {
   unicoTransactionsLoading.value = true;
   try {
-    const url = API_ENDPOINTS.analyticsCrmUnicoRaioX(props.cnpj, dt_janela);
+    const url = API_ENDPOINTS.analyticsCrmUnicoRaioX(props.cnpj, dt_janela, hourInt);
     const t0 = performance.now();
     const res = await fetch(url);
     if (!res.ok) throw new Error('Falha HTTP');
@@ -634,17 +639,8 @@ async function loadUnicoTransactions(dt_janela) {
 }
 
 // ── Dados Ativos: fonte unificada para o RAIO-X ───────────────────────────
-// CRM Único como fonte: filtro de hora é client-side (data_hora em cada tx).
-// CRM Múltiplos como fonte: filtro de hora é server-side (API por hora).
-const unicoTransactionsFiltered = computed(() => {
-  if (selectedHourlyHour.value === 'all' || selectedHourlyHour.value === null) {
-    return unicoTransactions.value;
-  }
-  return unicoTransactions.value.filter(t => {
-    const h = parseInt((t.data_hora?.split(' ')[1] || '').split(':')[0], 10);
-    return h === selectedHourlyHour.value;
-  });
-});
+// CRM Único: Agora o filtro de hora também é processado no servidor para consistência.
+const unicoTransactionsFiltered = computed(() => unicoTransactions.value);
 
 const groupedUnicoRaioxFiltered = computed(() => {
   const groups = {};

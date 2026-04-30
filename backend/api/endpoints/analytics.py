@@ -195,9 +195,10 @@ def get_crm_multiplos_raio_x(
 def get_crm_unico_raio_x(
     cnpj: str,
     date_str: str = Query(..., description="Data do dia anômalo (YYYY-MM-DD)"),
+    hour: Optional[int] = Query(None, description="Hora da anomalia (0-23)")
 ):
-    """Retorna todas as transações da farmácia num dia com alerta de CRM único, mais os médicos-gatilho."""
-    return AnalyticsService.get_crm_unico_raio_x(cnpj, date_str)
+    """Retorna as transações da farmácia num dia com alerta de CRM único, com filtro de hora opcional."""
+    return AnalyticsService.get_crm_unico_raio_x(cnpj, date_str, hour)
 
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)

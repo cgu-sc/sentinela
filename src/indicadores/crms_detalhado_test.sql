@@ -486,35 +486,41 @@ PRINT '   crm_multiplos_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE(
 
 CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.crm_multiplos_alertas(cnpj, dt_alerta, hr_janela);
 
--- 7. Tabela Final 4: crm_multiplos_tx (Raio-X Sub-horário)
--- Busca cirúrgica direto na fonte para as horas doentes detectadas.
+-- 7. Tabela Final: crm_raiox_tx (Busca Cirúrgica Unificada)
+-- Salva o movimento do DIA INTEIRO para qualquer farmácia que tenha tido
+-- alerta de Múltiplos (Surto Horário) OU CRM Único (Concentração).
+-- Isso fornece contexto total para o auditor e economiza IO no banco.
 -- ============================================================================
-PRINT '>> Passo 7: Criando crm_multiplos_tx (Busca Cirúrgica)...';
-DECLARE @t_detalhe_m DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_tx;
+PRINT '>> Passo 7: Criando crm_raiox_tx (Busca Cirúrgica Unificada)...';
+DECLARE @t_raiox DATETIME = GETDATE();
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 
+;WITH DiasSuspeitos AS (
+    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_multiplos_alertas
+    UNION
+    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas
+)
 SELECT
-    A.cnpj,
-    A.competencia,
-    A.dt_alerta                  AS dt_janela,
-    A.hr_janela,
+    M.cnpj,
+    CAST(M.data_hora AS DATE)                         AS dt_janela,
+    DATEPART(HOUR, M.data_hora)                      AS hr_janela,
     M.data_hora,
     M.num_autorizacao,
-    CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS id_medico,
+    CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf      AS id_medico,
     M.codigo_barra,
-    CAST(M.valor_pago AS DECIMAL(9,2)) AS valor_pago
-INTO temp_CGUSC.fp.crm_multiplos_tx
-FROM temp_CGUSC.fp.crm_multiplos_alertas A
+    CAST(M.valor_pago AS DECIMAL(9,2))                AS valor_pago
+INTO temp_CGUSC.fp.crm_raiox_tx
+FROM DiasSuspeitos D
 INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
-    ON  M.cnpj = A.cnpj
-    AND CAST(M.data_hora AS DATE) = A.dt_alerta
-    AND DATEPART(HOUR, M.data_hora) = A.hr_janela
+    ON  M.cnpj = D.cnpj
+    AND CAST(M.data_hora AS DATE) = D.dt_alerta
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
 
-PRINT '   crm_multiplos_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_detalhe_m, 114);
+PRINT '   crm_raiox_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_raiox, 114);
 
-CREATE CLUSTERED INDEX IDX_AlertaSeqDetalhe ON temp_CGUSC.fp.crm_multiplos_tx(cnpj, dt_janela, hr_janela);
+CREATE CLUSTERED INDEX IDX_RaioX_Cnpj_Data ON temp_CGUSC.fp.crm_raiox_tx(cnpj, dt_janela);
+
 
 
 -- (As derivações foram movidas para o início do script para evitar erros de dependência)
@@ -673,36 +679,6 @@ GO
 -- de CRM único, para permitir visualizar as rajadas no contexto do dia.
 -- ============================================================================
 
-PRINT '>> Criando temp_CGUSC.fp.crm_unico_tx (Busca Cirúrgica Raio-X)...';
-DECLARE @t_detalhe_u DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_tx;
-
-;WITH dias_alerta AS (
-    SELECT DISTINCT cnpj, dt_alerta
-    FROM temp_CGUSC.fp.crm_unico_alertas
-)
-SELECT
-    D.cnpj,
-    D.dt_alerta                  AS dt_janela,
-    M.data_hora,
-    M.num_autorizacao,
-    CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS id_medico,
-    M.codigo_barra,
-    CAST(M.valor_pago AS DECIMAL(9,2)) AS valor_pago
-INTO temp_CGUSC.fp.crm_unico_tx
-FROM dias_alerta D
-INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
-    ON  M.cnpj = D.cnpj
-    AND CAST(M.data_hora AS DATE) = D.dt_alerta
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
-
-PRINT '   temp_CGUSC.fp.crm_unico_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_detalhe_u, 114);
-
-
-
-
-CREATE CLUSTERED INDEX IDX_UnicoDetalhe ON temp_CGUSC.fp.crm_unico_tx(cnpj, dt_janela);
 
 GO
 

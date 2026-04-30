@@ -33,7 +33,11 @@ export const API_ENDPOINTS = {
     if (hour != null) url += `&hour=${hour}`;
     return url;
   },
-  analyticsCrmUnicoRaioX: (cnpj, dateStr) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-unico/raio-x?date_str=${dateStr}`,
+  analyticsCrmUnicoRaioX: (cnpj, dateStr, hour) => {
+    let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-unico/raio-x?date_str=${dateStr}`;
+    if (hour != null) url += `&hour=${hour}`;
+    return url;
+  },
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsMovimentacao: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/movimentacao`,
   analyticsCnpjLookup: `${BASE_URL}/api/v1/analytics/cnpj-lookup`,

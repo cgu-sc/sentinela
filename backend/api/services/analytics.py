@@ -2191,11 +2191,10 @@ class AnalyticsService:
         for m in crms_interesse_list:
             m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
-        # ── 7.2 Pré-Sincronização do Raio-X (Transações Horárias) ─────────────
-        # Garante que o arquivo _transacoes_horarias.parquet exista para uso offline
+        # ── 7.2 Pré-Sincronização do Raio-X Unificado ────────────────────────
+        # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
         try:
-            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
-            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+            AnalyticsService.sync_crm_raiox_tx(cnpj)
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
@@ -2246,7 +2245,7 @@ class AnalyticsService:
             ]
 
         # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
-        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
         alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
 
         if os.path.exists(TX_PARQUET_PATH):
@@ -2505,36 +2504,37 @@ class AnalyticsService:
             for r in df.iter_rows(named=True)
         ]
 
-        # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X)
-        AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
+        # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)
+        AnalyticsService.sync_crm_raiox_tx(cnpj)
 
         return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=from_cache,
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod
-    def sync_crm_multiplos_raio_x(cnpj: str) -> None:
-        """Sincroniza o cache parquet de transações literais (Raio-X) para um CNPJ."""
+    def sync_crm_raiox_tx(cnpj: str) -> None:
+        """Sincroniza o cache parquet de transações literais unificadas (Raio-X) para um CNPJ."""
         import pandas as pd
         import polars as pl
         from sqlalchemy import text
         from database import engine as _engine
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
+        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
 
+        # Se o cache já existe e parece saudável, não faz nada
         if os.path.exists(TX_PARQUET_PATH):
             try:
                 header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
-                if "codigo_barra" in header.columns and len(header.columns) > 5:
+                if "codigo_barra" in header.columns:
                     return
             except Exception: pass
 
         try:
-            print(f"🗄️ [SYNC] Buscando transações no banco para {cnpj}...")
+            print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
                     text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.crm_multiplos_tx "
+                         "FROM temp_CGUSC.fp.crm_raiox_tx "
                          "WHERE cnpj = :cnpj "
                          "ORDER BY data_hora ASC, num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
@@ -2554,207 +2554,118 @@ class AnalyticsService:
                 ])
             
             df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+            print(f"✅ Cache Raio-X salvo para {cnpj}")
         except Exception as e:
             if "IM002" in str(e) or "connection" in str(e).lower():
-                print(f"ℹ️  Modo Offline: Cache de transações para {cnpj} não encontrado.")
+                print(f"ℹ️  Modo Offline: Tabela de transações crm_raiox_tx não disponível.")
             else:
-                print(f"⚠️ Erro ao sincronizar parquet de transações horárias '{cnpj}': {e}")
+                print(f"⚠️ Erro ao sincronizar parquet de transações Raio-X '{cnpj}': {e}")
 
     @staticmethod
     def get_crm_multiplos_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmMultiplosRaioXResponse":
-        """Busca as transações literais e sequenciais de uma hora anômala, utilizando cache Parquet."""
-        import pandas as pd
+        """Busca as transações de uma hora anômala ou do dia todo, utilizando o cache unificado."""
         import polars as pl
-        from sqlalchemy import text
-        from database import engine as _engine
-
+        from api.schemas.analytics import CrmMultiplosRaioXResponse
+        
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "crm_multiplos_tx.parquet")
-
-        import time as _time
-        df = pl.DataFrame()
-        read_time_ms: float | None = None
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
 
         if not os.path.exists(PARQUET_PATH):
-            AnalyticsService.sync_crm_multiplos_raio_x(cnpj)
+            AnalyticsService.sync_crm_raiox_tx(cnpj)
 
-        if os.path.exists(PARQUET_PATH):
-            try:
-                _t0 = _time.perf_counter()
-                df = pl.read_parquet(PARQUET_PATH)
-                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            except Exception as e:
-                print(f"⚠️ Erro ao ler parquet hourly_tx '{cnpj}': {e}")
+        if not os.path.exists(PARQUET_PATH):
+            return CrmMultiplosRaioXResponse(transactions=[], from_cache=False)
 
-        if df.is_empty():
-            return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
-
-        # O Filtro Rápido do Polars na memória (por Dia e Hora opcional)
-        filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
-        if hour is not None:
-            filter_expr = filter_expr & (pl.col("hr_janela") == hour)
-
-        filtered_df = df.filter(filter_expr)
-
-        if filtered_df.is_empty():
-            return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
-
-        # Join com o cache de medicamentos para trazer nomes e princípios ativos
-        from data_cache import get_medicamentos_df
         try:
-            df_med = get_medicamentos_df()
-            # Selecionamos apenas as colunas necessárias para o join
-            df_med_subset = df_med.select(["codigo_barra", "produto", "principio_ativo"])
-            enriched_df = filtered_df.join(df_med_subset, on="codigo_barra", how="left")
-        except Exception as e:
-            print(f"⚠️ Erro ao cruzar com cadastro de medicamentos no Raio-X: {e}")
-            enriched_df = filtered_df.with_columns([
-                pl.lit(None).alias("produto"),
-                pl.lit(None).alias("principio_ativo")
+            import time as _time
+            _t0 = _time.perf_counter()
+            df = pl.read_parquet(PARQUET_PATH)
+            read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+            
+            # Filtro por Dia e Hora opcional
+            filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
+            if hour is not None:
+                filter_expr = filter_expr & (pl.col("hr_janela") == hour)
+
+            filtered_df = df.filter(filter_expr)
+            if filtered_df.is_empty():
+                return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
+
+            # Enriquece com nomes dos medicamentos
+            from data_cache import get_medicamentos_df
+            df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
+            enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
+            
+            # Garante tipos de string para o Pydantic
+            enriched_df = enriched_df.with_columns([
+                pl.col("num_autorizacao").cast(pl.Utf8),
+                pl.col("id_medico").cast(pl.Utf8),
+                pl.col("codigo_barra").cast(pl.Utf8),
+                pl.col("data_hora").cast(pl.Utf8)
             ])
 
-        # Garante que os campos que o Pydantic espera como String sejam de fato Strings
-        # (SQL e Parquet frequentemente inferem tipos numéricos para IDs longos)
-        enriched_df = enriched_df.with_columns([
-            pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("id_medico").cast(pl.Utf8),
-            pl.col("codigo_barra").cast(pl.Utf8),
-            pl.col("data_hora").cast(pl.Utf8)
-        ])
-
-        # Converte para o formato do Schema
-        transactions = enriched_df.to_dicts()
-        
-        return CrmMultiplosRaioXResponse(transactions=transactions, from_cache=True, read_time_ms=read_time_ms)
-
-    # ── CRM ÚNICO ─────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def sync_crm_unico_raio_x(cnpj: str) -> None:
-        """Sincroniza o cache parquet de transações do CRM ÚNICO (todos os dias com alerta) para um CNPJ."""
-        import pandas as pd
-        import polars as pl
-        from sqlalchemy import text
-        from database import engine as _engine
-
-        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_tx.parquet")
-
-        if os.path.exists(TX_PARQUET_PATH):
-            try:
-                header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
-                if "codigo_barra" in header.columns and len(header.columns) > 5:
-                    return
-            except Exception:
-                pass
-
-        try:
-            print(f"🗄️ [SYNC] Buscando transações CRM único no banco para {cnpj}...")
-            with _engine.connect() as conn:
-                pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.crm_unico_tx "
-                         "WHERE cnpj = :cnpj "
-                         "ORDER BY data_hora ASC, num_autorizacao ASC"),
-                    conn, params={"cnpj": cnpj}
-                )
-            df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
-                "dt_janela": pl.Utf8, "data_hora": pl.Utf8,
-                "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8,
-                "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
-            })
-
-            if not df_tx.is_empty():
-                df_tx = df_tx.with_columns([
-                    pl.col("num_autorizacao").cast(pl.Utf8),
-                    pl.col("id_medico").cast(pl.Utf8),
-                    pl.col("codigo_barra").cast(pl.Utf8),
-                    pl.col("data_hora").cast(pl.Utf8),
-                ])
-
-            df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+            return CrmMultiplosRaioXResponse(transactions=enriched_df.to_dicts(), from_cache=True, read_time_ms=read_time_ms)
         except Exception as e:
-            if "IM002" in str(e) or "connection" in str(e).lower():
-                print(f"ℹ️  Modo Offline: Cache CRM único para {cnpj} não encontrado.")
-            else:
-                print(f"⚠️ Erro ao sincronizar parquet crm_unico_tx '{cnpj}': {e}")
+            print(f"⚠️ Erro no Raio-X Múltiplos: {e}")
+            return CrmMultiplosRaioXResponse(transactions=[], from_cache=False)
 
     @staticmethod
-    def get_crm_unico_raio_x(cnpj: str, date_str: str) -> "CrmUnicoRaioXResponse":
-        """Retorna todas as transações da farmácia num dia com alerta de CRM único, mais os médicos-gatilho.
-
+    def get_crm_unico_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmUnicoRaioXResponse":
+        """Retorna as transações da farmácia num dia com alerta de CRM único, utilizando o cache unificado.
+        
         Args:
             cnpj: CNPJ de 14 dígitos sem formatação.
             date_str: Data no formato YYYY-MM-DD.
+            hour: Hora opcional para filtrar transações (0-23).
 
         Returns:
             CrmUnicoRaioXResponse com transações (enriquecidas com produto) e lista de alertas do dia.
         """
-        import pandas as pd
         import polars as pl
-        from sqlalchemy import text
-        from database import engine as _engine
         from api.schemas.analytics import CrmUnicoRaioXResponse
 
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        PARQUET_PATH = os.path.join(cnpj_dir, "crm_unico_tx.parquet")
-
-        import time as _time
-        df = pl.DataFrame()
-        read_time_ms: float | None = None
+        PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
 
         if not os.path.exists(PARQUET_PATH):
-            AnalyticsService.sync_crm_unico_raio_x(cnpj)
+            AnalyticsService.sync_crm_raiox_tx(cnpj)
 
-        if os.path.exists(PARQUET_PATH):
-            try:
-                _t0 = _time.perf_counter()
-                df = pl.read_parquet(PARQUET_PATH)
-                read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            except Exception as e:
-                print(f"⚠️ Erro ao ler parquet crm_unico_tx '{cnpj}': {e}")
+        empty = CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[], alertas=[], from_cache=True)
 
-        empty = CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[],
-                                      alertas=[], from_cache=True, read_time_ms=read_time_ms)
-
-        if df.is_empty():
+        if not os.path.exists(PARQUET_PATH):
             return empty
 
-        filtered_df = df.filter(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str)
-        if filtered_df.is_empty():
-            return empty
-
-        # Enriquece com nome do medicamento
-        from data_cache import get_medicamentos_df
         try:
-            df_med = get_medicamentos_df()
-            df_med_subset = df_med.select(["codigo_barra", "produto", "principio_ativo"])
-            enriched_df = filtered_df.join(df_med_subset, on="codigo_barra", how="left")
-        except Exception as e:
-            print(f"⚠️ Erro ao cruzar medicamentos no Raio-X CRM único: {e}")
-            enriched_df = filtered_df.with_columns([
-                pl.lit(None).alias("produto"),
-                pl.lit(None).alias("principio_ativo"),
+            import time as _time
+            _t0 = _time.perf_counter()
+            df = pl.read_parquet(PARQUET_PATH)
+            read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
+
+            filtered_df = df.filter(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str)
+            
+            if filtered_df.is_empty():
+                return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[], alertas=[], from_cache=True, read_time_ms=read_time_ms)
+
+            # Enriquece com medicamentos
+            from data_cache import get_medicamentos_df
+            df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
+            enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
+
+            enriched_df = enriched_df.with_columns([
+                pl.col("num_autorizacao").cast(pl.Utf8),
+                pl.col("id_medico").cast(pl.Utf8),
+                pl.col("codigo_barra").cast(pl.Utf8),
+                pl.col("data_hora").cast(pl.Utf8),
             ])
 
-        enriched_df = enriched_df.with_columns([
-            pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("id_medico").cast(pl.Utf8),
-            pl.col("codigo_barra").cast(pl.Utf8),
-            pl.col("data_hora").cast(pl.Utf8),
-        ])
+            transactions = enriched_df.to_dicts()
 
-        transactions = enriched_df.to_dicts()
-
-        # Busca os médicos que dispararam alertas naquele dia (do parquet de alertas já em cache)
-        alertas: list[dict] = []
-        try:
+            # Busca os médicos-gatilho do dia (usando o cache de alertas diários)
+            alertas: list[dict] = []
             alertas_parquet = os.path.join(cnpj_dir, "crm_unico_alertas.parquet")
             if os.path.exists(alertas_parquet):
                 df_alertas = pl.read_parquet(alertas_parquet)
-                day_alertas = df_alertas.filter(
-                    pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str
-                )
+                day_alertas = df_alertas.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
                 alertas = [
                     {
                         "id_medico":         str(r["id_medico"]),
@@ -2764,11 +2675,11 @@ class AnalyticsService:
                     }
                     for r in day_alertas.iter_rows(named=True)
                 ]
-        except Exception as e:
-            print(f"⚠️ Erro ao carregar alertas CRM único para {cnpj}/{date_str}: {e}")
 
-        return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=transactions,
-                                     alertas=alertas, from_cache=True, read_time_ms=read_time_ms)
+            return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=transactions, alertas=alertas, from_cache=True, read_time_ms=read_time_ms)
+        except Exception as e:
+            print(f"⚠️ Erro no Raio-X Único: {e}")
+            return empty
 
     @staticmethod
     def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:

@@ -2641,7 +2641,12 @@ class AnalyticsService:
             df = pl.read_parquet(PARQUET_PATH)
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
 
-            filtered_df = df.filter(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str)
+            # Filtro por Dia e Hora opcional
+            filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
+            if hour is not None:
+                filter_expr = filter_expr & (pl.col("hr_janela") == hour)
+
+            filtered_df = df.filter(filter_expr)
             
             if filtered_df.is_empty():
                 return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[], alertas=[], from_cache=True, read_time_ms=read_time_ms)
@@ -2669,6 +2674,7 @@ class AnalyticsService:
                 alertas = [
                     {
                         "id_medico":         str(r["id_medico"]),
+                        "hr_janela":         int(r["hr_janela"]),
                         "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
                         "nu_minutos_dia":     int(r["nu_minutos_dia"]),
                         "taxa_hora":          float(r["taxa_hora"]),

@@ -575,6 +575,15 @@ watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => 
   cnpjDetailStore.clearTimelineNavigation();
 });
 
+const hourlyChartRef = ref(null);
+watch(selectedHourlyHour, () => {
+  if (hourlyChartRef.value) {
+    setTimeout(() => {
+      hourlyChartRef.value.resize();
+    }, 100);
+  }
+});
+
 
 // ── CRM ÚNICO: Estado de Raio-X ───────────────────────────────────────────
 const unicoTransactions        = ref([]);
@@ -846,6 +855,8 @@ function toggleActiveRow(auth) {
           </span>
         </div>
         <VChart
+          v-if="selectedDay"
+          ref="hourlyChartRef"
           :option="chartOptionHourly"
           autoresize
           class="hourly-chart"
@@ -889,8 +900,11 @@ function toggleActiveRow(auth) {
           <span>Médicos com Alerta de Concentração neste Dia</span>
         </div>
         <div class="unico-alertas-list">
-          <div v-for="alerta in unicoAlertas" :key="alerta.id_medico" class="unico-alerta-chip">
+          <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
             <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico.split('/')[0]) }">{{ alerta.id_medico }}</span>
+            <span class="alerta-sep">·</span>
+            <span class="alerta-stat">{{ String(alerta.hr_janela).padStart(2, '0') }}h</span>
+            <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} prescrições</span>
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>

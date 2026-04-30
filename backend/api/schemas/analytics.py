@@ -445,6 +445,7 @@ class CrmMultiplosRaioXResponse(BaseModel):
 class CrmUnicoAlertaSchema(BaseModel):
     """Médico que disparou alerta de concentração num dia específico."""
     id_medico: str
+    hr_janela: int
     nu_prescricoes_dia: int
     nu_minutos_dia: int
     taxa_hora: float

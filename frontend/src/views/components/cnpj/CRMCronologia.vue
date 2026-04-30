@@ -189,22 +189,25 @@ async function loadTransactions(dt_janela, hourInt = null) {
   }
 }
 
-async function onChartClick(params) {
-  const day = filteredDailyDays.value?.[params.dataIndex];
-  if (!day || (day.is_crm_multiplos === 0 && day.is_crm_unico === 0)) {
-    selectedDay.value = null;
-    selectedHourlyHour.value = null;
-    return;
-  }
+async function onDailyZrClick() {
+  if (hoveredDailyDayIndex.value === null) return;
+  const day = filteredDailyDays.value?.[hoveredDailyDayIndex.value];
+  if (!day || (day.is_crm_multiplos === 0 && day.is_crm_unico === 0)) return;
+
+  if (selectedDay.value?.dt_janela === day.dt_janela) return;
+
   selectedDay.value = day;
-  selectedHourlyHour.value = 'all';
-  // CRM Único: fonte rica com todos os registros do dia + gatilhos
-  // CRM Múltiplos: fonte filtrada por hora via API
+  selectedHourlyHour.value = null;
+  
   if (day.is_crm_unico === 1) {
     await loadUnicoTransactions(day.dt_janela, null);
   } else {
     await loadTransactions(day.dt_janela, null);
   }
+}
+
+async function onChartClick(params) {
+  // Mantemos para compatibilidade se necessário, mas o principal agora é onDailyZrClick
 }
 
 
@@ -230,23 +233,39 @@ const chartOptionDaily = computed(() => {
     xAxis: {
       type: 'category',
       data: dailyDates.value,
+      axisPointer: {
+        show: true,
+        type: 'shadow',
+        shadowStyle: { color: 'rgba(99, 102, 241, 0.05)' },
+        triggerTooltip: true,
+        handle: { show: false }
+      },
       axisLabel: {
         formatter: (v) => v ? `${v.slice(8, 10)}/${v.slice(5, 7)}` : '',
-        interval: 'auto', // O ECharts decide quantos labels mostrar para não embolar
-        rotate: 45,       // Inclina para caber mais datas
+        interval: 'auto',
+        rotate: 45,
         fontSize: 10,
         color: chartTheme.value.muted
       },
       axisLine: { lineStyle: { color: chartTheme.value.border } },
     },
-    yAxis: {
-      type: 'value',
-      minInterval: 1,
-      axisLabel: { fontSize: 11 },
-      splitLine: { lineStyle: { color: chartTheme.value.grid } },
-    },
+    yAxis: [
+      {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { fontSize: 11 },
+        splitLine: { lineStyle: { color: chartTheme.value.grid } },
+      },
+      {
+        type: 'value',
+        min: 0,
+        max: 1,
+        show: false
+      }
+    ],
     tooltip: {
-      trigger: 'item',
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
       backgroundColor: chartTheme.value.tooltip,
       borderColor: chartTheme.value.tooltipBorder,
       borderWidth: 1,
@@ -324,9 +343,27 @@ const chartOptionDaily = computed(() => {
     ],
     series: [
       {
+        name: 'Área de Clique',
+        type: 'bar',
+        barGap: '-100%',
+        barWidth: '100%',
+        yAxisIndex: 1,
+        z: 1,
+        data: filteredDailyDays.value.map(d => ({
+          value: 1,
+          itemStyle: { color: 'transparent' },
+          cursor: (d.is_crm_multiplos === 1 || d.is_crm_unico === 1) ? 'pointer' : 'default'
+        })),
+        tooltip: { show: false },
+        silent: false
+      },
+      {
         name: 'Prescrições',
         type: 'bar',
+        barGap: '-100%',
+        barWidth: '100%',
         barMaxWidth: 40,
+        z: 2,
         data: dailyValues.value.map((v, i) => {
           const day = filteredDailyDays.value[i];
           const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
@@ -593,7 +630,15 @@ watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => 
 
 const hourlyChartRef = ref(null);
 const hoveredHourlyHour = ref(null);
+const hoveredDailyDayIndex = ref(null);
 
+function onDailyAxisPointerUpdate(params) {
+  if (params.axesInfo && params.axesInfo.length > 0) {
+    hoveredDailyDayIndex.value = params.axesInfo[0].value;
+  } else {
+    hoveredDailyDayIndex.value = null;
+  }
+}
 watch(selectedHourlyHour, () => {
   if (hourlyChartRef.value) {
     setTimeout(() => {
@@ -825,7 +870,7 @@ function toggleActiveRow(auth) {
         <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
         <span>Sem dados de perfil diário disponíveis.</span>
       </div>
-      <div v-else class="daily-chart-wrapper">
+      <div class="daily-chart-wrapper" :class="{ 'cursor-pointer-active': hoveredDailyDayIndex !== null }">
         <div class="chart-legend-html">
           <span class="legend-item">
             <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
@@ -848,7 +893,8 @@ function toggleActiveRow(auth) {
           :option="chartOptionDaily"
           autoresize
           class="daily-dispensacao-chart"
-          @click="onChartClick"
+          @zr:click="onDailyZrClick"
+          @updateAxisPointer="onDailyAxisPointerUpdate"
           @datazoom="onDailyZoom"
         />
       </div>

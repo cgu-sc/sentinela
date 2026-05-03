@@ -2214,11 +2214,15 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ca = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.volume_horario_anomalo_alertas WHERE cnpj = :cnpj"),
+                        text("SELECT V.id_cnpj, V.competencia, V.dt_alerta, V.hr_janela,"
+                             " V.nu_prescricoes, V.nu_crms, V.mediana_hora, V.multiplicador"
+                             " FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V"
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj"
+                             " WHERE F.cnpj = :cnpj"),
                         conn, params={"cnpj": cnpj}
                     )
                 df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={
-                    "cnpj": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, 
+                    "id_cnpj": pl.Int32, "competencia": pl.Int32, "dt_alerta": pl.Utf8,
                     "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32,
                     "mediana_hora": pl.Float64, "multiplicador": pl.Float64
                 })
@@ -2632,10 +2636,11 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando medianas horárias para {cnpj}...")
             with _engine.connect() as conn:
                 pdf = pd.read_sql(
-                    text("SELECT ano, trimestre, hr_janela, mediana_hora "
-                         "FROM temp_CGUSC.fp.mediana_autorizacoes_horaria "
-                         "WHERE cnpj = :cnpj "
-                         "ORDER BY ano, trimestre, hr_janela"),
+                    text("SELECT M.ano, M.trimestre, M.hr_janela, M.mediana_hora "
+                         "FROM temp_CGUSC.fp.mediana_autorizacoes_horaria M "
+                         "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
+                         "WHERE F.cnpj = :cnpj "
+                         "ORDER BY M.ano, M.trimestre, M.hr_janela"),
                     conn, params={"cnpj": cnpj}
                 )
             df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema={

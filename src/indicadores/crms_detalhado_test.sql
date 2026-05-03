@@ -518,16 +518,17 @@ DECLARE @t_mediana_ref DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.mediana_autorizacoes_horaria;
 
 SELECT DISTINCT
-    cnpj,
-    competencia / 100            AS ano,
-    (competencia % 100 - 1) / 3 AS trimestre,
-    hr_janela,
-    mediana_hora
+    F.id                                             AS id_cnpj,
+    CAST(M.competencia / 100 AS SMALLINT)            AS ano,
+    CAST((M.competencia % 100 - 1) / 3 AS TINYINT)  AS trimestre,
+    M.hr_janela,
+    CAST(M.mediana_hora AS DECIMAL(6,2))             AS mediana_hora
 INTO temp_CGUSC.fp.mediana_autorizacoes_horaria
-FROM #mediana_hora;
+FROM #mediana_hora M
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = M.cnpj;
 
 CREATE CLUSTERED INDEX IDX_MedianaHoraria
-    ON temp_CGUSC.fp.mediana_autorizacoes_horaria(cnpj, ano, trimestre, hr_janela);
+    ON temp_CGUSC.fp.mediana_autorizacoes_horaria(id_cnpj, ano, trimestre, hr_janela);
 
 PRINT '   mediana_autorizacoes_horaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_mediana_ref, 114);
 
@@ -539,20 +540,24 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.volume_horario_anomalo_alertas;
 
 
 SELECT
-    cnpj, competencia, dt_janela AS dt_alerta, hr_janela,
-    nu_prescricoes_hora AS nu_prescricoes,
-    nu_crms_distintos_hora AS nu_crms,
-    mediana_hora,
-    CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador
+    F.id                          AS id_cnpj,
+    H.competencia,
+    H.dt_janela                   AS dt_alerta,
+    H.hr_janela,
+    H.nu_prescricoes_hora         AS nu_prescricoes,
+    H.nu_crms_distintos_hora      AS nu_crms,
+    H.mediana_hora,
+    CAST(CAST(H.nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(H.mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador
 INTO temp_CGUSC.fp.volume_horario_anomalo_alertas
-FROM #anomalias_horarias
-WHERE is_anomalo_hora = 1;
+FROM #anomalias_horarias H
+INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = H.cnpj
+WHERE H.is_anomalo_hora = 1;
 
 PRINT '   volume_horario_anomalo_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alertas_m, 114);
 
 
 
-CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(cnpj, dt_alerta, hr_janela);
+CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(id_cnpj, dt_alerta, hr_janela);
 
 -- 7. Tabela Final: crm_raiox_tx (Busca Cirúrgica Unificada)
 -- Salva o movimento do DIA INTEIRO para qualquer farmácia que tenha tido
@@ -564,27 +569,26 @@ DECLARE @t_raiox DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 
 ;WITH DiasSuspeitos AS (
-    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
+    SELECT id_cnpj, dt_alerta FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
     UNION
-    SELECT F4.cnpj, C4.dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas C4
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F4 ON F4.id = C4.id_cnpj
+    SELECT id_cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas
 )
 SELECT
-    FAR.id                                            AS id_cnpj, -- Agora INT (antes CHAR(14))
+    D.id_cnpj,
     CAST(M.data_hora AS DATE)                         AS dt_janela,
-    CAST(DATEPART(HOUR, M.data_hora) AS TINYINT)      AS hr_janela, -- TINYINT: 1 byte (antes INT: 4 bytes)
-    CAST(M.data_hora AS SMALLDATETIME)                AS data_hora, -- SMALLDATETIME: 4 bytes (antes DATETIME: 8 bytes)
+    CAST(DATEPART(HOUR, M.data_hora) AS TINYINT)      AS hr_janela,
+    CAST(M.data_hora AS SMALLDATETIME)                AS data_hora,
     M.num_autorizacao,
-    MED.id                                            AS id_medico, -- Agora INT para economizar espaço
-    PAT.id                                            AS id_gtin, -- Agora SMALLINT para economizar espaço
+    MED.id                                            AS id_medico,
+    PAT.id                                            AS id_gtin,
     CAST(M.valor_pago AS DECIMAL(9,2))                AS valor_pago
 INTO temp_CGUSC.fp.crm_raiox_tx
 FROM DiasSuspeitos D
-INNER JOIN temp_CGUSC.fp.teste_mov_SC M 
-    ON  M.cnpj = D.cnpj
+INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.id = D.id_cnpj
+INNER JOIN temp_CGUSC.fp.teste_mov_SC M
+    ON  M.cnpj = FAR.cnpj
     AND CAST(M.data_hora AS DATE) = D.dt_alerta
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.cnpj = M.cnpj
 LEFT JOIN temp_CGUSC.fp.dados_medico MED
     ON MED.id_medico = CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20))
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';

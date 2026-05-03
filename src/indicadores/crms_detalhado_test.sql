@@ -360,10 +360,26 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
          OR (nu_prescricoes_hora >= 8  AND nu_minutos_hora <= 15)
          OR (nu_prescricoes_hora >= 9  AND nu_minutos_hora <= 20)
     )
-SELECT * INTO temp_CGUSC.fp.crm_unico_alertas FROM alertas WHERE severidade IS NOT NULL;
+SELECT
+    F.id                      AS id_cnpj,
+    MED.id                    AS id_medico,
+    A.competencia,
+    A.dt_alerta,
+    A.hr_janela,
+    A.nu_prescricoes_dia,
+    A.nu_minutos_dia,
+    A.taxa_hora,
+    A.dt_ini_hora,
+    A.dt_fim_hora,
+    A.severidade
+INTO temp_CGUSC.fp.crm_unico_alertas
+FROM alertas A
+INNER JOIN temp_CGUSC.fp.dados_farmacia F   ON F.cnpj      = A.cnpj
+INNER JOIN temp_CGUSC.fp.dados_medico   MED ON MED.id_medico = A.id_medico
+WHERE A.severidade IS NOT NULL;
 GO
 
-CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(cnpj, id_medico, dt_alerta);
+CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(id_cnpj, id_medico, dt_alerta);
 GO
 
 
@@ -430,7 +446,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_diario;
     GROUP BY nu_cnpj, dt_dia
 ),
 anomalias_unico_dia AS (
-    SELECT DISTINCT cnpj, dt_alerta
+    SELECT DISTINCT id_cnpj, dt_alerta
     FROM temp_CGUSC.fp.crm_unico_alertas
 )
 SELECT
@@ -449,7 +465,7 @@ FROM #totais_diarios T
 LEFT JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = T.cnpj
 INNER JOIN #mediana_diaria M   ON M.cnpj = T.cnpj AND M.competencia = T.competencia
 LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela  = T.dt_janela
-LEFT JOIN anomalias_unico_dia U ON U.cnpj = T.cnpj AND U.dt_alerta = T.dt_janela;
+LEFT JOIN anomalias_unico_dia U ON U.id_cnpj = F.id AND U.dt_alerta = T.dt_janela;
 
 PRINT '   crm_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_d, 114);
 
@@ -485,7 +501,7 @@ INNER JOIN temp_CGUSC.fp.crm_perfil_diario D
     ON  D.id_cnpj   = F.id
     AND D.dt_janela = H.dt_janela
 LEFT JOIN temp_CGUSC.fp.crm_unico_alertas U
-    ON  U.cnpj      = H.cnpj
+    ON  U.id_cnpj   = F.id
     AND U.dt_alerta = H.dt_janela
     AND U.hr_janela = H.hr_janela
 WHERE D.is_anomalo_multiplos = 1 OR D.is_anomalo_unico = 1;
@@ -550,7 +566,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 ;WITH DiasSuspeitos AS (
     SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
     UNION
-    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas
+    SELECT F4.cnpj, C4.dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas C4
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F4 ON F4.id = C4.id_cnpj
 )
 SELECT
     FAR.id                                            AS id_cnpj, -- Agora INT (antes CHAR(14))
@@ -904,8 +921,10 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 
 
 ;WITH base AS (
-    SELECT DISTINCT A1.cnpj AS nu_cnpj, A1.id_medico, A1.competencia
+    SELECT DISTINCT F1.cnpj AS nu_cnpj, MD1.id_medico, A1.competencia
     FROM temp_CGUSC.fp.crm_unico_alertas A1
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F1  ON F1.id  = A1.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD1 ON MD1.id = A1.id_medico
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico G1
@@ -920,9 +939,11 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
     FROM #crms_em_surto_raw S1
 ),
 conc_agg AS (
-    SELECT C1.cnpj, C1.id_medico, C1.competencia, COUNT(*) AS qtd_dias
+    SELECT F2.cnpj, MD2.id_medico, C1.competencia, COUNT(*) AS qtd_dias
     FROM temp_CGUSC.fp.crm_unico_alertas C1
-    GROUP BY C1.cnpj, C1.id_medico, C1.competencia
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F2  ON F2.id  = C1.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD2 ON MD2.id = C1.id_medico
+    GROUP BY F2.cnpj, MD2.id_medico, C1.competencia
 ),
 geo_cnpj AS (
     SELECT T.nu_cnpj, T.id_medico, T.competencia FROM (
@@ -1008,8 +1029,10 @@ LEFT JOIN #prescricoes_todos_estabelecimentos P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia
 LEFT JOIN (
-    SELECT DISTINCT cnpj, id_medico, competencia
-    FROM temp_CGUSC.fp.crm_unico_alertas
+    SELECT DISTINCT F3.cnpj, MD3.id_medico, C.competencia
+    FROM temp_CGUSC.fp.crm_unico_alertas C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F3  ON F3.id  = C.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD3 ON MD3.id = C.id_medico
 ) CONC
     ON  CONC.cnpj        = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico

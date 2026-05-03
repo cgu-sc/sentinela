@@ -3,17 +3,6 @@
 -- ============================================================================
 -- Severidades: ALTO → GRAVE → CRÍTICO → EXTREMO
 --
--- ── CRM ÚNICO (nu_crms_distintos = 1) ──────────────────────────────────────
---   EXTREMO →  7 auth em  5 min (1,4/min)
---   EXTREMO → 10 auth em 10 min (1,0/min)
---   CRÍTICO →  6 auth em  5 min (1,2/min)
---   CRÍTICO →  8 auth em 10 min (0,8/min)
---   GRAVE   →  8 auth em 15 min (0,5/min)
---   GRAVE   →  9 auth em 20 min (0,5/min)
---   ALTO    →  7 auth em 30 min (0,2/min)
---   ALTO    → 10 auth em 60 min (0,2/min)
---   ALTO    →  5+ auth, taxa >= 12/hora — replica crm_unico_alertas (taxa contínua)
---
 -- ── MULTI-CRM (nu_crms_distintos >= 2) ─────────────────────────────────────
 --   EXTREMO →  8 auth em  5 min (1,6/min)
 --   EXTREMO → 11 auth em 10 min (1,1/min)
@@ -210,22 +199,15 @@ BEGIN
       AND A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
     GROUP BY A.cnpj, A.data_hora
     HAVING
-        COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE,  5, A.data_hora) THEN B.num_autorizacao END) >=  5
-     OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 10, A.data_hora) THEN B.num_autorizacao END) >=  7
-     OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 15, A.data_hora) THEN B.num_autorizacao END) >=  8
-     OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 20, A.data_hora) THEN B.num_autorizacao END) >=  8
-     OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 30, A.data_hora) THEN B.num_autorizacao END) >=  7
-     OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora) THEN B.num_autorizacao END) >= 10
-     -- CRM único, 5-9 auth em 60 min com taxa >= 12/hora (replica crm_unico_alertas)
-     OR (
-            COUNT(DISTINCT CAST(B.crm AS VARCHAR(10)) + '/' + B.crm_uf) = 1
-        AND COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora) THEN B.num_autorizacao END) BETWEEN 5 AND 9
-        AND (
-                DATEDIFF(MINUTE, MIN(B.data_hora), MAX(B.data_hora)) = 0
-             OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora) THEN B.num_autorizacao END) * 60.0
-                / DATEDIFF(MINUTE, MIN(B.data_hora), MAX(B.data_hora)) >= 12
-        )
-     );
+        COUNT(DISTINCT CAST(B.crm AS VARCHAR(10)) + '/' + B.crm_uf) >= 2
+    AND (
+           COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE,  5, A.data_hora) THEN B.num_autorizacao END) >=  6
+        OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 10, A.data_hora) THEN B.num_autorizacao END) >=  8
+        OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 15, A.data_hora) THEN B.num_autorizacao END) >= 10
+        OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 20, A.data_hora) THEN B.num_autorizacao END) >= 11
+        OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 30, A.data_hora) THEN B.num_autorizacao END) >= 12
+        OR COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora) THEN B.num_autorizacao END) >= 18
+    );
 
     -- ── Deduplicação: 1 evento por janela de 60 min por cnpj/hora ─────────
     DROP TABLE IF EXISTS #concentracao_dedup;
@@ -258,19 +240,6 @@ BEGIN
             id_medico_unico,
             nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min,
             CASE
-                -- ── CRM ÚNICO ──────────────────────────────────────────
-                WHEN nu_crms_distintos = 1 AND nu_5min  >=  7 THEN 'EXTREMO'   -- 1,4/min
-                WHEN nu_crms_distintos = 1 AND nu_10min >= 10 THEN 'EXTREMO'   -- 1,0/min
-                WHEN nu_crms_distintos = 1 AND nu_5min  >=  6 THEN 'CRÍTICO'   -- 1,2/min
-                WHEN nu_crms_distintos = 1 AND nu_10min >=  8 THEN 'CRÍTICO'   -- 0,8/min
-                WHEN nu_crms_distintos = 1 AND nu_15min >=  8 THEN 'GRAVE'     -- 0,5/min
-                WHEN nu_crms_distintos = 1 AND nu_20min >=  9 THEN 'GRAVE'     -- 0,5/min
-                WHEN nu_crms_distintos = 1 AND nu_30min >=  7 THEN 'ALTO'      -- 0,2/min
-                WHEN nu_crms_distintos = 1 AND nu_60min >= 10 THEN 'ALTO'      -- 0,2/min
-                WHEN nu_crms_distintos = 1 AND nu_60min >=  5
-                  AND (    DATEDIFF(MINUTE, dt_ini_concentracao, dt_fim_concentracao) = 0
-                        OR nu_60min * 60.0 / DATEDIFF(MINUTE, dt_ini_concentracao, dt_fim_concentracao) >= 12
-                  )                                                    THEN 'ALTO'   -- taxa >= 12/hora
                 -- ── MULTI-CRM ──────────────────────────────────────────
                 WHEN nu_5min  >=  8 THEN 'EXTREMO'   -- 1,6/min
                 WHEN nu_10min >= 11 THEN 'EXTREMO'   -- 1,1/min

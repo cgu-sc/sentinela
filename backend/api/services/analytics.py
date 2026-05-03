@@ -1876,7 +1876,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT E.id_medico, E.cnpj, E.competencia, E.vl_total_prescricoes, "
+                        text("SELECT E.id_medico, E.competencia, E.vl_total_prescricoes, "
                              "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
                              "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
@@ -1884,7 +1884,8 @@ class AnalyticsService:
                              "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
                              "E.nu_estabelecimentos"
                              " FROM temp_CGUSC.fp.crm_export E"
-                             " WHERE E.cnpj = :cnpj"),
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
+                             " WHERE F.cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2372,8 +2373,9 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_perfil_diario"
-                             " WHERE cnpj = :cnpj ORDER BY dt_janela"),
+                        text("SELECT P.* FROM temp_CGUSC.fp.crm_perfil_diario P"
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
+                             " WHERE F.cnpj = :cnpj ORDER BY P.dt_janela"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2458,11 +2460,12 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT dt_janela, hr_janela, nu_prescricoes, nu_crms_diferentes, mediana_hora, "
-                             "is_anomalo_hora, is_crm_multiplos, is_crm_unico "
-                             "FROM temp_CGUSC.fp.crm_perfil_horario "
-                             "WHERE cnpj = :cnpj "
-                             "ORDER BY dt_janela, hr_janela"),
+                        text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
+                             "P.is_anomalo_hora, P.is_crm_multiplos, P.is_crm_unico "
+                             "FROM temp_CGUSC.fp.crm_perfil_horario P "
+                             "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+                             "WHERE F.cnpj = :cnpj "
+                             "ORDER BY P.dt_janela, P.hr_janela"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2570,22 +2573,24 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT dt_janela, hr_janela, data_hora, num_autorizacao, id_medico, codigo_barra, valor_pago "
-                         "FROM temp_CGUSC.fp.crm_raiox_tx "
-                         "WHERE cnpj = :cnpj "
-                         "ORDER BY data_hora ASC, num_autorizacao ASC"),
+                    text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
+                         "FROM temp_CGUSC.fp.crm_raiox_tx P "
+                         "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+                         "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
+                         "WHERE F.cnpj = :cnpj "
+                         "ORDER BY P.data_hora ASC, P.num_autorizacao ASC"),
                     conn, params={"cnpj": cnpj}
                 )
             df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
-                "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8, 
-                "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8, 
+                "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8,
+                "num_autorizacao": pl.Utf8, "id_medico": pl.Int32,
                 "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
             })
 
             if not df_tx.is_empty():
                 df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
-                    pl.col("id_medico").cast(pl.Utf8),
+                    pl.col("id_medico").cast(pl.Int32),
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8)
                 ])

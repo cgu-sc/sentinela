@@ -471,7 +471,6 @@ const chartOptionHourly = computed(() => {
         const ptInfo = fullPoints[dataIndex];
         const volItem = params.find(p => p.seriesName === 'Autorizações (Volume)');
         const vol  = volItem?.value ?? 0;
-        if (vol === 0) return '';
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
         const ratio = med > 0 ? (vol / med).toFixed(1) : null;

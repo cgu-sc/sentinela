@@ -829,8 +829,8 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
 
             # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
             cursor.execute(f"""
-                SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, descricao
-                FROM temp_CGUSC.fp.crm_multiplos_alertas
+                SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, multiplicador
+                FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
                 WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
                 ORDER BY dt_alerta DESC, hr_janela DESC
             """, (cnpj, data_inicio, data_fim))
@@ -841,7 +841,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
                 row_evidencias += 1
                 for s in surtos:
                     dt_f = s[0].strftime('%d/%m/%Y') if hasattr(s[0], 'strftime') else str(s[0])
-                    txt = f"Em {dt_f} às {s[1]}:00h: {s[4]} ({s[2]} prescrições de {s[3]} médicos diferentes)."
+                    txt = f"Em {dt_f} às {s[1]}:00h: {s[2]} prescrições de {s[3]} médicos (x{s[4]:.1f} acima da mediana)."
                     ws.merge_range(row_evidencias, 1, row_evidencias, 19, f"• {txt}", wb.add_format({'font_size': 9, 'font_color': '#555555'}))
                     row_evidencias += 1
         except Exception as e:

@@ -495,10 +495,10 @@ CREATE CLUSTERED INDEX IDX_MedianaHoraria
 
 PRINT '   mediana_autorizacoes_horaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_mediana_ref, 114);
 
--- 6. Tabela Final 3: crm_multiplos_alertas (Mestre de Surtos)
-PRINT '>> Passo 6: Criando crm_multiplos_alertas (Mestre de Surtos)...';
+-- 6. Tabela Final 3: volume_horario_anomalo_alertas (Detector de Volume Horário Anômalo)
+PRINT '>> Passo 6: Criando volume_horario_anomalo_alertas (Detector de Volume Horário Anômalo)...';
 DECLARE @t_alertas_m DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_multiplos_alertas;
+DROP TABLE IF EXISTS temp_CGUSC.fp.volume_horario_anomalo_alertas;
 
 
 
@@ -508,15 +508,15 @@ SELECT
     nu_crms_distintos_hora AS nu_crms,
     mediana_hora,
     CAST(CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / NULLIF(mediana_hora, 0) AS DECIMAL(10,1)) AS multiplicador
-INTO temp_CGUSC.fp.crm_multiplos_alertas
+INTO temp_CGUSC.fp.volume_horario_anomalo_alertas
 FROM #anomalias_horarias
 WHERE is_anomalo_hora = 1;
 
-PRINT '   crm_multiplos_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alertas_m, 114);
+PRINT '   volume_horario_anomalo_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alertas_m, 114);
 
 
 
-CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.crm_multiplos_alertas(cnpj, dt_alerta, hr_janela);
+CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(cnpj, dt_alerta, hr_janela);
 
 -- 7. Tabela Final: crm_raiox_tx (Busca Cirúrgica Unificada)
 -- Salva o movimento do DIA INTEIRO para qualquer farmácia que tenha tido
@@ -528,7 +528,7 @@ DECLARE @t_raiox DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 
 ;WITH DiasSuspeitos AS (
-    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_multiplos_alertas
+    SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
     UNION
     SELECT cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas
 )

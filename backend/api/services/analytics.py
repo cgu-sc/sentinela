@@ -2199,7 +2199,7 @@ class AnalyticsService:
         except: pass
 
         # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
-        CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "crm_multiplos_alertas.parquet")
+        CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "volume_horario_anomalo_alertas.parquet")
 
         df_ca: pl.DataFrame | None = None
 
@@ -2213,7 +2213,7 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ca = pd.read_sql(
-                        text("SELECT * FROM temp_CGUSC.fp.crm_multiplos_alertas WHERE cnpj = :cnpj"),
+                        text("SELECT * FROM temp_CGUSC.fp.volume_horario_anomalo_alertas WHERE cnpj = :cnpj"),
                         conn, params={"cnpj": cnpj}
                     )
                 df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={

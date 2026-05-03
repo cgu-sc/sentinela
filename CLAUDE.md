@@ -135,3 +135,6 @@ NUNCA utilize valores fixos nos componentes. Consulte sempre o arquivo correspon
 - **Nomenclatura**: PascalCase para componentes Vue, snake_case para arquivos/funções Python.
 - **Commits**: Utilize Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`).
 - **Documentação**: Use JSDoc para funções JS críticas, focando no "porquê" de lógicas complexas.
+
+## 7. Nomenclatura SQL — Vocabulário Proibido
+- **NUNCA** use a palavra `surto` em nomes de tabelas, colunas, variáveis ou comentários SQL.

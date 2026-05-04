@@ -180,7 +180,7 @@ defineExpose({
       </div>
 
       <!-- Visão: KPIs + Tabela de CRMs — v-show preserva estado expandido entre troca de abas -->
-      <div v-show="activeCrmViewMode === 'medicos'">
+      <div v-show="activeCrmViewMode === 'medicos'" class="medicos-view">
         <CRMKpiGrid
           :kpi-data="kpiData"
           :active-kpi-filter="activeKpiFilter"
@@ -234,6 +234,12 @@ defineExpose({
   transition: opacity 0.25s ease;
 }
 .content-wrapper.is-refreshing { opacity: 0.45; pointer-events: none; }
+
+.medicos-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
 
 .animate-fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

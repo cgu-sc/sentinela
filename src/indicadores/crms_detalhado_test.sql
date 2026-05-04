@@ -888,8 +888,13 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 
 
 ;WITH base AS (
-    SELECT DISTINCT U.id_cnpj, U.id_medico_int AS id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
+    SELECT DISTINCT
+        F.cnpj AS nu_cnpj,
+        M.id_medico,
+        YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = U.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = U.id_medico_int
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico G1
@@ -904,9 +909,15 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
     FROM #crms_em_surto_raw S1
 ),
 conc_agg AS (
-    SELECT U.id_cnpj, U.id_medico_int AS id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia, COUNT(*) AS qtd_dias
+    SELECT
+        F.cnpj AS nu_cnpj,
+        M.id_medico,
+        YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia,
+        COUNT(*) AS qtd_dias
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
-    GROUP BY U.id_cnpj, U.id_medico_int, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = U.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = U.id_medico_int
+    GROUP BY F.cnpj, M.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
 ),
 geo_cnpj AS (
     SELECT T.nu_cnpj, T.id_medico, T.competencia FROM (
@@ -927,7 +938,7 @@ SELECT
 INTO temp_CGUSC.fp.alertas_crm
 FROM base B
 LEFT JOIN conc_agg CA
-    ON  CA.cnpj       = B.nu_cnpj
+    ON  CA.nu_cnpj    = B.nu_cnpj
     AND CA.id_medico  = B.id_medico
     AND CA.competencia = B.competencia
 LEFT JOIN #crms_em_surto_raw SR
@@ -939,9 +950,9 @@ LEFT JOIN geo_cnpj GC
     AND GC.competencia = B.competencia
     AND GC.nu_cnpj    = B.nu_cnpj
 LEFT JOIN (
-    SELECT DISTINCT R2.id_cnpj, R2.id_medico, R2.competencia
+    SELECT DISTINCT R2.cnpj AS nu_cnpj, R2.id_medico, R2.competencia
     FROM temp_CGUSC.fp.alertas_crm_registro R2
-) RE ON RE.id_cnpj = B.id_cnpj AND RE.id_medico = B.id_medico AND RE.competencia = B.competencia;
+) RE ON RE.nu_cnpj = B.nu_cnpj AND RE.id_medico = B.id_medico AND RE.competencia = B.competencia;
 
 PRINT '   temp_CGUSC.fp.alertas_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_cons, 114);
 GO
@@ -972,7 +983,7 @@ SELECT
     A.taxa_pico_h,
     P.nu_prescricoes_medico_em_todos_estabelecimentos                 AS nu_prescricoes_total_brasil,
     P.nu_estabelecimentos_com_registro_mesmo_crm                      AS nu_estabelecimentos,
-    CAST(CASE WHEN CONC.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT)   AS flag_concentracao_mesmo_crm,
+    CAST(CASE WHEN CONC.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao_mesmo_crm,
     CAST(CASE WHEN G.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT)  AS flag_distancia_geografica,
     A.dt_prescricao_inicial_medico                                     AS dt_primeira_prescricao,
     M.dt_inscricao                                                    AS dt_inscricao_crm,
@@ -992,10 +1003,15 @@ LEFT JOIN #prescricoes_todos_estabelecimentos P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia
 LEFT JOIN (
-    SELECT DISTINCT C.cnpj, C.id_medico, YEAR(C.dt_dia) * 100 + MONTH(C.dt_dia) AS competencia
+    SELECT DISTINCT
+        F.cnpj AS nu_cnpj,
+        M.id_medico,
+        YEAR(C.dt_dia) * 100 + MONTH(C.dt_dia) AS competencia
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas C
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = C.id_cnpj
+    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = C.id_medico_int
 ) CONC
-    ON  CONC.cnpj        = A.nu_cnpj
+    ON  CONC.nu_cnpj     = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico
     AND CONC.competencia = A.competencia
 LEFT JOIN temp_CGUSC.fp.alertas_crm_geografico G

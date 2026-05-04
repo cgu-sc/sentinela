@@ -917,7 +917,7 @@ function toggleActiveRow(auth) {
         </div>
       </div>
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
-        Evolução diária de autorizações. Vermelho = volume horário anômalo. Âmbar = rajada de CRM único. Roxo = rajada com múltiplos CRMs. Clique em qualquer anomalia para análise detalhada.
+        Evolução diária de autorizações. Barras vermelhas indicam dias com algum tipo de anomalia. Os alertas podem refletir volume atípico, autorizações em sequência com uso de um único CRM ou autorizações em sequência com uso de múltiplos CRMs. Clique em um dia sinalizado para análise detalhada.
       </p>
       
       <div v-if="!crmPerfilDiario && !crmPerfilDiarioLoading" class="chart-empty">
@@ -928,23 +928,15 @@ function toggleActiveRow(auth) {
         <div class="chart-legend-html">
           <span class="legend-item">
             <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
-            Surto Horário
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-bar" style="background: #f59e0b;"></span>
-            Concentração Individual
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-bar" style="background: #8b5cf6;"></span>
-            CRM Múltiplo
+            Dia Anômalo
           </span>
           <span class="legend-item">
             <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
-            Normal
+            Dia Normal
           </span>
           <span class="legend-item">
             <span class="legend-swatch legend-dashed"></span>
-            Mediana Referência
+            Mediana de Referência
           </span>
         </div>
         <VChart
@@ -958,7 +950,7 @@ function toggleActiveRow(auth) {
       </div>
       <div v-if="!selectedDay && crmPerfilDiario" class="drill-hint">
         <i class="pi pi-hand-pointer" />
-        <span>Clique em uma barra vermelha, âmbar ou roxa para análise detalhada</span>
+        <span>Clique em um dia sinalizado para análise detalhada</span>
       </div>
     </div>
 

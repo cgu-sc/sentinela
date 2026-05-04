@@ -703,7 +703,7 @@ export function usePdfExport() {
       }
 
       // ── PÁGINA 2 — Evolução Financeira ───────────────────
-      cnpjNavStore.activeTabIndex = 1;
+      cnpjNavStore.activeTabIndex = 0;
       await sleep(900);
 
       pdf.addPage();
@@ -782,7 +782,7 @@ export function usePdfExport() {
       });
 
       // ── PÁGINA 3 — Indicadores ────────────────────────────
-      cnpjNavStore.activeTabIndex = 2;
+      cnpjNavStore.activeTabIndex = 3;
       await sleep(500);
 
       const indicadores    = indicatorsTabRef.value?.getIndicadoresData() ?? {};
@@ -920,11 +920,11 @@ export function usePdfExport() {
 
       // ── PÁGINA 4 — Prescritores ────────────────────────────
       if (crmsTabRef?.value) {
-        cnpjNavStore.activeTabIndex = 3;
+        cnpjNavStore.activeTabIndex = 4;
         await sleep(500);
 
         const summary = crmsTabRef.value.getSummary() || {};
-        const top20 = crmsTabRef.value.getTop20() || [];
+        const top20 = (crmsTabRef.value.getCrmsInteresse?.() || []).slice(0, 20);
         const kpis = crmsTabRef.value.getKpis?.() || {};
 
         if (top20.length > 0) {
@@ -1045,7 +1045,7 @@ export function usePdfExport() {
 
       // ── PÁGINA 5 — Falecidos ─────────────────────────────
       if (falecidosTabRef?.value?.hasData()) {
-        cnpjNavStore.activeTabIndex = 4;
+        cnpjNavStore.activeTabIndex = 5;
         await sleep(500);
 
         const summary    = falecidosTabRef.value.getSummary();
@@ -1137,6 +1137,8 @@ export function usePdfExport() {
       const safeName = (cnpjData.razao_social ?? cnpj).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
       pdf.save(`Sentinela_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
 
+    } catch (err) {
+      console.error('[usePdfExport] Critical failure during PDF generation:', err);
     } finally {
       cnpjNavStore.activeTabIndex = originalTab;
       isExporting.value = false;

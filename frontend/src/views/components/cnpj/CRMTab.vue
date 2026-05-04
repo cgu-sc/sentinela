@@ -65,7 +65,7 @@ const pctFraudeCrm            = computed(() => (summary.value.pct_valor_crm_inva
 const valorFraudeCrm          = computed(() => (summary.value.vl_crm_invalido || 0) + (summary.value.vl_crm_antes_registro || 0));
 
 const qtdCrmExclusivo         = computed(() => crmsInteresse.value.filter(m => m.flag_crm_exclusivo > 0).length);
-const qtdLancamentosAgrupados = computed(() => crmsInteresse.value.filter(m => m.alerta_concentracao_mesmo_crm).length);
+const qtdLancamentosAgrupados = computed(() => crmsInteresse.value.filter(m => m.alerta_concentracao_unico_crm).length);
 const totalSurtosCnpj         = computed(() => cnpjAlerts.value.length);
 const diasComSurtosCnpj       = computed(() => new Set(cnpjAlerts.value.map(a => a.dt)).size);
 const qtdAcima400km           = computed(() => crmsInteresse.value.filter(m => m.alerta5_geografico).length);
@@ -97,12 +97,12 @@ const kpiData = computed(() => ({
 const kpiFilters = {
   top1:        (m) => m.id_medico === crmsInteresse.value[0]?.id_medico,
   top5:        (m) => crmsInteresse.value.slice(0, 5).some(t => t.id_medico === m.id_medico),
-  agrupamento: (m) => !!m.alerta_concentracao_mesmo_crm,
+  agrupamento: (m) => !!m.alerta_concentracao_unico_crm,
   intensiva:   (m) => m.flag_robo > 0 || m.flag_robo_oculto > 0,
   exclusivo:   (m) => m.flag_crm_exclusivo > 0,
   fraude_crm:  (m) => m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia:   (m) => !!m.alerta5_geografico,
-  surtos_cnpj: (m) => m.flag_concentracao_estabelecimento > 0,
+  surtos_cnpj: (m) => m.alerta_concentracao_multiplos_crms > 0,
 };
 
 const kpiFilterLabels = {

@@ -933,7 +933,7 @@ SELECT
     CAST(CASE WHEN CA.id_medico     IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao,
     CAST(CASE WHEN GC.id_medico     IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_geografico,
     CAST(CASE WHEN RE.id_medico     IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_registro,
-    CAST(CASE WHEN SR.id_medico     IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao_estabelecimento,
+    CAST(CASE WHEN SR.id_medico     IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS alerta_concentracao_multiplos_crms,
     ISNULL(CA.qtd_dias, 0)                                             AS qtd_dias_concentracao
 INTO temp_CGUSC.fp.alertas_crm
 FROM base B
@@ -990,7 +990,7 @@ SELECT
     -- Flags CFM por competência
     CAST(CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_crm_invalido,
     CAST(CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_prescricao_antes_registro,
-    ISNULL(AL.flag_concentracao_estabelecimento, CAST(0 AS BIT))      AS flag_concentracao_estabelecimento
+    ISNULL(AL.alerta_concentracao_multiplos_crms, CAST(0 AS BIT))     AS alerta_concentracao_multiplos_crms
 INTO temp_CGUSC.fp.crm_export
 FROM temp_CGUSC.fp.dados_crm_detalhado A
 LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico

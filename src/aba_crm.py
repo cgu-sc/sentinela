@@ -55,7 +55,7 @@ def buscar_dados_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                     MAX(CAST(flag_prescricao_antes_registro AS INT)) as flag_prescricao_antes_registro,
                     MAX(CAST(flag_distancia_geografica AS INT)) as flag_distancia_geografica,
                     MAX(CAST(flag_concentracao_mesmo_crm AS INT)) as flag_concentracao_mesmo_crm,
-                    MAX(CAST(flag_concentracao_estabelecimento AS INT)) as flag_concentracao_estabelecimento,
+                    MAX(CAST(alerta_concentracao_multiplos_crms AS INT)) as alerta_concentracao_multiplos_crms,
                     -- Média Local
                     SUM(nu_prescricoes) / NULLIF(SUM(nu_prescricoes / NULLIF(nu_prescricoes_dia, 0)), 0) as avg_loc,
                     -- Média Brasil
@@ -155,9 +155,9 @@ def buscar_top20_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                 -- Flag Robô Rede: Média BR do período > 30
                 CASE WHEN (SUM(prescricoes_total_brasil) / NULLIF(SUM(prescricoes_total_brasil / NULLIF(prescricoes_dia_brasil, 0)), 0)) > 30 THEN 1 ELSE 0 END as flag_robo_oculto,
                 -- Alerta Rajada: Concentração temporal do CRM (Qualquer mês no período)
-                MAX(CAST(flag_concentracao_mesmo_crm AS INT)) as alerta_concentracao_mesmo_crm,
+                MAX(CAST(flag_concentracao_mesmo_crm AS INT)) as alerta_concentracao_unico_crm,
                 -- Flag Cross-CRM: Surto geral na farmácia
-                MAX(CAST(flag_concentracao_estabelecimento AS INT)) as flag_surto_geral,
+                MAX(CAST(alerta_concentracao_multiplos_crms AS INT)) as alerta_concentracao_multiplos_crms,
                 MAX(alerta_distancia_geografica) as alerta_geografico
             FROM temp_CGUSC.fp.crm_export
             WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
@@ -638,7 +638,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
             dt_inscricao_crm = presc.get('dt_inscricao_crm', None)
 
             alerta1 = presc.get('alerta1_crm_invalido', '') or presc.get('alerta1', '') or ''
-            alerta2 = presc.get('alerta_concentracao_mesmo_crm', '') or ''
+            alerta2 = presc.get('alerta_concentracao_unico_crm', '') or ''
             alerta3 = presc.get('alerta3_robo_estabelecimento', '') or presc.get('alerta3', '') or ''
             alerta4 = presc.get('alerta4_robo_rede', '') or presc.get('alerta4', '') or ''
             alerta_geo = presc.get('alerta5_geografico', '') or presc.get('alerta_geografico', '') or presc.get(

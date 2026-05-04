@@ -1879,7 +1879,7 @@ class AnalyticsService:
                         text("SELECT M.id_medico, E.id_medico_int, E.competencia, E.vl_total_prescricoes, "
                              "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
                              "E.flag_crm_invalido, "
-                             "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
+                             "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
                              "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
                              "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
                              "E.nu_estabelecimentos"
@@ -1894,7 +1894,7 @@ class AnalyticsService:
                 if pdf.empty:
                     return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=False, query_time_ms=query_time_ms)
                 df = pl.from_pandas(pdf)
-                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "flag_concentracao_estabelecimento"]:
+                for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
                     if col in df.columns:
                         df = df.with_columns(pl.col(col).cast(pl.Int8))
                 _t1 = _time.perf_counter()
@@ -1958,8 +1958,8 @@ class AnalyticsService:
                 pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do médico
                 pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
                 pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
-                pl.max("flag_concentracao_estabelecimento").alias("flag_concentracao_estabelecimento"),
-                pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_mesmo_crm"),
+                pl.max("alerta_concentracao_multiplos_crms").alias("alerta_concentracao_multiplos_crms"),
+                pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_unico_crm"),
                 pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta_distancia_geografica"),
                 pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta5_geografico"),
                 pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
@@ -2070,7 +2070,7 @@ class AnalyticsService:
             "pct_valor_crm_invalido":         pct_invalido,
             "pct_valor_crm_antes_registro":   pct_antes_reg,
             "qtd_prescritores_conc_temporal": qtd_conc_temp,
-            "qtd_prescritores_surto":         int(df_med["flag_concentracao_estabelecimento"].sum() or 0),
+            "qtd_prescritores_surto":         int(df_med["alerta_concentracao_multiplos_crms"].sum() or 0),
             "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
             "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
             "razaoSocial":                    razao_social,

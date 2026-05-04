@@ -58,9 +58,9 @@ function clearAllFilters() {
 }
 
 const hasAnyIssue = (m) =>
-  m.flag_robo > 0 || m.flag_robo_oculto > 0 || m.alerta_concentracao_mesmo_crm ||
+  m.flag_robo > 0 || m.flag_robo_oculto > 0 || m.alerta_concentracao_unico_crm ||
   m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0 ||
-  m.alerta5_geografico || m.flag_crm_exclusivo > 0 || m.flag_concentracao_estabelecimento > 0;
+  m.alerta5_geografico || m.flag_crm_exclusivo > 0 || m.alerta_concentracao_multiplos_crms > 0;
 
 const filteredCrmsInteresse = computed(() => {
   let list = props.crmsInteresse;
@@ -165,7 +165,7 @@ const maxPDOverall = computed(() => {
         <tbody>
           <template v-for="(m, i) in visibleCrms" :key="i">
             <tr
-              :class="{ 'row-expandable': m.alerta_concentracao_mesmo_crm || m.alerta5_geografico || m.flag_concentracao_estabelecimento }"
+              :class="{ 'row-expandable': m.alerta_concentracao_unico_crm || m.alerta5_geografico || m.alerta_concentracao_multiplos_crms }"
               @click="(m.alertas_crm_unico?.length || m.alertas_geograficos?.length || m.alertas_crm_multiplos?.length) ? toggleAlertasDiarios(m.id_medico) : null"
             >
               <td class="col-center">
@@ -186,7 +186,7 @@ const maxPDOverall = computed(() => {
                     <i class="pi pi-globe"></i> >30 PRESC/DIA (BRASIL)
                   </span>
                   <span
-                    v-if="m.alerta_concentracao_mesmo_crm"
+                    v-if="m.alerta_concentracao_unico_crm"
                     class="issue-tag violet clickable-badge"
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
@@ -215,7 +215,7 @@ const maxPDOverall = computed(() => {
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span
-                    v-if="m.flag_concentracao_estabelecimento"
+                    v-if="m.alerta_concentracao_multiplos_crms"
                     class="issue-tag amber clickable-badge"
                     v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios de surto geral'"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
@@ -225,7 +225,7 @@ const maxPDOverall = computed(() => {
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <i
-                    v-if="!m.alertas_crm_unico?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.flag_concentracao_estabelecimento && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
+                    v-if="!m.alertas_crm_unico?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.alerta_concentracao_multiplos_crms && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
                     class="pi pi-check-circle"
                     style="color: var(--text-muted); font-size: 0.85rem;"
                     v-tooltip.top="'Sem ocorrências identificadas'"

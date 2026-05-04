@@ -2080,7 +2080,7 @@ class AnalyticsService:
         }
 
         # ── 7. Alertas diários — injeta em cada médico ────────────────────────
-        ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "crm_unico_alertas.parquet")
+        ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
         df_ad: pl.DataFrame | None = None
 
         # Tenta carregar do cache parquet
@@ -2096,12 +2096,41 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT M.id_medico, A.competencia, A.dt_alerta, A.hr_janela, A.nu_prescricoes_dia, A.nu_minutos_dia, A.taxa_hora, A.dt_ini_hora, A.dt_fim_hora"
-                             " FROM temp_CGUSC.fp.crm_unico_alertas A"
-                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
-                             " INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int"
-                             " WHERE F.cnpj = :cnpj"
-                             " ORDER BY A.dt_alerta, M.id_medico"),
+                        text("SELECT A.id_medico, "
+                             " YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia, "
+                             " A.dt_dia AS dt_alerta, "
+                             " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela, "
+                             " CASE "
+                             "   WHEN A.nu_5min  >=  7 THEN A.nu_5min "
+                             "   WHEN A.nu_10min >= 10 THEN A.nu_10min "
+                             "   WHEN A.nu_5min  >=  6 THEN A.nu_5min "
+                             "   WHEN A.nu_10min >=  8 THEN A.nu_10min "
+                             "   WHEN A.nu_15min >=  8 THEN A.nu_15min "
+                             "   WHEN A.nu_20min >=  9 THEN A.nu_20min "
+                             "   WHEN A.nu_30min >=  7 THEN A.nu_30min "
+                             "   WHEN A.nu_60min >= 10 THEN A.nu_60min "
+                             "   WHEN A.nu_25min >=  5 THEN A.nu_25min "
+                             "   WHEN A.nu_60min >=  5 THEN A.nu_60min "
+                             " END AS nu_prescricoes_dia, "
+                             " A.nu_minutos_span AS nu_minutos_dia, "
+                             " CASE WHEN A.nu_minutos_span = 0 THEN 0 "
+                             "      ELSE CAST((CASE "
+                             "          WHEN A.nu_5min  >=  7 THEN A.nu_5min "
+                             "          WHEN A.nu_10min >= 10 THEN A.nu_10min "
+                             "          WHEN A.nu_5min  >=  6 THEN A.nu_5min "
+                             "          WHEN A.nu_10min >=  8 THEN A.nu_10min "
+                             "          WHEN A.nu_15min >=  8 THEN A.nu_15min "
+                             "          WHEN A.nu_20min >=  9 THEN A.nu_20min "
+                             "          WHEN A.nu_30min >=  7 THEN A.nu_30min "
+                             "          WHEN A.nu_60min >= 10 THEN A.nu_60min "
+                             "          WHEN A.nu_25min >=  5 THEN A.nu_25min "
+                             "          WHEN A.nu_60min >=  5 THEN A.nu_60min "
+                             "      END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora, "
+                             " A.dt_ini_concentracao AS dt_ini_hora, "
+                             " A.dt_fim_concentracao AS dt_fim_hora "
+                             " FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A"
+                             " WHERE A.cnpj = :cnpj"
+                             " ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2348,9 +2377,10 @@ class AnalyticsService:
     ) -> "CrmDailyProfileResponse":
         """Retorna o perfil diário unificado de dispensação de um CNPJ.
 
-        Cada dia inclui duas flags independentes:
+        Cada dia inclui três flags independentes:
           - is_dia_com_volume_horario_anomalo: surto horário de volume
           - is_anomalo_unico:                  concentração temporal de médico individual
+          - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
 
         Fonte: temp_CGUSC.fp.crm_perfil_diario
         Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
@@ -2371,6 +2401,9 @@ class AnalyticsService:
             try:
                 _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                if "is_crm_multiplo" not in df.columns:
+                    df = None
+                    raise ValueError("Parquet crm_perfil_diario sem coluna is_crm_multiplo; regenerando cache.")
                 read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 from_cache = True
             except Exception as e:
@@ -2422,6 +2455,7 @@ class AnalyticsService:
                 "mediana_diaria":        float(r["mediana_diaria"]),
                 "is_dia_com_volume_horario_anomalo": int(r["is_dia_com_volume_horario_anomalo"]),
                 "is_anomalo_unico":      int(r["is_anomalo_unico"]),
+                "is_crm_multiplo":       int(r.get("is_crm_multiplo", 0)),
             }
             for r in df.iter_rows(named=True)
         ]
@@ -2437,7 +2471,7 @@ class AnalyticsService:
     ) -> CrmHourlyProfileResponse:
         """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
 
-        Inclui is_volume_horario_anomalo (surto de volume) e is_crm_unico (concentração individual)
+        Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
         por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
         Cache: sentinela_cache/<cnpj>/crm_horario.parquet
         """
@@ -2458,6 +2492,9 @@ class AnalyticsService:
             try:
                 _t0 = _time.perf_counter()
                 df = pl.read_parquet(PARQUET_PATH)
+                if "is_crm_multiplo" not in df.columns or "is_hora_com_alerta" not in df.columns:
+                    df = None
+                    raise ValueError("Parquet crm_horario sem colunas atualizadas; regenerando cache.")
                 read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
                 from_cache = True
             except Exception as e:
@@ -2470,7 +2507,7 @@ class AnalyticsService:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
-                             "P.is_anomalo_hora, P.is_volume_horario_anomalo, P.is_crm_unico "
+                             "P.is_hora_com_alerta, P.is_volume_horario_anomalo, P.is_crm_unico, P.is_crm_multiplo "
                              "FROM temp_CGUSC.fp.crm_perfil_horario P "
                              "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
                              "WHERE F.cnpj = :cnpj "
@@ -2528,6 +2565,7 @@ class AnalyticsService:
                 dates_flags[dt] = {
                     "is_volume_horario_anomalo": int(r.get("is_volume_horario_anomalo", 0)),
                     "is_crm_unico":              int(r.get("is_crm_unico", 0)),
+                    "is_crm_multiplo":           int(r.get("is_crm_multiplo", 0)),
                 }
 
         # Expande para 24 horas por dia anômalo com mediana real para todas as horas
@@ -2548,9 +2586,10 @@ class AnalyticsService:
                     "nu_prescricoes":     int(row["nu_prescricoes"])     if row else 0,
                     "nu_crms_diferentes": int(row["nu_crms_diferentes"]) if row else 0,
                     "mediana_hora":       mediana,
-                    "is_anomalo_hora":    int(row.get("is_anomalo_hora", 0)) if row else 0,
+                    "is_hora_com_alerta": int(row.get("is_hora_com_alerta", 0)) if row else 0,
                     "is_volume_horario_anomalo": flags["is_volume_horario_anomalo"],
                     "is_crm_unico":              flags["is_crm_unico"],
+                    "is_crm_multiplo":           flags["is_crm_multiplo"],
                 })
 
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)
@@ -2767,7 +2806,7 @@ class AnalyticsService:
 
             # Busca os médicos-gatilho do dia (usando o cache de alertas diários)
             alertas: list[dict] = []
-            alertas_parquet = os.path.join(cnpj_dir, "crm_unico_alertas.parquet")
+            alertas_parquet = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
             if os.path.exists(alertas_parquet):
                 df_alertas = pl.read_parquet(alertas_parquet)
                 day_alertas = df_alertas.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)

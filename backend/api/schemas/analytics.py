@@ -281,6 +281,7 @@ class CrmDailyProfileItem(BaseModel):
     mediana_diaria: float
     is_dia_com_volume_horario_anomalo: int
     is_anomalo_unico: int
+    is_crm_multiplo: int
 
 class CrmDailyProfileResponse(BaseModel):
     cnpj: str
@@ -296,9 +297,10 @@ class CrmHourlyPointSchema(BaseModel):
     nu_prescricoes: int
     nu_crms_diferentes: int
     mediana_hora: float
-    is_anomalo_hora: int = 0
+    is_hora_com_alerta: int = 0
     is_volume_horario_anomalo: int = 0
     is_crm_unico: int = 0
+    is_crm_multiplo: int = 0
 
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str

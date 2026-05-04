@@ -48,16 +48,21 @@ watch([crmPerfilHorario, crmPerfilHorarioLoading], ([newData, loading]) => {
   if (newData && !loading) cachedCrmPerfilHorario.value = newData;
 }, { immediate: true });
 
-// Série unificada: cada dia já traz is_dia_com_volume_horario_anomalo e is_anomalo_unico
-// Não há mais necessidade de merge entre dois caches distintos.
-const unifiedDays = computed(() =>
-  (cachedCrmPerfilDiario.value?.days ?? []).map(d => ({
+function normalizeDailyDay(d) {
+  return {
     ...d,
     is_volume_horario_anomalo: d.is_dia_com_volume_horario_anomalo,
-    is_crm_unico:               d.is_anomalo_unico,
+    is_crm_unico: d.is_anomalo_unico,
+    is_crm_multiplo: d.is_crm_multiplo ?? 0,
     // Compatibilidade retroativa: is_anomalo usado pelo watch de auto-seleção
-    is_anomalo: d.is_dia_com_volume_horario_anomalo || d.is_anomalo_unico ? 1 : 0,
-  }))
+    is_anomalo: d.is_dia_com_volume_horario_anomalo || d.is_anomalo_unico || d.is_crm_multiplo ? 1 : 0,
+  };
+}
+
+// Série unificada: cada dia já traz volume anômalo, CRM único e CRM múltiplo
+// Não há mais necessidade de merge entre dois caches distintos.
+const unifiedDays = computed(() =>
+  (cachedCrmPerfilDiario.value?.days ?? []).map(normalizeDailyDay)
 );
 
 
@@ -79,7 +84,7 @@ const dailyZoomEnd = ref(100);
 
 const filteredDailyDays = computed(() => {
   if (!filterDailyOnlyAnomalous.value) return unifiedDays.value;
-  return unifiedDays.value.filter(d => d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1);
+  return unifiedDays.value.filter(d => d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1 || d.is_crm_multiplo === 1);
 });
 
 const dailyDates     = computed(() => filteredDailyDays.value.map(d => d.dt_janela));
@@ -200,7 +205,7 @@ async function loadTransactions(dt_janela, hourInt = null) {
 async function onDailyZrClick() {
   if (hoveredDailyDayIndex.value === null) return;
   const day = filteredDailyDays.value?.[hoveredDailyDayIndex.value];
-  if (!day || (day.is_volume_horario_anomalo === 0 && day.is_crm_unico === 0)) return;
+  if (!day || (day.is_volume_horario_anomalo === 0 && day.is_crm_unico === 0 && day.is_crm_multiplo === 0)) return;
 
   if (selectedDay.value?.dt_janela === day.dt_janela) return;
 
@@ -294,7 +299,7 @@ const chartOptionDaily = computed(() => {
           const bars = Array.from({ length: 24 }, (_, h) => {
             const pt = points.find(x => x.hr_janela === h);
             const hPerc = pt ? (pt.nu_prescricoes / maxVal) * 100 : 0;
-            const isAnomalo = pt?.is_anomalo_hora === 1;
+            const isAnomalo = pt?.is_hora_com_alerta === 1;
             const color = isAnomalo ? '#ef4444' : c.muted;
             const opacity = hPerc > 0 ? 1 : 0.3;
             return `<div style="flex:1; height:${Math.max(hPerc, 2)}%; background:${color}; border-radius:1px; opacity:${opacity};"></div>`;
@@ -305,16 +310,21 @@ const chartOptionDaily = computed(() => {
               <div style="display:flex; align-items:flex-end; gap:2px; height:40px;">${bars}</div>
             </div>`;
         }
-        const flagAnomalo = day.is_volume_horario_anomalo === 1
-          ? `<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ SURTO</span>`
-          : day.is_crm_unico === 1
-            ? `<span style="font-size:10px; background:rgba(245, 158, 11, 0.15); color:#f59e0b; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(245, 158, 11, 0.3); margin-left:8px;">⚠ CONCENTRAÇÃO</span>`
-            : '';
+        const badges = [];
+        if (day.is_volume_horario_anomalo === 1) {
+          badges.push('<span style="font-size:10px; background:rgba(239, 68, 68, 0.15); color:#ef4444; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(239, 68, 68, 0.3); margin-left:8px;">⚠ SURTO</span>');
+        }
+        if (day.is_crm_unico === 1) {
+          badges.push('<span style="font-size:10px; background:rgba(245, 158, 11, 0.15); color:#f59e0b; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(245, 158, 11, 0.3); margin-left:8px;">⚠ CRM ÚNICO</span>');
+        }
+        if (day.is_crm_multiplo === 1) {
+          badges.push('<span style="font-size:10px; background:rgba(139, 92, 246, 0.15); color:#8b5cf6; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(139, 92, 246, 0.3); margin-left:8px;">⚠ CRM MÚLTIPLO</span>');
+        }
         return `
           <div style="color: ${c.tooltipText}; min-width: 200px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
               <span style="font-weight:700; font-size:14px;">${formatarData(day.dt_janela)}</span>
-              ${flagAnomalo}
+              ${badges.join('')}
             </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -327,7 +337,7 @@ const chartOptionDaily = computed(() => {
               </div>
             </div>
             ${sparklineHtml}
-            ${(day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1) ? '<div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>' : ''}
+            ${(day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1 || day.is_crm_multiplo === 1) ? '<div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>' : ''}
           </div>`;
       },
     },
@@ -361,7 +371,7 @@ const chartOptionDaily = computed(() => {
         data: filteredDailyDays.value.map(d => ({
           value: 1,
           itemStyle: { color: 'transparent' },
-          cursor: (d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1) ? 'pointer' : 'default'
+          cursor: (d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1 || d.is_crm_multiplo === 1) ? 'pointer' : 'default'
         })),
         tooltip: { show: false },
         silent: false
@@ -377,13 +387,13 @@ const chartOptionDaily = computed(() => {
           const day = filteredDailyDays.value[i];
           const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
           const hasSelection = !!selectedDay.value;
-          const isAnomalo = day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1;
+          const isAnomalo = day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1 || day.is_crm_multiplo === 1;
           const color = isAnomalo
             ? { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#ef444440' }] }
             : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(148,163,184,0.6)' }, { offset: 1, color: 'rgba(148,163,184,0.15)' }] };
           return {
             value: v,
-            cursor: (day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1) ? 'pointer' : 'default',
+            cursor: (day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1 || day.is_crm_multiplo === 1) ? 'pointer' : 'default',
             itemStyle: {
               opacity: hasSelection && !isSelected ? 0.5 : 1,
               color,
@@ -418,7 +428,7 @@ const chartOptionHourly = computed(() => {
   const fullPoints = hourlyPoints.value;
 
   const barColors = fullPoints.map(p => {
-    if (p.is_anomalo_hora === 1 && p.nu_prescricoes > 0) {
+    if (p.is_hora_com_alerta === 1 && p.nu_prescricoes > 0) {
       return { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: 'rgba(239, 68, 68, 0.4)' }] };
     }
     return { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(99, 102, 241, 0.65)' }, { offset: 1, color: 'rgba(99, 102, 241, 0.15)' }] };
@@ -475,7 +485,7 @@ const chartOptionHourly = computed(() => {
         const crms = volItem?.data?.nu_crms ?? 0;
         const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
         const ratio = med > 0 ? (vol / med).toFixed(1) : null;
-        const isAnomalo = ptInfo?.is_anomalo_hora === 1;
+        const isAnomalo = ptInfo?.is_hora_com_alerta === 1;
         const alertaHtml = ratio !== null
           ? `<div style="margin-top:8px; font-size:12px; color:${isAnomalo ? '#ef4444' : c.muted}; font-weight:${isAnomalo ? '600' : '400'};">${ratio}× ${isAnomalo ? 'acima da mediana' : 'da mediana'}</div>`
           : '';
@@ -529,7 +539,7 @@ const chartOptionHourly = computed(() => {
           return { 
             value: p.nu_prescricoes,
             nu_crms: p.nu_crms_diferentes,
-            is_anomalo_hora: p.is_anomalo_hora,
+            is_hora_com_alerta: p.is_hora_com_alerta,
             is_volume_horario_anomalo: p.is_volume_horario_anomalo,
             is_crm_unico: p.is_crm_unico,
             cursor: 'pointer',
@@ -629,7 +639,8 @@ watch(activeCrmViewMode, (mode) => {
 watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => {
   if (!evt || !profile) return;
 
-  const dayObj = profile.days.find(d => d.dt_janela === evt.date);
+  const rawDayObj = profile.days.find(d => d.dt_janela === evt.date);
+  const dayObj = rawDayObj ? normalizeDailyDay(rawDayObj) : null;
   if (!dayObj) return;
 
   // 1. Seleciona o dia — mostra o dia todo sem filtrar por hora
@@ -906,7 +917,7 @@ function toggleActiveRow(auth) {
         </div>
       </div>
       <p class="subtitle" style="padding-left: 1.75rem; margin-top: 0; margin-bottom: 0.75rem">
-        Evolução diária de autorizações. Vermelho = volume horário anômalo. Âmbar = médico com concentração elevada no dia (CRM Único). Clique em qualquer anomalia para análise detalhada.
+        Evolução diária de autorizações. Vermelho = volume horário anômalo. Âmbar = rajada de CRM único. Roxo = rajada com múltiplos CRMs. Clique em qualquer anomalia para análise detalhada.
       </p>
       
       <div v-if="!crmPerfilDiario && !crmPerfilDiarioLoading" class="chart-empty">
@@ -922,6 +933,10 @@ function toggleActiveRow(auth) {
           <span class="legend-item">
             <span class="legend-swatch legend-bar" style="background: #f59e0b;"></span>
             Concentração Individual
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-bar" style="background: #8b5cf6;"></span>
+            CRM Múltiplo
           </span>
           <span class="legend-item">
             <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
@@ -943,7 +958,7 @@ function toggleActiveRow(auth) {
       </div>
       <div v-if="!selectedDay && crmPerfilDiario" class="drill-hint">
         <i class="pi pi-hand-pointer" />
-        <span>Clique em uma barra vermelha (surto horário) ou âmbar (concentração individual) para análise detalhada</span>
+        <span>Clique em uma barra vermelha, âmbar ou roxa para análise detalhada</span>
       </div>
     </div>
 
@@ -964,6 +979,7 @@ function toggleActiveRow(auth) {
           <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
           <span v-if="selectedDay.is_volume_horario_anomalo === 1" class="anomalo-badge">SURTO HORÁRIO</span>
           <span v-if="selectedDay.is_crm_unico === 1" class="concentracao-badge">CONCENTRAÇÃO</span>
+          <span v-if="selectedDay.is_crm_multiplo === 1" class="multiplo-badge">CRM MÚLTIPLO</span>
         </div>
         <div class="drill-panel-actions">
           <button 
@@ -1406,6 +1422,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 .anomalo-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
 .concentracao-badge { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
+.multiplo-badge { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 0.75rem; }
 .close-detail-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; transition: all 0.2s; }
 .close-detail-btn:hover { background: var(--surface-hover); color: #ef4444; }
 

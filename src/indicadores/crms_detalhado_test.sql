@@ -2,9 +2,9 @@
 -- GERADOR DE DADOS PARA INDICADOR DE CRMs - VERSÃO 5
 -- ============================================================================
 -- ALTERAÇÕES v5 (sobre v4):
---   1. crm_unico_alertas: tabela master diária, fonte única de verdade
---      para alertas temporais. Inclui competencia para joins diretos.
---      Elimina alertas_crm_diario e a duplicação com #lista_alertas_temp.
+--   1. Concentração temporal externalizada:
+--      crm_concentracao_unico_alertas + crm_concentracao_multiplo_alertas
+--      passam a ser as fontes oficiais dos alertas temporais.
 --   2. alertas_crm_registro: unifica crm_invalido + crm_irregular_registro.
 --      Adiciona competencia (grain mensal) e vl_prescricoes (impacto financeiro).
 --      Elimina as tabelas crm_invalido e crm_irregular_registro.
@@ -68,7 +68,7 @@ INTO #base_horaria_mestra
 FROM temp_CGUSC.fp.teste_mov_SC M 
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
+  AND M.data_hora >= @DataInicio AND M.data_hora < DATEADD(DAY, 1, @DataFim)
 GROUP BY 
     M.cnpj, M.crm, M.crm_uf, 
     YEAR(M.data_hora), MONTH(M.data_hora), 
@@ -314,73 +314,13 @@ CREATE CLUSTERED INDEX IDX_PiorDia ON #pior_dia_crm(nu_cnpj, id_medico, competen
 GO
 
 -- ============================================================================
--- MOTOR TEMPORAL: crm_unico_alertas (Master Temporal)
+-- MOTOR TEMPORAL (EXTERNO)
+-- A concentração temporal de CRM único e múltiplo agora vem dos scripts:
+--   - temp_CGUSC.fp.crm_concentracao_unico_alertas
+--   - temp_CGUSC.fp.crm_concentracao_multiplo_alertas
+-- O motor legado crm_unico_alertas foi descontinuado neste fluxo.
 -- ============================================================================
-PRINT '>> Criando temp_CGUSC.fp.crm_unico_alertas (Master Temporal)...';
-DECLARE @t_alert_t DATETIME = GETDATE();
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
-
-;WITH base_com_taxa AS (
-    SELECT
-        nu_cnpj, id_medico, competencia,
-        dt_dia, hr_janela, nu_prescricoes_hora, nu_minutos_hora,
-        dt_ini_hora, dt_fim_hora,
-        CASE WHEN nu_minutos_hora = 0 THEN CAST(nu_prescricoes_hora AS FLOAT) * 60.0
-             ELSE CAST(nu_prescricoes_hora AS DECIMAL(10,2)) / (CAST(NULLIF(nu_minutos_hora, 0) AS DECIMAL(10,2)) / 60.0)
-        END AS taxa_hora
-    FROM #base_horaria_crm
-),
-    alertas AS (
-        SELECT
-            nu_cnpj                                          AS cnpj,
-            id_medico,
-            competencia,
-            dt_dia                                           AS dt_alerta,
-            hr_janela,
-            nu_prescricoes_hora                              AS nu_prescricoes_dia,
-            nu_minutos_hora                                  AS nu_minutos_dia,
-            CAST(taxa_hora AS DECIMAL(5,1))                   AS taxa_hora,
-            dt_ini_hora,
-            dt_fim_hora,
-            CASE
-                WHEN nu_prescricoes_hora >=  7 AND nu_minutos_hora <=  5 THEN 'EXTREMO'
-                WHEN nu_prescricoes_hora >= 10 AND nu_minutos_hora <= 10 THEN 'EXTREMO'
-                WHEN nu_prescricoes_hora >=  6 AND nu_minutos_hora <=  5 THEN 'CRÍTICO'
-                WHEN nu_prescricoes_hora >=  8 AND nu_minutos_hora <= 10 THEN 'CRÍTICO'
-                WHEN nu_prescricoes_hora >=  8 AND nu_minutos_hora <= 15 THEN 'GRAVE'
-                WHEN nu_prescricoes_hora >=  9 AND nu_minutos_hora <= 20 THEN 'GRAVE'
-                WHEN nu_prescricoes_hora >=  7 AND nu_minutos_hora <= 30 THEN 'ALTO'
-                WHEN nu_prescricoes_hora >= 10 AND nu_minutos_hora <= 60 THEN 'ALTO'
-                WHEN nu_prescricoes_hora >=  5 AND taxa_hora >= 12       THEN 'ALTO'
-            END AS severidade
-        FROM base_com_taxa
-        WHERE
-            (nu_prescricoes_hora >= 5  AND (taxa_hora >= 12 OR nu_minutos_hora <= 5))
-         OR (nu_prescricoes_hora >= 10 AND (taxa_hora >= 7 OR nu_minutos_hora <= 60))
-         OR (nu_prescricoes_hora >= 8  AND nu_minutos_hora <= 15)
-         OR (nu_prescricoes_hora >= 9  AND nu_minutos_hora <= 20)
-    )
-SELECT
-    F.id                      AS id_cnpj,
-    MED.id                    AS id_medico_int,
-    A.competencia,
-    A.dt_alerta,
-    A.hr_janela,
-    A.nu_prescricoes_dia,
-    A.nu_minutos_dia,
-    A.taxa_hora,
-    A.dt_ini_hora,
-    A.dt_fim_hora,
-    A.severidade
-INTO temp_CGUSC.fp.crm_unico_alertas
-FROM alertas A
-INNER JOIN temp_CGUSC.fp.dados_farmacia F   ON F.cnpj      = A.cnpj
-INNER JOIN temp_CGUSC.fp.dados_medico   MED ON MED.id_medico = A.id_medico
-WHERE A.severidade IS NOT NULL;
-GO
-
-CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(id_cnpj, id_medico_int, dt_alerta);
-GO
+PRINT '>> Usando tabelas externas de concentração temporal (CRM único / múltiplo)...';
 
 
 -- Identifica quais CRMs participaram de algum surto no CNPJ/Competencia
@@ -429,10 +369,10 @@ PRINT '   #mediana_diaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t
 
 CREATE CLUSTERED INDEX IDX_MedianaDia ON #mediana_diaria(cnpj, competencia);
 
--- 4. Tabela Unificada: crm_perfil_diario (Gráfico Principal — substitui crm_multiplos_perfil_diario + crm_unico_perfil_diario)
+-- 4. Tabela Unificada: crm_perfil_diario (Gráfico Principal)
 -- is_dia_com_volume_horario_anomalo = 1 → dia com surto horário detectado por volume (MZS > 4.5)
--- is_anomalo_unico     = 1 → dia com alerta de concentração temporal de CRM individual
--- As duas flags podem estar ativas no mesmo dia simultaneamente.
+-- is_anomalo_unico                  = 1 → dia com rajada temporal de CRM único
+-- is_crm_multiplo                   = 1 → dia com rajada temporal envolvendo múltiplos CRMs
 PRINT '>> Passo 4: Criando crm_perfil_diario (Perfil Diário Unificado)...';
 DECLARE @t_perfil_d DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_diario;
@@ -446,8 +386,12 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_diario;
     GROUP BY nu_cnpj, dt_dia
 ),
 anomalias_unico_dia AS (
-    SELECT DISTINCT id_cnpj, dt_alerta
-    FROM temp_CGUSC.fp.crm_unico_alertas
+    SELECT DISTINCT id_cnpj, dt_dia AS dt_alerta
+    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas
+),
+anomalias_multiplo_dia AS (
+    SELECT DISTINCT id_cnpj, dt_dia AS dt_alerta
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
 )
 SELECT
     F.id                                              AS id_cnpj,
@@ -459,23 +403,27 @@ SELECT
     -- Flag Múltiplos: rajada horária detectada pelo MZS
     CAST(T.dia_tem_anomalia_hora AS BIT)                                       AS is_dia_com_volume_horario_anomalo,
     -- Flag Único: médico individual com concentração anômala no dia
-    CAST(CASE WHEN U.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT)           AS is_anomalo_unico
+    CAST(CASE WHEN U.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT)           AS is_anomalo_unico,
+    -- Flag Múltiplo: rajada temporal com múltiplos médicos
+    CAST(CASE WHEN MU.dt_alerta IS NOT NULL THEN 1 ELSE 0 END AS BIT)          AS is_crm_multiplo
 INTO temp_CGUSC.fp.crm_perfil_diario
 FROM #totais_diarios T
 LEFT JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = T.cnpj
 INNER JOIN #mediana_diaria M   ON M.cnpj = T.cnpj AND M.competencia = T.competencia
 LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela  = T.dt_janela
-LEFT JOIN anomalias_unico_dia U ON U.id_cnpj = F.id AND U.dt_alerta = T.dt_janela;
+LEFT JOIN anomalias_unico_dia U ON U.id_cnpj = F.id AND U.dt_alerta = T.dt_janela
+LEFT JOIN anomalias_multiplo_dia MU ON MU.id_cnpj = F.id AND MU.dt_alerta = T.dt_janela;
 
 PRINT '   crm_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_d, 114);
 
 CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(id_cnpj, dt_janela);
 GO
 
--- 5. Tabela Final 2: crm_perfil_horario (Drill-down unificado: CRM Múltiplos + CRM Único)
--- is_anomalo_hora = 1  → hora específica com Surto (MZS) OU Alerta de CRM Único
+-- 5. Tabela Final 2: crm_perfil_horario (Drill-down unificado)
+-- is_hora_com_alerta = 1 → hora específica com surto de volume OU rajada temporal
 -- is_volume_horario_anomalo = 1 → dia tem surto horário detectado (volume MZS > 4.5)
--- is_crm_unico     = 1 → dia tem alerta de concentração temporal (médico com taxa/dia elevada)
+-- is_crm_unico             = 1 → hora/dia participa de rajada temporal de CRM único
+-- is_crm_multiplo          = 1 → hora/dia participa de rajada temporal com múltiplos CRMs
 PRINT '>> Passo 5: Criando crm_perfil_horario (Drill-down Unificado)...';
 DECLARE @t_perfil_h DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_horario;
@@ -489,22 +437,34 @@ SELECT
     H.mediana_hora,
     CAST(CASE 
         WHEN H.is_anomalo_hora = 1 THEN 1
-        WHEN U.hr_janela IS NOT NULL THEN 1
+        WHEN U.has_unico IS NOT NULL THEN 1
+        WHEN MU.has_multiplo IS NOT NULL THEN 1
         ELSE 0
-    END AS BIT) AS is_anomalo_hora,
+    END AS BIT) AS is_hora_com_alerta,
     CAST(D.is_dia_com_volume_horario_anomalo AS BIT) AS is_volume_horario_anomalo,
-    CAST(D.is_anomalo_unico     AS BIT) AS is_crm_unico
+    CAST(CASE WHEN U.has_unico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_crm_unico,
+    CAST(CASE WHEN MU.has_multiplo IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_crm_multiplo
 INTO temp_CGUSC.fp.crm_perfil_horario
 FROM #anomalias_horarias H
 LEFT JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = H.cnpj
 INNER JOIN temp_CGUSC.fp.crm_perfil_diario D
     ON  D.id_cnpj   = F.id
     AND D.dt_janela = H.dt_janela
-LEFT JOIN temp_CGUSC.fp.crm_unico_alertas U
-    ON  U.id_cnpj   = F.id
-    AND U.dt_alerta = H.dt_janela
-    AND U.hr_janela = H.hr_janela
-WHERE D.is_dia_com_volume_horario_anomalo = 1 OR D.is_anomalo_unico = 1;
+OUTER APPLY (
+    SELECT TOP 1 1 AS has_unico
+    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
+    WHERE U.id_cnpj = F.id
+      AND U.dt_dia = H.dt_janela
+      AND H.hr_janela BETWEEN DATEPART(HOUR, U.dt_ini_concentracao) AND DATEPART(HOUR, U.dt_fim_concentracao)
+) U
+OUTER APPLY (
+    SELECT TOP 1 1 AS has_multiplo
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas MU
+    WHERE MU.id_cnpj = F.id
+      AND MU.dt_dia = H.dt_janela
+      AND H.hr_janela BETWEEN DATEPART(HOUR, MU.dt_ini_concentracao) AND DATEPART(HOUR, MU.dt_fim_concentracao)
+) MU
+WHERE D.is_dia_com_volume_horario_anomalo = 1 OR D.is_anomalo_unico = 1 OR D.is_crm_multiplo = 1;
 
 PRINT '   crm_perfil_horario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_h, 114);
 
@@ -571,7 +531,9 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 ;WITH DiasSuspeitos AS (
     SELECT id_cnpj, dt_alerta FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
     UNION
-    SELECT id_cnpj, dt_alerta FROM temp_CGUSC.fp.crm_unico_alertas
+    SELECT id_cnpj, dt_dia AS dt_alerta FROM temp_CGUSC.fp.crm_concentracao_unico_alertas
+    UNION
+    SELECT id_cnpj, dt_dia AS dt_alerta FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
 )
 SELECT
     D.id_cnpj,
@@ -745,7 +707,8 @@ GO
 
 -- ============================================================================
 -- NOTA: crm_unico_perfil_diario foi eliminada.
--- Os flags is_dia_com_volume_horario_anomalo e is_anomalo_unico agora vivem em crm_perfil_diario.
+-- Os flags is_dia_com_volume_horario_anomalo, is_anomalo_unico e
+-- is_crm_multiplo agora vivem em crm_perfil_diario.
 -- ============================================================================
 
 -- ============================================================================
@@ -925,10 +888,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 
 
 ;WITH base AS (
-    SELECT DISTINCT F1.cnpj AS nu_cnpj, MD1.id_medico, A1.competencia
-    FROM temp_CGUSC.fp.crm_unico_alertas A1
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F1  ON F1.id  = A1.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD1 ON MD1.id = A1.id_medico_int
+    SELECT DISTINCT U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
+    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico G1
@@ -943,11 +904,9 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
     FROM #crms_em_surto_raw S1
 ),
 conc_agg AS (
-    SELECT F2.cnpj, MD2.id_medico, C1.competencia, COUNT(*) AS qtd_dias
-    FROM temp_CGUSC.fp.crm_unico_alertas C1
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F2  ON F2.id  = C1.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD2 ON MD2.id = C1.id_medico_int
-    GROUP BY F2.cnpj, MD2.id_medico, C1.competencia
+    SELECT U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia, COUNT(*) AS qtd_dias
+    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
+    GROUP BY U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
 ),
 geo_cnpj AS (
     SELECT T.nu_cnpj, T.id_medico, T.competencia FROM (
@@ -980,9 +939,9 @@ LEFT JOIN geo_cnpj GC
     AND GC.competencia = B.competencia
     AND GC.nu_cnpj    = B.nu_cnpj
 LEFT JOIN (
-    SELECT DISTINCT R2.cnpj, R2.id_medico, R2.competencia
+    SELECT DISTINCT R2.id_cnpj, R2.id_medico, R2.competencia
     FROM temp_CGUSC.fp.alertas_crm_registro R2
-) RE ON RE.cnpj = B.nu_cnpj AND RE.id_medico = B.id_medico AND RE.competencia = B.competencia;
+) RE ON RE.id_cnpj = B.id_cnpj AND RE.id_medico = B.id_medico AND RE.competencia = B.competencia;
 
 PRINT '   temp_CGUSC.fp.alertas_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_cons, 114);
 GO
@@ -1033,10 +992,8 @@ LEFT JOIN #prescricoes_todos_estabelecimentos P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia
 LEFT JOIN (
-    SELECT DISTINCT F3.cnpj, MD3.id_medico, C.competencia
-    FROM temp_CGUSC.fp.crm_unico_alertas C
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F3  ON F3.id  = C.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD3 ON MD3.id = C.id_medico_int
+    SELECT DISTINCT C.cnpj, C.id_medico, YEAR(C.dt_dia) * 100 + MONTH(C.dt_dia) AS competencia
+    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas C
 ) CONC
     ON  CONC.cnpj        = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico

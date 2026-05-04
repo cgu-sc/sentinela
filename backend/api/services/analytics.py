@@ -2096,7 +2096,7 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT A.id_medico, "
+                        text("SELECT M.id_medico, "
                              " YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia, "
                              " A.dt_dia AS dt_alerta, "
                              " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela, "
@@ -2129,8 +2129,10 @@ class AnalyticsService:
                              " A.dt_ini_concentracao AS dt_ini_hora, "
                              " A.dt_fim_concentracao AS dt_fim_hora "
                              " FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A"
-                             " WHERE A.cnpj = :cnpj"
-                             " ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao"),
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
+                             " LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int"
+                             " WHERE F.cnpj = :cnpj"
+                             " ORDER BY A.dt_dia, M.id_medico, A.dt_ini_concentracao"),
                         conn,
                         params={"cnpj": cnpj},
                     )

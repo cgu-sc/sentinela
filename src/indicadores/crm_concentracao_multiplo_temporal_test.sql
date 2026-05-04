@@ -349,6 +349,11 @@ BEGIN
           ' | Alertas lote: ' + CAST(@nu_alertas_lote AS VARCHAR) +
           ' | Total alertas: ' + CAST(@nu_alertas_total AS VARCHAR) +
           ' | ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
+
+    -- Limpeza sistemática para evitar erro Msg 2714 no próximo lote
+    DROP TABLE IF EXISTS #base_lote;
+    DROP TABLE IF EXISTS #concentracao_raw;
+    DROP TABLE IF EXISTS #concentracao_dedup;
 END
 
 

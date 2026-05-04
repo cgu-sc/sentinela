@@ -279,7 +279,7 @@ class CrmDailyProfileItem(BaseModel):
     nu_prescricoes_dia: int
     nu_crms_distintos: int
     mediana_diaria: float
-    is_anomalo_multiplos: int
+    is_dia_com_volume_horario_anomalo: int
     is_anomalo_unico: int
 
 class CrmDailyProfileResponse(BaseModel):
@@ -297,7 +297,7 @@ class CrmHourlyPointSchema(BaseModel):
     nu_crms_diferentes: int
     mediana_hora: float
     is_anomalo_hora: int = 0
-    is_crm_multiplos: int = 0
+    is_volume_horario_anomalo: int = 0
     is_crm_unico: int = 0
 
 class CrmHourlyProfileResponse(BaseModel):

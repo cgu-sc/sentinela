@@ -2344,8 +2344,8 @@ class AnalyticsService:
         """Retorna o perfil diário unificado de dispensação de um CNPJ.
 
         Cada dia inclui duas flags independentes:
-          - is_anomalo_multiplos: surto horário (vários CRMs simultâneos)
-          - is_anomalo_unico:     concentração temporal de médico individual
+          - is_dia_com_volume_horario_anomalo: surto horário de volume
+          - is_anomalo_unico:                  concentração temporal de médico individual
 
         Fonte: temp_CGUSC.fp.crm_perfil_diario
         Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
@@ -2415,7 +2415,7 @@ class AnalyticsService:
                 "nu_prescricoes_dia":    int(r["nu_prescricoes_dia"]),
                 "nu_crms_distintos":     int(r["nu_crms_distintos"]),
                 "mediana_diaria":        float(r["mediana_diaria"]),
-                "is_anomalo_multiplos":  int(r["is_anomalo_multiplos"]),
+                "is_dia_com_volume_horario_anomalo": int(r["is_dia_com_volume_horario_anomalo"]),
                 "is_anomalo_unico":      int(r["is_anomalo_unico"]),
             }
             for r in df.iter_rows(named=True)
@@ -2432,7 +2432,7 @@ class AnalyticsService:
     ) -> CrmHourlyProfileResponse:
         """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
 
-        Inclui is_crm_multiplos (surto de volume) e is_crm_unico (concentração individual)
+        Inclui is_volume_horario_anomalo (surto de volume) e is_crm_unico (concentração individual)
         por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
         Cache: sentinela_cache/<cnpj>/crm_horario.parquet
         """
@@ -2465,7 +2465,7 @@ class AnalyticsService:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
                         text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
-                             "P.is_anomalo_hora, P.is_crm_multiplos, P.is_crm_unico "
+                             "P.is_anomalo_hora, P.is_volume_horario_anomalo, P.is_crm_unico "
                              "FROM temp_CGUSC.fp.crm_perfil_horario P "
                              "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
                              "WHERE F.cnpj = :cnpj "
@@ -2521,8 +2521,8 @@ class AnalyticsService:
             activity[(dt, int(r["hr_janela"]))] = r
             if dt not in dates_flags:
                 dates_flags[dt] = {
-                    "is_crm_multiplos": int(r.get("is_crm_multiplos", 0)),
-                    "is_crm_unico":     int(r.get("is_crm_unico", 0)),
+                    "is_volume_horario_anomalo": int(r.get("is_volume_horario_anomalo", 0)),
+                    "is_crm_unico":              int(r.get("is_crm_unico", 0)),
                 }
 
         # Expande para 24 horas por dia anômalo com mediana real para todas as horas
@@ -2544,8 +2544,8 @@ class AnalyticsService:
                     "nu_crms_diferentes": int(row["nu_crms_diferentes"]) if row else 0,
                     "mediana_hora":       mediana,
                     "is_anomalo_hora":    int(row.get("is_anomalo_hora", 0)) if row else 0,
-                    "is_crm_multiplos":   flags["is_crm_multiplos"],
-                    "is_crm_unico":       flags["is_crm_unico"],
+                    "is_volume_horario_anomalo": flags["is_volume_horario_anomalo"],
+                    "is_crm_unico":              flags["is_crm_unico"],
                 })
 
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)

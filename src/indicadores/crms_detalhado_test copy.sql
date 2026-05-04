@@ -65,7 +65,13 @@ SELECT
     CAST(MAX(M.data_hora) AS SMALLDATETIME)           AS dt_fim_hora,
     CAST(DATEDIFF(MINUTE, MIN(M.data_hora), MAX(M.data_hora)) AS TINYINT) AS nu_minutos_hora
 INTO #base_horaria_mestra
-FROM temp_CGUSC.fp.teste_mov_SC M 
+FROM  (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora <= @DataFim
@@ -558,6 +564,7 @@ PRINT '   volume_horario_anomalo_alertas concluída em: ' + CONVERT(VARCHAR(20),
 
 
 CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(id_cnpj, dt_alerta, hr_janela);
+GO
 
 -- 7. Tabela Final: crm_raiox_tx (Busca Cirúrgica Unificada)
 -- Salva o movimento do DIA INTEIRO para qualquer farmácia que tenha tido
@@ -585,7 +592,13 @@ SELECT
 INTO temp_CGUSC.fp.crm_raiox_tx
 FROM DiasSuspeitos D
 INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.id = D.id_cnpj
-INNER JOIN temp_CGUSC.fp.teste_mov_SC M
+INNER JOIN (
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+    UNION ALL
+    SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+) M
     ON  M.cnpj = FAR.cnpj
     AND CAST(M.data_hora AS DATE) = D.dt_alerta
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra

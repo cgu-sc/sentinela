@@ -296,7 +296,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             # 1. Lista de Médicos e Alertas (Gera 3 parquets: _prescritores, _crm_unico_alertas, _cnpj_alerts)
             AnalyticsService.get_crm_data(cnpj)
             
-            # 2. Perfil Diário Unificado (is_anomalo_multiplos + is_anomalo_unico)
+            # 2. Perfil Diário Unificado (is_dia_com_volume_horario_anomalo + is_anomalo_unico)
             AnalyticsService.get_crm_perfil_diario(cnpj)
 
             # 3. Detalhamento Horário de Anomalias (auto-warms medianas internamente)

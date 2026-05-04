@@ -334,9 +334,18 @@ const {
 } = useSliderPeriodLogic();
 
 const { getApiParams } = useFilterParameters();
+const animationMode = computed(() => filterStore.animationMode);
+const animationBaseRange = computed(() => filterStore.animationBaseSliderRange);
+const animationSliderValue = computed({
+  get: () => filterStore.animationSliderValue,
+  set: (val) => {
+    filterStore.animationSliderValue = val;
+  },
+});
 
 // Move a ponta inicial do slider em `delta` meses (+1 ou -1)
 const stepStart = (delta) => {
+  closeAnimationPreview();
   const [s, e] = timeSliderValue.value;
   const newS = Math.max(0, Math.min(e - 1, s + delta));
   if (newS === s) return;
@@ -346,6 +355,7 @@ const stepStart = (delta) => {
 
 // Move a ponta final do slider em `delta` meses (+1 ou -1)
 const stepEnd = (delta) => {
+  closeAnimationPreview();
   const [s, e] = timeSliderValue.value;
   const newE = Math.max(s + 1, Math.min(availableMonths.length - 1, e + delta));
   if (newE === e) return;
@@ -355,11 +365,15 @@ const stepEnd = (delta) => {
 
 onMounted(() => applySliderPeriod(timeSliderValue.value));
 
+const toggleAnalysisYear = (year) => {
+  closeAnimationPreview();
+  toggleYear(year);
+};
+
 // Handler do @slideend do Slider — extraído do template para evitar o auto-unwrap
 // de refs pelo Vue no contexto inline, que causava "Cannot set properties of null".
 const onSliderEnd = () => {
-  stopPlay();
-  savedRange.value = null;
+  closeAnimationPreview();
   applySliderPeriod(timeSliderValue.value);
 };
 
@@ -369,13 +383,11 @@ const onSliderEnd = () => {
 // tweens se sobreponham e o movimento seja contínuo (sem pausa entre passos).
 const PLAY_DURATION_MS = 350; // duração da transição ECharts (publicada na store)
 const PLAY_INTERVAL_MS = 300; // intervalo entre steps (< PLAY_DURATION_MS = overlap)
-const PLAY_STEP = 2; // trimestral: avança 3 meses por tick
+const PLAY_STEP = 1; // avança 1 mês por tick
+const PLAY_WINDOW_MONTHS = 3;
 
 const isPlaying = ref(false);
 let playIntervalId = null;
-
-// Range salvo ao iniciar o play, para restaurar ao final ou no reset
-const savedRange = ref(null);
 
 const stopPlay = () => {
   isPlaying.value = false;
@@ -387,21 +399,91 @@ const stopPlay = () => {
   }
 };
 
+const resetAnimationPreload = () => {
+  filterStore.animationPreload.status = "idle";
+  filterStore.animationPreload.dataInicio = null;
+  filterStore.animationPreload.dataFim = null;
+};
+
+const closeAnimationPreview = () => {
+  stopPlay();
+  filterStore.resetAnimationPreview();
+};
+
+const animationSliderMin = computed(() => animationBaseRange.value?.[0] ?? 0);
+const animationSliderMax = computed(() => {
+  if (!animationBaseRange.value) return 0;
+  const [startIdx, endIdx] = animationBaseRange.value;
+  return Math.max(startIdx, endIdx - PLAY_WINDOW_MONTHS + 1);
+});
+
+const getAnimationFrameEndIndex = (startIdx) => {
+  if (!animationBaseRange.value) return startIdx;
+  return Math.min(startIdx + PLAY_WINDOW_MONTHS - 1, animationBaseRange.value[1]);
+};
+
+const syncAnimationFrame = (startIdx) => {
+  if (!animationBaseRange.value) return;
+  const clampedStart = Math.min(
+    Math.max(startIdx, animationSliderMin.value),
+    animationSliderMax.value,
+  );
+  const endIdx = getAnimationFrameEndIndex(clampedStart);
+  const startDate = availableMonths[clampedStart]?.date;
+  const rawEndDate = availableMonths[endIdx]?.date;
+  if (!startDate || !rawEndDate) return;
+
+  animationSliderValue.value = clampedStart;
+  filterStore.animationFrameRange = [
+    startDate,
+    new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0),
+  ];
+};
+
+const animationStartMonthLabel = computed(() => {
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
+    return "—";
+  }
+  return availableMonths[animationSliderValue.value]?.label ?? "—";
+});
+
+const animationEndMonthLabel = computed(() => {
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
+    return "—";
+  }
+  const endIdx = getAnimationFrameEndIndex(animationSliderValue.value);
+  return availableMonths[endIdx]?.label ?? "—";
+});
+
+const openAnimationPreview = () => {
+  const baseRange = [...timeSliderValue.value];
+  filterStore.animationMode = true;
+  filterStore.animationBaseSliderRange = baseRange;
+  syncAnimationFrame(baseRange[0]);
+};
+
+const ensureAnimationPreview = () => {
+  const baseRange = [...timeSliderValue.value];
+  const currentBase = animationBaseRange.value;
+  const isSameBase =
+    currentBase?.[0] === baseRange[0] && currentBase?.[1] === baseRange[1];
+
+  if (!animationMode.value || !isSameBase) {
+    openAnimationPreview();
+  }
+};
+
 const playStep = () => {
-  const [s] = timeSliderValue.value;
-  const maxE = savedRange.value[1];
-  const nextS = s + PLAY_STEP;
-  if (nextS > maxE) {
-    // Chegou ao fim: para e restaura o range original
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
     stopPlay();
-    timeSliderValue.value = [...savedRange.value];
-    applySliderPeriod(savedRange.value);
-    savedRange.value = null;
     return;
   }
-  const nextE = Math.min(nextS + PLAY_STEP - 1, maxE);
-  timeSliderValue.value = [nextS, nextE];
-  applySliderPeriod([nextS, nextE]);
+  const nextStart = animationSliderValue.value + PLAY_STEP;
+  if (nextStart > animationSliderMax.value) {
+    stopPlay();
+    return;
+  }
+  syncAnimationFrame(nextStart);
 };
 
 const isPreloading = computed(
@@ -409,11 +491,11 @@ const isPreloading = computed(
 );
 
 const startAnimation = () => {
-  if (!savedRange.value) return;
-  const startIdx = savedRange.value[0];
-  const endIdx = Math.min(startIdx + PLAY_STEP - 1, savedRange.value[1]);
-  timeSliderValue.value = [startIdx, endIdx];
-  applySliderPeriod([startIdx, endIdx]);
+  ensureAnimationPreview();
+  if (!animationBaseRange.value) return;
+  if (animationSliderValue.value === animationSliderMax.value) {
+    syncAnimationFrame(animationBaseRange.value[0]);
+  }
   isPlaying.value = true;
   filterStore.isAnimating = true;
   filterStore.animationDuration = PLAY_DURATION_MS; // gráfico lê este valor para os tweens
@@ -426,17 +508,13 @@ const togglePlay = () => {
     return;
   }
 
-  // Pausa → retoma de onde parou (preload já está pronto)
-  if (savedRange.value && filterStore.animationPreload.status === "ready") {
-    isPlaying.value = true;
-    filterStore.isAnimating = true;
-    filterStore.animationDuration = PLAY_DURATION_MS;
-    playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
+  ensureAnimationPreview();
+
+  if (filterStore.animationPreload.status === "ready") {
+    startAnimation();
     return;
   }
 
-  // Início limpo: salva range e dispara preload (RiskDiagnosisTab observa e busca os dados)
-  savedRange.value = [...timeSliderValue.value];
   const { inicio, fim } = getApiParams();
   filterStore.animationPreload.status = "loading";
   filterStore.animationPreload.dataInicio = inicio;
@@ -447,45 +525,62 @@ const togglePlay = () => {
 watch(
   () => filterStore.animationPreload.status,
   (status) => {
-    if (status === "ready") startAnimation();
+    if (status !== "ready") return;
+    if (!animationMode.value) {
+      resetAnimationPreload();
+      return;
+    }
+    startAnimation();
   },
 );
 
 const resetPlayback = () => {
   stopPlay();
-  if (savedRange.value) {
-    timeSliderValue.value = [...savedRange.value];
-    applySliderPeriod(savedRange.value);
-    savedRange.value = null;
+  if (!animationMode.value) {
+    resetAnimationPreload();
+    return;
   }
-  filterStore.animationPreload.status = "idle";
-  filterStore.animationPreload.dataInicio = null;
-  filterStore.animationPreload.dataFim = null;
+  if (animationBaseRange.value) {
+    syncAnimationFrame(animationBaseRange.value[0]);
+  }
+  resetAnimationPreload();
 };
 
 // Limpa o filtro de período — para a animação sem restaurar o range salvo,
 // depois delega ao resetYears para restaurar o padrão.
 const clearPeriodFilter = () => {
-  stopPlay();
-  savedRange.value = null;
-  filterStore.animationPreload.status = "idle";
-  filterStore.animationPreload.dataInicio = null;
-  filterStore.animationPreload.dataFim = null;
+  closeAnimationPreview();
   resetYears();
 };
+
+const stepAnimation = (delta) => {
+  if (!animationMode.value || isPlaying.value) return;
+  syncAnimationFrame((animationSliderValue.value ?? animationSliderMin.value) + delta);
+};
+
+const onAnimationSliderEnd = () => {
+  if (!animationMode.value) return;
+  stopPlay();
+  syncAnimationFrame(animationSliderValue.value ?? animationSliderMin.value);
+};
+
+// Atualiza os gráficos em tempo real enquanto o usuário arrasta o slider manualmente
+watch(animationSliderValue, (val) => {
+  if (animationMode.value && !isPlaying.value && val !== null) {
+    syncAnimationFrame(val);
+  }
+});
 
 // Para o play e reseta preload ao navegar para outra rota
 watch(
   () => route.path,
   () => {
-    stopPlay();
-    savedRange.value = null;
-    filterStore.animationPreload.status = "idle";
+    closeAnimationPreview();
   },
 );
 
 // Limpa o intervalo ao desmontar o componente
-onBeforeUnmount(stopPlay);
+onBeforeUnmount(closeAnimationPreview);
 </script>
 
 <template>
@@ -909,7 +1004,7 @@ onBeforeUnmount(stopPlay);
                 'perc-chip-disabled': isYearDisabled(year),
               }"
               :disabled="isYearDisabled(year) || isIndicadoresRoute"
-              @click="toggleYear(year)"
+              @click="toggleAnalysisYear(year)"
             >
               {{ year }}
             </button>
@@ -985,7 +1080,9 @@ onBeforeUnmount(stopPlay);
                   ? 'Carregando dados...'
                   : isPlaying
                     ? 'Pausar animação'
-                    : 'Animar trimestre a trimestre'
+                    : animationMode
+                      ? 'Retomar preview temporal'
+                      : 'Abrir preview temporal'
               "
               @click="togglePlay"
             >
@@ -999,17 +1096,69 @@ onBeforeUnmount(stopPlay);
                 "
               />
               <span>{{
-                isPreloading ? "Carregando..." : isPlaying ? "Pausar" : "Animar"
+                isPreloading ? "Carregando..." : isPlaying ? "Pausar" : animationMode ? "Retomar" : "Animar"
               }}</span>
             </button>
             <button
               class="period-step-btn reset-btn"
-              :disabled="isIndicadoresRoute"
-              title="Voltar ao início"
+              :disabled="isIndicadoresRoute || !animationMode"
+              title="Voltar ao início do preview"
               @click="resetPlayback"
             >
               <i class="pi pi-step-backward" />
             </button>
+          </div>
+
+          <div
+            v-if="animationMode"
+            class="animation-preview-panel"
+            :class="{ disabled: isPreloading }"
+          >
+            <div class="animation-preview-header">
+              <span class="animation-preview-title">Preview Temporal</span>
+              <button
+                class="animation-close-btn"
+                type="button"
+                title="Fechar preview"
+                @click="closeAnimationPreview"
+              >
+                <i class="pi pi-times" />
+              </button>
+            </div>
+
+            <div class="period-steppers animation-period-steppers">
+              <div class="period-stepper-group">
+                <button
+                  class="period-step-btn"
+                  :disabled="animationSliderValue === animationSliderMin || isPlaying"
+                  @click="stepAnimation(-PLAY_STEP)"
+                >
+                  <i class="pi pi-chevron-left" />
+                </button>
+                <span class="period-step-label">{{ animationStartMonthLabel }}</span>
+              </div>
+              <div class="period-stepper-group">
+                <span class="period-step-label">{{ animationEndMonthLabel }}</span>
+                <button
+                  class="period-step-btn"
+                  :disabled="animationSliderValue === animationSliderMax || isPlaying"
+                  @click="stepAnimation(PLAY_STEP)"
+                >
+                  <i class="pi pi-chevron-right" />
+                </button>
+              </div>
+            </div>
+
+            <div class="slider-wrapper animation-slider-wrapper">
+              <Slider
+                v-model="animationSliderValue"
+                :min="animationSliderMin"
+                :max="animationSliderMax"
+                class="w-full time-slider"
+                :disabled="isPreloading || isPlaying"
+                @slideend="onAnimationSliderEnd"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1966,6 +2115,67 @@ onBeforeUnmount(stopPlay);
 .playback-controls.disabled {
   opacity: 0.3;
   pointer-events: none;
+}
+
+.animation-preview-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--sidebar-input-bg));
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.animation-preview-panel.disabled {
+  opacity: 0.65;
+}
+
+.animation-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.animation-preview-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-color);
+}
+
+.animation-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--sidebar-border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.animation-close-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}
+
+.animation-period-steppers {
+  margin-bottom: 0;
+}
+
+.animation-slider-wrapper {
+  margin-top: 0;
 }
 
 .play-btn {

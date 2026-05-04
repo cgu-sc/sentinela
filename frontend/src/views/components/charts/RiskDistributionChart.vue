@@ -28,7 +28,8 @@ const props = defineProps({
   loading:      { type: Boolean, default: false },
   rankingText:  { type: String,  default: null },
   metricLabel:  { type: String,  default: 'Score de Risco' },
-  rankBadge:    { type: Object,  default: null }
+  rankBadge:    { type: Object,  default: null },
+  yAxisMax:     { type: Number,  default: null }
 });
 
 const { chartTheme } = useChartTheme();
@@ -136,6 +137,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type:      'value',
+      max:       props.yAxisMax,
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.4 } },
       axisLabel: {
         color:     c.textColor,

@@ -4,6 +4,7 @@ import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRegional } from '@/composables/useRegional';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
+import { useFormatting } from '@/composables/useFormatting';
 import { API_ENDPOINTS } from '@/config/api';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
@@ -20,6 +21,7 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
 const { getApiParams } = useFilterParameters();
+const { toLocalISO } = useFormatting();
 const { regionalData, regionalLoading, fetchRegional } = useRegional();
 
 // Escopo do scatter regional
@@ -33,6 +35,16 @@ const regionalScopes = [
 // Nota: percValSemComp pode exceder 100% por anomalias nos dados de auditoria
 // (val_sem_comp > total_mov). Limitamos a 100 para coincidir com a curva de percentis.
 const currentScore = computed(() => {
+    if (isAnimationPreviewActive.value && previewCurrentFarmacia.value) {
+      if (riskMetric.value === 'percentual_sem_comprovacao') {
+        return Math.min(Number(previewCurrentFarmacia.value.percValSemComp ?? 0), 100);
+      }
+      return Number(
+        previewCurrentFarmacia.value.score_risco ??
+        previewCurrentFarmacia.value.score_risco_final ??
+        0
+      );
+    }
     // Se estivermos vendo %, usamos o valor do período selecionado (se disponível)
     if (riskMetric.value === 'percentual_sem_comprovacao') {
       const val = props.periodSummary?.percValSemComp ?? props.cnpjData?.percValSemComp ?? 0;
@@ -57,12 +69,34 @@ const riskMetricOptions = [
   { label: '% Não-Comprovação', value: 'percentual_sem_comprovacao' }
 ];
 
+const isAnimationPreviewActive = computed(() => {
+  if (!filterStore.animationMode) return false;
+  const [inicio, fim] = filterStore.animationFrameRange ?? [];
+  return (
+    inicio instanceof Date &&
+    !Number.isNaN(inicio.getTime()) &&
+    fim instanceof Date &&
+    !Number.isNaN(fim.getTime())
+  );
+});
+
+function getEffectivePeriodParams() {
+  if (isAnimationPreviewActive.value) {
+    const [inicio, fim] = filterStore.animationFrameRange;
+    return {
+      inicio: toLocalISO(inicio),
+      fim: toLocalISO(fim),
+    };
+  }
+  return getApiParams();
+}
+
 const updateRiskCurve = () => {
   if (!props.geoData?.sg_uf) return;
-  const { inicio, fim } = getApiParams();
+  const { inicio, fim } = getEffectivePeriodParams();
 
   // Durante animação, serve do cache sem round-trip HTTP
-  if (filterStore.isAnimating) {
+  if (isAnimationPreviewActive.value) {
     const key = `${riskScope.value}|${props.geoData.sg_uf}|${props.geoData.id_regiao_saude ?? ''}|${riskMetric.value}|${inicio}|${fim}`;
     if (percentilesCache.has(key)) {
       cnpjDetailStore.setMetricPercentilesDirectly(percentilesCache.get(key), key);
@@ -86,6 +120,13 @@ const periodsCache = new Map();
 // Mapa local: "scope|uf|regioId|metric|YYYY-MM-DD|YYYY-MM-DD" → percentiles[]
 const percentilesCache = new Map();
 
+const previewCurrentFarmacia = computed(() => {
+  const { inicio, fim } = getEffectivePeriodParams();
+  if (!isAnimationPreviewActive.value || !inicio || !fim) return null;
+  const frame = periodsCache.get(`${inicio}|${fim}`);
+  return frame?.farmacias?.find((item) => String(item.cnpj) === String(props.cnpj)) ?? null;
+});
+
 // Máximos globais calculados sobre todos os trimestres — usados para fixar os
 // eixos do scatter durante a animação e evitar que a escala salte entre passos.
 const animationXMax    = ref(null); // max totalMov
@@ -94,11 +135,11 @@ const animationYMaxPct = ref(null); // max percValSemComp
 
 const loadRegional = () => {
     if (!props.geoData?.sg_uf) return;
-    const { inicio, fim } = getApiParams();
+    const { inicio, fim } = getEffectivePeriodParams();
 
     // Durante animação, serve direto do cache sem round-trip HTTP
     const cacheKey = `${inicio}|${fim}`;
-    if (filterStore.isAnimating && periodsCache.has(cacheKey)) {
+    if (isAnimationPreviewActive.value && periodsCache.has(cacheKey)) {
       regionalData.value = periodsCache.get(cacheKey);
       return;
     }
@@ -175,6 +216,12 @@ watch(() => filterStore.animationPreload.status, async (status) => {
     console.error('[RiskDiagnosis] Erro no preload de animação:', e);
   }
 
+  if (!filterStore.animationMode) {
+    clearAnimationState();
+    filterStore.animationPreload.status = 'idle';
+    return;
+  }
+
   filterStore.animationPreload.status = 'ready';
 });
 
@@ -194,8 +241,22 @@ onUnmounted(() => {
   }
 });
 
-watch(riskScope, updateRiskCurve, { immediate: true });
-watch(riskMetric, updateRiskCurve);
+watch(riskMetric, () => {
+    if (filterStore.animationMode) {
+      clearAnimationState();
+      filterStore.animationPreload.status = 'idle';
+    }
+    updateRiskCurve();
+});
+
+watch(riskScope, () => {
+    if (filterStore.animationMode) {
+      clearAnimationState();
+      filterStore.animationPreload.status = 'idle';
+    }
+    updateRiskCurve();
+});
+
 watch(() => props.geoData?.sg_uf, () => {
     updateRiskCurve();
     loadRegional();
@@ -203,16 +264,29 @@ watch(() => props.geoData?.sg_uf, () => {
 
 // Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
+    if (filterStore.animationMode) return;
     updateRiskCurve();
     loadRegional();
 }, { deep: true });
 
-// Limpa os caches de animação quando o play termina (isAnimating: true → false),
-// garantindo que mudanças manuais de período sempre busquem dados frescos do backend.
-watch(() => filterStore.isAnimating, (isAnimating) => {
-    if (!isAnimating) clearAnimationState();
-});
+// Sincroniza dados quando o frame da animação muda
+watch(() => filterStore.animationFrameRange, () => {
+    if (!isAnimationPreviewActive.value) return;
+    updateRiskCurve();
+    loadRegional();
+}, { deep: true });
 
+// Limpa caches ao sair do modo animação
+watch(() => filterStore.animationMode, (isActive) => {
+    if (!isActive) {
+      clearAnimationState();
+      updateRiskCurve();
+      loadRegional();
+      return;
+    }
+    updateRiskCurve();
+    loadRegional();
+});
 
 watch(regionalScope, () => {
     // Escopo mudou — cache de animação é inválido (regiao vs uf)
@@ -252,6 +326,25 @@ const riskRankBadge = computed(() => {
   if (topPct <= 15) return { label: 'Alerta',  value: `TOP ${topPct}%`,    color: '#f59e0b' };
   return             { label: 'Normal',  value: `Percentil ${pct}%`, color: '#10b981' };
 });
+
+function formatAnimationMonth(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', {
+    month: 'short',
+    year: 'numeric',
+  }).format(date).replace('.', '');
+}
+
+const animationPeriodLabel = computed(() => {
+  const [inicio, fim] = filterStore.animationFrameRange ?? [];
+  if (!(inicio instanceof Date) || Number.isNaN(inicio.getTime())) return null;
+  if (!(fim instanceof Date) || Number.isNaN(fim.getTime())) return formatAnimationMonth(inicio);
+  return `${formatAnimationMonth(inicio)} a ${formatAnimationMonth(fim)}`;
+});
+
+const showAnimationPeriod = computed(() =>
+  isAnimationPreviewActive.value && !!animationPeriodLabel.value
+);
 </script>
 
 <template>
@@ -264,7 +357,21 @@ const riskRankBadge = computed(() => {
     </div>
 
     <template v-else>
-      <div class="diagnosis-grid">
+      <!-- BANNER CENTRAL DE ANIMAÇÃO -->
+      <Transition name="fade-down">
+        <div v-if="showAnimationPeriod" class="animation-time-banner">
+           <div class="banner-glass-bg"></div>
+           <div class="banner-content">
+              <i class="pi pi-history animation-pulse" />
+              <div class="banner-text">
+                <span class="banner-tag">MODO TEMPORAL</span>
+                <span class="banner-value">{{ animationPeriodLabel }}</span>
+              </div>
+           </div>
+        </div>
+      </Transition>
+
+      <div class="diagnosis-grid" :class="{ 'with-banner': showAnimationPeriod }">
         
         <!-- CARD 1: POSICIONAMENTO REGIONAL (Scatter) -->
         <div class="diagnosis-card">
@@ -298,8 +405,8 @@ const riskRankBadge = computed(() => {
                    :cnpj-atual="cnpj"
                    :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
                    :active-metric="riskMetric"
-                   :x-axis-max="filterStore.isAnimating ? animationXMax : null"
-                   :y-axis-max="filterStore.isAnimating ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
+                   :x-axis-max="isAnimationPreviewActive ? animationXMax : null"
+                   :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
                  />
              </div>
 
@@ -364,6 +471,7 @@ const riskRankBadge = computed(() => {
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
                 :rank-badge="riskRankBadge"
+                :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
               />
             <!-- AJUDA CONTEXTUAL CARD 2 -->
             <div class="diagnosis-card-help">
@@ -388,6 +496,7 @@ const riskRankBadge = computed(() => {
   gap: 1.5rem;
   min-height: 100%;
   flex: 1;
+  position: relative; /* Mantém o banner dentro dos limites da aba */
 }
 
 .diagnosis-grid {
@@ -397,6 +506,7 @@ const riskRankBadge = computed(() => {
   align-items: stretch;
   flex: 1;
   min-height: 520px;
+  position: relative;
 }
 
 .diagnosis-card {
@@ -430,6 +540,7 @@ const riskRankBadge = computed(() => {
 }
 
 .header-info i { color: var(--primary-color); font-size: 1.1rem; }
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -440,12 +551,10 @@ const riskRankBadge = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* permite que flex-children usem height: 100% corretamente */
+  min-height: 0;
 }
 
-.relative-body {
-  position: relative;
-}
+.relative-body { position: relative; }
 
 .chart-wrapper {
   flex: 1;
@@ -459,15 +568,7 @@ const riskRankBadge = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
   border-radius: 8px;
-  transition: border-color 0.2s, background 0.2s;
   width: 100%;
-}
-
-:deep(.scope-selector .p-dropdown:hover),
-:deep(.scope-selector .p-dropdown.p-focus) {
-  border-color: var(--primary-color) !important;
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  box-shadow: none !important;
 }
 
 :deep(.scope-selector .p-dropdown-label) {
@@ -477,59 +578,12 @@ const riskRankBadge = computed(() => {
   padding: 0.35rem 0.5rem;
 }
 
-:deep(.scope-selector .p-dropdown-trigger) {
-  color: var(--primary-color);
-  width: 2rem;
-}
-
-:deep(.scope-selector .p-dropdown-trigger .p-dropdown-trigger-icon) {
-  font-size: 0.7rem;
-}
-
-/* O painel do Dropdown é renderizado no body (fora do DOM do componente),
-   por isso precisa de :global() em vez de :deep() para os estilos alcançarem. */
 :global(.p-dropdown-panel.card-panel) {
   background: var(--card-bg) !important;
   border: 1px solid var(--card-border) !important;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
 }
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item) {
-  font-size: 0.78rem;
-  color: var(--text-color) !important;
-  padding: 0.5rem 0.85rem;
-}
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
-  color: var(--primary-color) !important;
-}
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
-  color: var(--primary-color) !important;
-}
-
-.dropdown-selected-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.placeholder-card {
-  padding: 4rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: var(--text-muted);
-  background: var(--card-bg);
-  border: 1px dashed var(--card-border);
-  border-radius: 12px;
-}
-
-.placeholder-card i { font-size: 2.5rem; opacity: 0.4; }
 
 .diagnosis-card-help {
   display: flex;
@@ -539,25 +593,106 @@ const riskRankBadge = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 4%, transparent);
   border-left: 4px solid var(--primary-color);
   border-radius: 6px;
-  margin: 1.5rem 1.25rem 1.25rem 1.25rem; /* Descola o texto das bordas e do gráfico */
-  margin-top: auto; /* Garante que fique no rodapé da coluna */
+  margin: 1.5rem 1.25rem 1.25rem 1.25rem;
+  margin-top: auto;
 }
 
-.diagnosis-card-help i {
+.diagnosis-card-help i { color: var(--primary-color); font-size: 1rem; }
+.help-text { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
+.help-text b { color: var(--text-color); font-weight: 600; }
+
+/* ── Banner de Análise Temporal (Glassmorphism) ────────────────────────── */
+.animation-time-banner {
+  position: absolute;
+  top: 15px; /* Desce o banner para dentro da área da aba */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 320px;
+}
+
+.banner-glass-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: color-mix(in srgb, var(--primary-color) 15%, rgba(15, 23, 42, 0.7));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark-mode) .banner-glass-bg {
+  background: color-mix(in srgb, var(--primary-color) 12%, rgba(0, 0, 0, 0.8));
+}
+
+.banner-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1.5rem;
+  color: white;
+}
+
+.banner-content i {
+  font-size: 1.3rem;
   color: var(--primary-color);
-  font-size: 1rem;
-  margin-top: 2px;
+  filter: drop-shadow(0 0 5px var(--primary-color));
 }
 
-.help-text {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
+.banner-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
 }
 
-.help-text b {
-  color: var(--text-color);
-  font-weight: 600;
+.banner-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  opacity: 0.7;
+  margin-bottom: 3px;
 }
 
+.banner-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Animações */
+.animation-pulse {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 5px var(--primary-color)); }
+  50% { opacity: 0.6; filter: drop-shadow(0 0 12px var(--primary-color)); }
+}
+
+.fade-down-enter-active, .fade-down-leave-active {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.fade-down-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px) scale(0.9);
+}
+
+.fade-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px) scale(0.95);
+}
+
+.diagnosis-grid {
+  transition: padding-top 0.4s ease;
+}
+
+.diagnosis-grid.with-banner {
+  padding-top: 4rem; /* Aumenta o espaço para o banner não cobrir os títulos dos cards */
+}
 </style>

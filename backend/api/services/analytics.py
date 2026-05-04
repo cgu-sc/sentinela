@@ -1876,7 +1876,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT E.id_medico, E.competencia, E.vl_total_prescricoes, "
+                        text("SELECT M.id_medico, E.id_medico_int, E.competencia, E.vl_total_prescricoes, "
                              "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
                              "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.flag_concentracao_estabelecimento, "
@@ -1885,6 +1885,7 @@ class AnalyticsService:
                              "E.nu_estabelecimentos"
                              " FROM temp_CGUSC.fp.crm_export E"
                              " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
+                             " LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = E.id_medico_int"
                              " WHERE F.cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
@@ -1950,6 +1951,7 @@ class AnalyticsService:
         df_med = (
             df.group_by("id_medico")
             .agg([
+                pl.col("id_medico_int").first().alias("id_medico_int"),
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
                 pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
                 pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
@@ -2094,9 +2096,12 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT id_medico, competencia, dt_alerta, hr_janela, nu_prescricoes_dia, nu_minutos_dia, taxa_hora, dt_ini_hora, dt_fim_hora"
-                             " FROM temp_CGUSC.fp.crm_unico_alertas WHERE cnpj = :cnpj"
-                             " ORDER BY dt_alerta, id_medico"),
+                        text("SELECT M.id_medico, A.competencia, A.dt_alerta, A.hr_janela, A.nu_prescricoes_dia, A.nu_minutos_dia, A.taxa_hora, A.dt_ini_hora, A.dt_fim_hora"
+                             " FROM temp_CGUSC.fp.crm_unico_alertas A"
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
+                             " INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int"
+                             " WHERE F.cnpj = :cnpj"
+                             " ORDER BY A.dt_alerta, M.id_medico"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2577,9 +2582,10 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
+                    text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, DM.id_medico, MED.codigo_barra, P.valor_pago "
                          "FROM temp_CGUSC.fp.crm_raiox_tx P "
                          "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+                         "LEFT JOIN temp_CGUSC.fp.dados_medico DM ON DM.id = P.id_medico_int "
                          "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
                          "WHERE F.cnpj = :cnpj "
                          "ORDER BY P.data_hora ASC, P.num_autorizacao ASC"),
@@ -2587,14 +2593,14 @@ class AnalyticsService:
                 )
             df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
                 "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8,
-                "num_autorizacao": pl.Utf8, "id_medico": pl.Int32,
+                "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8,
                 "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
             })
 
             if not df_tx.is_empty():
                 df_tx = df_tx.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
-                    pl.col("id_medico").cast(pl.Int32),
+                    pl.col("id_medico").cast(pl.Utf8),
                     pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8)
                 ])

@@ -161,6 +161,7 @@ const raioxTotalValue = computed(() => {
 
 function getCRMColor(idMedico) {
   if (!idMedico) return 'var(--primary-color)';
+  idMedico = String(idMedico);
   let hash = 0;
   for (let i = 0; i < idMedico.length; i++) { hash = idMedico.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash % 360);
@@ -1044,7 +1045,7 @@ function toggleActiveRow(auth) {
         </div>
         <div class="unico-alertas-list">
           <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
-            <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico.split('/')[0]) }">{{ alerta.id_medico }}</span>
+            <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico) }">{{ alerta.id_medico }}</span>
             <span class="alerta-sep">·</span>
             <span class="alerta-stat">{{ alerta.dt_ini_hora }} → {{ alerta.dt_fim_hora }}</span>
             <span class="alerta-sep">·</span>

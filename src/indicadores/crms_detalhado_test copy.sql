@@ -368,7 +368,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_unico_alertas;
     )
 SELECT
     F.id                      AS id_cnpj,
-    MED.id                    AS id_medico,
+    MED.id                    AS id_medico_int,
     A.competencia,
     A.dt_alerta,
     A.hr_janela,
@@ -385,7 +385,7 @@ INNER JOIN temp_CGUSC.fp.dados_medico   MED ON MED.id_medico = A.id_medico
 WHERE A.severidade IS NOT NULL;
 GO
 
-CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(id_cnpj, id_medico, dt_alerta);
+CREATE CLUSTERED INDEX IDX_ConcTemp ON temp_CGUSC.fp.crm_unico_alertas(id_cnpj, id_medico_int, dt_alerta);
 GO
 
 
@@ -586,7 +586,7 @@ SELECT
     CAST(DATEPART(HOUR, M.data_hora) AS TINYINT)      AS hr_janela,
     CAST(M.data_hora AS SMALLDATETIME)                AS data_hora,
     M.num_autorizacao,
-    MED.id                                            AS id_medico,
+    MED.id                                            AS id_medico_int,
     PAT.id                                            AS id_gtin,
     CAST(M.valor_pago AS DECIMAL(9,2))                AS valor_pago
 INTO temp_CGUSC.fp.crm_raiox_tx
@@ -941,7 +941,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
     SELECT DISTINCT F1.cnpj AS nu_cnpj, MD1.id_medico, A1.competencia
     FROM temp_CGUSC.fp.crm_unico_alertas A1
     INNER JOIN temp_CGUSC.fp.dados_farmacia F1  ON F1.id  = A1.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD1 ON MD1.id = A1.id_medico
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD1 ON MD1.id = A1.id_medico_int
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico G1
@@ -959,7 +959,7 @@ conc_agg AS (
     SELECT F2.cnpj, MD2.id_medico, C1.competencia, COUNT(*) AS qtd_dias
     FROM temp_CGUSC.fp.crm_unico_alertas C1
     INNER JOIN temp_CGUSC.fp.dados_farmacia F2  ON F2.id  = C1.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD2 ON MD2.id = C1.id_medico
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD2 ON MD2.id = C1.id_medico_int
     GROUP BY F2.cnpj, MD2.id_medico, C1.competencia
 ),
 geo_cnpj AS (
@@ -1017,7 +1017,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 
 
 SELECT
-    M.id                                                              AS id_medico,   -- INT (antes VARCHAR(20))
+    M.id                                                              AS id_medico_int,
     FAR.id                                                            AS id_cnpj,     -- INT (antes CHAR(14))
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes_mes,
@@ -1049,7 +1049,7 @@ LEFT JOIN (
     SELECT DISTINCT F3.cnpj, MD3.id_medico, C.competencia
     FROM temp_CGUSC.fp.crm_unico_alertas C
     INNER JOIN temp_CGUSC.fp.dados_farmacia F3  ON F3.id  = C.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico   MD3 ON MD3.id = C.id_medico
+    INNER JOIN temp_CGUSC.fp.dados_medico   MD3 ON MD3.id = C.id_medico_int
 ) CONC
     ON  CONC.cnpj        = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico
@@ -1080,7 +1080,7 @@ IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key'
     DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
 
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico, competencia);
+    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico_int, competencia);
 GO
 
 

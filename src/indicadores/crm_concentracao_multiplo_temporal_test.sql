@@ -70,7 +70,6 @@ BEGIN
         dt_fim_concentracao SMALLDATETIME   NOT NULL,
         nu_minutos_span     TINYINT         NOT NULL,
         nu_crms_distintos   TINYINT         NOT NULL,
-        id_medico_unico_int INT             NULL,
         nu_5min             SMALLINT        NOT NULL,
         nu_10min            SMALLINT        NOT NULL,
         nu_15min            SMALLINT        NOT NULL,
@@ -163,6 +162,8 @@ BEGIN
 
     -- ── Passo 3.A: Criar base pré-filtrada por patologia para o lote ──────
     -- Isso reduz drasticamente o volume de dados para o self-join sliding window.
+    DROP TABLE IF EXISTS #base_lote;
+
     SELECT 
         L.id_cnpj,
         A.data_hora,
@@ -185,6 +186,8 @@ BEGIN
     -- ── Passo 3.B: Self-join com janela máxima de 60 minutos ─────────────────────────
     -- Usamos uma subconsulta para calcular as agregações uma única vez, 
     -- evitando o custo dobrado de repetir os COUNT(DISTINCT) no HAVING.
+    DROP TABLE IF EXISTS #concentracao_raw;
+
     SELECT *
     INTO #concentracao_raw
     FROM (
@@ -206,9 +209,6 @@ BEGIN
                                 THEN B.num_autorizacao END)                           AS nu_60min,
 
             COUNT(DISTINCT B.id_medico_int)                                            AS nu_crms_distintos,
-            CASE WHEN COUNT(DISTINCT B.id_medico_int) = 1
-                 THEN MIN(B.id_medico_int)
-                 END                                                                   AS id_medico_unico_int,
 
             -- Timestamps de fim real para cada sub-janela
             MAX(CASE WHEN B.data_hora <= DATEADD(SECOND, 359, A.data_hora) THEN B.data_hora END) AS fim_real_5min,
@@ -274,9 +274,9 @@ BEGIN
     -- ── INSERT incremental nos alertas ────────────────────────────────────
     INSERT INTO temp_CGUSC.fp.crm_concentracao_multiplo_alertas
         (id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-         nu_crms_distintos, id_medico_unico_int, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade)
+         nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade)
     SELECT id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-           nu_crms_distintos, id_medico_unico_int, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade
+           nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade
     FROM (
         SELECT
             id_cnpj,
@@ -285,7 +285,6 @@ BEGIN
             CAST(dt_fim_real AS SMALLDATETIME)                              AS dt_fim_concentracao,
             CAST(DATEDIFF(MINUTE, janela_inicio, dt_fim_real) AS TINYINT)    AS nu_minutos_span,
             CAST(nu_crms_distintos AS TINYINT)                              AS nu_crms_distintos,
-            id_medico_unico_int,
             CAST(nu_5min AS SMALLINT)                                       AS nu_5min,
             CAST(nu_10min AS SMALLINT)                                      AS nu_10min,
             CAST(nu_15min AS SMALLINT)                                      AS nu_15min,

@@ -2482,6 +2482,7 @@ class AnalyticsService:
         
         cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
         PARQUET_PATH = os.path.join(cnpj_dir, "crm_horario.parquet")
+        EVENTS_PARQUET_PATH = os.path.join(cnpj_dir, "crm_horario_eventos.parquet")
 
         import time as _time
         df: pl.DataFrame | None = None
@@ -2539,8 +2540,74 @@ class AnalyticsService:
             df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
 
         if df.is_empty():
-            return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
+            return CrmHourlyProfileResponse(cnpj=cnpj, points=[], events=[], from_cache=from_cache,
                                             read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
+
+        # --- 2. Carregar/Gerar Eventos Temporais (Trilha) ---
+        df_events: pl.DataFrame | None = None
+        if os.path.exists(EVENTS_PARQUET_PATH):
+            try:
+                df_events = pl.read_parquet(EVENTS_PARQUET_PATH)
+            except Exception: pass
+
+        if df_events is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf_events = pd.read_sql(
+                        text("""
+                            SELECT 
+                                'UNICO' as tipo,
+                                A.dt_dia,
+                                M.id_medico,
+                                NULL as nu_crms_distintos,
+                                A.dt_ini_concentracao,
+                                A.dt_fim_concentracao,
+                                A.severidade
+                            FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                            INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                            LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int
+                            WHERE F.cnpj = :cnpj
+                            
+                            UNION ALL
+                            
+                            SELECT 
+                                'MULTIPLO' as tipo,
+                                A.dt_dia,
+                                NULL as id_medico,
+                                A.nu_crms_distintos,
+                                A.dt_ini_concentracao,
+                                A.dt_fim_concentracao,
+                                A.severidade
+                            FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
+                            INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                            WHERE F.cnpj = :cnpj
+                        """),
+                        conn,
+                        params={"cnpj": cnpj}
+                    )
+                    df_events = pl.from_pandas(pdf_events)
+                    # Cálculos de minutos e formatação
+                    if not df_events.is_empty():
+                        df_events = df_events.with_columns([
+                            pl.col("dt_ini_concentracao").dt.strftime("%H:%M").alias("hora_inicio"),
+                            pl.col("dt_fim_concentracao").dt.strftime("%H:%M").alias("hora_fim"),
+                            (pl.col("dt_ini_concentracao").dt.hour() * 60 + pl.col("dt_ini_concentracao").dt.minute()).alias("minuto_inicio"),
+                            (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
+                        ])
+                    df_events.write_parquet(EVENTS_PARQUET_PATH, compression="lz4")
+            except Exception as e:
+                print(f"⚠️ Erro ao buscar eventos hourly '{cnpj}': {e}")
+                df_events = pl.DataFrame()
+
+        # Filtro de período nos eventos
+        if not df_events.is_empty():
+            if data_inicio:
+                d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
+                df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) >= d_ini)
+            if data_fim:
+                d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
+                df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) <= d_fim)
 
         # Garante que o parquet de medianas existe (auto-warming)
         AnalyticsService.sync_mediana_autorizacoes_horaria(cnpj)
@@ -2594,10 +2661,28 @@ class AnalyticsService:
                     "is_crm_multiplo":           flags["is_crm_multiplo"],
                 })
 
+        # Prepara lista de eventos
+        events_list = []
+        if not df_events.is_empty():
+            events_list = [
+                {
+                    "dt_janela":        str(r["dt_dia"])[:10],
+                    "tipo":             r["tipo"],
+                    "hora_inicio":      r["hora_inicio"],
+                    "hora_fim":         r["hora_fim"],
+                    "minuto_inicio":    int(r["minuto_inicio"]),
+                    "minuto_fim":       int(r["minuto_fim"]),
+                    "severidade":       r["severidade"],
+                    "id_medico":        r["id_medico"],
+                    "nu_crms_distintos": r["nu_crms_distintos"]
+                }
+                for r in df_events.iter_rows(named=True)
+            ]
+
         # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)
         AnalyticsService.sync_crm_raiox_tx(cnpj)
 
-        return CrmHourlyProfileResponse(cnpj=cnpj, points=points, from_cache=from_cache,
+        return CrmHourlyProfileResponse(cnpj=cnpj, points=points, events=events_list, from_cache=from_cache,
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     @staticmethod

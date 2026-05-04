@@ -302,9 +302,21 @@ class CrmHourlyPointSchema(BaseModel):
     is_crm_unico: int = 0
     is_crm_multiplo: int = 0
 
+class CrmHourlyEventSchema(BaseModel):
+    dt_janela: date
+    tipo: str
+    hora_inicio: str
+    hora_fim: str
+    minuto_inicio: int
+    minuto_fim: int
+    severidade: Optional[str] = None
+    id_medico: Optional[str] = None
+    nu_crms_distintos: Optional[int] = None
+
 class CrmHourlyProfileResponse(BaseModel):
     cnpj: str
     points: List[CrmHourlyPointSchema]
+    events: List[CrmHourlyEventSchema] = []
     from_cache: bool = False
     read_time_ms: Optional[float] = None
     query_time_ms: Optional[float] = None

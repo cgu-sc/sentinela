@@ -69,23 +69,23 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_controle') IS NULL
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
 BEGIN
     CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_alertas (
-        id_cnpj             INT         NOT NULL,
-        id_medico           VARCHAR(20) NOT NULL,
-        dt_dia              DATE        NOT NULL,
-        dt_ini_concentracao DATETIME    NOT NULL,
-        dt_fim_concentracao DATETIME    NOT NULL,
-        nu_minutos_span     INT         NOT NULL,
-        nu_5min             INT         NOT NULL,
-        nu_10min            INT         NOT NULL,
-        nu_15min            INT         NOT NULL,
-        nu_20min            INT         NOT NULL,
-        nu_25min            INT         NOT NULL,
-        nu_30min            INT         NOT NULL,
-        nu_60min            INT         NOT NULL,
-        severidade          VARCHAR(10) NOT NULL
+        id_cnpj             INT             NOT NULL,
+        id_medico_int       INT             NOT NULL,
+        dt_dia              DATE            NOT NULL,
+        dt_ini_concentracao SMALLDATETIME   NOT NULL,
+        dt_fim_concentracao SMALLDATETIME   NOT NULL,
+        nu_minutos_span     TINYINT         NOT NULL,
+        nu_5min             SMALLINT        NOT NULL,
+        nu_10min            SMALLINT        NOT NULL,
+        nu_15min            SMALLINT        NOT NULL,
+        nu_20min            SMALLINT        NOT NULL,
+        nu_25min            SMALLINT        NOT NULL,
+        nu_30min            SMALLINT        NOT NULL,
+        nu_60min            SMALLINT        NOT NULL,
+        severidade          VARCHAR(10)     NOT NULL
     );
     CREATE CLUSTERED INDEX IDX_ConcentracaoUnicoAlertas
-        ON temp_CGUSC.fp.crm_concentracao_unico_alertas(id_cnpj, id_medico, dt_dia);
+        ON temp_CGUSC.fp.crm_concentracao_unico_alertas(id_cnpj, id_medico_int, dt_dia);
 END
 
 
@@ -175,6 +175,7 @@ BEGIN
     SELECT 
         L.id_cnpj,
         A.cnpj,
+        M.id AS id_medico_int,
         A.crm,
         A.crm_uf,
         A.data_hora,
@@ -183,11 +184,13 @@ BEGIN
     FROM temp_CGUSC.fp.teste_mov_SC A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
     INNER JOIN #lote_atual L ON L.cnpj = A.cnpj
+    LEFT JOIN temp_CGUSC.fp.dados_medico M 
+        ON M.id_medico = CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(20))
     WHERE A.crm IS NOT NULL AND A.crm_uf IS NOT NULL AND A.crm_uf <> 'BR'
       AND A.data_hora >= @DataInicio AND A.data_hora < DATEADD(DAY, 1, @DataFim)
-    GROUP BY L.id_cnpj, A.cnpj, A.crm, A.crm_uf, A.data_hora, A.num_autorizacao;
+    GROUP BY L.id_cnpj, A.cnpj, M.id, A.crm, A.crm_uf, A.data_hora, A.num_autorizacao;
 
-    CREATE INDEX IDX_BaseLote ON #base_lote(id_cnpj, crm, crm_uf, data_hora);
+    CREATE INDEX IDX_BaseLote ON #base_lote(id_cnpj, id_medico_int, data_hora);
 
 
     -- ── Passo 3.B: Concentração sobre a base reduzida ────────────────────
@@ -200,7 +203,7 @@ BEGIN
     FROM (
         SELECT
             A.id_cnpj,
-            CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(20)) AS id_medico,
+            A.id_medico_int,
             A.data_hora                                                     AS janela_inicio,
 
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(SECOND, 359, A.data_hora)
@@ -231,11 +234,10 @@ BEGIN
 
         FROM #base_lote A
         INNER JOIN #base_lote B
-            ON  B.id_cnpj   = A.id_cnpj
-            AND B.crm       = A.crm
-            AND B.crm_uf    = A.crm_uf
+            ON  B.id_cnpj       = A.id_cnpj
+            AND B.id_medico_int = A.id_medico_int
             AND B.data_hora BETWEEN A.data_hora AND DATEADD(MINUTE, 60, A.data_hora)
-        GROUP BY A.id_cnpj, A.crm, A.crm_uf, A.data_hora
+        GROUP BY A.id_cnpj, A.id_medico_int, A.data_hora
     ) Agg
     WHERE nu_5min >= 6 
        OR nu_10min >= 8 
@@ -253,7 +255,7 @@ BEGIN
 
     SELECT
         id_cnpj,
-        id_medico,
+        id_medico_int,
         janela_inicio,
         nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
         fim_real_5min, fim_real_10min, fim_real_15min, fim_real_20min, 
@@ -262,7 +264,7 @@ BEGIN
         ROW_NUMBER() OVER (
             PARTITION BY
                 id_cnpj,
-                id_medico,
+                id_medico_int,
                 CAST(janela_inicio AS DATE),
                 DATEDIFF(MINUTE, 0, janela_inicio) / 60
             ORDER BY
@@ -293,19 +295,25 @@ BEGIN
 
     -- ── INSERT incremental nos alertas ────────────────────────────────────
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_alertas
-        (id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
+        (id_cnpj, id_medico_int, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
          nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade)
-    SELECT id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
+    SELECT id_cnpj, id_medico_int, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
            nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade
     FROM (
         SELECT
             id_cnpj,
-            id_medico,
+            id_medico_int,
             CAST(janela_inicio AS DATE)                                 AS dt_dia,
-            janela_inicio                                               AS dt_ini_concentracao,
-            dt_fim_real                                                 AS dt_fim_concentracao,
-            DATEDIFF(MINUTE, janela_inicio, dt_fim_real)                AS nu_minutos_span,
-            nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+            CAST(janela_inicio AS SMALLDATETIME)                        AS dt_ini_concentracao,
+            CAST(dt_fim_real AS SMALLDATETIME)                          AS dt_fim_concentracao,
+            CAST(DATEDIFF(MINUTE, janela_inicio, dt_fim_real) AS TINYINT) AS nu_minutos_span,
+            CAST(nu_5min AS SMALLINT)                                   AS nu_5min,
+            CAST(nu_10min AS SMALLINT)                                  AS nu_10min,
+            CAST(nu_15min AS SMALLINT)                                  AS nu_15min,
+            CAST(nu_20min AS SMALLINT)                                  AS nu_20min,
+            CAST(nu_25min AS SMALLINT)                                  AS nu_25min,
+            CAST(nu_30min AS SMALLINT)                                  AS nu_30min,
+            CAST(nu_60min AS SMALLINT)                                  AS nu_60min,
             severidade
         FROM (
             SELECT
@@ -382,7 +390,7 @@ SELECT
     severidade,
     COUNT(*)                        AS qtd_alertas,
     COUNT(DISTINCT id_cnpj)         AS qtd_cnpjs,
-    COUNT(DISTINCT id_medico)       AS qtd_medicos,
+    COUNT(DISTINCT id_medico_int)   AS qtd_medicos,
     AVG(nu_minutos_span)            AS media_minutos_span,
     AVG(nu_60min)                   AS media_rx_60min,
     MIN(dt_ini_concentracao)        AS primeiro_alerta,
@@ -395,7 +403,7 @@ ORDER BY
 -- Top 30 piores casos
 SELECT TOP 30
     id_cnpj,
-    id_medico,
+    id_medico_int,
     dt_dia,
     dt_ini_concentracao,
     dt_fim_concentracao,

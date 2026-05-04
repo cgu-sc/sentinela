@@ -888,7 +888,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 
 
 ;WITH base AS (
-    SELECT DISTINCT U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
+    SELECT DISTINCT U.id_cnpj, U.id_medico_int AS id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
@@ -904,9 +904,9 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
     FROM #crms_em_surto_raw S1
 ),
 conc_agg AS (
-    SELECT U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia, COUNT(*) AS qtd_dias
+    SELECT U.id_cnpj, U.id_medico_int AS id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia, COUNT(*) AS qtd_dias
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
-    GROUP BY U.id_cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
+    GROUP BY U.id_cnpj, U.id_medico_int, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
 ),
 geo_cnpj AS (
     SELECT T.nu_cnpj, T.id_medico, T.competencia FROM (

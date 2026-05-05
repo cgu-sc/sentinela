@@ -2226,7 +2226,40 @@ class AnalyticsService:
         for m in crms_interesse_list:
             m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
-        # ── 7.2 Pré-Sincronização do Raio-X Unificado ────────────────────────
+        # ── 7.2 Alertas de Múltiplos CRMs (Surtos Coordenados) ───────────────
+        ALERTAS_MULTI_PATH = os.path.join(cnpj_dir, "crm_concentracao_multiplo_alertas.parquet")
+        df_cm: pl.DataFrame | None = None
+
+        if os.path.exists(ALERTAS_MULTI_PATH):
+            try: df_cm = pl.read_parquet(ALERTAS_MULTI_PATH)
+            except: pass
+            
+        if df_cm is None:
+            try:
+                from database import engine as _engine
+                with _engine.connect() as conn:
+                    pdf_cm = pd.read_sql(
+                        text("SELECT A.id_cnpj, "
+                             " YEAR(A.dt_dia)*100 + MONTH(A.dt_dia) AS competencia, "
+                             " A.dt_ini_concentracao AS dt_alerta, "
+                             " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,"
+                             " A.nu_60min AS nu_prescricoes, "
+                             " A.nu_crms_distintos AS nu_crms "
+                             " FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A"
+                             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
+                             " WHERE F.cnpj = :cnpj"),
+                        conn, params={"cnpj": cnpj}
+                    )
+                df_cm = pl.from_pandas(pdf_cm) if not pdf_cm.empty else pl.DataFrame(schema={
+                    "id_cnpj": pl.Int32, "competencia": pl.Int32, "dt_alerta": pl.Datetime,
+                    "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32
+                })
+                df_cm.write_parquet(ALERTAS_MULTI_PATH, compression="lz4")
+            except Exception as e:
+                print(f"⚠️ Erro ao buscar alertas múltiplos para {cnpj}: {e}")
+                df_cm = pl.DataFrame()
+
+        # ── 7.3 Pré-Sincronização do Raio-X Unificado ────────────────────────
         # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
         try:
             AnalyticsService.sync_crm_raiox_tx(cnpj)
@@ -2264,24 +2297,68 @@ class AnalyticsService:
                 print(f"❌ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
                 df_ca = pl.DataFrame()
 
+        # ── 8. Alertas do Estabelecimento (Consolidação das 3 Fontes) ─────────
         cnpj_alerts_list = []
-        if not df_ca.is_empty():
-            if comp_ini:
-                df_ca = df_ca.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-            if comp_fim:
-                df_ca = df_ca.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
-            
-            cnpj_alerts_list = [
-                {
+        
+        # 8.1 - Alertas de Volume (df_ca)
+        if df_ca is not None and not df_ca.is_empty():
+            _ca = df_ca
+            if comp_ini: _ca = _ca.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+            if comp_fim: _ca = _ca.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+            for r in _ca.iter_rows(named=True):
+                cnpj_alerts_list.append({
+                    "tipo": "VOLUME",
                     "dt": str(r["dt_alerta"]),
                     "hr": int(r["hr_janela"]),
                     "nu_prescricoes": int(r["nu_prescricoes"]),
                     "nu_crms": int(r["nu_crms"]),
-                    "multiplicador": float(r["multiplicador"] or 0),
+                    "multiplicador": float(r.get("multiplicador", 0)),
                     "mediana_hora":  float(r.get("mediana_hora", 0))
-                }
-                for r in df_ca.sort(["dt_alerta", "hr_janela"]).iter_rows(named=True)
-            ]
+                })
+
+        # 8.2 - Alertas de Múltiplos CRMs (df_cm)
+        if df_cm is not None and not df_cm.is_empty():
+            _cm = df_cm
+            if comp_ini: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+            if comp_fim: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+            for r in _cm.iter_rows(named=True):
+                cnpj_alerts_list.append({
+                    "tipo": "MULTIPLO",
+                    "dt": str(r["dt_alerta"]),
+                    "hr": int(r["hr_janela"]),
+                    "nu_prescricoes": int(r["nu_prescricoes"]),
+                    "nu_crms": int(r["nu_crms"]),
+                    "multiplicador": 0.0,
+                    "mediana_hora": 0.0
+                })
+
+        # 8.3 - Alertas de Médico Único (df_ad - Agregado por Janela)
+        # Note: df_ad contém múltiplos alertas por médico. No nível de CNPJ,
+        # queremos mostrar quando HOUVE um alerta de médico único.
+        if df_ad is not None and not df_ad.is_empty():
+            _ad = df_ad
+            if comp_ini: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+            if comp_fim: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+            
+            # Agrupamos por janela para não duplicar se 2 médicos tiveram alerta na mesma hora
+            # (embora o frontend lide com isso, é mais limpo consolidar)
+            _ad_agg = _ad.group_by(["dt_alerta", "hr_janela"]).agg([
+                pl.count("id_medico").alias("nu_crms"),
+                pl.sum("nu_prescricoes_dia").alias("nu_prescricoes")
+            ])
+            for r in _ad_agg.iter_rows(named=True):
+                cnpj_alerts_list.append({
+                    "tipo": "UNICO",
+                    "dt": str(r["dt_alerta"]),
+                    "hr": int(r["hr_janela"]),
+                    "nu_prescricoes": int(r["nu_prescricoes"]),
+                    "nu_crms": int(r["nu_crms"]),
+                    "multiplicador": 0.0,
+                    "mediana_hora": 0.0
+                })
+
+        # Ordenação Final por Data/Hora
+        cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
 
         # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
         TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
@@ -2577,6 +2654,20 @@ class AnalyticsService:
                                 A.severidade
                             FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                             INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                            WHERE F.cnpj = :cnpj
+                            
+                            UNION ALL
+                            
+                            SELECT 
+                                'VOLUME' as tipo,
+                                V.dt_alerta as dt_dia,
+                                NULL as id_medico,
+                                V.nu_crms as nu_crms_distintos,
+                                V.dt_alerta as dt_ini_concentracao,
+                                DATEADD(HOUR, 1, V.dt_alerta) as dt_fim_concentracao,
+                                'CRÍTICO' as severidade
+                            FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V
+                            INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj
                             WHERE F.cnpj = :cnpj
                         """),
                         conn,

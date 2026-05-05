@@ -1950,7 +1950,6 @@ class AnalyticsService:
         df_med = (
             df.group_by("id_medico")
             .agg([
-                pl.col("id_medico").first().alias("id_medico"),
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
                 pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
                 pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
@@ -2095,7 +2094,7 @@ class AnalyticsService:
                 from database import engine as _engine
                 with _engine.connect() as conn:
                     pdf_ad = pd.read_sql(
-                        text("SELECT M.id_medico, "
+                        text("SELECT A.id_medico, "
                              " YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia, "
                              " A.dt_dia AS dt_alerta, "
                              " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela, "
@@ -2106,10 +2105,10 @@ class AnalyticsService:
                              "   WHEN A.nu_10min >=  8 THEN A.nu_10min "
                              "   WHEN A.nu_15min >=  8 THEN A.nu_15min "
                              "   WHEN A.nu_20min >=  9 THEN A.nu_20min "
-                             "   WHEN A.nu_30min >=  7 THEN A.nu_30min "
+                             "   WHEN A.nu_30min >=  9 THEN A.nu_30min "
+                             "   WHEN A.nu_60min >= 14 THEN A.nu_60min "
+                             "   WHEN A.nu_25min >=  8 THEN A.nu_25min "
                              "   WHEN A.nu_60min >= 10 THEN A.nu_60min "
-                             "   WHEN A.nu_25min >=  5 THEN A.nu_25min "
-                             "   WHEN A.nu_60min >=  5 THEN A.nu_60min "
                              " END AS nu_prescricoes_dia, "
                              " A.nu_minutos_span AS nu_minutos_dia, "
                              " CASE WHEN A.nu_minutos_span = 0 THEN 0 "
@@ -2120,10 +2119,10 @@ class AnalyticsService:
                              "          WHEN A.nu_10min >=  8 THEN A.nu_10min "
                              "          WHEN A.nu_15min >=  8 THEN A.nu_15min "
                              "          WHEN A.nu_20min >=  9 THEN A.nu_20min "
-                             "          WHEN A.nu_30min >=  7 THEN A.nu_30min "
+                             "          WHEN A.nu_30min >=  9 THEN A.nu_30min "
+                             "          WHEN A.nu_60min >= 14 THEN A.nu_60min "
+                             "          WHEN A.nu_25min >=  8 THEN A.nu_25min "
                              "          WHEN A.nu_60min >= 10 THEN A.nu_60min "
-                             "          WHEN A.nu_25min >=  5 THEN A.nu_25min "
-                             "          WHEN A.nu_60min >=  5 THEN A.nu_60min "
                              "      END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora, "
                              " A.dt_ini_concentracao AS dt_ini_hora, "
                              " A.dt_fim_concentracao AS dt_fim_hora "

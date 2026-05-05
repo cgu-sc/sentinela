@@ -441,7 +441,7 @@ SELECT
         WHEN MU.has_multiplo IS NOT NULL THEN 1
         ELSE 0
     END AS BIT) AS is_hora_com_alerta,
-    CAST(D.is_dia_com_volume_horario_anomalo AS BIT) AS is_volume_horario_anomalo,
+    CAST(CASE WHEN H.is_anomalo_hora = 1 THEN 1 ELSE 0 END AS BIT) AS is_volume_horario_anomalo,
     CAST(CASE WHEN U.has_unico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_crm_unico,
     CAST(CASE WHEN MU.has_multiplo IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS is_crm_multiplo
 INTO temp_CGUSC.fp.crm_perfil_horario

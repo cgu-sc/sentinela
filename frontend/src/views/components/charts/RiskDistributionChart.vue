@@ -80,7 +80,7 @@ const chartOption = computed(() => {
       text: `{t|ESTABELECIMENTO}${badgeText ? '\n' + badgeText : ''}`,
       left: 24,
       top: 15,
-      backgroundColor: 'rgba(30, 37, 51, 0.85)', // Fundo escuro levemente transparente
+      backgroundColor: c.tooltip, // Fundo adaptativo (claro/escuro)
       borderColor: badgeColor,
       borderWidth: 1.5,
       padding: [10, 16],

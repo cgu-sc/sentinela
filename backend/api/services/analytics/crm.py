@@ -885,8 +885,8 @@ def get_crm_perfil_horario(
                             V.dt_alerta as dt_dia,
                             NULL as id_medico,
                             V.nu_crms as nu_crms_distintos,
-                            V.dt_alerta as dt_ini_concentracao,
-                            DATEADD(HOUR, 1, V.dt_alerta) as dt_fim_concentracao,
+                            DATEADD(HOUR, V.hr_janela, CAST(V.dt_alerta AS DATETIME)) as dt_ini_concentracao,
+                            DATEADD(HOUR, V.hr_janela + 1, CAST(V.dt_alerta AS DATETIME)) as dt_fim_concentracao,
                             'CRÍTICO' as severidade
                         FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj

@@ -154,6 +154,23 @@ function formatDailyRankMetric(day, mode = dailyRankMode.value) {
   return '';
 }
 
+function formatDailyRankBadge(day, mode = dailyRankMode.value) {
+  if (!day || !mode) return '';
+  if (mode === 'unico') {
+    const score = Number(day.score_crm_unico_hora ?? 0);
+    return score ? `${Math.round(score)}/h` : '';
+  }
+  if (mode === 'multiplo') {
+    const score = Number(day.score_crm_multiplo_hora ?? 0);
+    return score ? `${Math.round(score)}/h` : '';
+  }
+  if (mode === 'volume') {
+    const info = volumeScoreByDate.value.get(day.dt_janela);
+    return info?.score ? `${info.score.toFixed(1)}x` : '';
+  }
+  return '';
+}
+
 function toggleDailyRankMode(mode) {
   dailyRankMode.value = dailyRankMode.value === mode ? null : mode;
   if (dailyRankMode.value) filterDailyOnlyAnomalous.value = false;
@@ -347,6 +364,13 @@ const chartOptionDaily = computed(() => {
     ? (totalDays <= 10 ? 58 : totalDays <= 20 ? 42 : totalDays <= 50 ? 30 : 24)
     : 40;
   const showDailySlider = !dailyRankMode.value || dailyRankLimit.value === 0;
+  const showDailyRankBadge = !!dailyRankMode.value && dailyRankLimit.value > 0 && totalDays <= 20;
+  const rankBadgeColors = {
+    unico: { bg: 'rgba(245, 158, 11, 0.18)', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.38)' },
+    multiplo: { bg: 'rgba(139, 92, 246, 0.18)', text: '#8b5cf6', border: 'rgba(139, 92, 246, 0.38)' },
+    volume: { bg: 'rgba(16, 185, 129, 0.18)', text: '#10b981', border: 'rgba(16, 185, 129, 0.38)' },
+  };
+  const rankBadgeColor = rankBadgeColors[dailyRankMode.value] ?? rankBadgeColors.unico;
 
   return {
     ...chartTheme.value,
@@ -354,7 +378,7 @@ const chartOptionDaily = computed(() => {
     animationDuration: 100,
     animationDurationUpdate: 100,
     legend: { show: false },
-    grid: { top: 16, right: 20, bottom: 80, left: 50, containLabel: false },
+    grid: { top: showDailyRankBadge ? 34 : 16, right: 20, bottom: 80, left: 50, containLabel: false },
     xAxis: {
       type: 'category',
       data: dailyDates.value,
@@ -504,6 +528,25 @@ const chartOptionDaily = computed(() => {
         barWidth: dailyBarWidth,
         barMaxWidth: dailyBarMaxWidth,
         z: 2,
+        label: {
+          show: showDailyRankBadge,
+          position: 'top',
+          distance: 6,
+          formatter: (params) => params.data?.rankBadge ? `{badge|${params.data.rankBadge}}` : '',
+          rich: {
+            badge: {
+              color: rankBadgeColor.text,
+              backgroundColor: rankBadgeColor.bg,
+              borderColor: rankBadgeColor.border,
+              borderWidth: 1,
+              borderRadius: 4,
+              padding: [2, 5],
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 14,
+            },
+          },
+        },
         data: dailyValues.value.map((v, i) => {
           const day = filteredDailyDays.value[i];
           const isSelected = selectedDay.value && selectedDay.value.dt_janela === day.dt_janela;
@@ -514,6 +557,7 @@ const chartOptionDaily = computed(() => {
             : { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(148,163,184,0.6)' }, { offset: 1, color: 'rgba(148,163,184,0.15)' }] };
           return {
             value: v,
+            rankBadge: formatDailyRankBadge(day),
             cursor: (day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1 || day.is_crm_multiplo === 1) ? 'pointer' : 'default',
             itemStyle: {
               opacity: hasSelection && !isSelected ? 0.5 : 1,

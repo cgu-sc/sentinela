@@ -74,6 +74,7 @@ BEGIN
         nu_10min            SMALLINT        NOT NULL,
         nu_15min            SMALLINT        NOT NULL,
         nu_20min            SMALLINT        NOT NULL,
+        nu_25min            SMALLINT        NOT NULL,
         nu_30min            SMALLINT        NOT NULL,
         nu_60min            SMALLINT        NOT NULL,
         severidade          VARCHAR(10)     NOT NULL
@@ -201,6 +202,8 @@ BEGIN
                                 THEN B.num_autorizacao END)                           AS nu_15min,
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 20, A.data_hora)
                                 THEN B.num_autorizacao END)                           AS nu_20min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 25, A.data_hora)
+                                THEN B.num_autorizacao END)                           AS nu_25min,
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 30, A.data_hora)
                                 THEN B.num_autorizacao END)                           AS nu_30min,
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora)
@@ -213,6 +216,7 @@ BEGIN
             MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 10, A.data_hora) THEN B.data_hora END) AS fim_real_10min,
             MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 15, A.data_hora) THEN B.data_hora END) AS fim_real_15min,
             MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 20, A.data_hora) THEN B.data_hora END) AS fim_real_20min,
+            MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 25, A.data_hora) THEN B.data_hora END) AS fim_real_25min,
             MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 30, A.data_hora) THEN B.data_hora END) AS fim_real_30min,
             MAX(CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora) THEN B.data_hora END) AS fim_real_60min,
 
@@ -230,6 +234,7 @@ BEGIN
         OR nu_10min >=  8
         OR nu_15min >= 10
         OR nu_20min >= 11
+        OR nu_25min >= 12
         OR nu_30min >= 12
         OR nu_60min >= 18
         OR (nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3)
@@ -252,6 +257,7 @@ BEGIN
                     WHEN nu_10min >=  8 THEN 2
                     WHEN nu_15min >= 10 THEN 3
                     WHEN nu_20min >= 11 THEN 3
+                    WHEN nu_25min >= 12 THEN 4
                     WHEN nu_30min >= 12 THEN 4
                     WHEN nu_60min >= 18 THEN 4
                     WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 4
@@ -259,6 +265,7 @@ BEGIN
                 END ASC,
                 nu_60min DESC,
                 nu_30min DESC,
+                nu_25min DESC,
                 nu_20min DESC,
                 nu_15min DESC,
                 nu_10min DESC,
@@ -272,9 +279,9 @@ BEGIN
     -- ── INSERT incremental nos alertas ────────────────────────────────────
     INSERT INTO temp_CGUSC.fp.crm_concentracao_multiplo_alertas
         (id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-         nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade)
+         nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade)
     SELECT id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-           nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_30min, nu_60min, severidade
+           nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade
     FROM (
         SELECT
             id_cnpj,
@@ -287,6 +294,7 @@ BEGIN
             CAST(nu_10min AS SMALLINT)                                      AS nu_10min,
             CAST(nu_15min AS SMALLINT)                                      AS nu_15min,
             CAST(nu_20min AS SMALLINT)                                      AS nu_20min,
+            CAST(nu_25min AS SMALLINT)                                      AS nu_25min,
             CAST(nu_30min AS SMALLINT)                                      AS nu_30min,
             CAST(nu_60min AS SMALLINT)                                      AS nu_60min,
             severidade
@@ -300,6 +308,7 @@ BEGIN
                     WHEN nu_10min >=  8 THEN fim_real_10min
                     WHEN nu_15min >= 10 THEN fim_real_15min
                     WHEN nu_20min >= 11 THEN fim_real_20min
+                    WHEN nu_25min >= 12 THEN fim_real_25min
                     WHEN nu_30min >= 12 THEN fim_real_30min
                     WHEN nu_60min >= 18 THEN fim_real_60min
                     WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN fim_real_60min
@@ -311,6 +320,7 @@ BEGIN
                     WHEN nu_10min >=  8 THEN 'CRÍTICO'
                     WHEN nu_15min >= 10 THEN 'GRAVE'
                     WHEN nu_20min >= 11 THEN 'GRAVE'
+                    WHEN nu_25min >= 12 THEN 'ALTO'
                     WHEN nu_30min >= 12 THEN 'ALTO'
                     WHEN nu_60min >= 18 THEN 'ALTO'
                     WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 'ALTO'
@@ -390,6 +400,7 @@ SELECT TOP 30
     nu_10min,
     nu_15min,
     nu_20min,
+    nu_25min,
     nu_30min,
     nu_60min,
     severidade

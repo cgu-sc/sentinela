@@ -282,6 +282,14 @@ class CrmDailyProfileItem(BaseModel):
     is_dia_com_volume_horario_anomalo: int
     is_anomalo_unico: int
     is_crm_multiplo: int
+    score_crm_unico_hora: Optional[float] = None
+    score_crm_unico_qtd: Optional[int] = None
+    score_crm_unico_minutos: Optional[int] = None
+    score_crm_unico_medico: Optional[str] = None
+    score_crm_multiplo_hora: Optional[float] = None
+    score_crm_multiplo_qtd: Optional[int] = None
+    score_crm_multiplo_minutos: Optional[int] = None
+    score_crm_multiplo_crms: Optional[int] = None
 
 class CrmDailyProfileResponse(BaseModel):
     cnpj: str

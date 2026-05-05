@@ -54,7 +54,6 @@ function normalizeDailyDay(d) {
     is_volume_horario_anomalo: d.is_dia_com_volume_horario_anomalo,
     is_crm_unico: d.is_anomalo_unico,
     is_crm_multiplo: d.is_crm_multiplo ?? 0,
-    // Compatibilidade retroativa: is_anomalo usado pelo watch de auto-seleção
     is_anomalo: d.is_dia_com_volume_horario_anomalo || d.is_anomalo_unico || d.is_crm_multiplo ? 1 : 0,
   };
 }
@@ -79,10 +78,117 @@ const hourlyByDate = computed(() => {
 
 // ── Filtro e Zoom do Gráfico Diário ───────────────────────────────────────
 const filterDailyOnlyAnomalous = ref(false);
+const dailyRankMode = ref(null);
+const dailyRankLimit = ref(10);
 const dailyZoomStart = ref(0);
 const dailyZoomEnd = ref(100);
+const dailyRankLimitOptions = [
+  { label: 'Top 10', value: 10 },
+  { label: 'Top 20', value: 20 },
+  { label: 'Top 50', value: 50 },
+  { label: 'Todos', value: 0 },
+];
+const DAILY_RANK_VISIBLE_LIMIT = 50;
+
+const volumeScoreByDate = computed(() => {
+  const map = new Map();
+  for (const pt of cachedCrmPerfilHorario.value?.points ?? []) {
+    if (pt.is_volume_horario_anomalo !== 1) continue;
+    const key = String(pt.dt_janela).slice(0, 10);
+    const mediana = Math.max(Number(pt.mediana_hora ?? 0), 3);
+    const score = mediana > 0 ? Number(pt.nu_prescricoes ?? 0) / mediana : 0;
+    const current = map.get(key);
+    if (!current || score > current.score) {
+      map.set(key, {
+        score,
+        hr_janela: pt.hr_janela,
+        nu_prescricoes: pt.nu_prescricoes,
+        mediana_hora: pt.mediana_hora,
+      });
+    }
+  }
+  return map;
+});
+
+function getDailyRankScore(day, mode) {
+  if (mode === 'unico') return Number(day.score_crm_unico_hora ?? 0);
+  if (mode === 'multiplo') return Number(day.score_crm_multiplo_hora ?? 0);
+  if (mode === 'volume') return Number(volumeScoreByDate.value.get(day.dt_janela)?.score ?? 0);
+  return 0;
+}
+
+const dailyRankedDays = computed(() => {
+  if (!dailyRankMode.value) return [];
+  const ranked = unifiedDays.value
+    .map(day => ({ ...day, _rankScore: getDailyRankScore(day, dailyRankMode.value) }))
+    .filter(day => day._rankScore > 0)
+    .sort((a, b) => {
+      const scoreDiff = b._rankScore - a._rankScore;
+      if (scoreDiff !== 0) return scoreDiff;
+      return String(b.dt_janela).localeCompare(String(a.dt_janela));
+    });
+
+  return dailyRankLimit.value > 0 ? ranked.slice(0, dailyRankLimit.value) : ranked;
+});
+
+function formatDailyRankMetric(day, mode = dailyRankMode.value) {
+  if (!day || !mode) return '';
+  if (mode === 'unico') {
+    const qtd = day.score_crm_unico_qtd;
+    const min = day.score_crm_unico_minutos;
+    const score = Number(day.score_crm_unico_hora ?? 0);
+    return score ? `${score.toFixed(1)}/h${qtd && min ? ` (${qtd} em ${min}min)` : ''}` : '';
+  }
+  if (mode === 'multiplo') {
+    const qtd = day.score_crm_multiplo_qtd;
+    const min = day.score_crm_multiplo_minutos;
+    const crms = day.score_crm_multiplo_crms;
+    const score = Number(day.score_crm_multiplo_hora ?? 0);
+    return score ? `${score.toFixed(1)}/h${qtd && min ? ` (${qtd} em ${min}min)` : ''}${crms ? ` · ${crms} CRMs` : ''}` : '';
+  }
+  if (mode === 'volume') {
+    const info = volumeScoreByDate.value.get(day.dt_janela);
+    if (!info?.score) return '';
+    return `${info.score.toFixed(1)}x · ${String(info.hr_janela).padStart(2, '0')}h`;
+  }
+  return '';
+}
+
+function toggleDailyRankMode(mode) {
+  dailyRankMode.value = dailyRankMode.value === mode ? null : mode;
+  if (dailyRankMode.value) filterDailyOnlyAnomalous.value = false;
+  selectedDay.value = null;
+  selectedHourlyHour.value = null;
+  dailyZoomStart.value = 0;
+  dailyZoomEnd.value = 100;
+}
+
+function setDailyZoomWindow(total, centerIdx = null, maxVisible = 30) {
+  if (total <= 0) return;
+
+  const visible = Math.min(total, maxVisible);
+  let startIdx;
+  let endIdx;
+
+  if (centerIdx === null) {
+    endIdx = total;
+    startIdx = Math.max(0, total - visible);
+  } else {
+    const halfWindow = visible / 2;
+    startIdx = Math.max(0, centerIdx - halfWindow);
+    endIdx = Math.min(total, startIdx + visible);
+    if (endIdx === total) startIdx = Math.max(0, total - visible);
+  }
+
+  dailyZoomStart.value = (startIdx / total) * 100;
+  dailyZoomEnd.value = (endIdx / total) * 100;
+}
 
 const filteredDailyDays = computed(() => {
+  if (dailyRankMode.value) {
+    if (dailyRankLimit.value > 0) return dailyRankedDays.value;
+    return [...dailyRankedDays.value].sort((a, b) => String(a.dt_janela).localeCompare(String(b.dt_janela)));
+  }
   if (!filterDailyOnlyAnomalous.value) return unifiedDays.value;
   return unifiedDays.value.filter(d => d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1 || d.is_crm_multiplo === 1);
 });
@@ -234,6 +340,13 @@ const chartOptionDaily = computed(() => {
   const startZoom = dailyZoomStart.value;
   const endZoom = dailyZoomEnd.value;
   const fixedSpan = totalDays > 30 ? (30 / totalDays) * 100 : 100;
+  const dailyBarWidth = dailyRankMode.value
+    ? (totalDays <= 10 ? '46%' : totalDays <= 20 ? '54%' : totalDays <= 50 ? '58%' : '52%')
+    : '100%';
+  const dailyBarMaxWidth = dailyRankMode.value
+    ? (totalDays <= 10 ? 58 : totalDays <= 20 ? 42 : totalDays <= 50 ? 30 : 24)
+    : 40;
+  const showDailySlider = !dailyRankMode.value || dailyRankLimit.value === 0;
 
   return {
     ...chartTheme.value,
@@ -319,6 +432,13 @@ const chartOptionDaily = computed(() => {
         if (day.is_crm_multiplo === 1) {
           badges.push('<span style="font-size:10px; background:rgba(139, 92, 246, 0.15); color:#8b5cf6; padding:2px 8px; border-radius:4px; font-weight:600; border:1px solid rgba(139, 92, 246, 0.3); margin-left:8px;">⚠ CRM MÚLTIPLO</span>');
         }
+        const rankMetric = dailyRankMode.value ? formatDailyRankMetric(day) : '';
+        const rankMetricHtml = rankMetric
+          ? `<div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Ranking Ativo</span>
+                <span style="font-weight:700; font-size:13px;">${rankMetric}</span>
+             </div>`
+          : '';
         return `
           <div style="color: ${c.tooltipText}; min-width: 200px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -334,6 +454,7 @@ const chartOptionDaily = computed(() => {
                 <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos Distintos</span>
                 <span style="font-weight:700; font-size:13px;">${day.nu_crms_distintos}</span>
               </div>
+              ${rankMetricHtml}
             </div>
             ${sparklineHtml}
             ${(day.is_volume_horario_anomalo === 1 || day.is_crm_unico === 1 || day.is_crm_multiplo === 1) ? '<div style="margin-top:10px; font-size:10px; color:#6366f1; text-align:center; opacity:.8; font-style:italic;">Clique para drill-down detalhado</div>' : ''}
@@ -344,6 +465,7 @@ const chartOptionDaily = computed(() => {
       { type: 'inside', start: startZoom, end: endZoom, zoomLock: true },
       { 
         type: 'slider', 
+        show: showDailySlider,
         start: startZoom, 
         end: endZoom, 
         height: 16, 
@@ -379,8 +501,8 @@ const chartOptionDaily = computed(() => {
         name: 'Prescrições',
         type: 'bar',
         barGap: '-100%',
-        barWidth: '100%',
-        barMaxWidth: 40,
+        barWidth: dailyBarWidth,
+        barMaxWidth: dailyBarMaxWidth,
         z: 2,
         data: dailyValues.value.map((v, i) => {
           const day = filteredDailyDays.value[i];
@@ -615,11 +737,14 @@ const chartOptionHourly = computed(() => {
 watch(filteredDailyDays, (newDays) => {
   if (newDays.length > 0 && !selectedDay.value) {
     const anomalousDays = newDays.filter(d => d.is_anomalo === 1);
-    if (anomalousDays.length > 0) {
-      // 1. Encontra o pior dia (maior volume)
-      const maxDay = anomalousDays.reduce((max, d) => 
-        (d.nu_prescricoes_dia > max.nu_prescricoes_dia) ? d : max, anomalousDays[0]
-      );
+    const candidateDays = dailyRankMode.value ? dailyRankedDays.value : anomalousDays;
+    if (candidateDays.length > 0) {
+      // 1. Encontra o pior dia do contexto atual
+      const maxDay = dailyRankMode.value
+        ? candidateDays[0]
+        : candidateDays.reduce((max, d) =>
+            (d.nu_prescricoes_dia > max.nu_prescricoes_dia) ? d : max, candidateDays[0]
+          );
       selectedDay.value = maxDay;
       selectedHourlyHour.value = 'all';
       loadRaiox(maxDay.dt_janela, null);
@@ -627,31 +752,20 @@ watch(filteredDailyDays, (newDays) => {
       // 2. Centraliza o Gráfico no dia selecionado
       const idx = newDays.findIndex(d => d.dt_janela === maxDay.dt_janela);
       if (idx !== -1) {
-        const total = newDays.length;
-        const windowSize = 30; // Mostrar 30 dias ao redor
-        const halfWindow = windowSize / 2;
-        
-        // Calcula porcentagens
-        let startIdx = Math.max(0, idx - halfWindow);
-        let endIdx = Math.min(total, startIdx + windowSize);
-        
-        // Ajusta se bater no final
-        if (endIdx === total) {
-          startIdx = Math.max(0, total - windowSize);
-        }
-
-        dailyZoomStart.value = (startIdx / total) * 100;
-        dailyZoomEnd.value = (endIdx / total) * 100;
+        setDailyZoomWindow(newDays.length, idx, dailyRankMode.value ? DAILY_RANK_VISIBLE_LIMIT : 30);
       }
     } else {
       // 3. Caso não haja anomalia, mostra os últimos 30 dias por padrão
-      const total = newDays.length;
-      const windowSize = 30;
-      dailyZoomStart.value = Math.max(0, 100 - (windowSize / total) * 100);
-      dailyZoomEnd.value = 100;
+      setDailyZoomWindow(newDays.length, null, dailyRankMode.value ? DAILY_RANK_VISIBLE_LIMIT : 30);
     }
   }
 }, { immediate: true });
+
+watch(dailyRankLimit, () => {
+  if (!dailyRankMode.value) return;
+  selectedDay.value = null;
+  selectedHourlyHour.value = null;
+});
 
 // ── Retrigger quando parquet fica pronto (race condition com auto-seleção) ──
 // get_crm_perfil_horario cria o parquet via sync_crm_raiox_tx ANTES de responder,
@@ -853,8 +967,48 @@ function toggleActiveRow(auth) {
             </button>
           </div>
           <div class="filter-divider"></div>
-          <label class="filter-toggle">
-            <input type="checkbox" v-model="filterDailyOnlyAnomalous" />
+          <div class="daily-rank-controls" aria-label="Piores dias por">
+            <button
+              class="rank-btn is-unico"
+              :class="{ 'is-active': dailyRankMode === 'unico' }"
+              title="Top 10 por CRM Único"
+              @click="toggleDailyRankMode('unico')"
+            >
+              <i class="pi pi-user" />
+              <span>CRM Único</span>
+            </button>
+            <button
+              class="rank-btn is-multiplo"
+              :class="{ 'is-active': dailyRankMode === 'multiplo' }"
+              title="Top 10 por Multi-CRM"
+              @click="toggleDailyRankMode('multiplo')"
+            >
+              <i class="pi pi-users" />
+              <span>Multi-CRM</span>
+            </button>
+            <button
+              class="rank-btn is-volume"
+              :class="{ 'is-active': dailyRankMode === 'volume' }"
+              title="Top 10 por volume anômalo"
+              @click="toggleDailyRankMode('volume')"
+            >
+              <i class="pi pi-chart-bar" />
+              <span>Volume</span>
+            </button>
+            <select
+              v-model.number="dailyRankLimit"
+              class="rank-limit-select"
+              title="Quantidade de dias no ranking"
+              :disabled="!dailyRankMode"
+            >
+              <option v-for="option in dailyRankLimitOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="filter-divider"></div>
+          <label class="filter-toggle" :class="{ 'is-disabled': dailyRankMode }">
+            <input type="checkbox" v-model="filterDailyOnlyAnomalous" :disabled="dailyRankMode !== null" />
             <span class="toggle-slider"></span>
             <span class="toggle-label">Apenas Anomalias</span>
           </label>
@@ -1337,8 +1491,11 @@ function toggleActiveRow(auth) {
 .chart-loading-badge { margin-left: 0.75rem; font-size: 0.78rem; color: var(--text-muted); }
 .chart-empty { display: flex; align-items: center; gap: 0.6rem; padding: 2rem; color: var(--text-muted); justify-content: center; }
 
-.filter-controls { display: flex; align-items: center; }
+.filter-controls { display: flex; align-items: center; flex-wrap: wrap; row-gap: 0.5rem; }
 .filter-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.75rem; color: var(--text-secondary); }
+.filter-toggle.is-disabled { opacity: 0.45; cursor: not-allowed; }
+.filter-toggle.is-disabled .toggle-slider,
+.filter-toggle.is-disabled .toggle-label { cursor: not-allowed; }
 
 /* ── Botões de Navegação do Gráfico ── */
 .chart-nav-buttons {
@@ -1393,6 +1550,72 @@ function toggleActiveRow(auth) {
 
 :global(.dark-mode) .filter-divider {
   background: rgba(255, 255, 255, 0.1);
+}
+.daily-rank-controls {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+:global(.dark-mode) .daily-rank-controls {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.rank-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 28px;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.rank-btn i { font-size: 0.75rem; }
+.rank-btn:hover {
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  color: var(--text-color);
+}
+.rank-btn.is-unico.is-active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+.rank-btn.is-multiplo.is-active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+}
+.rank-btn.is-volume.is-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+.rank-limit-select {
+  min-height: 28px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-color);
+  padding: 0 1.7rem 0 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rank-limit-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+:global(.dark-mode) .rank-limit-select {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 .filter-toggle input { display: none; }
 .toggle-slider { position: relative; width: 32px; height: 18px; background-color: var(--tabs-border); border-radius: 20px; transition: 0.3s; }

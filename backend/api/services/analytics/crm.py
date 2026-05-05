@@ -674,6 +674,170 @@ def get_crm_data(
         save_time_ms=save_time_ms,
     )
 
+_CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
+_CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
+
+def _best_crm_rhythm_from_row(row: dict, windows: tuple[int, ...]) -> tuple[float, int | None, int | None]:
+    best_score = 0.0
+    best_count = None
+    best_minutes = None
+
+    for minutes in windows:
+        raw_count = row.get(f"nu_{minutes}min")
+        if raw_count is None:
+            continue
+        try:
+            count = int(raw_count or 0)
+        except (TypeError, ValueError):
+            continue
+
+        score = (count / minutes) * 60
+        if score > best_score:
+            best_score = score
+            best_count = count
+            best_minutes = minutes
+
+    return round(best_score, 2), best_count, best_minutes
+
+def _build_crm_rhythm_map(
+    df_alertas: pl.DataFrame,
+    date_col: str,
+    windows: tuple[int, ...],
+    id_col: str | None = None,
+    crms_col: str | None = None,
+) -> dict[str, dict]:
+    scores: dict[str, dict] = {}
+    if df_alertas.is_empty():
+        return scores
+
+    for row in df_alertas.iter_rows(named=True):
+        score, count, minutes = _best_crm_rhythm_from_row(row, windows)
+        if score <= 0:
+            continue
+
+        day = str(row.get(date_col, ""))[:10]
+        if not day:
+            continue
+
+        current = scores.get(day)
+        if current and score <= current["score"]:
+            continue
+
+        item = {"score": score, "qtd": count, "minutos": minutes}
+        if id_col:
+            item["id_medico"] = str(row.get(id_col) or "")
+        if crms_col:
+            try:
+                item["nu_crms"] = int(row.get(crms_col) or 0)
+            except (TypeError, ValueError):
+                item["nu_crms"] = None
+        scores[day] = item
+
+    return scores
+
+def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
+    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
+    rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_UNICO_RHYTHM_WINDOWS}
+    required_columns = {
+        "id_medico",
+        "competencia",
+        "dt_alerta",
+        "hr_janela",
+        "nu_prescricoes_dia",
+        "nu_minutos_dia",
+        "taxa_hora",
+        "dt_ini_hora",
+        "dt_fim_hora",
+        "severidade",
+        *rhythm_columns,
+    }
+
+    if os.path.exists(alertas_path):
+        try:
+            cached_df = pl.read_parquet(alertas_path)
+            if required_columns.issubset(set(cached_df.columns)):
+                return cached_df
+        except Exception:
+            pass
+
+    schema = {
+        "id_medico": pl.Utf8,
+        "competencia": pl.Int32,
+        "dt_alerta": pl.Utf8,
+        "hr_janela": pl.Int32,
+        "nu_prescricoes_dia": pl.Int32,
+        "nu_minutos_dia": pl.Int32,
+        "taxa_hora": pl.Float64,
+        "dt_ini_hora": pl.Datetime,
+        "dt_fim_hora": pl.Datetime,
+        "severidade": pl.Utf8,
+        **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_UNICO_RHYTHM_WINDOWS},
+    }
+
+    try:
+        import pandas as pd
+        from database import engine as _engine
+
+        with _engine.connect() as conn:
+            pdf_alertas = pd.read_sql(
+                text("""
+                    SELECT
+                        A.id_medico,
+                        YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
+                        A.dt_dia AS dt_alerta,
+                        DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
+                        CASE
+                          WHEN A.nu_5min  >=  7 THEN A.nu_5min
+                          WHEN A.nu_10min >= 10 THEN A.nu_10min
+                          WHEN A.nu_5min  >=  6 THEN A.nu_5min
+                          WHEN A.nu_10min >=  8 THEN A.nu_10min
+                          WHEN A.nu_15min >=  8 THEN A.nu_15min
+                          WHEN A.nu_20min >=  9 THEN A.nu_20min
+                          WHEN A.nu_30min >=  9 THEN A.nu_30min
+                          WHEN A.nu_60min >= 14 THEN A.nu_60min
+                          WHEN A.nu_25min >=  8 THEN A.nu_25min
+                          WHEN A.nu_60min >= 10 THEN A.nu_60min
+                        END AS nu_prescricoes_dia,
+                        A.nu_minutos_span AS nu_minutos_dia,
+                        CASE WHEN A.nu_minutos_span = 0 THEN 0
+                             ELSE CAST((CASE
+                                 WHEN A.nu_5min  >=  7 THEN A.nu_5min
+                                 WHEN A.nu_10min >= 10 THEN A.nu_10min
+                                 WHEN A.nu_5min  >=  6 THEN A.nu_5min
+                                 WHEN A.nu_10min >=  8 THEN A.nu_10min
+                                 WHEN A.nu_15min >=  8 THEN A.nu_15min
+                                 WHEN A.nu_20min >=  9 THEN A.nu_20min
+                                 WHEN A.nu_30min >=  9 THEN A.nu_30min
+                                 WHEN A.nu_60min >= 14 THEN A.nu_60min
+                                 WHEN A.nu_25min >=  8 THEN A.nu_25min
+                                 WHEN A.nu_60min >= 10 THEN A.nu_60min
+                             END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora,
+                        A.dt_ini_concentracao AS dt_ini_hora,
+                        A.dt_fim_concentracao AS dt_fim_hora,
+                        A.severidade,
+                        A.nu_5min,
+                        A.nu_10min,
+                        A.nu_15min,
+                        A.nu_20min,
+                        A.nu_25min,
+                        A.nu_30min,
+                        A.nu_60min
+                    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                    WHERE F.cnpj = :cnpj
+                    ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao
+                """),
+                conn,
+                params={"cnpj": cnpj},
+            )
+
+        df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema=schema)
+        df_alertas.write_parquet(alertas_path, compression="lz4")
+        return df_alertas
+    except Exception as e:
+        print(f"Erro ao sincronizar alertas unicos do Raio-X '{cnpj}': {e}")
+        return pl.DataFrame(schema=schema)
+
 def get_crm_perfil_diario(
     cnpj: str,
     data_inicio: str | None = None,
@@ -750,6 +914,24 @@ def get_crm_perfil_diario(
         return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
+    unico_scores: dict[str, dict] = {}
+    multi_scores: dict[str, dict] = {}
+    try:
+        unico_scores = _build_crm_rhythm_map(
+            _load_crm_unico_alertas(cnpj, cnpj_dir),
+            date_col="dt_alerta",
+            windows=_CRM_UNICO_RHYTHM_WINDOWS,
+            id_col="id_medico",
+        )
+        multi_scores = _build_crm_rhythm_map(
+            _load_crm_multi_alertas(cnpj, cnpj_dir),
+            date_col="dt_dia",
+            windows=_CRM_MULTIPLO_RHYTHM_WINDOWS,
+            crms_col="nu_crms_distintos",
+        )
+    except Exception as e:
+        print(f"Erro ao calcular scores de criticidade CRM '{cnpj}': {e}")
+
     days = [
         {
             "dt_janela":             str(r["dt_janela"])[:10],
@@ -760,6 +942,14 @@ def get_crm_perfil_diario(
             "is_dia_com_volume_horario_anomalo": int(r["is_dia_com_volume_horario_anomalo"]),
             "is_anomalo_unico":      int(r["is_anomalo_unico"]),
             "is_crm_multiplo":       int(r.get("is_crm_multiplo", 0)),
+            "score_crm_unico_hora":   unico_scores.get(str(r["dt_janela"])[:10], {}).get("score"),
+            "score_crm_unico_qtd":    unico_scores.get(str(r["dt_janela"])[:10], {}).get("qtd"),
+            "score_crm_unico_minutos": unico_scores.get(str(r["dt_janela"])[:10], {}).get("minutos"),
+            "score_crm_unico_medico": unico_scores.get(str(r["dt_janela"])[:10], {}).get("id_medico"),
+            "score_crm_multiplo_hora": multi_scores.get(str(r["dt_janela"])[:10], {}).get("score"),
+            "score_crm_multiplo_qtd": multi_scores.get(str(r["dt_janela"])[:10], {}).get("qtd"),
+            "score_crm_multiplo_minutos": multi_scores.get(str(r["dt_janela"])[:10], {}).get("minutos"),
+            "score_crm_multiplo_crms": multi_scores.get(str(r["dt_janela"])[:10], {}).get("nu_crms"),
         }
         for r in df.iter_rows(named=True)
     ]
@@ -968,12 +1158,6 @@ def get_crm_perfil_horario(
             is_uni = int(row.get("is_crm_unico", 0)) if row else 0
             is_mul = int(row.get("is_crm_multiplo", 0)) if row else 0
             
-            # Se a tabela perfil_horario não tiver as flags específicas, 
-            # podemos usar a is_anomalo_hora como fallback para volume
-            if row and is_vol == 0 and is_uni == 0 and is_mul == 0:
-                if int(row.get("is_anomalo_hora", 0)) == 1:
-                    is_vol = 1
-
             points.append({
                 "dt_janela":          dt,
                 "hr_janela":          h,
@@ -1033,7 +1217,7 @@ def _extract_alert_hour(value) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
-def _alert_overlaps_hour(start_value, end_value, hour: Optional[int], fallback_hour=None) -> bool:
+def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     if hour is None:
         return True
 
@@ -1042,10 +1226,7 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int], fallback_h
     end_hour = _extract_alert_hour(end_value)
 
     if start_hour is None and end_hour is None:
-        try:
-            return int(fallback_hour) == target_hour
-        except (TypeError, ValueError):
-            return False
+        return False
 
     if start_hour is None:
         start_hour = end_hour
@@ -1058,6 +1239,7 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int], fallback_h
 
 def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
     alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_raiox_alertas.parquet")
+    rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS}
     required_columns = {
         "dt_dia",
         "dt_ini_concentracao",
@@ -1065,6 +1247,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         "nu_60min",
         "nu_crms_distintos",
         "severidade",
+        *rhythm_columns,
     }
 
     if os.path.exists(alertas_path):
@@ -1088,7 +1271,13 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         A.dt_fim_concentracao,
                         A.nu_60min,
                         A.nu_crms_distintos,
-                        A.severidade
+                        A.severidade,
+                        A.nu_5min,
+                        A.nu_10min,
+                        A.nu_15min,
+                        A.nu_20min,
+                        A.nu_25min,
+                        A.nu_30min
                     FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                     WHERE F.cnpj = :cnpj
@@ -1104,6 +1293,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             "nu_60min": pl.Int32,
             "nu_crms_distintos": pl.Int32,
             "severidade": pl.Utf8,
+            **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS if minutes != 60},
         })
         df_alertas.write_parquet(alertas_path, compression="lz4")
         return df_alertas
@@ -1154,20 +1344,16 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             df_unico = pl.read_parquet(unico_path)
             day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
             if hour is not None:
-                if {"dt_ini_hora", "dt_fim_hora", "hr_janela"}.issubset(set(day_unico.columns)):
-                    day_unico = day_unico.filter(
-                        pl.struct(["dt_ini_hora", "dt_fim_hora", "hr_janela"]).map_elements(
-                            lambda r: _alert_overlaps_hour(
-                                r.get("dt_ini_hora"),
-                                r.get("dt_fim_hora"),
-                                hour,
-                                r.get("hr_janela"),
-                            ),
-                            return_dtype=pl.Boolean,
-                        )
+                day_unico = day_unico.filter(
+                    pl.struct(["dt_ini_hora", "dt_fim_hora"]).map_elements(
+                        lambda r: _alert_overlaps_hour(
+                            r.get("dt_ini_hora"),
+                            r.get("dt_fim_hora"),
+                            hour,
+                        ),
+                        return_dtype=pl.Boolean,
                     )
-                elif "hr_janela" in day_unico.columns:
-                    day_unico = day_unico.filter(pl.col("hr_janela") == hour)
+                )
             alertas_unico = [
                 {
                     "id_medico": str(r["id_medico"]),

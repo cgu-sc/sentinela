@@ -1016,9 +1016,6 @@ function toggleActiveRow(auth) {
           <i class="pi pi-clock" style="color: #6366f1;" />
           <span>ANÁLISE HORÁRIA</span>
           <span class="drill-context-tag">{{ formatarData(selectedDay.dt_janela) }}</span>
-          <span v-if="selectedDay.is_volume_horario_anomalo === 1" class="anomalo-badge">SURTO HORÁRIO</span>
-          <span v-if="selectedDay.is_crm_unico === 1" class="concentracao-badge">CONCENTRAÇÃO</span>
-          <span v-if="selectedDay.is_crm_multiplo === 1" class="multiplo-badge">CRM MÚLTIPLO</span>
         </div>
         <div class="drill-panel-actions">
           <button 
@@ -1039,18 +1036,26 @@ function toggleActiveRow(auth) {
       </p>
       <div class="daily-chart-wrapper" :class="{ 'cursor-pointer-active': hoveredHourlyHour !== null }">
         <div class="chart-legend-html">
-          <span class="legend-item">
-            <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
-            Autorizações (anomalia)
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-bar" :style="{ background: chartUFAccents.bar1 }"></span>
-            Autorizações (normal)
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-dashed"></span>
-            Mediana Referência
-          </span>
+          <div class="legend-group">
+            <span class="legend-item">
+              <span class="legend-swatch legend-bar" style="background: #ef4444;"></span>
+              Hora com Alerta
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch legend-bar" :style="{ background: 'rgba(99, 102, 241, 0.65)' }"></span>
+              Hora Normal
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch legend-dashed"></span>
+              Mediana Referência
+            </span>
+          </div>
+          <div v-if="selectedDay.is_volume_horario_anomalo || selectedDay.is_crm_unico || selectedDay.is_crm_multiplo" class="legend-divider"></div>
+          <div class="legend-group">
+            <span v-if="selectedDay.is_volume_horario_anomalo === 1" class="track-badge is-volume">Volume Atípico</span>
+            <span v-if="selectedDay.is_crm_unico === 1" class="track-badge is-unico">CRM Único</span>
+            <span v-if="selectedDay.is_crm_multiplo === 1" class="track-badge is-multiplo">Multi-CRM</span>
+          </div>
         </div>
         <VChart
           v-if="selectedDay"
@@ -1387,7 +1392,26 @@ function toggleActiveRow(auth) {
 .is-refreshing { opacity: 0.6; pointer-events: none; }
 
 .daily-chart-wrapper { display: flex; flex-direction: column; gap: 0.5rem; }
-.chart-legend-html { display: flex; align-items: center; justify-content: center; gap: 1.25rem; padding: 0.5rem 0; }
+.chart-legend-html { 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 1.25rem; 
+  padding: 0.5rem 0; 
+  flex-wrap: wrap;
+}
+.legend-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.legend-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--card-border);
+  opacity: 0.6;
+}
+:global(.dark-mode) .legend-divider { background: rgba(255,255,255,0.1); }
 .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--text-secondary); }
 .legend-swatch { width: 14px; height: 8px; border-radius: 2px; }
 .legend-dashed { background: none; border-top: 2px dashed #f59e0b; height: 0; width: 18px; }
@@ -1710,90 +1734,24 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   white-space: nowrap;
 }
 
-/* ── Trilha de Eventos Horários ────────────────────────────────────────── */
-.hourly-timeline-tracks {
-  margin-top: -10px;
-  padding: 0 20px 10px 54px; /* Alinhado com o grid do chart (left: 54, right: 20) */
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: relative;
-}
-
-.track-labels {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: absolute;
-  left: 12px;
-  top: 2px;
-}
-
-.track-label {
-  font-size: 0.55rem;
-  font-weight: 800;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-  height: 12px;
-  display: flex;
+.track-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  display: inline-flex;
   align-items: center;
-  opacity: 0.4;
+  gap: 4px;
 }
+.track-badge.is-volume { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.track-badge.is-unico { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+.track-badge.is-multiplo { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
 
-.tracks-viewport {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: 4px;
-  padding: 2px 0;
-  position: relative;
-}
+.anomalo-badge { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; }
+.concentracao-badge { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; }
+.multiplo-badge { background: rgba(139, 92, 246, 0.12); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 4px; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; }
 
-:global(.dark-mode) .tracks-viewport {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.timeline-track {
-  height: 12px;
-  position: relative;
-  width: 100%;
-}
-
-.event-block {
-  position: absolute;
-  height: 100%;
-  border-radius: 3px;
-  min-width: 4px;
-  cursor: help;
-  transition: transform 0.2s;
-  z-index: 5;
-}
-
-.event-block:hover {
-  transform: scaleY(1.3);
-  z-index: 10;
-}
-
-.unico-track .event-block {
-  background: #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
-}
-
-.multiplo-track .event-block {
-  background: #8b5cf6;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
-}
-
-.event-glow {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.3), transparent);
-  border-radius: inherit;
-}
-
-.event-block.is-critico {
-  filter: saturate(1.5) brightness(1.2);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
-}
+/* ── Trilha de Eventos Horários Legada (Removida) ─────────────────────────── */
 </style>

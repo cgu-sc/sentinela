@@ -526,6 +526,8 @@ CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_
 -- ============================================================================
 PRINT '>> Passo 7: Criando crm_raiox_tx (Busca Cirúrgica Unificada)...';
 DECLARE @t_raiox DATETIME = GETDATE();
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim    DATE = '2024-12-31';
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_raiox_tx;
 
 ;WITH DiasSuspeitos AS (

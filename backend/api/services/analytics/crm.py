@@ -958,16 +958,28 @@ def get_crm_perfil_horario(
         for h in range(24):
             row = activity.get((dt, h))
             mediana = mediana_lookup.get((ano, trimestre, h), 0.0)
+            
+            # Pega as flags da HORA específica (row), não do dia (flags)
+            is_vol = int(row.get("is_volume_horario_anomalo", 0)) if row else 0
+            is_uni = int(row.get("is_crm_unico", 0)) if row else 0
+            is_mul = int(row.get("is_crm_multiplo", 0)) if row else 0
+            
+            # Se a tabela perfil_horario não tiver as flags específicas, 
+            # podemos usar a is_anomalo_hora como fallback para volume
+            if row and is_vol == 0 and is_uni == 0 and is_mul == 0:
+                if int(row.get("is_anomalo_hora", 0)) == 1:
+                    is_vol = 1
+
             points.append({
                 "dt_janela":          dt,
                 "hr_janela":          h,
                 "nu_prescricoes":     int(row["nu_prescricoes"])     if row else 0,
                 "nu_crms_diferentes": int(row["nu_crms_diferentes"]) if row else 0,
                 "mediana_hora":       mediana,
-                "is_hora_com_alerta": int(row.get("is_hora_com_alerta", 0)) if row else 0,
-                "is_volume_horario_anomalo": flags["is_volume_horario_anomalo"],
-                "is_crm_unico":              flags["is_crm_unico"],
-                "is_crm_multiplo":           flags["is_crm_multiplo"],
+                "is_hora_com_alerta": 1 if (is_vol or is_uni or is_mul) else 0,
+                "is_volume_horario_anomalo": is_vol,
+                "is_crm_unico":              is_uni,
+                "is_crm_multiplo":           is_mul,
             })
 
     # Prepara lista de eventos

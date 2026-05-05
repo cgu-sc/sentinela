@@ -418,14 +418,13 @@ const chartOptionDaily = computed(() => {
 const hourlyPoints = computed(() => {
   if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
   const targetDate = selectedDay.value.dt_janela;
-  // Backend já retorna as 24 horas por dia anômalo com medianas reais preenchidas
-  return cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
+  return cachedCrmPerfilHorario.value.points.filter(p => String(p.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
 });
 
 const hourlyEvents = computed(() => {
   if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
   const targetDate = selectedDay.value.dt_janela;
-  return (cachedCrmPerfilHorario.value.events ?? []).filter(e => e.dt_janela === targetDate);
+  return (cachedCrmPerfilHorario.value.events ?? []).filter(e => String(e.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
 });
 
 const chartOptionHourly = computed(() => {
@@ -447,16 +446,31 @@ const chartOptionHourly = computed(() => {
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: 'Inter, sans-serif' },
     legend: { show: false },
-    grid: { top: 16, left: 54, right: 20, bottom: 42, containLabel: false },
-    xAxis: {
-      type: 'category',
-      data: fullPoints.map(p => `${String(p.hr_janela).padStart(2, '0')}h`),
-      axisLine: { lineStyle: { color: c.grid } },
-      axisTick: { show: false },
-      axisLabel: { color: c.muted, fontSize: 10, fontWeight: 600, fontFamily: 'Inter, sans-serif', interval: 1, formatter: (v, i) => (i % 2 === 0 ? v : '') },
-    },
+    grid: [
+      { top: 16, left: 100, right: 20, height: '55%' }, // Grid 0: Barras
+      { top: '75%', left: 100, right: 20, height: '18%' } // Grid 1: Trilhas
+    ],
+    xAxis: [
+      {
+        gridIndex: 0,
+        type: 'category',
+        data: fullPoints.map(p => `${String(p.hr_janela).padStart(2, '0')}h`),
+        axisLine: { lineStyle: { color: c.grid } },
+        axisTick: { show: false },
+        axisLabel: { color: c.muted, fontSize: 10, fontWeight: 600, fontFamily: 'Inter, sans-serif', interval: 1, formatter: (v, i) => (i % 2 === 0 ? v : '') },
+      },
+      {
+        gridIndex: 1,
+        type: 'category',
+        data: fullPoints.map(p => `${String(p.hr_janela).padStart(2, '0')}h`),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { show: false }
+      }
+    ],
     yAxis: [
       { 
+        gridIndex: 0,
         type: 'value', 
         minInterval: 1, 
         axisLine: { show: false }, 
@@ -465,10 +479,28 @@ const chartOptionHourly = computed(() => {
         axisLabel: { color: c.muted, fontSize: 10, fontFamily: 'Inter, sans-serif' } 
       },
       {
+        gridIndex: 1,
         type: 'value',
         min: 0,
-        max: 1,
-        show: false
+        max: 10,
+        interval: 1,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: {
+          show: true,
+          color: c.textSecondary || '#94a3b8',
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: 'Inter, sans-serif',
+          margin: 12,
+          formatter: (v) => {
+            if (v === 2) return 'VOLUME';
+            if (v === 5) return 'ÚNICO';
+            if (v === 8) return 'MÚLTIPLO';
+            return '';
+          }
+        }
       }
     ],
     tooltip: {
@@ -483,18 +515,21 @@ const chartOptionHourly = computed(() => {
       shadowColor: 'rgba(0,0,0,0.15)',
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       formatter: (params) => {
-        const dataIndex = params[0]?.dataIndex ?? 0;
-        const hora = params[0]?.axisValue ?? '';
-        const ptInfo = fullPoints[dataIndex];
-        const volItem = params.find(p => p.seriesName === 'Autorizações (Volume)');
-        const vol  = volItem?.value ?? 0;
-        const crms = volItem?.data?.nu_crms ?? 0;
-        const med  = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
+        const barParam = params.find(p => p.seriesName === 'Autorizações (Volume)');
+        if (!barParam) return '';
+        const dataIndex = barParam.dataIndex;
+        const pt = fullPoints[dataIndex];
+        const hora = barParam.axisValue;
+        const vol = barParam.value;
+        const crms = pt.nu_crms_diferentes;
+        const med = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
         const ratio = med > 0 ? (vol / med).toFixed(1) : null;
-        const isAnomalo = ptInfo?.is_hora_com_alerta === 1;
-        const alertaHtml = ratio !== null
+        const isAnomalo = pt.is_hora_com_alerta === 1;
+
+        const ratioHtml = ratio !== null
           ? `<div style="margin-top:8px; font-size:12px; color:${isAnomalo ? '#ef4444' : c.muted}; font-weight:${isAnomalo ? '600' : '400'};">${ratio}× ${isAnomalo ? 'acima da mediana' : 'da mediana'}</div>`
           : '';
+
         return `
           <div style="color:${c.tooltipText}; min-width:190px;">
             <div style="font-weight:700; font-size:14px; margin-bottom:10px;">${hora}</div>
@@ -504,37 +539,19 @@ const chartOptionHourly = computed(() => {
                 <span style="font-weight:700; font-size:13px;">${vol} <small>autorizações</small></span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:2px;background:#6366f1;display:inline-block;"></span><span style="font-size:11px; opacity:.6; text-transform:uppercase;">CRMs Distintos</span></span>
-                <span style="font-weight:700; font-size:13px;">${crms} <small>médicos</small></span>
-              </div>
-              <div style="border-top:1px solid ${c.tooltipBorder}; padding-top:8px; margin-top:2px; display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:11px; opacity:.6; text-transform:uppercase;">Mediana Referência</span>
-                <span style="font-weight:600; font-size:12px; color:#f59e0b;">${med.toFixed(1)}</span>
+                <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:2px;background:#6366f1;display:inline-block;"></span><span style="font-size:11px; opacity:.6; text-transform:uppercase;">Médicos</span></span>
+                <span style="font-weight:700; font-size:13px;">${crms}</span>
               </div>
             </div>
-            ${alertaHtml}
+            ${ratioHtml}
           </div>`;
       },
     },
     series: [
       {
-        name: 'Área de Clique',
-        type: 'bar',
-        barGap: '-100%',
-        barWidth: '100%',
-        yAxisIndex: 1,
-        z: 1,
-        data: fullPoints.map(p => ({
-          value: 1,
-          itemStyle: { color: 'transparent' },
-          cursor: (p.nu_prescricoes || 0) > 0 ? 'pointer' : 'default'
-        })),
-        tooltip: { show: false },
-        silent: false
-      },
-      {
         name: 'Autorizações (Volume)',
         type: 'bar',
+        xAxisIndex: 0, yAxisIndex: 0,
         barGap: '-100%',
         barWidth: '100%',
         barMaxWidth: 28,
@@ -544,29 +561,53 @@ const chartOptionHourly = computed(() => {
           const hasSelection = selectedHourlyHour.value !== 'all' && selectedHourlyHour.value !== null;
           return { 
             value: p.nu_prescricoes,
-            nu_crms: p.nu_crms_diferentes,
-            is_hora_com_alerta: p.is_hora_com_alerta,
-            is_volume_horario_anomalo: p.is_volume_horario_anomalo,
-            is_crm_unico: p.is_crm_unico,
-            cursor: 'pointer',
             itemStyle: { 
               color: barColors[i],
               opacity: hasSelection && !isSelected ? 0.3 : 1
             } 
           };
         }),
-        emphasis: { itemStyle: { opacity: 1 } },
       },
       {
         name: 'Mediana Referência (Hora)',
         type: 'line',
+        xAxisIndex: 0, yAxisIndex: 0,
         step: 'middle',
         z: 3,
         data: fullPoints.map(p => p.mediana_hora),
         lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
         symbol: 'none',
-        emphasis: { disabled: true },
       },
+      {
+        name: 'Trilha Volume',
+        type: 'scatter',
+        xAxisIndex: 1, yAxisIndex: 1,
+        symbol: 'roundRect',
+        symbolSize: [26, 6],
+        z: 5,
+        data: fullPoints.map((p, i) => p.is_volume_horario_anomalo === 1 ? [i, 2] : null),
+        itemStyle: { color: '#10b981' }
+      },
+      {
+        name: 'Trilha Único',
+        type: 'scatter',
+        xAxisIndex: 1, yAxisIndex: 1,
+        symbol: 'roundRect',
+        symbolSize: [26, 6],
+        z: 5,
+        data: fullPoints.map((p, i) => p.is_crm_unico === 1 ? [i, 5] : null),
+        itemStyle: { color: '#f59e0b' }
+      },
+      {
+        name: 'Trilha Múltiplo',
+        type: 'scatter',
+        xAxisIndex: 1, yAxisIndex: 1,
+        symbol: 'roundRect',
+        symbolSize: [26, 6],
+        z: 5,
+        data: fullPoints.map((p, i) => p.is_crm_multiplo === 1 ? [i, 8] : null),
+        itemStyle: { color: '#8b5cf6' }
+      }
     ],
   };
 });
@@ -1021,47 +1062,6 @@ function toggleActiveRow(auth) {
           @updateAxisPointer="onHourlyAxisPointerUpdate"
         />
 
-        <!-- Trilha de Eventos Temporais (Minuto a Minuto) -->
-        <div v-if="hourlyEvents.length > 0" class="hourly-timeline-tracks">
-          <div class="track-labels">
-            <span class="track-label">EVENTOS ÚNICOS</span>
-            <span class="track-label">EVENTOS MÚLTIPLOS</span>
-          </div>
-          <div class="tracks-viewport">
-            <!-- Track CRM Único -->
-            <div class="timeline-track unico-track">
-              <template v-for="(event, idx) in hourlyEvents.filter(e => e.tipo === 'UNICO')" :key="`u-${idx}`">
-                <div 
-                  class="event-block"
-                  :class="[`is-${event.severidade?.toLowerCase() || 'info'}`]"
-                  :style="{
-                    left: `${(event.minuto_inicio / 1440) * 100}%`,
-                    width: `${(Math.max(event.minuto_fim - event.minuto_inicio, 5) / 1440) * 100}%`
-                  }"
-                  :title="`${event.hora_inicio} - ${event.hora_fim} | ${event.id_medico}`"
-                >
-                  <div class="event-glow" />
-                </div>
-              </template>
-            </div>
-            <!-- Track CRM Múltiplo -->
-            <div class="timeline-track multiplo-track">
-              <template v-for="(event, idx) in hourlyEvents.filter(e => e.tipo === 'MULTIPLO')" :key="`m-${idx}`">
-                <div 
-                  class="event-block"
-                  :class="[`is-${event.severidade?.toLowerCase() || 'info'}`]"
-                  :style="{
-                    left: `${(event.minuto_inicio / 1440) * 100}%`,
-                    width: `${(Math.max(event.minuto_fim - event.minuto_inicio, 5) / 1440) * 100}%`
-                  }"
-                  :title="`${event.hora_inicio} - ${event.hora_fim} | ${event.nu_crms_distintos} CRMs`"
-                >
-                  <div class="event-glow" />
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
       </div>
       <div v-if="selectedHourlyHour === null" class="drill-hint">
         <i class="pi pi-hand-pointer" />

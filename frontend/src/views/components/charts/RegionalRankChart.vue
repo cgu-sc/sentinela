@@ -107,6 +107,7 @@ const chartOption = computed(() => {
     grid: { top: 20, right: 30, bottom: 50, left: 70 },
     tooltip: {
       trigger: 'item',
+      confine: true,
       backgroundColor: c.tooltip,
       padding: [10, 15],
       borderColor: c.tooltipBorder,

@@ -390,14 +390,6 @@ const animationStartMonthLabel = computed(() => {
   return unref(availableMonths)[animationSliderValue.value]?.label ?? "—";
 });
 
-const animationEndMonthLabel = computed(() => {
-  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
-    return "—";
-  }
-  const endIdx = getAnimationFrameEndIndex(animationSliderValue.value);
-  return unref(availableMonths)[endIdx]?.label ?? "—";
-});
-
 // Limpa cache e reseta preload se o componente for desmontado durante animação
 onUnmounted(() => {
   stopPlay();
@@ -626,16 +618,15 @@ const riskRankBadge = computed(() => {
       <!-- Painel de Controle de Período (Slider) -->
       <Transition name="fade-slide-right">
         <div v-if="filterStore.animationMode" class="fab-slider-panel">
-          <div class="period-stepper-group">
-            <button
-              class="period-step-btn"
-              :disabled="animationSliderValue === animationSliderMin || isPlaying"
-              @click="stepAnimation(-PLAY_STEP)"
-            >
-              <i class="pi pi-chevron-left"></i>
-            </button>
-            <span class="period-step-label">{{ animationStartMonthLabel }}</span>
-          </div>
+          <button
+            class="period-step-btn"
+            :disabled="animationSliderValue === animationSliderMin || isPlaying"
+            @click="stepAnimation(-PLAY_STEP)"
+          >
+            <i class="pi pi-chevron-left"></i>
+          </button>
+
+          <span class="period-step-label">{{ animationStartMonthLabel }}</span>
 
           <div class="animation-slider-wrapper">
             <Slider
@@ -648,16 +639,13 @@ const riskRankBadge = computed(() => {
             />
           </div>
 
-          <div class="period-stepper-group">
-            <span class="period-step-label">{{ animationEndMonthLabel }}</span>
-            <button
-              class="period-step-btn"
-              :disabled="animationSliderValue === animationSliderMax || isPlaying"
-              @click="stepAnimation(PLAY_STEP)"
-            >
-              <i class="pi pi-chevron-right"></i>
-            </button>
-          </div>
+          <button
+            class="period-step-btn"
+            :disabled="animationSliderValue === animationSliderMax || isPlaying"
+            @click="stepAnimation(PLAY_STEP)"
+          >
+            <i class="pi pi-chevron-right"></i>
+          </button>
         </div>
       </Transition>
 
@@ -883,7 +871,7 @@ const riskRankBadge = computed(() => {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-color);
-  min-width: 55px;
+  width: 75px; /* Tamanho fixo para evitar que a barra trema ou mude de tamanho */
   text-align: center;
 }
 

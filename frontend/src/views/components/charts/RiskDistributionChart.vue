@@ -28,7 +28,8 @@ const props = defineProps({
   loading:      { type: Boolean, default: false },
   rankingText:  { type: String,  default: null },
   metricLabel:  { type: String,  default: 'Score de Risco' },
-  rankBadge:    { type: Object,  default: null }
+  rankBadge:    { type: Object,  default: null },
+  yAxisMax:     { type: Number,  default: null }
 });
 
 const { chartTheme } = useChartTheme();
@@ -79,7 +80,7 @@ const chartOption = computed(() => {
       text: `{t|ESTABELECIMENTO}${badgeText ? '\n' + badgeText : ''}`,
       left: 24,
       top: 15,
-      backgroundColor: 'rgba(30, 37, 51, 0.85)', // Fundo escuro levemente transparente
+      backgroundColor: c.tooltip, // Fundo adaptativo (claro/escuro)
       borderColor: badgeColor,
       borderWidth: 1.5,
       padding: [10, 16],
@@ -136,6 +137,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type:      'value',
+      max:       props.yAxisMax,
       splitLine: { lineStyle: { color: c.grid, type: 'dashed', opacity: 0.4 } },
       axisLabel: {
         color:     c.textColor,

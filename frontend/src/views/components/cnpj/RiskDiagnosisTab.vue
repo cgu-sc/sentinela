@@ -1,13 +1,16 @@
 <script setup>
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { computed, ref, watch, onUnmounted, unref } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRegional } from '@/composables/useRegional';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
+import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
+import { useFormatting } from '@/composables/useFormatting';
 import { API_ENDPOINTS } from '@/config/api';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
 import Dropdown from 'primevue/dropdown';
+import Slider from 'primevue/slider';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -20,6 +23,7 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
 const { getApiParams } = useFilterParameters();
+const { toLocalISO } = useFormatting();
 const { regionalData, regionalLoading, fetchRegional } = useRegional();
 
 // Escopo do scatter regional
@@ -33,6 +37,16 @@ const regionalScopes = [
 // Nota: percValSemComp pode exceder 100% por anomalias nos dados de auditoria
 // (val_sem_comp > total_mov). Limitamos a 100 para coincidir com a curva de percentis.
 const currentScore = computed(() => {
+    if (isAnimationPreviewActive.value && previewCurrentFarmacia.value) {
+      if (riskMetric.value === 'percentual_sem_comprovacao') {
+        return Math.min(Number(previewCurrentFarmacia.value.percValSemComp ?? 0), 100);
+      }
+      return Number(
+        previewCurrentFarmacia.value.score_risco ??
+        previewCurrentFarmacia.value.score_risco_final ??
+        0
+      );
+    }
     // Se estivermos vendo %, usamos o valor do período selecionado (se disponível)
     if (riskMetric.value === 'percentual_sem_comprovacao') {
       const val = props.periodSummary?.percValSemComp ?? props.cnpjData?.percValSemComp ?? 0;
@@ -57,12 +71,34 @@ const riskMetricOptions = [
   { label: '% Não-Comprovação', value: 'percentual_sem_comprovacao' }
 ];
 
+const isAnimationPreviewActive = computed(() => {
+  if (!filterStore.animationMode) return false;
+  const [inicio, fim] = filterStore.animationFrameRange ?? [];
+  return (
+    inicio instanceof Date &&
+    !Number.isNaN(inicio.getTime()) &&
+    fim instanceof Date &&
+    !Number.isNaN(fim.getTime())
+  );
+});
+
+function getEffectivePeriodParams() {
+  if (isAnimationPreviewActive.value) {
+    const [inicio, fim] = filterStore.animationFrameRange;
+    return {
+      inicio: toLocalISO(inicio),
+      fim: toLocalISO(fim),
+    };
+  }
+  return getApiParams();
+}
+
 const updateRiskCurve = () => {
   if (!props.geoData?.sg_uf) return;
-  const { inicio, fim } = getApiParams();
+  const { inicio, fim } = getEffectivePeriodParams();
 
   // Durante animação, serve do cache sem round-trip HTTP
-  if (filterStore.isAnimating) {
+  if (isAnimationPreviewActive.value) {
     const key = `${riskScope.value}|${props.geoData.sg_uf}|${props.geoData.id_regiao_saude ?? ''}|${riskMetric.value}|${inicio}|${fim}`;
     if (percentilesCache.has(key)) {
       cnpjDetailStore.setMetricPercentilesDirectly(percentilesCache.get(key), key);
@@ -86,6 +122,13 @@ const periodsCache = new Map();
 // Mapa local: "scope|uf|regioId|metric|YYYY-MM-DD|YYYY-MM-DD" → percentiles[]
 const percentilesCache = new Map();
 
+const previewCurrentFarmacia = computed(() => {
+  const { inicio, fim } = getEffectivePeriodParams();
+  if (!isAnimationPreviewActive.value || !inicio || !fim) return null;
+  const frame = periodsCache.get(`${inicio}|${fim}`);
+  return frame?.farmacias?.find((item) => String(item.cnpj) === String(props.cnpj)) ?? null;
+});
+
 // Máximos globais calculados sobre todos os trimestres — usados para fixar os
 // eixos do scatter durante a animação e evitar que a escala salte entre passos.
 const animationXMax    = ref(null); // max totalMov
@@ -94,11 +137,11 @@ const animationYMaxPct = ref(null); // max percValSemComp
 
 const loadRegional = () => {
     if (!props.geoData?.sg_uf) return;
-    const { inicio, fim } = getApiParams();
+    const { inicio, fim } = getEffectivePeriodParams();
 
     // Durante animação, serve direto do cache sem round-trip HTTP
     const cacheKey = `${inicio}|${fim}`;
-    if (filterStore.isAnimating && periodsCache.has(cacheKey)) {
+    if (isAnimationPreviewActive.value && periodsCache.has(cacheKey)) {
       regionalData.value = periodsCache.get(cacheKey);
       return;
     }
@@ -175,6 +218,12 @@ watch(() => filterStore.animationPreload.status, async (status) => {
     console.error('[RiskDiagnosis] Erro no preload de animação:', e);
   }
 
+  if (!filterStore.animationMode) {
+    clearAnimationState();
+    filterStore.animationPreload.status = 'idle';
+    return;
+  }
+
   filterStore.animationPreload.status = 'ready';
 });
 
@@ -186,16 +235,186 @@ const clearAnimationState = () => {
   animationYMaxPct.value = null;
 };
 
+// ── Lógica de Controle de Playback (Migrado da Sidebar) ──────────────
+const { availableMonths, timeSliderValue } = useSliderPeriodLogic();
+const isPreloading = computed(() => filterStore.animationPreload.status === 'loading');
+
+const PLAY_DURATION_MS = 350;
+const PLAY_INTERVAL_MS = 300;
+const PLAY_STEP = 1;
+const PLAY_WINDOW_MONTHS = 3;
+
+const isPlaying = ref(false);
+let playIntervalId = null;
+
+const animationSliderMin = computed(() => filterStore.animationBaseSliderRange?.[0] ?? 0);
+const animationSliderMax = computed(() => {
+  if (!filterStore.animationBaseSliderRange) return 0;
+  const [startIdx, endIdx] = filterStore.animationBaseSliderRange;
+  return Math.max(startIdx, endIdx - PLAY_WINDOW_MONTHS + 1);
+});
+
+const getAnimationFrameEndIndex = (startIdx) => {
+  if (!filterStore.animationBaseSliderRange) return startIdx;
+  return Math.min(startIdx + PLAY_WINDOW_MONTHS - 1, filterStore.animationBaseSliderRange[1]);
+};
+
+const syncAnimationFrame = (startIdx) => {
+  if (!filterStore.animationBaseSliderRange) return;
+  const clampedStart = Math.min(
+    Math.max(startIdx, animationSliderMin.value),
+    animationSliderMax.value,
+  );
+  const endIdx = getAnimationFrameEndIndex(clampedStart);
+  const months = unref(availableMonths);
+  const startDate = months[clampedStart]?.date;
+  const rawEndDate = months[endIdx]?.date;
+  if (!startDate || !rawEndDate) return;
+
+  filterStore.animationSliderValue = clampedStart;
+  filterStore.animationFrameRange = [
+    startDate,
+    new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0),
+  ];
+};
+
+const stopPlay = () => {
+  isPlaying.value = false;
+  filterStore.isAnimating = false;
+  filterStore.animationDuration = PLAY_DURATION_MS; // Mantém a suavidade (tweening) nas mudanças manuais
+  if (playIntervalId !== null) {
+    clearInterval(playIntervalId);
+    playIntervalId = null;
+  }
+};
+
+const resetAnimationPreload = () => {
+  filterStore.animationPreload.status = 'idle';
+  filterStore.animationPreload.dataInicio = null;
+  filterStore.animationPreload.dataFim = null;
+};
+
+const closeAnimationPreview = () => {
+  stopPlay();
+  filterStore.resetAnimationPreview();
+};
+
+const playStep = () => {
+  if (filterStore.animationSliderValue === null || filterStore.animationSliderValue === undefined) {
+    stopPlay();
+    return;
+  }
+  const nextStart = filterStore.animationSliderValue + PLAY_STEP;
+  if (nextStart > animationSliderMax.value) {
+    stopPlay();
+    return;
+  }
+  syncAnimationFrame(nextStart);
+};
+
+const startAnimation = () => {
+  if (!filterStore.animationBaseSliderRange) return;
+  if (filterStore.animationSliderValue === animationSliderMax.value) {
+    syncAnimationFrame(filterStore.animationBaseSliderRange[0]);
+  }
+  isPlaying.value = true;
+  filterStore.isAnimating = true;
+  filterStore.animationDuration = PLAY_DURATION_MS;
+  playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
+};
+
+const togglePlay = () => {
+  if (isPlaying.value) {
+    stopPlay();
+    return;
+  }
+
+  if (!filterStore.animationMode) {
+     const baseRange = [...unref(timeSliderValue)];
+     filterStore.animationMode = true;
+     filterStore.animationBaseSliderRange = baseRange;
+     filterStore.animationDuration = PLAY_DURATION_MS; // Garante suavidade antes mesmo do startAnimation
+     syncAnimationFrame(baseRange[0]);
+  }
+
+  if (filterStore.animationPreload.status === 'ready') {
+    startAnimation();
+    return;
+  }
+
+  const { inicio, fim } = getApiParams();
+  filterStore.animationPreload.status = 'loading';
+  filterStore.animationPreload.dataInicio = inicio;
+  filterStore.animationPreload.dataFim = fim;
+};
+
+watch(
+  () => filterStore.animationPreload.status,
+  (status) => {
+    if (status !== 'ready') return;
+    if (!filterStore.animationMode) {
+      resetAnimationPreload();
+      return;
+    }
+    startAnimation();
+  }
+);
+
+// ── Funções de Slider Manual ─────────────────────────────────────────────────
+const animationSliderValue = computed({
+  get: () => filterStore.animationSliderValue,
+  set: (val) => { filterStore.animationSliderValue = val; }
+});
+
+const stepAnimation = (delta) => {
+  if (!filterStore.animationMode || isPlaying.value) return;
+  syncAnimationFrame((animationSliderValue.value ?? animationSliderMin.value) + delta);
+};
+
+const onAnimationSliderEnd = () => {
+  if (!filterStore.animationMode) return;
+  stopPlay();
+  syncAnimationFrame(animationSliderValue.value ?? animationSliderMin.value);
+};
+
+watch(animationSliderValue, (val) => {
+  if (filterStore.animationMode && !isPlaying.value && val !== null) {
+    syncAnimationFrame(val);
+  }
+});
+
+const animationStartMonthLabel = computed(() => {
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
+    return "—";
+  }
+  return unref(availableMonths)[animationSliderValue.value]?.label ?? "—";
+});
+
 // Limpa cache e reseta preload se o componente for desmontado durante animação
 onUnmounted(() => {
+  stopPlay();
   clearAnimationState();
   if (filterStore.animationPreload.status !== 'idle') {
     filterStore.animationPreload.status = 'idle';
   }
 });
 
-watch(riskScope, updateRiskCurve, { immediate: true });
-watch(riskMetric, updateRiskCurve);
+watch(riskMetric, () => {
+    if (filterStore.animationMode) {
+      clearAnimationState();
+      filterStore.animationPreload.status = 'idle';
+    }
+    updateRiskCurve();
+});
+
+watch(riskScope, () => {
+    if (filterStore.animationMode) {
+      clearAnimationState();
+      filterStore.animationPreload.status = 'idle';
+    }
+    updateRiskCurve();
+});
+
 watch(() => props.geoData?.sg_uf, () => {
     updateRiskCurve();
     loadRegional();
@@ -203,16 +422,29 @@ watch(() => props.geoData?.sg_uf, () => {
 
 // Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
+    if (filterStore.animationMode) return;
     updateRiskCurve();
     loadRegional();
 }, { deep: true });
 
-// Limpa os caches de animação quando o play termina (isAnimating: true → false),
-// garantindo que mudanças manuais de período sempre busquem dados frescos do backend.
-watch(() => filterStore.isAnimating, (isAnimating) => {
-    if (!isAnimating) clearAnimationState();
-});
+// Sincroniza dados quando o frame da animação muda
+watch(() => filterStore.animationFrameRange, () => {
+    if (!isAnimationPreviewActive.value) return;
+    updateRiskCurve();
+    loadRegional();
+}, { deep: true });
 
+// Limpa caches ao sair do modo animação
+watch(() => filterStore.animationMode, (isActive) => {
+    if (!isActive) {
+      clearAnimationState();
+      updateRiskCurve();
+      loadRegional();
+      return;
+    }
+    updateRiskCurve();
+    loadRegional();
+});
 
 watch(regionalScope, () => {
     // Escopo mudou — cache de animação é inválido (regiao vs uf)
@@ -252,6 +484,7 @@ const riskRankBadge = computed(() => {
   if (topPct <= 15) return { label: 'Alerta',  value: `TOP ${topPct}%`,    color: '#f59e0b' };
   return             { label: 'Normal',  value: `Percentil ${pct}%`, color: '#10b981' };
 });
+
 </script>
 
 <template>
@@ -298,8 +531,8 @@ const riskRankBadge = computed(() => {
                    :cnpj-atual="cnpj"
                    :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
                    :active-metric="riskMetric"
-                   :x-axis-max="filterStore.isAnimating ? animationXMax : null"
-                   :y-axis-max="filterStore.isAnimating ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
+                   :x-axis-max="isAnimationPreviewActive ? animationXMax : null"
+                   :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
                  />
              </div>
 
@@ -364,6 +597,7 @@ const riskRankBadge = computed(() => {
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
                 :rank-badge="riskRankBadge"
+                :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
               />
             <!-- AJUDA CONTEXTUAL CARD 2 -->
             <div class="diagnosis-card-help">
@@ -378,6 +612,68 @@ const riskRankBadge = computed(() => {
       </div>
     </template>
 
+    <!-- FAB de Controle da Animação Temporal -->
+    <div v-if="!periodLoading" class="fab-container">
+      
+      <!-- Painel de Controle de Período (Slider) -->
+      <Transition name="fade-slide-right">
+        <div v-if="filterStore.animationMode" class="fab-slider-panel">
+          <button
+            class="period-step-btn"
+            :disabled="animationSliderValue === animationSliderMin || isPlaying"
+            @click="stepAnimation(-PLAY_STEP)"
+          >
+            <i class="pi pi-chevron-left"></i>
+          </button>
+
+          <span class="period-step-label">{{ animationStartMonthLabel }}</span>
+
+          <div class="animation-slider-wrapper">
+            <Slider
+              v-model="animationSliderValue"
+              :min="animationSliderMin"
+              :max="animationSliderMax"
+              class="w-full time-slider"
+              :disabled="isPreloading || isPlaying"
+              @slideend="onAnimationSliderEnd"
+            />
+          </div>
+
+          <button
+            class="period-step-btn"
+            :disabled="animationSliderValue === animationSliderMax || isPlaying"
+            @click="stepAnimation(PLAY_STEP)"
+          >
+            <i class="pi pi-chevron-right"></i>
+          </button>
+        </div>
+      </Transition>
+
+      <div class="fab-buttons">
+        <Transition name="fade-scale">
+          <button
+            v-if="filterStore.animationMode"
+            class="fab-close-btn"
+            title="Fechar Animação"
+            @click="closeAnimationPreview"
+          >
+            <i class="pi pi-times"></i>
+          </button>
+        </Transition>
+
+        <button
+          class="fab-main-btn"
+          :class="{ playing: isPlaying, loading: isPreloading }"
+          :title="isPlaying ? 'Pausar Animação' : 'Animar Período'"
+          @click="togglePlay"
+        >
+          <i v-if="isPreloading" class="pi pi-spin pi-spinner"></i>
+          <i v-else-if="isPlaying" class="pi pi-pause"></i>
+          <i v-else class="pi pi-play"></i>
+        </button>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -388,6 +684,7 @@ const riskRankBadge = computed(() => {
   gap: 1.5rem;
   min-height: 100%;
   flex: 1;
+  position: relative; /* Mantém o banner dentro dos limites da aba */
 }
 
 .diagnosis-grid {
@@ -397,6 +694,7 @@ const riskRankBadge = computed(() => {
   align-items: stretch;
   flex: 1;
   min-height: 520px;
+  position: relative;
 }
 
 .diagnosis-card {
@@ -430,6 +728,7 @@ const riskRankBadge = computed(() => {
 }
 
 .header-info i { color: var(--primary-color); font-size: 1.1rem; }
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -440,12 +739,10 @@ const riskRankBadge = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* permite que flex-children usem height: 100% corretamente */
+  min-height: 0;
 }
 
-.relative-body {
-  position: relative;
-}
+.relative-body { position: relative; }
 
 .chart-wrapper {
   flex: 1;
@@ -459,15 +756,7 @@ const riskRankBadge = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
   border-radius: 8px;
-  transition: border-color 0.2s, background 0.2s;
   width: 100%;
-}
-
-:deep(.scope-selector .p-dropdown:hover),
-:deep(.scope-selector .p-dropdown.p-focus) {
-  border-color: var(--primary-color) !important;
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  box-shadow: none !important;
 }
 
 :deep(.scope-selector .p-dropdown-label) {
@@ -477,59 +766,12 @@ const riskRankBadge = computed(() => {
   padding: 0.35rem 0.5rem;
 }
 
-:deep(.scope-selector .p-dropdown-trigger) {
-  color: var(--primary-color);
-  width: 2rem;
-}
-
-:deep(.scope-selector .p-dropdown-trigger .p-dropdown-trigger-icon) {
-  font-size: 0.7rem;
-}
-
-/* O painel do Dropdown é renderizado no body (fora do DOM do componente),
-   por isso precisa de :global() em vez de :deep() para os estilos alcançarem. */
 :global(.p-dropdown-panel.card-panel) {
   background: var(--card-bg) !important;
   border: 1px solid var(--card-border) !important;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
 }
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item) {
-  font-size: 0.78rem;
-  color: var(--text-color) !important;
-  padding: 0.5rem 0.85rem;
-}
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover) {
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
-  color: var(--primary-color) !important;
-}
-
-:global(.card-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
-  color: var(--primary-color) !important;
-}
-
-.dropdown-selected-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.placeholder-card {
-  padding: 4rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: var(--text-muted);
-  background: var(--card-bg);
-  border: 1px dashed var(--card-border);
-  border-radius: 12px;
-}
-
-.placeholder-card i { font-size: 2.5rem; opacity: 0.4; }
 
 .diagnosis-card-help {
   display: flex;
@@ -539,25 +781,214 @@ const riskRankBadge = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 4%, transparent);
   border-left: 4px solid var(--primary-color);
   border-radius: 6px;
-  margin: 1.5rem 1.25rem 1.25rem 1.25rem; /* Descola o texto das bordas e do gráfico */
-  margin-top: auto; /* Garante que fique no rodapé da coluna */
+  margin: 1.5rem 1.25rem 1.25rem 1.25rem;
+  margin-top: auto;
 }
 
-.diagnosis-card-help i {
+.diagnosis-card-help i { color: var(--primary-color); font-size: 1rem; }
+.help-text { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
+.help-text b { color: var(--text-color); font-weight: 600; }
+
+/* Animação Pulso */
+.animation-pulse {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 5px var(--primary-color)); }
+  50% { opacity: 0.6; filter: drop-shadow(0 0 12px var(--primary-color)); }
+}
+
+.diagnosis-grid {
+  transition: padding-top 0.4s ease;
+}
+
+/* ── Floating Action Button (FAB) e Painel ──────────────────────────────────────── */
+.fab-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+}
+
+.fab-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fab-slider-panel {
+  background: color-mix(in srgb, var(--card-bg) 95%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-radius: 999px; /* Pill shape */
+  padding: 0 1.25rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 56px; /* Matches fab-main-btn height */
+  width: 400px;
+}
+
+.period-stepper-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.period-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+.period-step-btn i { font-size: 0.6rem; }
+.period-step-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
   color: var(--primary-color);
-  font-size: 1rem;
-  margin-top: 2px;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+.period-step-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.help-text {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.help-text b {
-  color: var(--text-color);
+.period-step-label {
+  font-size: 0.75rem;
   font-weight: 600;
+  color: var(--text-color);
+  width: 75px; /* Tamanho fixo para evitar que a barra trema ou mude de tamanho */
+  text-align: center;
 }
 
+.animation-slider-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.time-slider) {
+  height: 4px;
+  background: var(--card-border);
+}
+:deep(.time-slider .p-slider-range) {
+  background: var(--primary-color);
+}
+:deep(.time-slider .p-slider-handle) {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--primary-color);
+  background: var(--card-bg);
+  transition: all 0.2s;
+}
+:deep(.time-slider .p-slider-handle:hover) {
+  background: var(--primary-color);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.fade-slide-right-enter-active,
+.fade-slide-right-leave-active {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.fade-slide-right-enter-from,
+.fade-slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(20px) scale(0.95);
+}
+
+.fab-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
+  color: var(--text-muted);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.fab-close-btn:hover {
+  background: var(--color-error);
+  color: white;
+}
+.fab-close-btn i {
+  font-size: 0.85rem;
+}
+
+.fab-main-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary-color) 40%, transparent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.fab-main-btn i {
+  font-size: 1.5rem;
+  margin-left: 4px; /* Centralização visual do Play */
+}
+
+.fab-main-btn .pi-pause, .fab-main-btn .pi-spinner {
+  margin-left: 0; /* Volta ao normal para outros ícones */
+}
+
+.fab-main-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary-color) 60%, transparent);
+}
+
+.fab-main-btn.playing {
+  background: #f97316; /* Laranja Vibrante para Pause */
+  box-shadow: 0 6px 16px color-mix(in srgb, #f97316 50%, transparent);
+  animation: fab-pulse 2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+.fab-main-btn.loading {
+  background: var(--sidebar-border);
+  color: var(--text-muted);
+  cursor: wait;
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
+@keyframes fab-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, #f97316 70%, transparent); }
+  70% { box-shadow: 0 0 0 15px color-mix(in srgb, #f97316 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, #f97316 0%, transparent); }
+}
+
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.5) translateY(10px);
+}
 </style>

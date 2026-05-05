@@ -996,10 +996,10 @@ function toggleActiveRow(auth) {
       </div>
 
       <!-- Médicos Gatilho (CRM Único) -->
-      <div v-if="unicoAlertas.length > 0" class="unico-alertas-section">
+      <div v-if="unicoAlertas.length > 0" class="unico-alertas-section alertas-unico-section">
         <div class="unico-alertas-header">
           <i class="pi pi-exclamation-triangle" />
-          <span>Médicos com Alerta de Concentração neste Dia</span>
+          <span>Alertas de CRM Único no Período</span>
         </div>
         <div class="unico-alertas-list">
           <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
@@ -1015,14 +1015,14 @@ function toggleActiveRow(auth) {
       </div>
 
       <!-- Surtos Coordenados (Multi-CRM) -->
-      <div v-if="multiAlertas.length > 0" class="unico-alertas-section">
+      <div v-if="multiAlertas.length > 0" class="unico-alertas-section alertas-multi-section">
         <div class="unico-alertas-header">
           <i class="pi pi-users" />
-          <span>Surtos Coordenados neste Dia</span>
+          <span>Alertas Multi-CRM no Período</span>
         </div>
         <div class="unico-alertas-list">
           <div v-for="alerta in multiAlertas" :key="`${alerta.dt_janela}-${alerta.hr_janela}-${alerta.dt_ini_hora}`" class="unico-alerta-chip">
-            <span class="alerta-crm">{{ alerta.nu_crms }} CRMs</span>
+            <span class="alerta-crm alerta-crm-multi">{{ alerta.nu_crms }} CRMs</span>
             <span class="alerta-sep">-</span>
             <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
             <span class="alerta-sep">-</span>
@@ -1622,6 +1622,18 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   padding: 0.3rem 0.75rem;
   font-size: 0.72rem;
 }
+.alertas-multi-section {
+  background: rgba(139, 92, 246, 0.05);
+  border-color: rgba(139, 92, 246, 0.25);
+}
+.alertas-multi-section .unico-alertas-header {
+  color: #8b5cf6;
+}
+.alertas-multi-section .unico-alerta-chip {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.22);
+}
+.alerta-crm-multi { color: #8b5cf6; }
 .alerta-crm { font-weight: 700; }
 .alerta-stat { color: var(--text-secondary); }
 .alerta-sep { opacity: 0.3; }

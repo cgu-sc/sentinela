@@ -1033,6 +1033,29 @@ def _extract_alert_hour(value) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
+def _alert_overlaps_hour(start_value, end_value, hour: Optional[int], fallback_hour=None) -> bool:
+    if hour is None:
+        return True
+
+    target_hour = int(hour)
+    start_hour = _extract_alert_hour(start_value)
+    end_hour = _extract_alert_hour(end_value)
+
+    if start_hour is None and end_hour is None:
+        try:
+            return int(fallback_hour) == target_hour
+        except (TypeError, ValueError):
+            return False
+
+    if start_hour is None:
+        start_hour = end_hour
+    if end_hour is None:
+        end_hour = start_hour
+
+    if end_hour < start_hour:
+        return target_hour >= start_hour or target_hour <= end_hour
+    return start_hour <= target_hour <= end_hour
+
 def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
     alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_raiox_alertas.parquet")
     required_columns = {
@@ -1130,6 +1153,21 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
         if os.path.exists(unico_path):
             df_unico = pl.read_parquet(unico_path)
             day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
+            if hour is not None:
+                if {"dt_ini_hora", "dt_fim_hora", "hr_janela"}.issubset(set(day_unico.columns)):
+                    day_unico = day_unico.filter(
+                        pl.struct(["dt_ini_hora", "dt_fim_hora", "hr_janela"]).map_elements(
+                            lambda r: _alert_overlaps_hour(
+                                r.get("dt_ini_hora"),
+                                r.get("dt_fim_hora"),
+                                hour,
+                                r.get("hr_janela"),
+                            ),
+                            return_dtype=pl.Boolean,
+                        )
+                    )
+                elif "hr_janela" in day_unico.columns:
+                    day_unico = day_unico.filter(pl.col("hr_janela") == hour)
             alertas_unico = [
                 {
                     "id_medico": str(r["id_medico"]),

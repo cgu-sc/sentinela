@@ -17,7 +17,8 @@ const props = defineProps({
   geoData: { type: Object, default: null },
   cnpjData: { type: Object, default: null },
   periodSummary: { type: Object, default: null },
-  periodLoading: { type: Boolean, default: false }
+  periodLoading: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: false },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
@@ -613,7 +614,10 @@ const riskRankBadge = computed(() => {
     </template>
 
     <!-- FAB de Controle da Animação Temporal -->
-    <div v-if="!periodLoading" class="fab-container">
+    <!-- Teleport to body: evita que o transform da animação tabContentEntry
+         quebre o position:fixed do FAB durante os primeiros 400ms da aba -->
+    <Teleport to="body">
+    <div v-if="props.isActive && !periodLoading" class="fab-container">
       
       <!-- Painel de Controle de Período (Slider) -->
       <Transition name="fade-slide-right">
@@ -654,7 +658,7 @@ const riskRankBadge = computed(() => {
           <button
             v-if="filterStore.animationMode"
             class="fab-close-btn"
-            title="Fechar Animação"
+            v-tooltip.left="'Fechar Animação'"
             @click="closeAnimationPreview"
           >
             <i class="pi pi-times"></i>
@@ -664,7 +668,7 @@ const riskRankBadge = computed(() => {
         <button
           class="fab-main-btn"
           :class="{ playing: isPlaying, loading: isPreloading }"
-          :title="isPlaying ? 'Pausar Animação' : 'Animar Período'"
+          v-tooltip.left="isPlaying ? 'Pausar Animação' : 'Animar Período'"
           @click="togglePlay"
         >
           <i v-if="isPreloading" class="pi pi-spin pi-spinner"></i>
@@ -673,6 +677,7 @@ const riskRankBadge = computed(() => {
         </button>
       </div>
     </div>
+    </Teleport>
 
   </div>
 </template>
@@ -815,10 +820,10 @@ const riskRankBadge = computed(() => {
 }
 
 .fab-buttons {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
 }
 
 .fab-slider-panel {
@@ -912,6 +917,10 @@ const riskRankBadge = computed(() => {
 }
 
 .fab-close-btn {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
   width: 32px;
   height: 32px;
   border-radius: 50%;

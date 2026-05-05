@@ -290,13 +290,14 @@ const isInitialLoading = computed(() => {
             >Diagnóstico de Risco</span
           ></template
         >
-        <RiskDiagnosisTab 
+        <RiskDiagnosisTab
           :cnpj="cnpj"
           :cnpj-data="cnpjData"
           :geo-data="geoData"
           :period-summary="periodSummary"
           :period-loading="evolucaoLoading"
-          class="tab-content" 
+          :is-active="cnpjNav.activeTabIndex === 1"
+          class="tab-content"
         />
       </TabPanel>
 

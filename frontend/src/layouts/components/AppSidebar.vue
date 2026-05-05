@@ -334,18 +334,10 @@ const {
 } = useSliderPeriodLogic();
 
 const { getApiParams } = useFilterParameters();
-const animationMode = computed(() => filterStore.animationMode);
-const animationBaseRange = computed(() => filterStore.animationBaseSliderRange);
-const animationSliderValue = computed({
-  get: () => filterStore.animationSliderValue,
-  set: (val) => {
-    filterStore.animationSliderValue = val;
-  },
-});
 
 // Move a ponta inicial do slider em `delta` meses (+1 ou -1)
 const stepStart = (delta) => {
-  closeAnimationPreview();
+  filterStore.resetAnimationPreview();
   const [s, e] = timeSliderValue.value;
   const newS = Math.max(0, Math.min(e - 1, s + delta));
   if (newS === s) return;
@@ -355,7 +347,7 @@ const stepStart = (delta) => {
 
 // Move a ponta final do slider em `delta` meses (+1 ou -1)
 const stepEnd = (delta) => {
-  closeAnimationPreview();
+  filterStore.resetAnimationPreview();
   const [s, e] = timeSliderValue.value;
   const newE = Math.max(s + 1, Math.min(availableMonths.length - 1, e + delta));
   if (newE === e) return;
@@ -366,221 +358,36 @@ const stepEnd = (delta) => {
 onMounted(() => applySliderPeriod(timeSliderValue.value));
 
 const toggleAnalysisYear = (year) => {
-  closeAnimationPreview();
+  filterStore.resetAnimationPreview();
   toggleYear(year);
 };
 
 // Handler do @slideend do Slider — extraído do template para evitar o auto-unwrap
 // de refs pelo Vue no contexto inline, que causava "Cannot set properties of null".
 const onSliderEnd = () => {
-  closeAnimationPreview();
-  applySliderPeriod(timeSliderValue.value);
-};
-
-// ── Play automático do Período de Análise ────────────────────────────────────
-// Duração centralizada no store: Sidebar e gráfico usam exatamente o mesmo valor.
-// Intervalo ligeiramente menor que a duração de animação do ECharts para que os
-// tweens se sobreponham e o movimento seja contínuo (sem pausa entre passos).
-const PLAY_DURATION_MS = 350; // duração da transição ECharts (publicada na store)
-const PLAY_INTERVAL_MS = 300; // intervalo entre steps (< PLAY_DURATION_MS = overlap)
-const PLAY_STEP = 1; // avança 1 mês por tick
-const PLAY_WINDOW_MONTHS = 3;
-
-const isPlaying = ref(false);
-let playIntervalId = null;
-
-const stopPlay = () => {
-  isPlaying.value = false;
-  filterStore.isAnimating = false;
-  filterStore.animationDuration = 0; // volta a resposta instantânea para filtros manuais
-  if (playIntervalId !== null) {
-    clearInterval(playIntervalId);
-    playIntervalId = null;
-  }
-};
-
-const resetAnimationPreload = () => {
-  filterStore.animationPreload.status = "idle";
-  filterStore.animationPreload.dataInicio = null;
-  filterStore.animationPreload.dataFim = null;
-};
-
-const closeAnimationPreview = () => {
-  stopPlay();
   filterStore.resetAnimationPreview();
-};
-
-const animationSliderMin = computed(() => animationBaseRange.value?.[0] ?? 0);
-const animationSliderMax = computed(() => {
-  if (!animationBaseRange.value) return 0;
-  const [startIdx, endIdx] = animationBaseRange.value;
-  return Math.max(startIdx, endIdx - PLAY_WINDOW_MONTHS + 1);
-});
-
-const getAnimationFrameEndIndex = (startIdx) => {
-  if (!animationBaseRange.value) return startIdx;
-  return Math.min(startIdx + PLAY_WINDOW_MONTHS - 1, animationBaseRange.value[1]);
-};
-
-const syncAnimationFrame = (startIdx) => {
-  if (!animationBaseRange.value) return;
-  const clampedStart = Math.min(
-    Math.max(startIdx, animationSliderMin.value),
-    animationSliderMax.value,
-  );
-  const endIdx = getAnimationFrameEndIndex(clampedStart);
-  const startDate = availableMonths[clampedStart]?.date;
-  const rawEndDate = availableMonths[endIdx]?.date;
-  if (!startDate || !rawEndDate) return;
-
-  animationSliderValue.value = clampedStart;
-  filterStore.animationFrameRange = [
-    startDate,
-    new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0),
-  ];
-};
-
-const animationStartMonthLabel = computed(() => {
-  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
-    return "—";
-  }
-  return availableMonths[animationSliderValue.value]?.label ?? "—";
-});
-
-const animationEndMonthLabel = computed(() => {
-  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
-    return "—";
-  }
-  const endIdx = getAnimationFrameEndIndex(animationSliderValue.value);
-  return availableMonths[endIdx]?.label ?? "—";
-});
-
-const openAnimationPreview = () => {
-  const baseRange = [...timeSliderValue.value];
-  filterStore.animationMode = true;
-  filterStore.animationBaseSliderRange = baseRange;
-  syncAnimationFrame(baseRange[0]);
-};
-
-const ensureAnimationPreview = () => {
-  const baseRange = [...timeSliderValue.value];
-  const currentBase = animationBaseRange.value;
-  const isSameBase =
-    currentBase?.[0] === baseRange[0] && currentBase?.[1] === baseRange[1];
-
-  if (!animationMode.value || !isSameBase) {
-    openAnimationPreview();
-  }
-};
-
-const playStep = () => {
-  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
-    stopPlay();
-    return;
-  }
-  const nextStart = animationSliderValue.value + PLAY_STEP;
-  if (nextStart > animationSliderMax.value) {
-    stopPlay();
-    return;
-  }
-  syncAnimationFrame(nextStart);
-};
-
-const isPreloading = computed(
-  () => filterStore.animationPreload.status === "loading",
-);
-
-const startAnimation = () => {
-  ensureAnimationPreview();
-  if (!animationBaseRange.value) return;
-  if (animationSliderValue.value === animationSliderMax.value) {
-    syncAnimationFrame(animationBaseRange.value[0]);
-  }
-  isPlaying.value = true;
-  filterStore.isAnimating = true;
-  filterStore.animationDuration = PLAY_DURATION_MS; // gráfico lê este valor para os tweens
-  playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
-};
-
-const togglePlay = () => {
-  if (isPlaying.value) {
-    stopPlay();
-    return;
-  }
-
-  ensureAnimationPreview();
-
-  if (filterStore.animationPreload.status === "ready") {
-    startAnimation();
-    return;
-  }
-
-  const { inicio, fim } = getApiParams();
-  filterStore.animationPreload.status = "loading";
-  filterStore.animationPreload.dataInicio = inicio;
-  filterStore.animationPreload.dataFim = fim;
-};
-
-// Auto-inicia a animação quando o RiskDiagnosisTab sinalizar que o preload concluiu
-watch(
-  () => filterStore.animationPreload.status,
-  (status) => {
-    if (status !== "ready") return;
-    if (!animationMode.value) {
-      resetAnimationPreload();
-      return;
-    }
-    startAnimation();
-  },
-);
-
-const resetPlayback = () => {
-  stopPlay();
-  if (!animationMode.value) {
-    resetAnimationPreload();
-    return;
-  }
-  if (animationBaseRange.value) {
-    syncAnimationFrame(animationBaseRange.value[0]);
-  }
-  resetAnimationPreload();
+  applySliderPeriod(timeSliderValue.value);
 };
 
 // Limpa o filtro de período — para a animação sem restaurar o range salvo,
 // depois delega ao resetYears para restaurar o padrão.
 const clearPeriodFilter = () => {
-  closeAnimationPreview();
+  filterStore.resetAnimationPreview();
   resetYears();
 };
-
-const stepAnimation = (delta) => {
-  if (!animationMode.value || isPlaying.value) return;
-  syncAnimationFrame((animationSliderValue.value ?? animationSliderMin.value) + delta);
-};
-
-const onAnimationSliderEnd = () => {
-  if (!animationMode.value) return;
-  stopPlay();
-  syncAnimationFrame(animationSliderValue.value ?? animationSliderMin.value);
-};
-
-// Atualiza os gráficos em tempo real enquanto o usuário arrasta o slider manualmente
-watch(animationSliderValue, (val) => {
-  if (animationMode.value && !isPlaying.value && val !== null) {
-    syncAnimationFrame(val);
-  }
-});
 
 // Para o play e reseta preload ao navegar para outra rota
 watch(
   () => route.path,
   () => {
-    closeAnimationPreview();
+    filterStore.resetAnimationPreview();
   },
 );
 
 // Limpa o intervalo ao desmontar o componente
-onBeforeUnmount(closeAnimationPreview);
+onBeforeUnmount(() => {
+  filterStore.resetAnimationPreview();
+});
 </script>
 
 <template>
@@ -1064,101 +871,6 @@ onBeforeUnmount(closeAnimationPreview);
               :disabled="isIndicadoresRoute"
               @slideend="onSliderEnd"
             />
-          </div>
-
-          <!-- Controles de Playback -->
-          <div
-            class="playback-controls"
-            :class="{ disabled: isIndicadoresRoute }"
-          >
-            <button
-              class="play-btn"
-              :class="{ playing: isPlaying, loading: isPreloading }"
-              :disabled="isIndicadoresRoute || isPreloading"
-              :title="
-                isPreloading
-                  ? 'Carregando dados...'
-                  : isPlaying
-                    ? 'Pausar animação'
-                    : animationMode
-                      ? 'Retomar preview temporal'
-                      : 'Abrir preview temporal'
-              "
-              @click="togglePlay"
-            >
-              <i
-                :class="
-                  isPreloading
-                    ? 'pi pi-spin pi-spinner'
-                    : isPlaying
-                      ? 'pi pi-pause'
-                      : 'pi pi-play'
-                "
-              />
-              <span>{{
-                isPreloading ? "Carregando..." : isPlaying ? "Pausar" : animationMode ? "Retomar" : "Animar"
-              }}</span>
-            </button>
-            <button
-              class="period-step-btn reset-btn"
-              :disabled="isIndicadoresRoute || !animationMode"
-              title="Voltar ao início do preview"
-              @click="resetPlayback"
-            >
-              <i class="pi pi-step-backward" />
-            </button>
-          </div>
-
-          <div
-            v-if="animationMode"
-            class="animation-preview-panel"
-            :class="{ disabled: isPreloading }"
-          >
-            <div class="animation-preview-header">
-              <span class="animation-preview-title">Preview Temporal</span>
-              <button
-                class="animation-close-btn"
-                type="button"
-                title="Fechar preview"
-                @click="closeAnimationPreview"
-              >
-                <i class="pi pi-times" />
-              </button>
-            </div>
-
-            <div class="period-steppers animation-period-steppers">
-              <div class="period-stepper-group">
-                <button
-                  class="period-step-btn"
-                  :disabled="animationSliderValue === animationSliderMin || isPlaying"
-                  @click="stepAnimation(-PLAY_STEP)"
-                >
-                  <i class="pi pi-chevron-left" />
-                </button>
-                <span class="period-step-label">{{ animationStartMonthLabel }}</span>
-              </div>
-              <div class="period-stepper-group">
-                <span class="period-step-label">{{ animationEndMonthLabel }}</span>
-                <button
-                  class="period-step-btn"
-                  :disabled="animationSliderValue === animationSliderMax || isPlaying"
-                  @click="stepAnimation(PLAY_STEP)"
-                >
-                  <i class="pi pi-chevron-right" />
-                </button>
-              </div>
-            </div>
-
-            <div class="slider-wrapper animation-slider-wrapper">
-              <Slider
-                v-model="animationSliderValue"
-                :min="animationSliderMin"
-                :max="animationSliderMax"
-                class="w-full time-slider"
-                :disabled="isPreloading || isPlaying"
-                @slideend="onAnimationSliderEnd"
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -2104,139 +1816,4 @@ onBeforeUnmount(closeAnimationPreview);
   opacity: 0.75;
 }
 
-/* CONTROLES DE PLAYBACK */
-.playback-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.6rem;
-}
-
-.playback-controls.disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-
-.animation-preview-panel {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color) 8%, var(--sidebar-input-bg));
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.animation-preview-panel.disabled {
-  opacity: 0.65;
-}
-
-.animation-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.animation-preview-title {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary-color);
-}
-
-.animation-close-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px solid var(--sidebar-border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s,
-    background 0.15s;
-}
-
-.animation-close-btn:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-}
-
-.animation-period-steppers {
-  margin-bottom: 0;
-}
-
-.animation-slider-wrapper {
-  margin-top: 0;
-}
-
-.play-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  height: 26px;
-  padding: 0 0.75rem;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
-  color: var(--primary-color);
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.18s,
-    border-color 0.18s,
-    box-shadow 0.18s;
-  letter-spacing: 0.03em;
-}
-
-.play-btn i {
-  font-size: 0.6rem;
-}
-
-.play-btn:hover {
-  background: color-mix(in srgb, var(--primary-color) 16%, transparent);
-  border-color: var(--primary-color);
-}
-
-.play-btn.loading {
-  opacity: 0.75;
-  cursor: wait;
-}
-
-.play-btn.playing {
-  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--primary-color) 20%, transparent);
-  animation: play-pulse 1.6s ease-in-out infinite;
-}
-
-.reset-btn {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-@keyframes play-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px
-      color-mix(in srgb, var(--primary-color) 20%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 4px
-      color-mix(in srgb, var(--primary-color) 10%, transparent);
-  }
-}
 </style>

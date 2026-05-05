@@ -1,14 +1,16 @@
 <script setup>
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { computed, ref, watch, onUnmounted, unref } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRegional } from '@/composables/useRegional';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
+import { useSliderPeriodLogic } from '@/composables/useSliderPeriodLogic';
 import { useFormatting } from '@/composables/useFormatting';
 import { API_ENDPOINTS } from '@/config/api';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
 import Dropdown from 'primevue/dropdown';
+import Slider from 'primevue/slider';
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -233,8 +235,172 @@ const clearAnimationState = () => {
   animationYMaxPct.value = null;
 };
 
+// ── Lógica de Controle de Playback (Migrado da Sidebar) ──────────────
+const { availableMonths, timeSliderValue } = useSliderPeriodLogic();
+const isPreloading = computed(() => filterStore.animationPreload.status === 'loading');
+
+const PLAY_DURATION_MS = 350;
+const PLAY_INTERVAL_MS = 300;
+const PLAY_STEP = 1;
+const PLAY_WINDOW_MONTHS = 3;
+
+const isPlaying = ref(false);
+let playIntervalId = null;
+
+const animationSliderMin = computed(() => filterStore.animationBaseSliderRange?.[0] ?? 0);
+const animationSliderMax = computed(() => {
+  if (!filterStore.animationBaseSliderRange) return 0;
+  const [startIdx, endIdx] = filterStore.animationBaseSliderRange;
+  return Math.max(startIdx, endIdx - PLAY_WINDOW_MONTHS + 1);
+});
+
+const getAnimationFrameEndIndex = (startIdx) => {
+  if (!filterStore.animationBaseSliderRange) return startIdx;
+  return Math.min(startIdx + PLAY_WINDOW_MONTHS - 1, filterStore.animationBaseSliderRange[1]);
+};
+
+const syncAnimationFrame = (startIdx) => {
+  if (!filterStore.animationBaseSliderRange) return;
+  const clampedStart = Math.min(
+    Math.max(startIdx, animationSliderMin.value),
+    animationSliderMax.value,
+  );
+  const endIdx = getAnimationFrameEndIndex(clampedStart);
+  const months = unref(availableMonths);
+  const startDate = months[clampedStart]?.date;
+  const rawEndDate = months[endIdx]?.date;
+  if (!startDate || !rawEndDate) return;
+
+  filterStore.animationSliderValue = clampedStart;
+  filterStore.animationFrameRange = [
+    startDate,
+    new Date(rawEndDate.getFullYear(), rawEndDate.getMonth() + 1, 0),
+  ];
+};
+
+const stopPlay = () => {
+  isPlaying.value = false;
+  filterStore.isAnimating = false;
+  filterStore.animationDuration = PLAY_DURATION_MS; // Mantém a suavidade (tweening) nas mudanças manuais
+  if (playIntervalId !== null) {
+    clearInterval(playIntervalId);
+    playIntervalId = null;
+  }
+};
+
+const resetAnimationPreload = () => {
+  filterStore.animationPreload.status = 'idle';
+  filterStore.animationPreload.dataInicio = null;
+  filterStore.animationPreload.dataFim = null;
+};
+
+const closeAnimationPreview = () => {
+  stopPlay();
+  filterStore.resetAnimationPreview();
+};
+
+const playStep = () => {
+  if (filterStore.animationSliderValue === null || filterStore.animationSliderValue === undefined) {
+    stopPlay();
+    return;
+  }
+  const nextStart = filterStore.animationSliderValue + PLAY_STEP;
+  if (nextStart > animationSliderMax.value) {
+    stopPlay();
+    return;
+  }
+  syncAnimationFrame(nextStart);
+};
+
+const startAnimation = () => {
+  if (!filterStore.animationBaseSliderRange) return;
+  if (filterStore.animationSliderValue === animationSliderMax.value) {
+    syncAnimationFrame(filterStore.animationBaseSliderRange[0]);
+  }
+  isPlaying.value = true;
+  filterStore.isAnimating = true;
+  filterStore.animationDuration = PLAY_DURATION_MS;
+  playIntervalId = setInterval(playStep, PLAY_INTERVAL_MS);
+};
+
+const togglePlay = () => {
+  if (isPlaying.value) {
+    stopPlay();
+    return;
+  }
+
+  if (!filterStore.animationMode) {
+     const baseRange = [...unref(timeSliderValue)];
+     filterStore.animationMode = true;
+     filterStore.animationBaseSliderRange = baseRange;
+     filterStore.animationDuration = PLAY_DURATION_MS; // Garante suavidade antes mesmo do startAnimation
+     syncAnimationFrame(baseRange[0]);
+  }
+
+  if (filterStore.animationPreload.status === 'ready') {
+    startAnimation();
+    return;
+  }
+
+  const { inicio, fim } = getApiParams();
+  filterStore.animationPreload.status = 'loading';
+  filterStore.animationPreload.dataInicio = inicio;
+  filterStore.animationPreload.dataFim = fim;
+};
+
+watch(
+  () => filterStore.animationPreload.status,
+  (status) => {
+    if (status !== 'ready') return;
+    if (!filterStore.animationMode) {
+      resetAnimationPreload();
+      return;
+    }
+    startAnimation();
+  }
+);
+
+// ── Funções de Slider Manual ─────────────────────────────────────────────────
+const animationSliderValue = computed({
+  get: () => filterStore.animationSliderValue,
+  set: (val) => { filterStore.animationSliderValue = val; }
+});
+
+const stepAnimation = (delta) => {
+  if (!filterStore.animationMode || isPlaying.value) return;
+  syncAnimationFrame((animationSliderValue.value ?? animationSliderMin.value) + delta);
+};
+
+const onAnimationSliderEnd = () => {
+  if (!filterStore.animationMode) return;
+  stopPlay();
+  syncAnimationFrame(animationSliderValue.value ?? animationSliderMin.value);
+};
+
+watch(animationSliderValue, (val) => {
+  if (filterStore.animationMode && !isPlaying.value && val !== null) {
+    syncAnimationFrame(val);
+  }
+});
+
+const animationStartMonthLabel = computed(() => {
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
+    return "—";
+  }
+  return unref(availableMonths)[animationSliderValue.value]?.label ?? "—";
+});
+
+const animationEndMonthLabel = computed(() => {
+  if (animationSliderValue.value === null || animationSliderValue.value === undefined) {
+    return "—";
+  }
+  const endIdx = getAnimationFrameEndIndex(animationSliderValue.value);
+  return unref(availableMonths)[endIdx]?.label ?? "—";
+});
+
 // Limpa cache e reseta preload se o componente for desmontado durante animação
 onUnmounted(() => {
+  stopPlay();
   clearAnimationState();
   if (filterStore.animationPreload.status !== 'idle') {
     filterStore.animationPreload.status = 'idle';
@@ -327,24 +493,6 @@ const riskRankBadge = computed(() => {
   return             { label: 'Normal',  value: `Percentil ${pct}%`, color: '#10b981' };
 });
 
-function formatAnimationMonth(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('pt-BR', {
-    month: 'short',
-    year: 'numeric',
-  }).format(date).replace('.', '');
-}
-
-const animationPeriodLabel = computed(() => {
-  const [inicio, fim] = filterStore.animationFrameRange ?? [];
-  if (!(inicio instanceof Date) || Number.isNaN(inicio.getTime())) return null;
-  if (!(fim instanceof Date) || Number.isNaN(fim.getTime())) return formatAnimationMonth(inicio);
-  return `${formatAnimationMonth(inicio)} a ${formatAnimationMonth(fim)}`;
-});
-
-const showAnimationPeriod = computed(() =>
-  isAnimationPreviewActive.value && !!animationPeriodLabel.value
-);
 </script>
 
 <template>
@@ -357,21 +505,7 @@ const showAnimationPeriod = computed(() =>
     </div>
 
     <template v-else>
-      <!-- BANNER CENTRAL DE ANIMAÇÃO -->
-      <Transition name="fade-down">
-        <div v-if="showAnimationPeriod" class="animation-time-banner">
-           <div class="banner-glass-bg"></div>
-           <div class="banner-content">
-              <i class="pi pi-history animation-pulse" />
-              <div class="banner-text">
-                <span class="banner-tag">MODO TEMPORAL</span>
-                <span class="banner-value">{{ animationPeriodLabel }}</span>
-              </div>
-           </div>
-        </div>
-      </Transition>
-
-      <div class="diagnosis-grid" :class="{ 'with-banner': showAnimationPeriod }">
+      <div class="diagnosis-grid">
         
         <!-- CARD 1: POSICIONAMENTO REGIONAL (Scatter) -->
         <div class="diagnosis-card">
@@ -485,6 +619,72 @@ const showAnimationPeriod = computed(() =>
 
       </div>
     </template>
+
+    <!-- FAB de Controle da Animação Temporal -->
+    <div v-if="!periodLoading" class="fab-container">
+      
+      <!-- Painel de Controle de Período (Slider) -->
+      <Transition name="fade-slide-right">
+        <div v-if="filterStore.animationMode" class="fab-slider-panel">
+          <div class="period-stepper-group">
+            <button
+              class="period-step-btn"
+              :disabled="animationSliderValue === animationSliderMin || isPlaying"
+              @click="stepAnimation(-PLAY_STEP)"
+            >
+              <i class="pi pi-chevron-left"></i>
+            </button>
+            <span class="period-step-label">{{ animationStartMonthLabel }}</span>
+          </div>
+
+          <div class="animation-slider-wrapper">
+            <Slider
+              v-model="animationSliderValue"
+              :min="animationSliderMin"
+              :max="animationSliderMax"
+              class="w-full time-slider"
+              :disabled="isPreloading || isPlaying"
+              @slideend="onAnimationSliderEnd"
+            />
+          </div>
+
+          <div class="period-stepper-group">
+            <span class="period-step-label">{{ animationEndMonthLabel }}</span>
+            <button
+              class="period-step-btn"
+              :disabled="animationSliderValue === animationSliderMax || isPlaying"
+              @click="stepAnimation(PLAY_STEP)"
+            >
+              <i class="pi pi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <div class="fab-buttons">
+        <Transition name="fade-scale">
+          <button
+            v-if="filterStore.animationMode"
+            class="fab-close-btn"
+            title="Fechar Animação"
+            @click="closeAnimationPreview"
+          >
+            <i class="pi pi-times"></i>
+          </button>
+        </Transition>
+
+        <button
+          class="fab-main-btn"
+          :class="{ playing: isPlaying, loading: isPreloading }"
+          :title="isPlaying ? 'Pausar Animação' : 'Animar Período'"
+          @click="togglePlay"
+        >
+          <i v-if="isPreloading" class="pi pi-spin pi-spinner"></i>
+          <i v-else-if="isPlaying" class="pi pi-pause"></i>
+          <i v-else class="pi pi-play"></i>
+        </button>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -601,70 +801,7 @@ const showAnimationPeriod = computed(() =>
 .help-text { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
 .help-text b { color: var(--text-color); font-weight: 600; }
 
-/* ── Banner de Análise Temporal (Glassmorphism) ────────────────────────── */
-.animation-time-banner {
-  position: absolute;
-  top: 15px; /* Desce o banner para dentro da área da aba */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 320px;
-}
-
-.banner-glass-bg {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: color-mix(in srgb, var(--primary-color) 15%, rgba(15, 23, 42, 0.7));
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
-  border-radius: 999px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-:global(.dark-mode) .banner-glass-bg {
-  background: color-mix(in srgb, var(--primary-color) 12%, rgba(0, 0, 0, 0.8));
-}
-
-.banner-content {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 1.5rem;
-  color: white;
-}
-
-.banner-content i {
-  font-size: 1.3rem;
-  color: var(--primary-color);
-  filter: drop-shadow(0 0 5px var(--primary-color));
-}
-
-.banner-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
-
-.banner-tag {
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  opacity: 0.7;
-  margin-bottom: 3px;
-}
-
-.banner-value {
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* Animações */
+/* Animação Pulso */
 .animation-pulse {
   animation: pulse-glow 2s infinite ease-in-out;
 }
@@ -674,25 +811,196 @@ const showAnimationPeriod = computed(() =>
   50% { opacity: 0.6; filter: drop-shadow(0 0 12px var(--primary-color)); }
 }
 
-.fade-down-enter-active, .fade-down-leave-active {
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.fade-down-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-20px) scale(0.9);
-}
-
-.fade-down-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-10px) scale(0.95);
-}
-
 .diagnosis-grid {
   transition: padding-top 0.4s ease;
 }
 
-.diagnosis-grid.with-banner {
-  padding-top: 4rem; /* Aumenta o espaço para o banner não cobrir os títulos dos cards */
+/* ── Floating Action Button (FAB) e Painel ──────────────────────────────────────── */
+.fab-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+}
+
+.fab-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fab-slider-panel {
+  background: color-mix(in srgb, var(--card-bg) 95%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-radius: 999px; /* Pill shape */
+  padding: 0 1.25rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 56px; /* Matches fab-main-btn height */
+  width: 400px;
+}
+
+.period-stepper-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.period-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+.period-step-btn i { font-size: 0.6rem; }
+.period-step-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+.period-step-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.period-step-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+  min-width: 55px;
+  text-align: center;
+}
+
+.animation-slider-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.time-slider) {
+  height: 4px;
+  background: var(--card-border);
+}
+:deep(.time-slider .p-slider-range) {
+  background: var(--primary-color);
+}
+:deep(.time-slider .p-slider-handle) {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--primary-color);
+  background: var(--card-bg);
+  transition: all 0.2s;
+}
+:deep(.time-slider .p-slider-handle:hover) {
+  background: var(--primary-color);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.fade-slide-right-enter-active,
+.fade-slide-right-leave-active {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.fade-slide-right-enter-from,
+.fade-slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(20px) scale(0.95);
+}
+
+.fab-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, var(--sidebar-bg) 80%, white);
+  color: var(--text-muted);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.fab-close-btn:hover {
+  background: var(--color-error);
+  color: white;
+}
+.fab-close-btn i {
+  font-size: 0.85rem;
+}
+
+.fab-main-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary-color) 40%, transparent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.fab-main-btn i {
+  font-size: 1.5rem;
+  margin-left: 4px; /* Centralização visual do Play */
+}
+
+.fab-main-btn .pi-pause, .fab-main-btn .pi-spinner {
+  margin-left: 0; /* Volta ao normal para outros ícones */
+}
+
+.fab-main-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary-color) 60%, transparent);
+}
+
+.fab-main-btn.playing {
+  background: #f97316; /* Laranja Vibrante para Pause */
+  box-shadow: 0 6px 16px color-mix(in srgb, #f97316 50%, transparent);
+  animation: fab-pulse 2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+.fab-main-btn.loading {
+  background: var(--sidebar-border);
+  color: var(--text-muted);
+  cursor: wait;
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
+@keyframes fab-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, #f97316 70%, transparent); }
+  70% { box-shadow: 0 0 0 15px color-mix(in srgb, #f97316 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, #f97316 0%, transparent); }
+}
+
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.5) translateY(10px);
 }
 </style>

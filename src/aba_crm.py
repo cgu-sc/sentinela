@@ -889,11 +889,20 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
 
             # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
             cursor.execute(f"""
-                SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, multiplicador
-                FROM temp_CGUSC.fp.volume_horario_anomalo_alertas A
+                SELECT dt_ini_concentracao, nu_crms_distintos, 
+                       CASE 
+                           WHEN nu_5min  >=  6 THEN nu_5min 
+                           WHEN nu_10min >=  8 THEN nu_10min 
+                           WHEN nu_15min >= 10 THEN nu_15min 
+                           WHEN nu_20min >= 11 THEN nu_20min 
+                           WHEN nu_30min >= 12 THEN nu_30min 
+                           WHEN nu_60min >= 15 THEN nu_60min 
+                       END as nu_prescricoes,
+                       nu_minutos_span, severidade
+                FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                WHERE F.cnpj = ? AND A.dt_alerta BETWEEN ? AND ?
-                ORDER BY A.dt_alerta DESC, A.hr_janela DESC
+                WHERE F.cnpj = ? AND A.dt_dia BETWEEN ? AND ?
+                ORDER BY A.dt_dia DESC, A.dt_ini_concentracao DESC
             """, (cnpj, data_inicio, data_fim))
             
             surtos = cursor.fetchall()
@@ -902,7 +911,8 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
                 row_evidencias += 1
                 for s in surtos:
                     dt_f = s[0].strftime('%d/%m/%Y') if hasattr(s[0], 'strftime') else str(s[0])
-                    txt = f"Em {dt_f} às {s[1]}:00h: {s[2]} prescrições de {s[3]} médicos (x{s[4]:.1f} acima da mediana)."
+                    hr_f = s[0].strftime('%H:%M') if hasattr(s[0], 'strftime') else str(s[0])
+                    txt = f"Em {dt_f} às {hr_f}: {s[2]} prescrições de {s[1]} médicos em {s[3]} min (Severidade: {s[4]})."
                     ws.merge_range(row_evidencias, 1, row_evidencias, 19, f"• {txt}", wb.add_format({'font_size': 9, 'font_color': '#555555'}))
                     row_evidencias += 1
         except Exception as e:

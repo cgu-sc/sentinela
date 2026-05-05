@@ -302,7 +302,7 @@ BEGIN
                     WHEN nu_20min >= 11 THEN fim_real_20min
                     WHEN nu_30min >= 12 THEN fim_real_30min
                     WHEN nu_60min >= 18 THEN fim_real_60min
-                    WHEN nu_60min >=  6 AND nu_minutos_span_full <= nu_60min * 3 THEN fim_real_60min
+                    WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN fim_real_60min
                 END AS dt_fim_real,
                 CASE
                     WHEN nu_5min  >=  8 THEN 'EXTREMO'
@@ -313,7 +313,7 @@ BEGIN
                     WHEN nu_20min >= 11 THEN 'GRAVE'
                     WHEN nu_30min >= 12 THEN 'ALTO'
                     WHEN nu_60min >= 18 THEN 'ALTO'
-                    WHEN nu_60min >=  6 AND nu_minutos_span_full <= nu_60min * 3 THEN 'ALTO'
+                    WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 'ALTO'
                 END AS severidade
             FROM #concentracao_dedup
             WHERE rn = 1

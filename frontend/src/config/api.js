@@ -28,13 +28,8 @@ export const API_ENDPOINTS = {
   analyticsCrmData: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-data`,
   analyticsCrmPerfilDiario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-diario`,
   analyticsCrmPerfilHorario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-horario`,
-  analyticsCrmMultiplosRaioX: (cnpj, dateStr, hour) => {
-    let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-multiplos/raio-x?date_str=${dateStr}`;
-    if (hour != null) url += `&hour=${hour}`;
-    return url;
-  },
-  analyticsCrmUnicoRaioX: (cnpj, dateStr, hour) => {
-    let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-unico/raio-x?date_str=${dateStr}`;
+  analyticsCrmRaioX: (cnpj, dateStr, hour) => {
+    let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/raio-x?date_str=${dateStr}`;
     if (hour != null) url += `&hour=${hour}`;
     return url;
   },

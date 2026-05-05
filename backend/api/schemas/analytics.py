@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from datetime import date
 
@@ -449,12 +449,6 @@ class CrmHourlyTransactionSchema(BaseModel):
     produto: Optional[str] = None
     principio_ativo: Optional[str] = None
 
-class CrmMultiplosRaioXResponse(BaseModel):
-    """Lista cronológica de prescrições aprovadas numa hora anômala."""
-    transactions: List[CrmHourlyTransactionSchema]
-    from_cache: bool = False
-    read_time_ms: Optional[float] = None
-
 
 class CrmUnicoAlertaSchema(BaseModel):
     """Médico que disparou alerta de concentração num dia específico."""
@@ -466,17 +460,29 @@ class CrmUnicoAlertaSchema(BaseModel):
     dt_ini_hora: Optional[str] = None
     dt_fim_hora: Optional[str] = None
 
-class CrmUnicoRaioXResponse(BaseModel):
-    """Todas as transações da farmácia num dia com alerta de CRM único, com os médicos-gatilho."""
-    cnpj: str
-    dt_janela: str
-    transactions: List[CrmHourlyTransactionSchema]
-    alertas: List[CrmUnicoAlertaSchema]
-    from_cache: bool = False
-    read_time_ms: Optional[float] = None
-
 
 # ── Evolução Mensal por GTIN ─────────────────────────────────────────────────
+
+class CrmMultiploAlertaSchema(BaseModel):
+    """Surto coordenado de prescricoes envolvendo multiplos CRMs num intervalo."""
+    dt_janela: str
+    hr_janela: Optional[int] = None
+    nu_prescricoes: int = 0
+    nu_crms: int = 0
+    severidade: Optional[str] = None
+    dt_ini_hora: Optional[str] = None
+    dt_fim_hora: Optional[str] = None
+
+class CrmRaioXResponse(BaseModel):
+    """Contrato unificado do Raio-X de auditoria CRM."""
+    cnpj: str
+    dt_janela: str
+    hour: Optional[int] = None
+    transactions: List[CrmHourlyTransactionSchema]
+    alertas_unico: List[CrmUnicoAlertaSchema] = Field(default_factory=list)
+    alertas_multi: List[CrmMultiploAlertaSchema] = Field(default_factory=list)
+    from_cache: bool = False
+    read_time_ms: Optional[float] = None
 
 class MesMensalGtinItem(BaseModel):
     mes: str                          # "YYYY-MM"

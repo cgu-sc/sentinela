@@ -47,8 +47,7 @@ from ...schemas.analytics import (
     IndicadorAnaliseResponse,
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse,
-    CrmUnicoRaioXResponse,
+    CrmRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -456,8 +455,13 @@ def get_crm_data(
     df_cm: pl.DataFrame | None = None
 
     if os.path.exists(ALERTAS_MULTI_PATH):
-        try: df_cm = pl.read_parquet(ALERTAS_MULTI_PATH)
-        except: pass
+        try:
+            df_cm = pl.read_parquet(ALERTAS_MULTI_PATH)
+            expected_cm_columns = {"competencia", "dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms"}
+            if not expected_cm_columns.issubset(set(df_cm.columns)):
+                df_cm = None
+        except:
+            pass
         
     if df_cm is None:
         try:
@@ -1006,129 +1010,181 @@ def get_crm_perfil_horario(
     return CrmHourlyProfileResponse(cnpj=cnpj, points=points, events=events_list, from_cache=from_cache,
                                     read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-def get_crm_multiplos_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmMultiplosRaioXResponse":
-    """Busca as transações de uma hora anômala ou do dia todo, utilizando o cache unificado."""
-    import polars as pl
-    from api.schemas.analytics import CrmMultiplosRaioXResponse
-    
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
+def _format_alert_time(value) -> Optional[str]:
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%H:%M")
+    text_value = str(value)
+    if " " in text_value:
+        text_value = text_value.split(" ", 1)[1]
+    return text_value[:5]
 
-    if not os.path.exists(PARQUET_PATH):
-        sync_crm_raiox_tx(cnpj)
+def _extract_alert_hour(value) -> Optional[int]:
+    if value is None:
+        return None
+    if hasattr(value, "hour"):
+        return int(value.hour)
+    text_value = str(value)
+    if " " in text_value:
+        text_value = text_value.split(" ", 1)[1]
+    try:
+        return int(text_value[:2])
+    except (TypeError, ValueError):
+        return None
 
-    if not os.path.exists(PARQUET_PATH):
-        return CrmMultiplosRaioXResponse(transactions=[], from_cache=False)
+def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
+    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_raiox_alertas.parquet")
+    required_columns = {
+        "dt_dia",
+        "dt_ini_concentracao",
+        "dt_fim_concentracao",
+        "nu_60min",
+        "nu_crms_distintos",
+        "severidade",
+    }
+
+    if os.path.exists(alertas_path):
+        try:
+            cached_df = pl.read_parquet(alertas_path)
+            if required_columns.issubset(set(cached_df.columns)):
+                return cached_df
+        except Exception:
+            pass
 
     try:
-        import time as _time
-        _t0 = _time.perf_counter()
-        df = pl.read_parquet(PARQUET_PATH)
-        read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-        
-        # Filtro por Dia e Hora opcional
-        filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
-        if hour is not None:
-            filter_expr = filter_expr & (pl.col("hr_janela") == hour)
+        import pandas as pd
+        from database import engine as _engine
 
-        filtered_df = df.filter(filter_expr)
-        if filtered_df.is_empty():
-            return CrmMultiplosRaioXResponse(transactions=[], from_cache=True, read_time_ms=read_time_ms)
+        with _engine.connect() as conn:
+            pdf_alertas = pd.read_sql(
+                text("""
+                    SELECT
+                        A.dt_dia,
+                        A.dt_ini_concentracao,
+                        A.dt_fim_concentracao,
+                        A.nu_60min,
+                        A.nu_crms_distintos,
+                        A.severidade
+                    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                    WHERE F.cnpj = :cnpj
+                """),
+                conn,
+                params={"cnpj": cnpj},
+            )
 
-        # Enriquece com nomes dos medicamentos
-        from data_cache import get_medicamentos_df
-        df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
-        enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
-        
-        # Garante tipos de string para o Pydantic
-        enriched_df = enriched_df.with_columns([
-            pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("id_medico").cast(pl.Utf8),
-            pl.col("codigo_barra").cast(pl.Utf8),
-            pl.col("data_hora").cast(pl.Utf8)
-        ])
-
-        return CrmMultiplosRaioXResponse(transactions=enriched_df.to_dicts(), from_cache=True, read_time_ms=read_time_ms)
+        df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema={
+            "dt_dia": pl.Utf8,
+            "dt_ini_concentracao": pl.Utf8,
+            "dt_fim_concentracao": pl.Utf8,
+            "nu_60min": pl.Int32,
+            "nu_crms_distintos": pl.Int32,
+            "severidade": pl.Utf8,
+        })
+        df_alertas.write_parquet(alertas_path, compression="lz4")
+        return df_alertas
     except Exception as e:
-        print(f"⚠️ Erro no Raio-X Múltiplos: {e}")
-        return CrmMultiplosRaioXResponse(transactions=[], from_cache=False)
+        print(f"Erro ao sincronizar alertas multiplos do Raio-X '{cnpj}': {e}")
+        return pl.DataFrame()
 
-def get_crm_unico_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmUnicoRaioXResponse":
-    """Retorna as transações da farmácia num dia com alerta de CRM único, utilizando o cache unificado.
-    
-    Args:
-        cnpj: CNPJ de 14 dígitos sem formatação.
-        date_str: Data no formato YYYY-MM-DD.
-        hour: Hora opcional para filtrar transações (0-23).
-
-    Returns:
-        CrmUnicoRaioXResponse com transações (enriquecidas com produto) e lista de alertas do dia.
-    """
-    import polars as pl
-    from api.schemas.analytics import CrmUnicoRaioXResponse
-
+def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmRaioXResponse":
+    """Retorna transacoes e alertas CRM unificados para uma data/hora."""
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
+    parquet_path = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
 
-    if not os.path.exists(PARQUET_PATH):
+    if not os.path.exists(parquet_path):
         sync_crm_raiox_tx(cnpj)
 
-    empty = CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[], alertas=[], from_cache=True)
-
-    if not os.path.exists(PARQUET_PATH):
-        return empty
+    read_time_ms = None
+    transactions: list[dict] = []
 
     try:
         import time as _time
-        _t0 = _time.perf_counter()
-        df = pl.read_parquet(PARQUET_PATH)
-        read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
 
-        # Filtro por Dia e Hora opcional
-        filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
-        if hour is not None:
-            filter_expr = filter_expr & (pl.col("hr_janela") == hour)
+        if os.path.exists(parquet_path):
+            t0 = _time.perf_counter()
+            df = pl.read_parquet(parquet_path)
+            read_time_ms = round((_time.perf_counter() - t0) * 1000, 1)
 
-        filtered_df = df.filter(filter_expr)
-        
-        if filtered_df.is_empty():
-            return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=[], alertas=[], from_cache=True, read_time_ms=read_time_ms)
+            filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
+            if hour is not None:
+                filter_expr = filter_expr & (pl.col("hr_janela") == hour)
 
-        # Enriquece com medicamentos
-        from data_cache import get_medicamentos_df
-        df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
-        enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
+            filtered_df = df.filter(filter_expr)
+            if not filtered_df.is_empty():
+                from data_cache import get_medicamentos_df
 
-        enriched_df = enriched_df.with_columns([
-            pl.col("num_autorizacao").cast(pl.Utf8),
-            pl.col("id_medico").cast(pl.Utf8),
-            pl.col("codigo_barra").cast(pl.Utf8),
-            pl.col("data_hora").cast(pl.Utf8),
-        ])
+                df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
+                enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
+                enriched_df = enriched_df.with_columns([
+                    pl.col("num_autorizacao").cast(pl.Utf8),
+                    pl.col("id_medico").cast(pl.Utf8),
+                    pl.col("codigo_barra").cast(pl.Utf8),
+                    pl.col("data_hora").cast(pl.Utf8),
+                ])
+                transactions = enriched_df.to_dicts()
 
-        transactions = enriched_df.to_dicts()
-
-        # Busca os médicos-gatilho do dia (usando o cache de alertas diários)
-        alertas: list[dict] = []
-        alertas_parquet = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
-        if os.path.exists(alertas_parquet):
-            df_alertas = pl.read_parquet(alertas_parquet)
-            day_alertas = df_alertas.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
-            alertas = [
+        alertas_unico: list[dict] = []
+        unico_path = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
+        if os.path.exists(unico_path):
+            df_unico = pl.read_parquet(unico_path)
+            day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
+            alertas_unico = [
                 {
-                    "id_medico":         str(r["id_medico"]),
-                    "hr_janela":         int(r["hr_janela"]),
+                    "id_medico": str(r["id_medico"]),
+                    "hr_janela": int(r["hr_janela"]),
                     "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
-                    "nu_minutos_dia":     int(r["nu_minutos_dia"]),
-                    "taxa_hora":          float(r["taxa_hora"]),
-                    "dt_ini_hora":        r["dt_ini_hora"].strftime("%H:%M") if r.get("dt_ini_hora") else None,
-                    "dt_fim_hora":        r["dt_fim_hora"].strftime("%H:%M") if r.get("dt_fim_hora") else None,
+                    "nu_minutos_dia": int(r["nu_minutos_dia"]),
+                    "taxa_hora": float(r["taxa_hora"]),
+                    "dt_ini_hora": _format_alert_time(r.get("dt_ini_hora")),
+                    "dt_fim_hora": _format_alert_time(r.get("dt_fim_hora")),
                 }
-                for r in day_alertas.iter_rows(named=True)
+                for r in day_unico.iter_rows(named=True)
             ]
 
-        return CrmUnicoRaioXResponse(cnpj=cnpj, dt_janela=date_str, transactions=transactions, alertas=alertas, from_cache=True, read_time_ms=read_time_ms)
+        df_multi = _load_crm_multi_alertas(cnpj, cnpj_dir)
+        alertas_multi: list[dict] = []
+        if not df_multi.is_empty():
+            day_multi = df_multi.filter(pl.col("dt_dia").cast(pl.Utf8).str.slice(0, 10) == date_str)
+            if hour is not None:
+                day_multi = day_multi.filter(
+                    pl.col("dt_ini_concentracao").cast(pl.Utf8).str.slice(11, 2).cast(pl.Int32, strict=False) == hour
+                )
+
+            alertas_multi = [
+                {
+                    "dt_janela": str(r["dt_dia"])[:10],
+                    "hr_janela": _extract_alert_hour(r.get("dt_ini_concentracao")),
+                    "nu_prescricoes": int(r["nu_60min"] or 0),
+                    "nu_crms": int(r["nu_crms_distintos"] or 0),
+                    "severidade": r.get("severidade"),
+                    "dt_ini_hora": _format_alert_time(r.get("dt_ini_concentracao")),
+                    "dt_fim_hora": _format_alert_time(r.get("dt_fim_concentracao")),
+                }
+                for r in day_multi.iter_rows(named=True)
+            ]
+
+        return CrmRaioXResponse(
+            cnpj=cnpj,
+            dt_janela=date_str,
+            hour=hour,
+            transactions=transactions,
+            alertas_unico=alertas_unico,
+            alertas_multi=alertas_multi,
+            from_cache=os.path.exists(parquet_path),
+            read_time_ms=read_time_ms,
+        )
     except Exception as e:
-        print(f"⚠️ Erro no Raio-X Único: {e}")
-        return empty
+        print(f"Erro no Raio-X CRM unificado: {e}")
+        return CrmRaioXResponse(
+            cnpj=cnpj,
+            dt_janela=date_str,
+            hour=hour,
+            transactions=[],
+            alertas_unico=[],
+            alertas_multi=[],
+            from_cache=False,
+            read_time_ms=read_time_ms,
+        )
 

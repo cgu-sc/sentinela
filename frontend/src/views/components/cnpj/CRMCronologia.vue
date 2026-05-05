@@ -135,10 +135,8 @@ const expandedRaioxRows = ref(new Set());
 
 // CRM Único: refs declaradas aqui (antes dos watches) para evitar TDZ quando o
 // watch com immediate:true dispara durante o setup com dados já em cache.
-const unicoTransactions        = ref([]);
-const unicoTransactionsLoading = ref(false);
-const unicoAlertas             = ref([]);
-const expandedUnicoRows        = ref(new Set());
+const unicoAlertas = ref([]);
+const multiAlertas = ref([]);
 
 const groupedRaiox = computed(() => {
   const groups = {};
@@ -180,23 +178,28 @@ function toggleRaioxRow(auth) {
   expandedRaioxRows.value = new Set(expandedRaioxRows.value);
 }
 
-async function loadTransactions(dt_janela, hourInt = null) {
+async function loadRaiox(dt_janela, hourInt = null) {
   hourlyTransactionsLoading.value = true;
   try {
-    const url = API_ENDPOINTS.analyticsCrmMultiplosRaioX(props.cnpj, dt_janela, hourInt);
+    const url = API_ENDPOINTS.analyticsCrmRaioX(props.cnpj, dt_janela, hourInt);
     const t0 = performance.now();
     const res = await fetch(url);
     if (!res.ok) throw new Error('Falha HTTP');
     const data = await res.json();
     const ms = Math.round(performance.now() - t0);
-    cnpjDetailStore.requestTimes['transacoes-horarias'] = {
-      label: 'Transações Horárias',
+    cnpjDetailStore.requestTimes['crm-raio-x'] = {
+      label: 'Raio-X CRM',
       ms,
       detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
     };
     hourlyTransactions.value = data.transactions || [];
+    unicoAlertas.value = data.alertas_unico || [];
+    multiAlertas.value = data.alertas_multi || [];
   } catch (err) {
-    console.error("Erro ao buscar Raio-X Sub-horário:", err);
+    console.error("Erro ao buscar Raio-X CRM:", err);
+    hourlyTransactions.value = [];
+    unicoAlertas.value = [];
+    multiAlertas.value = [];
   } finally {
     hourlyTransactionsLoading.value = false;
   }
@@ -212,11 +215,7 @@ async function onDailyZrClick() {
   selectedDay.value = day;
   selectedHourlyHour.value = 'all';
 
-  if (day.is_crm_unico === 1) {
-    await loadUnicoTransactions(day.dt_janela, null);
-  } else {
-    await loadTransactions(day.dt_janela, null);
-  }
+  await loadRaiox(day.dt_janela, null);
 }
 
 async function onChartClick(params) {
@@ -623,11 +622,7 @@ watch(filteredDailyDays, (newDays) => {
       );
       selectedDay.value = maxDay;
       selectedHourlyHour.value = 'all';
-      if (maxDay.is_crm_unico === 1) {
-        loadUnicoTransactions(maxDay.dt_janela, null);
-      } else {
-        loadTransactions(maxDay.dt_janela, null);
-      }
+      loadRaiox(maxDay.dt_janela, null);
 
       // 2. Centraliza o Gráfico no dia selecionado
       const idx = newDays.findIndex(d => d.dt_janela === maxDay.dt_janela);
@@ -664,8 +659,7 @@ watch(filteredDailyDays, (newDays) => {
 watch(crmPerfilHorarioLoading, (loading) => {
   if (!loading && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
     const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
-    if (selectedDay.value.is_crm_unico === 1) loadUnicoTransactions(selectedDay.value.dt_janela, hour);
-    else loadTransactions(selectedDay.value.dt_janela, hour);
+    loadRaiox(selectedDay.value.dt_janela, hour);
   }
 });
 
@@ -674,8 +668,7 @@ const { activeCrmViewMode } = storeToRefs(cnpjDetailStore);
 watch(activeCrmViewMode, (mode) => {
   if (mode === 'cronologia' && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
     const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
-    if (selectedDay.value.is_crm_unico === 1) loadUnicoTransactions(selectedDay.value.dt_janela, hour);
-    else loadTransactions(selectedDay.value.dt_janela, hour);
+    loadRaiox(selectedDay.value.dt_janela, hour);
   }
 });
 
@@ -695,11 +688,7 @@ watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => 
   selectedHourlyHour.value = 'all';
 
   // 2. Carrega as transações do dia inteiro
-  if (dayObj.is_crm_unico === 1) {
-    await loadUnicoTransactions(evt.date, null);
-  } else {
-    await loadTransactions(evt.date, null);
-  }
+  await loadRaiox(evt.date, null);
 
   // 3. Centraliza o zoom
   const idx = profile.days.findIndex(d => d.dt_janela === evt.date);
@@ -758,42 +747,17 @@ async function onHourlyZrClick() {
   // Toggle do filtro
   if (selectedHourlyHour.value === hourInt) {
     selectedHourlyHour.value = 'all';
-    if (selectedDay.value.is_crm_unico === 1) {
-      await loadUnicoTransactions(selectedDay.value.dt_janela, null);
-    } else {
-      await loadTransactions(selectedDay.value.dt_janela, null);
-    }
+    await loadRaiox(selectedDay.value.dt_janela, null);
     return;
   }
   
   selectedHourlyHour.value = hourInt;
-  if (selectedDay.value.is_crm_unico === 1) {
-    await loadUnicoTransactions(selectedDay.value.dt_janela, hourInt);
-  } else {
-    await loadTransactions(selectedDay.value.dt_janela, hourInt);
-  }
+  await loadRaiox(selectedDay.value.dt_janela, hourInt);
 }
 
 
 // ── CRM ÚNICO: Estado de Raio-X ─────────────────────────────────────────────
 // (refs declaradas no topo do script para evitar TDZ com watch immediate:true)
-
-const groupedUnicoRaiox = computed(() => {
-  const groups = {};
-  unicoTransactions.value.forEach(item => {
-    const key = item.num_autorizacao;
-    if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, vl_autorizacao: 0, items: [] };
-    }
-    groups[key].vl_autorizacao += (item.valor_pago || 0);
-    groups[key].items.push(item);
-  });
-  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
-});
-
-const unicoTotalValue = computed(() =>
-  groupedUnicoRaiox.value.reduce((sum, tx) => sum + tx.vl_autorizacao, 0)
-);
 
 const unicoGatilhoMap = computed(() => {
   const map = {};
@@ -805,108 +769,41 @@ const unicoGatilhoMap = computed(() => {
 });
 
 function isGatilhoTx(tx) {
-  if (selectedDay.value?.is_crm_unico !== 1) return false;
   const intervals = unicoGatilhoMap.value[tx.id_medico];
   if (!intervals?.length) return false;
   const txTime = (tx.data_hora.split(' ')[1] || '').slice(0, 5);
   return intervals.some(a => txTime >= a.dt_ini_hora && txTime <= a.dt_fim_hora);
 }
 
-const unicoCrmFrequencies = computed(() => {
-  const freqs = {};
-  groupedUnicoRaiox.value.forEach(tx => { freqs[tx.id_medico] = (freqs[tx.id_medico] || 0) + 1; });
-  return freqs;
-});
-
-function toggleUnicoRow(auth) {
-  if (expandedUnicoRows.value.has(auth)) expandedUnicoRows.value.delete(auth);
-  else expandedUnicoRows.value.add(auth);
-  expandedUnicoRows.value = new Set(expandedUnicoRows.value);
-}
-
-async function loadUnicoTransactions(dt_janela, hourInt = null) {
-  unicoTransactionsLoading.value = true;
-  try {
-    const url = API_ENDPOINTS.analyticsCrmUnicoRaioX(props.cnpj, dt_janela, hourInt);
-    const t0 = performance.now();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Falha HTTP');
-    const data = await res.json();
-    const ms = Math.round(performance.now() - t0);
-    cnpjDetailStore.requestTimes['transacoes-crm-unico'] = {
-      label: 'Raio-X CRM Único',
-      ms,
-      detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
-    };
-    unicoTransactions.value = data.transactions || [];
-    unicoAlertas.value      = data.alertas || [];
-  } catch (err) {
-    console.error('Erro ao buscar Raio-X CRM Único:', err);
-  } finally {
-    unicoTransactionsLoading.value = false;
-  }
-}
-
 // ── Dados Ativos: fonte unificada para o RAIO-X ───────────────────────────
 // CRM Único: Agora o filtro de hora também é processado no servidor para consistência.
-const unicoTransactionsFiltered = computed(() => unicoTransactions.value);
-
-const groupedUnicoRaioxFiltered = computed(() => {
-  const groups = {};
-  unicoTransactionsFiltered.value.forEach(item => {
-    const key = item.num_autorizacao;
-    if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, vl_autorizacao: 0, items: [] };
-    }
-    groups[key].vl_autorizacao += (item.valor_pago || 0);
-    groups[key].items.push(item);
-  });
-  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
-});
-
 const activeGroupedRaiox = computed(() => {
-  if (!selectedDay.value) return [];
-  return selectedDay.value.is_crm_unico === 1 ? groupedUnicoRaioxFiltered.value : groupedRaiox.value;
+  return selectedDay.value ? groupedRaiox.value : [];
 });
 
 const activeTransactions = computed(() => {
-  if (!selectedDay.value) return [];
-  return selectedDay.value.is_crm_unico === 1 ? unicoTransactionsFiltered.value : hourlyTransactions.value;
+  return selectedDay.value ? hourlyTransactions.value : [];
 });
 
 const activeRaioxTotalValue = computed(() => {
-  if (!selectedDay.value) return 0;
-  if (selectedDay.value.is_crm_unico === 1) {
-    return unicoTransactionsFiltered.value.reduce((sum, t) => sum + (t.valor_pago || 0), 0);
-  }
-  return raioxTotalValue.value;
+  return selectedDay.value ? raioxTotalValue.value : 0;
 });
 
 const activeCrmFrequencies = computed(() => {
-  if (!selectedDay.value) return {};
-  if (selectedDay.value.is_crm_unico === 1) {
-    const freqs = {};
-    groupedUnicoRaioxFiltered.value.forEach(tx => { freqs[tx.id_medico] = (freqs[tx.id_medico] || 0) + 1; });
-    return freqs;
-  }
-  return crmFrequencies.value;
+  return selectedDay.value ? crmFrequencies.value : {};
 });
 
 const activeTransactionsLoading = computed(() =>
-  selectedDay.value?.is_crm_unico === 1 ? unicoTransactionsLoading.value : hourlyTransactionsLoading.value
+  hourlyTransactionsLoading.value
 );
 
 function activeRowExpanded(auth) {
-  if (!selectedDay.value) return false;
-  return selectedDay.value.is_crm_unico === 1
-    ? expandedUnicoRows.value.has(auth)
-    : expandedRaioxRows.value.has(auth);
+  return selectedDay.value ? expandedRaioxRows.value.has(auth) : false;
 }
 
 function toggleActiveRow(auth) {
   if (!selectedDay.value) return;
-  if (selectedDay.value.is_crm_unico === 1) toggleUnicoRow(auth);
-  else toggleRaioxRow(auth);
+  toggleRaioxRow(auth);
 }
 </script>
 
@@ -1021,7 +918,7 @@ function toggleActiveRow(auth) {
           <button 
             v-if="selectedHourlyHour !== 'all'" 
             class="reset-filter-btn animate-fade-in"
-            @click="selectedHourlyHour = 'all'; selectedDay.is_crm_unico === 1 ? loadUnicoTransactions(selectedDay.dt_janela, null) : loadTransactions(selectedDay.dt_janela, null)"
+            @click="selectedHourlyHour = 'all'; loadRaiox(selectedDay.dt_janela, null)"
           >
             <i class="pi pi-filter-slash" />
             <span>Ver Dia Todo</span>
@@ -1099,7 +996,7 @@ function toggleActiveRow(auth) {
       </div>
 
       <!-- Médicos Gatilho (CRM Único) -->
-      <div v-if="selectedDay?.is_crm_unico === 1 && unicoAlertas.length" class="unico-alertas-section">
+      <div v-if="unicoAlertas.length > 0" class="unico-alertas-section">
         <div class="unico-alertas-header">
           <i class="pi pi-exclamation-triangle" />
           <span>Médicos com Alerta de Concentração neste Dia</span>
@@ -1107,12 +1004,31 @@ function toggleActiveRow(auth) {
         <div class="unico-alertas-list">
           <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
             <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico) }">{{ alerta.id_medico }}</span>
-            <span class="alerta-sep">·</span>
-            <span class="alerta-stat">{{ alerta.dt_ini_hora }} → {{ alerta.dt_fim_hora }}</span>
-            <span class="alerta-sep">·</span>
+            <span class="alerta-sep">-</span>
+            <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
+            <span class="alerta-sep">-</span>
             <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} autorizações</span>
-            <span class="alerta-sep">·</span>
+            <span class="alerta-sep">-</span>
             <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Surtos Coordenados (Multi-CRM) -->
+      <div v-if="multiAlertas.length > 0" class="unico-alertas-section">
+        <div class="unico-alertas-header">
+          <i class="pi pi-users" />
+          <span>Surtos Coordenados neste Dia</span>
+        </div>
+        <div class="unico-alertas-list">
+          <div v-for="alerta in multiAlertas" :key="`${alerta.dt_janela}-${alerta.hr_janela}-${alerta.dt_ini_hora}`" class="unico-alerta-chip">
+            <span class="alerta-crm">{{ alerta.nu_crms }} CRMs</span>
+            <span class="alerta-sep">-</span>
+            <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
+            <span class="alerta-sep">-</span>
+            <span class="alerta-stat">{{ alerta.nu_prescricoes }} autorizacoes</span>
+            <span v-if="alerta.severidade" class="alerta-sep">-</span>
+            <span v-if="alerta.severidade" class="alerta-stat">{{ alerta.severidade }}</span>
           </div>
         </div>
       </div>
@@ -1124,7 +1040,7 @@ function toggleActiveRow(auth) {
           <span>Cores identificam <strong>médicos diferentes</strong> para destacar padrões de concentração.</span>
         </div>
         <div class="legend-tip-divider" />
-        <div v-if="selectedDay?.is_crm_unico === 1" class="legend-tip-item">
+        <div v-if="unicoAlertas.length > 0" class="legend-tip-item">
           <span class="unico-gatilho-sample">⚠</span>
           <span>Badge <strong>gatilho</strong> = CRM que disparou o alerta de concentração.</span>
         </div>

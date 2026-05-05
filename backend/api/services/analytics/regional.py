@@ -47,8 +47,6 @@ from ...schemas.analytics import (
     IndicadorAnaliseResponse,
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse,
-    CrmUnicoRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,

@@ -9,7 +9,7 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
-    CrmMultiplosRaioXResponse, CrmUnicoRaioXResponse,
+    CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
 )
 from ..services.analytics import AnalyticsService
@@ -182,23 +182,14 @@ def get_crm_perfil_horario(
     """Retorna o detalhamento horário unificado (volume horário anômalo + CRM único) de um CNPJ."""
     return AnalyticsService.get_crm_perfil_horario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
-@router.get("/cnpj/{cnpj}/crm-multiplos/raio-x", response_model=CrmMultiplosRaioXResponse)
-def get_crm_multiplos_raio_x(
+@router.get("/cnpj/{cnpj}/crm/raio-x", response_model=CrmRaioXResponse)
+def get_crm_raio_x(
     cnpj: str,
-    date_str: str = Query(..., description="Data da anomalia (YYYY-MM-DD)"),
+    date_str: str = Query(..., description="Data da janela de auditoria (YYYY-MM-DD)"),
     hour: Optional[int] = Query(None, description="Hora da anomalia (0-23)")
 ):
     """Retorna o raio-x (transação literal) de uma hora específica ou do dia inteiro se a hora for omitida."""
-    return AnalyticsService.get_crm_multiplos_raio_x(cnpj, date_str, hour)
-
-@router.get("/cnpj/{cnpj}/crm-unico/raio-x", response_model=CrmUnicoRaioXResponse)
-def get_crm_unico_raio_x(
-    cnpj: str,
-    date_str: str = Query(..., description="Data do dia anômalo (YYYY-MM-DD)"),
-    hour: Optional[int] = Query(None, description="Hora da anomalia (0-23)")
-):
-    """Retorna as transações da farmácia num dia com alerta de CRM único, com filtro de hora opcional."""
-    return AnalyticsService.get_crm_unico_raio_x(cnpj, date_str, hour)
+    return AnalyticsService.get_crm_raio_x(cnpj, date_str, hour)
 
 
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)

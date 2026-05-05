@@ -6,10 +6,9 @@ from ._cache import (
 )
 from .crm import (
     get_crm_data,
-    get_crm_multiplos_raio_x,
     get_crm_perfil_diario,
     get_crm_perfil_horario,
-    get_crm_unico_raio_x,
+    get_crm_raio_x,
 )
 from .dashboard import (
     get_dashboard_data,
@@ -62,8 +61,7 @@ class AnalyticsService:
     get_crm_perfil_horario = staticmethod(get_crm_perfil_horario)
     sync_crm_raiox_tx = staticmethod(sync_crm_raiox_tx)
     sync_mediana_autorizacoes_horaria = staticmethod(sync_mediana_autorizacoes_horaria)
-    get_crm_multiplos_raio_x = staticmethod(get_crm_multiplos_raio_x)
-    get_crm_unico_raio_x = staticmethod(get_crm_unico_raio_x)
+    get_crm_raio_x = staticmethod(get_crm_raio_x)
     get_dados_farmacia = staticmethod(get_dados_farmacia)
     get_movimentacao_data = staticmethod(get_movimentacao_data)
     get_metric_percentiles = staticmethod(get_metric_percentiles)

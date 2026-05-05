@@ -550,9 +550,9 @@ INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.id = D.id_cnpj
 INNER JOIN temp_CGUSC.fp.teste_mov_SC M
     ON  M.cnpj = FAR.cnpj
     AND CAST(M.data_hora AS DATE) = D.dt_alerta
-INNER JOIN #base_horaria_mestra BH ON BH.nu_cnpj = FAR.cnpj AND BH.dt_dia = D.dt_alerta -- Apenas para filtrar o join
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
+WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
+  AND M.data_hora >= @DataInicio AND M.data_hora < DATEADD(DAY, 1, @DataFim);
 
 PRINT '   crm_raiox_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_raiox, 114);
 

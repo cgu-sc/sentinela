@@ -451,42 +451,7 @@ def get_crm_data(
         m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
     # ── 7.2 Alertas de Múltiplos CRMs (Surtos Coordenados) ───────────────
-    ALERTAS_MULTI_PATH = os.path.join(cnpj_dir, "crm_concentracao_multiplo_alertas.parquet")
-    df_cm: pl.DataFrame | None = None
-
-    if os.path.exists(ALERTAS_MULTI_PATH):
-        try:
-            df_cm = pl.read_parquet(ALERTAS_MULTI_PATH)
-            expected_cm_columns = {"competencia", "dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms"}
-            if not expected_cm_columns.issubset(set(df_cm.columns)):
-                df_cm = None
-        except:
-            pass
-        
-    if df_cm is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                pdf_cm = pd.read_sql(
-                    text("SELECT A.id_cnpj, "
-                         " YEAR(A.dt_dia)*100 + MONTH(A.dt_dia) AS competencia, "
-                         " A.dt_ini_concentracao AS dt_alerta, "
-                         " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,"
-                         " A.nu_60min AS nu_prescricoes, "
-                         " A.nu_crms_distintos AS nu_crms "
-                         " FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A"
-                         " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
-                         " WHERE F.cnpj = :cnpj"),
-                    conn, params={"cnpj": cnpj}
-                )
-            df_cm = pl.from_pandas(pdf_cm) if not pdf_cm.empty else pl.DataFrame(schema={
-                "id_cnpj": pl.Int32, "competencia": pl.Int32, "dt_alerta": pl.Datetime,
-                "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32
-            })
-            df_cm.write_parquet(ALERTAS_MULTI_PATH, compression="lz4")
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar alertas múltiplos para {cnpj}: {e}")
-            df_cm = pl.DataFrame()
+    df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
 
     # ── 7.3 Pré-Sincronização do Raio-X Unificado ────────────────────────
     # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
@@ -1238,12 +1203,18 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     return start_hour <= target_hour <= end_hour
 
 def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
-    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_raiox_alertas.parquet")
+    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_alertas.parquet")
     rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS}
     required_columns = {
+        "id_cnpj",
+        "competencia",
         "dt_dia",
+        "dt_alerta",
+        "hr_janela",
         "dt_ini_concentracao",
         "dt_fim_concentracao",
+        "nu_prescricoes",
+        "nu_crms",
         "nu_60min",
         "nu_crms_distintos",
         "severidade",
@@ -1266,9 +1237,15 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             pdf_alertas = pd.read_sql(
                 text("""
                     SELECT
+                        A.id_cnpj,
+                        YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
                         A.dt_dia,
+                        A.dt_ini_concentracao AS dt_alerta,
+                        DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
                         A.dt_ini_concentracao,
                         A.dt_fim_concentracao,
+                        A.nu_60min AS nu_prescricoes,
+                        A.nu_crms_distintos AS nu_crms,
                         A.nu_60min,
                         A.nu_crms_distintos,
                         A.severidade,
@@ -1287,9 +1264,15 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             )
 
         df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema={
+            "id_cnpj": pl.Int32,
+            "competencia": pl.Int32,
             "dt_dia": pl.Utf8,
+            "dt_alerta": pl.Utf8,
+            "hr_janela": pl.Int32,
             "dt_ini_concentracao": pl.Utf8,
             "dt_fim_concentracao": pl.Utf8,
+            "nu_prescricoes": pl.Int32,
+            "nu_crms": pl.Int32,
             "nu_60min": pl.Int32,
             "nu_crms_distintos": pl.Int32,
             "severidade": pl.Utf8,
@@ -1298,7 +1281,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         df_alertas.write_parquet(alertas_path, compression="lz4")
         return df_alertas
     except Exception as e:
-        print(f"Erro ao sincronizar alertas multiplos do Raio-X '{cnpj}': {e}")
+        print(f"Erro ao sincronizar alertas multiplos '{cnpj}': {e}")
         return pl.DataFrame()
 
 def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmRaioXResponse":

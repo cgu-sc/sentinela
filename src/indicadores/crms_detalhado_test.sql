@@ -541,7 +541,7 @@ SELECT
     CAST(DATEPART(HOUR, M.data_hora) AS TINYINT)      AS hr_janela,
     CAST(M.data_hora AS SMALLDATETIME)                AS data_hora,
     M.num_autorizacao,
-    MED.id                                            AS id_medico_int,
+    CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20)) AS id_medico,
     PAT.id                                            AS id_gtin,
     CAST(M.valor_pago AS DECIMAL(9,2))                AS valor_pago
 INTO temp_CGUSC.fp.crm_raiox_tx
@@ -550,9 +550,8 @@ INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.id = D.id_cnpj
 INNER JOIN temp_CGUSC.fp.teste_mov_SC M
     ON  M.cnpj = FAR.cnpj
     AND CAST(M.data_hora AS DATE) = D.dt_alerta
+INNER JOIN #base_horaria_mestra BH ON BH.nu_cnpj = FAR.cnpj AND BH.dt_dia = D.dt_alerta -- Apenas para filtrar o join
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-LEFT JOIN temp_CGUSC.fp.dados_medico MED
-    ON MED.id_medico = CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20))
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR';
 
 PRINT '   crm_raiox_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_raiox, 114);
@@ -890,11 +889,10 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 ;WITH base AS (
     SELECT DISTINCT
         F.cnpj AS nu_cnpj,
-        M.id_medico,
+        U.id_medico,
         YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = U.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = U.id_medico_int
     UNION
     SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
     FROM temp_CGUSC.fp.alertas_crm_geografico G1
@@ -911,13 +909,12 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
 conc_agg AS (
     SELECT
         F.cnpj AS nu_cnpj,
-        M.id_medico,
+        U.id_medico,
         YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia,
         COUNT(*) AS qtd_dias
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = U.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = U.id_medico_int
-    GROUP BY F.cnpj, M.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
+    GROUP BY F.cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
 ),
 geo_cnpj AS (
     SELECT T.nu_cnpj, T.id_medico, T.competencia FROM (
@@ -959,6 +956,9 @@ GO
 
 
 
+IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_Alertas_Key' AND object_id = OBJECT_ID('temp_CGUSC.fp.alertas_crm'))
+    DROP INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm;
+
 CREATE CLUSTERED INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm(nu_cnpj, id_medico, competencia);
 GO
 GO
@@ -974,8 +974,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 
 
 SELECT
-    M.id                                                              AS id_medico_int,
-    FAR.id                                                            AS id_cnpj,     -- INT (antes CHAR(14))
+    A.id_medico,
+    FAR.id                                                            AS id_cnpj,     -- Mantemos o ID da farmácia como INT para performance
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes_mes,
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
@@ -1005,11 +1005,10 @@ LEFT JOIN #prescricoes_todos_estabelecimentos P
 LEFT JOIN (
     SELECT DISTINCT
         F.cnpj AS nu_cnpj,
-        M.id_medico,
+        C.id_medico,
         YEAR(C.dt_dia) * 100 + MONTH(C.dt_dia) AS competencia
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas C
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = C.id_cnpj
-    INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id = C.id_medico_int
 ) CONC
     ON  CONC.nu_cnpj     = A.nu_cnpj
     AND CONC.id_medico   = A.id_medico
@@ -1040,7 +1039,7 @@ IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key'
     DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
 
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico_int, competencia);
+    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico, competencia);
 GO
 
 

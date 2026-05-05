@@ -24,7 +24,7 @@ SELECT
 INTO #base_a
 FROM temp_CGUSC.fp.crm_unico_alertas U
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = U.id_cnpj
-INNER JOIN temp_CGUSC.fp.dados_medico   M ON M.id = U.id_medico;
+INNER JOIN temp_CGUSC.fp.dados_medico   M ON M.id_medico = U.id_medico;
 
 CREATE CLUSTERED INDEX IDX_A ON #base_a(cnpj, id_medico, dt_alerta, hr_janela);
 

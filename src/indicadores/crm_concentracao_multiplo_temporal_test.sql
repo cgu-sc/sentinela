@@ -168,17 +168,15 @@ BEGIN
         L.id_cnpj,
         A.data_hora,
         A.num_autorizacao,
-        M.id AS id_medico_int
+        CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(20)) AS id_medico
     INTO #base_lote
     FROM temp_CGUSC.fp.teste_mov_SC A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = A.cnpj
     INNER JOIN #lote_atual L ON L.id_cnpj = F.id
-    LEFT JOIN temp_CGUSC.fp.dados_medico M 
-        ON M.id_medico = CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(20))
     WHERE A.crm    IS NOT NULL AND A.crm_uf    IS NOT NULL AND A.crm_uf    <> 'BR'
       AND A.data_hora >= @DataInicio AND A.data_hora < DATEADD(DAY, 1, @DataFim)
-    GROUP BY L.id_cnpj, A.data_hora, A.num_autorizacao, M.id;
+    GROUP BY L.id_cnpj, A.data_hora, A.num_autorizacao, A.crm, A.crm_uf;
 
     CREATE INDEX IDX_BaseLote ON #base_lote(id_cnpj, data_hora);
 
@@ -208,7 +206,7 @@ BEGIN
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora)
                                 THEN B.num_autorizacao END)                           AS nu_60min,
 
-            COUNT(DISTINCT B.id_medico_int)                                            AS nu_crms_distintos,
+            COUNT(DISTINCT B.id_medico)                                            AS nu_crms_distintos,
 
             -- Timestamps de fim real para cada sub-janela
             MAX(CASE WHEN B.data_hora <= DATEADD(SECOND, 359, A.data_hora) THEN B.data_hora END) AS fim_real_5min,
@@ -234,7 +232,7 @@ BEGIN
         OR nu_20min >= 11
         OR nu_30min >= 12
         OR nu_60min >= 18
-        OR (nu_60min >= 6 AND nu_minutos_span_full <= nu_60min * 3)
+        OR (nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3)
     );
 
     -- ── Deduplicação: 1 evento por janela de 60 min por cnpj/hora ─────────
@@ -256,7 +254,7 @@ BEGIN
                     WHEN nu_20min >= 11 THEN 3
                     WHEN nu_30min >= 12 THEN 4
                     WHEN nu_60min >= 18 THEN 4
-                    WHEN nu_60min >=  6 AND nu_minutos_span_full <= nu_60min * 3 THEN 4
+                    WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 4
                     ELSE 99
                 END ASC,
                 nu_60min DESC,

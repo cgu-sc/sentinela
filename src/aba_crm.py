@@ -22,18 +22,20 @@ def buscar_dados_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                 -- Calcula o faturamento total da farmácia e total de médicos no período
                 SELECT 
                     SUM(vl_total_prescricoes) as total_valor, 
-                    SUM(nu_prescricoes) as total_prescricoes,
+                    SUM(nu_prescricoes_mes) as total_prescricoes,
                     COUNT(DISTINCT id_medico) as total_prescritores_distintos
-                FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
+                FROM temp_CGUSC.fp.crm_export E
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj
+                WHERE F.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
             ),
             Ranking AS (
                 SELECT 
                     id_medico,
                     SUM(vl_total_prescricoes) as vl_medico,
                     ROW_NUMBER() OVER (ORDER BY SUM(vl_total_prescricoes) DESC) as rk
-                FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
+                FROM temp_CGUSC.fp.crm_export E
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj
+                WHERE F.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                 GROUP BY id_medico
             ),
             Exclusivos AS (
@@ -41,8 +43,9 @@ def buscar_dados_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                 SELECT COUNT(*) as qtd_exclusivos
                 FROM (
                     SELECT id_medico
-                    FROM temp_CGUSC.fp.crm_export
-                    WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
+                    FROM temp_CGUSC.fp.crm_export E
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia FAR ON FAR.id = E.id_cnpj
+                    WHERE FAR.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                     GROUP BY id_medico
                     HAVING MAX(nu_estabelecimentos) = 1
                 ) t
@@ -56,12 +59,25 @@ def buscar_dados_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                     MAX(CAST(flag_distancia_geografica AS INT)) as flag_distancia_geografica,
                     MAX(CAST(flag_concentracao_mesmo_crm AS INT)) as flag_concentracao_mesmo_crm,
                     MAX(CAST(alerta_concentracao_multiplos_crms AS INT)) as alerta_concentracao_multiplos_crms,
-                    -- Média Local
-                    SUM(nu_prescricoes) / NULLIF(SUM(nu_prescricoes / NULLIF(nu_prescricoes_dia, 0)), 0) as avg_loc,
+                    -- Média Local (Aproximada pelos dias do mês)
+                    SUM(nu_prescricoes_mes) / CAST(NULLIF(SUM(
+                        CASE 
+                            WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                            WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                            ELSE 28 
+                        END
+                    ), 0) AS FLOAT) as avg_loc,
                     -- Média Brasil
-                    SUM(prescricoes_total_brasil) / NULLIF(SUM(prescricoes_total_brasil / NULLIF(prescricoes_dia_brasil, 0)), 0) as avg_br
-                FROM temp_CGUSC.fp.crm_export
-                WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
+                    SUM(nu_prescricoes_total_brasil) / CAST(NULLIF(SUM(
+                        CASE 
+                            WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                            WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                            ELSE 28 
+                        END
+                    ), 0) AS FLOAT) as avg_br
+                FROM temp_CGUSC.fp.crm_export E
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj
+                WHERE F.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
                 GROUP BY id_medico
             ),
             Contagens AS (
@@ -137,31 +153,56 @@ def buscar_top20_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
         # Busca e agrega por médico
         cursor.execute(f'''
             SELECT 
-                id_medico,
-                SUM(nu_prescricoes) as nu_prescricoes,
+                E.id_medico,
+                SUM(nu_prescricoes_mes) as nu_prescricoes,
                 SUM(vl_total_prescricoes) as vl_total_prescricoes,
-                -- MÉDIA REAL LOCAL: Total Presc / Total Dias
-                SUM(nu_prescricoes) / NULLIF(SUM(nu_prescricoes / NULLIF(nu_prescricoes_dia, 0)), 0) as nu_prescricoes_dia,
-                SUM(prescricoes_total_brasil) as prescricoes_total_brasil,
-                -- MÉDIA REAL BRASIL: Total Presc BR / Total Dias BR
-                SUM(prescricoes_total_brasil) / NULLIF(SUM(prescricoes_total_brasil / NULLIF(prescricoes_dia_brasil, 0)), 0) as prescricoes_dia_total_brasil,
+                -- MÉDIA REAL LOCAL: Total Presc / Total Dias (Simplificado)
+                SUM(nu_prescricoes_mes) / CAST(NULLIF(SUM(
+                    CASE 
+                        WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                        WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                        ELSE 28 
+                    END
+                ), 0) AS FLOAT) as nu_prescricoes_dia,
+                SUM(nu_prescricoes_total_brasil) as prescricoes_total_brasil,
+                -- MÉDIA REAL BRASIL: Total Presc BR / Total Dias BR (Simplificado)
+                SUM(nu_prescricoes_total_brasil) / CAST(NULLIF(SUM(
+                    CASE 
+                        WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                        WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                        ELSE 28 
+                    END
+                ), 0) AS FLOAT) as prescricoes_dia_total_brasil,
                 MAX(nu_estabelecimentos) as qtd_estabelecimentos_atua,
                 MIN(dt_primeira_prescricao) as dt_primeira_prescricao,
                 MAX(dt_inscricao_crm) as dt_inscricao_crm,
                 MAX(CAST(flag_crm_invalido AS INT)) as flag_crm_invalido,
                 MAX(CAST(flag_prescricao_antes_registro AS INT)) as flag_prescricao_antes_registro,
                 -- Flag Robô Aqui: Média do período > 30
-                CASE WHEN (SUM(nu_prescricoes) / NULLIF(SUM(nu_prescricoes / NULLIF(nu_prescricoes_dia, 0)), 0)) > 30 THEN 1 ELSE 0 END as flag_robo,
+                CASE WHEN (SUM(nu_prescricoes_mes) / CAST(NULLIF(SUM(
+                    CASE 
+                        WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                        WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                        ELSE 28 
+                    END
+                ), 0) AS FLOAT)) > 30 THEN 1 ELSE 0 END as flag_robo,
                 -- Flag Robô Rede: Média BR do período > 30
-                CASE WHEN (SUM(prescricoes_total_brasil) / NULLIF(SUM(prescricoes_total_brasil / NULLIF(prescricoes_dia_brasil, 0)), 0)) > 30 THEN 1 ELSE 0 END as flag_robo_oculto,
+                CASE WHEN (SUM(nu_prescricoes_total_brasil) / CAST(NULLIF(SUM(
+                    CASE 
+                        WHEN competencia % 100 IN (1, 3, 5, 7, 8, 10, 12) THEN 31
+                        WHEN competencia % 100 IN (4, 6, 9, 11) THEN 30
+                        ELSE 28 
+                    END
+                ), 0) AS FLOAT)) > 30 THEN 1 ELSE 0 END as flag_robo_oculto,
                 -- Alerta Rajada: Concentração temporal do CRM (Qualquer mês no período)
                 MAX(CAST(flag_concentracao_mesmo_crm AS INT)) as alerta_concentracao_unico_crm,
                 -- Flag Cross-CRM: Surto geral na farmácia
                 MAX(CAST(alerta_concentracao_multiplos_crms AS INT)) as alerta_concentracao_multiplos_crms,
-                MAX(alerta_distancia_geografica) as alerta_geografico
-            FROM temp_CGUSC.fp.crm_export
-            WHERE cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
-            GROUP BY id_medico
+                MAX(CAST(flag_distancia_geografica AS INT)) as alerta_geografico
+            FROM temp_CGUSC.fp.crm_export E
+            INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj
+            WHERE F.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
+            GROUP BY E.id_medico
             ORDER BY nu_prescricoes DESC
         ''', cnpj)
 
@@ -810,10 +851,29 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
 
             # Busca todas as rajadas detalhadas no período (lista completa)
             cursor.execute(f"""
-                SELECT id_medico, dt_alerta, nu_prescricoes_dia, nu_minutos_dia, taxa_hora
-                FROM temp_CGUSC.fp.crm_unico_alertas
-                WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
-                ORDER BY dt_alerta DESC, taxa_hora DESC
+                WITH Base AS (
+                    SELECT A.id_medico, A.dt_dia, 
+                           CASE 
+                               WHEN A.nu_5min  >=  7 THEN A.nu_5min 
+                               WHEN A.nu_10min >= 10 THEN A.nu_10min 
+                               WHEN A.nu_5min  >=  6 THEN A.nu_5min 
+                               WHEN A.nu_10min >=  8 THEN A.nu_10min 
+                               WHEN A.nu_15min >=  8 THEN A.nu_15min 
+                               WHEN A.nu_20min >=  9 THEN A.nu_20min 
+                               WHEN A.nu_30min >=  9 THEN A.nu_30min 
+                               WHEN A.nu_60min >= 14 THEN A.nu_60min 
+                               WHEN A.nu_25min >=  8 THEN A.nu_25min 
+                               WHEN A.nu_60min >= 10 THEN A.nu_60min 
+                           END as nu_prescricoes, 
+                           A.nu_minutos_span
+                    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                    WHERE F.cnpj = ? AND A.dt_dia BETWEEN ? AND ?
+                )
+                SELECT id_medico, dt_dia, nu_prescricoes, nu_minutos_span,
+                       CAST(CASE WHEN nu_minutos_span = 0 THEN 0 ELSE nu_prescricoes * 60.0 / nu_minutos_span END AS DECIMAL(10,2)) as taxa_hora
+                FROM Base
+                ORDER BY dt_dia DESC, taxa_hora DESC
             """, (cnpj, data_inicio, data_fim))
             
             rajadas = cursor.fetchall()
@@ -830,9 +890,10 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
             # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
             cursor.execute(f"""
                 SELECT dt_alerta, hr_janela, nu_prescricoes, nu_crms, multiplicador
-                FROM temp_CGUSC.fp.volume_horario_anomalo_alertas
-                WHERE cnpj = ? AND dt_alerta BETWEEN ? AND ?
-                ORDER BY dt_alerta DESC, hr_janela DESC
+                FROM temp_CGUSC.fp.volume_horario_anomalo_alertas A
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                WHERE F.cnpj = ? AND A.dt_alerta BETWEEN ? AND ?
+                ORDER BY A.dt_alerta DESC, A.hr_janela DESC
             """, (cnpj, data_inicio, data_fim))
             
             surtos = cursor.fetchall()

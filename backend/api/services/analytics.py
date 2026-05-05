@@ -1876,7 +1876,7 @@ class AnalyticsService:
                 with _engine.connect() as conn:
                     _t0 = _time.perf_counter()
                     pdf = pd.read_sql(
-                        text("SELECT M.id_medico, E.id_medico_int, E.competencia, E.vl_total_prescricoes, "
+                        text("SELECT E.id_medico, E.competencia, E.vl_total_prescricoes, "
                              "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
                              "E.flag_crm_invalido, "
                              "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
@@ -1885,7 +1885,6 @@ class AnalyticsService:
                              "E.nu_estabelecimentos"
                              " FROM temp_CGUSC.fp.crm_export E"
                              " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
-                             " LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = E.id_medico_int"
                              " WHERE F.cnpj = :cnpj"),
                         conn,
                         params={"cnpj": cnpj},
@@ -1951,7 +1950,7 @@ class AnalyticsService:
         df_med = (
             df.group_by("id_medico")
             .agg([
-                pl.col("id_medico_int").first().alias("id_medico_int"),
+                pl.col("id_medico").first().alias("id_medico"),
                 pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
                 pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
                 pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
@@ -2130,9 +2129,8 @@ class AnalyticsService:
                              " A.dt_fim_concentracao AS dt_fim_hora "
                              " FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A"
                              " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
-                             " LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int"
                              " WHERE F.cnpj = :cnpj"
-                             " ORDER BY A.dt_dia, M.id_medico, A.dt_ini_concentracao"),
+                             " ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao"),
                         conn,
                         params={"cnpj": cnpj},
                     )
@@ -2559,14 +2557,13 @@ class AnalyticsService:
                             SELECT 
                                 'UNICO' as tipo,
                                 A.dt_dia,
-                                M.id_medico,
+                                A.id_medico,
                                 NULL as nu_crms_distintos,
                                 A.dt_ini_concentracao,
                                 A.dt_fim_concentracao,
                                 A.severidade
                             FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
                             INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                            LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id = A.id_medico_int
                             WHERE F.cnpj = :cnpj
                             
                             UNION ALL
@@ -2708,10 +2705,9 @@ class AnalyticsService:
             print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
             with _engine.connect() as conn:
                 pdf_tx = pd.read_sql(
-                    text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, DM.id_medico, MED.codigo_barra, P.valor_pago "
+                    text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
                          "FROM temp_CGUSC.fp.crm_raiox_tx P "
                          "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                         "LEFT JOIN temp_CGUSC.fp.dados_medico DM ON DM.id = P.id_medico_int "
                          "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
                          "WHERE F.cnpj = :cnpj "
                          "ORDER BY P.data_hora ASC, P.num_autorizacao ASC"),

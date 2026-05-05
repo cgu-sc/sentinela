@@ -240,8 +240,8 @@ const clearAnimationState = () => {
 const { availableMonths, timeSliderValue } = useSliderPeriodLogic();
 const isPreloading = computed(() => filterStore.animationPreload.status === 'loading');
 
-const PLAY_DURATION_MS = 350;
-const PLAY_INTERVAL_MS = 300;
+const PLAY_DURATION_MS = 450;
+const PLAY_INTERVAL_MS = 400;
 const PLAY_STEP = 1;
 const PLAY_WINDOW_MONTHS = 3;
 

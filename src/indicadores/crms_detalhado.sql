@@ -1028,7 +1028,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
 SELECT
     A.nu_cnpj                                                         AS cnpj,
     A.id_medico,
-    M.id_crm_id,
+    FAR.id                                                            AS id_cnpj,
     A.competencia,
     A.nu_prescricoes_medico                                           AS nu_prescricoes,
     A.vl_autorizacoes_medico                                          AS vl_total_prescricoes,
@@ -1117,7 +1117,7 @@ IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key'
     DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
 
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(cnpj, id_crm_id, competencia);
+    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico, competencia);
 GO
 
 

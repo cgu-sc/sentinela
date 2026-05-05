@@ -422,6 +422,12 @@ const hourlyPoints = computed(() => {
   return cachedCrmPerfilHorario.value.points.filter(p => p.dt_janela === targetDate);
 });
 
+const hourlyEvents = computed(() => {
+  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
+  const targetDate = selectedDay.value.dt_janela;
+  return (cachedCrmPerfilHorario.value.events ?? []).filter(e => e.dt_janela === targetDate);
+});
+
 const chartOptionHourly = computed(() => {
   if (!selectedDay.value || !hourlyPoints.value.length) return {};
   const c = chartTheme.value;
@@ -1014,6 +1020,48 @@ function toggleActiveRow(auth) {
           @zr:click="onHourlyZrClick"
           @updateAxisPointer="onHourlyAxisPointerUpdate"
         />
+
+        <!-- Trilha de Eventos Temporais (Minuto a Minuto) -->
+        <div v-if="hourlyEvents.length > 0" class="hourly-timeline-tracks">
+          <div class="track-labels">
+            <span class="track-label">EVENTOS ÚNICOS</span>
+            <span class="track-label">EVENTOS MÚLTIPLOS</span>
+          </div>
+          <div class="tracks-viewport">
+            <!-- Track CRM Único -->
+            <div class="timeline-track unico-track">
+              <template v-for="(event, idx) in hourlyEvents.filter(e => e.tipo === 'UNICO')" :key="`u-${idx}`">
+                <div 
+                  class="event-block"
+                  :class="[`is-${event.severidade?.toLowerCase() || 'info'}`]"
+                  :style="{
+                    left: `${(event.minuto_inicio / 1440) * 100}%`,
+                    width: `${(Math.max(event.minuto_fim - event.minuto_inicio, 5) / 1440) * 100}%`
+                  }"
+                  :title="`${event.hora_inicio} - ${event.hora_fim} | ${event.id_medico}`"
+                >
+                  <div class="event-glow" />
+                </div>
+              </template>
+            </div>
+            <!-- Track CRM Múltiplo -->
+            <div class="timeline-track multiplo-track">
+              <template v-for="(event, idx) in hourlyEvents.filter(e => e.tipo === 'MULTIPLO')" :key="`m-${idx}`">
+                <div 
+                  class="event-block"
+                  :class="[`is-${event.severidade?.toLowerCase() || 'info'}`]"
+                  :style="{
+                    left: `${(event.minuto_inicio / 1440) * 100}%`,
+                    width: `${(Math.max(event.minuto_fim - event.minuto_inicio, 5) / 1440) * 100}%`
+                  }"
+                  :title="`${event.hora_inicio} - ${event.hora_fim} | ${event.nu_crms_distintos} CRMs`"
+                >
+                  <div class="event-glow" />
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
       </div>
       <div v-if="selectedHourlyHour === null" class="drill-hint">
         <i class="pi pi-hand-pointer" />
@@ -1660,5 +1708,92 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   padding: 1px 5px;
   border-radius: 3px;
   white-space: nowrap;
+}
+
+/* ── Trilha de Eventos Horários ────────────────────────────────────────── */
+.hourly-timeline-tracks {
+  margin-top: -10px;
+  padding: 0 20px 10px 54px; /* Alinhado com o grid do chart (left: 54, right: 20) */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.track-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  left: 12px;
+  top: 2px;
+}
+
+.track-label {
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  opacity: 0.4;
+}
+
+.tracks-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+  padding: 2px 0;
+  position: relative;
+}
+
+:global(.dark-mode) .tracks-viewport {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.timeline-track {
+  height: 12px;
+  position: relative;
+  width: 100%;
+}
+
+.event-block {
+  position: absolute;
+  height: 100%;
+  border-radius: 3px;
+  min-width: 4px;
+  cursor: help;
+  transition: transform 0.2s;
+  z-index: 5;
+}
+
+.event-block:hover {
+  transform: scaleY(1.3);
+  z-index: 10;
+}
+
+.unico-track .event-block {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+}
+
+.multiplo-track .event-block {
+  background: #8b5cf6;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+}
+
+.event-glow {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.3), transparent);
+  border-radius: inherit;
+}
+
+.event-block.is-critico {
+  filter: saturate(1.5) brightness(1.2);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
 }
 </style>

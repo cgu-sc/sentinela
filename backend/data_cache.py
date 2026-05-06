@@ -145,6 +145,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.id_cnae_principal, D.cnae_principal,
                D.id_cnae_secundario, D.cnae_secundario,
                D.data_abertura,
+               D.data_processamento,
                I.sg_uf as uf,
                I.no_municipio as municipio,
                CAST(ISNULL(R.total_mov, 0) AS FLOAT) as total_mov,

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
-from datetime import date
+from datetime import date, datetime
 
 class AnalyticsKPISchema(BaseModel):
     id: str
@@ -349,6 +349,7 @@ class DadosFarmaciaSchema(BaseModel):
     id_cnae_secundario: Optional[str] = None
     cnae_secundario: Optional[str] = None
     data_abertura: Optional[date] = None
+    data_processamento: Optional[datetime] = None
 
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────

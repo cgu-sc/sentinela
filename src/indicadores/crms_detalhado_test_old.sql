@@ -25,8 +25,6 @@ DECLARE @DataFim    DATE = '2024-12-31';
 -- ============================================================================
 -- PASSO -1: MAPA DE MÉDICOS PARA ID INT
 -- ============================================================================
-PRINT '>> Passo -1: Criando temp_CGUSC.fp.dados_medico...';
-DECLARE @t_dados_medico DATETIME = GETDATE();
 DROP TABLE IF EXISTS temp_CGUSC.fp.dados_medico;
 
 SELECT 
@@ -43,8 +41,6 @@ WHERE NU_CRM IS NOT NULL
 
 CREATE CLUSTERED INDEX IDX_Join_Medico ON temp_CGUSC.fp.dados_medico(id_medico);
 CREATE NONCLUSTERED INDEX IDX_ID_Medico ON temp_CGUSC.fp.dados_medico(id);
-
-PRINT '   temp_CGUSC.fp.dados_medico concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_dados_medico, 114);
 
 
 -- ============================================================================
@@ -79,7 +75,8 @@ GROUP BY
     CAST(M.data_hora AS DATE), DATEPART(HOUR, M.data_hora);
 
 CREATE CLUSTERED INDEX IDX_Mestra ON #base_horaria_mestra(nu_cnpj, id_medico, competencia);
-PRINT '   #base_horaria_mestra concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_passo0, 114);
+GO
+PRINT '   #base_horaria_mestra concluída.';
 GO
 
 -- ----------------------------------------------------------------------------
@@ -87,7 +84,6 @@ GO
 -- Gerada a partir da Mestra para manter compatibilidade com o restante do script.
 -- ----------------------------------------------------------------------------
 PRINT '>> Derivando #base_agregada_crm_cnpj (Mensal)...';
-DECLARE @t_base_agregada DATETIME = GETDATE();
 DROP TABLE IF EXISTS #base_agregada_crm_cnpj;
 
 SELECT
@@ -102,14 +98,12 @@ FROM #base_horaria_mestra
 GROUP BY nu_cnpj, id_medico, competencia;
 
 CREATE CLUSTERED INDEX IDX_BaseAgreg_Key ON #base_agregada_crm_cnpj(nu_cnpj, id_medico, competencia);
-PRINT '   #base_agregada_crm_cnpj concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_base_agregada, 114);
 GO
 
 -- ----------------------------------------------------------------------------
 -- DERIVAÇÃO: #base_diaria_crm (Agregação Diária)
 -- ----------------------------------------------------------------------------
 PRINT '>> Derivando #base_diaria_crm (Diária)...';
-DECLARE @t_base_diaria DATETIME = GETDATE();
 DROP TABLE IF EXISTS #base_diaria_crm;
 SELECT
     id_medico, nu_cnpj, competencia, dt_dia,
@@ -122,25 +116,21 @@ FROM #base_horaria_mestra
 GROUP BY nu_cnpj, id_medico, competencia, dt_dia;
 
 CREATE CLUSTERED INDEX IDX_BaseDiaria ON #base_diaria_crm(nu_cnpj, id_medico, competencia);
-PRINT '   #base_diaria_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_base_diaria, 114);
 GO
 
 -- ----------------------------------------------------------------------------
 -- DERIVAÇÃO: #base_horaria_crm (Agregação Horária)
 -- ----------------------------------------------------------------------------
 PRINT '>> Derivando #base_horaria_crm (Horária)...';
-DECLARE @t_base_horaria_crm DATETIME = GETDATE();
 DROP TABLE IF EXISTS #base_horaria_crm;
 SELECT * INTO #base_horaria_crm FROM #base_horaria_mestra;
 
 CREATE CLUSTERED INDEX IDX_BaseHora_Mestra ON #base_horaria_crm(nu_cnpj, id_medico, dt_dia, hr_janela);
-PRINT '   #base_horaria_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_base_horaria_crm, 114);
 
 -- ----------------------------------------------------------------------------
 -- DERIVAÇÃO: #tb_info_estabelecimento (Estabelecimento)
 -- ----------------------------------------------------------------------------
 PRINT '>> Derivando #tb_info_estabelecimento...';
-DECLARE @t_info_estabelecimento DATETIME = GETDATE();
 DROP TABLE IF EXISTS #tb_info_estabelecimento;
 SELECT
     nu_cnpj                                   AS cnpj,
@@ -154,7 +144,6 @@ FROM #base_horaria_mestra
 GROUP BY nu_cnpj, competencia;
 
 CREATE CLUSTERED INDEX IDX_InfoEst ON #tb_info_estabelecimento(cnpj, competencia);
-PRINT '   #tb_info_estabelecimento concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_info_estabelecimento, 114);
 
 
 
@@ -173,7 +162,6 @@ GROUP BY nu_cnpj, id_medico
 HAVING SUM(nu_prescricoes_medico) >= 5;
 
 CREATE CLUSTERED INDEX IDX_Whitelist ON #whitelist_crms_relevantes(nu_cnpj, id_medico);
-PRINT '   #whitelist_crms_relevantes concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_whitelist, 114);
 GO
 
 
@@ -273,8 +261,9 @@ INNER JOIN #mad_hora    MAD  ON MAD.cnpj = H.cnpj
                             AND MAD.competencia = H.competencia
                             AND MAD.hr_janela = H.hr_janela;
 
-CREATE CLUSTERED INDEX IDX_AnomaliaH ON #anomalias_horarias(cnpj, dt_janela, hr_janela);
 PRINT '   #anomalias_horarias concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_anomalias_h, 114);
+
+CREATE CLUSTERED INDEX IDX_AnomaliaH ON #anomalias_horarias(cnpj, dt_janela, hr_janela);
 GO
 
 
@@ -322,7 +311,6 @@ FROM ranked
 WHERE rn = 1;
 
 CREATE CLUSTERED INDEX IDX_PiorDia ON #pior_dia_crm(nu_cnpj, id_medico, competencia);
-PRINT '   #pior_dia_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_pior_dia, 114);
 GO
 
 -- ============================================================================
@@ -377,8 +365,9 @@ SELECT DISTINCT
 INTO #mediana_diaria
 FROM #totais_diarios;
 
-CREATE CLUSTERED INDEX IDX_MedianaDia ON #mediana_diaria(cnpj, competencia);
 PRINT '   #mediana_diaria concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_mediana_d, 114);
+
+CREATE CLUSTERED INDEX IDX_MedianaDia ON #mediana_diaria(cnpj, competencia);
 
 -- 4. Tabela Unificada: crm_perfil_diario (Gráfico Principal)
 -- is_dia_com_volume_horario_anomalo = 1 → dia com surto horário detectado por volume (MZS > 4.5)
@@ -425,8 +414,9 @@ LEFT JOIN crms_distintos_dia C ON C.cnpj = T.cnpj AND C.dt_janela  = T.dt_janela
 LEFT JOIN anomalias_unico_dia U ON U.id_cnpj = F.id AND U.dt_alerta = T.dt_janela
 LEFT JOIN anomalias_multiplo_dia MU ON MU.id_cnpj = F.id AND MU.dt_alerta = T.dt_janela;
 
-CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(id_cnpj, dt_janela);
 PRINT '   crm_perfil_diario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_d, 114);
+
+CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(id_cnpj, dt_janela);
 GO
 
 -- 5. Tabela Final 2: crm_perfil_horario (Drill-down unificado)
@@ -476,8 +466,9 @@ OUTER APPLY (
 ) MU
 WHERE D.is_dia_com_volume_horario_anomalo = 1 OR D.is_anomalo_unico = 1 OR D.is_crm_multiplo = 1;
 
-CREATE CLUSTERED INDEX IDX_PerfilHorario ON temp_CGUSC.fp.crm_perfil_horario(id_cnpj, dt_janela, hr_janela);
 PRINT '   crm_perfil_horario concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_perfil_h, 114);
+
+CREATE CLUSTERED INDEX IDX_PerfilHorario ON temp_CGUSC.fp.crm_perfil_horario(id_cnpj, dt_janela, hr_janela);
 
 -- 5.1 Tabela Auxiliar: mediana_autorizacoes_horaria (referência histórica por hora)
 -- Compacta: 1 linha por (cnpj × ano × trimestre × hr_janela).
@@ -522,8 +513,11 @@ FROM #anomalias_horarias H
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = H.cnpj
 WHERE H.is_anomalo_hora = 1;
 
-CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(id_cnpj, dt_alerta, hr_janela);
 PRINT '   volume_horario_anomalo_alertas concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_alertas_m, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.volume_horario_anomalo_alertas(id_cnpj, dt_alerta, hr_janela);
 
 -- 7. Tabela Final: crm_raiox_tx (Busca Cirúrgica Unificada)
 -- Salva o movimento do DIA INTEIRO para qualquer farmácia que tenha tido
@@ -562,8 +556,9 @@ INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codi
 WHERE M.crm_uf IS NOT NULL AND M.crm IS NOT NULL AND M.crm_uf <> 'BR'
   AND M.data_hora >= @DataInicio AND M.data_hora < DATEADD(DAY, 1, @DataFim);
 
-CREATE CLUSTERED INDEX IDX_RaioX_Cnpj_Data ON temp_CGUSC.fp.crm_raiox_tx(id_cnpj, dt_janela);
 PRINT '   crm_raiox_tx concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_raiox, 114);
+
+CREATE CLUSTERED INDEX IDX_RaioX_Cnpj_Data ON temp_CGUSC.fp.crm_raiox_tx(id_cnpj, dt_janela);
 
 
 
@@ -695,8 +690,11 @@ INNER JOIN #prescricoes_todos_estabelecimentos    P
     ON  P.id_medico   = A.id_medico
     AND P.competencia = A.competencia;
 
-CREATE CLUSTERED INDEX IDX_DadosDet ON temp_CGUSC.fp.dados_crm_detalhado(nu_cnpj, id_medico, competencia);
 PRINT '   temp_CGUSC.fp.dados_crm_detalhado concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_dados_det, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_DadosDet ON temp_CGUSC.fp.dados_crm_detalhado(nu_cnpj, id_medico, competencia);
 GO
 
 
@@ -817,8 +815,11 @@ INNER JOIN TotaisPorMedico T
     AND T.competencia = P.competencia
 WHERE P.rn = 1;
 
-CREATE CLUSTERED INDEX IDX_GeoAlerta ON temp_CGUSC.fp.alertas_crm_geografico(id_medico, competencia);
 PRINT '   temp_CGUSC.fp.alertas_crm_geografico concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_geo, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_GeoAlerta ON temp_CGUSC.fp.alertas_crm_geografico(id_medico, competencia);
 GO
 
 
@@ -848,7 +849,6 @@ LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico
 WHERE M.id_medico IS NULL
 GROUP BY A.nu_cnpj, A.id_medico, A.competencia;
 
-PRINT '   alertas_crm_registro (inexistentes) concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_reg, 114);
 GO
 
 DECLARE @t_reg DATETIME = GETDATE();
@@ -871,8 +871,9 @@ INNER JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = A.id_medico
 WHERE M.dt_inscricao > A.dt_prescricao_inicial_medico
 GROUP BY A.nu_cnpj, A.id_medico, A.competencia, M.dt_inscricao;
 
+PRINT '   temp_CGUSC.fp.alertas_crm_registro concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_reg, 114);
+
 CREATE CLUSTERED INDEX IDX_Registro ON temp_CGUSC.fp.alertas_crm_registro(cnpj, id_medico, competencia);
-PRINT '   alertas_crm_registro (irregulares + índice) concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_reg, 114);
 GO
 
 
@@ -960,9 +961,7 @@ GO
 IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_Alertas_Key' AND object_id = OBJECT_ID('temp_CGUSC.fp.alertas_crm'))
     DROP INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm;
 
-DECLARE @t_idx_alertas DATETIME = GETDATE();
 CREATE CLUSTERED INDEX IDX_Alertas_Key ON temp_CGUSC.fp.alertas_crm(nu_cnpj, id_medico, competencia);
-PRINT '   IDX_Alertas_Key concluído em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_idx_alertas, 114);
 GO
 GO
 
@@ -1041,10 +1040,8 @@ GO
 IF EXISTS (SELECT * FROM temp_CGUSC.sys.indexes WHERE name = 'IDX_CrmExport_Key' AND object_id = OBJECT_ID('temp_CGUSC.fp.crm_export'))
     DROP INDEX IDX_CrmExport_Key ON temp_CGUSC.fp.crm_export;
 
-DECLARE @t_idx_export DATETIME = GETDATE();
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
     ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico, competencia);
-PRINT '   IDX_CrmExport_Key concluído em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_idx_export, 114);
 GO
 
 
@@ -1140,8 +1137,11 @@ LEFT JOIN HHI H      ON H.cnpj = I.cnpj AND H.competencia = I.competencia
 LEFT JOIN Anomalias AN ON AN.cnpj = I.cnpj AND AN.competencia = I.competencia
 LEFT JOIN Turistas TU ON TU.cnpj = I.cnpj AND TU.competencia = I.competencia;
 
-CREATE CLUSTERED INDEX IDX_IndCrm ON #indicador_crm(cnpj, competencia);
 PRINT '   #indicador_crm concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_ind, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_IndCrm ON #indicador_crm(cnpj, competencia);
 GO
 
 
@@ -1171,8 +1171,11 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_uf;
 )
 SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_uf FROM CTE;
 
-CREATE CLUSTERED INDEX IDX_BenchUF ON temp_CGUSC.fp.indicador_crm_bench_uf(uf, competencia);
 PRINT '   temp_CGUSC.fp.indicador_crm_bench_uf concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bench_uf, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_BenchUF ON temp_CGUSC.fp.indicador_crm_bench_uf(uf, competencia);
 
 
 -- ============================================================================
@@ -1202,8 +1205,11 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_regiao;
 )
 SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_regiao FROM CTE;
 
-CREATE CLUSTERED INDEX IDX_BenchReg ON temp_CGUSC.fp.indicador_crm_bench_regiao(id_regiao_saude, competencia);
 PRINT '   temp_CGUSC.fp.indicador_crm_bench_regiao concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bench_reg, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_BenchReg ON temp_CGUSC.fp.indicador_crm_bench_regiao(id_regiao_saude, competencia);
 
 
 -- ============================================================================
@@ -1230,8 +1236,11 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_br;
 )
 SELECT * INTO temp_CGUSC.fp.indicador_crm_bench_br FROM CTE;
 
-CREATE CLUSTERED INDEX IDX_BenchBR ON temp_CGUSC.fp.indicador_crm_bench_br(competencia);
 PRINT '   temp_CGUSC.fp.indicador_crm_bench_br concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bench_br, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_BenchBR ON temp_CGUSC.fp.indicador_crm_bench_br(competencia);
 GO
 
 
@@ -1288,8 +1297,11 @@ LEFT JOIN Bench   BU  ON BU.uf              = H.uf
 LEFT JOIN BenchReg BR2 ON BR2.id_regiao_saude = H.id_regiao_saude
 CROSS JOIN BenchBR BR;
 
-CREATE CLUSTERED INDEX IDX_CrmHHI ON temp_CGUSC.fp.indicador_crm_hhi(cnpj);
 PRINT '   temp_CGUSC.fp.indicador_crm_hhi concluída em: ' + CONVERT(VARCHAR(20), GETDATE() - @t_hhi, 114);
+
+
+
+CREATE CLUSTERED INDEX IDX_CrmHHI ON temp_CGUSC.fp.indicador_crm_hhi(cnpj);
 GO
 
 

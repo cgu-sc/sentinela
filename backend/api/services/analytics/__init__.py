@@ -36,6 +36,7 @@ from .regional import (
     get_regional_benchmarking,
     get_regional_benchmarking_animation,
 )
+from .nota_tecnica import generate_nota_tecnica
 
 __all__ = ['AnalyticsService', 'INDICATOR_MAPPING', '_INDICATOR_FLAGS']
 
@@ -67,3 +68,4 @@ class AnalyticsService:
     get_metric_percentiles = staticmethod(get_metric_percentiles)
     get_metric_percentiles_animation = staticmethod(get_metric_percentiles_animation)
     get_cnpj_lookup = staticmethod(get_cnpj_lookup)
+    generate_nota_tecnica = staticmethod(generate_nota_tecnica)

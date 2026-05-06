@@ -60,7 +60,7 @@ const props = defineProps({
   periodLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["export"]);
+const emit = defineEmits(["export", "generateNote"]);
 
 const copied = ref(false);
 const copyCnpj = () => {
@@ -307,11 +307,18 @@ const filterNetwork = () => {
             class="list-btn list-btn--icon-only list-btn--export"
             @click="emit('export')"
             :disabled="isExporting"
-            v-tooltip.bottom="'Exportar relatório PDF'"
+            v-tooltip.bottom="'Gerar Relatório PDF'"
           >
             <i
               :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"
             />
+          </button>
+          <button
+            class="list-btn list-btn--icon-only list-btn--note"
+            @click="emit('generateNote')"
+            v-tooltip.bottom="'Gerar Nota Técnica'"
+          >
+            <i class="pi pi-book" />
           </button>
           <button
             class="list-btn list-btn--icon-only"
@@ -605,6 +612,20 @@ const filterNetwork = () => {
 .list-btn--export:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.list-btn--note {
+  --btn-note-color: #a855f7;
+  color: var(--btn-note-color);
+  border-color: color-mix(in srgb, var(--btn-note-color) 30%, transparent);
+  background: color-mix(in srgb, var(--btn-note-color) 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.list-btn--note:hover {
+  background: color-mix(in srgb, var(--btn-note-color) 15%, transparent);
+  border-color: var(--btn-note-color);
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--btn-note-color) 25%, transparent);
 }
 
 .list-btn--interesse {

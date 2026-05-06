@@ -13,6 +13,8 @@ from ..schemas.analytics import (
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
 )
 from ..services.analytics import AnalyticsService
+from fastapi.responses import StreamingResponse
+import urllib.parse
 
 router = APIRouter()
 
@@ -262,3 +264,22 @@ def get_metric_percentiles(
 ):
     """Retorna os percentis de score de risco ou não comprovação para o escopo selecionado."""
     return AnalyticsService.get_metric_percentiles(scope, uf, regiao_id, metric, data_inicio, data_fim)
+@router.get("/cnpj/{cnpj}/nota-tecnica")
+def get_nota_tecnica(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Gera e retorna o download da Nota Técnica Preliminar (.docx)."""
+    file_stream = AnalyticsService.generate_nota_tecnica(db, cnpj, data_inicio, data_fim)
+    
+    filename = f"Nota_Tecnica_{cnpj}_{date.today().isoformat()}.docx"
+    # Encode filename for header
+    safe_filename = urllib.parse.quote(filename)
+    
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}"}
+    )

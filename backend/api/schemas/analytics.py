@@ -344,6 +344,11 @@ class DadosFarmaciaSchema(BaseModel):
     cep: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    id_cnae_principal: Optional[str] = None
+    cnae_principal: Optional[str] = None
+    id_cnae_secundario: Optional[str] = None
+    cnae_secundario: Optional[str] = None
+    data_abertura: Optional[date] = None
 
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────

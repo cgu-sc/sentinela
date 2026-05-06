@@ -147,9 +147,19 @@ def _get_criticos(cnpj: str) -> set[str]:
 
 
 def _add_toc_entry(doc, num: str, title: str, page: str = 'xx'):
-    """Adiciona uma entrada no sumário com tab stop e líder de pontos."""
+    """Adiciona uma entrada no sumário com tab stop, líder de pontos e recuo para evitar sobreposição."""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    
+    # Recuo à direita para forçar o wrap antes de chegar no número da página
+    p.paragraph_format.right_indent = Inches(0.7)
+    
+    # Recuo deslocado (Hanging Indent) para que a quebra de linha fique elegante
+    # Ajustamos conforme o nível (se tem espaço ou não no início)
+    indent_base = 0.4 if num.startswith(' ') else 0.2
+    p.paragraph_format.left_indent = Inches(indent_base)
+    p.paragraph_format.first_line_indent = Inches(-0.2)
+    
     p.paragraph_format.tab_stops.add_tab_stop(
         Inches(6.4), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS
     )
@@ -164,25 +174,25 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
     _run(p_title, 'SUMÁRIO', color='0F172A', size=14, bold=True)
     doc.add_paragraph()
 
-    _add_toc_entry(doc, '1.', 'ASSUNTO')
-    _add_toc_entry(doc, '2.', 'REFERÊNCIAS')
-    _add_toc_entry(doc, '3.', 'INTRODUÇÃO')
-    _add_toc_entry(doc, '4.', 'SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO')
-    _add_toc_entry(doc, '  4.1', 'Sobre o Programa Farmácia Popular do Brasil')
-    _add_toc_entry(doc, '  4.2', 'Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”')
+    _add_toc_entry(doc, '1.', 'ASSUNTO', page='3')
+    _add_toc_entry(doc, '2.', 'REFERÊNCIAS', page='3')
+    _add_toc_entry(doc, '3.', 'INTRODUÇÃO', page='4')
+    _add_toc_entry(doc, '4.', 'SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', page='5')
+    _add_toc_entry(doc, '  4.1', 'Sobre o Programa Farmácia Popular do Brasil', page='5')
+    _add_toc_entry(doc, '  4.2', 'Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', page='5')
 
-    _add_toc_entry(doc, '5.', 'ANÁLISE')
-    _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})')
-    _add_toc_entry(doc, '  5.2', 'Informações obtidas no Portal de Gestão do Farmácia Popular')
-    _add_toc_entry(doc, '  5.3', 'Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil')
-    _add_toc_entry(doc, '  5.4', f'Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas')
+    _add_toc_entry(doc, '5.', 'ANÁLISE', page='6')
+    _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
+    _add_toc_entry(doc, '  5.2', 'Informações obtidas no Portal de Gestão do Farmácia Popular', page='6')
+    _add_toc_entry(doc, '  5.3', 'Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', page='6')
+    _add_toc_entry(doc, '  5.4', f'Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
     for key, num, title in _SECAO5_MAP:
         if key in criticos:
             full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
-            _add_toc_entry(doc, f'  {num}', full_title)
+            _add_toc_entry(doc, f'  {num}', full_title, page='6')
 
-    _add_toc_entry(doc, '6.', 'CONCLUSÃO E ENCAMINHAMENTO')
+    _add_toc_entry(doc, '6.', 'CONCLUSÃO E ENCAMINHAMENTO', page='7')
 
 
 # ── Geração do documento ─────────────────────────────────────────────────────
@@ -292,6 +302,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     c_info = tbl_resumo.rows[0].cells[0]
     _cell_borders(c_info, bottom={'sz': '6', 'color': 'CBD5E1'})
     p_info = c_info.paragraphs[0]
+    p_info.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _run(p_info, 'IDENTIFICAÇÃO DO ESTABELECIMENTO AUDITADO\n', color='64748B', size=7, bold=True)
     _run(p_info, f'{razao_social}\n', color='0F172A', size=13, bold=True)
     _run(p_info, f'CNPJ {cnpj_fmt}  •  {municipio} / {uf}\n', color='475569', size=9)
@@ -377,7 +388,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     # 3. INTRODUÇÃO
     doc.add_heading('3. INTRODUÇÃO', level=1)
     doc.add_paragraph(f'No âmbito dos trabalhos realizados pela CGU de monitoramento e avaliação de gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, trata a presente Nota Técnica (NT) de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
-    doc.add_paragraph(f'A partir de metodologia desenvolvida pela CGU, consignada em seu Relatório de Auditoria nº 823121 (contido no ANEXO I desta Nota Técnica), foi identificada para a Farmácia {razao_social}, no período de {periodo_txt}, ausência significativa de estoque compatível com as vendas (distribuições) realizadas de medicamentos para a população (denominada pela CGU como “vendas sem comprovação”), o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio de registro fictício de dispensações de medicamentos.')
+    
+    p_intro = doc.add_paragraph('A partir de metodologia desenvolvida pela CGU, consignada em seu Relatório de Auditoria nº 823121 (contido no ANEXO I desta Nota Técnica), foi identificada para a Farmácia ')
+    p_intro.add_run(razao_social).bold = True
+    p_intro.add_run(', no período de ')
+    run_periodo = p_intro.add_run(periodo_txt)
+    run_periodo.underline = True
+    run_periodo.bold = True
+    p_intro.add_run(', ausência significativa de estoque compatível com as vendas (distribuições) realizadas de medicamentos para a população (denominada pela CGU como “vendas sem comprovação”), o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio de registro fictício de dispensações de medicamentos.')
     
     snippets = [f'[Subitem 5.4] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}', '[Subitem 5.4.1] crescimento excessivo de dispensação do medicamento para tratamento da doença de Parkinson']
     mapping_intro = {

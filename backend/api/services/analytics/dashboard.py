@@ -231,6 +231,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.col("is_grande_rede").first().alias("is_grande_rede"),
                 pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
                 pl.col("situacao_rf").first().alias("situacao_rf"),
+                pl.col("porte_empresa").first().alias("porte_empresa"),
                 pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
                 (pl.col("is_matriz").cast(pl.Boolean).first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
             ])

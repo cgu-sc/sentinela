@@ -382,7 +382,12 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     sec_sintese.footer.is_linked_to_previous = False
     f_sintese = sec_sintese.footer.paragraphs[0]
     f_sintese.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_sintese, f'(2) Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, em {date.today().strftime("%d/%m/%Y")}.', color='64748B', size=8)
+    _run(f_sintese, f'(2) Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, em {date.today().strftime("%d/%m/%Y")}.\n', color='64748B', size=8)
+    _run(f_sintese, '(3) A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf\n', color='64748B', size=8)
+    _run(f_sintese, '(4) Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde reabriu a necessidade a partir de 17 de abril de 2025.\n', color='64748B', size=8)
+    _run(f_sintese, '(5) Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.\n', color='64748B', size=8)
+    _run(f_sintese, '(6) A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 que o estabelecimento deveria manter por cinco anos.\n', color='64748B', size=8)
+    _run(f_sintese, '(7) A CGU, em seu Relatório de Auditoria nº 823121, considerou “vendas sem comprovação” no âmbito do PFPB a diferença identificada por princípio ativo/insumo, após o batimento entre Notas Fiscais de entrada (compartilhadas pela Receita Federal do Brasil e relativas a aquisições de medicamentos do PFPB) e registro de saída no Sistema Autorizador de Vendas – SAV (onde as dispensações subsidiadas são informadas), tendo como elo os números que constam abaixo dos códigos de barra (Código GTIN).', color='64748B', size=8)
 
     sec_sintese.top_margin = Inches(0.5); sec_sintese.bottom_margin = Inches(0.5)
     sec_sintese.left_margin = Inches(0.7); sec_sintese.right_margin = Inches(0.7)
@@ -412,22 +417,33 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     # Bloco de Citação 2 (Continuação na linha de baixo)
     p_quote2 = doc.add_paragraph(style='Quote')
     p_quote2.paragraph_format.left_indent = Inches(1.57) # ~4cm
-    run_quote2 = p_quote2.add_run(
-        'A partir de 14 de fevereiro de 2025, o Programa Farmácia Popular passou a disponibilizar gratuitamente 100% '
-        'dos medicamentos e insumos de seu elenco à população brasileira. O programa atende 12 indicações, '
-        'contemplando medicamentos para hipertensão, diabetes, asma, osteoporose, dislipidemia (colesterol alto), '
-        'rinite, doença de Parkinson, glaucoma, diabetes mellitus associada a doenças cardiovasculares e anticoncepção. '
-        'Além disso, oferece fraldas geriátricas para pessoas com incontinência e absorventes higiênicos para '
-        'beneficiárias do Programa Dignidade Menstrual.'
-    )
-    run_quote2.font.size = Pt(10)
-    doc.add_paragraph('A operacionalização do programa ocorre com a participação de drogarias credenciadas pelo Ministério da Saúde (MS), que realizam a dispensação gratuita de medicamentos diretamente aos cidadãos. As drogarias são posteriormente ressarcidas pela União, de acordo com informações relativas às quantidades distribuídas de cada medicamento.')
-    doc.add_paragraph('As informações acerca da dispensação são encaminhadas pelas drogarias credenciadas ao MS mensalmente por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos, em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
+    p_quote2.add_run('A partir de 14 de fevereiro de 2025, o Programa Farmácia Popular passou a disponibilizar gratuitamente 100% dos medicamentos e insumos de seu elenco à população brasileira. O programa atende 12 indicações, contemplando medicamentos para hipertensão, diabetes, asma, osteoporose, dislipidemia (colesterol alto), rinite, doença de Parkinson, glaucoma, diabetes mellitus associada a doenças cardiovasculares e anticoncepção. Além disso, oferece fraldas geriátricas para pessoas com incontinência e absorventes higiênicos para beneficiárias do Programa Dignidade Menstrual')
+    run_sup3 = p_quote2.add_run('3')
+    run_sup3.font.superscript = True
+    p_quote2.add_run('.')
+    for run in p_quote2.runs:
+        if not run.font.superscript: run.font.size = Pt(10)
+
+    p_op = doc.add_paragraph('A operacionalização do programa ocorre com a participação de drogarias credenciadas pelo Ministério da Saúde (MS)')
+    run_sup4 = p_op.add_run('4')
+    run_sup4.font.superscript = True
+    p_op.add_run(', que realizam a dispensação gratuita de medicamentos diretamente aos cidadãos. As drogarias são posteriormente ressarcidas pela União, de acordo com informações relativas às quantidades distribuídas de cada medicamento')
+    run_sup5 = p_op.add_run('5')
+    run_sup5.font.superscript = True
+    p_op.add_run('.')
+
+    p_sav = doc.add_paragraph('As informações acerca da dispensação são encaminhadas pelas drogarias credenciadas ao MS mensalmente por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
+    run_sup6 = p_sav.add_run('6')
+    run_sup6.font.superscript = True
+    p_sav.add_run(', em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
 
     doc.add_heading('4.2. Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', level=2)
     doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a imensa capilaridade de mais de 30 mil estabelecimentos credenciados.')
     doc.add_paragraph('Para enfrentar essa realidade, a CGU elaborou o Relatório de Apuração nº 823121 (ANEXO I desta NT), fundamentado no desenvolvimento do Sistema Sentinela, uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
-    doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”, ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
+    p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”')
+    run_sup7 = p_cgu.add_run('7')
+    run_sup7.font.superscript = True
+    p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
     doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir desta informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, de não existência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia em que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base da Receita Federal do Brasil de Notas Fiscais Eletrônicas (NF-e), utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e suas compras posteriores com as vendas realizadas no âmbito do Programa.')
     doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de cut-off, estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do programa PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo "virtual" favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia, que fazem parte do rol do PFPB, somente foram vendidos para clientes que fizeram uso do Programa, ou seja, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
     doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 05/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código GTIN/EAN. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.')
@@ -442,8 +458,27 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
 
     # 5. ANÁLISE
     doc.add_heading('5. ANÁLISE', level=1)
+    doc.add_paragraph(f'A presente Nota Técnica traz informações cadastrais e o resultado das análises dos alertas extraídos do Sistema Sentinela para a Farmácia {razao_social}, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
+
     doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)
-    doc.add_paragraph(f'O estabelecimento está localizado em {municipio}/{uf}. A análise detalhada das operações durante o período de {periodo_txt} revelou os pontos de auditoria descritos a seguir.')
+    
+    # Mapeamento do porte conforme padrões RFB/Filtros
+    porte_raw = getattr(cnpj_data_obj, 'porte_empresa', 'ND') if cnpj_data_obj else "ND"
+    porte_txt = "empresa"
+    if "microempresa" in porte_raw.lower(): 
+        porte_txt = "microempresa"
+    elif "pequeno porte" in porte_raw.lower(): 
+        porte_txt = "empresa de pequeno porte"
+    elif "demais" in porte_raw.lower(): 
+        porte_txt = "empresa de médio/grande porte"
+    
+    situacao = getattr(cnpj_data_obj, 'situacao_rf', 'ATIVA') if cnpj_data_obj else "ATIVA"
+    
+    doc.add_paragraph(
+        f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), '
+        f'a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, '
+        f'é uma {porte_txt}, com capital social de R$ XXX.XXX,XX e com situação {situacao}:'
+    )
     doc.add_heading('5.2 Informações obtidas no Portal de Gestão do Farmácia Popular', level=2)
     doc.add_paragraph('Análise de regularidade cadastral e histórico de pagamentos...')
     doc.add_heading('5.3 Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', level=2)

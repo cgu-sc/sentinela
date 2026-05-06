@@ -10,9 +10,10 @@
 --   CRÍTICO →  8 auth em 10 min (0,8/min)
 --   GRAVE   → 10 auth em 15 min (0,7/min)
 --   GRAVE   → 11 auth em 20 min (0,6/min)
+--   ALTO    → 12 auth em 25 min (0,5/min)
 --   ALTO    → 12 auth em 30 min (0,4/min)
 --   ALTO    → 18 auth em 60 min (0,3/min)
---   ALTO    →  N auth, taxa ≥ 20/hr p/ N > 5 (ex: 7 em 20 min)
+--   ALTO    →  N auth, taxa ≥ 20/hr p/ N >= 15 (ex: 15 em até 45 min)
 --
 -- ── PROCESSAMENTO ───────────────────────────────────────────────────────────
 --   Lotes de 20 CNPJs com checkpoint por CNPJ.

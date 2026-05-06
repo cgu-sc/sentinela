@@ -70,14 +70,14 @@ def get_crm_data(
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     PARQUET_PATH = os.path.join(cnpj_dir, "dados_crms.parquet")
 
-    # ── helpers de competência ────────────────────────────────────────────
+    # â”€â”€ helpers de competÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _to_comp(date_str: str) -> int:
         return int(date_str[:7].replace("-", ""))
 
     comp_ini = _to_comp(data_inicio) if data_inicio else None
     comp_fim = _to_comp(data_fim)    if data_fim    else None
 
-    # ── 1. Carrega ou gera o parquet ──────────────────────────────────────
+    # â”€â”€ 1. Carrega ou gera o parquet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     import time as _time
     df: pl.DataFrame | None = None
     from_cache    = False
@@ -92,7 +92,7 @@ def get_crm_data(
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"⚠️ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
+            print(f"âš ï¸ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
 
     if df is None:
         try:
@@ -124,11 +124,11 @@ def get_crm_data(
             df.write_parquet(PARQUET_PATH, compression="lz4")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
-            print(f"❌ ERRO ao buscar CRM do banco para {cnpj}: {e}")
+            print(f"âŒ ERRO ao buscar CRM do banco para {cnpj}: {e}")
             print(traceback.format_exc())
             return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], query_time_ms=query_time_ms)
 
-    # ── 2. Filtro de período ───────────────────────────────────────────────
+    # â”€â”€ 2. Filtro de perÃ­odo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if comp_ini:
         df = df.filter(pl.col("competencia") >= comp_ini)
     if comp_fim:
@@ -138,10 +138,10 @@ def get_crm_data(
         return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache,
                                     read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    # ── 3. Agrega por id_medico (colapsa competências) ────────────────────
+    # â”€â”€ 3. Agrega por id_medico (colapsa competÃªncias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total_valor = float(df["vl_total_prescricoes"].sum() or 0)
 
-    # Cálculo de dias no período para o ritmo diário real
+    # CÃ¡lculo de dias no perÃ­odo para o ritmo diÃ¡rio real
     from datetime import datetime
     import calendar
     try:
@@ -158,9 +158,9 @@ def get_crm_data(
     except Exception:
         dias_periodo = 30
 
-    # ── Dias ativos por médico (vetorizado, sem Python callback) ─────────
-    # Calcula quantos dias tem cada competência (YYYYMM) criando o 1º dia do
-    # próximo mês e subtraindo 1 dia. Trata a virada de ano (dez → jan).
+    # â”€â”€ Dias ativos por mÃ©dico (vetorizado, sem Python callback) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Calcula quantos dias tem cada competÃªncia (YYYYMM) criando o 1Âº dia do
+    # prÃ³ximo mÃªs e subtraindo 1 dia. Trata a virada de ano (dez â†’ jan).
     _ano  = pl.col("competencia") // 100
     _mes  = pl.col("competencia") % 100
     _prox_ano = pl.when(_mes == 12).then(_ano + 1).otherwise(_ano)
@@ -177,7 +177,7 @@ def get_crm_data(
             pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
             pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
             pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
-            pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do médico
+            pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do mÃ©dico
             pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
             pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
             pl.max("alerta_concentracao_multiplos_crms").alias("alerta_concentracao_multiplos_crms"),
@@ -189,7 +189,7 @@ def get_crm_data(
             pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
         ])
         .with_columns([
-            # Divide pelo total de dias dos meses em que o médico de fato prescreveu
+            # Divide pelo total de dias dos meses em que o mÃ©dico de fato prescreveu
             (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
             (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("prescricoes_dia_total_brasil"),
         ])
@@ -206,7 +206,7 @@ def get_crm_data(
         .with_row_index("ranking")
         .with_columns([
             (pl.col("ranking") + 1).alias("ranking"),
-            # Mantemos o pct_participacao com alta precisão para o acumulado
+            # Mantemos o pct_participacao com alta precisÃ£o para o acumulado
             (pl.col("vl_total_prescricoes") / total_valor * 100).alias("_pct_raw")
             if total_valor > 0 else pl.lit(0.0).alias("_pct_raw"),
         ])
@@ -225,7 +225,7 @@ def get_crm_data(
 
     crms_interesse_list = [r for r in df_med.iter_rows(named=True)]
 
-    # ── 4. Summary ────────────────────────────────────────────────────────
+    # â”€â”€ 4. Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     top1       = df_med.row(0, named=True)
     top5_valor = float(df_med.head(5)["vl_total_prescricoes"].sum() or 0)
 
@@ -243,7 +243,7 @@ def get_crm_data(
     pct_invalido  = round(vl_invalido  / total_valor * 100, 2)                if total_valor else 0.0
     pct_antes_reg = round(vl_antes_reg / total_valor * 100, 2)                if total_valor else 0.0
 
-    # ── 5. Benchmarks ─────────────────────────────────────────────────────
+    # â”€â”€ 5. Benchmarks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     bench_top5_reg = 0.0
     bench_top5_br  = 0.0
     try:
@@ -265,7 +265,7 @@ def get_crm_data(
     except Exception:
         pass
 
-    # ── 6. Metadados do CNPJ (matriz de risco) ────────────────────────────
+    # â”€â”€ 6. Metadados do CNPJ (matriz de risco) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     razao_social = municipio = uf_str = None
     try:
         df_risco  = get_df_matriz_risco()
@@ -301,75 +301,11 @@ def get_crm_data(
         "from_cache":                     os.path.exists(PARQUET_PATH),
     }
 
-    # ── 7. Alertas diários — injeta em cada médico ────────────────────────
-    ALERTAS_DIARIOS_PATH = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
-    df_ad: pl.DataFrame | None = None
-
-    # Tenta carregar do cache parquet
-    if os.path.exists(ALERTAS_DIARIOS_PATH):
-        try:
-            df_ad = pl.read_parquet(ALERTAS_DIARIOS_PATH)
-        except Exception as e:
-            print(f"⚠️ Erro ao ler parquet alertas diários '{cnpj}': {e}")
-    
-    # Se não houver cache, busca no banco e salva (Auto-Healing)
-    if df_ad is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                pdf_ad = pd.read_sql(
-                    text("SELECT A.id_medico, "
-                         " YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia, "
-                         " A.dt_dia AS dt_alerta, "
-                         " DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela, "
-                         " CASE "
-                         "   WHEN A.nu_5min  >=  7 THEN A.nu_5min "
-                         "   WHEN A.nu_10min >= 10 THEN A.nu_10min "
-                         "   WHEN A.nu_5min  >=  6 THEN A.nu_5min "
-                         "   WHEN A.nu_10min >=  8 THEN A.nu_10min "
-                         "   WHEN A.nu_15min >=  8 THEN A.nu_15min "
-                         "   WHEN A.nu_20min >=  9 THEN A.nu_20min "
-                         "   WHEN A.nu_30min >=  9 THEN A.nu_30min "
-                         "   WHEN A.nu_60min >= 14 THEN A.nu_60min "
-                         "   WHEN A.nu_25min >=  8 THEN A.nu_25min "
-                         "   WHEN A.nu_60min >= 10 THEN A.nu_60min "
-                         " END AS nu_prescricoes_dia, "
-                         " A.nu_minutos_span AS nu_minutos_dia, "
-                         " CASE WHEN A.nu_minutos_span = 0 THEN 0 "
-                         "      ELSE CAST((CASE "
-                         "          WHEN A.nu_5min  >=  7 THEN A.nu_5min "
-                         "          WHEN A.nu_10min >= 10 THEN A.nu_10min "
-                         "          WHEN A.nu_5min  >=  6 THEN A.nu_5min "
-                         "          WHEN A.nu_10min >=  8 THEN A.nu_10min "
-                         "          WHEN A.nu_15min >=  8 THEN A.nu_15min "
-                         "          WHEN A.nu_20min >=  9 THEN A.nu_20min "
-                         "          WHEN A.nu_30min >=  9 THEN A.nu_30min "
-                         "          WHEN A.nu_60min >= 14 THEN A.nu_60min "
-                         "          WHEN A.nu_25min >=  8 THEN A.nu_25min "
-                         "          WHEN A.nu_60min >= 10 THEN A.nu_60min "
-                         "      END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora, "
-                         " A.dt_ini_concentracao AS dt_ini_hora, "
-                         " A.dt_fim_concentracao AS dt_fim_hora "
-                         " FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A"
-                         " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj"
-                         " WHERE F.cnpj = :cnpj"
-                         " ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao"),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-            df_ad = pl.from_pandas(pdf_ad) if not pdf_ad.empty else pl.DataFrame(schema={
-                "id_medico": pl.Utf8, "competencia": pl.Int32, "dt_alerta": pl.Utf8, "hr_janela": pl.Int32,
-                "nu_prescricoes_dia": pl.Int32, "nu_minutos_dia": pl.Int32, "taxa_hora": pl.Float64,
-                "dt_ini_hora": pl.Datetime, "dt_fim_hora": pl.Datetime
-            })
-            df_ad.write_parquet(ALERTAS_DIARIOS_PATH, compression="lz4")
-        except Exception as e:
-            print(f"❌ Erro ao buscar alertas diários do banco para {cnpj}: {e}")
-            df_ad = pl.DataFrame()
-
+    # â”€â”€ 7. Alertas diÃ¡rios â€” injeta em cada mÃ©dico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    df_ad = _load_crm_unico_alertas(cnpj, cnpj_dir)
     alertas_por_medico: dict[str, list[dict]] = {}
     if not df_ad.is_empty():
-        # Filtro de período no DataFrame de alertas
+        # Filtro de perÃ­odo no DataFrame de alertas
         if comp_ini:
             df_ad = df_ad.filter(
                 pl.col("competencia").cast(pl.Int32) >= comp_ini
@@ -391,7 +327,7 @@ def get_crm_data(
     for m in crms_interesse_list:
         m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
 
-    # ── 7.1 Alertas Geográficos (Distância) ──────────────────────────────
+    # â”€â”€ 7.1 Alertas GeogrÃ¡ficos (DistÃ¢ncia) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ALERTAS_GEO_PATH = os.path.join(cnpj_dir, "geografico.parquet")
     df_geo: pl.DataFrame | None = None
 
@@ -416,11 +352,11 @@ def get_crm_data(
             })
             df_geo.write_parquet(ALERTAS_GEO_PATH, compression="lz4")
         except Exception as e:
-            # Se falhar a conexão (comum em modo offline), apenas avisa de forma amigável
+            # Se falhar a conexÃ£o (comum em modo offline), apenas avisa de forma amigÃ¡vel
             if "IM002" in str(e) or "connection" in str(e).lower():
-                print(f"ℹ️  Modo Offline: Alertas geográficos para {cnpj} não encontrados no cache e banco inacessível.")
+                print(f"â„¹ï¸  Modo Offline: Alertas geogrÃ¡ficos para {cnpj} nÃ£o encontrados no cache e banco inacessÃ­vel.")
             else:
-                print(f"⚠️ Erro ao buscar alertas geográficos para {cnpj}: {e}")
+                print(f"âš ï¸ Erro ao buscar alertas geogrÃ¡ficos para {cnpj}: {e}")
             df_geo = pl.DataFrame()
 
     alertas_geo_por_medico: dict[str, list[dict]] = {}
@@ -450,16 +386,16 @@ def get_crm_data(
     for m in crms_interesse_list:
         m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
-    # ── 7.2 Alertas de Múltiplos CRMs (Surtos Coordenados) ───────────────
+    # â”€â”€ 7.2 Alertas de MÃºltiplos CRMs (Surtos Coordenados) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
 
-    # ── 7.3 Pré-Sincronização do Raio-X Unificado ────────────────────────
+    # â”€â”€ 7.3 PrÃ©-SincronizaÃ§Ã£o do Raio-X Unificado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
     try:
         sync_crm_raiox_tx(cnpj)
     except: pass
 
-    # ── 8. Alertas do Estabelecimento (Cross-CRM) ─────────────────────────
+    # â”€â”€ 8. Alertas do Estabelecimento (Cross-CRM) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "volume_horario_anomalo_alertas.parquet")
 
     df_ca: pl.DataFrame | None = None
@@ -488,10 +424,10 @@ def get_crm_data(
             })
             df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
         except Exception as e:
-            print(f"❌ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
+            print(f"âŒ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
             df_ca = pl.DataFrame()
 
-    # ── 8. Alertas do Estabelecimento (Consolidação das 3 Fontes) ─────────
+    # â”€â”€ 8. Alertas do Estabelecimento (ConsolidaÃ§Ã£o das 3 Fontes) â”€â”€â”€â”€â”€â”€â”€â”€â”€
     cnpj_alerts_list = []
     
     # 8.1 - Alertas de Volume (df_ca)
@@ -510,7 +446,7 @@ def get_crm_data(
                 "mediana_hora":  float(r.get("mediana_hora", 0))
             })
 
-    # 8.2 - Alertas de Múltiplos CRMs (df_cm)
+    # 8.2 - Alertas de MÃºltiplos CRMs (df_cm)
     if df_cm is not None and not df_cm.is_empty():
         _cm = df_cm
         if comp_ini: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
@@ -526,16 +462,16 @@ def get_crm_data(
                 "mediana_hora": 0.0
             })
 
-    # 8.3 - Alertas de Médico Único (df_ad - Agregado por Janela)
-    # Note: df_ad contém múltiplos alertas por médico. No nível de CNPJ,
-    # queremos mostrar quando HOUVE um alerta de médico único.
+    # 8.3 - Alertas de MÃ©dico Ãšnico (df_ad - Agregado por Janela)
+    # Note: df_ad contÃ©m mÃºltiplos alertas por mÃ©dico. No nÃ­vel de CNPJ,
+    # queremos mostrar quando HOUVE um alerta de mÃ©dico Ãºnico.
     if df_ad is not None and not df_ad.is_empty():
         _ad = df_ad
         if comp_ini: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
         if comp_fim: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
         
-        # Agrupamos por janela para não duplicar se 2 médicos tiveram alerta na mesma hora
-        # (embora o frontend lide com isso, é mais limpo consolidar)
+        # Agrupamos por janela para nÃ£o duplicar se 2 mÃ©dicos tiveram alerta na mesma hora
+        # (embora o frontend lide com isso, Ã© mais limpo consolidar)
         _ad_agg = _ad.group_by(["dt_alerta", "hr_janela"]).agg([
             pl.count("id_medico").alias("nu_crms"),
             pl.sum("nu_prescricoes_dia").alias("nu_prescricoes")
@@ -551,19 +487,19 @@ def get_crm_data(
                 "mediana_hora": 0.0
             })
 
-    # Ordenação Final por Data/Hora
+    # OrdenaÃ§Ã£o Final por Data/Hora
     cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
 
-    # ── 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ──
+    # â”€â”€ 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? â”€â”€
     TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
     alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
 
     if os.path.exists(TX_PARQUET_PATH):
         try:
-            # Carregamos as transações anômalas (Raio-X) do estabelecimento
+            # Carregamos as transaÃ§Ãµes anÃ´malas (Raio-X) do estabelecimento
             df_tx = pl.read_parquet(TX_PARQUET_PATH)
             if not df_tx.is_empty():
-                # Filtro de período nas transações se necessário
+                # Filtro de perÃ­odo nas transaÃ§Ãµes se necessÃ¡rio
                 if comp_ini or comp_fim:
                     # Garantimos que seja Date para os accessors .dt
                     dt_temp = pl.col("dt_janela")
@@ -588,9 +524,9 @@ def get_crm_data(
                     ])
                 )
                 
-                # Cruzamos com os alertas do CNPJ para trazer o contexto (descrição/total)
+                # Cruzamos com os alertas do CNPJ para trazer o contexto (descriÃ§Ã£o/total)
                 if not df_ca.is_empty():
-                    # Garantimos que dt_alerta também seja String no mesmo formato
+                    # Garantimos que dt_alerta tambÃ©m seja String no mesmo formato
                     df_ca_clean = df_ca.with_columns(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10))
                     
                     df_surto_full = df_surto_agg.join(
@@ -607,8 +543,8 @@ def get_crm_data(
                         mult = r.get("multiplicador", 0)
                         med = r.get("mediana_hora", 0)
                         
-                        # Frase técnica padronizada (Backend-only)
-                        desc = f"{vol} prescrições às {hr:02d}h ({mult}x a mediana da farmácia: {med}/h)"
+                        # Frase tÃ©cnica padronizada (Backend-only)
+                        desc = f"{vol} prescriÃ§Ãµes Ã s {hr:02d}h ({mult}x a mediana da farmÃ¡cia: {med}/h)"
                         
                         alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
                             "dt": str(r["dt_janela"]),
@@ -621,9 +557,9 @@ def get_crm_data(
                             "descricao": desc
                         })
         except Exception as e:
-            print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
+            print(f"âš ï¸ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
 
-    # Atribuição final aos médicos
+    # AtribuiÃ§Ã£o final aos mÃ©dicos
     for m in crms_interesse_list:
         m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
 
@@ -641,6 +577,7 @@ def get_crm_data(
 
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
+_CRM_UNICO_ALERTAS_CACHE_VERSION = 2
 
 def _best_crm_rhythm_from_row(row: dict, windows: tuple[int, ...]) -> tuple[float, int | None, int | None]:
     best_score = 0.0
@@ -697,6 +634,39 @@ def _build_crm_rhythm_map(
             except (TypeError, ValueError):
                 item["nu_crms"] = None
         scores[day] = item
+
+    return scores
+
+def _build_crm_unico_concentration_map(df_alertas: pl.DataFrame) -> dict[str, dict]:
+    scores: dict[str, dict] = {}
+    if df_alertas.is_empty():
+        return scores
+
+    for row in df_alertas.iter_rows(named=True):
+        try:
+            count = int(row.get("nu_prescricoes_dia") or 0)
+            minutes = int(row.get("nu_minutos_dia") or 0)
+        except (TypeError, ValueError):
+            continue
+
+        if count <= 0 or minutes <= 0:
+            continue
+
+        score = round((count * 60.0) / minutes, 2)
+        day = str(row.get("dt_alerta", ""))[:10]
+        if not day:
+            continue
+
+        current = scores.get(day)
+        if current and score <= current["score"]:
+            continue
+
+        scores[day] = {
+            "score": score,
+            "qtd": count,
+            "minutos": minutes,
+            "id_medico": str(row.get("id_medico") or ""),
+        }
 
     return scores
 
@@ -758,10 +728,10 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                           WHEN A.nu_10min >=  8 THEN A.nu_10min
                           WHEN A.nu_15min >=  8 THEN A.nu_15min
                           WHEN A.nu_20min >=  9 THEN A.nu_20min
-                          WHEN A.nu_30min >=  9 THEN A.nu_30min
-                          WHEN A.nu_60min >= 14 THEN A.nu_60min
-                          WHEN A.nu_25min >=  8 THEN A.nu_25min
-                          WHEN A.nu_60min >= 10 THEN A.nu_60min
+                          WHEN A.nu_30min >=  8 THEN A.nu_30min
+                          WHEN A.nu_60min >= 12 THEN A.nu_60min
+                          WHEN A.nu_25min >=  6 THEN A.nu_25min
+                          WHEN A.nu_60min >=  8 AND A.nu_minutos_span <= A.nu_60min * 5 THEN A.nu_60min
                         END AS nu_prescricoes_dia,
                         A.nu_minutos_span AS nu_minutos_dia,
                         CASE WHEN A.nu_minutos_span = 0 THEN 0
@@ -772,10 +742,10 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                                  WHEN A.nu_10min >=  8 THEN A.nu_10min
                                  WHEN A.nu_15min >=  8 THEN A.nu_15min
                                  WHEN A.nu_20min >=  9 THEN A.nu_20min
-                                 WHEN A.nu_30min >=  9 THEN A.nu_30min
-                                 WHEN A.nu_60min >= 14 THEN A.nu_60min
-                                 WHEN A.nu_25min >=  8 THEN A.nu_25min
-                                 WHEN A.nu_60min >= 10 THEN A.nu_60min
+                                 WHEN A.nu_30min >=  8 THEN A.nu_30min
+                                 WHEN A.nu_60min >= 12 THEN A.nu_60min
+                                 WHEN A.nu_25min >=  6 THEN A.nu_25min
+                                 WHEN A.nu_60min >=  8 AND A.nu_minutos_span <= A.nu_60min * 5 THEN A.nu_60min
                              END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora,
                         A.dt_ini_concentracao AS dt_ini_hora,
                         A.dt_fim_concentracao AS dt_fim_hora,
@@ -808,12 +778,12 @@ def get_crm_perfil_diario(
     data_inicio: str | None = None,
     data_fim: str | None = None
 ) -> "CrmDailyProfileResponse":
-    """Retorna o perfil diário unificado de dispensação de um CNPJ.
+    """Retorna o perfil diÃ¡rio unificado de dispensaÃ§Ã£o de um CNPJ.
 
-    Cada dia inclui três flags independentes:
-      - is_dia_com_volume_horario_anomalo: surto horário de volume
-      - is_anomalo_unico:                  concentração temporal de médico individual
-      - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
+    Cada dia inclui trÃªs flags independentes:
+      - is_dia_com_volume_horario_anomalo: surto horÃ¡rio de volume
+      - is_anomalo_unico:                  concentraÃ§Ã£o temporal de mÃ©dico individual
+      - is_crm_multiplo:                  concentraÃ§Ã£o temporal com mÃºltiplos CRMs
 
     Fonte: temp_CGUSC.fp.crm_perfil_diario
     Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
@@ -840,7 +810,7 @@ def get_crm_perfil_diario(
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"⚠️ Erro ao ler parquet crm_perfil_diario '{cnpj}': {e}")
+            print(f"âš ï¸ Erro ao ler parquet crm_perfil_diario '{cnpj}': {e}")
 
     if df is None:
         try:
@@ -860,14 +830,14 @@ def get_crm_perfil_diario(
             df.write_parquet(PARQUET_PATH, compression="lz4")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
-            print(f"⚠️ Erro ao gerar parquet crm_perfil_diario '{cnpj}': {e}")
+            print(f"âš ï¸ Erro ao gerar parquet crm_perfil_diario '{cnpj}': {e}")
             df = pl.DataFrame()
 
     if df.is_empty():
         return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    # --- Filtro de Período ---
+    # --- Filtro de PerÃ­odo ---
     if data_inicio:
         d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
         df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
@@ -882,11 +852,8 @@ def get_crm_perfil_diario(
     unico_scores: dict[str, dict] = {}
     multi_scores: dict[str, dict] = {}
     try:
-        unico_scores = _build_crm_rhythm_map(
-            _load_crm_unico_alertas(cnpj, cnpj_dir),
-            date_col="dt_alerta",
-            windows=_CRM_UNICO_RHYTHM_WINDOWS,
-            id_col="id_medico",
+        unico_scores = _build_crm_unico_concentration_map(
+            _load_crm_unico_alertas(cnpj, cnpj_dir)
         )
         multi_scores = _build_crm_rhythm_map(
             _load_crm_multi_alertas(cnpj, cnpj_dir),
@@ -926,10 +893,10 @@ def get_crm_perfil_horario(
     data_inicio: str | None = None,
     data_fim: str | None = None
 ) -> CrmHourlyProfileResponse:
-    """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
+    """Retorna o detalhamento horÃ¡rio (0-23h) de todos os dias anÃ´malos do CNPJ.
 
     Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
-    por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
+    por ponto horÃ¡rio, lidos de temp_CGUSC.fp.crm_perfil_horario.
     Cache: sentinela_cache/<cnpj>/crm_horario.parquet
     """
     import pandas as pd
@@ -956,7 +923,7 @@ def get_crm_perfil_horario(
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"⚠️ Erro ao ler parquet hourly '{cnpj}': {e}")
+            print(f"âš ï¸ Erro ao ler parquet hourly '{cnpj}': {e}")
 
     if df is None:
         try:
@@ -979,14 +946,14 @@ def get_crm_perfil_horario(
             df.write_parquet(PARQUET_PATH, compression="lz4")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
-            print(f"⚠️ Erro ao gerar parquet hourly '{cnpj}': {e}")
+            print(f"âš ï¸ Erro ao gerar parquet hourly '{cnpj}': {e}")
             df = pl.DataFrame()
 
     if df.is_empty():
         return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    # --- Filtro de Período ---
+    # --- Filtro de PerÃ­odo ---
     if data_inicio:
         d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
         df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
@@ -1055,7 +1022,7 @@ def get_crm_perfil_horario(
                     params={"cnpj": cnpj}
                 )
                 df_events = pl.from_pandas(pdf_events)
-                # Cálculos de minutos e formatação
+                # CÃ¡lculos de minutos e formataÃ§Ã£o
                 if not df_events.is_empty():
                     df_events = df_events.with_columns([
                         pl.col("dt_ini_concentracao").dt.strftime("%H:%M").alias("hora_inicio"),
@@ -1065,10 +1032,10 @@ def get_crm_perfil_horario(
                     ])
                 df_events.write_parquet(EVENTS_PARQUET_PATH, compression="lz4")
         except Exception as e:
-            print(f"⚠️ Erro ao buscar eventos hourly '{cnpj}': {e}")
+            print(f"âš ï¸ Erro ao buscar eventos hourly '{cnpj}': {e}")
             df_events = pl.DataFrame()
 
-    # Filtro de período nos eventos
+    # Filtro de perÃ­odo nos eventos
     if not df_events.is_empty():
         if data_inicio:
             d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
@@ -1080,7 +1047,7 @@ def get_crm_perfil_horario(
     # Garante que o parquet de medianas existe (auto-warming)
     sync_mediana_autorizacoes_horaria(cnpj)
 
-    # Carrega lookup de medianas: (ano, trimestre, hr_janela) → mediana_hora
+    # Carrega lookup de medianas: (ano, trimestre, hr_janela) â†’ mediana_hora
     from datetime import datetime as _dt
     MEDIANA_PATH = os.path.join(cnpj_dir, "mediana_autorizacoes_horaria.parquet")
     mediana_lookup: dict = {}
@@ -1105,7 +1072,7 @@ def get_crm_perfil_horario(
                 "is_crm_multiplo":           int(r.get("is_crm_multiplo", 0)),
             }
 
-    # Expande para 24 horas por dia anômalo com mediana real para todas as horas
+    # Expande para 24 horas por dia anÃ´malo com mediana real para todas as horas
     points = []
     for dt in sorted(dates_flags):
         flags = dates_flags[dt]
@@ -1118,7 +1085,7 @@ def get_crm_perfil_horario(
             row = activity.get((dt, h))
             mediana = mediana_lookup.get((ano, trimestre, h), 0.0)
             
-            # Pega as flags da HORA específica (row), não do dia (flags)
+            # Pega as flags da HORA especÃ­fica (row), nÃ£o do dia (flags)
             is_vol = int(row.get("is_volume_horario_anomalo", 0)) if row else 0
             is_uni = int(row.get("is_crm_unico", 0)) if row else 0
             is_mul = int(row.get("is_crm_multiplo", 0)) if row else 0
@@ -1153,7 +1120,7 @@ def get_crm_perfil_horario(
             for r in df_events.iter_rows(named=True)
         ]
 
-    # AUTO-WARMING: Pré-aquece o parquet de Transações Literais (Raio-X Unificado)
+    # AUTO-WARMING: PrÃ©-aquece o parquet de TransaÃ§Ãµes Literais (Raio-X Unificado)
     sync_crm_raiox_tx(cnpj)
 
     return CrmHourlyProfileResponse(cnpj=cnpj, points=points, events=events_list, from_cache=from_cache,
@@ -1244,7 +1211,18 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
                         A.dt_ini_concentracao,
                         A.dt_fim_concentracao,
-                        A.nu_60min AS nu_prescricoes,
+                        CASE
+                          WHEN A.nu_5min  >=  8 THEN A.nu_5min
+                          WHEN A.nu_10min >= 11 THEN A.nu_10min
+                          WHEN A.nu_5min  >=  6 THEN A.nu_5min
+                          WHEN A.nu_10min >=  8 THEN A.nu_10min
+                          WHEN A.nu_15min >= 10 THEN A.nu_15min
+                          WHEN A.nu_20min >= 11 THEN A.nu_20min
+                          WHEN A.nu_25min >= 12 THEN A.nu_25min
+                          WHEN A.nu_30min >= 12 THEN A.nu_30min
+                          WHEN A.nu_60min >= 18 THEN A.nu_60min
+                          WHEN A.nu_60min >= 15 AND A.nu_minutos_span <= A.nu_60min * 3 THEN A.nu_60min
+                        END AS nu_prescricoes,
                         A.nu_crms_distintos AS nu_crms,
                         A.nu_60min,
                         A.nu_crms_distintos,
@@ -1337,18 +1315,23 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                         return_dtype=pl.Boolean,
                     )
                 )
-            alertas_unico = [
-                {
+            for r in day_unico.iter_rows(named=True):
+                ritmo_qtd = int(r["nu_prescricoes_dia"] or 0)
+                ritmo_minutos = int(r["nu_minutos_dia"] or 0)
+                ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
+                alertas_unico.append({
                     "id_medico": str(r["id_medico"]),
                     "hr_janela": int(r["hr_janela"]),
                     "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
                     "nu_minutos_dia": int(r["nu_minutos_dia"]),
                     "taxa_hora": float(r["taxa_hora"]),
+                    "ritmo_hora": ritmo_hora,
+                    "ritmo_qtd": ritmo_qtd,
+                    "ritmo_minutos": ritmo_minutos,
+                    "severidade": r.get("severidade"),
                     "dt_ini_hora": _format_alert_time(r.get("dt_ini_hora")),
                     "dt_fim_hora": _format_alert_time(r.get("dt_fim_hora")),
-                }
-                for r in day_unico.iter_rows(named=True)
-            ]
+                })
 
         df_multi = _load_crm_multi_alertas(cnpj, cnpj_dir)
         alertas_multi: list[dict] = []

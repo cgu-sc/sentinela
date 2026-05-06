@@ -261,6 +261,55 @@ const expandedRaioxRows = ref(new Set());
 const unicoAlertas = ref([]);
 const multiAlertas = ref([]);
 
+const unicoAlertasAgrupados = computed(() => {
+  const grupos = new Map();
+
+  unicoAlertas.value.forEach((alerta, index) => {
+    const idMedico = String(alerta.id_medico || 'CRM nao informado');
+    const alertaNormalizado = {
+      ...alerta,
+      id_medico: idMedico,
+      numero_alerta: index + 1,
+      ritmo_qtd_display: alerta.ritmo_qtd ?? alerta.nu_prescricoes_dia ?? alerta.nu_prescricoes ?? 0,
+      ritmo_minutos_display: alerta.ritmo_minutos ?? alerta.nu_minutos_span ?? 0,
+      ritmo_hora_num: Number(alerta.ritmo_hora ?? alerta.taxa_hora ?? 0),
+    };
+
+    if (!grupos.has(idMedico)) {
+      grupos.set(idMedico, { id_medico: idMedico, alertas: [] });
+    }
+    grupos.get(idMedico).alertas.push(alertaNormalizado);
+  });
+
+  return Array.from(grupos.values())
+    .map(grupo => ({
+      ...grupo,
+      alertas: grupo.alertas.sort((a, b) =>
+        String(a.dt_ini_hora || '').localeCompare(String(b.dt_ini_hora || ''))
+      ),
+    }))
+    .sort((a, b) => {
+      const inicioA = a.alertas[0]?.dt_ini_hora || '';
+      const inicioB = b.alertas[0]?.dt_ini_hora || '';
+      return String(inicioA).localeCompare(String(inicioB)) || a.id_medico.localeCompare(b.id_medico);
+    });
+});
+
+const multiAlertasNumerados = computed(() => {
+  return [...multiAlertas.value]
+    .sort((a, b) => {
+      const inicioA = a.dt_ini_hora || a.hr_janela || '';
+      const inicioB = b.dt_ini_hora || b.hr_janela || '';
+      return String(inicioA).localeCompare(String(inicioB));
+    })
+    .map((alerta, index) => ({
+      ...alerta,
+      numero_alerta: index + 1,
+      nu_crms_display: alerta.nu_crms ?? alerta.nu_crms_distintos ?? 0,
+      nu_prescricoes_display: alerta.nu_prescricoes ?? alerta.nu_prescricoes_dia ?? 0,
+    }));
+});
+
 const groupedRaiox = computed(() => {
   const groups = {};
   hourlyTransactions.value.forEach(item => {
@@ -420,6 +469,18 @@ const chartOptionDaily = computed(() => {
       borderWidth: 1,
       padding: [12, 16],
       confine: true,
+      position: (point, params, dom, rect, size) => {
+        const gap = 16;
+        const viewWidth = size.viewSize[0];
+        const viewHeight = size.viewSize[1];
+        const tooltipWidth = size.contentSize[0];
+        const tooltipHeight = size.contentSize[1];
+        const x = point[0] + tooltipWidth + gap > viewWidth
+          ? Math.max(gap, point[0] - tooltipWidth - gap)
+          : point[0] + gap;
+        const y = Math.min(Math.max(gap, point[1] + gap), viewHeight - tooltipHeight - gap);
+        return [x, y];
+      },
       textStyle: { color: chartTheme.value.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
       shadowBlur: 10,
       shadowColor: 'rgba(0,0,0,0.15)',
@@ -519,6 +580,7 @@ const chartOptionDaily = computed(() => {
           cursor: (d.is_volume_horario_anomalo === 1 || d.is_crm_unico === 1 || d.is_crm_multiplo === 1) ? 'pointer' : 'default'
         })),
         tooltip: { show: false },
+        emphasis: { disabled: true },
         silent: false
       },
       {
@@ -546,6 +608,12 @@ const chartOptionDaily = computed(() => {
               lineHeight: 14,
             },
           },
+        },
+        emphasis: {
+          label: { show: showDailyRankBadge },
+        },
+        blur: {
+          label: { show: showDailyRankBadge, opacity: 1 },
         },
         data: dailyValues.value.map((v, i) => {
           const day = filteredDailyDays.value[i];
@@ -1199,15 +1267,27 @@ function toggleActiveRow(auth) {
           <i class="pi pi-exclamation-triangle" />
           <span>Alertas de CRM Único no Período</span>
         </div>
-        <div class="unico-alertas-list">
-          <div v-for="alerta in unicoAlertas" :key="`${alerta.id_medico}-${alerta.hr_janela}`" class="unico-alerta-chip">
-            <span class="alerta-crm" :style="{ color: getCRMColor(alerta.id_medico) }">{{ alerta.id_medico }}</span>
-            <span class="alerta-sep">-</span>
-            <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
-            <span class="alerta-sep">-</span>
-            <span class="alerta-stat">{{ alerta.nu_prescricoes_dia }} autorizações</span>
-            <span class="alerta-sep">-</span>
-            <span class="alerta-stat">{{ alerta.taxa_hora.toFixed(1) }}/h</span>
+        <div class="unico-alertas-grouped-list">
+          <div v-for="grupo in unicoAlertasAgrupados" :key="grupo.id_medico" class="unico-alerta-group">
+            <div class="unico-alerta-group-title">
+              <span class="alerta-crm" :style="{ color: getCRMColor(grupo.id_medico) }">{{ grupo.id_medico }}</span>
+              <span class="unico-alerta-group-count">
+                {{ grupo.alertas.length }} alerta{{ grupo.alertas.length !== 1 ? 's' : '' }}
+              </span>
+            </div>
+            <div class="unico-alerta-group-items">
+              <div
+                v-for="alerta in grupo.alertas"
+                :key="`${alerta.id_medico}-${alerta.dt_ini_hora}-${alerta.dt_fim_hora}-${alerta.numero_alerta}`"
+                class="unico-alerta-row"
+              >
+                <span class="alerta-alert-id">#{{ alerta.numero_alerta }}</span>
+                <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
+                <span v-if="alerta.severidade" class="alerta-severity">{{ alerta.severidade }}</span>
+                <span class="alerta-stat">{{ alerta.ritmo_qtd_display }} em {{ alerta.ritmo_minutos_display }}min</span>
+                <span class="alerta-stat">{{ alerta.ritmo_hora_num.toFixed(1) }}/h</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1218,15 +1298,17 @@ function toggleActiveRow(auth) {
           <i class="pi pi-users" />
           <span>Alertas Multi-CRM no Período</span>
         </div>
-        <div class="unico-alertas-list">
-          <div v-for="alerta in multiAlertas" :key="`${alerta.dt_janela}-${alerta.hr_janela}-${alerta.dt_ini_hora}`" class="unico-alerta-chip">
-            <span class="alerta-crm alerta-crm-multi">{{ alerta.nu_crms }} CRMs</span>
-            <span class="alerta-sep">-</span>
+        <div class="multi-alertas-numbered-list">
+          <div
+            v-for="alerta in multiAlertasNumerados"
+            :key="`${alerta.dt_janela}-${alerta.hr_janela}-${alerta.dt_ini_hora}-${alerta.numero_alerta}`"
+            class="multi-alerta-row"
+          >
+            <span class="multi-alerta-id">#{{ alerta.numero_alerta }}</span>
+            <span class="alerta-crm alerta-crm-multi">{{ alerta.nu_crms_display }} CRMs</span>
             <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
-            <span class="alerta-sep">-</span>
-            <span class="alerta-stat">{{ alerta.nu_prescricoes }} autorizacoes</span>
-            <span v-if="alerta.severidade" class="alerta-sep">-</span>
-            <span v-if="alerta.severidade" class="alerta-stat">{{ alerta.severidade }}</span>
+            <span v-if="alerta.severidade" class="multi-alerta-severity">{{ alerta.severidade }}</span>
+            <span class="alerta-stat">{{ alerta.nu_prescricoes_display }} autorizacoes</span>
           </div>
         </div>
       </div>
@@ -1889,6 +1971,68 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   padding: 0.3rem 0.75rem;
   font-size: 0.72rem;
 }
+.unico-alertas-grouped-list {
+  display: grid;
+  gap: 0.75rem;
+}
+.unico-alerta-group {
+  display: grid;
+  gap: 0.35rem;
+}
+.unico-alerta-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.3rem;
+}
+.unico-alerta-group-title .alerta-crm {
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+.unico-alerta-group-count {
+  color: var(--text-secondary);
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.22);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.unico-alerta-group-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.unico-alerta-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.22);
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  min-height: 1.7rem;
+  white-space: nowrap;
+}
+.alerta-alert-id {
+  color: #f59e0b;
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.28);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.alerta-severity {
+  color: #f59e0b;
+  font-weight: 800;
+  text-transform: uppercase;
+}
 .alertas-multi-section {
   background: rgba(139, 92, 246, 0.05);
   border-color: rgba(139, 92, 246, 0.25);
@@ -1899,6 +2043,38 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .alertas-multi-section .unico-alerta-chip {
   background: rgba(139, 92, 246, 0.08);
   border-color: rgba(139, 92, 246, 0.22);
+}
+.multi-alertas-numbered-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.multi-alerta-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  min-height: 1.7rem;
+  white-space: nowrap;
+}
+.multi-alerta-id {
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.multi-alerta-severity {
+  color: #a78bfa;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 .alerta-crm-multi { color: #8b5cf6; }
 .alerta-crm { font-weight: 700; }

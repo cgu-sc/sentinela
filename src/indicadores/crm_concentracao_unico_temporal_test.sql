@@ -15,10 +15,10 @@
 --   CRÍTICO →  8 auth em 10 min (0,8/min)
 --   GRAVE   →  8 auth em 15 min (0,5/min)
 --   GRAVE   →  9 auth em 20 min (0,5/min)
---   ALTO    →  7 auth em 30 min (0,2/min)
---   ALTO    → 10 auth em 60 min (0,2/min)
---   ALTO    →  5 auth em 25 min (taxa ≥ 12/hr, janela fixa)
---   ALTO    →  N auth, taxa ≥ 12/hr p/ N > 5 (ex: 8 em 40 min)
+--   ALTO    →  6 auth em 25 min (0,2/min)
+--   ALTO    →  8 auth em 30 min (0,3/min)
+--   ALTO    → 12 auth em 60 min (0,2/min)
+--   ALTO    →  N auth, taxa ≥ 12/hr p/ N >= 8 (ex: 8 em até 40 min)
 --
 -- ── PROCESSAMENTO ───────────────────────────────────────────────────────────
 --   Lotes de 20 CNPJs com checkpoint por CNPJ.
@@ -239,10 +239,10 @@ BEGIN
        OR nu_10min >= 8 
        OR nu_15min >= 8 
        OR nu_20min >= 9 
-       OR nu_25min >= 8 
-       OR nu_30min >= 9 
-       OR nu_60min >= 14 
-       OR (nu_60min >= 10 AND nu_minutos_span_full <= nu_60min * 4.28);
+       OR nu_25min >= 6 
+       OR nu_30min >= 8 
+       OR nu_60min >= 12 
+       OR (nu_60min >= 8 AND nu_minutos_span_full <= nu_60min * 5);
 
     -- ── Deduplicação: 1 evento por (cnpj, médico, hora) ──────────────────
     -- PARTITION BY inclui id_medico: dois médicos diferentes no mesmo CNPJ/hora
@@ -271,10 +271,10 @@ BEGIN
                     WHEN nu_10min >=  8 THEN 2
                     WHEN nu_15min >=  8 THEN 3
                     WHEN nu_20min >=  9 THEN 3
-                    WHEN nu_30min >=  9 THEN 4
-                    WHEN nu_60min >= 14 THEN 4
-                    WHEN nu_25min >=  8 THEN 4
-                    WHEN nu_60min >= 10 AND nu_minutos_span_full <= nu_60min * 4.28 THEN 4
+                    WHEN nu_30min >=  8 THEN 4
+                    WHEN nu_60min >= 12 THEN 4
+                    WHEN nu_25min >=  6 THEN 4
+                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 4
                     ELSE 99
                 END ASC,
                 nu_60min DESC,
@@ -321,10 +321,10 @@ BEGIN
                     WHEN nu_10min >=  8 THEN fim_real_10min
                     WHEN nu_15min >=  8 THEN fim_real_15min
                     WHEN nu_20min >=  9 THEN fim_real_20min
-                    WHEN nu_30min >=  7 THEN fim_real_30min
-                    WHEN nu_60min >= 10 THEN fim_real_60min
-                    WHEN nu_25min >=  5 THEN fim_real_25min
-                    WHEN nu_60min >=  5 AND nu_minutos_span_full <= nu_60min * 5 THEN fim_real_60min
+                    WHEN nu_30min >=  8 THEN fim_real_30min
+                    WHEN nu_60min >= 12 THEN fim_real_60min
+                    WHEN nu_25min >=  6 THEN fim_real_25min
+                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN fim_real_60min
                 END AS dt_fim_real,
                 CASE
                     WHEN nu_5min  >=  7 THEN 'EXTREMO'
@@ -333,10 +333,10 @@ BEGIN
                     WHEN nu_10min >=  8 THEN 'CRÍTICO'
                     WHEN nu_15min >=  8 THEN 'GRAVE'
                     WHEN nu_20min >=  9 THEN 'GRAVE'
-                    WHEN nu_30min >=  7 THEN 'ALTO'
-                    WHEN nu_60min >= 10 THEN 'ALTO'
-                    WHEN nu_25min >=  5 THEN 'ALTO'
-                    WHEN nu_60min >=  5 AND nu_minutos_span_full <= nu_60min * 5 THEN 'ALTO'
+                    WHEN nu_30min >=  8 THEN 'ALTO'
+                    WHEN nu_60min >= 12 THEN 'ALTO'
+                    WHEN nu_25min >=  6 THEN 'ALTO'
+                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 'ALTO'
                 END AS severidade
             FROM #concentracao_dedup
             WHERE rn = 1

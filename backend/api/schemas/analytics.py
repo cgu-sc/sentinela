@@ -465,6 +465,10 @@ class CrmUnicoAlertaSchema(BaseModel):
     nu_prescricoes_dia: int
     nu_minutos_dia: int
     taxa_hora: float
+    ritmo_hora: float
+    ritmo_qtd: int
+    ritmo_minutos: int
+    severidade: Optional[str] = None
     dt_ini_hora: Optional[str] = None
     dt_fim_hora: Optional[str] = None
 

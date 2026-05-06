@@ -123,9 +123,16 @@ NUNCA utilize valores fixos nos componentes. Consulte sempre o arquivo correspon
 
 ## 4. UI/UX e Design System
 - **Variáveis CSS**: Use `var(--bg-color)`, `var(--text-color)`, `var(--primary-color)`. Não use hexadecimais no CSS dos componentes.
+- **Tooltips**: Sempre utilize o `Tooltip` do PrimeVue para dicas, explicações e interações de hover. Evite `title` nativo do HTML quando o tooltip fizer parte da experiência de usuário.
 - **RESTRIÇÕES DE FONTE**: NUNCA utilize fontes BOLD (`font-weight: 700`, `font-weight: 800`, `bold`). O peso máximo permitido é Semi-Bold (`600`) ou Medium (`500`). NUNCA utilize fontes do tipo MONO ou monospaced (ex: `font-variant-numeric: tabular-nums`, `font-family: monospace`), a não ser que explicitamente exigido para código puro.
 - **Arbflow Design**: Mantenha a estética de glassmorphism, bordas suaves e as animações definidas em `animations.css`.
 - **Feedback**: Utilize `ToastService` para mensagens do sistema e estados de loading durante requisições de API.
+
+## 4.1 Performance Como Requisito
+- **Pense em escala sempre**: Ao desenvolver qualquer método, função, computed, endpoint, service ou query SQL, considere performance desde o desenho inicial. O sistema trabalha com bases que podem chegar a bilhões de linhas.
+- **Evite complexidade desnecessária**: Não use loops O(n²), recomputações reativas pesadas, joins amplos, scans completos ou transformações em memória quando houver alternativa mais eficiente.
+- **Prefira estratégias escaláveis**: Use filtros antecipados, índices, pré-agregações, estruturas `Map`/lookup O(1), paginação, lazy loading, cache controlado e processamento no backend/banco quando isso reduzir volume trafegado ou trabalho no frontend.
+- **Valide o custo**: Para funções críticas, considere o tamanho esperado dos dados, o caminho de execução mais frequente e o impacto em memória, CPU, rede e banco.
 
 ## 5. Padrões de Backend (Python/FastAPI)
 - **Camadas**: Separação clara entre `endpoints`, `services` e `schemas` (Pydantic).

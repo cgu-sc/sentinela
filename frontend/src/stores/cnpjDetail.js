@@ -21,14 +21,14 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     dadosCadastro:        null,
     dadosCadastroLoading: false,
 
-    // ── Evolução Financeira ───────────────────────────────────────────────────
+    // ── Movimentação Financeira ───────────────────────────────────────────────
     evolucaoFinanceira: null,
     evolucaoLoading:    false,
     evolucaoLoaded:     false,
     evolucaoError:      null,
     evolucaoKey:        null,   // Cache key: "cnpj|inicio|fim" — evita re-fetch desnecessário
 
-    // ── Movimentação (Memória de Cálculo) ─────────────────────────────────────
+    // ── Memória de Cálculo ────────────────────────────────────────────────────
     movimentacaoData:    null,
     movimentacaoLoading: false,
     movimentacaoLoaded:  false,
@@ -110,7 +110,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Evolução Financeira ───────────────────────────────────────────────────
+    // ── Movimentação Financeira ───────────────────────────────────────────────
     async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.evolucaoKey === key) return;
@@ -125,7 +125,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });
-        this.requestTimes['evolucao'] = { label: 'Evolução Financeira', ms: Math.round(performance.now() - t0) };
+        this.requestTimes['evolucao'] = { label: 'Movimentação Financeira', ms: Math.round(performance.now() - t0) };
         this.evolucaoFinanceira = data;
         this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
@@ -177,7 +177,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Movimentação ──────────────────────────────────────────────────────────
+    // ── Memória de Cálculo ────────────────────────────────────────────────────
     async fetchMovimentacao(cnpj) {
       if (!cnpj) return;
       this.movimentacaoLoading = true;
@@ -186,7 +186,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
         const ms = Math.round(performance.now() - t0);
-        this.requestTimes['movimentacao'] = { label: 'Movimentação', ms, detail: buildTimingDetail(data) };
+        this.requestTimes['movimentacao'] = { label: 'Memória de Cálculo', ms, detail: buildTimingDetail(data) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
       } catch (e) {

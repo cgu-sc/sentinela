@@ -31,14 +31,35 @@ export const useFarmaciaListsStore = defineStore('farmaciaLists', () => {
     if (isInteresse.value(cnpj)) {
       interesse.value = interesse.value.filter((e) => e.cnpj !== cnpj);
     } else {
-      interesse.value.push({ cnpj, razaoSocial, adicionadoEm: new Date().toISOString() });
+      interesse.value.push({
+        cnpj,
+        razaoSocial,
+        adicionadoEm: new Date().toISOString(),
+        observacao: '',
+      });
     }
     saveToStorage(interesse);
   }
+
+  function setObservacao(cnpj, text) {
+    const item = interesse.value.find((e) => e.cnpj === cnpj);
+    if (item) {
+      item.observacao = text;
+      item.atualizadoEm = new Date().toISOString();
+      saveToStorage(interesse);
+    }
+  }
+
+  const getObservacao = computed(() => (cnpj) => {
+    const item = interesse.value.find((e) => e.cnpj === cnpj);
+    return item ? item.observacao : '';
+  });
 
   return {
     interesse,
     isInteresse,
     toggleInteresse,
+    setObservacao,
+    getObservacao,
   };
 });

@@ -126,6 +126,7 @@ function formatScore(v) {
             <th>#</th>
             <th>CNPJ</th>
             <th>Razão Social</th>
+            <th>Observação</th>
             <th>Município / UF</th>
             <th class="col-right">% N. Comp.</th>
             <th class="col-right">Score de Risco</th>
@@ -140,6 +141,13 @@ function formatScore(v) {
             <td class="col-num">{{ i + 1 }}</td>
             <td class="col-cnpj">{{ formatCnpj(item.cnpj) }}</td>
             <td class="col-razao">{{ item.razaoSocial }}</td>
+            <td class="col-obs">
+              <div v-if="item.observacao" class="obs-content" v-tooltip.top="item.observacao">
+                <i class="pi pi-comment mr-1 opacity-60" />
+                <span class="obs-text">{{ item.observacao }}</span>
+              </div>
+              <span v-else class="col-vazio">—</span>
+            </td>
             <td class="col-loc">
               <span v-if="item.municipio !== '—'">{{ item.municipio }}</span>
               <span v-if="item.uf !== '—'" class="col-uf">/{{ item.uf }}</span>
@@ -344,6 +352,23 @@ function formatScore(v) {
 .col-num   { width: 36px; opacity: 0.4; font-weight: 400; }
 .col-cnpj  { font-size: 0.75rem; white-space: nowrap; opacity: 0.7; }
 .col-razao { font-weight: 400; max-width: 220px; }
+.col-obs   { max-width: 250px; }
+.obs-content {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-color);
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+.obs-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .col-date  { opacity: 0.55; font-size: 0.76rem; white-space: nowrap; }
 .col-right { text-align: right; }
 .col-vazio { opacity: 0.3; }

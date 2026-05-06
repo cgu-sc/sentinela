@@ -193,9 +193,8 @@ BEGIN
       AND A.data_hora >= @DataInicio AND A.data_hora < DATEADD(DAY, 1, @DataFim)
     GROUP BY L.id_cnpj, A.data_hora, A.num_autorizacao, A.crm, A.crm_uf;
 
-    CREATE INDEX IDX_BaseLote
-        ON #base_lote(id_cnpj, dt_dia, data_hora)
-        INCLUDE (num_autorizacao, id_medico);
+    CREATE CLUSTERED INDEX IDX_BaseLote
+        ON #base_lote(id_cnpj, dt_dia, data_hora);
 
     PRINT '      3.A Base lote + indice: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 

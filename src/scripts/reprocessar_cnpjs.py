@@ -10,7 +10,7 @@ processados incorretamente devido a problemas de comunicação com o banco de da
 COMO FUNCIONA:
 1.  **Lista de CNPJs:** O script lê uma lista de CNPJs fornecida na variável `lista_cnpjs_reprocessar`.
 2.  **Limpeza:** Para cada CNPJ, ele primeiro apaga todos os registros de processamento anteriores
-    das tabelas `processamentosFP` e `dadosProcessamentosFP` para evitar duplicidade.
+    das tabelas `fp.processamento` e `fp.dados_processamento_gtin` para evitar duplicidade.
 3.  **Reprocessamento:** Em seguida, ele executa a mesma lógica de análise do script principal
     `08 - sentinela.py`, mas com um tempo de espera aumentado entre as consultas (10 segundos)
     para garantir que o banco de dados tenha tempo de retornar os dados completos.
@@ -125,8 +125,8 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
     # Limpa dados anteriores do CNPJ
     try:
-        cursor.execute("DELETE FROM [temp_CGUSC].[dbo].[dadosProcessamentosFP] WHERE id_processamento IN (SELECT id FROM [temp_CGUSC].[dbo].[processamentosFP] WHERE cnpj = ?)", cnpj)
-        cursor.execute("DELETE FROM [temp_CGUSC].[dbo].[processamentosFP] WHERE cnpj = ?", cnpj)
+        cursor.execute("DELETE FROM [temp_CGUSC].[fp].[dados_processamento_gtin] WHERE id_processamento IN (SELECT id FROM [temp_CGUSC].[fp].[processamento] WHERE cnpj = ?)", cnpj)
+        cursor.execute("DELETE FROM [temp_CGUSC].[fp].[processamento] WHERE cnpj = ?", cnpj)
         conn.commit()
         logging.info(f"Dados anteriores do CNPJ {cnpj} removidos com sucesso.")
     except pyodbc.Error as e:
@@ -198,7 +198,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
     cursor.execute('''
     select *
-    from temp_CGUSC.[dbo].dadosFarmaciasFP
+    from temp_CGUSC.fp.dados_farmacia
     where cnpj = ? 
     ''', cnpj)
 
@@ -353,7 +353,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
     # =====================================================================
     data_hora_processamento = datetime.datetime.now()
     cursor.execute('''
-    insert into [temp_CGUSC].[dbo].[processamentosFP] (cnpj, razao_social, nome_fantasia, municipio, uf, periodo_inicial, periodo_final,data_processamento, situacao) values (?,?,?,?,?,?,?,?,?)
+    insert into [temp_CGUSC].[fp].[processamento] (cnpj, razao_social, nome_fantasia, municipio, uf, periodo_inicial, periodo_final,data_processamento, situacao) values (?,?,?,?,?,?,?,?,?)
     ''', cnpj, tabela_dados_cnpj['razao_social'], tabela_dados_cnpj['nome_fantasia'],
                    tabela_dados_cnpj['municipio'],
                    tabela_dados_cnpj['uf'], data_inicio_vendas_estabelecimento, DATA_FINAL_ANALISE, data_hora_processamento, 1)
@@ -361,7 +361,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
     id_processamento = None
     cursor.execute('''
-    select top 1 id from [temp_CGUSC].[dbo].[processamentosFP]
+    select top 1 id from [temp_CGUSC].[fp].[processamento]
     where cnpj = ?
     order by data_processamento desc
     ''', cnpj)
@@ -372,7 +372,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
     for i in tabela_completa.items():
         cursor.execute('''
-        insert into [temp_CGUSC].[dbo].dadosProcessamentosFP(id_processamento,codigo_barra, tipo, vendas_periodo, vendas_sem_comprovacao, qnt_aquis_dev) values (?,?, ?, ?, ?, ?)
+        insert into [temp_CGUSC].[fp].dados_processamento_gtin(id_processamento,codigo_barra, tipo, vendas_periodo, vendas_sem_comprovacao, qnt_aquis_dev) values (?,?, ?, ?, ?, ?)
         ''', id_processamento, i[0], 'h', 1, 1, 1)
         conn.commit()
 
@@ -382,7 +382,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
             if tipo == 'c':
                 cursor.execute('''
-                insert into [temp_CGUSC].[dbo].dadosProcessamentosFP(id_processamento,codigo_barra, tipo, estoque_inicial, estoque_final,data_aquis_dev_estoq, qnt_aquis_dev,numero_nfe) values (?,?, ?, ?, ?, ?, ?, ?)
+                insert into [temp_CGUSC].[fp].dados_processamento_gtin(id_processamento,codigo_barra, tipo, estoque_inicial, estoque_final,data_aquis_dev_estoq, qnt_aquis_dev,numero_nfe) values (?,?, ?, ?, ?, ?, ?, ?)
                 ''', id_processamento, bar_code, tipo, j['estoque_inicial'], j['estoque_final'],
                                j['data_aquisicao'],
                                j['qnt_aquisicao'], j['numeroNFE'])
@@ -390,7 +390,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
             elif tipo == 'v':
                 cursor.execute('''
-                insert into [temp_CGUSC].[dbo].dadosProcessamentosFP(id_processamento,codigo_barra, tipo, periodo_inicial, periodo_inicial_nao_comprovacao, periodo_final, estoque_inicial, vendas_periodo, estoque_final, vendas_sem_comprovacao, valor_movimentado, valor_sem_comprovacao) values (?,?, ?, ?, ?,?,?,?, ?, ?, ?,?)
+                insert into [temp_CGUSC].[fp].dados_processamento_gtin(id_processamento,codigo_barra, tipo, periodo_inicial, periodo_inicial_nao_comprovacao, periodo_final, estoque_inicial, vendas_periodo, estoque_final, vendas_sem_comprovacao, valor_movimentado, valor_sem_comprovacao) values (?,?, ?, ?, ?,?,?,?, ?, ?, ?,?)
                 ''', id_processamento, bar_code, tipo, j['periodo_inicial'],
                                j['data_inicio_nao_comprovacao_codigo_barra'], j['periodo_final'],
                                j['estoque_inicial'],
@@ -400,7 +400,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
             elif tipo == 'd':
                 cursor.execute('''
-                insert into [temp_CGUSC].[dbo].dadosProcessamentosFP(id_processamento,codigo_barra, tipo, estoque_inicial, estoque_final,data_aquis_dev_estoq, qnt_aquis_dev,numero_nfe) values (?,?, ?, ?, ?, ?, ?, ?)
+                insert into [temp_CGUSC].[fp].dados_processamento_gtin(id_processamento,codigo_barra, tipo, estoque_inicial, estoque_final,data_aquis_dev_estoq, qnt_aquis_dev,numero_nfe) values (?,?, ?, ?, ?, ?, ?, ?)
                 ''', id_processamento, bar_code, tipo, j['estoque_inicial'], j['estoque_final'],
                                j['data_devolucao'],
                                j['qnt_devolucao'], j['numeroNFE'])
@@ -411,7 +411,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
                 if j['estoque_inicial'] > 0:
                     data_estoque = j['data_estoque_inicial']
                 cursor.execute('''
-                insert into [temp_CGUSC].[dbo].dadosProcessamentosFP(id_processamento,codigo_barra, tipo, estoque_inicial, data_aquis_dev_estoq) values (?,?, ?, ?, ?)
+                insert into [temp_CGUSC].[fp].dados_processamento_gtin(id_processamento,codigo_barra, tipo, estoque_inicial, data_aquis_dev_estoq) values (?,?, ?, ?, ?)
                 ''', id_processamento, bar_code, tipo, j['estoque_inicial'], data_estoque)
                 conn.commit()
 

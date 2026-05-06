@@ -160,26 +160,31 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 
 
 
--- Cria a tabela temporária processamentosFP para armazenar dados de processamento de farmácias      
-CREATE TABLE temp_cgusc.[fp].[processamento(
+-- Cria a tabela temporária processamento para armazenar dados de auditoria das farmácias
+	drop table if exists temp_cgusc.fp.processamento
+	CREATE TABLE temp_cgusc.fp.processamento(
 	[id] [int] PRIMARY KEY IDENTITY(1,1) NOT NULL,
-	[cnpj] [varchar](max) NOT NULL,
-	razao_social [varchar](max)  NULL,
-	nome_fantasia [varchar](max)  NULL,
-	municipio [varchar](max)  NULL,
-	uf [varchar](max)  NULL,
-	[periodo_inicial] [datetime2] NOT NULL,
-	[periodo_final] [datetime2] NOT NULL,
+	[cnpj] [varchar](14) NOT NULL,
+	razao_social [varchar](200) NULL,
+	nome_fantasia [varchar](200) NULL,
+	municipio [varchar](100) NULL,
+	uf [char](2) NULL,
+	[periodo_inicial] [date] NOT NULL,
+	[periodo_final] [date] NOT NULL,
 	[data_processamento] [datetime2] NOT NULL,
-	situacao integer not null,
+	situacao [tinyint] not null,
     status_detalhado VARCHAR(500),  
     tempo_processamento_segundos DECIMAL(10,2), 
     total_registros_processados INT,  
     total_medicamentos INT
 	);
 
--- Cria a tabela temporária dadosProcessamentosFP para armazenar detalhes dos processamentos
-CREATE TABLE temp_cgusc.[dbo].dadosProcessamentosFP(
+	CREATE INDEX ix_processamento_cnpj ON temp_cgusc.fp.processamento(cnpj);
+	CREATE INDEX ix_processamento_data ON temp_cgusc.fp.processamento(data_processamento);
+
+-- Cria a tabela temporária dados_processamento_gtin para armazenar detalhes dos processamentos
+	drop table if exists temp_cgusc.fp.dados_processamento_gtin
+	CREATE TABLE temp_cgusc.fp.dados_processamento_gtin(
 	[id] INT Identity(1,1) Primary Key,
 	[id_processamento] INT NULL,
 	[codigo_barra] [VARCHAR](14) NOT NULL,
@@ -196,8 +201,10 @@ CREATE TABLE temp_cgusc.[dbo].dadosProcessamentosFP(
 	[data_aquis_dev_estoq] [date] NULL,
 	[qnt_aquis_dev] [int] NULL,
 	[numero_nfe] [varchar](max) NULL,
-	constraint fk2_id_processamento_movimentacao foreign key (id_processamento) references temp_cgusc.[fp].[processamento (id)
+	constraint fk2_id_processamento_movimentacao foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id)
 	);
+
+	CREATE INDEX ix_dadosProcGtin_proc ON temp_cgusc.fp.dados_processamento_gtin(id_processamento);
 
 -- Cria a tabela temporária movimentacaoMensalCodigoBarraFP para movimentações mensais por código de barra
 	drop table if exists temp_cgusc.fp.movimentacao_mensal_gtin
@@ -210,7 +217,12 @@ CREATE TABLE temp_cgusc.[dbo].dadosProcessamentosFP(
 	[qnt_vendas_sem_comprovacao] [int] NULL,
 	[valor_vendas] [DECIMAL](11, 2) NULL,
 	[valor_sem_comprovacao] [DECIMAL](11, 2) NULL,
-	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento (id))
+	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id)
+	);
+
+	-- Índices para performance de consulta por GTIN e Auditoria
+	CREATE INDEX ix_movMensalGtin_proc ON temp_cgusc.fp.movimentacao_mensal_gtin(id_processamento);
+	CREATE INDEX ix_movMensalGtin_periodo ON temp_cgusc.fp.movimentacao_mensal_gtin(periodo);
 
 
 	--------------------------------------------------------------

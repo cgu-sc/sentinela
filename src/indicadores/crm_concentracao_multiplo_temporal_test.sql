@@ -180,6 +180,7 @@ BEGIN
 
     SELECT 
         L.id_cnpj,
+        CAST(A.data_hora AS DATE) AS dt_dia,
         A.data_hora,
         A.num_autorizacao,
         CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(20)) AS id_medico
@@ -193,7 +194,7 @@ BEGIN
     GROUP BY L.id_cnpj, A.data_hora, A.num_autorizacao, A.crm, A.crm_uf;
 
     CREATE INDEX IDX_BaseLote
-        ON #base_lote(id_cnpj, data_hora)
+        ON #base_lote(id_cnpj, dt_dia, data_hora)
         INCLUDE (num_autorizacao, id_medico);
 
     PRINT '      3.A Base lote + indice: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -243,6 +244,7 @@ BEGIN
         FROM #base_lote A
         INNER JOIN #base_lote B
             ON  B.id_cnpj   = A.id_cnpj
+            AND B.dt_dia    = A.dt_dia
             AND B.data_hora BETWEEN A.data_hora AND DATEADD(MINUTE, 60, A.data_hora)
         GROUP BY A.id_cnpj, A.data_hora
     ) Agg

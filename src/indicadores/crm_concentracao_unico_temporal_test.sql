@@ -37,6 +37,7 @@ DECLARE @DataFim     DATE     = '2024-12-31';
 DECLARE @lote_size   INT      = 20;
 DECLARE @t0          DATETIME = GETDATE();
 DECLARE @t1          DATETIME;
+DECLARE @t_bloco     DATETIME;
 
 DECLARE @lote_num           INT = 0;
 DECLARE @nu_processados     INT = 0;
@@ -55,6 +56,7 @@ PRINT '   Lote: ' + CAST(@lote_size AS VARCHAR) + ' CNPJs por iteração';
 -- PASSO 0: Criar tabelas persistentes se não existirem
 -- ============================================================================
 PRINT '>> Passo 0: Inicializando tabelas persistentes...';
+SET @t1 = GETDATE();
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_controle') IS NULL
     CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_controle (
@@ -88,11 +90,14 @@ BEGIN
         ON temp_CGUSC.fp.crm_concentracao_unico_alertas(id_cnpj, id_medico, dt_dia);
 END
 
+PRINT '   Passo 0 concluido em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
+
 
 -- ============================================================================
 -- PASSO 1: Limpar CNPJs interrompidos para reprocessar do zero
 -- ============================================================================
 PRINT '>> Passo 1: Limpando CNPJs interrompidos (status PROCESSANDO)...';
+SET @t1 = GETDATE();
 
 DELETE alerta
 FROM temp_CGUSC.fp.crm_concentracao_unico_alertas alerta
@@ -103,7 +108,7 @@ WHERE ctrl.status = 'PROCESSANDO';
 DELETE FROM temp_CGUSC.fp.crm_concentracao_unico_controle
 WHERE status = 'PROCESSANDO';
 
-PRINT '   Limpeza concluída.';
+PRINT '   Limpeza concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 
 
 -- ============================================================================
@@ -154,6 +159,7 @@ BEGIN
     SET @t1 = GETDATE();
 
     -- ── Pegar próximo lote da fila ────────────────────────────────────────
+    SET @t_bloco = GETDATE();
     DROP TABLE IF EXISTS #lote_atual;
 
     SELECT TOP (@lote_size) id_cnpj, cnpj
@@ -161,15 +167,21 @@ BEGIN
     FROM #cnpjs_pendentes
     ORDER BY id_cnpj;
 
+    PRINT '      3.0 Selecionar lote: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
     -- ── Marcar lote como PROCESSANDO ─────────────────────────────────────
+    SET @t_bloco = GETDATE();
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_controle (id_cnpj, dt_inicio, status)
     SELECT id_cnpj, GETDATE(), 'PROCESSANDO'
     FROM #lote_atual;
+
+    PRINT '      3.0 Marcar PROCESSANDO: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
     -- ── Passo 3.A: Criar base pré-filtrada por patologia para o lote ──────
     -- Isso reduz o volume de dados e remove a necessidade de joins repetidos
     -- com a tabela de medicamentos dentro do sliding window.
     -- Isso colapsa múltiplos itens de uma mesma autorização no mesmo instante.
+    SET @t_bloco = GETDATE();
     DROP TABLE IF EXISTS #base_lote;
 
     SELECT 
@@ -188,8 +200,11 @@ BEGIN
 
     CREATE INDEX IDX_BaseLote ON #base_lote(id_cnpj, id_medico, data_hora);
 
+    PRINT '      3.A Base lote + indice: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
 
     -- ── Passo 3.B: Concentração sobre a base reduzida ────────────────────
+    SET @t_bloco = GETDATE();
     DROP TABLE IF EXISTS #concentracao_raw;
 
     -- Usamos uma subconsulta para calcular as agregações uma única vez, 
@@ -244,9 +259,12 @@ BEGIN
        OR nu_60min >= 12 
        OR (nu_60min >= 8 AND nu_minutos_span_full <= nu_60min * 5);
 
+    PRINT '      3.B Self-join concentracao_raw: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
     -- ── Deduplicação: 1 evento por (cnpj, médico, hora) ──────────────────
     -- PARTITION BY inclui id_medico: dois médicos diferentes no mesmo CNPJ/hora
     -- geram eventos independentes (não se cancelam).
+    SET @t_bloco = GETDATE();
     DROP TABLE IF EXISTS #concentracao_dedup;
 
     SELECT
@@ -289,7 +307,10 @@ BEGIN
     INTO #concentracao_dedup
     FROM #concentracao_raw;
 
+    PRINT '      3.C Deduplicacao: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
     -- ── INSERT incremental nos alertas ────────────────────────────────────
+    SET @t_bloco = GETDATE();
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_alertas
         (id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
          nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade)
@@ -347,7 +368,10 @@ BEGIN
     SET @nu_alertas_lote  = @@ROWCOUNT;
     SET @nu_alertas_total += @nu_alertas_lote;
 
+    PRINT '      3.D Insert alertas: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
     -- ── Marcar lote como OK com contagem de alertas por CNPJ ─────────────
+    SET @t_bloco = GETDATE();
     UPDATE ctrl
     SET status     = 'OK',
         dt_fim     = GETDATE(),
@@ -359,10 +383,15 @@ BEGIN
     FROM temp_CGUSC.fp.crm_concentracao_unico_controle ctrl
     WHERE ctrl.id_cnpj IN (SELECT id_cnpj FROM #lote_atual);
 
+    PRINT '      3.E Atualizar controle: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
     -- ── Remover lote da fila e atualizar contadores ───────────────────────
+    SET @t_bloco = GETDATE();
     DELETE FROM #cnpjs_pendentes WHERE id_cnpj IN (SELECT id_cnpj FROM #lote_atual);
 
     SET @nu_processados += (SELECT COUNT(*) FROM #lote_atual);
+
+    PRINT '      3.F Remover da fila: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
     PRINT '   Lote ' + RIGHT('0000' + CAST(@lote_num AS VARCHAR), 4) +
           ' | ' + CAST(@nu_ja_processados + @nu_processados AS VARCHAR) + '/' + CAST(@nu_total AS VARCHAR) + ' CNPJs' +

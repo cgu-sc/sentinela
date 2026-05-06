@@ -29,6 +29,17 @@ def _cell_bg(cell, fill_hex: str):
     tcPr.append(shd)
 
 
+def _cell_bg_run(run, fill_hex: str):
+    """Define cor de fundo (shading) para um Run específico (realce)."""
+    r = run._r
+    rPr = r.get_or_add_rPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), fill_hex)
+    rPr.append(shd)
+
+
 def _cell_borders(cell, left=None, right=None, top=None, bottom=None):
     """Define bordas coloridas em lados específicos da célula. None = sem borda."""
     tc = cell._tc
@@ -148,7 +159,6 @@ def _add_toc_entry(doc, num: str, title: str, page: str = 'xx'):
 
 def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
     """Constrói a página de sumário dinâmica."""
-    doc.add_page_break()
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_title, 'SUMÁRIO', color='0F172A', size=14, bold=True)
@@ -173,7 +183,6 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
             _add_toc_entry(doc, f'  {num}', full_title)
 
     _add_toc_entry(doc, '6.', 'CONCLUSÃO E ENCAMINHAMENTO')
-    doc.add_page_break()
 
 
 # ── Geração do documento ─────────────────────────────────────────────────────
@@ -233,57 +242,85 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     BAR_W = Inches(0.18)
     MAIN_W = PAGE_W - BAR_W
 
-    # PÁGINA 1 — CAPA
-    tbl_banner = doc.add_table(rows=1, cols=2)
-    tbl_banner.autofit = False
-    tbl_banner.columns[0].width = BAR_W
-    tbl_banner.columns[1].width = MAIN_W
-    _tbl_no_borders(tbl_banner)
+    # PÁGINA 1 — CAPA (Estilo Oficial)
+    # ── 4. Cabeçalho Oficial ───────────────────────────────────────────
+    p_brasao = doc.add_paragraph()
+    p_brasao.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Busca a raiz do projeto (d:\sentinela) a partir deste arquivo (backend/api/services/analytics/nota_tecnica.py)
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+    brasao_path = os.path.join(root_dir, 'frontend', 'public', 'img', 'brasao_republica_mini.jpg')
+    
+    if os.path.exists(brasao_path):
+        p_brasao.add_run().add_picture(brasao_path, width=Inches(1.5))
+    else:
+        # Fallback para debug se não encontrar
+        print(f"⚠️ Alerta: Brasão não encontrado em {brasao_path}")
+    
+    p_header = doc.add_paragraph()
+    p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p_header, 'CONTROLADORIA-GERAL DA UNIÃO', color='0F172A', size=14, bold=True)
+    
+    doc.add_paragraph('\n' * 3)
+    
+    # ── 5. Título da Nota Técnica ──────────────────────────────────────
+    p_titulo = doc.add_paragraph()
+    p_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p_titulo, 'NOTA TÉCNICA PRELIMINAR\n', color='0F172A', size=24, bold=True)
+    _run(p_titulo, 'SISTEMA SENTINELA', color='0F172A', size=14, bold=True)
+    _run(p_titulo, '\nPrograma Farmácia Popular do Brasil', color='64748B', size=10, italic=True)
 
-    cell_bar = tbl_banner.rows[0].cells[0]
-    cell_main = tbl_banner.rows[0].cells[1]
-    _cell_bg(cell_bar, '6366F1')
-    _cell_bg(cell_main, '0F172A')
+    doc.add_paragraph('\n' * 2)
 
-    p_main = cell_main.paragraphs[0]
-    p_main.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # ── 6. Selo de Sigilo ──────────────────────────────────────────────
+    p_sigilo = doc.add_paragraph()
+    p_sigilo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_sigilo = _run(p_sigilo, ' DOCUMENTO SIGILOSO ', color='FFFFFF', size=10, bold=True)
+    _cell_bg_run(r_sigilo, 'EF4444') # Fundo vermelho para o selo de sigilo
+    
+    doc.add_paragraph('\n')
 
-    logo_path = os.path.abspath(os.path.join(os.getcwd(), 'frontend', 'public', 'img', 'logo_cgu.png'))
-    if os.path.exists(logo_path):
-        p_main.add_run().add_picture(logo_path, width=Inches(2.0))
-        p_main.add_run('\n')
 
-    _run(p_main, 'SENTINELA', color='CBD5E1', size=22, bold=True)
-    _run(p_main, '  /  Sistema de Auditoria Contínua', color='94A3B8', size=11)
-    p_main.add_run('\n')
-    _run(p_main, 'Programa Farmácia Popular do Brasil — PFPB', color='94A3B8', size=10)
-    p_main.add_run('\n\n')
-    _run(p_main, 'Nota Técnica Preliminar', color='6366F1', size=20, bold=True)
-    p_main.add_run('\n')
+    # ── 6. Resumo Executivo da Auditoria (Capa) ──────────────────────────
+    tbl_resumo = doc.add_table(rows=1, cols=2)
+    tbl_resumo.autofit = False
+    tbl_resumo.columns[0].width = Inches(4.5)
+    tbl_resumo.columns[1].width = PAGE_W - Inches(4.5)
+    _tbl_no_borders(tbl_resumo)
+    
+    # Coluna 1: Dados do Estabelecimento
+    c_info = tbl_resumo.rows[0].cells[0]
+    _cell_borders(c_info, bottom={'sz': '6', 'color': 'CBD5E1'})
+    p_info = c_info.paragraphs[0]
+    _run(p_info, 'IDENTIFICAÇÃO DO ESTABELECIMENTO AUDITADO\n', color='64748B', size=7, bold=True)
+    _run(p_info, f'{razao_social}\n', color='0F172A', size=13, bold=True)
+    _run(p_info, f'CNPJ {cnpj_fmt}  •  {municipio} / {uf}\n', color='475569', size=9)
+    if endereco: 
+        _run(p_info, f'{endereco}\n', color='64748B', size=8)
+    _run(p_info, f'Período sob análise: {periodo_txt}', color='64748B', size=8)
 
-    tbl_card = doc.add_table(rows=1, cols=1)
-    tbl_card.autofit = False
-    tbl_card.columns[0].width = PAGE_W
-    _tbl_no_borders(tbl_card)
-    cell_card = tbl_card.rows[0].cells[0]
-    _cell_bg(cell_card, '1E293B')
-    _cell_borders(cell_card, left={'sz': '24', 'color': risco_hex})
+    # Coluna 2: Status do Risco
+    c_risk = tbl_resumo.rows[0].cells[1]
+    _cell_bg(c_risk, 'F8FAFC') # Cinza suave para contraste
+    _cell_borders(c_risk, left={'sz': '6', 'color': 'CBD5E1'}, bottom={'sz': '6', 'color': 'CBD5E1'})
+    p_risk = c_risk.paragraphs[0]
+    p_risk.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    _run(p_risk, 'CLASSIFICAÇÃO DE RISCO\n', color='64748B', size=7, bold=True)
+    _run(p_risk, f'{risco_label}\n', color=risco_hex, size=18, bold=True)
+    
+    # Pequena divisória interna por parágrafo
+    p_metrics = c_risk.add_paragraph()
+    p_metrics.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p_metrics, 'SCORE FINAL: ', color='64748B', size=7)
+    _run(p_metrics, f'{score:.1f}   ', color='0F172A', size=10, bold=True)
+    _run(p_metrics, 'IRREGULARIDADE: ', color='64748B', size=7)
+    _run(p_metrics, f'{perc:.1f}%', color='0F172A', size=10, bold=True)
 
-    cp = cell_card.paragraphs[0]
-    cp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(cp, razao_social + '\n', color='CBD5E1', size=13, bold=True)
-    _run(cp, f'CNPJ {cnpj_fmt}     {municipio} / {uf}\n', color='94A3B8', size=9)
-    if endereco: _run(cp, f'{endereco}\n', color='64748B', size=8)
-    _run(cp, f'Período: {periodo_txt}\n', color='64748B', size=8)
-    cp.add_run('\n')
-    _run(cp, '% SEM COMPROVAÇÃO   ', color='64748B', size=7)
-    _run(cp, f'{perc:.1f}%       ', color=risco_hex, size=18, bold=True)
-    _run(cp, 'SCORE DE RISCO   ', color='64748B', size=7)
-    _run(cp, f'{score:.1f}       ', color=risco_hex, size=18, bold=True)
-    _run(cp, risco_label, color=risco_hex, size=9, bold=True)
-
+    doc.add_paragraph('\n')
     p_ts = doc.add_paragraph()
-    _run(p_ts, f'Gerado em: {date.today().strftime("%d/%m/%Y")}', color='64748B', size=8)
+    p_ts.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(p_ts, f'Relatório extraído do Sistema Sentinela em {date.today().strftime("%d/%m/%Y")}', color='94A3B8', size=8, italic=True)
 
     # ── 4. Seção 1: Sumário (Sem Rodapé) ──────────────────────────────────
     sec_sumario = doc.add_section()

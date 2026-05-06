@@ -27,6 +27,7 @@ import TabPanel from "primevue/tabpanel";
 import Tag from "primevue/tag";
 import Chip from "primevue/chip";
 import ProgressSpinner from "primevue/progressspinner";
+import { API_ENDPOINTS } from "@/config/api";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
@@ -104,6 +105,12 @@ const handleExport = async () => {
     formatNumberFull,
     formatarData,
   });
+};
+const handleGenerateNote = () => {
+  const { inicio, fim } = getApiParams();
+  const url = `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?data_inicio=${inicio}&data_fim=${fim}`;
+  
+  window.open(url, "_blank");
 };
 // ── Composables (Fim) ─────────────────────────────────────
 
@@ -267,6 +274,7 @@ const isInitialLoading = computed(() => {
       :period-summary="periodSummary"
       :period-loading="evolucaoLoading"
       @export="handleExport"
+      @generate-note="handleGenerateNote"
     />
 
     <!-- TABS -->

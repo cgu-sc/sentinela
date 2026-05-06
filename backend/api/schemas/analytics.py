@@ -61,6 +61,7 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     is_grande_rede: Optional[bool] = False
     qtd_estabelecimentos_rede: Optional[int] = 0
     situacao_rf: Optional[str] = "ND"
+    porte_empresa: Optional[str] = "ND"
     is_conexao_ativa: Optional[bool] = False
     is_matriz: Optional[bool] = False
     id_ibge7: Optional[int] = None

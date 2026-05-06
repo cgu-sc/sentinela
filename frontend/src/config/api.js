@@ -51,5 +51,6 @@ export const API_ENDPOINTS = {
   analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,
+  analyticsNotaTecnica: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/nota-tecnica`,
 };
 

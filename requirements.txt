@@ -20,3 +20,4 @@ sqlalchemy                    # Gerenciamento profissional de banco de dados
 pydantic                      # Validação de dados (usado pelo FastAPI)
 httpx                         # Cliente HTTP para testes de integração
 polars                        # Engine columnar in-memory para queries analíticas (Modo 3)
+python-docx                   # Geração de documentos Word (.docx)业务

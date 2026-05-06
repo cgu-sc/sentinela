@@ -13,6 +13,8 @@ import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
+import Dialog from 'primevue/dialog';
+import Textarea from 'primevue/textarea';
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -174,6 +176,19 @@ const filterNetwork = () => {
     router.push("/cnpj");
   }
 };
+
+const showObsDialog = ref(false);
+const tempObs = ref('');
+const openObsDialog = () => {
+  tempObs.value = farmaciaLists.getObservacao(props.cnpj);
+  showObsDialog.value = true;
+};
+const saveObs = () => {
+  farmaciaLists.setObservacao(props.cnpj, tempObs.value);
+  showObsDialog.value = false;
+};
+
+const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 </script>
 
 <template>
@@ -341,6 +356,17 @@ const filterNetwork = () => {
                   : 'pi pi-star'
               "
             />
+          </button>
+
+          <!-- Botão de Observação -->
+          <button
+            v-if="farmaciaLists.isInteresse(cnpj)"
+            class="list-btn list-btn--icon-only list-btn--obs"
+            :class="{ 'list-btn--obs-active': hasObservacao }"
+            @click="openObsDialog"
+            v-tooltip.bottom="hasObservacao ? 'Editar Observação' : 'Adicionar Observação'"
+          >
+            <i :class="hasObservacao ? 'pi pi-comment' : 'pi pi-pencil'" />
           </button>
         </div>
         <div class="header-kpis-new">
@@ -510,6 +536,37 @@ const filterNetwork = () => {
       <i class="pi pi-spin pi-spinner" /> Carregando perfil do
       estabelecimento...
     </div>
+
+    <!-- Dialog de Observação -->
+    <Dialog
+      v-model:visible="showObsDialog"
+      modal
+      header="Observação da Farmácia"
+      :style="{ width: '450px' }"
+      class="obs-dialog-custom"
+    >
+      <div class="p-fluid">
+        <div class="field mb-4">
+          <label for="obs" class="block font-semibold mb-2" style="font-size: 0.9rem; color: var(--text-color)">
+            Sua anotação para {{ tituloDisplay }}:
+          </label>
+          <Textarea
+            id="obs"
+            v-model="tempObs"
+            rows="5"
+            autoResize
+            placeholder="Digite aqui os motivos do interesse ou observações importantes..."
+            class="custom-textarea"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer-actions">
+          <button class="footer-btn footer-btn--cancel" @click="showObsDialog = false">Cancelar</button>
+          <button class="footer-btn footer-btn--save" @click="saveObs">Salvar Observação</button>
+        </div>
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -653,6 +710,79 @@ const filterNetwork = () => {
 .list-btn--interesse-active:hover {
   background: color-mix(in srgb, var(--primary-color) 85%, black);
   border-color: color-mix(in srgb, var(--primary-color) 85%, black);
+}
+
+.list-btn--obs {
+  --btn-obs-color: var(--text-muted);
+  color: var(--btn-obs-color);
+  border-color: color-mix(in srgb, var(--btn-obs-color) 30%, transparent);
+  background: color-mix(in srgb, var(--btn-obs-color) 8%, transparent);
+  opacity: 0.8;
+}
+
+.list-btn--obs:hover {
+  background: color-mix(in srgb, var(--btn-obs-color) 15%, transparent);
+  border-color: var(--btn-obs-color);
+  opacity: 1;
+}
+
+.list-btn--obs-active {
+  --btn-obs-active-color: #3b82f6;
+  color: var(--btn-obs-active-color);
+  border-color: color-mix(in srgb, var(--btn-obs-active-color) 40%, transparent);
+  background: color-mix(in srgb, var(--btn-obs-active-color) 12%, transparent);
+  opacity: 1;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--btn-obs-active-color) 20%, transparent);
+}
+
+/* Dialog Styles */
+.dialog-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.footer-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.footer-btn--cancel {
+  background: transparent;
+  color: var(--text-muted);
+}
+.footer-btn--cancel:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.footer-btn--save {
+  background: var(--primary-color);
+  color: white;
+}
+.footer-btn--save:hover {
+  background: color-mix(in srgb, var(--primary-color) 90%, black);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.custom-textarea {
+  background: var(--bg-secondary);
+  border: 1px solid var(--establishment-header-border);
+  border-radius: 8px;
+  color: var(--text-color);
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.custom-textarea:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
 .risk-chip {

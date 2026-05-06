@@ -281,7 +281,7 @@ export function usePdfExport() {
 
   async function exportCnpjPdf({
     cnpjData, geoData, cadastro, cnpj, qtdMunicipiosRegiao,
-    evolutionTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
+    financialMovementTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
     cnpjNavStore, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
     isExporting.value = true;
@@ -702,15 +702,15 @@ export function usePdfExport() {
         }
       }
 
-      // ── PÁGINA 2 — Evolução Financeira ───────────────────
+      // ── PÁGINA 2 — Movimentação Financeira ───────────────────
       cnpjNavStore.activeTabIndex = 0;
       await sleep(900);
 
       pdf.addPage();
-      pageHeader('Evolução Financeira', cnpjData.razao_social, PI.CHART_LINE);
+      pageHeader('Movimentação Financeira', cnpjData.razao_social, PI.CHART_LINE);
 
-      const semestres = evolutionTabRef.value?.getSemestresData() ?? [];
-      const chartImg  = evolutionTabRef.value?.getChartImage(4) ?? null;
+      const semestres = financialMovementTabRef.value?.getSemestresData() ?? [];
+      const chartImg  = financialMovementTabRef.value?.getChartImage(4) ?? null;
 
       let y2 = 26;
 

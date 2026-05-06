@@ -477,11 +477,14 @@ class CrmUnicoAlertaSchema(BaseModel):
 # ── Evolução Mensal por GTIN ─────────────────────────────────────────────────
 
 class CrmMultiploAlertaSchema(BaseModel):
-    """Surto coordenado de prescricoes envolvendo multiplos CRMs num intervalo."""
+    """Alerta coordenado de prescricoes envolvendo multiplos CRMs num intervalo."""
     dt_janela: str
     hr_janela: Optional[int] = None
     nu_prescricoes: int = 0
     nu_crms: int = 0
+    ritmo_hora: float = 0
+    ritmo_qtd: int = 0
+    ritmo_minutos: int = 0
     severidade: Optional[str] = None
     dt_ini_hora: Optional[str] = None
     dt_fim_hora: Optional[str] = None

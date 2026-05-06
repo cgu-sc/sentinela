@@ -255,6 +255,7 @@ const selectedHourlyHour = ref(null);
 const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 const expandedRaioxRows = ref(new Set());
+const hoveredAlert = ref(null);
 
 // CRM Único: refs declaradas aqui (antes dos watches) para evitar TDZ quando o
 // watch com immediate:true dispara durante o setup com dados já em cache.
@@ -302,13 +303,71 @@ const multiAlertasNumerados = computed(() => {
       const inicioB = b.dt_ini_hora || b.hr_janela || '';
       return String(inicioA).localeCompare(String(inicioB));
     })
-    .map((alerta, index) => ({
-      ...alerta,
-      numero_alerta: index + 1,
-      nu_crms_display: alerta.nu_crms ?? alerta.nu_crms_distintos ?? 0,
-      nu_prescricoes_display: alerta.nu_prescricoes ?? alerta.nu_prescricoes_dia ?? 0,
-    }));
+    .map((alerta, index) => {
+      const qtd = alerta.ritmo_qtd ?? alerta.nu_prescricoes ?? alerta.nu_prescricoes_dia ?? 0;
+      const minutos = alerta.ritmo_minutos ?? alerta.nu_minutos_span ?? calcularMinutosEntreHoras(alerta.dt_ini_hora, alerta.dt_fim_hora);
+      const ritmoHora = Number(alerta.ritmo_hora ?? (minutos > 0 ? Number(qtd) * 60 / minutos : 0));
+      return {
+        ...alerta,
+        numero_alerta: index + 1,
+        nu_crms_display: alerta.nu_crms ?? alerta.nu_crms_distintos ?? 0,
+        nu_prescricoes_display: qtd,
+        ritmo_minutos_display: minutos,
+        ritmo_hora_num: ritmoHora,
+      };
+    });
 });
+
+function getHoraMinuto(value) {
+  if (!value) return '';
+  const text = String(value);
+  const timePart = text.includes(' ') ? text.split(' ')[1] : text;
+  return timePart.slice(0, 5);
+}
+
+function calcularMinutosEntreHoras(inicio, fim) {
+  const [hi, mi] = String(inicio || '').split(':').map(Number);
+  const [hf, mf] = String(fim || '').split(':').map(Number);
+  if (![hi, mi, hf, mf].every(Number.isFinite)) return 0;
+  const inicioMinutos = hi * 60 + mi;
+  const fimMinutos = hf * 60 + mf;
+  return Math.max(0, fimMinutos - inicioMinutos);
+}
+
+function formatUnicoAlertTitle(alerta) {
+  return `U#${alerta.numero_alerta} | ${alerta.dt_ini_hora} -> ${alerta.dt_fim_hora} | ${alerta.severidade || 'ALERTA'} | ${alerta.ritmo_qtd_display} em ${alerta.ritmo_minutos_display}min | ${alerta.ritmo_hora_num.toFixed(1)}/h`;
+}
+
+function formatMultiAlertTitle(alerta) {
+  return `M#${alerta.numero_alerta} | ${alerta.dt_ini_hora} -> ${alerta.dt_fim_hora} | ${alerta.severidade || 'ALERTA'} | ${alerta.nu_crms_display} CRMs | ${alerta.nu_prescricoes_display} em ${alerta.ritmo_minutos_display}min | ${alerta.ritmo_hora_num.toFixed(1)}/h`;
+}
+
+function setHoveredUnicoAlert(alerta) {
+  hoveredAlert.value = {
+    key: `U-${alerta.numero_alerta}`,
+    type: 'unico',
+    id_medico: alerta.id_medico,
+  };
+}
+
+function setHoveredMultiAlert(alerta) {
+  hoveredAlert.value = {
+    key: `M-${alerta.numero_alerta}`,
+    type: 'multi',
+  };
+}
+
+function setHoveredTableAlert(alerta) {
+  hoveredAlert.value = {
+    key: alerta.key,
+    type: alerta.type,
+    id_medico: alerta.id_medico ?? null,
+  };
+}
+
+function clearHoveredAlert() {
+  hoveredAlert.value = null;
+}
 
 const groupedRaiox = computed(() => {
   const groups = {};
@@ -987,18 +1046,68 @@ async function onHourlyZrClick() {
 
 const unicoGatilhoMap = computed(() => {
   const map = {};
-  unicoAlertas.value.forEach(a => {
+  unicoAlertasAgrupados.value.flatMap(grupo => grupo.alertas).forEach(a => {
     if (!map[a.id_medico]) map[a.id_medico] = [];
-    map[a.id_medico].push({ dt_ini_hora: a.dt_ini_hora, dt_fim_hora: a.dt_fim_hora });
+    map[a.id_medico].push(a);
   });
   return map;
 });
 
-function isGatilhoTx(tx) {
+function getUnicoAlertasDaTx(tx) {
   const intervals = unicoGatilhoMap.value[tx.id_medico];
-  if (!intervals?.length) return false;
-  const txTime = (tx.data_hora.split(' ')[1] || '').slice(0, 5);
-  return intervals.some(a => txTime >= a.dt_ini_hora && txTime <= a.dt_fim_hora);
+  if (!intervals?.length) return [];
+  const txTime = getHoraMinuto(tx.data_hora);
+  return intervals.filter(a => txTime >= a.dt_ini_hora && txTime <= a.dt_fim_hora);
+}
+
+function getMultiAlertasDaTx(tx) {
+  const txTime = getHoraMinuto(tx.data_hora);
+  return multiAlertasNumerados.value.filter(a => txTime >= a.dt_ini_hora && txTime <= a.dt_fim_hora);
+}
+
+function getAlertasDaTx(tx) {
+  return [
+    ...getUnicoAlertasDaTx(tx).map(alerta => ({
+      key: `U-${alerta.numero_alerta}`,
+      label: `U#${alerta.numero_alerta}`,
+      type: 'unico',
+      id_medico: alerta.id_medico,
+      title: formatUnicoAlertTitle(alerta),
+    })),
+    ...getMultiAlertasDaTx(tx).map(alerta => ({
+      key: `M-${alerta.numero_alerta}`,
+      label: `M#${alerta.numero_alerta}`,
+      type: 'multi',
+      title: formatMultiAlertTitle(alerta),
+    })),
+  ];
+}
+
+function getHoveredAlertaType(tx) {
+  const alert = hoveredAlert.value;
+  if (!alert) return null;
+  if (alert.type === 'unico') return tx.id_medico === alert.id_medico ? 'unico' : null;
+  return getMultiAlertasDaTx(tx).some(a => `M-${a.numero_alerta}` === alert.key) ? 'multi' : null;
+}
+
+function isGatilhoTx(tx) {
+  return getUnicoAlertasDaTx(tx).length > 0;
+}
+
+function isMultiAlertaTx(tx) {
+  return getMultiAlertasDaTx(tx).length > 0;
+}
+
+function getRaioxRowClasses(tx) {
+  const hasUnico = isGatilhoTx(tx);
+  const hoveredType = getHoveredAlertaType(tx);
+  return {
+    'row-expanded-main': activeRowExpanded(tx.num_autorizacao),
+    'row-gatilho': hasUnico,
+    'row-multi-alerta': isMultiAlertaTx(tx) && !hasUnico,
+    'row-alert-highlight-unico': hoveredType === 'unico',
+    'row-alert-highlight-multi': hoveredType === 'multi',
+  };
 }
 
 // ── Dados Ativos: fonte unificada para o RAIO-X ───────────────────────────
@@ -1281,7 +1390,14 @@ function toggleActiveRow(auth) {
                 :key="`${alerta.id_medico}-${alerta.dt_ini_hora}-${alerta.dt_fim_hora}-${alerta.numero_alerta}`"
                 class="unico-alerta-row"
               >
-                <span class="alerta-alert-id">#{{ alerta.numero_alerta }}</span>
+                <span
+                  class="alerta-alert-id"
+                  v-tooltip.top="{ value: formatUnicoAlertTitle(alerta), showDelay: 120, hideDelay: 80 }"
+                  @pointerenter="setHoveredUnicoAlert(alerta)"
+                  @pointerleave="clearHoveredAlert"
+                >
+                  #{{ alerta.numero_alerta }}
+                </span>
                 <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
                 <span v-if="alerta.severidade" class="alerta-severity">{{ alerta.severidade }}</span>
                 <span class="alerta-stat">{{ alerta.ritmo_qtd_display }} em {{ alerta.ritmo_minutos_display }}min</span>
@@ -1304,11 +1420,19 @@ function toggleActiveRow(auth) {
             :key="`${alerta.dt_janela}-${alerta.hr_janela}-${alerta.dt_ini_hora}-${alerta.numero_alerta}`"
             class="multi-alerta-row"
           >
-            <span class="multi-alerta-id">#{{ alerta.numero_alerta }}</span>
+            <span
+              class="multi-alerta-id"
+              v-tooltip.top="{ value: formatMultiAlertTitle(alerta), showDelay: 120, hideDelay: 80 }"
+              @pointerenter="setHoveredMultiAlert(alerta)"
+              @pointerleave="clearHoveredAlert"
+            >
+              #{{ alerta.numero_alerta }}
+            </span>
             <span class="alerta-crm alerta-crm-multi">{{ alerta.nu_crms_display }} CRMs</span>
             <span class="alerta-stat">{{ alerta.dt_ini_hora }} -> {{ alerta.dt_fim_hora }}</span>
             <span v-if="alerta.severidade" class="multi-alerta-severity">{{ alerta.severidade }}</span>
-            <span class="alerta-stat">{{ alerta.nu_prescricoes_display }} autorizacoes</span>
+            <span class="alerta-stat">{{ alerta.nu_prescricoes_display }} em {{ alerta.ritmo_minutos_display }}min</span>
+            <span class="alerta-stat">{{ alerta.ritmo_hora_num.toFixed(1) }}/h</span>
           </div>
         </div>
       </div>
@@ -1320,9 +1444,10 @@ function toggleActiveRow(auth) {
           <span>Cores identificam <strong>médicos diferentes</strong> para destacar padrões de concentração.</span>
         </div>
         <div class="legend-tip-divider" />
-        <div v-if="unicoAlertas.length > 0" class="legend-tip-item">
-          <span class="unico-gatilho-sample">⚠</span>
-          <span>Badge <strong>gatilho</strong> = CRM que disparou o alerta de concentração.</span>
+        <div v-if="unicoAlertas.length > 0 || multiAlertas.length > 0" class="legend-tip-item">
+          <span class="alerta-participacao-badge is-unico">U#1</span>
+          <span class="alerta-participacao-badge is-multi">M#1</span>
+          <span>Badges indicam a <strong>janela de alerta</strong> da qual a autorização participa.</span>
         </div>
         <div v-else class="legend-tip-item">
           <span class="sample-badge">2x</span>
@@ -1349,7 +1474,7 @@ function toggleActiveRow(auth) {
           </thead>
           <tbody>
             <template v-for="tx in activeGroupedRaiox" :key="tx.num_autorizacao">
-              <tr :class="{ 'row-expanded-main': activeRowExpanded(tx.num_autorizacao), 'row-gatilho': isGatilhoTx(tx) }"
+              <tr :class="getRaioxRowClasses(tx)"
                   @click="toggleActiveRow(tx.num_autorizacao)"
                   class="cursor-pointer">
                 <td class="col-center raiox-time align-top">
@@ -1373,8 +1498,17 @@ function toggleActiveRow(auth) {
                           :style="{ border: `1px solid ${getCRMColor(tx.id_medico)}`, color: getCRMColor(tx.id_medico) }">
                       {{ activeCrmFrequencies[tx.id_medico] }}x
                     </span>
-                    <span v-if="isGatilhoTx(tx)"
-                          class="gatilho-badge">⚠ gatilho</span>
+                    <span
+                      v-for="alerta in getAlertasDaTx(tx)"
+                      :key="alerta.key"
+                      class="alerta-participacao-badge"
+                      :class="`is-${alerta.type}`"
+                      v-tooltip.top="{ value: alerta.title, showDelay: 120, hideDelay: 80 }"
+                      @pointerenter.stop="setHoveredTableAlert(alerta)"
+                      @pointerleave.stop="clearHoveredAlert"
+                    >
+                      {{ alerta.label }}
+                    </span>
                   </div>
                 </td>
                 <td class="col-center align-top">
@@ -2091,8 +2225,47 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .unico-gatilho-sample { font-size: 0.85rem; color: #f59e0b; line-height: 1; }
 
 /* Linha gatilho na tabela */
-.row-gatilho { background: rgba(245,158,11,0.05) !important; }
 .row-gatilho td:first-child { border-left: 3px solid #f59e0b; }
+.row-multi-alerta td:first-child { border-left: 3px solid #8b5cf6; }
+.premium-table tbody tr.row-alert-highlight-unico {
+  background: rgba(245,158,11,0.12) !important;
+}
+.premium-table tbody tr.row-alert-highlight-multi {
+  background: rgba(139, 92, 246, 0.13) !important;
+}
+.premium-table tbody tr.row-alert-highlight-unico td:first-child {
+  border-left-color: #f59e0b;
+}
+.premium-table tbody tr.row-alert-highlight-multi td:first-child {
+  border-left-color: #8b5cf6;
+}
+
+.alerta-participacao-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.alerta-participacao-badge.is-unico {
+  color: #f59e0b;
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.3);
+}
+.alerta-participacao-badge.is-multi {
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+:global(.p-tooltip) {
+  z-index: 99999 !important;
+}
 
 .gatilho-badge {
   font-size: 0.6rem;

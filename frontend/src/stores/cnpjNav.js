@@ -10,7 +10,7 @@ import { ref } from 'vue';
  */
 export const useCnpjNavStore = defineStore('cnpjNav', () => {
   // Índice da aba ativa (espelha TAB_INDEX do CnpjDetailView)
-  const activeTabIndex = ref(1); // começa na Evolução Financeira
+  const activeTabIndex = ref(1); // começa no Diagnóstico de Risco
 
   // Município a ser pré-selecionado ao abrir a aba de Região de Saúde.
   // Consumido e limpo pelo CnpjTabRegional.

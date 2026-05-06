@@ -11,12 +11,12 @@ import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import CnpjHeader from "./components/cnpj/CnpjHeader.vue";
-import EvolutionTab from "./components/cnpj/EvolutionTab.vue";
+import FinancialMovementTab from "./components/cnpj/FinancialMovementTab.vue";
 import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
 import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import CRMTab from "./components/cnpj/CRMTab.vue";
-import MovementTab from "./components/cnpj/MovementTab.vue";
+import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
 import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
@@ -65,7 +65,7 @@ const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 import { usePdfExport } from "@/composables/usePdfExport";
 const { isExporting, exportCnpjPdf } = usePdfExport();
 
-const evolutionTabRef = ref(null);
+const financialMovementTabRef = ref(null);
 const indicatorsTabRef = ref(null);
 const crmsTabRef = ref(null);
 const falecidosTabRef = ref(null);
@@ -94,7 +94,7 @@ const handleExport = async () => {
     cadastro: dadosCadastro.value,
     cnpj: cnpj.value,
     qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
-    evolutionTabRef,
+    financialMovementTabRef,
     indicatorsTabRef,
     crmsTabRef,
     falecidosTabRef,
@@ -195,7 +195,7 @@ watch(
 );
 
 onMounted(() => {
-  // Evolução Financeira agora é carregada de forma autônoma pelo componente filho
+  // Movimentação Financeira agora é carregada de forma autônoma pelo componente filho
 });
 
 const geoData = computed(() => {
@@ -286,10 +286,10 @@ const isInitialLoading = computed(() => {
       <TabPanel>
         <template #header
           ><i class="pi pi-chart-line tab-icon" /><span
-            >Evolução Financeira</span
+            >Movimentação Financeira</span
           ></template
         >
-        <EvolutionTab ref="evolutionTabRef" class="tab-content" />
+        <FinancialMovementTab ref="financialMovementTabRef" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -311,9 +311,9 @@ const isInitialLoading = computed(() => {
 
       <TabPanel>
         <template #header
-          ><i class="pi pi-list tab-icon" /><span>Movimentação</span></template
+          ><i class="pi pi-list tab-icon" /><span>Memória de Cálculo</span></template
         >
-        <MovementTab :cnpj="cnpj" class="tab-content" />
+        <CalculationMemoryTab :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -326,7 +326,7 @@ const isInitialLoading = computed(() => {
       <TabPanel>
         <template #header
           ><i class="pi pi-id-card tab-icon" /><span
-            >Análise de CRMs</span
+            >Análise de Autorizações</span
           ></template
         >
         <CRMTab ref="crmsTabRef" :cnpj="cnpj" class="tab-content" />

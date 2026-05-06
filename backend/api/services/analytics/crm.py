@@ -1183,6 +1183,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         "nu_prescricoes",
         "nu_crms",
         "nu_60min",
+        "nu_minutos_span",
         "nu_crms_distintos",
         "severidade",
         *rhythm_columns,
@@ -1225,6 +1226,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         END AS nu_prescricoes,
                         A.nu_crms_distintos AS nu_crms,
                         A.nu_60min,
+                        A.nu_minutos_span,
                         A.nu_crms_distintos,
                         A.severidade,
                         A.nu_5min,
@@ -1252,6 +1254,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             "nu_prescricoes": pl.Int32,
             "nu_crms": pl.Int32,
             "nu_60min": pl.Int32,
+            "nu_minutos_span": pl.Int32,
             "nu_crms_distintos": pl.Int32,
             "severidade": pl.Utf8,
             **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS if minutes != 60},
@@ -1339,21 +1342,33 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             day_multi = df_multi.filter(pl.col("dt_dia").cast(pl.Utf8).str.slice(0, 10) == date_str)
             if hour is not None:
                 day_multi = day_multi.filter(
-                    pl.col("dt_ini_concentracao").cast(pl.Utf8).str.slice(11, 2).cast(pl.Int32, strict=False) == hour
+                    pl.struct(["dt_ini_concentracao", "dt_fim_concentracao"]).map_elements(
+                        lambda r: _alert_overlaps_hour(
+                            r.get("dt_ini_concentracao"),
+                            r.get("dt_fim_concentracao"),
+                            hour,
+                        ),
+                        return_dtype=pl.Boolean,
+                    )
                 )
 
-            alertas_multi = [
-                {
+            alertas_multi = []
+            for r in day_multi.iter_rows(named=True):
+                ritmo_qtd = int(r["nu_prescricoes"] or 0)
+                ritmo_minutos = int(r["nu_minutos_span"] or 0)
+                ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
+                alertas_multi.append({
                     "dt_janela": str(r["dt_dia"])[:10],
                     "hr_janela": _extract_alert_hour(r.get("dt_ini_concentracao")),
-                    "nu_prescricoes": int(r["nu_60min"] or 0),
+                    "nu_prescricoes": ritmo_qtd,
                     "nu_crms": int(r["nu_crms_distintos"] or 0),
+                    "ritmo_hora": ritmo_hora,
+                    "ritmo_qtd": ritmo_qtd,
+                    "ritmo_minutos": ritmo_minutos,
                     "severidade": r.get("severidade"),
                     "dt_ini_hora": _format_alert_time(r.get("dt_ini_concentracao")),
                     "dt_fim_hora": _format_alert_time(r.get("dt_fim_concentracao")),
-                }
-                for r in day_multi.iter_rows(named=True)
-            ]
+                })
 
         return CrmRaioXResponse(
             cnpj=cnpj,

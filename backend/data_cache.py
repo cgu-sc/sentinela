@@ -122,10 +122,9 @@ def _sync_matriz_risco(engine, progress_callback=None):
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_list.append(chunk)
         rows_processed += len(chunk)
-        p = int((rows_processed / total_rows) * 100)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Matriz: {p}% ({rows_processed:,} / {total_rows:,})")
-        if progress_callback:
-            progress_callback(p)
+        if progress_callback: progress_callback(p)
             
     pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
     _df_matriz_risco = pl.from_pandas(pdf)
@@ -143,6 +142,10 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.logradouro, D.numero, D.complemento, D.bairro, D.cep,
                D.latitude, D.longitude,
                D.codibge as id_ibge7,
+               D.id_cnae_principal, D.cnae_principal,
+               D.id_cnae_secundario, D.cnae_secundario,
+               D.data_abertura,
+               D.data_processamento,
                I.sg_uf as uf,
                I.no_municipio as municipio,
                CAST(ISNULL(R.total_mov, 0) AS FLOAT) as total_mov,

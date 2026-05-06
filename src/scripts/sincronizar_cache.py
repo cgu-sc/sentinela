@@ -24,12 +24,323 @@ from data_cache import (
     _sync_localidades,
     _sync_rede,
     _sync_matriz_risco,
-    _sync_falecidos,
+    _sync_medicamentos,
     _sync_crm_benchmarks,
-    _sync_crm_parquets,
     _sync_dados_farmacia,
     _sync_movimentacao,
 )
+
+_CNPJ_PARQUETS = [
+    "memoria_calculo.parquet",
+    "movimentacao_mensal_gtin.parquet",
+    "falecidos.parquet",
+    "dados_crms.parquet",
+    "geografico.parquet",
+    "volume_horario_anomalo_alertas.parquet",
+    "crm_raiox_tx.parquet",
+    "crm_concentracao_unico_alertas.parquet",
+    "crm_concentracao_multiplo_alertas.parquet",
+    "crm_perfil_diario.parquet",
+    "crm_horario.parquet",
+    "crm_horario_eventos.parquet",
+    "mediana_autorizacoes_horaria.parquet",
+]
+
+
+def _schema_cnpj_parquet(pl):
+    """Schemas usados para criar parquets vazios quando nao ha dados no SQL."""
+    return {
+        "memoria_calculo.parquet": {
+            "tipo_linha": pl.Utf8,
+            "gtin": pl.Utf8,
+            "medicamento": pl.Utf8,
+            "periodo_inicial": pl.Utf8,
+            "periodo_inicio_irregular": pl.Utf8,
+            "periodo_final": pl.Utf8,
+            "estoque_inicial": pl.Int64,
+            "estoque_final": pl.Int64,
+            "vendas": pl.Int64,
+            "vendas_irregular": pl.Int64,
+            "valor": pl.Float64,
+            "valor_irregular": pl.Float64,
+            "notas": pl.Utf8,
+        },
+        "movimentacao_mensal_gtin.parquet": {
+            "codigo_barra": pl.Utf8,
+            "periodo": pl.Date,
+            "qnt_vendas": pl.Int64,
+            "qnt_vendas_sem_comprovacao": pl.Int64,
+            "valor_vendas": pl.Float64,
+            "valor_sem_comprovacao": pl.Float64,
+        },
+        "falecidos.parquet": {
+            "cpf": pl.Utf8,
+            "cnpj": pl.Utf8,
+            "nome_falecido": pl.Utf8,
+            "municipio_falecido": pl.Utf8,
+            "uf_falecido": pl.Utf8,
+            "dt_nascimento": pl.Date,
+            "dt_obito": pl.Date,
+            "fonte_obito": pl.Utf8,
+            "data_autorizacao": pl.Date,
+            "num_autorizacao": pl.Utf8,
+            "qtd_itens_na_autorizacao": pl.Int64,
+            "valor_total_autorizacao": pl.Float64,
+            "dias_apos_obito": pl.Int64,
+        },
+        "dados_crms.parquet": {
+            "id_medico": pl.Utf8,
+            "competencia": pl.Int32,
+            "vl_total_prescricoes": pl.Float64,
+            "nu_prescricoes_mes": pl.Int64,
+            "nu_prescricoes_total_brasil": pl.Int64,
+            "flag_crm_invalido": pl.Int8,
+            "flag_prescricao_antes_registro": pl.Int8,
+            "alerta_concentracao_multiplos_crms": pl.Int8,
+            "flag_concentracao_mesmo_crm": pl.Int8,
+            "flag_distancia_geografica": pl.Int8,
+            "dt_primeira_prescricao": pl.Utf8,
+            "dt_inscricao_crm": pl.Utf8,
+            "nu_estabelecimentos": pl.Int64,
+        },
+        "geografico.parquet": {
+            "id_medico": pl.Utf8,
+            "competencia": pl.Int32,
+            "cnpj_a": pl.Utf8,
+            "no_municipio_a": pl.Utf8,
+            "sg_uf_a": pl.Utf8,
+            "dt_ini_a": pl.Utf8,
+            "dt_fim_a": pl.Utf8,
+            "nu_prescricoes_a": pl.Int32,
+            "cnpj_b": pl.Utf8,
+            "no_municipio_b": pl.Utf8,
+            "sg_uf_b": pl.Utf8,
+            "dt_ini_b": pl.Utf8,
+            "dt_fim_b": pl.Utf8,
+            "nu_prescricoes_b": pl.Int32,
+            "distancia_km": pl.Float64,
+        },
+        "volume_horario_anomalo_alertas.parquet": {
+            "id_cnpj": pl.Int32,
+            "competencia": pl.Int32,
+            "dt_alerta": pl.Utf8,
+            "hr_janela": pl.Int32,
+            "nu_prescricoes": pl.Int32,
+            "nu_crms": pl.Int32,
+            "mediana_hora": pl.Float64,
+            "multiplicador": pl.Float64,
+        },
+        "crm_raiox_tx.parquet": {
+            "dt_janela": pl.Utf8,
+            "hr_janela": pl.Int32,
+            "data_hora": pl.Utf8,
+            "num_autorizacao": pl.Utf8,
+            "id_medico": pl.Utf8,
+            "codigo_barra": pl.Utf8,
+            "valor_pago": pl.Float64,
+        },
+        "crm_concentracao_unico_alertas.parquet": {
+            "id_medico": pl.Utf8,
+            "competencia": pl.Int32,
+            "dt_alerta": pl.Utf8,
+            "hr_janela": pl.Int32,
+            "nu_prescricoes_dia": pl.Int32,
+            "nu_minutos_dia": pl.Int32,
+            "taxa_hora": pl.Float64,
+            "dt_ini_hora": pl.Datetime,
+            "dt_fim_hora": pl.Datetime,
+            "severidade": pl.Utf8,
+            "nu_5min": pl.Int32,
+            "nu_10min": pl.Int32,
+            "nu_15min": pl.Int32,
+            "nu_20min": pl.Int32,
+            "nu_25min": pl.Int32,
+            "nu_30min": pl.Int32,
+            "nu_60min": pl.Int32,
+        },
+        "crm_concentracao_multiplo_alertas.parquet": {
+            "id_cnpj": pl.Int32,
+            "competencia": pl.Int32,
+            "dt_dia": pl.Utf8,
+            "dt_alerta": pl.Utf8,
+            "hr_janela": pl.Int32,
+            "dt_ini_concentracao": pl.Utf8,
+            "dt_fim_concentracao": pl.Utf8,
+            "nu_prescricoes": pl.Int32,
+            "nu_crms": pl.Int32,
+            "nu_60min": pl.Int32,
+            "nu_minutos_span": pl.Int32,
+            "nu_crms_distintos": pl.Int32,
+            "severidade": pl.Utf8,
+            "nu_5min": pl.Int32,
+            "nu_10min": pl.Int32,
+            "nu_15min": pl.Int32,
+            "nu_20min": pl.Int32,
+            "nu_25min": pl.Int32,
+            "nu_30min": pl.Int32,
+        },
+        "crm_perfil_diario.parquet": {
+            "dt_janela": pl.Utf8,
+            "competencia": pl.Int32,
+            "nu_prescricoes_dia": pl.Int32,
+            "nu_crms_distintos": pl.Int32,
+            "mediana_diaria": pl.Float64,
+            "is_dia_com_volume_horario_anomalo": pl.Int8,
+            "is_anomalo_unico": pl.Int8,
+            "is_crm_multiplo": pl.Int8,
+        },
+        "crm_horario.parquet": {
+            "dt_janela": pl.Utf8,
+            "hr_janela": pl.Int32,
+            "nu_prescricoes": pl.Int32,
+            "nu_crms_diferentes": pl.Int32,
+            "mediana_hora": pl.Float64,
+            "is_hora_com_alerta": pl.Int8,
+            "is_volume_horario_anomalo": pl.Int8,
+            "is_crm_unico": pl.Int8,
+            "is_crm_multiplo": pl.Int8,
+        },
+        "crm_horario_eventos.parquet": {
+            "tipo": pl.Utf8,
+            "dt_dia": pl.Utf8,
+            "id_medico": pl.Utf8,
+            "nu_crms_distintos": pl.Int32,
+            "dt_ini_concentracao": pl.Datetime,
+            "dt_fim_concentracao": pl.Datetime,
+            "severidade": pl.Utf8,
+            "hora_inicio": pl.Utf8,
+            "hora_fim": pl.Utf8,
+            "minuto_inicio": pl.Int32,
+            "minuto_fim": pl.Int32,
+        },
+        "mediana_autorizacoes_horaria.parquet": {
+            "ano": pl.Int32,
+            "trimestre": pl.Int32,
+            "hr_janela": pl.Int32,
+            "mediana_hora": pl.Float64,
+        },
+    }
+
+
+def _criar_parquets_vazios(cnpj_dir: str, arquivos: list[str]) -> list[str]:
+    """Materializa parquets vazios para caches opcionais sem dados."""
+    import polars as pl
+
+    schemas = _schema_cnpj_parquet(pl)
+    criados = []
+    for arquivo in arquivos:
+        schema = schemas.get(arquivo)
+        if not schema:
+            continue
+        path = os.path.join(cnpj_dir, arquivo)
+        pl.DataFrame(schema=schema).write_parquet(path, compression="lz4")
+        criados.append(arquivo)
+    return criados
+
+
+def _sync_falecidos(engine, progress_callback=None):
+    """Gera os parquets de falecidos por CNPJ usando a rotina atual da API."""
+    from sqlalchemy import text
+    from api.services.analytics import AnalyticsService
+
+    with engine.connect() as conn:
+        res = conn.execute(text("""
+            SELECT DISTINCT cnpj
+            FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]
+            ORDER BY cnpj
+        """))
+        cnpjs = [row[0] for row in res if row[0]]
+
+    total = len(cnpjs)
+    print(f"Sincronizando Falecidos por Farmacia para {total} estabelecimento(s)...")
+
+    if total == 0:
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    for i, cnpj in enumerate(cnpjs, 1):
+        try:
+            AnalyticsService.get_falecidos_data(str(cnpj))
+        except Exception as e:
+            print(f"\n  Aviso: erro ao sincronizar falecidos do CNPJ {cnpj}: {e}")
+        if progress_callback:
+            progress_callback(int((i / total) * 100))
+
+
+def _buscar_cnpjs_matriz(engine) -> list[str]:
+    """Busca os CNPJs ativos da matriz de risco para sincronizacao em lote."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        res = conn.execute(text("""
+            SELECT DISTINCT cnpj
+            FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]
+            ORDER BY cnpj
+        """))
+        return [str(row[0]).strip() for row in res if row[0]]
+
+
+def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
+    """Gera todos os parquets mantidos em sentinela_cache/<cnpj>/."""
+    from api.services.analytics import AnalyticsService
+
+    if not cnpjs:
+        cnpjs = _buscar_cnpjs_matriz(engine)
+
+    cnpjs = [str(cnpj).strip() for cnpj in cnpjs if str(cnpj).strip()]
+    total = len(cnpjs)
+    print(f"Sincronizando todos os parquets por CNPJ para {total} estabelecimento(s)...")
+
+    if total == 0:
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    etapas = [
+        ("memoria_calculo", lambda cnpj: AnalyticsService.get_movimentacao_data(cnpj, engine, check_cache=False)),
+        ("movimentacao_mensal_gtin", lambda cnpj: AnalyticsService.get_evolucao_mensal_gtin(cnpj)),
+        ("falecidos", lambda cnpj: AnalyticsService.get_falecidos_data(cnpj)),
+        ("crm_dados", lambda cnpj: AnalyticsService.get_crm_data(cnpj)),
+        ("crm_perfil_diario", lambda cnpj: AnalyticsService.get_crm_perfil_diario(cnpj)),
+        ("crm_perfil_horario", lambda cnpj: AnalyticsService.get_crm_perfil_horario(cnpj)),
+        ("crm_raiox_tx", lambda cnpj: AnalyticsService.sync_crm_raiox_tx(cnpj)),
+        ("mediana_horaria", lambda cnpj: AnalyticsService.sync_mediana_autorizacoes_horaria(cnpj)),
+    ]
+
+    for i, cnpj in enumerate(cnpjs, 1):
+        print(f"\n  [{i}/{total}] CNPJ {cnpj}")
+
+        for nome_etapa, func in etapas:
+            try:
+                print(f"    - {nome_etapa}...", end="", flush=True)
+                func(cnpj)
+                print(" ok")
+            except Exception as e:
+                print(f" erro: {e}")
+
+        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
+        faltantes = [
+            arquivo for arquivo in _CNPJ_PARQUETS
+            if not os.path.exists(os.path.join(cnpj_dir, arquivo))
+        ]
+        if faltantes:
+            criados = _criar_parquets_vazios(cnpj_dir, faltantes)
+            if criados:
+                print(f"    Parquets vazios criados: {', '.join(criados)}")
+
+            ainda_faltantes = [
+                arquivo for arquivo in _CNPJ_PARQUETS
+                if not os.path.exists(os.path.join(cnpj_dir, arquivo))
+            ]
+            if ainda_faltantes:
+                print(f"    Aviso: parquets faltantes: {', '.join(ainda_faltantes)}")
+
+        if progress_callback:
+            progress_callback(int((i / total) * 100))
+
+    if progress_callback:
+        progress_callback(100)
 
 # ── Módulos disponíveis ────────────────────────────────────────────────────────
 
@@ -39,9 +350,10 @@ MODULOS = [
     {"id": 3, "name": "Matriz de Risco",           "func": _sync_matriz_risco,   "peso": "~médio"},
     {"id": 4, "name": "Falecidos por Farmácia",    "func": _sync_falecidos,      "peso": "~médio"},
     {"id": 5, "name": "Benchmarks CRM",            "func": _sync_crm_benchmarks, "peso": "~rápido"},
-    {"id": 6, "name": "CRMs por CNPJ (parquets)",  "func": _sync_crm_parquets,   "peso": "~muito pesado"},
+    {"id": 6, "name": "Todos por CNPJ (parquets)", "func": _sync_cnpj_parquets,  "peso": "~muito pesado"},
     {"id": 7, "name": "Dados das Farmácias",       "func": _sync_dados_farmacia, "peso": "~médio"},
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
+    {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

@@ -193,6 +193,78 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
             _add_toc_entry(doc, f'  {num}', full_title, page='6')
 
     _add_toc_entry(doc, '6.', 'CONCLUSÃO E ENCAMINHAMENTO', page='7')
+    doc.add_page_break()
+
+
+def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_txt: str):
+    """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
+    doc.add_paragraph()
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='0F172A', size=9, bold=True)
+    _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=8)
+
+    tbl = doc.add_table(rows=0, cols=2)
+    tbl.style = 'Table Grid'
+    tbl.autofit = False
+    
+    # Configura larguras (Total ~7.1 inches)
+    col_label_w = Inches(2.2)
+    col_value_w = Inches(4.9)
+
+    rows_to_add = [
+        ('CNPJ', data.get('cnpj_fmt')),
+        ('Razão Social', data.get('razao_social')),
+        ('Nome Fantasia', data.get('nome_fantasia') or '—'),
+        ('Natureza Jurídica', data.get('natureza_juridica') or '—'),
+        ('CNAE Principal', f"{data.get('id_cnae_principal') or ''} - {data.get('cnae_principal') or ''}"),
+        ('CNAE Secundária', f"{data.get('id_cnae_secundario') or ''} - {data.get('cnae_secundario') or ''}"),
+        ('Abertura', data.get('data_abertura').strftime('%d/%m/%Y') if data.get('data_abertura') else '—'),
+        ('Situação', data.get('situacao_rf') or '—'),
+        ('Porte', data.get('porte_empresa') or '—'),
+        ('Capital Social *', f"R$ {capital_social:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')),
+        ('Endereço', data.get('endereco_completo') or '—'),
+        ('Bairro', data.get('bairro') or '—'),
+        ('Município/UF', f"{data.get('municipio') or '—'} / {data.get('uf') or '—'}"),
+        ('CEP', data.get('cep') or '—'),
+        ('Telefone', data.get('telefone') or '—'),
+        ('E-mail', data.get('email') or '—'),
+    ]
+
+    for label, value in rows_to_add:
+        row = tbl.add_row()
+        row.cells[0].width = col_label_w
+        row.cells[1].width = col_value_w
+        
+        # Estilo Rótulo
+        c0 = row.cells[0]
+        _cell_bg(c0, 'F8FAFC')
+        p0 = c0.paragraphs[0]
+        _run(p0, label, color='475569', size=8, bold=True)
+        p0.paragraph_format.space_before = Pt(2)
+        p0.paragraph_format.space_after = Pt(2)
+
+        # Estilo Valor
+        c1 = row.cells[1]
+        p1 = c1.paragraphs[0]
+        _run(p1, str(value) if value else '—', color='0F172A', size=8)
+        p1.paragraph_format.space_before = Pt(2)
+        p1.paragraph_format.space_after = Pt(2)
+
+    # Nota de Rodapé do Quadro
+    total_mov = data.get('total_mov') or 0.0
+    relacao_pct = (total_mov / capital_social * 100) if capital_social > 0 else 0
+    vezes = (total_mov / capital_social) if capital_social > 0 else 0
+    
+    p_nota = doc.add_paragraph()
+    p_nota.paragraph_format.space_before = Pt(6)
+    _run(p_nota, f"* A relação do valor de vendas sobre o capital social é de {relacao_pct:,.2f}%".replace(',', 'X').replace('.', ',').replace('X', '.'), color='475569', size=8)
+    _run(p_nota, f", ou seja, ela recebeu, no período analisado ({periodo_txt}), apenas por meio das vendas subsidiadas pelo Programa Farmácia Popular, ", color='475569', size=8)
+    _run(p_nota, f"{vezes:,.1f} vezes".replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=8, bold=True)
+    _run(p_nota, " o valor do seu capital social.", color='475569', size=8)
+
+    p_fonte = doc.add_paragraph()
+    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, extraído em {date.today().strftime('%d/%m/%Y')}.", color='94A3B8', size=7, italic=True)
 
 
 # ── Geração do documento ─────────────────────────────────────────────────────
@@ -534,6 +606,34 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
         f'a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, '
         f'é uma {porte_txt}, com capital social de R$ XXX.XXX,XX e com situação {situacao}:'
     )
+
+    # Adiciona o Quadro 01 (Informações Detalhadas)
+    # Por padrão, vamos usar R$ 10.000 como capital social fictício se não houver no banco
+    cap_social_val = 10000.0 
+    
+    # Prepara dicionário para o quadro
+    quadro_data = {
+        'cnpj_fmt': cnpj_fmt,
+        'razao_social': razao_social,
+        'nome_fantasia': cadastro.get('nome_fantasia'),
+        'natureza_juridica': cadastro.get('natureza_juridica'),
+        'id_cnae_principal': cadastro.get('id_cnae_principal'),
+        'cnae_principal': cadastro.get('cnae_principal'),
+        'id_cnae_secundario': cadastro.get('id_cnae_secundario'),
+        'cnae_secundario': cadastro.get('cnae_secundario'),
+        'data_abertura': cadastro.get('data_abertura'),
+        'situacao_rf': cnpj_data.get('situacao_rf') or 'ATIVA',
+        'porte_empresa': cnpj_data.get('porte_empresa') or 'MICROEMPRESA',
+        'endereco_completo': endereco,
+        'bairro': bairro,
+        'municipio': municipio,
+        'uf': uf,
+        'cep': cep,
+        'telefone': cadastro.get('telefone'),
+        'email': cadastro.get('email'),
+        'total_mov': cnpj_data.get('totalMov') or 0.0
+    }
+    _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
     doc.add_heading('5.2 Informações obtidas no Portal de Gestão do Farmácia Popular', level=2)
     doc.add_paragraph('Análise de regularidade cadastral e histórico de pagamentos...')
     doc.add_heading('5.3 Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', level=2)

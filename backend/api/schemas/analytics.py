@@ -350,6 +350,13 @@ class DadosFarmaciaSchema(BaseModel):
     cnae_secundario: Optional[str] = None
     data_abertura: Optional[date] = None
     data_processamento: Optional[datetime] = None
+    # Dados adicionais de identidade para o Quadro 01 da Nota Técnica
+    natureza_juridica: Optional[str] = None
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+    # UF e Município (conveniência para o objeto de cadastro)
+    uf: Optional[str] = None
+    municipio: Optional[str] = None
 
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────

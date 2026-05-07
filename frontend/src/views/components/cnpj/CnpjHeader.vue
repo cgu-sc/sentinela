@@ -56,6 +56,7 @@ const props = defineProps({
   geoData:       { type: Object,  default: null },
   cadastro:      { type: Object,  default: null },
   isExporting:   { type: Boolean, default: false },
+  isGeneratingNote: { type: Boolean, default: false },
   // Totais recalculados para o período de análise selecionado.
   // Quando presentes, sobrepõem os valores globais do cnpjData.
   periodSummary: { type: Object,  default: null },  // { totalMov, valSemComp, percValSemComp }
@@ -331,9 +332,10 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           <button
             class="list-btn list-btn--icon-only list-btn--note"
             @click="emit('generateNote')"
+            :disabled="isGeneratingNote"
             v-tooltip.bottom="'Gerar Nota Técnica'"
           >
-            <i class="pi pi-book" />
+            <i :class="isGeneratingNote ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
           </button>
           <button
             class="list-btn list-btn--icon-only"

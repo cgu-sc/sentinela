@@ -106,11 +106,36 @@ const handleExport = async () => {
     formatarData,
   });
 };
-const handleGenerateNote = () => {
+const isGeneratingNote = ref(false);
+const handleGenerateNote = async () => {
   const { inicio, fim } = getApiParams();
   const url = `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?data_inicio=${inicio}&data_fim=${fim}`;
   
-  window.open(url, "_blank");
+  try {
+    isGeneratingNote.value = true;
+    
+    // Baixa o arquivo como blob para não sair da página
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Erro ao gerar nota técnica");
+    
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    
+    // Cria um link temporário para o download
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', `Nota_Tecnica_${cnpj.value}.docx`);
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Erro ao gerar Nota Técnica:", error);
+  } finally {
+    isGeneratingNote.value = false;
+  }
 };
 // ── Composables (Fim) ─────────────────────────────────────
 
@@ -271,6 +296,7 @@ const isInitialLoading = computed(() => {
       :geo-data="geoData"
       :cadastro="dadosCadastro"
       :is-exporting="isExporting"
+      :is-generating-note="isGeneratingNote"
       :period-summary="periodSummary"
       :period-loading="evolucaoLoading"
       @export="handleExport"

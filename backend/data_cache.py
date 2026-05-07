@@ -214,15 +214,11 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("cnpj").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("nome_socio").cast(pl.String),
-        pl.col("cep").cast(pl.String),
-        pl.col("municipio").cast(pl.Categorical),  # Categorizado
-        pl.col("numero").cast(pl.String),
-        pl.col("complemento").cast(pl.String),
-        pl.col("bairro").cast(pl.Categorical),     # Categorizado
+        pl.col("municipio").cast(pl.Categorical),
+        pl.col("uf").cast(pl.Categorical),
         pl.col("cpf_representante").cast(pl.String),
         pl.col("id_qualificacao_representante").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
-        pl.col("descricao_logradouro").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("data_entrada_sociedade").cast(pl.Date),
         pl.col("data_exclusao_sociedade").cast(pl.Date),

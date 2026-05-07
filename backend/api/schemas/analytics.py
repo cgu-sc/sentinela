@@ -369,6 +369,8 @@ class SocioSchema(BaseModel):
     cpf_cnpj_socio: str
     nome_socio: Optional[str] = None
     indicador_socio: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
     descricao_qualificacao: Optional[str] = None
     data_entrada_sociedade: Optional[date] = None
     data_exclusao_sociedade: Optional[date] = None

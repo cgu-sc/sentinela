@@ -334,6 +334,13 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
                 pl.col("competencia").cast(pl.Int32)
             ])
             
+            # Remove redundância (caso o SQL tenha retornado uma linha por CNPJ sem DISTINCT)
+            subset_cols = ["competencia"]
+            if "uf" in df.columns: subset_cols.append("uf")
+            if "id_regiao_saude" in df.columns: subset_cols.append("id_regiao_saude")
+            
+            df = df.unique(subset=subset_cols)
+            
             # UF e Região de Saúde são categóricos
             if "uf" in df.columns:
                 df = df.with_columns(pl.col("uf").cast(pl.Categorical))
@@ -341,7 +348,7 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
                 df = df.with_columns(pl.col("id_regiao_saude").cast(pl.String))
                 
             df.write_parquet(info['path'], compression="zstd")
-            print(f"   -> Benchmark {key} exportado: {len(df):,} competências.")
+            print(f"   -> Benchmark {key} exportado: {len(df):,} registros únicos.")
             
             if progress_callback:
                 progress_callback(int(((i+1)/total) * 100))

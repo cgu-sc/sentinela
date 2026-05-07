@@ -23,26 +23,28 @@ try:
         _LOCALIDADES_PARQUET_PATH,
         _REDE_PARQUET_PATH,
         _MATRIZ_PARQUET_PATH,
-        _FALECIDOS_PARQUET_PATH,
-        _CRMS_DETALHADO_PARQUET_PATH,
-        _TOP20_CRMS_PARQUET_PATH,
-        _DADOS_FARMACIA_PARQUET_PATH
+        _BENCH_CRM_UF_PATH,
+        _BENCH_CRM_REGIAO_PATH,
+        _BENCH_CRM_BR_PATH,
+        _DADOS_FARMACIA_PARQUET_PATH,
+        _MEDICAMENTOS_PARQUET_PATH,
     )
-except ImportError:
-    print("❌ Erro: Não foi possível importar as definições do backend.")
+except ImportError as e:
+    print(f"❌ Erro: Não foi possível importar as definições do backend.\n   Detalhe: {e}")
     sys.exit(1)
 
 # ── Configuração dos Arquivos ──────────────────────────────────────────────────
 
 ARQUIVOS = [
-    {"id": 1, "name": "Movimentação Mensal",     "path": _PARQUET_PATH},
-    {"id": 2, "name": "Localidades (IBGE)",      "path": _LOCALIDADES_PARQUET_PATH},
-    {"id": 3, "name": "Rede de Estabelecimentos","path": _REDE_PARQUET_PATH},
-    {"id": 4, "name": "Matriz de Risco",         "path": _MATRIZ_PARQUET_PATH},
-    {"id": 5, "name": "Falecidos por Farmácia",  "path": _FALECIDOS_PARQUET_PATH},
-    {"id": 6, "name": "Indicador CRM Detalhado", "path": _CRMS_DETALHADO_PARQUET_PATH},
-    {"id": 7, "name": "Top 20 CRMs (Médicos)",   "path": _TOP20_CRMS_PARQUET_PATH},
-    {"id": 8, "name": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH},
+    {"id": 1, "name": "Movimentação Mensal",      "path": _PARQUET_PATH},
+    {"id": 2, "name": "Localidades (IBGE)",       "path": _LOCALIDADES_PARQUET_PATH},
+    {"id": 3, "name": "Rede de Estabelecimentos", "path": _REDE_PARQUET_PATH},
+    {"id": 4, "name": "Matriz de Risco",          "path": _MATRIZ_PARQUET_PATH},
+    {"id": 5, "name": "Benchmark CRM (UF)",       "path": _BENCH_CRM_UF_PATH},
+    {"id": 6, "name": "Benchmark CRM (Região)",   "path": _BENCH_CRM_REGIAO_PATH},
+    {"id": 7, "name": "Benchmark CRM (Brasil)",   "path": _BENCH_CRM_BR_PATH},
+    {"id": 8, "name": "Dados das Farmácias",      "path": _DADOS_FARMACIA_PARQUET_PATH},
+    {"id": 9, "name": "Cadastro de Medicamentos", "path": _MEDICAMENTOS_PARQUET_PATH},
 ]
 
 # ── Funções de Interface ───────────────────────────────────────────────────────

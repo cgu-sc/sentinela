@@ -154,7 +154,8 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.situacaoReceita as situacao_rf,
                D.ds_porte_empresa as porte_empresa,
                D.uf,
-               D.municipio
+               D.municipio,
+               D.capital_social
         FROM [temp_CGUSC].[fp].[dados_farmacia] D
     """
     with engine.connect() as conn:

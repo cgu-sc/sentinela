@@ -456,10 +456,12 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.dados_farmacia;
 SELECT
     f.*,
     mov.dataInicialDadosMovimentacao,
-    mov.dataFinalDadosMovimentacao
+    mov.dataFinalDadosMovimentacao,
+    cs.VlrCapitalSocial AS capital_social
 INTO temp_CGUSC.fp.dados_farmacia
-FROM #tempDadosFarmacias2          AS f
-LEFT JOIN #tempDatasMovimentacao   AS mov ON mov.cnpj = f.cnpj;
+FROM #tempDadosFarmacias2                  AS f
+LEFT JOIN #tempDatasMovimentacao           AS mov ON mov.cnpj = f.cnpj
+LEFT JOIN db_CNPJ_CapitalSocial.dbo.CNPJ_CapitalSocial AS cs  ON cs.NumCNPJ = f.cnpj;
 
 -- Adiciona a Chave Primária e garante o IDENTITY (se o SELECT INTO não manteve)
 -- No SQL Server, o IDENTITY costuma ser mantido no SELECT INTO se a origem for IDENTITY.

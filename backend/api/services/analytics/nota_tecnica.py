@@ -1,6 +1,7 @@
 import io
 import os
 import polars as pl
+from decimal import Decimal
 from datetime import date
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -604,14 +605,17 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     
     situacao = getattr(cnpj_data_obj, 'situacao_rf', 'ATIVA') if cnpj_data_obj else "ATIVA"
     
+    cap_social_val = Decimal(str(cadastro.get('capital_social') or 0.0))
+    cap_social_txt = f"R$ {cap_social_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
     p_intro_51 = doc.add_paragraph()
-    _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de R$ XXX.XXX,XX e com situação ')
+    _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de ')
+    _run(p_intro_51, cap_social_txt, bold=True)
+    _run(p_intro_51, ' e com situação ')
     _run(p_intro_51, situacao, bold=True, underline=True)
     _run(p_intro_51, ':')
 
     # Adiciona o Quadro 01 (Informações Detalhadas)
-    # Por padrão, vamos usar R$ 10.000 como capital social fictício se não houver no banco
-    cap_social_val = 10000.0 
     
     # Prepara dicionário para o quadro
     quadro_data = {

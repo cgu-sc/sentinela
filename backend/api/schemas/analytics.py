@@ -353,6 +353,7 @@ class DadosFarmaciaSchema(BaseModel):
     data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
     natureza_juridica: Optional[str] = None
+    capital_social: Optional[float] = 0.0
     # Dados adicionais de identidade para o Quadro 01 da Nota Técnica
     telefone_1: Optional[str] = None
     telefone_2: Optional[str] = None

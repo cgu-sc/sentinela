@@ -155,6 +155,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.data_abertura as data_abertura,
                D.data_processamento as data_processamento,
                D.natureza_juridica as natureza_juridica,
+               D.capital_social as capital_social,
                D.telefone_1 as telefone_1,
                D.telefone_2 as telefone_2,
                D.correio_eletronico as email,

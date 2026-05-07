@@ -6,12 +6,14 @@ from datetime import date
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
+from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 from data_cache import get_df_matriz_risco
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
+from .socios import get_socios_farmacia
 from .indicadores import _INDICATOR_FLAGS
 
 
@@ -106,6 +108,18 @@ def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False
     run.font.size = Pt(size)
     run.font.color.rgb = _rgb(color)
     return run
+
+
+
+def _format_cpf_cnpj(v: str | None) -> str:
+    """Formata CPF ou CNPJ com máscara padrão."""
+    if not v: return "—"
+    clean = "".join(filter(str.isdigit, v))
+    if len(clean) == 11:
+        return f"{clean[:3]}.{clean[3:6]}.{clean[6:9]}-{clean[9:]}"
+    if len(clean) == 14:
+        return f"{clean[:2]}.{clean[2:5]}.{clean[5:8]}/{clean[8:12]}-{clean[12:]}"
+    return v
 
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
@@ -270,6 +284,64 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
     dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
     _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=7, italic=True)
 
+    # ── Quadro Societário Atual ──────────────────────────────────────────
+    p_socio_intro = doc.add_paragraph()
+    p_socio_intro.paragraph_format.space_before = Pt(12)
+    _run(p_socio_intro, f"O quadro societário atual da Farmácia {data.get('razao_social') or ''} conta com os seguintes sócios:", color='0F172A', size=10)
+
+    if data.get('socios_ativos'):
+        for s in data['socios_ativos']:
+            p_s = doc.add_paragraph(style='List Bullet')
+            p_s.paragraph_format.left_indent = Inches(0.5)
+            cpf_fmt = _format_cpf_cnpj(s.cpf_cnpj_socio)
+            entrada_fmt = s.data_entrada_sociedade.strftime('%d/%m/%Y') if s.data_entrada_sociedade else '—'
+            _run(p_s, f"{s.nome_socio}, CPF: {cpf_fmt} (entrada em {entrada_fmt})", color='0F172A', size=10)
+    else:
+        p_s = doc.add_paragraph(style='List Bullet')
+        _run(p_s, "Informação de sócios não disponível ou nenhum sócio ativo identificado.", color='475569', size=10, italic=True)
+
+    # Disclaimer de Operações Especiais (Transição)
+    p_ops = doc.add_paragraph()
+    p_ops.paragraph_format.space_before = Pt(12)
+    _run(p_ops, 'Os parágrafos, a seguir, trazem problemas identificados em trabalhos de Operações Especiais sobre o programa.', color='0F172A', size=10)
+
+    # Seção de Mão de Obra e RT (Placeholders em vermelho)
+    doc.add_paragraph()
+    p_rais = doc.add_paragraph()
+    _run(p_rais, 'Segundo dados da Relação Anual de Informações Sociais (RAIS)', color='0F172A', size=10)
+    run_sup8 = p_rais.add_run('8')
+    run_sup8.font.superscript = True
+    run_sup8.font.size = Pt(7)
+    _run(p_rais, f' do Ministério do Trabalho e Emprego, a Farmácia {data.get("razao_social") or ""} possuía ', color='0F172A', size=10)
+    _run(p_rais, 'yy', color='EF4444', size=10, bold=True)
+    _run(p_rais, ' funcionários registrados em ', color='0F172A', size=10)
+    _run(p_rais, 'XXXX', color='EF4444', size=10, bold=True)
+    _run(p_rais, '. Contudo, apenas ', color='0F172A', size=10)
+    _run(p_rais, 'x', color='EF4444', size=10, bold=True)
+    _run(p_rais, ' funcionário(s) consta(m) nos anos de ', color='0F172A', size=10)
+    _run(p_rais, '20XX, 20YY e 20ZZ', color='EF4444', size=10, bold=True)
+    _run(p_rais, ', período em que, conforme será visto mais adiante, a transferência de recursos aumentou de forma relevante.', color='0F172A', size=10)
+
+    p_esocial = doc.add_paragraph()
+    p_esocial.paragraph_format.space_before = Pt(6)
+    _run(p_esocial, 'Destaca-se, também, o fato de que a legislação', color='0F172A', size=10)
+    run_sup9 = p_esocial.add_run('9')
+    run_sup9.font.superscript = True
+    run_sup9.font.size = Pt(7)
+    _run(p_esocial, ' sobre o exercício e a fiscalização das atividades farmacêuticas dispõe que a farmácia e a drogaria terão, obrigatoriamente, a responsabilidade e a assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento. Assim sendo, fica evidenciado mais uma possível irregularidade, pois em consulta ao eSocial', color='0F172A', size=10)
+    run_sup10 = p_esocial.add_run('10')
+    run_sup10.font.superscript = True
+    run_sup10.font.size = Pt(7)
+    _run(p_esocial, ' (atualizado até ', color='0F172A', size=10)
+    _run(p_esocial, 'XXXXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, ') foi identificado que, no período de ', color='0F172A', size=10)
+    _run(p_esocial, 'XXXX a YYYY', color='EF4444', size=10, bold=True)
+    _run(p_esocial, ', a única empregada registrada era ', color='0F172A', size=10)
+    _run(p_esocial, 'XXXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, ', que havia sido admitida em ', color='0F172A', size=10)
+    _run(p_esocial, 'XXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, '.', color='0F172A', size=10)
+
 
 # ── Geração do documento ─────────────────────────────────────────────────────
 
@@ -283,6 +355,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     resumo = get_dashboard_data(db, data_inicio, data_fim, cnpjs=[cnpj])
     cnpj_data_obj = resumo.resultado_cnpjs[0] if hasattr(resumo, 'resultado_cnpjs') and resumo.resultado_cnpjs else None
     cnpj_data = cnpj_data_obj.model_dump() if cnpj_data_obj and hasattr(cnpj_data_obj, 'model_dump') else cnpj_data_obj.dict() if cnpj_data_obj and hasattr(cnpj_data_obj, 'dict') else {}
+
+    # Coleta de sócios
+    socios_res = get_socios_farmacia(cnpj)
+    socios_ativos = [s for s in socios_res.socios if not s.data_exclusao_sociedade]
 
     # 2. Campos derivados
     razao_social = (cadastro.get('razao_social') or cnpj_data.get('razao_social') or 'NÃO INFORMADO').upper()
@@ -421,7 +497,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     _build_sumario(doc, criticos, razao_social, cnpj_fmt)
 
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
-    sec_ref = doc.add_section()
+    sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_ref.footer.is_linked_to_previous = False
     f_ref = sec_ref.footer.paragraphs[0]
     f_ref.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -505,23 +581,20 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Subitem 5.4.1] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if 'falecidos' in criticos: fontes.append('[Subitem 5.5] Sistema de Informações sobre Mortalidade (SIM), SIRC e SISOB')
     if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Subitem 5.19] [Subitem 5.20] [Subitem 5.21] e Cadastros de médicos do Conselho Regional de Medicina (CRM)')
-
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
 
-    # ── 7. Seção 4: Síntese (Rodapé 2) ───────────────────────────────────
-    sec_sintese = doc.add_section()
-    sec_sintese.footer.is_linked_to_previous = False
-    f_sintese = sec_sintese.footer.paragraphs[0]
-    f_sintese.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_sintese, f'(2) Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, em {date.today().strftime("%d/%m/%Y")}.\n', color='64748B', size=8)
-    _run(f_sintese, '(3) A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf\n', color='64748B', size=8)
-    _run(f_sintese, '(4) Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde reabriu a necessidade a partir de 17 de abril de 2025.\n', color='64748B', size=8)
-    _run(f_sintese, '(5) Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.\n', color='64748B', size=8)
-    _run(f_sintese, '(6) A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 que o estabelecimento deveria manter por cinco anos.\n', color='64748B', size=8)
-    _run(f_sintese, '(7) A CGU, em seu Relatório de Auditoria nº 823121, considerou “vendas sem comprovação” no âmbito do PFPB a diferença identificada por princípio ativo/insumo, após o batimento entre Notas Fiscais de entrada (compartilhadas pela Receita Federal do Brasil e relativas a aquisições de medicamentos do PFPB) e registro de saída no Sistema Autorizador de Vendas – SAV (onde as dispensações subsidiadas são informadas), tendo como elo os números que constam abaixo dos códigos de barra (Código GTIN).', color='64748B', size=8)
-
-    sec_sintese.top_margin = Inches(0.5); sec_sintese.bottom_margin = Inches(0.5)
-    sec_sintese.left_margin = Inches(0.7); sec_sintese.right_margin = Inches(0.7)
+    # ── 7. Seção 4.1: Sobre o Programa (Rodapé notas 2 a 6) ──────────────────
+    sec_41 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_41.footer.is_linked_to_previous = False
+    f_41 = sec_41.footer.paragraphs[0]
+    f_41.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(f_41, f'(2) Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, em {date.today().strftime("%d/%m/%Y")}.\n', color='64748B', size=8)
+    _run(f_41, '(3) A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf\n', color='64748B', size=8)
+    _run(f_41, '(4) Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde reabriu a necessidade a partir de 17 de abril de 2025.\n', color='64748B', size=8)
+    _run(f_41, '(5) Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.\n', color='64748B', size=8)
+    _run(f_41, '(6) A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 que o estabelecimento deveria manter por cinco anos.', color='64748B', size=8)
+    sec_41.top_margin = Inches(0.5); sec_41.bottom_margin = Inches(0.5)
+    sec_41.left_margin = Inches(0.7); sec_41.right_margin = Inches(0.7)
 
     # 4. SÍNTESE
     doc.add_heading('4. SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', level=1)
@@ -568,7 +641,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     run_sup6.font.superscript = True
     p_sav.add_run(', em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
 
-    doc.add_heading('4.2. Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', level=2)
+    # ── 8. Seção 4.2: Metodologia CGU (Rodapé nota 7) ────────────────────────
+    sec_42 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_42.footer.is_linked_to_previous = False
+    f_42 = sec_42.footer.paragraphs[0]
+    f_42.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(f_42, '(7) A CGU, em seu Relatório de Auditoria nº 823121, considerou "vendas sem comprovação" no âmbito do PFPB a diferença identificada por princípio ativo/insumo, após o batimento entre Notas Fiscais de entrada (compartilhadas pela Receita Federal do Brasil e relativas a aquisições de medicamentos do PFPB) e registro de saída no Sistema Autorizador de Vendas – SAV (onde as dispensações subsidiadas são informadas), tendo como elo os números que constam abaixo dos códigos de barra (Código GTIN).', color='64748B', size=8)
+    sec_42.top_margin = Inches(0.5); sec_42.bottom_margin = Inches(0.5)
+    sec_42.left_margin = Inches(0.7); sec_42.right_margin = Inches(0.7)
+
+    doc.add_heading('4.2. Sobre metodologia desenvolvida pela CGU para apuração de possíveis "vendas sem comprovação"', level=2)
     doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a imensa capilaridade de mais de 30 mil estabelecimentos credenciados.')
     doc.add_paragraph('Para enfrentar essa realidade, a CGU elaborou o Relatório de Apuração nº 823121 (ANEXO I desta NT), fundamentado no desenvolvimento do Sistema Sentinela, uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
     p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”')
@@ -580,19 +662,32 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 05/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código GTIN/EAN. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.')
     doc.add_paragraph('Além do levantamento de valores de “Vendas sem Comprovação” para todos as empresas que operam no PFPB, o Sistema Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram com a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
 
-    # ── 8. Seção 5: Análise e Conclusão (Sem Rodapé específico) ──────────
-    sec_analise = doc.add_section()
-    sec_analise.footer.is_linked_to_previous = False
-    
-    sec_analise.top_margin = Inches(0.5); sec_analise.bottom_margin = Inches(0.5)
-    sec_analise.left_margin = Inches(0.7); sec_analise.right_margin = Inches(0.7)
+    # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
+    sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_5_intro.footer.is_linked_to_previous = False
+    sec_5_intro.top_margin = Inches(0.5); sec_5_intro.bottom_margin = Inches(0.5)
+    sec_5_intro.left_margin = Inches(0.7); sec_5_intro.right_margin = Inches(0.7)
 
     # 5. ANÁLISE
     doc.add_heading('5. ANÁLISE', level=1)
     doc.add_paragraph(f'A presente Nota Técnica traz informações cadastrais e o resultado das análises dos alertas extraídos do Sistema Sentinela para a Farmácia {razao_social}, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
 
-    doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)
-    
+    # ── Seção 5.1 (Rodapé notas 8 e 9) ─────────────────────────────────
+    sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_51.footer.is_linked_to_previous = False
+    f_51 = sec_51.footer.paragraphs[0]
+    f_51.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(f_51, '(8) Relação Anual de Informações Sociais, atualização em ', color='64748B', size=8)
+    _run(f_51, 'XXX de XXX', color='EF4444', size=8, bold=True)
+    _run(f_51, '. Consulta realizada em ', color='64748B', size=8)
+    _run(f_51, 'xx.xx.xxxx', color='EF4444', size=8, bold=True)
+    _run(f_51, '.\n', color='64748B', size=8)
+    _run(f_51, '(9) Art. 5º da Lei nº 13.021, de 08.08.2014.\n', color='64748B', size=8)
+    _run(f_51, '(10) eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas do governo federal.', color='64748B', size=8)
+    sec_51.top_margin = Inches(0.5); sec_51.bottom_margin = Inches(0.5)
+    sec_51.left_margin = Inches(0.7); sec_51.right_margin = Inches(0.7)
+
+    doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)    
     # Mapeamento do porte conforme padrões RFB/Filtros
     porte_raw = getattr(cnpj_data_obj, 'porte_empresa', 'ND') if cnpj_data_obj else "ND"
     porte_txt = "empresa"
@@ -612,7 +707,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de ')
     _run(p_intro_51, cap_social_txt, bold=True)
     _run(p_intro_51, ' e com situação ')
-    _run(p_intro_51, situacao, bold=True, underline=True)
+    _run(p_intro_51, situacao.upper(), bold=True, underline=True)
     _run(p_intro_51, ':')
 
     # Adiciona o Quadro 01 (Informações Detalhadas)
@@ -639,11 +734,49 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
         'telefone_2': cadastro.get('telefone_2'),
         'email': cadastro.get('email'),
         'data_processamento': cadastro.get('data_processamento'),
-        'total_mov': cnpj_data.get('totalMov') or 0.0
+        'total_mov': cnpj_data.get('totalMov') or 0.0,
+        'socios_ativos': socios_ativos
     }
+    # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
+
+    # ── 9. Seção 5.2+ (Rodapé nota 11) ──────────────
+    sec_52 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_52.footer.is_linked_to_previous = False
+    f_52 = sec_52.footer.paragraphs[0]
+    f_52.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(f_52, '(11) Disponível em: https://farmaciapopular-gestao.saude.gov.br/farmaciapopular-gestao/pages/login.jsf. Consulta realizada em xx.xx.xxxx.', color='64748B', size=8)
+    sec_52.top_margin = Inches(0.5); sec_52.bottom_margin = Inches(0.5)
+    sec_52.left_margin = Inches(0.7); sec_52.right_margin = Inches(0.7)
+
     doc.add_heading('5.2 Informações obtidas no Portal de Gestão do Farmácia Popular', level=2)
-    doc.add_paragraph('Análise de regularidade cadastral e histórico de pagamentos...')
+    
+    # Texto condicional e instrutivo para o auditor
+    p_gestao_intro = doc.add_paragraph()
+    _run(p_gestao_intro, '(ATENÇÃO: Este item 5.2 só deve ser mantido se o estabelecimento estiver inativo junto ao PFPB. Caso contrário, remova esta seção.)', color='EF4444', size=8, italic=True)
+    
+    doc.add_paragraph()
+    p_gestao_corpo = doc.add_paragraph()
+    _run(p_gestao_corpo, f'Identificou-se, por meio de consulta ao Portal de Gestão do Farmácia Popular (Módulo Gestão', color='0F172A', size=10)
+    run_sup11 = p_gestao_corpo.add_run('11')
+    run_sup11.font.superscript = True
+    run_sup11.font.size = Pt(7)
+    _run(p_gestao_corpo, f'), que a Farmácia {razao_social} foi colocada na situação de ', color='0F172A', size=10)
+    _run(p_gestao_corpo, '“inativa”', color='EF4444', size=10, bold=True)
+    _run(p_gestao_corpo, ', em ', color='0F172A', size=10)
+    _run(p_gestao_corpo, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
+    _run(p_gestao_corpo, ', por ações de controle e monitoramento especificadas na ', color='0F172A', size=10)
+    _run(p_gestao_corpo, 'Nota Técnica nº 786/2024 – CGPFP/DAF/SECTICS/MS e no Ofício nº 3435/2024/CGPFP/DAF/SECTICS/MS', color='EF4444', size=10, bold=True)
+    _run(p_gestao_corpo, ', encaminhado à empresa pela Coordenação Geral do Programa Farmácia Popular do Brasil, do Ministério da Saúde. ', color='0F172A', size=10)
+    _run(p_gestao_corpo, '(ATENÇÃO: cabe ao auditor checar se não existem documentos mais recentes). ', color='F97316', size=9, bold=True, italic=True)
+    _run(p_gestao_corpo, 'Em que pese não ter sido identificados os respectivos documentos anexados informando as causas, bem como as respostas, tal situação reforça a hipótese de funcionamento inadequado ou existência de irregularidades cometidos pelo estabelecimento.', color='0F172A', size=10)
+
+    doc.add_paragraph()
+    p_reitera = doc.add_paragraph()
+    _run(p_reitera, f'A Farmácia {razao_social} também foi notificada (reiteração) pela Coordenação Geral do Programa Farmácia Popular do Brasil, em ', color='0F172A', size=10)
+    _run(p_reitera, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
+    _run(p_reitera, ', em decorrência deste monitoramento, mas a resposta e o ofício de solicitação de informações não foram anexados ao sistema, até a última consulta. ', color='0F172A', size=10)
+    _run(p_reitera, '(ATENÇÃO: Somente para casos de reiteração, cabendo ao auditor tal checagem).', color='F97316', size=9, bold=True, italic=True)
     doc.add_heading('5.3 Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', level=2)
     doc.add_paragraph('Cruzamento de notas fiscais de entrada com cupons fiscais de saída...')
     doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)

@@ -207,10 +207,14 @@ def _sync_dados_socios(engine, progress_callback=None):
         chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
-        print(f"   -> Progresso Dados Sócios: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
 
-    _df_dados_socios = pl.concat(chunk_list).with_columns([
+    df_full = pl.concat(chunk_list)
+    
+    # Debug: Mostrar colunas reais antes do cast
+    # print(f"DEBUG: Colunas encontradas: {df_full.columns}")
+
+    _df_dados_socios = df_full.with_columns([
         pl.col("cnpj").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("nome_socio").cast(pl.String),
@@ -224,8 +228,10 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("data_exclusao_sociedade").cast(pl.Date),
         pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("data_processamento").cast(pl.Date),
-    ]).sort("cnpj")  # Ordenação para compressão
+    ]).sort("cnpj")
+
     _df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="zstd")
+    print(f"   -> Sincronização de Sócios finalizada ({len(_df_dados_socios):,} registros).")
 
 
 def _sync_medicamentos(engine, progress_callback=None):

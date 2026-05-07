@@ -87,7 +87,7 @@ def get_falecidos_data(
             read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"⚠️ Erro ao ler parquet falecidos '{cnpj}': {e}")
+            print(f"[ CACHE ] {cnpj} ● FALECIDOS ● ⚠️ ERRO DE LEITURA ({e})")
 
     # ── 2. Gerar parquet via SQL (primeira vez ou cache corrompido) ──────
     if df_all is None:
@@ -120,17 +120,9 @@ def get_falecidos_data(
             save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
             print(f"⏱  Falecidos {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
 
-        except Exception as e:
-            import traceback
-            print(f"⚠️ Erro ao gerar parquet falecidos '{cnpj}': {e}")
-            print(traceback.format_exc())
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● FALECIDOS ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df_all = pl.DataFrame()
-
-    # ── 3. Filtro de período ─────────────────────────────────────────────
-    if data_inicio:
-        df_all = df_all.filter(pl.col("data_autorizacao") >= pl.lit(data_inicio).cast(pl.Date))
-    if data_fim:
-        df_all = df_all.filter(pl.col("data_autorizacao") <= pl.lit(data_fim).cast(pl.Date))
 
     _empty_response = FalecidosResponse(
         cnpj=cnpj,
@@ -146,6 +138,15 @@ def get_falecidos_data(
         save_time_ms=save_time_ms,
         read_time_ms=read_time_ms,
     )
+
+    # ── 3. Filtro de período ─────────────────────────────────────────────
+    if df_all.is_empty() or len(df_all.columns) == 0:
+        return _empty_response
+
+    if data_inicio:
+        df_all = df_all.filter(pl.col("data_autorizacao") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        df_all = df_all.filter(pl.col("data_autorizacao") <= pl.lit(data_fim).cast(pl.Date))
 
     try:
         df_target = df_all.filter(pl.col("cnpj") == cnpj)

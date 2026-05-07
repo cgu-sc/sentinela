@@ -201,7 +201,7 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
             read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"⚠️ Erro ao ler parquet gtin '{cnpj}': {e}")
+            print(f"[ CACHE ] {cnpj} ● GTIN ● ⚠️ ERRO DE LEITURA ({e})")
 
     if df is None:
         try:
@@ -236,10 +236,8 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
             save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
 
             print(f"⏱  GTIN {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
-        except Exception as e:
-            import traceback
-            print(f"⚠️ Erro ao gerar parquet gtin '{cnpj}': {e}")
-            print(traceback.format_exc())
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● GTIN ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df = pl.DataFrame()
 
     if df.is_empty():

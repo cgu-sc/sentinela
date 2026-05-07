@@ -418,7 +418,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             try:
                 return pl.read_parquet(path)
             except Exception as e:
-                print(f"⚠️  Erro ao ler parquet '{name}': {e}")
+                print(f"[ CACHE ] GLOBAL ● {name} ● ⚠️ ERRO DE LEITURA ({e})")
                 missing.append(name)
                 return None
 
@@ -540,8 +540,11 @@ def get_medicamentos_df() -> pl.DataFrame:
     if _df_medicamentos is None:
         # Se não carregado, tentamos ler do parquet direto se existir
         if os.path.exists(_MEDICAMENTOS_PARQUET_PATH):
-            _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
-            return _df_medicamentos
+            try:
+                _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
+                return _df_medicamentos
+            except Exception as e:
+                print(f"[ CACHE ] GLOBAL ● medicamentos ● ⚠️ ERRO DE LEITURA ({e})")
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 

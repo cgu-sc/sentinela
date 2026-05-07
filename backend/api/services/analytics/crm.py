@@ -123,9 +123,8 @@ def get_crm_data(
             _t1 = _time.perf_counter()
             df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception as e:
-            print(f"âŒ ERRO ao buscar CRM do banco para {cnpj}: {e}")
-            print(traceback.format_exc())
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● CRM ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], query_time_ms=query_time_ms)
 
     # â”€â”€ 2. Filtro de perÃ­odo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -327,13 +326,14 @@ def get_crm_data(
     for m in crms_interesse_list:
         m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
 
-    # â”€â”€ 7.1 Alertas GeogrÃ¡ficos (DistÃ¢ncia) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— 7.1 Alertas Geográficos (Distância) ——————————————————————————————————————
     ALERTAS_GEO_PATH = os.path.join(cnpj_dir, "geografico.parquet")
     df_geo: pl.DataFrame | None = None
 
     if os.path.exists(ALERTAS_GEO_PATH):
         try: df_geo = pl.read_parquet(ALERTAS_GEO_PATH)
-        except: pass
+        except Exception as e:
+            print(f"[ CACHE ] {cnpj} ● GEO ● ⚠️ ERRO DE LEITURA ({e})")
         
     if df_geo is None:
         try:
@@ -351,12 +351,8 @@ def get_crm_data(
                 "dt_fim_b": pl.Utf8, "nu_prescricoes_b": pl.Int32, "distancia_km": pl.Float64
             })
             df_geo.write_parquet(ALERTAS_GEO_PATH, compression="zstd")
-        except Exception as e:
-            # Se falhar a conexÃ£o (comum em modo offline), apenas avisa de forma amigÃ¡vel
-            if "IM002" in str(e) or "connection" in str(e).lower():
-                print(f"â„¹ï¸  Modo Offline: Alertas geogrÃ¡ficos para {cnpj} nÃ£o encontrados no cache e banco inacessÃ­vel.")
-            else:
-                print(f"âš ï¸ Erro ao buscar alertas geogrÃ¡ficos para {cnpj}: {e}")
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● GEO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df_geo = pl.DataFrame()
 
     alertas_geo_por_medico: dict[str, list[dict]] = {}
@@ -386,16 +382,17 @@ def get_crm_data(
     for m in crms_interesse_list:
         m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
 
-    # â”€â”€ 7.2 Alertas de MÃºltiplos CRMs (Surtos Coordenados) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— 7.2 Alertas de Múltiplos CRMs (Surtos Coordenados) ———————————————————————
     df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
 
-    # â”€â”€ 7.3 PrÃ©-SincronizaÃ§Ã£o do Raio-X Unificado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— 7.3 Pré-Sincronização do Raio-X Unificado ———————————————————————————————
     # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
     try:
         sync_crm_raiox_tx(cnpj)
-    except: pass
+    except Exception as e:
+        print(f"[ ANALYTICS ] {cnpj} ● RAIO-X ● ⚠️ ERRO NA SINCRONIZAÇÃO ({e})")
 
-    # â”€â”€ 8. Alertas do Estabelecimento (Cross-CRM) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
     CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "volume_horario_anomalo_alertas.parquet")
 
     df_ca: pl.DataFrame | None = None
@@ -403,7 +400,8 @@ def get_crm_data(
     if os.path.exists(CNPJ_ALERTS_PATH):
         try:
             df_ca = pl.read_parquet(CNPJ_ALERTS_PATH)
-        except: pass
+        except Exception as e:
+            print(f"[ CACHE ] {cnpj} ● SURTOS ● ⚠️ ERRO DE LEITURA ({e})")
     
     if df_ca is None:
         try:
@@ -423,11 +421,11 @@ def get_crm_data(
                 "mediana_hora": pl.Float64, "multiplicador": pl.Float64
             })
             df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="zstd")
-        except Exception as e:
-            print(f"âŒ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● SURTOS ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df_ca = pl.DataFrame()
 
-    # â”€â”€ 8. Alertas do Estabelecimento (ConsolidaÃ§Ã£o das 3 Fontes) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— 8. Alertas do Estabelecimento (Consolidação das 3 Fontes) —————————————————
     cnpj_alerts_list = []
     
     # 8.1 - Alertas de Volume (df_ca)
@@ -446,7 +444,7 @@ def get_crm_data(
                 "mediana_hora":  float(r.get("mediana_hora", 0))
             })
 
-    # 8.2 - Alertas de MÃºltiplos CRMs (df_cm)
+    # 8.2 - Alertas de Múltiplos CRMs (df_cm)
     if df_cm is not None and not df_cm.is_empty():
         _cm = df_cm
         if comp_ini: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
@@ -462,16 +460,16 @@ def get_crm_data(
                 "mediana_hora": 0.0
             })
 
-    # 8.3 - Alertas de MÃ©dico Ãšnico (df_ad - Agregado por Janela)
-    # Note: df_ad contÃ©m mÃºltiplos alertas por mÃ©dico. No nÃ­vel de CNPJ,
-    # queremos mostrar quando HOUVE um alerta de mÃ©dico Ãºnico.
+    # 8.3 - Alertas de Médico Único (df_ad - Agregado por Janela)
+    # Note: df_ad contém múltiplos alertas por médico. No nível de CNPJ,
+    # queremos mostrar quando HOUVE um alerta de médico único.
     if df_ad is not None and not df_ad.is_empty():
         _ad = df_ad
         if comp_ini: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
         if comp_fim: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
         
-        # Agrupamos por janela para nÃ£o duplicar se 2 mÃ©dicos tiveram alerta na mesma hora
-        # (embora o frontend lide com isso, Ã© mais limpo consolidar)
+        # Agrupamos por janela para não duplicar se 2 médicos tiveram alerta na mesma hora
+        # (embora o frontend lide com isso, é mais limpo consolidar)
         _ad_agg = _ad.group_by(["dt_alerta", "hr_janela"]).agg([
             pl.count("id_medico").alias("nu_crms"),
             pl.sum("nu_prescricoes_dia").alias("nu_prescricoes")
@@ -487,19 +485,19 @@ def get_crm_data(
                 "mediana_hora": 0.0
             })
 
-    # OrdenaÃ§Ã£o Final por Data/Hora
+    # Ordenação Final por Data/Hora
     cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
 
-    # â”€â”€ 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? â”€â”€
+    # ——— 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ———————
     TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
     alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
 
     if os.path.exists(TX_PARQUET_PATH):
         try:
-            # Carregamos as transaÃ§Ãµes anÃ´malas (Raio-X) do estabelecimento
+            # Carregamos as transações anômalas (Raio-X) do estabelecimento
             df_tx = pl.read_parquet(TX_PARQUET_PATH)
             if not df_tx.is_empty():
-                # Filtro de perÃ­odo nas transaÃ§Ãµes se necessÃ¡rio
+                # Filtro de período nas transações se necessário
                 if comp_ini or comp_fim:
                     # Garantimos que seja Date para os accessors .dt
                     dt_temp = pl.col("dt_janela")
@@ -524,9 +522,9 @@ def get_crm_data(
                     ])
                 )
                 
-                # Cruzamos com os alertas do CNPJ para trazer o contexto (descriÃ§Ã£o/total)
+                # Cruzamos com os alertas do CNPJ para trazer o contexto (descrição/total)
                 if not df_ca.is_empty():
-                    # Garantimos que dt_alerta tambÃ©m seja String no mesmo formato
+                    # Garantimos que dt_alerta também seja String no mesmo formato
                     df_ca_clean = df_ca.with_columns(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10))
                     
                     df_surto_full = df_surto_agg.join(
@@ -543,8 +541,8 @@ def get_crm_data(
                         mult = r.get("multiplicador", 0)
                         med = r.get("mediana_hora", 0)
                         
-                        # Frase tÃ©cnica padronizada (Backend-only)
-                        desc = f"{vol} prescriÃ§Ãµes Ã s {hr:02d}h ({mult}x a mediana da farmÃ¡cia: {med}/h)"
+                        # Frase técnica padronizada (Backend-only)
+                        desc = f"{vol} prescrições às {hr:02d}h ({mult}x a mediana da farmácia: {med}/h)"
                         
                         alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
                             "dt": str(r["dt_janela"]),
@@ -556,10 +554,11 @@ def get_crm_data(
                             "mediana_hora": med,
                             "descricao": desc
                         })
-        except Exception as e:
-            print(f"âš ï¸ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
+        except Exception:
+            # print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
+            pass
 
-    # AtribuiÃ§Ã£o final aos mÃ©dicos
+    # Atribuição final aos médicos
     for m in crms_interesse_list:
         m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
 
@@ -778,12 +777,12 @@ def get_crm_perfil_diario(
     data_inicio: str | None = None,
     data_fim: str | None = None
 ) -> "CrmDailyProfileResponse":
-    """Retorna o perfil diÃ¡rio unificado de dispensaÃ§Ã£o de um CNPJ.
+    """Retorna o perfil diário unificado de dispensação de um CNPJ.
 
-    Cada dia inclui trÃªs flags independentes:
-      - is_dia_com_volume_horario_anomalo: surto horÃ¡rio de volume
-      - is_anomalo_unico:                  concentraÃ§Ã£o temporal de mÃ©dico individual
-      - is_crm_multiplo:                  concentraÃ§Ã£o temporal com mÃºltiplos CRMs
+    Cada dia inclui três flags independentes:
+      - is_dia_com_volume_horario_anomalo: surto horário de volume
+      - is_anomalo_unico:                  concentração temporal de médico individual
+      - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
 
     Fonte: temp_CGUSC.fp.crm_perfil_diario
     Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
@@ -810,7 +809,7 @@ def get_crm_perfil_diario(
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"âš ï¸ Erro ao ler parquet crm_perfil_diario '{cnpj}': {e}")
+            print(f"[ CACHE ] {cnpj} ● PERFIL DIÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
 
     if df is None:
         try:
@@ -829,15 +828,15 @@ def get_crm_perfil_diario(
             _t1 = _time.perf_counter()
             df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception as e:
-            print(f"âš ï¸ Erro ao gerar parquet crm_perfil_diario '{cnpj}': {e}")
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● PERFIL DIÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df = pl.DataFrame()
 
     if df.is_empty():
         return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    # --- Filtro de PerÃ­odo ---
+    # --- Filtro de Período ---
     if data_inicio:
         d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
         df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
@@ -893,10 +892,10 @@ def get_crm_perfil_horario(
     data_inicio: str | None = None,
     data_fim: str | None = None
 ) -> CrmHourlyProfileResponse:
-    """Retorna o detalhamento horÃ¡rio (0-23h) de todos os dias anÃ´malos do CNPJ.
+    """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
 
     Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
-    por ponto horÃ¡rio, lidos de temp_CGUSC.fp.crm_perfil_horario.
+    por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
     Cache: sentinela_cache/<cnpj>/crm_horario.parquet
     """
     import pandas as pd
@@ -923,7 +922,7 @@ def get_crm_perfil_horario(
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             from_cache = True
         except Exception as e:
-            print(f"âš ï¸ Erro ao ler parquet hourly '{cnpj}': {e}")
+            print(f"[ CACHE ] {cnpj} ● PERFIL HORÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
 
     if df is None:
         try:
@@ -945,15 +944,15 @@ def get_crm_perfil_horario(
             _t1 = _time.perf_counter()
             df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception as e:
-            print(f"âš ï¸ Erro ao gerar parquet hourly '{cnpj}': {e}")
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● PERFIL HORÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df = pl.DataFrame()
 
     if df.is_empty():
         return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    # --- Filtro de PerÃ­odo ---
+    # --- Filtro de Período ---
     if data_inicio:
         d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
         df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
@@ -970,7 +969,9 @@ def get_crm_perfil_horario(
     if os.path.exists(EVENTS_PARQUET_PATH):
         try:
             df_events = pl.read_parquet(EVENTS_PARQUET_PATH)
-        except Exception: pass
+        except Exception as e:
+            print(f"[ CACHE ] {cnpj} ● EVENTOS HORÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
+            pass
 
     if df_events is None:
         try:
@@ -1022,7 +1023,7 @@ def get_crm_perfil_horario(
                     params={"cnpj": cnpj}
                 )
                 df_events = pl.from_pandas(pdf_events)
-                # CÃ¡lculos de minutos e formataÃ§Ã£o
+                # Cálculos de minutos e formatação
                 if not df_events.is_empty():
                     df_events = df_events.with_columns([
                         pl.col("dt_ini_concentracao").dt.strftime("%H:%M").alias("hora_inicio"),
@@ -1031,11 +1032,11 @@ def get_crm_perfil_horario(
                         (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
                     ])
                 df_events.write_parquet(EVENTS_PARQUET_PATH, compression="zstd")
-        except Exception as e:
-            print(f"âš ï¸ Erro ao buscar eventos hourly '{cnpj}': {e}")
+        except Exception:
+            print(f"[ ANALYTICS ] {cnpj} ● PERFIL HORÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
             df_events = pl.DataFrame()
 
-    # Filtro de perÃ­odo nos eventos
+    # Filtro de período nos eventos
     if not df_events.is_empty():
         if data_inicio:
             d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"

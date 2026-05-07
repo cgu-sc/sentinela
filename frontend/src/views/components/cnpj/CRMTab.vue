@@ -25,11 +25,7 @@ watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
 }, { immediate: true });
 
 onMounted(() => {
-  if (props.cnpj) {
-    const { inicio, fim } = getApiParams();
-    cnpjDetailStore.fetchCrmPerfilDiario(props.cnpj, inicio, fim);
-    cnpjDetailStore.fetchCrmPerfilHorario(props.cnpj, inicio, fim);
-  }
+  // Dados agora são carregados centralizadamente pelo CnpjDetailView (Eager Load)
 });
 
 // ── Estado de Navegação (Agora via Store) ─────────────────────────────────

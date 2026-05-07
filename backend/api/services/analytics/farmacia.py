@@ -140,8 +140,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
             _read_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             return _build_response_from_df(df_cached, from_cache=True, read_time_ms=_read_ms)
         except Exception as e:
-            import traceback
-            print(f"⚠️ Erro ao ler Parquet '{cnpj}': {e}")
+            print(f"[ CACHE ] {cnpj} ● MOVIMENTAÇÃO ● ⚠️ ERRO DE LEITURA ({e})")
 
     # ── 1b. Se for apenas check_cache e não existia/corrompeu, retorna vazio
     if check_cache:
@@ -198,20 +197,11 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
                     from decimal import Decimal
                     item[key] = Decimal(str(item[key]))
     
-    except (SQLAInterfaceError, Exception) as e:
-        msg = str(e)
-        if "IM002" in msg or "ODBC" in msg or "InterfaceError" in msg:
-            print(f"❌ [INFO] Driver ODBC não disponível. Consulta 'live' ignorada.")
-            return MovimentacaoResponse(
-                cnpj=cnpj, summary=empty_summary, rows=[],
-                error="Arquivo Parquet local não encontrado e Driver ODBC ausente."
-            )
-        
-        print(f"❌ ERRO ao buscar movimentação para {cnpj}: {e}")
-        print(traceback.format_exc())
-        raise HTTPException(
-            status_code=503,
-            detail="Erro interno ao processar dados de movimentação. Verifique os logs do servidor."
+    except (SQLAInterfaceError, Exception):
+        print(f"[ ANALYTICS ] {cnpj} ● MOVIMENTAÇÃO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
+        return MovimentacaoResponse(
+            cnpj=cnpj, summary=empty_summary, rows=[],
+            error="Arquivo Parquet local não encontrado e Banco Offline."
         )
 
     # ── 3. Processa linhas (lógica espelhada de gerar_relatorio.py) ──────

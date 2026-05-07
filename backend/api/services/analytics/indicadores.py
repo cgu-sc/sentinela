@@ -130,8 +130,8 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
             for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items()
         }
         return IndicadoresResponse(cnpj=cnpj, indicadores=indicadores)
-    except Exception as e:
-        print(traceback.format_exc())
+    except Exception:
+        print(f"[ ANALYTICS ] {cnpj} ● INDICADORES ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
         return IndicadoresResponse(cnpj=cnpj, indicadores={})
 
 def get_indicadores_analise(

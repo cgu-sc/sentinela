@@ -320,7 +320,7 @@ SELECT
     temp_CGUSC.dbo.InitCapEachWord(cnae_s.DescSubClasseCNAE)   AS cnae_secundario,
     c.Telefone1                                                AS telefone_1,
     c.Telefone2                                                AS telefone_2,
-    c.CorreioEletronico                                        AS correio_eletronico,
+    LOWER(c.CorreioEletronico)                                 AS correio_eletronico,
     GETDATE()                                                  AS data_processamento
 INTO #tempDadosFarmacias
 FROM temp_CGUSC.fp.lista_cnpjs                     AS lst

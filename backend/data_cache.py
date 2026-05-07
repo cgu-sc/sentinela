@@ -173,7 +173,11 @@ def _sync_dados_farmacia(engine, progress_callback=None):
         if progress_callback: progress_callback(p)
 
     pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
-    _df_dados_farmacia = pl.from_pandas(pdf)
+    _df_dados_farmacia = pl.from_pandas(pdf).with_columns([
+        (pl.col("is_matriz") == "M").alias("is_matriz"),
+        pl.col("id_cnae_principal").cast(pl.String),
+        pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
+    ])
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="lz4")
 
 

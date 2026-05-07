@@ -85,7 +85,7 @@ class RedeEstabelecimentoSchema(BaseModel):
     razao_social: Optional[str] = None
     uf: Optional[str] = None
     municipio: Optional[str] = None
-    is_matriz: bool = False
+    is_matriz: Optional[bool] = False
     qtd_estabelecimentos_rede: Optional[int] = 0
     is_grande_rede: Optional[bool] = False
 
@@ -336,6 +336,7 @@ class DadosFarmaciaSchema(BaseModel):
     cnpj: str
     razao_social: Optional[str] = None
     nome_fantasia: Optional[str] = None
+    is_matriz: Optional[bool] = False
     tipo_logradouro: Optional[str] = None
     logradouro: Optional[str] = None
     numero: Optional[str] = None
@@ -352,11 +353,14 @@ class DadosFarmaciaSchema(BaseModel):
     data_processamento: Optional[datetime] = None
     # Dados adicionais de identidade para o Quadro 01 da Nota Técnica
     natureza_juridica: Optional[str] = None
-    telefone: Optional[str] = None
+    telefone_1: Optional[str] = None
+    telefone_2: Optional[str] = None
     email: Optional[str] = None
     # UF e Município (conveniência para o objeto de cadastro)
     uf: Optional[str] = None
     municipio: Optional[str] = None
+    situacao_rf: Optional[str] = None
+    porte_empresa: Optional[str] = None
 
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────

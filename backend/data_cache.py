@@ -136,6 +136,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     print("Sincronizando Dados Cadastrais das Farmácias...")
     sql = """
         SELECT D.cnpj,
+               D.indMatriz as is_matriz,
                D.razaoSocial as razao_social,
                D.nomeFantasia as nome_fantasia,
                D.tipoLogradouro as tipo_logradouro,
@@ -146,30 +147,15 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.id_cnae_secundario, D.cnae_secundario,
                D.data_abertura,
                D.data_processamento,
-               D.naturezaJuridica as natureza_juridica,
-               D.telefone,
-               D.email,
-               D.situacaoRF as situacao_rf,
-               D.porteEmpresa as porte_empresa,
-               I.sg_uf as uf,
-               I.no_municipio as municipio,
-               CAST(ISNULL(R.total_mov, 0) AS FLOAT) as total_mov,
-               CAST(ISNULL(R.val_sem_comp, 0) AS FLOAT) as val_sem_comp,
-               CAST(CASE WHEN ISNULL(R.total_mov, 0) > 0 
-                         THEN LEAST((ISNULL(R.val_sem_comp, 0) / R.total_mov) * 100, 100)
-                         ELSE 0 END AS FLOAT) as perc_val_sem_comp,
-               CAST(ISNULL(M.score_risco_final, 0) AS FLOAT) as score_risco_final,
-               ISNULL(M.classificacao_risco, 'N/A') as classificacao_risco
+               D.natureza_juridica,
+               D.telefone_1,
+               D.telefone_2,
+               D.correio_eletronico as email,
+               D.situacaoReceita as situacao_rf,
+               D.ds_porte_empresa as porte_empresa,
+               D.uf,
+               D.municipio
         FROM [temp_CGUSC].[fp].[dados_farmacia] D
-        LEFT JOIN [temp_CGUSC].[fp].[dados_ibge] I ON I.id_ibge7 = D.codibge
-        LEFT JOIN (
-            SELECT cnpj, 
-                   SUM(total_vendas) as total_mov, 
-                   SUM(total_sem_comprovacao) as val_sem_comp
-            FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]
-            GROUP BY cnpj
-        ) R ON R.cnpj = D.cnpj
-        LEFT JOIN [temp_CGUSC].[fp].[matriz_risco_consolidada] M ON M.cnpj = D.cnpj
     """
     with engine.connect() as conn:
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[dados_farmacia]")).scalar()

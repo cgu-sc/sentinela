@@ -227,7 +227,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
         ('Bairro', data.get('bairro') or '—'),
         ('Município/UF', f"{data.get('municipio') or '—'} / {data.get('uf') or '—'}"),
         ('CEP', data.get('cep') or '—'),
-        ('Telefone', data.get('telefone') or '—'),
+        ('Telefone(s)', ' / '.join(filter(None, [data.get('telefone_1'), data.get('telefone_2')])) or '—'),
         ('E-mail', data.get('email') or '—'),
     ]
 
@@ -629,7 +629,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
         'municipio': municipio,
         'uf': uf,
         'cep': cep,
-        'telefone': cadastro.get('telefone'),
+        'telefone_1': cadastro.get('telefone_1'),
+        'telefone_2': cadastro.get('telefone_2'),
         'email': cadastro.get('email'),
         'total_mov': cnpj_data.get('totalMov') or 0.0
     }

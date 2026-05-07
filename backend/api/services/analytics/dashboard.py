@@ -233,7 +233,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.col("situacao_rf").first().alias("situacao_rf"),
                 pl.col("porte_empresa").first().alias("porte_empresa"),
                 pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
-                (pl.col("is_matriz").cast(pl.Boolean).first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
+                (pl.col("is_matriz").eq("M").first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
             ])
             .with_columns([
                 (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),

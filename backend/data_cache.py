@@ -302,7 +302,7 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
         pl.col("no_municipio").cast(pl.Categorical),
-        pl.col("razao_social").cast(pl.String),
+        pl.col("razao_social").cast(pl.Categorical),  # Mudado para Categorical para compressão
         pl.col("situacao_rf").cast(pl.Categorical),
         pl.col("porte_empresa").cast(pl.Categorical),
         pl.col("unidade_pf").cast(pl.Categorical),
@@ -314,7 +314,8 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_qnt_sem_comprovacao").cast(pl.Int32),
         pl.col("total_vendas").cast(pl.Float64),
         pl.col("total_sem_comprovacao").cast(pl.Float64),
-    ])
+    ]).sort(["cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
+    
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 
 def _sync_crm_benchmarks(engine, progress_callback=None):

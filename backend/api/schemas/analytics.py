@@ -345,14 +345,15 @@ class DadosFarmaciaSchema(BaseModel):
     cep: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    id_ibge7: Optional[str] = None
     id_cnae_principal: Optional[str] = None
     cnae_principal: Optional[str] = None
     id_cnae_secundario: Optional[str] = None
     cnae_secundario: Optional[str] = None
-    data_abertura: Optional[date] = None
+    data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
-    # Dados adicionais de identidade para o Quadro 01 da Nota Técnica
     natureza_juridica: Optional[str] = None
+    # Dados adicionais de identidade para o Quadro 01 da Nota Técnica
     telefone_1: Optional[str] = None
     telefone_2: Optional[str] = None
     email: Optional[str] = None

@@ -97,10 +97,11 @@ def _rgb(hex6: str) -> RGBColor:
     return RGBColor(int(hex6[0:2], 16), int(hex6[2:4], 16), int(hex6[4:6], 16))
 
 
-def _run(para, text: str, *, color: str, size: float, bold=False, italic=False):
+def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False, italic=False, underline=False):
     run = para.add_run(text)
     run.bold = bold
     run.italic = italic
+    run.underline = underline
     run.font.size = Pt(size)
     run.font.color.rgb = _rgb(color)
     return run
@@ -264,7 +265,9 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
     _run(p_nota, " o valor do seu capital social.", color='475569', size=8)
 
     p_fonte = doc.add_paragraph()
-    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, extraído em {date.today().strftime('%d/%m/%Y')}.", color='94A3B8', size=7, italic=True)
+    dt_extracao = data.get('data_processamento')
+    dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
+    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=7, italic=True)
 
 
 # ── Geração do documento ─────────────────────────────────────────────────────
@@ -601,11 +604,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     
     situacao = getattr(cnpj_data_obj, 'situacao_rf', 'ATIVA') if cnpj_data_obj else "ATIVA"
     
-    doc.add_paragraph(
-        f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), '
-        f'a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, '
-        f'é uma {porte_txt}, com capital social de R$ XXX.XXX,XX e com situação {situacao}:'
-    )
+    p_intro_51 = doc.add_paragraph()
+    _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de R$ XXX.XXX,XX e com situação ')
+    _run(p_intro_51, situacao, bold=True, underline=True)
+    _run(p_intro_51, ':')
 
     # Adiciona o Quadro 01 (Informações Detalhadas)
     # Por padrão, vamos usar R$ 10.000 como capital social fictício se não houver no banco
@@ -632,6 +634,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
         'telefone_1': cadastro.get('telefone_1'),
         'telefone_2': cadastro.get('telefone_2'),
         'email': cadastro.get('email'),
+        'data_processamento': cadastro.get('data_processamento'),
         'total_mov': cnpj_data.get('totalMov') or 0.0
     }
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)

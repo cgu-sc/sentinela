@@ -261,12 +261,13 @@ def _sync_movimentacao(engine, progress_callback):
     with engine.connect() as conn:
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]")).scalar()
     
+    # Query otimizada: busca geografia via JOIN para economizar espaço no SQL
     sql = """
-        SELECT M.cnpj, M.uf, M.no_regiao_saude, M.no_municipio, M.periodo,
+        SELECT M.cnpj, P.uf, IB.no_regiao_saude, P.municipio AS no_municipio, M.periodo,
                CAST(M.total_vendas AS FLOAT) AS total_vendas,
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
-               CAST(M.total_qnt_vendas AS FLOAT) AS total_qnt_vendas,
-               CAST(M.total_qnt_sem_comprovacao AS FLOAT) AS total_qnt_sem_comprovacao,
+               M.total_qnt_vendas,
+               M.total_qnt_sem_comprovacao,
                P.razao_social,
                P.situacao_rf,
                P.is_conexao_ativa,
@@ -277,6 +278,8 @@ def _sync_movimentacao(engine, progress_callback):
                P.unidade_pf
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
+        LEFT JOIN [temp_CGUSC].[fp].[dados_farmacia] DF ON DF.cnpj = M.cnpj
+        LEFT JOIN [temp_CGUSC].[fp].[dados_ibge] IB ON IB.id_ibge7 = DF.codibge
     """
     
     chunk_list = []
@@ -288,7 +291,7 @@ def _sync_movimentacao(engine, progress_callback):
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_list.append(chunk)
         rows_processed += len(chunk)
-        p = int((rows_processed / total_rows) * 100)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Movimentação: {p}% ({rows_processed:,} / {total_rows:,})")
         progress_callback(p)
 
@@ -299,18 +302,18 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
         pl.col("no_municipio").cast(pl.Categorical),
-        pl.col("total_vendas").cast(pl.Float64),
-        pl.col("total_sem_comprovacao").cast(pl.Float64),
-        pl.col("total_qnt_vendas").cast(pl.Float64),
-        pl.col("total_qnt_sem_comprovacao").cast(pl.Float64),
         pl.col("razao_social").cast(pl.String),
         pl.col("situacao_rf").cast(pl.Categorical),
-        pl.col("is_conexao_ativa").cast(pl.Boolean),
         pl.col("porte_empresa").cast(pl.Categorical),
+        pl.col("unidade_pf").cast(pl.Categorical),
+        pl.col("is_conexao_ativa").cast(pl.Boolean),
         pl.col("is_grande_rede").cast(pl.Boolean),
         pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
-        pl.col("unidade_pf").cast(pl.Categorical),
+        pl.col("total_qnt_vendas").cast(pl.Int32),
+        pl.col("total_qnt_sem_comprovacao").cast(pl.Int32),
+        pl.col("total_vendas").cast(pl.Float64),
+        pl.col("total_sem_comprovacao").cast(pl.Float64),
     ])
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
 

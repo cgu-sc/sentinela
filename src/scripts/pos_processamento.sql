@@ -8,89 +8,46 @@ IF OBJECT_ID('fp.movimentacao_mensal_cnpj', 'U') IS NOT NULL
     DROP TABLE fp.movimentacao_mensal_cnpj;
 GO
 
--- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO (Denormalizada com CNPJ + UF + Geo + Quantidades)
+-- 2. CRIAÇÃO DA TABELA DE AGREGAÇÃO (CNPJ + Período + Valores)
 CREATE TABLE fp.movimentacao_mensal_cnpj (
-    id_processamento INT NOT NULL,
-    cnpj VARCHAR(14) NOT NULL,          -- Incluído para evitar JOINs pesados no Gráfico
-    uf VARCHAR(2) NULL,                  -- Denormalizado para filtros por UF sem JOIN
-    no_regiao_saude VARCHAR(100) NULL,   -- Denormalizado para filtros por Região de Saúde sem JOIN
-    no_municipio VARCHAR(100) NULL,      -- Denormalizado para filtros por Município sem JOIN
+    cnpj VARCHAR(14) NOT NULL,
     periodo DATE NOT NULL,
-    total_vendas DECIMAL(18, 2),
-    total_sem_comprovacao DECIMAL(18, 2),
-    total_qnt_vendas INT,               -- Qtde total de medicamentos vendidos no mês
-    total_qnt_sem_comprovacao INT       -- Qtde de medicamentos sem comprovação no mês
+    total_vendas DECIMAL(9, 2),
+    total_sem_comprovacao DECIMAL(9, 2),
+    total_qnt_vendas INT,                    -- Voltando para INT (SMALLINT estourou com 55k)
+    total_qnt_sem_comprovacao INT            -- Voltando para INT
 );
 GO
 
--- 3. CARGA INICIAL DOS DADOS (Enriquecendo com CNPJ, UF, Região de Saúde, Município e Quantidades)
+-- 3. CARGA INICIAL DOS DADOS
 INSERT INTO fp.movimentacao_mensal_cnpj (
-    id_processamento, cnpj, uf, no_regiao_saude, no_municipio, periodo,
+    cnpj, periodo,
     total_vendas, total_sem_comprovacao,
     total_qnt_vendas, total_qnt_sem_comprovacao
 )
 SELECT
-    m.id_processamento,
     p.cnpj,
-    r.uf,
-    g.no_regiao_saude,
-    g.no_municipio,
     m.periodo,
-    SUM(m.valor_vendas),
-    SUM(m.valor_sem_comprovacao),
+    CAST(SUM(m.valor_vendas) AS DECIMAL(9,2)),
+    CAST(SUM(m.valor_sem_comprovacao) AS DECIMAL(9,2)),
     SUM(m.qnt_vendas),
     SUM(m.qnt_vendas_sem_comprovacao)
 FROM fp.movimentacao_mensal_gtin m
 INNER JOIN fp.processamento p ON p.id = m.id_processamento
-LEFT JOIN fp.resultado_sentinela r ON r.cnpj = p.cnpj
-LEFT JOIN fp.dados_ibge g ON g.id_ibge7 = r.id_ibge7
-GROUP BY m.id_processamento, p.cnpj, r.uf, g.no_regiao_saude, g.no_municipio, m.periodo;
+GROUP BY p.cnpj, m.periodo;
 GO
 
 -- 4. ÍNDICE CLUSTERIZADO (Acesso principal por Período + CNPJ)
--- Cobre: fator-risco, KPIs globais por período — range scan eficiente
 CREATE CLUSTERED INDEX IX_mov_cnpj_periodo_cnpj
 ON fp.movimentacao_mensal_cnpj (periodo, cnpj);
 GO
 
--- 5. ÍNDICE NÃO-CLUSTERIZADO (Período + UF com colunas cobertas)
--- Cobre: ranking UF por período (WHERE periodo BETWEEN ... GROUP BY uf)
-CREATE NONCLUSTERED INDEX IX_mov_cnpj_periodo_uf
-ON fp.movimentacao_mensal_cnpj (periodo, uf)
-INCLUDE (cnpj, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
-GO
-
--- 6. ÍNDICE NÃO-CLUSTERIZADO (UF + Período)
--- Cobre: filtros por UF específica + período
-CREATE NONCLUSTERED INDEX IX_mov_cnpj_uf_periodo
-ON fp.movimentacao_mensal_cnpj (uf, periodo)
-INCLUDE (cnpj, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
-GO
-
--- 7. ÍNDICE NÃO-CLUSTERIZADO (Região de Saúde + Período)
--- Cobre: filtros por Região de Saúde específica + período
-CREATE NONCLUSTERED INDEX IX_mov_cnpj_regiao_periodo
-ON fp.movimentacao_mensal_cnpj (no_regiao_saude, periodo)
-INCLUDE (cnpj, uf, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
-GO
-
--- 8. ÍNDICE NÃO-CLUSTERIZADO (Município + Período)
--- Cobre: filtros por Município específico + período
-CREATE NONCLUSTERED INDEX IX_mov_cnpj_municipio_periodo
-ON fp.movimentacao_mensal_cnpj (no_municipio, periodo)
-INCLUDE (cnpj, uf, total_vendas, total_sem_comprovacao, total_qnt_vendas, total_qnt_sem_comprovacao);
-GO
-
--- 9. COLUMNSTORE INDEX (O maior ganho de performance para queries analíticas)
--- Para SUMs, COUNTs e GROUP BYs em grandes volumes, pode ser 10x mais rápido
--- que índices B-tree tradicionais. O SQL Server usa compressão por coluna e
--- processamento em batch — ideal para o padrão OLAP do Sentinela.
+-- 5. COLUMNSTORE INDEX (Alta performance analítica)
+-- Ideal para os SUMs e GROUP BYs do dashboard. 
+-- Com as colunas reduzidas e sem strings, a compressão será altíssima.
 CREATE NONCLUSTERED COLUMNSTORE INDEX IX_mov_cnpj_columnstore
 ON fp.movimentacao_mensal_cnpj (
     periodo,
-    uf,
-    no_regiao_saude,
-    no_municipio,
     cnpj,
     total_vendas,
     total_sem_comprovacao,

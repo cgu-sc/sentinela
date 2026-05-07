@@ -83,7 +83,7 @@ def _sync_localidades(engine, progress_callback=None):
         pl.col("no_municipio").cast(pl.Categorical),
         pl.col("unidade_pf").cast(pl.Categorical),
     ])
-    _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="lz4")
+    _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="zstd")
 
 def _sync_rede(engine, progress_callback=None):
     """Tarefa 2: Sincroniza a tabela de rede de estabelecimentos."""
@@ -105,7 +105,7 @@ def _sync_rede(engine, progress_callback=None):
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
         pl.col("is_grande_rede").cast(pl.Boolean),
     ])
-    _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="lz4")
+    _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="zstd")
 
 def _sync_matriz_risco(engine, progress_callback=None):
     """Tarefa 4: Sincroniza a matriz de risco consolidada por CNPJ em chunks."""
@@ -122,15 +122,14 @@ def _sync_matriz_risco(engine, progress_callback=None):
     CHUNK_SIZE = 2_000
     
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(chunk)
+        chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Matriz: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
             
-    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
-    _df_matriz_risco = pl.from_pandas(pdf)
-    _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="lz4")
+    _df_matriz_risco = pl.concat(chunk_list)
+    _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
 
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
@@ -176,19 +175,18 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     CHUNK_SIZE = 5_000
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(chunk)
+        chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Dados Farmácias: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
 
-    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
-    _df_dados_farmacia = pl.from_pandas(pdf).with_columns([
+    _df_dados_farmacia = pl.concat(chunk_list).with_columns([
         (pl.col("is_matriz") == "M").alias("is_matriz"),
         pl.col("id_cnae_principal").cast(pl.String),
         pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
     ])
-    _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="lz4")
+    _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
 
 
 def _sync_dados_socios(engine, progress_callback=None):
@@ -206,22 +204,21 @@ def _sync_dados_socios(engine, progress_callback=None):
     CHUNK_SIZE = 5_000
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(chunk)
+        chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Dados Sócios: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
 
-    pdf = pd.concat(chunk_list, ignore_index=True) if chunk_list else pd.DataFrame()
-    _df_dados_socios = pl.from_pandas(pdf).with_columns([
+    _df_dados_socios = pl.concat(chunk_list).with_columns([
         pl.col("cnpj").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("nome_socio").cast(pl.String),
         pl.col("cep").cast(pl.String),
-        pl.col("municipio").cast(pl.String),
+        pl.col("municipio").cast(pl.Categorical),  # Categorizado
         pl.col("numero").cast(pl.String),
         pl.col("complemento").cast(pl.String),
-        pl.col("bairro").cast(pl.String),
+        pl.col("bairro").cast(pl.Categorical),     # Categorizado
         pl.col("cpf_representante").cast(pl.String),
         pl.col("id_qualificacao_representante").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
@@ -231,8 +228,8 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("data_exclusao_sociedade").cast(pl.Date),
         pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("data_processamento").cast(pl.Date),
-    ])
-    _df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="lz4")
+    ]).sort("cnpj")  # Ordenação para compressão
+    _df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="zstd")
 
 
 def _sync_medicamentos(engine, progress_callback=None):
@@ -252,7 +249,7 @@ def _sync_medicamentos(engine, progress_callback=None):
         pl.col("laboratorio").cast(pl.Categorical),
         pl.col("patologia").cast(pl.Categorical),
     ])
-    _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="lz4")
+    _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="zstd")
 
 
 def _sync_movimentacao(engine, progress_callback):
@@ -289,15 +286,14 @@ def _sync_movimentacao(engine, progress_callback):
     print(f"Total de registros a baixar: {total_rows:,}")
     
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(chunk)
+        chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Movimentação: {p}% ({rows_processed:,} / {total_rows:,})")
         progress_callback(p)
 
     print("   -> Organizando e otimizando dados (Polars)...")
-    pdf = pd.concat(chunk_list, ignore_index=True)
-    _df_movimentacao = pl.from_pandas(pdf).with_columns([
+    _df_movimentacao = pl.concat(chunk_list).with_columns([
         pl.col("periodo").cast(pl.Date),
         pl.col("uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
@@ -316,7 +312,7 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_sem_comprovacao").cast(pl.Float64),
     ]).sort(["cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
     
-    _df_movimentacao.write_parquet(_PARQUET_PATH, compression="lz4")
+    _df_movimentacao.write_parquet(_PARQUET_PATH, compression="zstd")
 
 def _sync_crm_benchmarks(engine, progress_callback=None):
     """Tarefa: Gera bench_uf, bench_regiao e bench_br como parquets."""

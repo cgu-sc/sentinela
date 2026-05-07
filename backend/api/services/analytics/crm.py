@@ -121,7 +121,7 @@ def get_crm_data(
                 if col in df.columns:
                     df = df.with_columns(pl.col(col).cast(pl.Int8))
             _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="lz4")
+            df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
             print(f"âŒ ERRO ao buscar CRM do banco para {cnpj}: {e}")
@@ -350,7 +350,7 @@ def get_crm_data(
                 "no_municipio_b": pl.Utf8, "sg_uf_b": pl.Utf8, "dt_ini_b": pl.Utf8, 
                 "dt_fim_b": pl.Utf8, "nu_prescricoes_b": pl.Int32, "distancia_km": pl.Float64
             })
-            df_geo.write_parquet(ALERTAS_GEO_PATH, compression="lz4")
+            df_geo.write_parquet(ALERTAS_GEO_PATH, compression="zstd")
         except Exception as e:
             # Se falhar a conexÃ£o (comum em modo offline), apenas avisa de forma amigÃ¡vel
             if "IM002" in str(e) or "connection" in str(e).lower():
@@ -422,7 +422,7 @@ def get_crm_data(
                 "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32,
                 "mediana_hora": pl.Float64, "multiplicador": pl.Float64
             })
-            df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="lz4")
+            df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="zstd")
         except Exception as e:
             print(f"âŒ Erro ao buscar/salvar alertas de surto do banco para {cnpj}: {e}")
             df_ca = pl.DataFrame()
@@ -767,7 +767,7 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             )
 
         df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema=schema)
-        df_alertas.write_parquet(alertas_path, compression="lz4")
+        df_alertas.write_parquet(alertas_path, compression="zstd")
         return df_alertas
     except Exception as e:
         print(f"Erro ao sincronizar alertas unicos do Raio-X '{cnpj}': {e}")
@@ -827,7 +827,7 @@ def get_crm_perfil_diario(
                 query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             df = pl.from_pandas(pdf)
             _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="lz4")
+            df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
             print(f"âš ï¸ Erro ao gerar parquet crm_perfil_diario '{cnpj}': {e}")
@@ -943,7 +943,7 @@ def get_crm_perfil_horario(
                 query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             df = pl.from_pandas(pdf)
             _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="lz4")
+            df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception as e:
             print(f"âš ï¸ Erro ao gerar parquet hourly '{cnpj}': {e}")
@@ -1030,7 +1030,7 @@ def get_crm_perfil_horario(
                         (pl.col("dt_ini_concentracao").dt.hour() * 60 + pl.col("dt_ini_concentracao").dt.minute()).alias("minuto_inicio"),
                         (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
                     ])
-                df_events.write_parquet(EVENTS_PARQUET_PATH, compression="lz4")
+                df_events.write_parquet(EVENTS_PARQUET_PATH, compression="zstd")
         except Exception as e:
             print(f"âš ï¸ Erro ao buscar eventos hourly '{cnpj}': {e}")
             df_events = pl.DataFrame()
@@ -1259,7 +1259,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             "severidade": pl.Utf8,
             **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS if minutes != 60},
         })
-        df_alertas.write_parquet(alertas_path, compression="lz4")
+        df_alertas.write_parquet(alertas_path, compression="zstd")
         return df_alertas
     except Exception as e:
         print(f"Erro ao sincronizar alertas multiplos '{cnpj}': {e}")

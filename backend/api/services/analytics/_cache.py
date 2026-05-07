@@ -112,7 +112,7 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
                 pl.col("data_hora").cast(pl.Utf8)
             ])
         
-        df_tx.write_parquet(TX_PARQUET_PATH, compression="lz4")
+        df_tx.write_parquet(TX_PARQUET_PATH, compression="zstd")
         print(f"✅ Cache Raio-X salvo para {cnpj}")
     except Exception as e:
         if "IM002" in str(e) or "connection" in str(e).lower():
@@ -159,7 +159,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
             "ano": pl.Int32, "trimestre": pl.Int32,
             "hr_janela": pl.Int32, "mediana_hora": pl.Float64
         })
-        df.write_parquet(PARQUET_PATH, compression="lz4")
+        df.write_parquet(PARQUET_PATH, compression="zstd")
         print(f"✅ Cache medianas horárias salvo para {cnpj}")
     except Exception as e:
         if "IM002" in str(e) or "connection" in str(e).lower():

@@ -234,7 +234,7 @@ def _criar_parquets_vazios(cnpj_dir: str, arquivos: list[str]) -> list[str]:
         if not schema:
             continue
         path = os.path.join(cnpj_dir, arquivo)
-        pl.DataFrame(schema=schema).write_parquet(path, compression="lz4")
+        pl.DataFrame(schema=schema).write_parquet(path, compression="zstd")
         criados.append(arquivo)
     return criados
 

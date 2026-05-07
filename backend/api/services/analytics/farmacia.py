@@ -369,7 +369,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
                 ])
             )
             _t1 = _time.perf_counter()
-            df_result.write_parquet(CACHE_PATH, compression="lz4")
+            df_result.write_parquet(CACHE_PATH, compression="zstd")
             _save_ms = round((_time.perf_counter() - _t1) * 1000, 1)
             print(f"✅ Cache Parquet salvo: {CACHE_PATH}")
         except Exception as e:

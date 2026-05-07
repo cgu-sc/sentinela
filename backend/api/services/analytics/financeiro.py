@@ -232,7 +232,7 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
                 pl.col("valor_sem_comprovacao").cast(pl.Float64),
             ])
             t1 = time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="lz4")
+            df.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
 
             print(f"⏱  GTIN {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")

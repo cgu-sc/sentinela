@@ -116,7 +116,7 @@ def get_falecidos_data(
                 pl.col("data_autorizacao").cast(pl.Date, strict=False),
             ])
             t1 = time.perf_counter()
-            df_all.write_parquet(PARQUET_PATH, compression="lz4")
+            df_all.write_parquet(PARQUET_PATH, compression="zstd")
             save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
             print(f"⏱  Falecidos {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
 

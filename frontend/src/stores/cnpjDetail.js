@@ -89,6 +89,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     gtinDetalhamentoMensalData: null,
     gtinDetalhamentoMensalLoading: false,
     gtinDetalhamentoMensalError: null,
+    
+    // ── Quadro Societário ─────────────────────────────────────────────────────
+    sociosData:    null,
+    sociosLoading: false,
+    sociosLoaded:  false,
+    sociosError:   null,
 
     // ── Timing de Requisições (diagnóstico de performance) ───────────────────
     // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
@@ -213,6 +219,25 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.indicadoresError = ERROR_MSG;
       } finally {
         this.indicadoresLoading = false;
+      }
+    },
+
+    // ── Quadro Societário ─────────────────────────────────────────────────────
+    async fetchSocios(cnpj) {
+      if (!cnpj || this.sociosLoaded === cnpj) return;
+      this.sociosLoading = true;
+      this.sociosError   = null;
+      try {
+        const t0 = performance.now();
+        const { data } = await axios.get(API_ENDPOINTS.analyticsSocios(cnpj));
+        this.requestTimes['socios'] = { label: 'Quadro Societário', ms: Math.round(performance.now() - t0) };
+        this.sociosData   = data;
+        this.sociosLoaded = cnpj;
+      } catch (e) {
+        console.error('Erro ao buscar quadro societário:', e);
+        this.sociosError = ERROR_MSG;
+      } finally {
+        this.sociosLoading = false;
       }
     },
 
@@ -449,6 +474,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.metricPercentiles        = null;
       this.metricPercentilesLoading = false;
       this.metricPercentilesLoaded  = false;
+
+      this.sociosData    = null;
+      this.sociosLoading = false;
+      this.sociosLoaded  = false;
+      this.sociosError   = null;
     },
   },
 });

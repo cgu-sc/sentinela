@@ -10,7 +10,8 @@ from ..schemas.analytics import (
     PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
     CrmRaioXResponse,
-    EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse
+    EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
+    SociosResponse
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -23,6 +24,12 @@ router = APIRouter()
 def get_dados_farmacia(cnpj: str):
     """Retorna os dados cadastrais e geográficos (endereço, lat/lon) para um CNPJ."""
     return AnalyticsService.get_dados_farmacia(cnpj)
+
+@router.get("/cnpj/{cnpj}/socios", response_model=SociosResponse)
+def get_socios_farmacia(cnpj: str):
+    """Retorna o quadro societário de um estabelecimento."""
+    return AnalyticsService.get_socios_farmacia(cnpj)
+
 
 @router.get("/resumo", response_model=AnalyticsResponse)
 def get_analytics_summary(

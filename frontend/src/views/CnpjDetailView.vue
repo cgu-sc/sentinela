@@ -18,6 +18,7 @@ import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import CRMTab from "./components/cnpj/CRMTab.vue";
 import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
 import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
+import SociosTab from "./components/cnpj/SociosTab.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -37,7 +38,8 @@ const TAB_INDEX = {
   INDICATORS: 3,
   CRMS: 4,
   MORTALITY: 5,
-  REGIONAL: 6,
+  SOCIOS: 6,
+  REGIONAL: 7,
 };
 
 const route = useRoute();
@@ -179,6 +181,7 @@ watch(
       cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmPerfilDiario(newCnpj, inicio, fim);
       cnpjDetailStore.fetchCrmPerfilHorario(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchSocios(newCnpj);
       if (!cnpjData.value) {
         const p = getApiParams();
         await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
@@ -365,6 +368,15 @@ const isInitialLoading = computed(() => {
           ></template
         >
         <MortalityTab ref="falecidosTabRef" :cnpj="cnpj" class="tab-content" />
+      </TabPanel>
+
+      <TabPanel>
+        <template #header
+          ><i class="pi pi-users tab-icon" /><span
+            >Quadro Societário</span
+          ></template
+        >
+        <SociosTab />
       </TabPanel>
 
       <TabPanel>

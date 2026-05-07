@@ -364,6 +364,22 @@ class DadosFarmaciaSchema(BaseModel):
     situacao_rf: Optional[str] = None
     porte_empresa: Optional[str] = None
 
+class SocioSchema(BaseModel):
+    cnpj: str
+    cpf_cnpj_socio: str
+    nome_socio: Optional[str] = None
+    indicador_socio: Optional[str] = None
+    descricao_qualificacao: Optional[str] = None
+    data_entrada_sociedade: Optional[date] = None
+    data_exclusao_sociedade: Optional[date] = None
+    percentual_qualificacao: Optional[float] = 0.0
+
+class SociosResponse(BaseModel):
+    cnpj: str
+    socios: List[SocioSchema]
+    data_processamento: Optional[date] = None
+    from_cache: bool = False
+
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────
 class MovimentacaoRowSchema(BaseModel):

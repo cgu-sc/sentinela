@@ -238,43 +238,36 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 
 DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios;
 
-SELECT
+SELECT DISTINCT
     soc.cpfcnpjSocio                                          AS cpf_cnpj_socio,
     soc.cnpj,
     CAST(soc.indSocio AS CHAR(2))                             AS indicador_socio,
     temp_CGUSC.dbo.InitCapEachWord(LEFT(soc.nomeSocio, 100))   AS nome_socio,
     temp_CGUSC.dbo.InitCapEachWord(soc.descricaoLogradouro)   AS descricao_logradouro,
     soc.numero,
-    temp_CGUSC.dbo.InitCapEachWord(soc.complemento)           AS complemento,
-    temp_CGUSC.dbo.InitCapEachWord(soc.bairro)                AS bairro,
-    CAST(soc.cep AS CHAR(8))                                  AS cep,
-    temp_CGUSC.dbo.InitCapEachWord(mun_ibge.municipio)        AS municipio,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(soc.complemento) AS VARCHAR(80))          AS complemento,
+    temp_CGUSC.dbo.InitCapEachWord(soc.bairro)                                     AS bairro,
+    CAST(soc.cep AS CHAR(8))                                                       AS cep,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))         AS municipio,
     CAST(soc.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(soc.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
-    soc.percentualQualificacao                                AS percentual_qualificacao,
-    temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS descricao_qualificacao,
-    GETDATE()                                                 AS data_processamento
+    CAST(soc.percentualQualificacao / 100.0 AS DECIMAL(5,2)) AS percentual_qualificacao,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
+    CAST(soc.CpfRepresentante AS CHAR(11))                                         AS cpf_representante,
+    CAST(soc.IdQualificacaoRepresentante AS CHAR(2))                               AS id_qualificacao_representante,
+    CAST(GETDATE() AS SMALLDATETIME)                                               AS data_processamento
 INTO temp_CGUSC.fp.dados_socios
 FROM temp_CGUSC.fp.lista_cnpjs    AS lst
 INNER JOIN db_CNPJ.dbo.socios             AS soc       ON soc.cnpj           = lst.cnpj
 INNER JOIN db_CNPJ.dbo.CNPJ               AS cnpj      ON cnpj.cnpj          = lst.cnpj
 LEFT JOIN  db_CNPJ.dbo.Municipio          AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
-LEFT JOIN  temp_CGUSC.dbo.municipiosIBGE  AS mun_ibge  ON mun_ibge.codibge   = mun.CodIbge
-WHERE
-    soc.dataExclusaoSociedade   IS NULL
-    AND cnpj.SituacaoCadastral  = 2;
+LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge;
 
--- Índices em tb_sociosFP
--- Busca por CNPJ da empresa (JOIN principal com dados_farmacia)
-CREATE INDEX ix_sociosFP_cnpj
-    ON temp_CGUSC.fp.dados_socios (cnpj);
-
--- Busca por CPF/CNPJ do sócio (subquery de outras sociedades)
+-- Busca por CPF/CNPJ do sócio (cruzamento: em quais empresas essa pessoa aparece)
 CREATE INDEX ix_sociosFP_cpf_cnpj_socio
     ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio);
 
--- Índice composto para o padrão de consulta mais frequente:
--- "sócios ativos de um determinado CNPJ"
+-- Padrão principal de consulta: todos os sócios de um CNPJ
 CREATE INDEX ix_sociosFP_cnpj_cpf
     ON temp_CGUSC.fp.dados_socios (cnpj, cpf_cnpj_socio);
 

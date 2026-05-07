@@ -27,6 +27,7 @@ from data_cache import (
     _sync_medicamentos,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
+    _sync_dados_socios,
     _sync_movimentacao,
 )
 
@@ -354,6 +355,7 @@ MODULOS = [
     {"id": 7, "name": "Dados das Farmácias",       "func": _sync_dados_farmacia, "peso": "~médio"},
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
+    {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

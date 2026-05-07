@@ -315,13 +315,39 @@ def _sync_movimentacao(engine, progress_callback):
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="zstd")
 
 def _sync_crm_benchmarks(engine, progress_callback=None):
-    """Tarefa: Gera bench_uf, bench_regiao e bench_br como parquets."""
-    import importlib, sys as _sys
-    # exportar_crms está no mesmo diretório (backend/)
-    if "exportar_crms" not in _sys.modules:
-        importlib.import_module("exportar_crms")
-    from exportar_crms import exportar_benchmarks
-    exportar_benchmarks()
+    """Tarefa 5: Gera bench_uf, bench_regiao e bench_br como parquets a partir das tabelas de indicadores do banco."""
+    print("Sincronizando Benchmarks CRM (Nacional, Estadual e Regional)...")
+    
+    tab_map = {
+        "BR":     {"table": "temp_CGUSC.fp.indicador_crm_bench_br",     "path": _BENCH_CRM_BR_PATH},
+        "UF":     {"table": "temp_CGUSC.fp.indicador_crm_bench_uf",     "path": _BENCH_CRM_UF_PATH},
+        "REGIAO": {"table": "temp_CGUSC.fp.indicador_crm_bench_regiao", "path": _BENCH_CRM_REGIAO_PATH},
+    }
+
+    total = len(tab_map)
+    for i, (key, info) in enumerate(tab_map.items()):
+        try:
+            sql = f"SELECT * FROM {info['table']}"
+            pdf = pd.read_sql(sql, engine)
+            
+            df = pl.from_pandas(pdf).with_columns([
+                pl.col("competencia").cast(pl.Int32)
+            ])
+            
+            # UF e Região de Saúde são categóricos
+            if "uf" in df.columns:
+                df = df.with_columns(pl.col("uf").cast(pl.Categorical))
+            if "id_regiao_saude" in df.columns:
+                df = df.with_columns(pl.col("id_regiao_saude").cast(pl.String))
+                
+            df.write_parquet(info['path'], compression="zstd")
+            print(f"   -> Benchmark {key} exportado: {len(df):,} competências.")
+            
+            if progress_callback:
+                progress_callback(int(((i+1)/total) * 100))
+        except Exception as e:
+            print(f"   ⚠️ Erro ao exportar benchmark {key}: {e}")
+
     if progress_callback:
         progress_callback(100)
 
@@ -418,7 +444,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
-        {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)},
+        # {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)}, # OBSOLETO
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
         {"name": "Movimentação",          "weight": 61, "func": lambda cb: _sync_movimentacao(engine, cb)},

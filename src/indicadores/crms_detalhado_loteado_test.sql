@@ -31,6 +31,10 @@ DECLARE @pipeline_nome    VARCHAR(80) = 'crms_detalhado_loteado';
 DECLARE @pipeline_versao  VARCHAR(40) = 'v1_loteado_2026_05_07';
 DECLARE @pre_global_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
 DECLARE @pre_global_versao VARCHAR(40) = 'v1_pre_global_2026_05_07';
+DECLARE @concentracao_unico_nome      VARCHAR(80) = 'crm_concentracao_unico';
+DECLARE @concentracao_unico_versao    VARCHAR(40) = 'v1_unico_2026_05_07';
+DECLARE @concentracao_multiplo_nome   VARCHAR(80) = 'crm_concentracao_multiplo';
+DECLARE @concentracao_multiplo_versao VARCHAR(40) = 'v1_multiplo_2026_05_07';
 DECLARE @DataInicio       DATE        = '2015-07-01';
 DECLARE @DataFim          DATE        = '2024-12-31';
 DECLARE @existia_tabela_loteada BIT   = CASE WHEN
@@ -43,6 +47,19 @@ DECLARE @existia_tabela_loteada BIT   = CASE WHEN
      OR OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NOT NULL
     THEN 1 ELSE 0 END;
+DECLARE @nu_registros_teste_mov_sc BIGINT;
+DECLARE @metadata_ok BIT;
+
+IF OBJECT_ID('temp_CGUSC.fp.teste_mov_SC') IS NULL
+BEGIN
+    RAISERROR('Tabela fonte temp_CGUSC.fp.teste_mov_SC nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
+FROM temp_CGUSC.sys.partitions P
+WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.teste_mov_SC')
+  AND P.index_id IN (0, 1);
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos') IS NULL
 BEGIN
@@ -62,18 +79,144 @@ BEGIN
     RETURN;
 END;
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata
-    WHERE id_pipeline = 1
-      AND pipeline_nome = @pre_global_nome
-      AND pipeline_versao = @pre_global_versao
-      AND dt_data_inicio = @DataInicio
-      AND dt_data_fim = @DataFim
-      AND status = 'OK'
-)
+IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pre_global_metadata', 'nu_registros_teste_mov_sc') IS NULL
 BEGIN
-    RAISERROR('Pre-global incompativel com o loteado: metadata ausente, status diferente de OK, periodo divergente ou versao inesperada. Rode crms_detalhado_pre_global_test.sql para o mesmo periodo.', 16, 1);
+    RAISERROR('Metadata pre-global existe, mas nao possui nu_registros_teste_mov_sc. Rode crms_detalhado_pre_global_test.sql atualizado antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+SET @metadata_ok = 0;
+EXEC sp_executesql
+    N'SELECT @ok = CASE WHEN EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+          WHERE id_pipeline = 1
+            AND pipeline_nome = @nome
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim
+            AND nu_registros_teste_mov_sc = @nu_mov
+            AND status = ''OK''
+      ) THEN 1 ELSE 0 END;',
+    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @nu_mov BIGINT, @ok BIT OUTPUT',
+    @nome = @pre_global_nome,
+    @versao = @pre_global_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim,
+    @nu_mov = @nu_registros_teste_mov_sc,
+    @ok = @metadata_ok OUTPUT;
+
+IF @metadata_ok = 0
+BEGIN
+    RAISERROR('Pre-global incompativel com o loteado: metadata ausente, status diferente de OK, periodo divergente, tamanho da teste_mov_SC divergente ou versao inesperada. Rode crms_detalhado_pre_global_test.sql para o mesmo periodo/fonte.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_unico_alertas nao encontrada. Rode o motor temporal de CRM unico antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_multiplo_alertas nao encontrada. Rode o motor temporal de CRM multiplo antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'id_cnpj') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'dt_dia') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'dt_ini_concentracao') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'dt_fim_concentracao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_unico_alertas existe, mas nao possui o schema minimo esperado: id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'id_cnpj') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'dt_dia') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'dt_ini_concentracao') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'dt_fim_concentracao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_multiplo_alertas existe, mas nao possui o schema minimo esperado: id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_metadata') IS NULL
+BEGIN
+    RAISERROR('Metadata temp_CGUSC.fp.crm_concentracao_unico_metadata nao encontrada. Rode o motor temporal de CRM unico atualizado antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_metadata') IS NULL
+BEGIN
+    RAISERROR('Metadata temp_CGUSC.fp.crm_concentracao_multiplo_metadata nao encontrada. Rode o motor temporal de CRM multiplo atualizado antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_metadata', 'nu_registros_teste_mov_sc') IS NULL
+BEGIN
+    RAISERROR('Metadata temp_CGUSC.fp.crm_concentracao_unico_metadata existe, mas nao possui nu_registros_teste_mov_sc. Rode o motor temporal de CRM unico atualizado antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_metadata', 'nu_registros_teste_mov_sc') IS NULL
+BEGIN
+    RAISERROR('Metadata temp_CGUSC.fp.crm_concentracao_multiplo_metadata existe, mas nao possui nu_registros_teste_mov_sc. Rode o motor temporal de CRM multiplo atualizado antes do loteado.', 16, 1);
+    RETURN;
+END;
+
+SET @metadata_ok = 0;
+EXEC sp_executesql
+    N'SELECT @ok = CASE WHEN EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.crm_concentracao_unico_metadata
+          WHERE id_pipeline = 1
+            AND pipeline_nome = @nome
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim
+            AND nu_registros_teste_mov_sc = @nu_mov
+            AND status = ''OK''
+      ) THEN 1 ELSE 0 END;',
+    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @nu_mov BIGINT, @ok BIT OUTPUT',
+    @nome = @concentracao_unico_nome,
+    @versao = @concentracao_unico_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim,
+    @nu_mov = @nu_registros_teste_mov_sc,
+    @ok = @metadata_ok OUTPUT;
+
+IF @metadata_ok = 0
+BEGIN
+    RAISERROR('Motor temporal CRM unico incompativel com o loteado: metadata ausente, status diferente de OK, periodo divergente, tamanho da teste_mov_SC divergente ou versao inesperada.', 16, 1);
+    RETURN;
+END;
+
+SET @metadata_ok = 0;
+EXEC sp_executesql
+    N'SELECT @ok = CASE WHEN EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.crm_concentracao_multiplo_metadata
+          WHERE id_pipeline = 1
+            AND pipeline_nome = @nome
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim
+            AND nu_registros_teste_mov_sc = @nu_mov
+            AND status = ''OK''
+      ) THEN 1 ELSE 0 END;',
+    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @nu_mov BIGINT, @ok BIT OUTPUT',
+    @nome = @concentracao_multiplo_nome,
+    @versao = @concentracao_multiplo_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim,
+    @nu_mov = @nu_registros_teste_mov_sc,
+    @ok = @metadata_ok OUTPUT;
+
+IF @metadata_ok = 0
+BEGIN
+    RAISERROR('Motor temporal CRM multiplo incompativel com o loteado: metadata ausente, status diferente de OK, periodo divergente, tamanho da teste_mov_SC divergente ou versao inesperada.', 16, 1);
     RETURN;
 END;
 
@@ -100,6 +243,7 @@ BEGIN
         pipeline_versao   VARCHAR(40)  NOT NULL,
         dt_data_inicio    DATE         NOT NULL,
         dt_data_fim       DATE         NOT NULL,
+        nu_registros_teste_mov_sc BIGINT NULL,
         dt_criacao        DATETIME     NOT NULL,
         dt_atualizacao    DATETIME     NULL,
         status            VARCHAR(20)  NOT NULL,
@@ -108,6 +252,9 @@ BEGIN
         CONSTRAINT CK_CrmDetalhadoLoteMetadata_Id CHECK (id_pipeline = 1)
     );
 END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_metadata', 'nu_registros_teste_mov_sc') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_metadata ADD nu_registros_teste_mov_sc BIGINT NULL;
 
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.crm_detalhado_lote_metadata WHERE id_pipeline = 1)
 BEGIN
@@ -145,6 +292,13 @@ BEGIN
         observacao = 'Execucao retomada/validada pelo script loteado.'
     WHERE id_pipeline = 1;
 END;
+
+EXEC sp_executesql
+    N'UPDATE temp_CGUSC.fp.crm_detalhado_lote_metadata
+      SET nu_registros_teste_mov_sc = @nu_mov
+      WHERE id_pipeline = 1;',
+    N'@nu_mov BIGINT',
+    @nu_mov = @nu_registros_teste_mov_sc;
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_controle') IS NULL
 BEGIN
@@ -1090,17 +1244,19 @@ PRINT '==========================================================';
 PRINT '   TEMPO TOTAL: ' + CONVERT(VARCHAR(20), GETDATE() - @t0, 114);
 PRINT '==========================================================';
 
-SELECT
-    id_pipeline,
-    pipeline_nome,
-    pipeline_versao,
-    dt_data_inicio,
-    dt_data_fim,
-    status,
-    dt_criacao,
-    dt_atualizacao,
-    observacao
-FROM temp_CGUSC.fp.crm_detalhado_lote_metadata;
+EXEC sp_executesql
+    N'SELECT
+          id_pipeline,
+          pipeline_nome,
+          pipeline_versao,
+          dt_data_inicio,
+          dt_data_fim,
+          nu_registros_teste_mov_sc,
+          status,
+          dt_criacao,
+          dt_atualizacao,
+          observacao
+      FROM temp_CGUSC.fp.crm_detalhado_lote_metadata;';
 
 SELECT
     status,

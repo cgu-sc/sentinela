@@ -30,6 +30,7 @@
 -- recompilação da próxima batch com as tabelas ausentes.
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_alertas;
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_controle;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_metadata;
 GO
 
 DECLARE @DataInicio  DATE     = '2015-07-01';
@@ -46,10 +47,46 @@ DECLARE @nu_alertas_total   INT = 0;
 DECLARE @nu_pendentes       INT;
 DECLARE @nu_ja_processados  INT;
 DECLARE @nu_total           INT;
+DECLARE @pipeline_nome      VARCHAR(80) = 'crm_concentracao_unico';
+DECLARE @pipeline_versao    VARCHAR(40) = 'v1_unico_2026_05_07';
+DECLARE @nu_registros_teste_mov_sc BIGINT;
+
+IF OBJECT_ID('temp_CGUSC.fp.teste_mov_SC') IS NULL
+BEGIN
+    RAISERROR('Tabela fonte temp_CGUSC.fp.teste_mov_SC nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
+FROM temp_CGUSC.sys.partitions P
+WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.teste_mov_SC')
+  AND P.index_id IN (0, 1);
 
 PRINT '>> [CRM ÚNICO] Iniciando detecção de concentração temporal por médico...';
 PRINT '   Período: ' + CAST(@DataInicio AS VARCHAR(10)) + ' → ' + CAST(@DataFim AS VARCHAR(10));
 PRINT '   Lote: ' + CAST(@lote_size AS VARCHAR) + ' CNPJs por iteração';
+
+CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_metadata (
+    id_pipeline       TINYINT      NOT NULL,
+    pipeline_nome     VARCHAR(80)  NOT NULL,
+    pipeline_versao   VARCHAR(40)  NOT NULL,
+    dt_data_inicio    DATE         NOT NULL,
+    dt_data_fim       DATE         NOT NULL,
+    nu_registros_teste_mov_sc BIGINT NOT NULL,
+    dt_criacao        DATETIME     NOT NULL,
+    dt_atualizacao    DATETIME     NULL,
+    status            VARCHAR(20)  NOT NULL,
+    observacao        VARCHAR(400) NULL,
+    CONSTRAINT PK_CrmConcentracaoUnicoMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+    CONSTRAINT CK_CrmConcentracaoUnicoMetadata_Id CHECK (id_pipeline = 1)
+);
+
+INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_metadata
+    (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
+     nu_registros_teste_mov_sc, dt_criacao, dt_atualizacao, status, observacao)
+VALUES
+    (1, @pipeline_nome, @pipeline_versao, @DataInicio, @DataFim,
+     @nu_registros_teste_mov_sc, GETDATE(), GETDATE(), 'PROCESSANDO', 'Motor temporal CRM unico em processamento.');
 
 
 -- ============================================================================
@@ -407,10 +444,32 @@ END
 -- RESULTADOS
 -- ============================================================================
 Resultados:
+UPDATE temp_CGUSC.fp.crm_concentracao_unico_metadata
+SET status = CASE
+        WHEN EXISTS (SELECT 1 FROM temp_CGUSC.fp.crm_concentracao_unico_controle WHERE status <> 'OK') THEN 'INCOMPLETO'
+        ELSE 'OK'
+    END,
+    dt_atualizacao = GETDATE(),
+    observacao = 'Motor temporal CRM unico finalizado.'
+WHERE id_pipeline = 1;
+
 PRINT '==========================================================';
 PRINT '   TEMPO TOTAL:   ' + CONVERT(VARCHAR(20), GETDATE() - @t0, 114);
 PRINT '   TOTAL ALERTAS: ' + CAST(@nu_alertas_total AS VARCHAR);
 PRINT '==========================================================';
+
+SELECT
+    id_pipeline,
+    pipeline_nome,
+    pipeline_versao,
+    dt_data_inicio,
+    dt_data_fim,
+    nu_registros_teste_mov_sc,
+    status,
+    dt_criacao,
+    dt_atualizacao,
+    observacao
+FROM temp_CGUSC.fp.crm_concentracao_unico_metadata;
 
 -- Distribuição por severidade
 SELECT

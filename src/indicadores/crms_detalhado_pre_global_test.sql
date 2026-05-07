@@ -28,6 +28,18 @@ DECLARE @t0         DATETIME = GETDATE();
 DECLARE @t1         DATETIME;
 DECLARE @pipeline_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
 DECLARE @pipeline_versao VARCHAR(40) = 'v1_pre_global_2026_05_07';
+DECLARE @nu_registros_teste_mov_sc BIGINT;
+
+IF OBJECT_ID('temp_CGUSC.fp.teste_mov_SC') IS NULL
+BEGIN
+    RAISERROR('Tabela fonte temp_CGUSC.fp.teste_mov_SC nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
+FROM temp_CGUSC.sys.partitions P
+WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.teste_mov_SC')
+  AND P.index_id IN (0, 1);
 
 PRINT '>> [PRE-GLOBAL CRM] Iniciando pre-processamento global...';
 PRINT '   Periodo: ' + CAST(@DataInicio AS VARCHAR(10)) + ' -> ' + CAST(@DataFim AS VARCHAR(10));
@@ -40,6 +52,7 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
     pipeline_versao   VARCHAR(40)  NOT NULL,
     dt_data_inicio    DATE         NOT NULL,
     dt_data_fim       DATE         NOT NULL,
+    nu_registros_teste_mov_sc BIGINT NOT NULL,
     dt_criacao        DATETIME     NOT NULL,
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
@@ -48,12 +61,19 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
     CONSTRAINT CK_CrmDetalhadoPreGlobalMetadata_Id CHECK (id_pipeline = 1)
 );
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pre_global_metadata
-    (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
-     dt_criacao, dt_atualizacao, status, observacao)
-VALUES
-    (1, @pipeline_nome, @pipeline_versao, @DataInicio, @DataFim,
-     GETDATE(), GETDATE(), 'PROCESSANDO', 'Pre-global em processamento.');
+EXEC sp_executesql
+    N'INSERT INTO temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+          (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
+           nu_registros_teste_mov_sc, dt_criacao, dt_atualizacao, status, observacao)
+      VALUES
+          (1, @nome, @versao, @inicio, @fim,
+           @nu_mov, GETDATE(), GETDATE(), ''PROCESSANDO'', ''Pre-global em processamento.'');',
+    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @nu_mov BIGINT',
+    @nome = @pipeline_nome,
+    @versao = @pipeline_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim,
+    @nu_mov = @nu_registros_teste_mov_sc;
 
 BEGIN TRY
 
@@ -148,17 +168,19 @@ PRINT '==========================================================';
 PRINT '   TEMPO TOTAL: ' + CONVERT(VARCHAR(20), GETDATE() - @t0, 114);
 PRINT '==========================================================';
 
-SELECT
-    id_pipeline,
-    pipeline_nome,
-    pipeline_versao,
-    dt_data_inicio,
-    dt_data_fim,
-    status,
-    dt_criacao,
-    dt_atualizacao,
-    observacao
-FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata;
+EXEC sp_executesql
+    N'SELECT
+          id_pipeline,
+          pipeline_nome,
+          pipeline_versao,
+          dt_data_inicio,
+          dt_data_fim,
+          nu_registros_teste_mov_sc,
+          status,
+          dt_criacao,
+          dt_atualizacao,
+          observacao
+      FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata;';
 
 SELECT
     COUNT(*) AS qtd_medicos_cfm

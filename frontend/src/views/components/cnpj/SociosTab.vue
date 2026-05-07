@@ -24,6 +24,12 @@ const formatCpfCnpj = (v) => {
   return v;
 };
 
+const formatTipoSocio = (v) => {
+  if (v === "PF") return "Pessoa Física";
+  if (v === "PJ") return "Pessoa Jurídica";
+  return v;
+};
+
 // Determina se o sócio ainda é ativo (sem data de exclusão)
 const isAtivo = (socio) => !socio.data_exclusao_sociedade;
 
@@ -77,6 +83,7 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
               <th>Sócio / Nome Empresarial</th>
               <th class="col-center">CPF / CNPJ</th>
               <th>Qualificação</th>
+              <th>Localização</th>
               <th class="col-center">Participação</th>
               <th class="col-center">Entrada</th>
               <th class="col-center">Saída / Situação</th>
@@ -87,12 +94,19 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
               <td>
                 <div class="socio-name">
                   {{ s.nome_socio || 'NOME NÃO INFORMADO' }}
-                  <span v-if="s.indicador_socio" class="socio-type">({{ s.indicador_socio }})</span>
+                  <span v-if="s.indicador_socio" class="socio-type">{{ formatTipoSocio(s.indicador_socio) }}</span>
                 </div>
               </td>
               <td class="col-center font-mono">{{ formatCpfCnpj(s.cpf_cnpj_socio) }}</td>
               <td class="qualificacao-cell">
                 {{ s.descricao_qualificacao || '—' }}
+              </td>
+              <td class="location-cell">
+                <div v-if="s.municipio" class="location-wrapper">
+                  <i class="pi pi-map-marker" />
+                  <span>{{ s.municipio }} / {{ s.uf }}</span>
+                </div>
+                <span v-else>—</span>
               </td>
               <td class="col-center">
                 <div class="pct-container" v-if="s.percentual_qualificacao > 0">
@@ -251,14 +265,35 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
 .socio-type {
   font-size: 0.7rem;
   color: var(--text-muted);
-  font-weight: 400;
-  text-transform: none !important;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-top: 0.1rem;
 }
 
 .qualificacao-cell {
   font-size: 0.85rem;
   color: var(--text-secondary);
   text-transform: none !important;
+}
+
+.location-cell {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  min-width: 120px;
+}
+
+.location-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.85;
+}
+
+.location-wrapper i {
+  font-size: 0.75rem;
+  color: var(--primary-color);
+  opacity: 0.7;
 }
 
 /* Barra de Percentual */

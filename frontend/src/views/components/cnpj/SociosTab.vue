@@ -39,7 +39,14 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
             <h2 class="title">QUADRO SOCIETÁRIO</h2>
             <p class="subtitle">
               Composição de sócios e administradores registrada na Receita Federal.
-              <span v-if="dataProcessamento" class="data-ref">Ref: {{ formatarData(dataProcessamento) }}</span>
+              <span 
+                v-if="dataProcessamento" 
+                class="data-ref" 
+                v-tooltip.top="'Data da última sincronização dos dados societários com a base oficial da Receita Federal.'"
+              >
+                Ref: {{ formatarData(dataProcessamento) }}
+                <i class="pi pi-info-circle" style="font-size: 0.65rem; margin-left: 0.2rem; opacity: 0.7" />
+              </span>
             </p>
           </div>
         </div>
@@ -79,13 +86,13 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
             <tr v-for="s in socios" :key="s.cpf_cnpj_socio" :class="{ 'row-inactive': !isAtivo(s) }">
               <td>
                 <div class="socio-name">
-                  {{ formatTitleCase(s.nome_socio) || 'NOME NÃO INFORMADO' }}
+                  {{ s.nome_socio || 'NOME NÃO INFORMADO' }}
                   <span v-if="s.indicador_socio" class="socio-type">({{ s.indicador_socio }})</span>
                 </div>
               </td>
               <td class="col-center font-mono">{{ formatCpfCnpj(s.cpf_cnpj_socio) }}</td>
               <td class="qualificacao-cell">
-                {{ formatTitleCase(s.descricao_qualificacao) || '—' }}
+                {{ s.descricao_qualificacao || '—' }}
               </td>
               <td class="col-center">
                 <div class="pct-container" v-if="s.percentual_qualificacao > 0">
@@ -133,9 +140,10 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  padding: 0.5rem 0;
   border-bottom: 1px solid var(--tabs-border);
-  padding-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .header-left {
@@ -145,17 +153,18 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
 }
 
 .header-left i {
-  font-size: 1.5rem;
+  font-size: 1rem;
   color: var(--primary-color);
-  opacity: 0.8;
 }
 
 .title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text-color);
+  opacity: 0.85;
 }
 
 .subtitle {
@@ -175,6 +184,7 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   font-size: 0.7rem;
   font-weight: 600;
   border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+  cursor: help;
 }
 
 .header-badge {
@@ -215,13 +225,17 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   color: var(--text-color);
 }
 
+.premium-table tbody tr {
+  background: transparent !important;
+}
+
 .premium-table tbody tr:hover {
-  background: var(--table-hover);
+  background: var(--table-hover) !important;
 }
 
 .row-inactive {
   opacity: 0.6;
-  background: color-mix(in srgb, var(--bg-color) 95%, black);
+  background: color-mix(in srgb, var(--bg-color) 95%, black) !important;
 }
 
 .col-center { text-align: center; }
@@ -231,17 +245,20 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   font-weight: 500;
   display: flex;
   flex-direction: column;
+  text-transform: none !important;
 }
 
 .socio-type {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 400;
+  text-transform: none !important;
 }
 
 .qualificacao-cell {
   font-size: 0.85rem;
   color: var(--text-secondary);
+  text-transform: none !important;
 }
 
 /* Barra de Percentual */

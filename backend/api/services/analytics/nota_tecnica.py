@@ -254,7 +254,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
         p1.paragraph_format.space_after = Pt(2)
 
     # Nota de Rodapé do Quadro
-    total_mov = data.get('total_mov') or 0.0
+    total_mov = Decimal(str(data.get('total_mov') or 0.0))
     relacao_pct = (total_mov / capital_social * 100) if capital_social > 0 else 0
     vezes = (total_mov / capital_social) if capital_social > 0 else 0
     

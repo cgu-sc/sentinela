@@ -161,8 +161,9 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.correio_eletronico as email,
                D.situacaoReceita as situacao_rf,
                D.ds_porte_empresa as porte_empresa,
-               D.uf as uf,
-               D.municipio as municipio
+               D.uf,
+               D.municipio,
+               D.capital_social
         FROM [temp_CGUSC].[fp].[dados_farmacia] D
     """
     with engine.connect() as conn:

@@ -10,6 +10,7 @@ import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import MortalityTimelineOverlay from './MortalityTimelineOverlay.vue';
+import TabPlaceholder from './TabPlaceholder.vue';
 
 const props = defineProps({
   cnpj: {
@@ -29,7 +30,7 @@ const isRefreshing = computed(() =>
   cachedFalecidosData.value !== null &&
   !filterStore.isAnimating
 );
-const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj } = useFormatting();
+const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj, toLocalISO } = useFormatting();
 const analyticsStore = useAnalyticsStore();
 const farmaciaLists = useFarmaciaListsStore();
 
@@ -43,6 +44,18 @@ const cnpjsDict = computed(() => {
   }
   return dict;
 });
+
+const formattedPeriod = computed(() => {
+  if (!filterStore.periodo || filterStore.periodo.length < 2) return null;
+  const start = filterStore.periodo[0];
+  const end = filterStore.periodo[1];
+  if (!start || !end) return null;
+  return {
+    start: formatarData(toLocalISO(start)),
+    end:   formatarData(toLocalISO(end))
+  };
+});
+
 
 const getEstabelecimentoInfo = (estabStr) => {
   if (!estabStr) return { cnpj: '', name: '', geo: '' };
@@ -160,20 +173,37 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 <template>
   <div class="tab-content falecidos-tab" :class="{ 'is-refreshing': isRefreshing }">
-    <div v-if="falecidosLoading && !cachedFalecidosData" class="tab-placeholder">
-      <i class="pi pi-spin pi-spinner placeholder-icon" />
-      <p>Analisando base de óbitos...</p>
-    </div>
+    <TabPlaceholder
+      v-if="showRefreshingKPIs && !cachedFalecidosData"
+      variant="loading"
+      title="Analisando base de óbitos"
+      description="Cruzando dados com registros de falecimento..."
+    />
 
-    <div v-else-if="falecidosError" class="tab-placeholder tab-placeholder--error">
-      <i class="pi pi-exclamation-circle placeholder-icon" />
-      <p>{{ falecidosError }}</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="falecidosError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="falecidosError"
+    />
 
-    <div v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length" class="tab-placeholder">
-      <i class="pi pi-check-circle placeholder-icon" style="color: var(--green-500)" />
-      <p>Nenhuma venda para falecidos encontrada neste estabelecimento.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length"
+      :variant="cachedFalecidosData?.tem_historico ? 'default' : 'success'"
+      :icon="cachedFalecidosData?.tem_historico ? 'pi-filter-slash' : 'pi-check-circle'"
+      :title="cachedFalecidosData?.tem_historico ? 'Sem ocorrências no período' : 'CNPJ livre de ocorrências'"
+    >
+      <template #description>
+        <span v-if="cachedFalecidosData?.tem_historico">
+          O estabelecimento possui histórico na base de óbitos, mas nenhuma venda foi identificada no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+        </span>
+        <span v-else>
+          Não foram encontradas transações vinculadas a CPFs de pessoas falecidas para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+        </span>
+      </template>
+    </TabPlaceholder>
+
 
     <template v-else-if="falecidosLoaded">
       <!-- 7 CARDS DE KPI -->

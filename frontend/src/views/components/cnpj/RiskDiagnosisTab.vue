@@ -9,6 +9,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { API_ENDPOINTS } from '@/config/api';
 import RegionalRankChart from '../charts/RegionalRankChart.vue';
 import RiskDistributionChart from '../charts/RiskDistributionChart.vue';
+import TabPlaceholder from './TabPlaceholder.vue';
 import Dropdown from 'primevue/dropdown';
 import Slider from 'primevue/slider';
 
@@ -503,10 +504,12 @@ const riskRankBadge = computed(() => {
   <div class="tab-content risk-diagnosis-tab">
     
     <!-- Aviso de GeoData ausente -->
-    <div v-if="!geoData?.no_regiao_saude" class="placeholder-card">
-       <i class="pi pi-exclamation-triangle" />
-       <p>Informações geográficas incompletas para realizar o diagnóstico comparativo.</p>
-    </div>
+    <TabPlaceholder
+      v-if="!geoData?.no_regiao_saude"
+      icon="pi-map-marker"
+      title="Geolocalização indisponível"
+      description="Informações geográficas incompletas para realizar o diagnóstico comparativo."
+    />
 
     <template v-else>
       <div class="diagnosis-grid">

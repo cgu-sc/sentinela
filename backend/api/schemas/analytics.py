@@ -230,6 +230,7 @@ class FalecidosResponse(BaseModel):
     ranking: List[FalecidosRankingSchema]
     transacoes: List[FalecidoTransactionSchema]
     from_cache: bool = False
+    tem_historico: bool = False
     query_time_ms: Optional[float] = None
     save_time_ms: Optional[float] = None
     read_time_ms: Optional[float] = None
@@ -272,6 +273,7 @@ class PrescritoresResponse(BaseModel):
     crms_interesse: list
     cnpj_alerts: List[dict] = []
     from_cache: bool = False
+    tem_historico: bool = False
     read_time_ms: Optional[float] = None
     query_time_ms: Optional[float] = None
     save_time_ms: Optional[float] = None

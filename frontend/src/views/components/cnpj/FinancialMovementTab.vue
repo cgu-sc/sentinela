@@ -22,6 +22,7 @@ import Row from 'primevue/row';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import GtinDetalhamentoMensalSidebar from './GtinDetalhamentoMensalSidebar.vue';
+import TabPlaceholder from './TabPlaceholder.vue';
 
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
 
@@ -488,20 +489,27 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
 <template>
   <div class="tab-content evolucao-tab">
-    <div v-if="evolucaoLoading && !cachedEvolucaoData" class="tab-placeholder">
-      <i class="pi pi-spin pi-spinner placeholder-icon" />
-      <p>Carregando dados...</p>
-    </div>
+    <TabPlaceholder
+      v-if="evolucaoLoading && !cachedEvolucaoData"
+      variant="loading"
+      title="Carregando movimentação financeira"
+      description="Buscando histórico semestral e mensal..."
+    />
 
-    <div v-else-if="evolucaoError" class="tab-placeholder tab-placeholder--error">
-      <i class="pi pi-exclamation-circle placeholder-icon" />
-      <p>{{ evolucaoError }}</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="evolucaoError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="evolucaoError"
+    />
 
-    <div v-else-if="evolucaoLoaded && !cachedEvolucaoData?.semestres?.length" class="tab-placeholder">
-      <i class="pi pi-inbox placeholder-icon" />
-      <p>Nenhum dado de movimentação encontrado para este CNPJ.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="evolucaoLoaded && !cachedEvolucaoData?.semestres?.length"
+      icon="pi-chart-bar"
+      title="Nenhum dado encontrado"
+      description="Não há movimentações registradas para este CNPJ no período selecionado."
+    />
 
     <template v-else-if="cachedEvolucaoData">
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
@@ -565,10 +573,11 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             @click="onMensalChartClick"
           />
         </div>
-        <div v-else class="tab-placeholder" style="padding: 2rem;">
-          <i class="pi pi-spin pi-spinner placeholder-icon" style="font-size: 1.5rem; opacity: 0.4;" />
-          <p style="font-size: 0.8rem;">Carregando dados mensais...</p>
-        </div>
+        <TabPlaceholder
+          v-else
+          variant="loading"
+          title="Carregando dados mensais"
+        />
       </div>
 
       <!-- Painel contextual: detalhe do semestre selecionado -->

@@ -10,6 +10,7 @@ import { useFrozenData } from '@/composables/useFrozenData';
 import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
 import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
 import MunicipalMap from '../maps/MunicipalMap.vue';
+import TabPlaceholder from './TabPlaceholder.vue';
 const props = defineProps({
   cnpj: { type: String, required: true },
   geoData: { type: Object, default: null },
@@ -132,28 +133,33 @@ watch(
 <template>
   <div class="tab-content regional-tab" :class="{ 'is-refreshing': isRefreshing }">
     <!-- Sem geo data -->
-    <div v-if="!geoData?.no_regiao_saude" class="tab-placeholder">
-      <i class="pi pi-map-marker placeholder-icon" />
-      <p>Não foi possível identificar a Região de Saúde deste estabelecimento.</p>
-    </div>
+    <TabPlaceholder
+      v-if="!geoData?.no_regiao_saude"
+      icon="pi-map-marker"
+      title="Geolocalização indisponível"
+      description="Não foi possível identificar a Região de Saúde deste estabelecimento para gerar o ranking comparativo."
+    />
 
-    <!-- Carregando (apenas na 1ª carga, sem dados prévios) -->
-    <div v-else-if="regionalLoading && !cachedRegionalData" class="tab-placeholder">
-      <i class="pi pi-spin pi-spinner placeholder-icon" />
-      <p>Carregando ranking regional — <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="regionalLoading && !cachedRegionalData"
+      variant="loading"
+      title="Carregando ranking regional"
+      :description="`Buscando dados da região ${geoData.no_regiao_saude}...`"
+    />
 
-    <!-- Sem dados carregados ainda (edge case antes do onMounted) -->
-    <div v-else-if="!regionalLoaded && !cachedRegionalData" class="tab-placeholder">
-      <i class="pi pi-globe placeholder-icon" />
-      <p>Carregando o ranking comparativo da <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>...</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="!regionalLoaded && !cachedRegionalData"
+      variant="loading"
+      title="Preparando análise"
+      :description="`Organizando o ranking comparativo da região ${geoData.no_regiao_saude}...`"
+    />
 
-    <!-- Sem resultados -->
-    <div v-else-if="!cachedRegionalData?.farmacias?.length" class="tab-placeholder">
-      <i class="pi pi-exclamation-triangle placeholder-icon" />
-      <p>Nenhuma farmácia encontrada para a região <span class="semi-bold-text">{{ geoData.no_regiao_saude }}</span>.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="!cachedRegionalData?.farmacias?.length"
+      icon="pi-map"
+      title="Nenhuma farmácia encontrada"
+      :description="`Não há estabelecimentos registrados na região ${geoData.no_regiao_saude} no período selecionado.`"
+    />
 
     <!-- Conteúdo principal -->
     <template v-else>

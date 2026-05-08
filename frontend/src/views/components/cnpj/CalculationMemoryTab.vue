@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from '@/composables/useFormatting';
+import TabPlaceholder from './TabPlaceholder.vue';
 
 const props = defineProps({
   cnpj: { type: String, required: true }
@@ -266,18 +267,20 @@ const pctIrregular = (section) => {
     </div>
 
     <!-- ── ESTADO: Carregando (inclui aguardando início do fetch) ───────────── -->
-    <div v-else-if="loading || (!loaded && !error)" class="mov-loading-state">
-      <div class="loading-inner">
-        <i class="pi pi-spin pi-spinner loading-icon" />
-        <p class="loading-title">Processando…</p>
-      </div>
-    </div>
+    <TabPlaceholder
+      v-else-if="loading || (!loaded && !error)"
+      variant="loading"
+      title="Processando memória de cálculo"
+      description="Buscando movimentações e calculando indicadores..."
+    />
 
     <!-- ── ESTADO: Sem dados ───────────────────────────────────────────────── -->
-    <div v-else-if="loaded && !rows.length" class="mov-empty-state">
-      <i class="pi pi-inbox placeholder-icon" />
-      <p>Nenhum dado encontrado.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="loaded && !rows.length"
+      icon="pi-database"
+      title="Nenhum dado encontrado"
+      description="Não há movimentações registradas para este CNPJ no período analisado."
+    />
 
     <!-- ── ESTADO: Dados carregados ───────────────────────────────────────── -->
     <template v-else-if="loaded && rows.length">

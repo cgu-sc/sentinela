@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { useFormatting } from "@/composables/useFormatting";
 import ProgressSpinner from "primevue/progressspinner";
+import TabPlaceholder from "./TabPlaceholder.vue";
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { sociosData, sociosLoading, sociosError } = storeToRefs(cnpjDetailStore);
@@ -37,7 +38,32 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
 
 <template>
   <div class="socios-tab tab-content">
-    <div class="socios-card animate-fade-in">
+
+    <!-- ── Estados sem dados: fora do card ──────────────────────────────── -->
+    <TabPlaceholder
+      v-if="sociosLoading"
+      variant="loading"
+      title="Carregando quadro societário"
+      description="Buscando dados da Receita Federal..."
+    />
+
+    <TabPlaceholder
+      v-else-if="sociosError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="sociosError"
+    />
+
+    <TabPlaceholder
+      v-else-if="socios.length === 0"
+      icon="pi-users"
+      title="Quadro societário não encontrado"
+      description="Nenhum dado societário disponível para este estabelecimento na base atual."
+    />
+
+    <!-- ── Card com dados: só renderiza quando há sócios ─────────────────── -->
+    <div v-else class="socios-card animate-fade-in">
       <div class="section-header">
         <div class="header-left">
           <i class="pi pi-users" />
@@ -56,27 +82,12 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
             </p>
           </div>
         </div>
-        <div v-if="socios.length > 0" class="header-badge">
+        <div class="header-badge">
           {{ socios.filter(isAtivo).length }} Sócios Ativos
         </div>
       </div>
 
-      <div v-if="sociosLoading" class="loading-state">
-        <ProgressSpinner style="width: 40px; height: 40px" strokeWidth="3" />
-        <span>Carregando composição societária...</span>
-      </div>
-
-      <div v-else-if="sociosError" class="error-state">
-        <i class="pi pi-exclamation-circle" />
-        <p>{{ sociosError }}</p>
-      </div>
-
-      <div v-else-if="socios.length === 0" class="empty-state">
-        <i class="pi pi-info-circle" />
-        <p>Nenhum dado societário encontrado para este estabelecimento.</p>
-      </div>
-
-      <div v-else class="table-wrapper">
+      <div class="table-wrapper">
         <table class="premium-table">
           <thead>
             <tr>

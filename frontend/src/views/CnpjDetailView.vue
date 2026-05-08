@@ -547,23 +547,7 @@ const isInitialLoading = computed(() => {
   min-height: calc(100vh - 450px); /* Garante que a aba tenha uma altura mínima respeitável */
 }
 
-.tab-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  min-height: 300px;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
 
-.placeholder-icon {
-  font-size: 3rem;
-}
-.tab-placeholder p {
-  font-size: 0.875rem;
-}
 
 /* ── GLOBAL LOADING OVERLAY (PREMIUM & ESTÁVEL) ── */
 .global-loading-overlay {

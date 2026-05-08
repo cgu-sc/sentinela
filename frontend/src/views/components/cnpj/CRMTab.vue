@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, watch } from "vue";
 import { useDelayedLoading } from '@/composables/useDelayedLoading';
+import TabPlaceholder from './TabPlaceholder.vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFilterParameters } from "@/composables/useFilterParameters";
@@ -8,6 +9,8 @@ import { useFilterParameters } from "@/composables/useFilterParameters";
 import CRMKpiGrid from './CRMKpiGrid.vue';
 import CRMCronologia from './CRMCronologia.vue';
 import CRMPrescritoresTable from './CRMPrescritoresTable.vue';
+import { useFilterStore } from "@/stores/filters";
+import { formatarData } from "@/composables/useFormatting";
 
 const props = defineProps({
   cnpj: { type: String, required: true },
@@ -19,6 +22,7 @@ const { getApiParams } = useFilterParameters();
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const cachedPrescritoresData = ref(prescritoresData.value);
 const showRefreshingKPIs = useDelayedLoading(prescritoresLoading);
+const filterStore = useFilterStore();
 
 watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
   if (newData && !loading) cachedPrescritoresData.value = newData;
@@ -145,20 +149,38 @@ defineExpose({
 
 <template>
   <div class="crm-tab-container">
-    <div v-if="prescritoresLoading && !prescritoresData" class="loading-state">
-      <i class="pi pi-spinner pi-spin"></i>
-      <p>Carregando análise de prescritores...</p>
-    </div>
+    <TabPlaceholder
+      v-if="showRefreshingKPIs && !prescritoresData"
+      variant="loading"
+      title="Carregando análise de prescritores"
+      description="Buscando CRMs e histórico de prescrições..."
+    />
 
-    <div v-else-if="prescritoresError && !prescritoresData" class="loading-state tab-placeholder--error">
-      <i class="pi pi-exclamation-circle" style="font-size: 2rem"></i>
-      <p>{{ prescritoresError }}</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="prescritoresError && !prescritoresData"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="prescritoresError"
+    />
 
-    <div v-else-if="!prescritoresData || crmsInteresse.length === 0" class="empty-state">
-      <i class="pi pi-users empty-icon"></i>
-      <p>Não há dados de prescrições registrados para este estabelecimento nos meses selecionados.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="!prescritoresData || crmsInteresse.length === 0"
+      :variant="prescritoresData?.tem_historico ? 'info' : 'success'"
+      icon="pi-id-card"
+      :title="prescritoresData?.tem_historico ? 'Sem prescrições no período' : 'CNPJ livre de ocorrências'"
+    >
+      <template #description>
+        <template v-if="prescritoresData?.tem_historico">
+          Não foram encontradas prescrições vinculadas a este CNPJ no período de 
+          <span class="underline">{{ formatarData(filterStore.dataInicio) }}</span> até 
+          <span class="underline">{{ formatarData(filterStore.dataFim) }}</span>.
+        </template>
+        <template v-else>
+          Este estabelecimento não possui registros de prescrições farmacêuticas em nossa base de dados histórica.
+        </template>
+      </template>
+    </TabPlaceholder>
 
     <div v-else class="content-wrapper" :class="{ 'is-refreshing': isRefreshing }">
       <!-- Seletor de Visão -->

@@ -115,8 +115,11 @@ def get_crm_data(
                 )
                 query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             if pdf.empty:
-                return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=False, query_time_ms=query_time_ms)
-            df = pl.from_pandas(pdf)
+                df = pl.DataFrame(schema={
+                    "id_medico": pl.Utf8, "competencia": pl.Int32, "vl_total_prescricoes": pl.Float64
+                })
+            else:
+                df = pl.from_pandas(pdf)
             for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
                 if col in df.columns:
                     df = df.with_columns(pl.col(col).cast(pl.Int8))
@@ -125,16 +128,26 @@ def get_crm_data(
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception:
             print(f"[ ANALYTICS ] {cnpj} ● CRM ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], query_time_ms=query_time_ms)
+            df = None
 
     # â”€â”€ 2. Filtro de perÃ­odo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 2. Validação de Disponibilidade e Histórico ──────────────────────
+    if df is None or len(df.columns) == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="Base de dados de prescrições indisponível no momento (Sem cache local e banco de dados offline)."
+        )
+
+    # Verifica se há qualquer dado histórico antes dos filtros de período
+    tem_historico = not df.is_empty()
+
     if comp_ini:
         df = df.filter(pl.col("competencia") >= comp_ini)
     if comp_fim:
         df = df.filter(pl.col("competencia") <= comp_fim)
 
     if df.is_empty():
-        return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache,
+        return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache, tem_historico=tem_historico,
                                     read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     # â”€â”€ 3. Agrega por id_medico (colapsa competÃªncias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -569,6 +582,7 @@ def get_crm_data(
         crms_interesse=crms_interesse_list,
         cnpj_alerts=cnpj_alerts_list,
         from_cache=from_cache,
+        tem_historico=tem_historico,
         read_time_ms=read_time_ms,
         query_time_ms=query_time_ms,
         save_time_ms=save_time_ms,

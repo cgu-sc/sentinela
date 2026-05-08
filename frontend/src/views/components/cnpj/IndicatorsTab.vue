@@ -6,6 +6,7 @@ import { useConfigStore } from '@/stores/config';
 import { useFormatting } from '@/composables/useFormatting';
 import { useFrozenData } from '@/composables/useFrozenData';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
+import TabPlaceholder from './TabPlaceholder.vue';
 
 const { formatCurrencyFull } = useFormatting();
 const cnpjDetailStore = useCnpjDetailStore();
@@ -111,20 +112,27 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 <template>
   <div class="tab-content indicadores-tab">
 
-    <div v-if="indicadoresLoading && !cachedIndicadoresData" class="tab-placeholder">
-      <i class="pi pi-spin pi-spinner placeholder-icon" />
-      <p>Carregando indicadores...</p>
-    </div>
+    <TabPlaceholder
+      v-if="indicadoresLoading && !cachedIndicadoresData"
+      variant="loading"
+      title="Carregando indicadores"
+      description="Buscando métricas de risco e comparativos regionais..."
+    />
 
-    <div v-else-if="indicadoresError" class="tab-placeholder tab-placeholder--error">
-      <i class="pi pi-exclamation-circle placeholder-icon" />
-      <p>{{ indicadoresError }}</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="indicadoresError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="indicadoresError"
+    />
 
-    <div v-else-if="indicadoresLoaded && !Object.keys(cachedIndicadoresData?.indicadores ?? {}).length" class="tab-placeholder">
-      <i class="pi pi-inbox placeholder-icon" />
-      <p>Nenhum indicador encontrado para este CNPJ.</p>
-    </div>
+    <TabPlaceholder
+      v-else-if="indicadoresLoaded && !Object.keys(cachedIndicadoresData?.indicadores ?? {}).length"
+      icon="pi-table"
+      title="Nenhum indicador encontrado"
+      description="Não há dados suficientes para gerar os indicadores de risco deste estabelecimento."
+    />
 
     <template v-else-if="cachedIndicadoresData">
 
@@ -227,10 +235,12 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
       </div><!-- ind-section -->
     </template>
 
-    <div v-else class="tab-placeholder">
-      <i class="pi pi-shield placeholder-icon" />
-      <p>Clique na aba para carregar os indicadores.</p>
-    </div>
+    <TabPlaceholder
+      v-else
+      icon="pi-shield"
+      title="Indicadores de Risco"
+      description="Clique na aba para processar e carregar a análise detalhada."
+    />
 
   </div>
 </template>

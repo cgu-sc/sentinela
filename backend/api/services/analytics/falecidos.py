@@ -122,7 +122,7 @@ def get_falecidos_data(
 
         except Exception:
             print(f"[ ANALYTICS ] {cnpj} ● FALECIDOS ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df_all = pl.DataFrame()
+            df_all = None
 
     _empty_response = FalecidosResponse(
         cnpj=cnpj,
@@ -139,8 +139,18 @@ def get_falecidos_data(
         read_time_ms=read_time_ms,
     )
 
-    # ── 3. Filtro de período ─────────────────────────────────────────────
-    if df_all.is_empty() or len(df_all.columns) == 0:
+    # ── 3. Validação de Disponibilidade e Histórico ──────────────────────
+    if df_all is None or len(df_all.columns) == 0:
+        raise HTTPException(
+            status_code=503, 
+            detail="Base de dados de óbitos indisponível no momento (Sem cache local e banco de dados offline)."
+        )
+
+    # Verifica se o estabelecimento tem histórico na base completa (antes dos filtros de data)
+    tem_historico = not df_all.filter(pl.col("cnpj") == cnpj).is_empty()
+
+    if df_all.is_empty():
+        _empty_response.tem_historico = tem_historico
         return _empty_response
 
     if data_inicio:
@@ -152,7 +162,9 @@ def get_falecidos_data(
         df_target = df_all.filter(pl.col("cnpj") == cnpj)
 
         if df_target.is_empty():
-            return _empty_response
+            res = _empty_response.model_copy()
+            res.tem_historico = tem_historico
+            return res
 
         # 1. KPIs Básicos
         cpfs_distintos = df_target["cpf"].n_unique()
@@ -263,6 +275,7 @@ def get_falecidos_data(
             ranking=ranking,
             transacoes=transacoes,
             from_cache=from_cache,
+            tem_historico=tem_historico,
             query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
             read_time_ms=read_time_ms,

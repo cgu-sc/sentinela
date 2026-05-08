@@ -604,14 +604,6 @@ def get_df_dados_socios() -> pl.DataFrame:
 
 def get_df_socios_externos() -> pl.DataFrame:
     if _df_socios_externos is None:
-        # Se não carregado, tentamos ler do parquet direto se existir
-        if os.path.exists(_SOCIOS_EXTERNOS_PARQUET_PATH):
-            try:
-                global _df_socios_externos
-                _df_socios_externos = pl.read_parquet(_SOCIOS_EXTERNOS_PARQUET_PATH)
-                return _df_socios_externos
-            except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● socios_externos ● ⚠️ ERRO DE LEITURA ({e})")
         raise RuntimeError("Cache de Participações Externas dos Sócios não carregado. Execute uma sincronização.")
     return _df_socios_externos
 

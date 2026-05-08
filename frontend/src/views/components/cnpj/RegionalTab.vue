@@ -172,7 +172,7 @@ watch(
           <MunicipalMap
             v-if="isActive"
             :prop-uf="geoData.sg_uf"
-            :prop-regiao="geoData.id_regiao_saude"
+            :prop-regiao="geoData.id_regiao_saude ? String(geoData.id_regiao_saude) : null"
             :prop-municipio-ibge7="filterMunicipioId ?? currentIbge7"
             :prop-municipios-data="cachedRegionalData.municipios"
             @select-municipio="(ibge7) => toggleMunicipioFilter(ibge7)"

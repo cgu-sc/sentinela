@@ -40,12 +40,12 @@ const hoverBorder = computed(() => `${themeStore.tokens.primary}B3`);
 // ── GeoJSON filtrado para a região ───────────────────────────────────────────
 const mapName = computed(() => {
   const uf = props.geoData?.sg_uf ?? "XX";
-  const id = props.geoData?.id_regiao ?? "default";
+  const id = props.geoData?.id_regiao_saude ?? "default";
   return `regiao-${uf}-${id}`;
 });
 
 const regiaoLocalidades = computed(() => {
-  const id_reg = props.geoData?.id_regiao;
+  const id_reg = props.geoData?.id_regiao_saude;
   const uf = props.geoData?.sg_uf;
   if (!id_reg || !uf) return [];
   return geoStore.localidades.filter(
@@ -63,7 +63,7 @@ const regiaoIbge7Set = computed(
 const mapKey = ref(0);
 
 watch(
-  [() => props.geoData?.sg_uf, () => props.geoData?.id_regiao],
+  [() => props.geoData?.sg_uf, () => props.geoData?.id_regiao_saude],
   ([uf]) => {
     if (!uf) return;
     const fullGeo = geoStore.getMunicipiosGeoByUF(uf);

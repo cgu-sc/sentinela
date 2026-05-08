@@ -31,7 +31,7 @@ const NODE_STYLES = {
   PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 64 },
 };
 
-const INITIAL_FIT_PADDING = 120;
+const INITIAL_FIT_PADDING = 40; // Reduzido para aproveitar o máximo da largura do card
 const REFIT_DELAY_MS = 80;
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
@@ -85,15 +85,15 @@ function buildGraph(data) {
       name: 'cose',
       animate: true,
       animationDuration: 800,
-      nodeRepulsion: () => 8000,
-      idealEdgeLength: () => 100,
-      gravity: 1.2,
+      nodeRepulsion: () => 15000,
+      idealEdgeLength: () => 80,
+      gravity: 0.9,               // Sweet spot de 0.9
       numIter: 1000,
       initialTemp: 1000,
       coolingFactor: 0.99,
       minTemp: 1.0,
       fit: false,
-      randomize: true, // Garante que não comece tudo no (0,0)
+      randomize: true,
     },
     minZoom: 0.35,
     maxZoom: 3,

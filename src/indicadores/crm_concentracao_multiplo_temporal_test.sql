@@ -198,21 +198,21 @@ END;
 
 IF @reset_fonte_uf = 1
 BEGIN
-    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual;
-    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual_metadata;
+    DROP TABLE IF EXISTS #crm_mov_fonte_atual;
+    DROP TABLE IF EXISTS #crm_mov_fonte_atual_metadata;
 END;
 
 SET @fonte_atual_ok = 0;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual') IS NOT NULL
-   AND OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual_metadata') IS NOT NULL
-   AND COL_LENGTH('temp_CGUSC.fp.crm_mov_fonte_atual', 'id_cnpj') IS NOT NULL
-   AND COL_LENGTH('temp_CGUSC.fp.crm_mov_fonte_atual_metadata', 'uf_farmacia') IS NOT NULL
+IF OBJECT_ID('tempdb..#crm_mov_fonte_atual') IS NOT NULL
+   AND OBJECT_ID('tempdb..#crm_mov_fonte_atual_metadata') IS NOT NULL
+   AND COL_LENGTH('tempdb..#crm_mov_fonte_atual', 'id_cnpj') IS NOT NULL
+   AND COL_LENGTH('tempdb..#crm_mov_fonte_atual_metadata', 'uf_farmacia') IS NOT NULL
 BEGIN
     EXEC sp_executesql
         N'SELECT @ok = CASE WHEN EXISTS (
               SELECT 1
-              FROM temp_CGUSC.fp.crm_mov_fonte_atual_metadata
+              FROM #crm_mov_fonte_atual_metadata
               WHERE id_pipeline = 1
                 AND pipeline_versao = @versao
                 AND dt_data_inicio = @inicio
@@ -251,8 +251,8 @@ BEGIN
         @inicio = @DataInicio,
         @fim = @DataFim;
 
-    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual;
-    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual_metadata;
+    DROP TABLE IF EXISTS #crm_mov_fonte_atual;
+    DROP TABLE IF EXISTS #crm_mov_fonte_atual_metadata;
 
     SELECT
         CAST(F.uf AS CHAR(2)) AS uf_farmacia,
@@ -264,7 +264,7 @@ BEGIN
         CAST(M.num_autorizacao AS VARCHAR(50)) AS num_autorizacao,
         CAST(M.valor_pago AS DECIMAL(18,2)) AS valor_pago,
         M.codigo_barra
-    INTO temp_CGUSC.fp.crm_mov_fonte_atual
+    INTO #crm_mov_fonte_atual
     FROM (
         SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
         FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
@@ -287,27 +287,27 @@ BEGIN
       );
 
     CREATE CLUSTERED INDEX IDX_CrmMovFonteAtual_UfCnpjData
-        ON temp_CGUSC.fp.crm_mov_fonte_atual(uf_farmacia, id_cnpj, data_hora);
+        ON #crm_mov_fonte_atual(uf_farmacia, id_cnpj, data_hora);
 
     CREATE NONCLUSTERED INDEX IDX_CrmMovFonteAtual_CnpjData
-        ON temp_CGUSC.fp.crm_mov_fonte_atual(cnpj, data_hora)
+        ON #crm_mov_fonte_atual(cnpj, data_hora)
         INCLUDE (id_cnpj, crm, crm_uf, num_autorizacao, valor_pago, codigo_barra);
 
     CREATE NONCLUSTERED INDEX IDX_CrmMovFonteAtual_CrmData
-        ON temp_CGUSC.fp.crm_mov_fonte_atual(id_cnpj, crm, crm_uf, data_hora)
+        ON #crm_mov_fonte_atual(id_cnpj, crm, crm_uf, data_hora)
         INCLUDE (cnpj, num_autorizacao, valor_pago, codigo_barra);
 
     SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-    FROM temp_CGUSC.sys.partitions P
-    WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual')
+    FROM tempdb.sys.partitions P
+    WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
       AND P.index_id IN (0, 1);
 
     SET @nu_cnpjs_fonte = (
         SELECT COUNT(DISTINCT id_cnpj)
-        FROM temp_CGUSC.fp.crm_mov_fonte_atual
+        FROM #crm_mov_fonte_atual
     );
 
-    CREATE TABLE temp_CGUSC.fp.crm_mov_fonte_atual_metadata (
+    CREATE TABLE #crm_mov_fonte_atual_metadata (
         id_pipeline          TINYINT      NOT NULL,
         pipeline_versao      VARCHAR(40)  NOT NULL,
         uf_farmacia          CHAR(2)      NOT NULL,
@@ -317,12 +317,10 @@ BEGIN
         nu_cnpjs_fonte       INT          NOT NULL,
         dt_criacao           DATETIME     NOT NULL,
         status               VARCHAR(20)  NOT NULL,
-        observacao           VARCHAR(400) NULL,
-        CONSTRAINT PK_CrmMovFonteAtualMetadata PRIMARY KEY CLUSTERED (id_pipeline),
-        CONSTRAINT CK_CrmMovFonteAtualMetadata_Id CHECK (id_pipeline = 1)
+        observacao           VARCHAR(400) NULL
     );
 
-    INSERT INTO temp_CGUSC.fp.crm_mov_fonte_atual_metadata
+    INSERT INTO #crm_mov_fonte_atual_metadata
         (id_pipeline, pipeline_versao, uf_farmacia, dt_data_inicio, dt_data_fim,
          nu_registros_fonte, nu_cnpjs_fonte, dt_criacao, status, observacao)
     VALUES
@@ -352,8 +350,8 @@ BEGIN
 END
 
 SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-FROM temp_CGUSC.sys.partitions P
-WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual')
+FROM tempdb.sys.partitions P
+WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
   AND P.index_id IN (0, 1);
 
 PRINT '>> [CRM MULTIPLO] Iniciando detecção de concentração temporal...';
@@ -474,7 +472,7 @@ DROP TABLE IF EXISTS #cnpjs_pendentes;
 
 SELECT DISTINCT F.id AS id_cnpj
 INTO #cnpjs_pendentes
-FROM temp_CGUSC.fp.crm_mov_fonte_atual A
+FROM #crm_mov_fonte_atual A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = A.cnpj
 WHERE A.crm    IS NOT NULL
@@ -493,7 +491,7 @@ SET @nu_ja_processados = (
     WHERE C.status = 'OK'
       AND EXISTS (
           SELECT 1
-          FROM temp_CGUSC.fp.crm_mov_fonte_atual F
+          FROM #crm_mov_fonte_atual F
           WHERE F.id_cnpj = C.id_cnpj
       )
 );
@@ -564,7 +562,7 @@ BEGIN
         A.num_autorizacao,
         CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(13)) AS id_medico
     INTO #base_lote
-    FROM temp_CGUSC.fp.crm_mov_fonte_atual A
+    FROM #crm_mov_fonte_atual A
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = A.cnpj
     INNER JOIN #lote_atual L ON L.id_cnpj = F.id
@@ -788,7 +786,7 @@ SET status = CASE
         WHEN EXISTS (
             SELECT 1
             FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
-            INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+            INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
             WHERE C.status <> 'OK'
         ) THEN 'INCOMPLETO'
         ELSE 'OK'
@@ -805,7 +803,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
                   WHEN EXISTS (
                       SELECT 1
                       FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
-                      INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                      INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''CONCENTRACAO_MULTIPLO_INCOMPLETA''
                   ELSE ''CONCENTRACAO_MULTIPLO_OK''
@@ -814,7 +812,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
                   WHEN EXISTS (
                       SELECT 1
                       FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
-                      INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                      INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''INCOMPLETO''
                   ELSE ''OK''

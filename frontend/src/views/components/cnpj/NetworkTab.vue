@@ -14,6 +14,7 @@ const { networkData, networkLoading, networkError } = storeToRefs(cnpjDetailStor
 // ── Cytoscape instance & container ─────────────────────────────────────────
 const cyContainer = ref(null);
 let cy = null;
+let resizeObserver = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -23,15 +24,19 @@ const totalEdges = computed(() => networkData.value?.edges?.length || 0);
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
-  PJ_ALVO:     { bg: '#6366f1', border: '#818cf8', shape: 'roundrectangle', size: 70 },
-  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 50 },
-  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 55 },
-  PJ_OUTRA:    { bg: '#64748b', border: '#94a3b8', shape: 'roundrectangle', size: 50 },
+  PJ_ALVO:     { bg: '#6366f1', border: '#818cf8', shape: 'roundrectangle', size: 88 },
+  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 64 },
+  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 68 },
+  PJ_OUTRA:    { bg: '#64748b', border: '#94a3b8', shape: 'roundrectangle', size: 64 },
 };
+
+const INITIAL_FIT_PADDING = 120;
+const REFIT_DELAY_MS = 80;
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
 function buildGraph(data) {
   if (!cyContainer.value || !data) return;
+  observeGraphContainer();
 
   // Destrói instância anterior com limpeza profunda
   if (cy) {
@@ -84,10 +89,10 @@ function buildGraph(data) {
       initialTemp: 1000,
       coolingFactor: 0.99,
       minTemp: 1.0,
-      fit: true,
-      padding: 50,
+      fit: false,
       randomize: true, // Garante que não comece tudo no (0,0)
     },
+    minZoom: 0.35,
     maxZoom: 3,
   });
 
@@ -95,14 +100,11 @@ function buildGraph(data) {
   cy.resize();
 
   // Garante centralização após renderizar
-  cy.one('layoutstop', () => {
-    cy.fit(50);
-    cy.center();
-  });
+  cy.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
 
   cy.ready(() => {
-    cy.resize();
-    cy.fit(50);
+    fitGraphToView(INITIAL_FIT_PADDING);
+    setTimeout(() => fitGraphToView(INITIAL_FIT_PADDING), REFIT_DELAY_MS);
   });
 
   // Eventos interativos
@@ -131,6 +133,25 @@ function buildGraph(data) {
   zoom.value = 100;
 }
 
+function fitGraphToView(padding = INITIAL_FIT_PADDING) {
+  if (!cy || !cyContainer.value || cy.elements().empty()) return;
+
+  const { clientWidth, clientHeight } = cyContainer.value;
+  if (!clientWidth || !clientHeight) return;
+
+  cy.resize();
+  cy.fit(cy.elements(), padding);
+  cy.center(cy.elements());
+  zoom.value = Math.round(cy.zoom() * 100);
+}
+
+function observeGraphContainer() {
+  if (!cyContainer.value || resizeObserver) return;
+
+  resizeObserver = new ResizeObserver(() => fitGraphToView(INITIAL_FIT_PADDING));
+  resizeObserver.observe(cyContainer.value);
+}
+
 function buildStylesheet() {
   const styles = [];
 
@@ -144,11 +165,11 @@ function buildStylesheet() {
         'border-width': 2,
         'shape': s.shape,
         'width': s.size,
-        'height': s.size * 0.65,
+        'height': s.shape === 'ellipse' ? s.size * 0.78 : s.size * 0.68,
         'label': 'data(label)',
         'text-valign': 'bottom',
         'text-halign': 'center',
-        'font-size': '9px',
+        'font-size': '10px',
         'font-family': 'Inter, system-ui, sans-serif',
         'font-weight': '600',
         'color': '#e2e8f0',
@@ -218,13 +239,14 @@ function truncateLabel(text, maxLen) {
 // ── Controles de zoom ───────────────────────────────────────────────────────
 function zoomIn()  { cy?.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cyContainer.value.clientWidth / 2, y: cyContainer.value.clientHeight / 2 } }); }
 function zoomOut() { cy?.zoom({ level: cy.zoom() * 0.8,  renderedPosition: { x: cyContainer.value.clientWidth / 2, y: cyContainer.value.clientHeight / 2 } }); }
-function fitGraph() { cy?.fit(undefined, 40); }
+function fitGraph() { fitGraphToView(80); }
 function resetLayout() {
   cy?.layout({
     name: 'cose', animate: true, animationDuration: 600,
     nodeRepulsion: () => 8000, idealEdgeLength: () => 120,
-    gravity: 1.2, numIter: 800, fit: true, padding: 40,
+    gravity: 1.2, numIter: 800, fit: false,
   }).run();
+  cy?.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
 }
 
 // ── Watchers ────────────────────────────────────────────────────────────────
@@ -240,11 +262,17 @@ onMounted(async () => {
     cnpjDetailStore.fetchNetwork(cnpj.value);
   } else {
     await nextTick();
+    observeGraphContainer();
     buildGraph(networkData.value);
   }
 });
 
-onBeforeUnmount(() => { cy?.destroy(); cy = null; });
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  cy?.destroy();
+  cy = null;
+});
 
 // ── Label do tipo de nó ─────────────────────────────────────────────────────
 const typeLabels = {

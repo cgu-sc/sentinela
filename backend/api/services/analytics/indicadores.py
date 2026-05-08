@@ -148,6 +148,7 @@ def get_indicadores_analise(
     perc_min: float | None = None,
     perc_max: float | None = None,
     val_min: float | None = None,
+    regiao_id: int | None = None,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
@@ -193,7 +194,7 @@ def get_indicadores_analise(
         df_geo = df_mov.group_by("cnpj").agg([
             pl.col("uf").last().alias("uf"),
             pl.col("no_municipio").last().alias("no_municipio"),
-            pl.col("no_regiao_saude").last().alias("no_regiao_saude"),
+            pl.col("id_regiao_saude").last().alias("id_regiao_saude"),
             pl.col("razao_social").last().alias("razao_social"),
             pl.col("is_grande_rede").last().alias("is_grande_rede"),
             pl.col("situacao_rf").last().alias("situacao_rf"),
@@ -213,8 +214,17 @@ def get_indicadores_analise(
         mask = pl.lit(True)
         if uf and uf != 'Todos':
             mask = mask & (pl.col("uf") == uf)
-        if regiao_saude and regiao_saude != 'Todos':
-            mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+        if regiao_id:
+            mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        elif regiao_saude and regiao_saude != 'Todos':
+            # Se recebeu nome, precisa converter pra ID via join ou manter mask se id_regiao_saude estivesse no df_geo
+            # Mas como o front agora manda ID, o fallback por nome será raro.
+            # Para manter compatibilidade, vamos buscar o ID da região pelo nome nas localidades
+            df_loc = get_localidades_df()
+            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
+            if not reg_row.is_empty():
+                target_id = str(reg_row.item(0, 0))
+                mask = mask & (pl.col("id_regiao_saude") == target_id)
         if municipio and municipio != 'Todos':
             mask = mask & (pl.col("no_municipio") == municipio)
         if situacao_rf and situacao_rf != 'Todos':
@@ -365,17 +375,29 @@ def get_indicadores_analise(
         # Identifica a Região de Saúde de referência (mesmo se filtro for municipal)
         ref_regiao = regiao_saude
         if (not ref_regiao or ref_regiao == 'Todos') and (municipio and municipio != 'Todos'):
-            # Busca a região de saúde desse município no dataframe original
-            sample = df_joined.select("no_regiao_saude").unique().limit(1)
+            # Busca o ID da região de saúde desse município no dataframe original
+            sample = df_joined.select("id_regiao_saude").unique().limit(1)
             if not sample.is_empty():
-                ref_regiao = sample.item(0, 0)
+                target_reg_id = sample.item(0, 0)
+                # Agora busca o NOME para exibição se necessário
+                df_loc = get_localidades_df()
+                name_row = df_loc.filter(pl.col("id_regiao_saude") == int(target_reg_id)).select("no_regiao_saude").unique()
+                if not name_row.is_empty():
+                    ref_regiao = name_row.item(0, 0)
 
         # Cálculo de Mediana/MAD sobre o CONTEXTO (UF + opcionalmente Região de Saúde)
         context_mask = pl.lit(True)
         if uf and uf != 'Todos':
             context_mask = context_mask & (pl.col("uf") == uf)
-        if ref_regiao and ref_regiao != 'Todos':
-            context_mask = context_mask & (pl.col("no_regiao_saude") == ref_regiao)
+        if regiao_id:
+            context_mask = context_mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        elif ref_regiao and ref_regiao != 'Todos':
+            # Fallback por nome (legado)
+            df_loc = get_localidades_df()
+            reg_row = df_loc.filter(pl.col("no_regiao_saude") == ref_regiao).select("id_regiao_saude").unique()
+            if not reg_row.is_empty():
+                target_id = str(reg_row.item(0, 0))
+                context_mask = context_mask & (pl.col("id_regiao_saude") == target_id)
 
         # Buscamos a mediana e MAD do indicador para o contexto regional completo
         mediana_reg = None
@@ -383,7 +405,7 @@ def get_indicadores_analise(
         # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
         df_context_geo = df_mov.group_by("cnpj").agg([
             pl.col("uf").last().alias("uf"),
-            pl.col("no_regiao_saude").last().alias("no_regiao_saude")
+            pl.col("id_regiao_saude").last().alias("id_regiao_saude")
         ]).filter(context_mask)
         
         df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, c_rr]), on="cnpj", how="inner")

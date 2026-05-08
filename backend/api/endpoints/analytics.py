@@ -49,9 +49,10 @@ def get_analytics_summary(
     unidade_pf: Optional[str] = Query(None),
     razao_social: Optional[str] = Query(None),
     cnpjs: Optional[List[str]] = Query(None),
+    regiao_id: Optional[int] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -74,9 +75,10 @@ def get_resultado_faixas_risco(
     cnpj_raiz: Optional[str] = Query(None),
     unidade_pf: Optional[str] = Query(None),
     razao_social: Optional[str] = Query(None),
+    regiao_id: Optional[int] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(
@@ -226,6 +228,7 @@ def get_indicadores_analise(
     perc_min: Optional[float] = Query(None),
     perc_max: Optional[float] = Query(None),
     val_min: Optional[float] = Query(None),
+    regiao_id: Optional[int] = Query(None)
 ):
     """
     Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
@@ -234,7 +237,7 @@ def get_indicadores_analise(
     return AnalyticsService.get_indicadores_analise(
         indicador, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
-        perc_min, perc_max, val_min
+        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id
     )
 
 

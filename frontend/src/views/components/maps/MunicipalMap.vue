@@ -65,7 +65,10 @@ const norm = (s) =>
     .trim();
 
 // UF ativa: prop ou filterStore
-const activeUf = computed(() => props.propUf ?? filterStore.selectedUF);
+const activeUf = computed(() => {
+  const uf = props.propUf ?? filterStore.selectedUF;
+  return uf === "Todos" ? null : uf;
+});
 
 // ── Estado interno de seleção ─────────────────────────────────────────────────
 const selectedIbge7 = ref(props.propMunicipioIbge7 ?? null);
@@ -86,7 +89,7 @@ const selectedRegiao = computed(() => {
       Number(l.id_ibge7) === Number(selectedIbge7.value) &&
       (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
   );
-  return loc?.no_regiao_saude ?? null;
+  return loc?.id_regiao_saude ? String(loc.id_regiao_saude) : null;
 });
 
 // Região efetiva: prop > clique > filterStore
@@ -103,9 +106,9 @@ const effectiveRegiao = computed(
 const mapKey = ref(0);
 
 watch(
-  () => activeUf.value,
-  (uf) => {
-    if (!uf || uf === "Todos") return;
+  [() => activeUf.value, () => geoStore.municipiosGeoJson],
+  ([uf, geoJson]) => {
+    if (!uf || uf === "Todos" || !geoJson) return;
     const geo = geoStore.getMunicipiosGeoByUF(uf);
     if (geo) {
       registerMap(`municipios-${uf}`, geo);
@@ -129,16 +132,16 @@ onMounted(async () => {
 });
 
 watch(
-  [selectedIbge7, effectiveRegiao],
-  ([ibge7, regiao]) => {
-    if (!regiao) return;
+  [selectedIbge7, effectiveRegiao, () => geoStore.municipiosGeoJson],
+  ([ibge7, regiao, geoJson]) => {
+    if (!regiao || !geoJson) return;
     const geo = geoStore.getMunicipiosGeoByUF(activeUf.value);
     if (!geo) return;
     const ibge7sRegiao = new Set(
       geoStore.localidades
         .filter(
           (l) =>
-            l.no_regiao_saude === regiao &&
+            String(l.id_regiao_saude) === String(regiao) &&
             (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
         )
         .map((l) => Number(l.id_ibge7)),
@@ -181,6 +184,9 @@ const regionSnapshot = ref(
 );
 const mapMunData = computed(() => {
   if (embeddedMode.value) return munDataByIbge7.value;
+  // Se não houver região efetiva (filtro ou drill-down), usa os dados globais da UF.
+  // Isso evita que dados residuais de um drill-down em outra UF bloqueiem a exibição.
+  if (!effectiveRegiao.value) return munDataByIbge7.value;
   return (
     regionSnapshot.value ?? filterStore.regionMapData ?? munDataByIbge7.value
   );
@@ -197,7 +203,7 @@ const mapData = computed(() => {
       geoStore.localidades
         .filter(
           (l) =>
-            l.no_regiao_saude === effectiveRegiao.value &&
+            String(l.id_regiao_saude) === String(effectiveRegiao.value) &&
             (activeUf.value === "Todos" || l.sg_uf === activeUf.value),
         )
         .map((l) => Number(l.id_ibge7)),
@@ -215,7 +221,12 @@ const mapData = computed(() => {
       !!selectedIbge7.value && ibge7 === Number(selectedIbge7.value);
     const dimmed = !!selectedIbge7.value && !isSelected;
     const opacity = dimmed ? 0.8 : 1;
-    const perc = hasData ? (munData.percValSemComp ?? 0) : 0;
+    const perc = hasData
+      ? (munData.percValSemComp ??
+        munData.perc_nao_comprovacao ??
+        munData.pct_critico ??
+        0)
+      : 0;
     const piece = getRiskPiece(perc);
     const baseColor = hasData ? piece.color : chartTheme.value.bg;
     const bColor = hasData
@@ -229,8 +240,12 @@ const mapData = computed(() => {
       ibge7,
       value: hasData ? perc : null,
       municipio: munData?.municipio ?? f.properties.name,
-      valSemComp: munData?.valSemComp ?? 0,
-      cnpjs: munData?.cnpjs ?? 0,
+      valSemComp: munData?.valSemComp ?? munData?.valor_irregular ?? 0,
+      cnpjs:
+        munData?.cnpjs ??
+        munData?.total_cnpjs ??
+        munData?.qtd_farmacias ??
+        0,
       hasData,
       selected: isSelected,
       itemStyle: {

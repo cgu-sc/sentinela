@@ -23,8 +23,10 @@ export function useFilterParameters() {
     const valMin = filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
 
     const uf = filterStore.selectedUF !== FILTER_ALL_VALUE ? filterStore.selectedUF : null;
-    const regiaoSaude = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
-    
+    const rawRegiao = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
+    const regiaoId = (rawRegiao && !isNaN(rawRegiao)) ? Number(rawRegiao) : null;
+    const regiaoSaude = (rawRegiao && isNaN(rawRegiao)) ? rawRegiao : null;
+
     const rawMunicipio = filterStore.selectedMunicipio !== FILTER_ALL_VALUE ? filterStore.selectedMunicipio : null;
     let municipio = parseMunicipio(rawMunicipio);
     if (rawMunicipio && !isNaN(rawMunicipio)) {
@@ -45,7 +47,24 @@ export function useFilterParameters() {
 
     const unidadePf    = filterStore.selectedUnidadePf !== FILTER_ALL_VALUE ? filterStore.selectedUnidadePf : null;
 
-    return { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf };
+    return { 
+      inicio, 
+      fim, 
+      percMin, 
+      percMax, 
+      valMin, 
+      uf, 
+      regiaoId, 
+      regiaoSaude, 
+      municipio, 
+      situacaoRf, 
+      conexaoMs, 
+      porteEmpresa, 
+      grandeRede, 
+      cnpjRaiz, 
+      razaoSocial, 
+      unidadePf 
+    };
   }
 
   function isPeriodoValido() {

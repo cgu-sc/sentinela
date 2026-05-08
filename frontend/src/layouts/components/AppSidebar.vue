@@ -54,7 +54,7 @@ watch(
   () => filterStore.selectedUF,
   (newUF) => {
     const regioesDisponiveis = geoStore.regioesPorUF(newUF);
-    if (!regioesDisponiveis.includes(filterStore.selectedRegiaoSaude)) {
+    if (!regioesDisponiveis.some(r => r.value === filterStore.selectedRegiaoSaude)) {
       filterStore.selectedRegiaoSaude = "Todos";
     }
     const unidadesDisponiveis = geoStore.jurisdicoesPorFiltro(
@@ -477,6 +477,8 @@ onBeforeUnmount(() => {
         <Dropdown
           v-model="filterStore.selectedRegiaoSaude"
           :options="regiaoSaudeOptions"
+          optionLabel="label"
+          optionValue="value"
           placeholder="Região"
           filter
           reset-filter-on-hide

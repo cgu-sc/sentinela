@@ -151,7 +151,7 @@ const loadRegional = () => {
       props.geoData.sg_uf,
       inicio,
       fim,
-      props.geoData.id_regiao_saude ?? null,
+      regionalScope.value === 'regiao' ? (props.geoData.id_regiao_saude ?? null) : null,
     );
 };
 
@@ -409,6 +409,14 @@ watch(riskMetric, () => {
       filterStore.animationPreload.status = 'idle';
     }
     updateRiskCurve();
+});
+
+watch(regionalScope, () => {
+    if (filterStore.animationMode) {
+      clearAnimationState();
+      filterStore.animationPreload.status = 'idle';
+    }
+    loadRegional();
 });
 
 watch(riskScope, () => {

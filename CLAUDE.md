@@ -143,5 +143,7 @@ NUNCA utilize valores fixos nos componentes. Consulte sempre o arquivo correspon
 - **Commits**: Utilize Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`).
 - **Documentação**: Use JSDoc para funções JS críticas, focando no "porquê" de lógicas complexas.
 
-## 7. Nomenclatura SQL — Vocabulário Proibido
+## 7. Nomenclatura e Identificadores — Regras Críticas
 - **NUNCA** use a palavra `surto` em nomes de tabelas, colunas, variáveis ou comentários SQL.
+- **NUNCA** utilize `no_regiao_saude` (o nome da região) para filtragem, agrupamento, parâmetros de funções ou lógica de negócio.
+- **SEMPRE** utilize `id_regiao_saude` (o ID numérico) como identificador primário para todas as operações regionais no frontend e backend.

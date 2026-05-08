@@ -385,7 +385,13 @@ const isInitialLoading = computed(() => {
             >Região de Saúde</span
           ></template
         >
-        <RegionalTab :cnpj="cnpj" :geo-data="geoData" :cnpj-data="cnpjData" class="tab-content" />
+        <RegionalTab
+          :cnpj="cnpj"
+          :geo-data="geoData"
+          :cnpj-data="cnpjData"
+          :is-active="cnpjNav.activeTabIndex === TAB_INDEX.REGIONAL"
+          class="tab-content"
+        />
       </TabPanel>
     </TabView>
   </div>

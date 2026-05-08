@@ -46,32 +46,27 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 3. CONTROLE DE CONTEXTO
   const filtersLocked = ref(false);
-  // Cache dos dados da região para o mapa (Map<ibge7, munData>).
-  // Persiste entre desmontagens do MunicipalityMapChart para que as cores
-  // da região não se percam após navegação com filtro de município ativo.
   const regionMapData = ref(null);
+  
   watch(selectedRegiaoSaude, (val) => {
     if (!val || val === FILTER_ALL_VALUE) regionMapData.value = null;
   });
+
   const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
   const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
-  // Estado de animação do slider de período (play automático na sidebar)
   const isAnimating = ref(false);
   const animationMode = ref(false);
-  // Duração compartilhada entre Sidebar (intervalo de steps) e gráfico (ECharts transition).
-  // 0 = resposta instantânea (filtro manual), >0 = animação fluida (modo play).
   const animationDuration = ref(0);
   const animationBaseSliderRange = ref(null);
   const animationSliderValue = ref(null);
   const animationFrameRange = ref([null, null]);
 
-  // Coordena o pré-carregamento de dados antes da animação iniciar.
-  // status: 'idle' → 'loading' (AppSidebar dispara) → 'ready' (RiskDiagnosisTab conclui)
   const animationPreload = reactive({
-    status: 'idle',   // 'idle' | 'loading' | 'ready'
-    dataInicio: null, // string YYYY-MM-DD do início do range
-    dataFim: null,    // string YYYY-MM-DD do fim do range
+    status: 'idle',
+    dataInicio: null,
+    dataFim: null,
   });
+
   watch(sidebarCollapsed, (val) => {
     localStorage.setItem('sentinela_sidebar_collapsed', String(val));
   });
@@ -83,8 +78,7 @@ export const useFilterStore = defineStore('filters', () => {
   const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
   const statusSelection = ref(saved?.statusSelection ?? FILTER_DEFAULTS.STATUS);
   const rfaSelection = ref(saved?.rfaSelection ?? FILTER_DEFAULTS.RFA);
-  const searchTarget       = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
-
+  const searchTarget = ref(saved?.searchTarget ?? FILTER_DEFAULTS.SEARCH);
 
   // 4. INTELIGÊNCIA DE DADOS (CASCATA REVERSA)
   watch(selectedUF, (newUF) => {
@@ -96,13 +90,7 @@ export const useFilterStore = defineStore('filters', () => {
   });
 
   watch(selectedUnidadePf, (newUnidade) => {
-    if (newUnidade === FILTER_ALL_VALUE) {
-      // Se limpou a jurisdição, não precisa necessariamente limpar o município 
-      // (a menos que o objetivo seja resetar tudo abaixo)
-      return;
-    }
-    
-    // INTELIGÊNCIA REVERSA: Se selecionei uma Jurisdição, a UF deve ser marcada automaticamente
+    if (newUnidade === FILTER_ALL_VALUE) return;
     if (geoStore.localidades.length > 0) {
       const found = geoStore.localidades.find(l => 
         l.unidade_pf === newUnidade &&
@@ -116,13 +104,12 @@ export const useFilterStore = defineStore('filters', () => {
 
   watch(selectedRegiaoSaude, (newRegiao) => {
     if (newRegiao === FILTER_ALL_VALUE) {
-      // Limpar região cascateia para município
       selectedMunicipio.value = FILTER_ALL_VALUE;
       return;
     }
     if (geoStore.localidades.length > 0) {
       const found = geoStore.localidades.find(l =>
-        l.no_regiao_saude === newRegiao &&
+        String(l.id_regiao_saude) === String(newRegiao) &&
         (selectedUF.value === FILTER_ALL_VALUE || l.sg_uf === selectedUF.value)
       );
       if (found && selectedUF.value !== found.sg_uf) {
@@ -139,13 +126,13 @@ export const useFilterStore = defineStore('filters', () => {
       
       if (found) {
         if (selectedUF.value !== found.sg_uf) selectedUF.value = found.sg_uf;
-        if (selectedRegiaoSaude.value !== found.no_regiao_saude) selectedRegiaoSaude.value = found.no_regiao_saude;
+        if (selectedRegiaoSaude.value !== String(found.id_regiao_saude)) {
+          selectedRegiaoSaude.value = String(found.id_regiao_saude);
+        }
       }
     }
   });
 
-  // Persiste automaticamente no localStorage com debounce de 200ms
-  // (evita escrita contínua durante drag de sliders)
   let _saveTimer = null;
   const saveToStorage = () => {
     clearTimeout(_saveTimer);
@@ -183,7 +170,6 @@ export const useFilterStore = defineStore('filters', () => {
     { deep: true }
   );
 
-  // 4. ACTION - RESET GLOBAL
   function resetFilters() {
     selectedUF.value = FILTER_ALL_VALUE;
     selectedRegiaoSaude.value = FILTER_ALL_VALUE;

@@ -54,7 +54,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: int = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -69,7 +69,14 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
         df = get_df()
         mask = pl.col("periodo").is_between(inicio, fim)
         if uf:                                        mask = mask & (pl.col("uf") == uf)
-        if regiao_saude:                              mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+        if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        elif regiao_saude and regiao_saude != 'Todos': 
+            from data_cache import get_localidades_df
+            df_loc = get_localidades_df()
+            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
+            if not reg_row.is_empty():
+                target_id = str(reg_row.item(0, 0))
+                mask = mask & (pl.col("id_regiao_saude") == target_id)
         if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
         if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
@@ -192,10 +199,14 @@ def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim
             return RegionalResponse(nome_regiao=nome_exibicao, id_regiao=id_regiao, municipios=[], farmacias=[])
 
         # ── 1. Resumo por Município ─────────────────────────────────────────
+        # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
+        df_farmacia = get_df_dados_farmacia().select(["cnpj", "id_ibge7"])
+        df_reg = df_reg.join(df_farmacia, on="cnpj", how="left")
+
         # Agrega CNPJs únicos e valores financeiros por município
         mun_agg = (
             df_reg
-            .group_by(["no_municipio", "uf"])
+            .group_by(["no_municipio", "uf", "id_ibge7"])
             .agg([
                 pl.n_unique("cnpj").alias("qtd_farmacias"),
                 pl.sum("total_vendas").alias("totalMov"),
@@ -211,12 +222,17 @@ def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim
             ])
         )
 
-        # Enriquece com população do IBGE (localidades_df)
-        loc_pop = df_loc.select(["no_municipio", "sg_uf", "id_regiao_saude", "nu_populacao", "id_ibge7"]).unique(subset=["no_municipio", "sg_uf"])
+        # Enriquece com população do IBGE (localidades_df) para densidade
+        # Usamos id_ibge7 como chave primária de join
+        loc_pop = df_loc.select([
+            pl.col("id_ibge7"),
+            pl.col("nu_populacao"),
+            pl.col("id_regiao_saude"),
+        ]).unique(subset=["id_ibge7"])
+
         mun_enriched = mun_agg.join(
             loc_pop,
-            left_on=["no_municipio", "uf"],
-            right_on=["no_municipio", "sg_uf"],
+            on="id_ibge7",
             how="left"
         ).with_columns([
             pl.col("nu_populacao").fill_null(0).alias("populacao"),

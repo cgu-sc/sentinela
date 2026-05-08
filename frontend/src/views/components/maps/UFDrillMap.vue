@@ -33,11 +33,16 @@ const mapBorderColor = computed(() =>
 
 // ── GeoJSON do Brasil ────────────────────────────────────────────────────────
 const mapReady = ref(false);
+const mapKey = ref(0);
 
 onMounted(async () => {
-  const geo = await fetch("/geo/brasil-uf.json").then((r) => r.json());
-  registerMap("brasil-uf", geo);
+  if (!window.__brasilUfRegistered) {
+    const geo = await fetch("/geo/brasil-uf.json").then((r) => r.json());
+    registerMap("brasil-uf", geo);
+    window.__brasilUfRegistered = true;
+  }
   mapReady.value = true;
+  mapKey.value++;
 });
 
 // ── Escala ativa conforme tema ────────────────────────────────────────────────
@@ -212,6 +217,7 @@ const onClick = (params) => {
       <VChart
         v-if="mapReady"
         ref="chartRef"
+        :key="`ud-${mapKey}`"
         class="echart"
         :option="chartOption"
         autoresize

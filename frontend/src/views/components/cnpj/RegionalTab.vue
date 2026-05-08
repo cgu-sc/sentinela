@@ -13,7 +13,8 @@ import MunicipalMap from '../maps/MunicipalMap.vue';
 const props = defineProps({
   cnpj: { type: String, required: true },
   geoData: { type: Object, default: null },
-  cnpjData: { type: Object, default: null }
+  cnpjData: { type: Object, default: null },
+  isActive: { type: Boolean, default: false }
 });
 
 const cnpjNav = useCnpjNavStore();
@@ -169,8 +170,9 @@ watch(
         </div>
         <div class="map-wrapper-col">
           <MunicipalMap
+            v-if="isActive"
             :prop-uf="geoData.sg_uf"
-            :prop-regiao="geoData.no_regiao_saude"
+            :prop-regiao="geoData.id_regiao_saude"
             :prop-municipio-ibge7="filterMunicipioId ?? currentIbge7"
             :prop-municipios-data="cachedRegionalData.municipios"
             @select-municipio="(ibge7) => toggleMunicipioFilter(ibge7)"

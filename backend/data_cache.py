@@ -262,7 +262,7 @@ def _sync_movimentacao(engine, progress_callback):
     
     # Query otimizada: busca geografia via JOIN para economizar espaço no SQL
     sql = """
-        SELECT M.cnpj, P.uf, IB.no_regiao_saude, IB.id_regiao_saude, P.municipio AS no_municipio, M.periodo,
+        SELECT M.cnpj, P.uf, IB.id_regiao_saude, P.municipio AS no_municipio, M.periodo,
                CAST(M.total_vendas AS FLOAT) AS total_vendas,
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
                M.total_qnt_vendas,
@@ -298,7 +298,6 @@ def _sync_movimentacao(engine, progress_callback):
     _df_movimentacao = pl.concat(chunk_list).with_columns([
         pl.col("periodo").cast(pl.Date),
         pl.col("uf").cast(pl.Categorical),
-        pl.col("no_regiao_saude").cast(pl.Categorical),
         pl.col("id_regiao_saude").cast(pl.String),
         pl.col("no_municipio").cast(pl.Categorical),
         pl.col("razao_social").cast(pl.Categorical),  # Mudado para Categorical para compressão

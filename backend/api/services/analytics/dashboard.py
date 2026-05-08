@@ -54,7 +54,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: List[str] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: List[str] = None, regiao_id: int = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -107,7 +107,14 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         # 2. Pipeline Polars - Filtros de Período e Geografia (Pré-agregação por CNPJ)
         mask = pl.col("periodo").is_between(inicio, fim)
         if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
-        if regiao_saude and regiao_saude != 'Todos':  mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
+        if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        elif regiao_saude and regiao_saude != 'Todos': 
+            from data_cache import get_localidades_df
+            df_loc = get_localidades_df()
+            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
+            if not reg_row.is_empty():
+                target_id = str(reg_row.item(0, 0))
+                mask = mask & (pl.col("id_regiao_saude") == target_id)
         if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
         if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
@@ -176,11 +183,15 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             for r in uf_df.iter_rows(named=True)
         ]
 
-        # 6. Detalhamento por Município (Sempre calculado)
+        # 6. Agregação por Município
+        # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
+        df_farmacia = get_df_dados_farmacia().select(["cnpj", "id_ibge7"])
+        period_df = period_df.join(df_farmacia, on="cnpj", how="left")
+
         muni_df = (
             period_df
             .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
-            .group_by(["uf", "no_municipio"])
+            .group_by(["uf", "no_municipio", "id_ibge7"])
             .agg([
                 pl.n_unique("cnpj").alias("cnpjs"),
                 pl.sum("total_vendas").alias("totalMov"),
@@ -194,22 +205,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             ])
             .sort("percValSemComp", descending=True, nulls_last=True)
         )
-        # Enrich muni_df with id_ibge7 from localidades
-        try:
-            loc_muni = (
-                get_localidades_df()
-                .select(["no_municipio", "sg_uf", "id_ibge7"])
-                .group_by(["no_municipio", "sg_uf"])
-                .agg(pl.col("id_ibge7").first())
-            )
-            muni_df = muni_df.join(
-                loc_muni,
-                left_on=["no_municipio", "uf"],
-                right_on=["no_municipio", "sg_uf"],
-                how="left"
-            )
-        except Exception:
-            muni_df = muni_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
+
         resultado_municipios = [
             ResultadoSentinelaMunicipioSchema(municipio=r["no_municipio"], **r)
             for r in muni_df.iter_rows(named=True)

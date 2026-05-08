@@ -108,15 +108,29 @@ export const useGeoStore = defineStore('geo', () => {
     const filtradas = uf === 'Todos'
       ? localidades.value
       : localidades.value.filter(l => l.sg_uf === uf);
-    const set = new Set(filtradas.map(l => l.no_regiao_saude));
-    return ['Todos', ...Array.from(set).sort()];
+    
+    // Agrupa por ID para garantir unicidade e pegar o nome canônico
+    const map = new Map();
+    filtradas.forEach(l => {
+      if (l.id_regiao_saude) {
+        map.set(String(l.id_regiao_saude), l.no_regiao_saude);
+      }
+    });
+
+    const list = Array.from(map.entries()).map(([id, nome]) => ({
+      label: nome,
+      value: id
+    }));
+
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: 'Todos', value: 'Todos' }, ...list];
   }
 
   // Unidades da PF filtradas por UF, Região de Saúde e/ou Município
   function jurisdicoesPorFiltro(uf, regiao, municipioValue) {
     let filtradas = localidades.value;
     if (uf && uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
-    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => String(l.id_regiao_saude) === String(regiao));
     
     if (municipioValue && municipioValue !== 'Todos') {
       filtradas = filtradas.filter(l => String(l.id_ibge7) === String(municipioValue));
@@ -132,7 +146,7 @@ export const useGeoStore = defineStore('geo', () => {
     if (!regiao) return null;
     const municipios = new Set(
       localidades.value
-        .filter((l) => l.no_regiao_saude === regiao)
+        .filter((l) => String(l.id_regiao_saude) === String(regiao))
         .map((l) => l.no_municipio)
     );
     return municipios.size || null;
@@ -141,7 +155,7 @@ export const useGeoStore = defineStore('geo', () => {
   function municipiosPorFiltro(uf, regiao, unidade) {
     let filtradas = localidades.value;
     if (uf && uf !== 'Todos') filtradas = filtradas.filter(l => l.sg_uf === uf);
-    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => l.no_regiao_saude === regiao);
+    if (regiao && regiao !== 'Todos') filtradas = filtradas.filter(l => String(l.id_regiao_saude) === String(regiao));
     if (unidade && unidade !== 'Todos') filtradas = filtradas.filter(l => l.unidade_pf === unidade);
     
     // Gera lista de objetos únicos { label, value }
@@ -175,7 +189,7 @@ export const useGeoStore = defineStore('geo', () => {
   function getRegiaoByIbge7(ibge7) {
     if (!ibge7 || ibge7 === 'Todos') return 'Todos';
     const found = localidadesByIbge7.value.get(Number(ibge7));
-    return found ? found.no_regiao_saude : 'Todos';
+    return found ? String(found.id_regiao_saude) : 'Todos';
   }
 
   return {

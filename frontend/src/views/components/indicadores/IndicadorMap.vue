@@ -106,9 +106,9 @@ onBeforeUnmount(() => {
 // ── GeoJSON municipal (para modo UF) ─────────────────────────────────────────
 const mapKey = ref(0);
 watch(
-  () => props.activeUf,
-  (uf) => {
-    if (!uf || uf === 'Todos') {
+  [() => props.activeUf, () => geoStore.municipiosGeoJson],
+  ([uf, geoJson]) => {
+    if (!uf || uf === "Todos" || !geoJson) {
       mapKey.value++;
       return;
     }
@@ -123,16 +123,16 @@ watch(
 
 // ── Registro de sub-mapa para drill-down de Região ────────────────────────
 watch(
-  () => props.selectedRegiao,
-  (regiao) => {
-    if (!regiao || regiao === 'Todos' || isNational.value) return;
+  [() => props.selectedRegiao, () => geoStore.municipiosGeoJson],
+  ([regiao, geoJson]) => {
+    if (!regiao || regiao === "Todos" || !geoJson || isNational.value) return;
     const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
     if (!geo) return;
     const ibge7sRegiao = new Set(
       geoStore.localidades
         .filter(
           (l) =>
-            l.no_regiao_saude === regiao &&
+            String(l.id_regiao_saude) === String(regiao) &&
             (props.activeUf === 'Todos' || l.sg_uf === props.activeUf)
         )
         .map((l) => Number(l.id_ibge7))
@@ -215,7 +215,7 @@ const echartsMapData = computed(() => {
   if (selReg) {
     const ibge7sRegiao = new Set(
       geoStore.localidades
-        .filter(l => l.no_regiao_saude === selReg)
+        .filter(l => String(l.id_regiao_saude) === String(selReg))
         .map(l => Number(l.id_ibge7))
     );
     features = features.filter((f) => ibge7sRegiao.has(Number(f.properties.id)));

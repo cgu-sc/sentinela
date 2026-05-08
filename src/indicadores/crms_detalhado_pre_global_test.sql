@@ -27,21 +27,54 @@ DECLARE @DataFim    DATE = '2024-12-31';
 DECLARE @t0         DATETIME = GETDATE();
 DECLARE @t1         DATETIME;
 DECLARE @pipeline_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
-DECLARE @pipeline_versao VARCHAR(40) = 'v1_pre_global_2026_05_07';
+DECLARE @pipeline_versao VARCHAR(40) = 'v2_2026_05_07';
 DECLARE @nu_registros_teste_mov_sc BIGINT;
 
-IF OBJECT_ID('temp_CGUSC.fp.teste_mov_SC') IS NULL
+IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
-    RAISERROR('Tabela fonte temp_CGUSC.fp.teste_mov_SC nao encontrada.', 16, 1);
+    RAISERROR('Tabela fonte db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024') IS NULL
+BEGIN
+    RAISERROR('Tabela fonte db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao possui coluna uf.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
     RETURN;
 END;
 
 SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-FROM temp_CGUSC.sys.partitions P
-WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.teste_mov_SC')
-  AND P.index_id IN (0, 1);
+FROM (
+    SELECT object_id, rows
+    FROM db_FarmaciaPopular.sys.partitions
+    WHERE object_id = OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP')
+      AND index_id IN (0, 1)
+    UNION ALL
+    SELECT object_id, rows
+    FROM db_FarmaciaPopular.sys.partitions
+    WHERE object_id = OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024')
+      AND index_id IN (0, 1)
+) P;
 
 PRINT '>> [PRE-GLOBAL CRM] Iniciando pre-processamento global...';
+PRINT '   Fonte: BRASIL';
 PRINT '   Periodo: ' + CAST(@DataInicio AS VARCHAR(10)) + ' -> ' + CAST(@DataFim AS VARCHAR(10));
 
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_pre_global_metadata;
@@ -77,6 +110,62 @@ EXEC sp_executesql
 
 BEGIN TRY
 
+IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.crm_pipeline_uf_controle (
+        uf_farmacia          CHAR(2)       NOT NULL,
+        pipeline_versao      VARCHAR(40)   NOT NULL,
+        dt_data_inicio       DATE          NOT NULL,
+        dt_data_fim          DATE          NOT NULL,
+        status               VARCHAR(20)   NOT NULL,
+        etapa                VARCHAR(80)   NULL,
+        dt_inicio            DATETIME      NULL,
+        dt_fim               DATETIME      NULL,
+        dt_atualizacao       DATETIME      NULL,
+        nu_registros_fonte   BIGINT        NULL,
+        nu_cnpjs_fonte       INT           NULL,
+        mensagem_erro        NVARCHAR(4000) NULL,
+        dt_erro              DATETIME      NULL,
+        CONSTRAINT PK_CrmPipelineUfControle PRIMARY KEY CLUSTERED (uf_farmacia)
+    );
+END;
+
+UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+SET pipeline_versao = @pipeline_versao,
+    dt_data_inicio = @DataInicio,
+    dt_data_fim = @DataFim,
+    status = 'PENDENTE',
+    etapa = 'AGUARDANDO_MATERIALIZACAO',
+    dt_inicio = NULL,
+    dt_fim = NULL,
+    dt_atualizacao = GETDATE(),
+    nu_registros_fonte = NULL,
+    nu_cnpjs_fonte = NULL,
+    mensagem_erro = NULL,
+    dt_erro = NULL
+WHERE pipeline_versao <> @pipeline_versao
+   OR dt_data_inicio <> @DataInicio
+   OR dt_data_fim <> @DataFim;
+
+INSERT INTO temp_CGUSC.fp.crm_pipeline_uf_controle
+    (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, status, etapa, dt_atualizacao)
+SELECT DISTINCT
+    CAST(F.uf AS CHAR(2)),
+    @pipeline_versao,
+    @DataInicio,
+    @DataFim,
+    'PENDENTE',
+    'AGUARDANDO_MATERIALIZACAO',
+    GETDATE()
+FROM temp_CGUSC.fp.dados_farmacia F
+WHERE F.uf IS NOT NULL
+  AND LEN(LTRIM(RTRIM(F.uf))) = 2
+  AND NOT EXISTS (
+      SELECT 1
+      FROM temp_CGUSC.fp.crm_pipeline_uf_controle C
+      WHERE C.uf_farmacia = CAST(F.uf AS CHAR(2))
+  );
+
 -- ============================================================================
 -- PASSO 1: MAPA DE MEDICOS PARA ID INT
 -- ============================================================================
@@ -87,7 +176,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.dados_medico;
 
 SELECT
     CAST(ROW_NUMBER() OVER (ORDER BY TRY_CAST(NU_CRM AS INT), SG_UF) AS INT) AS id,
-    CAST(CAST(TRY_CAST(NU_CRM AS BIGINT) AS VARCHAR(10)) + '/' + SG_UF AS VARCHAR(20)) AS id_medico,
+    CAST(CAST(TRY_CAST(NU_CRM AS BIGINT) AS VARCHAR(10)) + '/' + SG_UF AS VARCHAR(13)) AS id_medico,
     TRY_CAST(NU_CRM AS BIGINT)                           AS nu_crm,
     SG_UF                                                AS sg_uf,
     NM_MEDICO                                            AS no_medico,
@@ -122,10 +211,16 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos;
 ;WITH base_crm_cnpj AS (
     SELECT
         CAST(M.cnpj AS CHAR(14)) AS nu_cnpj,
-        CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(20)) AS id_medico,
+        CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(13)) AS id_medico,
         YEAR(M.data_hora) * 100 + MONTH(M.data_hora) AS competencia,
         COUNT(DISTINCT M.num_autorizacao) AS nu_prescricoes_medico
-    FROM temp_CGUSC.fp.teste_mov_SC M
+    FROM (
+        SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+        FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+        UNION ALL
+        SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+        FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+    ) M
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT
         ON PAT.codigo_barra = M.codigo_barra
     WHERE M.crm_uf IS NOT NULL
@@ -143,8 +238,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos;
 SELECT
     id_medico,
     competencia,
-    CAST(SUM(nu_prescricoes_medico) AS INT)          AS nu_prescricoes_medico_em_todos_estabelecimentos,
-    CAST(COUNT(DISTINCT nu_cnpj) AS INT)             AS nu_estabelecimentos_com_registro_mesmo_crm
+    CAST(SUM(nu_prescricoes_medico) AS SMALLINT)     AS nu_prescricoes_medico_em_todos_estabelecimentos,
+    CAST(COUNT(DISTINCT nu_cnpj) AS SMALLINT)        AS nu_estabelecimentos_com_registro_mesmo_crm
 INTO temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos
 FROM base_crm_cnpj
 GROUP BY id_medico, competencia;
@@ -159,7 +254,6 @@ SET status = 'OK',
     dt_atualizacao = GETDATE(),
     observacao = 'Pre-global finalizado com sucesso.'
 WHERE id_pipeline = 1;
-
 
 -- ============================================================================
 -- RESULTADOS
@@ -181,6 +275,19 @@ EXEC sp_executesql
           dt_atualizacao,
           observacao
       FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata;';
+
+SELECT
+    uf_farmacia,
+    pipeline_versao,
+    dt_data_inicio,
+    dt_data_fim,
+    status,
+    etapa,
+    nu_registros_fonte,
+    nu_cnpjs_fonte,
+    dt_atualizacao
+FROM temp_CGUSC.fp.crm_pipeline_uf_controle
+ORDER BY uf_farmacia;
 
 SELECT
     COUNT(*) AS qtd_medicos_cfm

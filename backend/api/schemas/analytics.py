@@ -57,6 +57,8 @@ class ResultadoSentinelaCnpjSchema(BaseModel):
     totalMov: float = 0.0
     valSemComp: float = 0.0
     percValSemComp: Optional[float] = 0.0
+    totalQtde: Optional[int] = 0
+    qtdeSemComp: Optional[int] = 0
     percQtdeSemComp: Optional[float] = 0.0
     is_grande_rede: Optional[bool] = False
     qtd_estabelecimentos_rede: Optional[int] = 0

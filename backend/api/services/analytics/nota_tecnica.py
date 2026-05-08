@@ -343,6 +343,54 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
     _run(p_esocial, '.', color='0F172A', size=10)
 
 
+def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p_title, f'Quadro 02 – Dispensações de medicamentos, informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação de Notas Fiscais de aquisições.', color='0F172A', size=10, bold=True)
+    
+    table = doc.add_table(rows=4, cols=3)
+    table.style = 'Table Grid'
+    
+    hdr_cells = table.rows[0].cells
+    _run(hdr_cells[0].paragraphs[0], 'Situação', bold=True)
+    _run(hdr_cells[1].paragraphs[0], 'Valor em R$', bold=True)
+    _run(hdr_cells[2].paragraphs[0], 'Quantidades de Medicamentos', bold=True)
+    
+    for cell in hdr_cells:
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _cell_bg(cell, 'E2E8F0')
+
+    r1 = table.rows[1].cells
+    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia *')
+    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
+    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'))
+    
+    r2 = table.rows[2].cells
+    _run(r2[0].paragraphs[0], 'Valor sem comprovação distribuído (R$) *')
+    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
+    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'))
+
+    r3 = table.rows[3].cells
+    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação *')
+    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','))
+    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','))
+    
+    for row in table.rows[1:]:
+        row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        row.cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(p_foot, f'* Correspondente ao período {periodo_txt}.\n', color='64748B', size=8)
+    _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=8)
+
+
 # ── Geração do documento ─────────────────────────────────────────────────────
 
 def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: date = None):
@@ -672,7 +720,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     doc.add_heading('5. ANÁLISE', level=1)
     doc.add_paragraph(f'A presente Nota Técnica traz informações cadastrais e o resultado das análises dos alertas extraídos do Sistema Sentinela para a Farmácia {razao_social}, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
 
-    # ── Seção 5.1 (Rodapé notas 8 e 9) ─────────────────────────────────
+    # ── Seção 5.1 e 5.2 (Rodapé notas 8, 9, 10, 11) ────────────────────────
     sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_51.footer.is_linked_to_previous = False
     f_51 = sec_51.footer.paragraphs[0]
@@ -683,7 +731,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     _run(f_51, 'xx.xx.xxxx', color='EF4444', size=8, bold=True)
     _run(f_51, '.\n', color='64748B', size=8)
     _run(f_51, '(9) Art. 5º da Lei nº 13.021, de 08.08.2014.\n', color='64748B', size=8)
-    _run(f_51, '(10) eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas do governo federal.', color='64748B', size=8)
+    _run(f_51, '(10) eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas do governo federal.\n', color='64748B', size=8)
+    _run(f_51, '(11) Disponível em: https://farmaciapopular-gestao.saude.gov.br/farmaciapopular-gestao/pages/login.jsf. Consulta realizada em xx.xx.xxxx.\n', color='64748B', size=8)
+    _run(f_51, '(12) Destaca-se que o bloqueio de uma Farmácia para operar no PFPB pode ocorrer baseado, por exemplo, nos seguintes motivos: monitoramento, documentação pendente, não renovação do Registro e Termo de Autorização e descredenciamento por irregularidade.\n', color='64748B', size=8)
+    _run(f_51, '(13) Documentos registrados no Processo NUP 25000.153459/2014-40, conforme disposto no “Módulo Gestão 4.9.2” do Portal de Gestão do Farmácia Popular.\n', color='64748B', size=8)
+    _run(f_51, '(14) Ofício XXXX (SEI YYYYYYY) citado no “Módulo Gestão 4.9.2” do Portal de Gestão do Farmácia Popular.', color='64748B', size=8)
     sec_51.top_margin = Inches(0.5); sec_51.bottom_margin = Inches(0.5)
     sec_51.left_margin = Inches(0.7); sec_51.right_margin = Inches(0.7)
 
@@ -740,15 +792,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
 
-    # ── 9. Seção 5.2+ (Rodapé nota 11) ──────────────
-    sec_52 = doc.add_section(WD_SECTION.CONTINUOUS)
-    sec_52.footer.is_linked_to_previous = False
-    f_52 = sec_52.footer.paragraphs[0]
-    f_52.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_52, '(11) Disponível em: https://farmaciapopular-gestao.saude.gov.br/farmaciapopular-gestao/pages/login.jsf. Consulta realizada em xx.xx.xxxx.', color='64748B', size=8)
-    sec_52.top_margin = Inches(0.5); sec_52.bottom_margin = Inches(0.5)
-    sec_52.left_margin = Inches(0.7); sec_52.right_margin = Inches(0.7)
-
     doc.add_heading('5.2 Informações obtidas no Portal de Gestão do Farmácia Popular', level=2)
     
     # Texto condicional e instrutivo para o auditor
@@ -763,10 +806,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     run_sup11.font.size = Pt(7)
     _run(p_gestao_corpo, f'), que a Farmácia {razao_social} foi colocada na situação de ', color='0F172A', size=10)
     _run(p_gestao_corpo, '“inativa”', color='EF4444', size=10, bold=True)
+    run_sup12 = p_gestao_corpo.add_run('12')
+    run_sup12.font.superscript = True
+    run_sup12.font.size = Pt(7)
     _run(p_gestao_corpo, ', em ', color='0F172A', size=10)
     _run(p_gestao_corpo, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
     _run(p_gestao_corpo, ', por ações de controle e monitoramento especificadas na ', color='0F172A', size=10)
     _run(p_gestao_corpo, 'Nota Técnica nº 786/2024 – CGPFP/DAF/SECTICS/MS e no Ofício nº 3435/2024/CGPFP/DAF/SECTICS/MS', color='EF4444', size=10, bold=True)
+    run_sup13 = p_gestao_corpo.add_run('13')
+    run_sup13.font.superscript = True
+    run_sup13.font.size = Pt(7)
     _run(p_gestao_corpo, ', encaminhado à empresa pela Coordenação Geral do Programa Farmácia Popular do Brasil, do Ministério da Saúde. ', color='0F172A', size=10)
     _run(p_gestao_corpo, '(ATENÇÃO: cabe ao auditor checar se não existem documentos mais recentes). ', color='F97316', size=9, bold=True, italic=True)
     _run(p_gestao_corpo, 'Em que pese não ter sido identificados os respectivos documentos anexados informando as causas, bem como as respostas, tal situação reforça a hipótese de funcionamento inadequado ou existência de irregularidades cometidos pelo estabelecimento.', color='0F172A', size=10)
@@ -775,10 +824,32 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     p_reitera = doc.add_paragraph()
     _run(p_reitera, f'A Farmácia {razao_social} também foi notificada (reiteração) pela Coordenação Geral do Programa Farmácia Popular do Brasil, em ', color='0F172A', size=10)
     _run(p_reitera, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
-    _run(p_reitera, ', em decorrência deste monitoramento, mas a resposta e o ofício de solicitação de informações não foram anexados ao sistema, até a última consulta. ', color='0F172A', size=10)
+    _run(p_reitera, ', em decorrência deste monitoramento, mas a resposta e o ofício de solicitação de informações', color='0F172A', size=10)
+    run_sup14 = p_reitera.add_run('14')
+    run_sup14.font.superscript = True
+    run_sup14.font.size = Pt(7)
+    _run(p_reitera, ' não foram anexados ao sistema, até a última consulta. ', color='0F172A', size=10)
     _run(p_reitera, '(ATENÇÃO: Somente para casos de reiteração, cabendo ao auditor tal checagem).', color='F97316', size=9, bold=True, italic=True)
+
+    # ── 10. Seção 5.3+ (Zera os rodapés para o restante do documento) ────────
+    sec_53 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_53.footer.is_linked_to_previous = False
+    for p in sec_53.footer.paragraphs:
+        p.text = ''  # Limpa o rodapé para não herdar as notas 8-11
+    sec_53.top_margin = Inches(0.5); sec_53.bottom_margin = Inches(0.5)
+    sec_53.left_margin = Inches(0.7); sec_53.right_margin = Inches(0.7)
+
     doc.add_heading('5.3 Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', level=2)
-    doc.add_paragraph('Cruzamento de notas fiscais de entrada com cupons fiscais de saída...')
+    p_53 = doc.add_paragraph()
+    _run(p_53, f'Em relação à Farmácia {razao_social} (CNPJ {cnpj_fmt}), verificou-se, conforme quadro a seguir, diferença relevante entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
+    
+    if data_inicio and data_fim:
+        _run(p_53, f'no período de {periodo_txt}:', color='0F172A', size=10)
+    else:
+        _run(p_53, f'no período avaliado ({periodo_txt}):', color='0F172A', size=10)
+        
+    _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt)
+    
     doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
     doc.add_paragraph('Monitoramento de picos de faturamento incompatíveis com a média histórica ou regional...')
 

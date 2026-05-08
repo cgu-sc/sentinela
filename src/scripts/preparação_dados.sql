@@ -250,7 +250,7 @@ SELECT DISTINCT
     CAST(soc.percentualQualificacao / 100.0 AS DECIMAL(5,2)) AS percentual_qualificacao,
     CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
     NULLIF(CAST(soc.CpfRepresentante AS CHAR(11)), '00000000000')                  AS cpf_representante,
-    CAST(soc.IdQualificacaoRepresentante AS CHAR(2))                               AS id_qualificacao_representante,
+    NULLIF(TRY_CAST(soc.IdQualificacaoRepresentante AS TINYINT), 0)                AS id_qualificacao_representante,
     temp_CGUSC.dbo.InitCapEachWord(LEFT(cobi_rep.nome, 100))                       AS nome_representante,
     CAST(temp_CGUSC.dbo.InitCapEachWord(qua_rep.DescricaoQualificacao) AS VARCHAR(60)) AS descricao_qualificacao_representante,
     CAST(cobi.dataNascimento AS DATE)                                              AS data_nascimento_socio,

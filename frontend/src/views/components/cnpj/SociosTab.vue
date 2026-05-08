@@ -7,8 +7,8 @@ import ProgressSpinner from "primevue/progressspinner";
 import TabPlaceholder from "./TabPlaceholder.vue";
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { sociosData, sociosLoading, sociosError } = storeToRefs(cnpjDetailStore);
-const { formatarData, formatPercent, formatTitleCase } = useFormatting();
+const { sociosData, sociosLoading, sociosError, dadosCadastro } = storeToRefs(cnpjDetailStore);
+const { formatarData, formatPercent, formatTitleCase, formatCurrencyFull } = useFormatting();
 
 const socios = computed(() => sociosData.value?.socios || []);
 const dataProcessamento = computed(() => sociosData.value?.data_processamento || null);
@@ -94,21 +94,31 @@ const copyAndSignal = (text, key) => {
             <h2 class="title">QUADRO SOCIETÁRIO</h2>
             <p class="subtitle">
               Composição de sócios e administradores registrada na Receita Federal.
-              <span 
-                v-if="dataProcessamento" 
-                class="data-ref" 
-                v-tooltip.top="'Data da última sincronização dos dados societários com a base oficial da Receita Federal.'"
-              >
-                Ref: {{ formatarData(dataProcessamento) }}
-                <i class="pi pi-info-circle" style="font-size: 0.65rem; margin-left: 0.2rem; opacity: 0.7" />
-              </span>
             </p>
           </div>
         </div>
-        <div class="header-badge">
-          {{ socios.filter(isAtivo).length }} Sócios Ativos
+        
+        <div class="header-right">
+          <div class="header-item">
+            <span class="label">Capital Social</span>
+            <span class="value">{{ formatCurrencyFull(dadosCadastro?.capital_social || 0) }}</span>
+          </div>
+          <div class="header-divider"></div>
+          <div class="header-item">
+            <span class="label">Sócios Ativos</span>
+            <span class="value value-muted">{{ socios.filter(isAtivo).length }}</span>
+          </div>
+          <div class="header-divider"></div>
+          <div class="header-item" v-tooltip.top="'Data da última sincronização com a base oficial da Receita Federal.'">
+            <span class="label">Atualização <i class="pi pi-info-circle" style="font-size: 0.55rem; opacity: 0.5" /></span>
+            <span class="value value-muted">{{ formatarData(dataProcessamento) }}</span>
+          </div>
         </div>
       </div>
+      
+
+      
+
 
       <div class="table-wrapper">
         <table class="premium-table">
@@ -540,5 +550,44 @@ const copyAndSignal = (text, key) => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.header-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.header-item .label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.header-item .value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.header-item .value.value-muted {
+  color: var(--text-color);
+  opacity: 0.75;
+}
+
+.header-divider {
+  width: 1px;
+  height: 1.8rem;
+  background: var(--tabs-border);
+  opacity: 0.5;
 }
 </style>

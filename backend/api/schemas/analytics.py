@@ -381,7 +381,7 @@ class SocioSchema(BaseModel):
     percentual_qualificacao: Optional[float] = 0.0
     # Representante Legal
     cpf_representante: Optional[str] = None
-    id_qualificacao_representante: Optional[str] = None
+    id_qualificacao_representante: Optional[int] = None
     nome_representante: Optional[str] = None
     descricao_qualificacao_representante: Optional[str] = None
     # Datas de Nascimento (Novidade)

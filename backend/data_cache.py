@@ -222,7 +222,7 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("municipio").cast(pl.Categorical),
         pl.col("uf").cast(pl.Categorical),
         pl.col("cpf_representante").cast(pl.String),
-        pl.col("id_qualificacao_representante").cast(pl.String),
+        pl.col("id_qualificacao_representante").cast(pl.Int8, strict=False),
         pl.col("nome_representante").cast(pl.String),
         pl.col("descricao_qualificacao_representante").cast(pl.Categorical),
         pl.col("data_nascimento_socio").cast(pl.Date),

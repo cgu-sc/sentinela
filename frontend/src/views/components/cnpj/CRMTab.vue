@@ -10,7 +10,9 @@ import CRMKpiGrid from './CRMKpiGrid.vue';
 import CRMCronologia from './CRMCronologia.vue';
 import CRMPrescritoresTable from './CRMPrescritoresTable.vue';
 import { useFilterStore } from "@/stores/filters";
-import { formatarData } from "@/composables/useFormatting";
+import { useFormatting } from "@/composables/useFormatting";
+
+const { formatarData } = useFormatting();
 
 const props = defineProps({
   cnpj: { type: String, required: true },

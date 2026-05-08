@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { useFilterStore } from '@/stores/filters';
 import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
@@ -21,6 +22,7 @@ const props = defineProps({
 
 const filterStore = useFilterStore();
 const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
+const showRefreshingKPIs = useDelayedLoading(falecidosLoading);
 
 // Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
 const cachedFalecidosData = useFrozenData(falecidosData, falecidosLoading);

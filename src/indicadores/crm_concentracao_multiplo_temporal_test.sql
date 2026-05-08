@@ -29,6 +29,8 @@
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_multiplo_metadata;
 GO
 
+SET NOCOUNT ON;
+
 DECLARE @DataInicio  DATE     = '2015-07-01';
 DECLARE @DataFim     DATE     = '2024-12-31';
 DECLARE @lote_size   INT      = 20;
@@ -47,42 +49,319 @@ DECLARE @pipeline_nome      VARCHAR(80) = 'crm_concentracao_multiplo';
 DECLARE @pipeline_versao    VARCHAR(40) = 'v2_2026_05_07';
 DECLARE @nu_registros_teste_mov_sc BIGINT;
 DECLARE @uf_farmacia CHAR(2);
+DECLARE @uf_farmacia_alvo CHAR(2) = NULL;
+DECLARE @reset_fonte_uf BIT = 0;
+DECLARE @nu_cnpjs_fonte INT;
+DECLARE @nu_ufs_processadas INT = 0;
+DECLARE @nu_alertas_total_geral INT = 0;
+DECLARE @fonte_atual_ok BIT = 0;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual') IS NULL
+IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
-    RAISERROR('Tabela fonte temp_CGUSC.fp.crm_mov_fonte_atual nao encontrada. Rode crm_materializa_movimentacao_uf_test.sql antes.', 16, 1);
+    RAISERROR('Fonte nacional db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual_metadata') IS NULL
+IF OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024') IS NULL
 BEGIN
-    RAISERROR('Metadata temp_CGUSC.fp.crm_mov_fonte_atual_metadata nao encontrada. Rode crm_materializa_movimentacao_uf_test.sql antes.', 16, 1);
+    RAISERROR('Fonte nacional db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 nao encontrada.', 16, 1);
     RETURN;
 END;
 
-SELECT @uf_farmacia = uf_farmacia
-FROM temp_CGUSC.fp.crm_mov_fonte_atual_metadata
-WHERE id_pipeline = 1
-  AND pipeline_versao = @pipeline_versao
-  AND dt_data_inicio = @DataInicio
-  AND dt_data_fim = @DataFim
-  AND status = 'OK';
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.crm_pipeline_uf_controle (
+        uf_farmacia        CHAR(2)       NOT NULL,
+        pipeline_versao    VARCHAR(40)   NOT NULL,
+        dt_data_inicio     DATE          NOT NULL,
+        dt_data_fim        DATE          NOT NULL,
+        status             VARCHAR(20)   NOT NULL,
+        etapa              VARCHAR(80)   NULL,
+        nu_registros_fonte BIGINT        NULL,
+        nu_cnpjs_fonte     INT           NULL,
+        dt_criacao         DATETIME      NOT NULL,
+        dt_atualizacao     DATETIME      NULL,
+        mensagem_erro      NVARCHAR(4000) NULL,
+        dt_erro            DATETIME      NULL,
+        CONSTRAINT PK_CrmPipelineUfControle PRIMARY KEY CLUSTERED (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim)
+    );
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'dt_criacao') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD dt_criacao DATETIME NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'dt_atualizacao') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD dt_atualizacao DATETIME NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'nu_registros_fonte') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD nu_registros_fonte BIGINT NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'nu_cnpjs_fonte') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD nu_cnpjs_fonte INT NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'mensagem_erro') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD mensagem_erro NVARCHAR(4000) NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'dt_erro') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD dt_erro DATETIME NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'status_concentracao_multiplo') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD status_concentracao_multiplo VARCHAR(20) NULL;
+
+IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'dt_concentracao_multiplo') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD dt_concentracao_multiplo DATETIME NULL;
+
+EXEC sp_executesql
+    N'INSERT INTO temp_CGUSC.fp.crm_pipeline_uf_controle
+          (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, status, etapa, dt_criacao, dt_atualizacao)
+      SELECT DISTINCT
+          CAST(F.uf AS CHAR(2)),
+          @versao,
+          @inicio,
+          @fim,
+          ''PENDENTE'',
+          ''AGUARDANDO_CONCENTRACAO_MULTIPLO'',
+          GETDATE(),
+          GETDATE()
+      FROM temp_CGUSC.fp.dados_farmacia F
+      WHERE F.uf IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1
+            FROM temp_CGUSC.fp.crm_pipeline_uf_controle C
+            WHERE C.uf_farmacia = CAST(F.uf AS CHAR(2))
+              AND C.pipeline_versao = @versao
+              AND C.dt_data_inicio = @inicio
+              AND C.dt_data_fim = @fim
+        );',
+    N'@versao VARCHAR(40), @inicio DATE, @fim DATE',
+    @versao = @pipeline_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim;
+
+ProximaUF:
+SET @lote_num = 0;
+SET @nu_processados = 0;
+SET @nu_alertas_lote = 0;
+SET @nu_alertas_total = 0;
+SET @nu_pendentes = NULL;
+SET @nu_ja_processados = NULL;
+SET @nu_total = NULL;
+SET @nu_registros_teste_mov_sc = NULL;
+SET @nu_cnpjs_fonte = NULL;
+SET @uf_farmacia = @uf_farmacia_alvo;
+
+IF @uf_farmacia_alvo IS NULL
+BEGIN
+    EXEC sp_executesql
+        N'SELECT TOP 1 @uf_out = C.uf_farmacia
+          FROM temp_CGUSC.fp.crm_pipeline_uf_controle C
+          WHERE C.pipeline_versao = @versao
+            AND C.dt_data_inicio = @inicio
+            AND C.dt_data_fim = @fim
+            AND ISNULL(C.status_concentracao_multiplo, ''PENDENTE'') <> ''OK''
+          ORDER BY
+            CASE ISNULL(C.status_concentracao_multiplo, C.status)
+                WHEN ''ERRO'' THEN 1
+                WHEN ''PROCESSANDO'' THEN 2
+                WHEN ''INCOMPLETO'' THEN 3
+                WHEN ''PENDENTE'' THEN 4
+                ELSE 5
+            END,
+            C.uf_farmacia;',
+        N'@versao VARCHAR(40), @inicio DATE, @fim DATE, @uf_out CHAR(2) OUTPUT',
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim,
+        @uf_out = @uf_farmacia OUTPUT;
+END
+ELSE IF @nu_ufs_processadas > 0
+BEGIN
+    GOTO ResultadosFinais;
+END;
 
 IF @uf_farmacia IS NULL
 BEGIN
-    RAISERROR('Fonte materializada incompativel: UF ausente, status diferente de OK, periodo divergente ou versao inesperada.', 16, 1);
-    RETURN;
+    GOTO ResultadosFinais;
 END;
+
+IF @reset_fonte_uf = 1
+BEGIN
+    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual_metadata;
+END;
+
+SET @fonte_atual_ok = 0;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual') IS NOT NULL
+   AND OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual_metadata') IS NOT NULL
+   AND COL_LENGTH('temp_CGUSC.fp.crm_mov_fonte_atual', 'id_cnpj') IS NOT NULL
+   AND COL_LENGTH('temp_CGUSC.fp.crm_mov_fonte_atual_metadata', 'uf_farmacia') IS NOT NULL
+BEGIN
+    EXEC sp_executesql
+        N'SELECT @ok = CASE WHEN EXISTS (
+              SELECT 1
+              FROM temp_CGUSC.fp.crm_mov_fonte_atual_metadata
+              WHERE id_pipeline = 1
+                AND pipeline_versao = @versao
+                AND dt_data_inicio = @inicio
+                AND dt_data_fim = @fim
+                AND uf_farmacia = @uf
+                AND status = ''OK''
+          ) THEN 1 ELSE 0 END;',
+        N'@versao VARCHAR(40), @inicio DATE, @fim DATE, @uf CHAR(2), @ok BIT OUTPUT',
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim,
+        @uf = @uf_farmacia,
+        @ok = @fonte_atual_ok OUTPUT;
+END;
+
+IF @fonte_atual_ok = 0
+BEGIN
+    PRINT '>> Materializando movimentacao da UF ' + @uf_farmacia + '...';
+    SET @t1 = GETDATE();
+
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET status = ''PROCESSANDO'',
+              etapa = ''MATERIALIZANDO_FONTE_UF'',
+              status_concentracao_multiplo = ''PROCESSANDO'',
+              dt_atualizacao = GETDATE(),
+              mensagem_erro = NULL,
+              dt_erro = NULL
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
+
+    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.crm_mov_fonte_atual_metadata;
+
+    SELECT
+        CAST(F.uf AS CHAR(2)) AS uf_farmacia,
+        CAST(F.id AS INT) AS id_cnpj,
+        CAST(M.cnpj AS CHAR(14)) AS cnpj,
+        CAST(M.crm AS VARCHAR(10)) AS crm,
+        CAST(M.crm_uf AS VARCHAR(2)) AS crm_uf,
+        CAST(M.data_hora AS DATETIME) AS data_hora,
+        CAST(M.num_autorizacao AS VARCHAR(50)) AS num_autorizacao,
+        CAST(M.valor_pago AS DECIMAL(18,2)) AS valor_pago,
+        M.codigo_barra
+    INTO temp_CGUSC.fp.crm_mov_fonte_atual
+    FROM (
+        SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+        FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
+        UNION ALL
+        SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+        FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
+    ) M
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F
+        ON F.cnpj = M.cnpj
+    WHERE F.uf = @uf_farmacia
+      AND M.crm IS NOT NULL
+      AND M.crm_uf IS NOT NULL
+      AND M.crm_uf <> 'BR'
+      AND M.data_hora >= @DataInicio
+      AND M.data_hora < DATEADD(DAY, 1, @DataFim)
+      AND EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.medicamentos_patologia PAT
+          WHERE PAT.codigo_barra = M.codigo_barra
+      );
+
+    CREATE CLUSTERED INDEX IDX_CrmMovFonteAtual_UfCnpjData
+        ON temp_CGUSC.fp.crm_mov_fonte_atual(uf_farmacia, id_cnpj, data_hora);
+
+    CREATE NONCLUSTERED INDEX IDX_CrmMovFonteAtual_CnpjData
+        ON temp_CGUSC.fp.crm_mov_fonte_atual(cnpj, data_hora)
+        INCLUDE (id_cnpj, crm, crm_uf, num_autorizacao, valor_pago, codigo_barra);
+
+    CREATE NONCLUSTERED INDEX IDX_CrmMovFonteAtual_CrmData
+        ON temp_CGUSC.fp.crm_mov_fonte_atual(id_cnpj, crm, crm_uf, data_hora)
+        INCLUDE (cnpj, num_autorizacao, valor_pago, codigo_barra);
+
+    SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
+    FROM temp_CGUSC.sys.partitions P
+    WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual')
+      AND P.index_id IN (0, 1);
+
+    SET @nu_cnpjs_fonte = (
+        SELECT COUNT(DISTINCT id_cnpj)
+        FROM temp_CGUSC.fp.crm_mov_fonte_atual
+    );
+
+    CREATE TABLE temp_CGUSC.fp.crm_mov_fonte_atual_metadata (
+        id_pipeline          TINYINT      NOT NULL,
+        pipeline_versao      VARCHAR(40)  NOT NULL,
+        uf_farmacia          CHAR(2)      NOT NULL,
+        dt_data_inicio       DATE         NOT NULL,
+        dt_data_fim          DATE         NOT NULL,
+        nu_registros_fonte   BIGINT       NOT NULL,
+        nu_cnpjs_fonte       INT          NOT NULL,
+        dt_criacao           DATETIME     NOT NULL,
+        status               VARCHAR(20)  NOT NULL,
+        observacao           VARCHAR(400) NULL,
+        CONSTRAINT PK_CrmMovFonteAtualMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+        CONSTRAINT CK_CrmMovFonteAtualMetadata_Id CHECK (id_pipeline = 1)
+    );
+
+    INSERT INTO temp_CGUSC.fp.crm_mov_fonte_atual_metadata
+        (id_pipeline, pipeline_versao, uf_farmacia, dt_data_inicio, dt_data_fim,
+         nu_registros_fonte, nu_cnpjs_fonte, dt_criacao, status, observacao)
+    VALUES
+        (1, @pipeline_versao, @uf_farmacia, @DataInicio, @DataFim,
+         @nu_registros_teste_mov_sc, @nu_cnpjs_fonte, GETDATE(), 'OK',
+         'Fonte materializada pelo motor CRM multiplo.');
+
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET etapa = ''FONTE_UF_MATERIALIZADA'',
+              nu_registros_fonte = @nu_mov,
+              nu_cnpjs_fonte = @nu_cnpjs,
+              dt_atualizacao = GETDATE()
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE, @nu_mov BIGINT, @nu_cnpjs INT',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim,
+        @nu_mov = @nu_registros_teste_mov_sc,
+        @nu_cnpjs = @nu_cnpjs_fonte;
+
+    PRINT '   Fonte UF materializada em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
+END
 
 SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
 FROM temp_CGUSC.sys.partitions P
 WHERE P.object_id = OBJECT_ID('temp_CGUSC.fp.crm_mov_fonte_atual')
   AND P.index_id IN (0, 1);
 
-PRINT '>> [CONCENTRACAO] Iniciando detecção de concentração temporal...';
+PRINT '>> [CRM MULTIPLO] Iniciando detecção de concentração temporal...';
 PRINT '   UF fonte: ' + @uf_farmacia;
 PRINT '   Período: ' + CAST(@DataInicio AS VARCHAR(10)) + ' → ' + CAST(@DataFim AS VARCHAR(10));
 PRINT '   Lote: ' + CAST(@lote_size AS VARCHAR) + ' CNPJs por iteração';
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_multiplo_metadata;
 
 CREATE TABLE temp_CGUSC.fp.crm_concentracao_multiplo_metadata (
     id_pipeline       TINYINT      NOT NULL,
@@ -107,13 +386,23 @@ VALUES
      @nu_registros_teste_mov_sc, GETDATE(), GETDATE(), 'PROCESSANDO', 'Motor temporal CRM multiplo em processamento.');
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
-    UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
-    SET status = 'PROCESSANDO',
-        etapa = 'CONCENTRACAO_MULTIPLO',
-        dt_atualizacao = GETDATE(),
-        mensagem_erro = NULL,
-        dt_erro = NULL
-    WHERE uf_farmacia = @uf_farmacia;
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET status = ''PROCESSANDO'',
+              etapa = ''CONCENTRACAO_MULTIPLO'',
+              status_concentracao_multiplo = ''PROCESSANDO'',
+              dt_atualizacao = GETDATE(),
+              mensagem_erro = NULL,
+              dt_erro = NULL
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
 
 
 -- ============================================================================
@@ -448,6 +737,7 @@ BEGIN
 
     SET @nu_alertas_lote  = @@ROWCOUNT;
     SET @nu_alertas_total += @nu_alertas_lote;
+    SET @nu_alertas_total_geral += @nu_alertas_lote;
 
     PRINT '      3.D Insert alertas: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
@@ -508,70 +798,125 @@ SET status = CASE
 WHERE id_pipeline = 1;
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
-    UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
-    SET status = 'PROCESSANDO',
-        etapa = CASE
-            WHEN EXISTS (
-                SELECT 1
-                FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
-                INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
-                WHERE C.status <> 'OK'
-            ) THEN 'CONCENTRACAO_MULTIPLO_INCOMPLETA'
-            ELSE 'CONCENTRACAO_MULTIPLO_OK'
-        END,
-        dt_atualizacao = GETDATE()
-    WHERE uf_farmacia = @uf_farmacia;
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET status = ''PROCESSANDO'',
+              etapa = CASE
+                  WHEN EXISTS (
+                      SELECT 1
+                      FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
+                      INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                      WHERE C.status <> ''OK''
+                  ) THEN ''CONCENTRACAO_MULTIPLO_INCOMPLETA''
+                  ELSE ''CONCENTRACAO_MULTIPLO_OK''
+              END,
+              status_concentracao_multiplo = CASE
+                  WHEN EXISTS (
+                      SELECT 1
+                      FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle C
+                      INNER JOIN temp_CGUSC.fp.crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                      WHERE C.status <> ''OK''
+                  ) THEN ''INCOMPLETO''
+                  ELSE ''OK''
+              END,
+              dt_concentracao_multiplo = GETDATE(),
+              dt_atualizacao = GETDATE(),
+              mensagem_erro = NULL,
+              dt_erro = NULL
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
 
+SET @nu_ufs_processadas += 1;
+
+IF @uf_farmacia_alvo IS NULL
+BEGIN
+    GOTO ProximaUF;
+END;
+
+ResultadosFinais:
 PRINT '==========================================================';
 PRINT '   TEMPO TOTAL:   ' + CONVERT(VARCHAR(20), GETDATE() - @t0, 114);
-PRINT '   TOTAL ALERTAS: ' + CAST(@nu_alertas_total AS VARCHAR);
+PRINT '   UFs processadas: ' + CAST(@nu_ufs_processadas AS VARCHAR);
+PRINT '   TOTAL ALERTAS: ' + CAST(@nu_alertas_total_geral AS VARCHAR);
 PRINT '==========================================================';
 
-SELECT
-    id_pipeline,
-    pipeline_nome,
-    pipeline_versao,
-    dt_data_inicio,
-    dt_data_fim,
-    nu_registros_teste_mov_sc,
-    status,
-    dt_criacao,
-    dt_atualizacao,
-    observacao
-FROM temp_CGUSC.fp.crm_concentracao_multiplo_metadata;
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_metadata') IS NOT NULL
+BEGIN
+    SELECT
+        id_pipeline,
+        pipeline_nome,
+        pipeline_versao,
+        dt_data_inicio,
+        dt_data_fim,
+        nu_registros_teste_mov_sc,
+        status,
+        dt_criacao,
+        dt_atualizacao,
+        observacao
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_metadata;
+END;
+
+EXEC sp_executesql
+    N'SELECT
+          uf_farmacia,
+          status,
+          etapa,
+          status_concentracao_multiplo,
+          nu_registros_fonte,
+          nu_cnpjs_fonte,
+          dt_concentracao_multiplo
+      FROM temp_CGUSC.fp.crm_pipeline_uf_controle
+      WHERE pipeline_versao = @versao
+        AND dt_data_inicio = @inicio
+        AND dt_data_fim = @fim
+      ORDER BY uf_farmacia;',
+    N'@versao VARCHAR(40), @inicio DATE, @fim DATE',
+    @versao = @pipeline_versao,
+    @inicio = @DataInicio,
+    @fim = @DataFim;
 
 -- Distribuição por severidade
-SELECT
-    severidade,
-    'Multi-CRM'                AS tipo,
-    COUNT(*)                   AS qtd_alertas,
-    COUNT(DISTINCT id_cnpj)    AS qtd_cnpjs,
-    AVG(nu_crms_distintos)     AS media_crms_distintos,
-    AVG(nu_minutos_span)       AS media_minutos_span,
-    MIN(dt_ini_concentracao)   AS primeiro_alerta,
-    MAX(dt_ini_concentracao)   AS ultimo_alerta
-FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
-GROUP BY severidade
-ORDER BY
-    CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END,
-    tipo;
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NOT NULL
+BEGIN
+    SELECT
+        severidade,
+        'Multi-CRM'                AS tipo,
+        COUNT(*)                   AS qtd_alertas,
+        COUNT(DISTINCT id_cnpj)    AS qtd_cnpjs,
+        AVG(nu_crms_distintos)     AS media_crms_distintos,
+        AVG(nu_minutos_span)       AS media_minutos_span,
+        MIN(dt_ini_concentracao)   AS primeiro_alerta,
+        MAX(dt_ini_concentracao)   AS ultimo_alerta
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
+    GROUP BY severidade
+    ORDER BY
+        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END,
+        tipo;
 
--- Top 30 piores casos
-SELECT TOP 30
-    id_cnpj,
-    dt_dia,
-    dt_ini_concentracao,
-    dt_fim_concentracao,
-    nu_minutos_span,
-    nu_crms_distintos,
-    nu_10min,
-    nu_15min,
-    nu_20min,
-    nu_25min,
-    nu_30min,
-    nu_60min,
-    severidade
-FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
-ORDER BY
-    CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END ASC,
-    nu_60min DESC;
+    -- Top 30 piores casos
+    SELECT TOP 30
+        id_cnpj,
+        dt_dia,
+        dt_ini_concentracao,
+        dt_fim_concentracao,
+        nu_minutos_span,
+        nu_crms_distintos,
+        nu_10min,
+        nu_15min,
+        nu_20min,
+        nu_25min,
+        nu_30min,
+        nu_60min,
+        severidade
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
+    ORDER BY
+        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END ASC,
+        nu_60min DESC;
+END;

@@ -213,6 +213,7 @@ def sync_network(cnpj: str) -> None:
                 "type": "PJ_ALVO",
                 "razao_social": r.get("razao_social"),
                 "nome_fantasia": r.get("nome_fantasia"),
+                "id_cnae_principal": r.get("id_cnae_principal"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
@@ -220,7 +221,7 @@ def sync_network(cnpj: str) -> None:
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
-                "razao_social": None, "nome_fantasia": None,
+                "razao_social": None, "nome_fantasia": None, "id_cnae_principal": None,
                 "municipio": None, "uf": None, "situacao_rf": None
             }
 
@@ -240,6 +241,7 @@ def sync_network(cnpj: str) -> None:
                     "type": s["indicador_socio"] or "PF",
                     "razao_social": s["nome_socio"],
                     "nome_fantasia": None,
+                    "id_cnae_principal": None,
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
@@ -263,12 +265,18 @@ def sync_network(cnpj: str) -> None:
                 id_socio = p["cpf_cnpj_socio"]
 
                 if cnpj_ext not in nodes:
+                    # Classifica como PJ_FARMACIA_EXT se for CNAE de farmácia mas não for FP
+                    tipo = "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA"
+                    if tipo == "PJ_OUTRA" and p.get("id_cnae_principal") in [4771701, 4771702]:
+                        tipo = "PJ_FARMACIA_EXT"
+
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
                         "label": p["nome_fantasia"] or p["razao_social"] or cnpj_ext,
-                        "type": "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA",
+                        "type": tipo,
                         "razao_social": p["razao_social"],
                         "nome_fantasia": p["nome_fantasia"],
+                        "id_cnae_principal": p.get("id_cnae_principal"),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],

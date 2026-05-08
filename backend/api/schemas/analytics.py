@@ -401,6 +401,7 @@ class NetworkNodeSchema(BaseModel):
     type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA' | 'PJ_OUTRA'
     razao_social: Optional[str] = None
     nome_fantasia: Optional[str] = None
+    id_cnae_principal: Optional[int] = None
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None

@@ -233,140 +233,7 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 
 
 --------------------------------------------------------------
--- ETAPA 1: Sócios das farmácias credenciadas
---------------------------------------------------------------
-
-DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios;
-
-SELECT DISTINCT
-    soc.cpfcnpjSocio                                          AS cpf_cnpj_socio,
-    soc.cnpj,
-    CAST(soc.indSocio AS CHAR(2))                             AS indicador_socio,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(soc.nomeSocio, 100))   AS nome_socio,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))         AS municipio,
-    CAST(ibge.sg_uf AS CHAR(2))                                                   AS uf,
-    CAST(soc.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(soc.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
-    CAST(soc.percentualQualificacao / 100.0 AS DECIMAL(5,2)) AS percentual_qualificacao,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
-    NULLIF(CAST(soc.CpfRepresentante AS CHAR(11)), '00000000000')                  AS cpf_representante,
-    NULLIF(TRY_CAST(soc.IdQualificacaoRepresentante AS TINYINT), 0)                AS id_qualificacao_representante,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(cobi_rep.nome, 100))                       AS nome_representante,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(qua_rep.DescricaoQualificacao) AS VARCHAR(60)) AS descricao_qualificacao_representante,
-    CAST(cobi.dataNascimento AS DATE)                                              AS data_nascimento_socio,
-    CAST(cobi_rep.dataNascimento AS DATE)                                          AS data_nascimento_representante,
-    CAST(GETDATE() AS SMALLDATETIME)                                               AS data_processamento
-INTO temp_CGUSC.fp.dados_socios
-FROM temp_CGUSC.fp.lista_cnpjs    AS lst
-INNER JOIN db_CNPJ.dbo.socios             AS soc       ON soc.cnpj           = lst.cnpj
-INNER JOIN db_CNPJ.dbo.CNPJ               AS cnpj      ON cnpj.cnpj          = lst.cnpj
-LEFT JOIN  db_CNPJ.dbo.Municipio          AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
-LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge
-LEFT JOIN  db_CPF.dbo.CPF                 AS cobi      ON cobi.CPF           = soc.cpfcnpjSocio AND soc.indSocio      = 'PF'
-LEFT JOIN  db_CPF.dbo.CPF                 AS cobi_rep  ON cobi_rep.CPF       = soc.CpfRepresentante
-                                                       AND soc.CpfRepresentante <> '00000000000'
-                                                       AND soc.CpfRepresentante IS NOT NULL
-LEFT JOIN  db_CNPJ.dbo.Qualificacao       AS qua_rep   ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
-                                                       AND TRY_CAST(soc.IdQualificacaoRepresentante AS INT) > 0;
-
--- Busca por CPF/CNPJ do sócio (cruzamento: em quais empresas essa pessoa aparece)
-CREATE INDEX ix_sociosFP_cpf_cnpj_socio
-    ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio);
-
--- Padrão principal de consulta: todos os sócios de um CNPJ
-CREATE INDEX ix_sociosFP_cnpj_cpf
-    ON temp_CGUSC.fp.dados_socios (cnpj, cpf_cnpj_socio);
-
-
---------------------------------------------------------------
--- ETAPA 1b: Participações externas dos sócios das farmácias FP
--- Para cada sócio identificado nas farmácias FP, busca TODAS as
--- outras empresas onde esse CPF/CNPJ aparece na base nacional.
---
--- Estratégia em 2 fases para evitar scan completo de db_CNPJ.dbo.socios:
---   Fase 1: extrai CPFs distintos (pequeno conjunto) + filtra socios
---   Fase 2: enriquece apenas os registros filtrados com CNPJ/Municipio/IBGE
---------------------------------------------------------------
-
-DROP TABLE IF EXISTS temp_CGUSC.fp.socios_participacoes_externas;
-
--- ── FASE 1: Tabela temporária dos CPFs/CNPJs dos sócios FP ──────────────────
--- Pequena e indexada para servir como lookup eficiente na tabela nacional
-
-DROP TABLE IF EXISTS #cpfs_socios_fp;
-
-SELECT DISTINCT cpf_cnpj_socio
-INTO #cpfs_socios_fp
-FROM temp_CGUSC.fp.dados_socios
-WHERE cpf_cnpj_socio IS NOT NULL;
-
-CREATE CLUSTERED INDEX ix_cpfs_lookup
-    ON #cpfs_socios_fp (cpf_cnpj_socio);
-
--- ── FASE 1b: Filtrar socios nacional apenas pelos CPFs conhecidos ────────────
--- Evita scan completo — usa o lookup indexado acima
-
-DROP TABLE IF EXISTS #socios_externos_raw;
-
-SELECT
-    s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
-    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
-    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(s.percentualQualificacao / 100.0 AS DECIMAL(5,2))  AS percentual_qualificacao,
-    CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
-    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
-INTO #socios_externos_raw
-FROM #cpfs_socios_fp                AS fp
-INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
--- Exclui CNPJs que já são farmácias FP (já estão em dados_socios)
-WHERE NOT EXISTS (
-    SELECT 1 FROM temp_CGUSC.fp.lista_cnpjs lst WHERE lst.cnpj = s.cnpj
-);
-
-CREATE CLUSTERED INDEX ix_socios_ext_cnpj
-    ON #socios_externos_raw (cnpj_empresa);
-
--- ── FASE 2: Enriquecer com dados cadastrais (CNPJ, Municipio, IBGE) ─────────
--- JOIN pesado acontece apenas sobre o conjunto já filtrado
-
-SELECT DISTINCT
-    raw.cpf_cnpj_socio,
-    raw.cnpj_empresa,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.RazaoSocial, 100)) AS VARCHAR(100)) AS razao_social,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.NomeFantasia, 100)) AS VARCHAR(100)) AS nome_fantasia,
-    raw.indicador_socio,
-    raw.percentual_qualificacao,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(raw.descricao_qualificacao) AS VARCHAR(60)) AS descricao_qualificacao,
-    raw.data_entrada_sociedade,
-    raw.data_exclusao_sociedade,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(sit.ds_situacao_cnpj) AS VARCHAR(60))        AS situacao_rf,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))          AS municipio,
-    CAST(ibge.sg_uf AS CHAR(2))                                                     AS uf,
-    CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT)
-         ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
-    CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
-INTO temp_CGUSC.fp.socios_participacoes_externas
-FROM #socios_externos_raw                        AS raw
-INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
-LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
-LEFT  JOIN db_CNPJ.dbo.Municipio                 AS mun  ON mun.SkMunicipio = c.CodMunicipio
-LEFT  JOIN temp_CGUSC.fp.dados_ibge              AS ibge ON ibge.id_ibge7   = mun.CodIbge
-LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = raw.cnpj_empresa;
-
--- ── Índices na tabela final ──────────────────────────────────────────────────
-
--- Índice principal: busca por CPF/CNPJ do sócio (usado pelo sync_network)
-CREATE INDEX ix_partExt_cpf_cnpj_socio
-    ON temp_CGUSC.fp.socios_participacoes_externas (cpf_cnpj_socio);
-
--- Índice secundário: busca por empresa externa (análise inversa futura)
-CREATE INDEX ix_partExt_cnpj_empresa
-    ON temp_CGUSC.fp.socios_participacoes_externas (cnpj_empresa);
-
-
---------------------------------------------------------------
--- ETAPA 2: Dados cadastrais das farmácias (1ª passagem)
+-- ETAPA 1: Dados cadastrais das farmácias (1ª passagem)
 --------------------------------------------------------------
 
 DROP TABLE IF EXISTS #tempDadosFarmacias;
@@ -430,7 +297,7 @@ CREATE INDEX ix_tempFarmacias_cnpj
 
 
 --------------------------------------------------------------
--- ETAPA 3: Enriquecimento — flag de outras sociedades
+-- ETAPA 1.1: Enriquecimento — Dados Geográficos e Porte
 --------------------------------------------------------------
 
 DROP TABLE IF EXISTS #tempDadosFarmacias2;
@@ -477,27 +344,9 @@ SELECT
         WHEN '03' THEN 'Empresa de Pequeno Porte (EPP)'
         WHEN '05' THEN 'Demais'
         ELSE 'Não Informado'
-    END AS ds_porte_empresa,
-    CASE
-        WHEN outras.outrasSociedades > 0 THEN 'Sim'
-        ELSE 'Não'
-    END AS outrasSociedades
+    END AS ds_porte_empresa
 INTO #tempDadosFarmacias2
-FROM #tempDadosFarmacias AS f
-CROSS APPLY (
-    SELECT COUNT(*) AS outrasSociedades
-    FROM (
-        SELECT DISTINCT soc2.cnpj
-        FROM temp_CGUSC.fp.socios_farmacia AS soc2
-        INNER JOIN #tempDadosFarmacias     AS farm ON farm.cnpj = soc2.cnpj
-        WHERE soc2.cnpj <> f.cnpj
-          AND soc2.cpf_cnpj_Socio IN (
-              SELECT soc1.cpf_cnpj_Socio
-              FROM temp_CGUSC.fp.socios_farmacia AS soc1
-              WHERE soc1.cnpj = f.cnpj
-          )
-    ) AS t
-) AS outras;
+FROM #tempDadosFarmacias AS f;
 
 -- Colunas de controle e georreferenciamento
 ALTER TABLE #tempDadosFarmacias2 ADD id        INT IDENTITY;
@@ -606,6 +455,170 @@ INNER JOIN
     temp_CGUSC.dbo.coordenadas AS coords -- Tabela com os dados de origem
 ON
     farmacias.CNPJ = coords.CNPJ; -- Condição de junção (chave)
+
+
+
+
+
+
+
+--------------------------------------------------------------
+-- ETAPA 2: Sócios das farmácias credenciadas
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios;
+
+SELECT DISTINCT
+    soc.cpfcnpjSocio                                          AS cpf_cnpj_socio,
+    soc.cnpj,
+    CAST(soc.indSocio AS CHAR(2))                             AS indicador_socio,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(soc.nomeSocio, 100))   AS nome_socio,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))         AS municipio,
+    CAST(ibge.sg_uf AS CHAR(2))                                                   AS uf,
+    CAST(soc.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(soc.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
+    CAST(soc.percentualQualificacao / 100.0 AS DECIMAL(5,2)) AS percentual_qualificacao,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
+    NULLIF(CAST(soc.CpfRepresentante AS CHAR(11)), '00000000000')                  AS cpf_representante,
+    NULLIF(TRY_CAST(soc.IdQualificacaoRepresentante AS TINYINT), 0)                AS id_qualificacao_representante,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(cobi_rep.nome, 100))                       AS nome_representante,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(qua_rep.DescricaoQualificacao) AS VARCHAR(60)) AS descricao_qualificacao_representante,
+    CAST(cobi.dataNascimento AS DATE)                                              AS data_nascimento_socio,
+    CAST(cobi_rep.dataNascimento AS DATE)                                          AS data_nascimento_representante,
+    CAST(GETDATE() AS SMALLDATETIME)                                               AS data_processamento
+INTO temp_CGUSC.fp.dados_socios
+FROM temp_CGUSC.fp.lista_cnpjs    AS lst
+INNER JOIN db_CNPJ.dbo.socios             AS soc       ON soc.cnpj           = lst.cnpj
+INNER JOIN db_CNPJ.dbo.CNPJ               AS cnpj      ON cnpj.cnpj          = lst.cnpj
+LEFT JOIN  db_CNPJ.dbo.Municipio          AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
+LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge
+LEFT JOIN  db_CPF.dbo.CPF                 AS cobi      ON cobi.CPF           = soc.cpfcnpjSocio AND soc.indSocio      = 'PF'
+LEFT JOIN  db_CPF.dbo.CPF                 AS cobi_rep  ON cobi_rep.CPF       = soc.CpfRepresentante
+                                                       AND soc.CpfRepresentante <> '00000000000'
+                                                       AND soc.CpfRepresentante IS NOT NULL
+LEFT JOIN  db_CNPJ.dbo.Qualificacao       AS qua_rep   ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
+                                                       AND TRY_CAST(soc.IdQualificacaoRepresentante AS INT) > 0;
+
+-- Busca por CPF/CNPJ do sócio (cruzamento: em quais empresas essa pessoa aparece)
+CREATE INDEX ix_sociosFP_cpf_cnpj_socio
+    ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio);
+
+-- Padrão principal de consulta: todos os sócios de um CNPJ
+CREATE INDEX ix_sociosFP_cnpj_cpf
+    ON temp_CGUSC.fp.dados_socios (cnpj, cpf_cnpj_socio);
+
+
+--------------------------------------------------------------
+-- ETAPA 3: Participações externas dos sócios das farmácias FP
+-- Para cada sócio identificado nas farmácias FP, busca TODAS as
+-- outras empresas onde esse CPF/CNPJ aparece na base nacional.
+--
+-- Estratégia em 2 fases para evitar scan completo de db_CNPJ.dbo.socios:
+--   Fase 1: extrai CPFs distintos (pequeno conjunto) + filtra socios
+--   Fase 2: enriquece apenas os registros filtrados com CNPJ/Municipio/IBGE
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.socios_participacoes_externas;
+
+-- ── FASE 1: Tabela temporária dos CPFs/CNPJs dos sócios FP ──────────────────
+-- Pequena e indexada para servir como lookup eficiente na tabela nacional
+
+DROP TABLE IF EXISTS #cpfs_socios_fp;
+
+SELECT DISTINCT cpf_cnpj_socio
+INTO #cpfs_socios_fp
+FROM temp_CGUSC.fp.dados_socios
+WHERE cpf_cnpj_socio IS NOT NULL;
+
+CREATE CLUSTERED INDEX ix_cpfs_lookup
+    ON #cpfs_socios_fp (cpf_cnpj_socio);
+
+-- ── FASE 1b: Filtrar socios nacional apenas pelos CPFs conhecidos ────────────
+-- Evita scan completo — usa o lookup indexado acima
+
+DROP TABLE IF EXISTS #socios_externos_raw;
+
+SELECT
+    s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
+    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(s.percentualQualificacao / 100.0 AS DECIMAL(5,2))  AS percentual_qualificacao,
+    CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
+    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+INTO #socios_externos_raw
+FROM #cpfs_socios_fp                AS fp
+INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
+-- Exclui CNPJs que já são farmácias FP (já estão em dados_socios)
+WHERE NOT EXISTS (
+    SELECT 1 FROM temp_CGUSC.fp.lista_cnpjs lst WHERE lst.cnpj = s.cnpj
+);
+
+CREATE CLUSTERED INDEX ix_socios_ext_cnpj
+    ON #socios_externos_raw (cnpj_empresa);
+
+-- ── FASE 2: Enriquecer com dados cadastrais (CNPJ, Municipio, IBGE) ─────────
+-- JOIN pesado acontece apenas sobre o conjunto já filtrado
+
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.RazaoSocial, 100)) AS VARCHAR(100)) AS razao_social,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.NomeFantasia, 100)) AS VARCHAR(100)) AS nome_fantasia,
+    TRY_CAST(c.CnaeFiscal AS INT)                                                  AS id_cnae_principal,
+    raw.indicador_socio,
+    raw.percentual_qualificacao,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(raw.descricao_qualificacao) AS VARCHAR(60)) AS descricao_qualificacao,
+    raw.data_entrada_sociedade,
+    raw.data_exclusao_sociedade,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(sit.ds_situacao_cnpj) AS VARCHAR(60))        AS situacao_rf,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))          AS municipio,
+    CAST(ibge.sg_uf AS CHAR(2))                                                     AS uf,
+    CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT)
+         ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
+    CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
+INTO temp_CGUSC.fp.socios_participacoes_externas
+FROM #socios_externos_raw                        AS raw
+INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
+LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
+LEFT  JOIN db_CNPJ.dbo.Municipio                 AS mun  ON mun.SkMunicipio = c.CodMunicipio
+LEFT  JOIN temp_CGUSC.fp.dados_ibge              AS ibge ON ibge.id_ibge7   = mun.CodIbge
+LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = raw.cnpj_empresa;
+
+-- ── Índices na tabela final ──────────────────────────────────────────────────
+
+-- Índice principal: busca por CPF/CNPJ do sócio (usado pelo sync_network)
+CREATE INDEX ix_partExt_cpf_cnpj_socio
+    ON temp_CGUSC.fp.socios_participacoes_externas (cpf_cnpj_socio);
+
+-- Índice secundário: busca por empresa externa (análise inversa futura)
+CREATE INDEX ix_partExt_cnpj_empresa
+    ON temp_CGUSC.fp.socios_participacoes_externas (cnpj_empresa);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

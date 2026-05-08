@@ -42,6 +42,7 @@ def get_socios_network(cnpj: str, engine) -> NetworkResponse:
             type=row["type"] or "PJ_OUTRA",
             razao_social=row.get("razao_social"),
             nome_fantasia=row.get("nome_fantasia"),
+            id_cnae_principal=row.get("id_cnae_principal"),
             municipio=row.get("municipio"),
             uf=row.get("uf"),
             situacao_rf=row.get("situacao_rf"),

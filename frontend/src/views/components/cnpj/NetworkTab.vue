@@ -27,6 +27,7 @@ const NODE_STYLES = {
   PJ_ALVO:     { bg: '#6366f1', border: '#818cf8', shape: 'roundrectangle', size: 88 },
   PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 64 },
   PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 68 },
+  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 64 },
   PJ_OUTRA:    { bg: '#64748b', border: '#94a3b8', shape: 'roundrectangle', size: 64 },
 };
 
@@ -279,6 +280,7 @@ const typeLabels = {
   PJ_ALVO:     { label: 'CNPJ em Análise', color: '#6366f1' },
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
   PJ_FARMACIA: { label: 'Farmácia FP',     color: '#10b981' },
+  PJ_FARMACIA_EXT: { label: 'Outra Farmácia (Não FP)', color: '#f59e0b' },
   PJ_OUTRA:    { label: 'Outra Empresa',   color: '#64748b' },
 };
 </script>

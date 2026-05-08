@@ -477,6 +477,33 @@ const isInitialLoading = computed(() => {
   border-top: 2px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
   border-bottom: 1px solid var(--tabs-border);
   padding: 0.75rem 1.25rem 0;
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: max-content;
+}
+
+:deep(.p-tabview-nav-container),
+:deep(.p-tabview-nav-content) {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent) transparent;
+}
+
+:deep(.p-tabview-nav-container::-webkit-scrollbar),
+:deep(.p-tabview-nav-content::-webkit-scrollbar) {
+  height: 6px;
+}
+
+:deep(.p-tabview-nav-container::-webkit-scrollbar-track),
+:deep(.p-tabview-nav-content::-webkit-scrollbar-track) {
+  background: transparent;
+}
+
+:deep(.p-tabview-nav-container::-webkit-scrollbar-thumb),
+:deep(.p-tabview-nav-content::-webkit-scrollbar-thumb) {
+  background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+  border-radius: 999px;
 }
 
 /* Reset de indicadores padrão do PrimeVue */
@@ -487,14 +514,19 @@ const isInitialLoading = computed(() => {
 :deep(.p-tabview-nav li) {
   border: none !important;
   background: transparent !important;
+  flex: 0 0 auto;
 }
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
   background: transparent !important;
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.7rem 1.1rem !important;
+  min-width: 9.5rem;
+  min-height: 4rem;
+  padding: 0.7rem 1rem !important;
   gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
   /* Transição cirúrgica: apenas no que importa, sem animar bordas (evita o flash) */
   transition: color 0.2s, background-color 0.2s;
   color: var(--text-secondary) !important;
@@ -503,6 +535,14 @@ const isInitialLoading = computed(() => {
   border: none !important;
   border-bottom: 3px solid transparent !important;
   margin-bottom: -1px !important;
+}
+
+:deep(.p-tabview-nav li .p-tabview-nav-link span) {
+  display: inline-block;
+  line-height: 1.1;
+  text-align: left;
+  white-space: normal;
+  max-width: 7.25rem;
 }
 
 /* Estado Ativo Cirúrgico (Sem Linha Dupla e Sem Flash) */

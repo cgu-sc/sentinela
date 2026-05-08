@@ -441,6 +441,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     doc = Document()
     style_normal = doc.styles['Normal']
     style_normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    
+    # Aplica o tema Grafite Médio (Slate 700) para as Seções/Títulos
+    for i in range(1, 4):
+        try:
+            style_heading = doc.styles[f'Heading {i}']
+            style_heading.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+        except Exception:
+            pass
 
     for section in doc.sections:
         section.top_margin = Inches(0.5)
@@ -849,6 +857,17 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
         _run(p_53, f'no período avaliado ({periodo_txt}):', color='0F172A', size=10)
         
     _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt)
+    
+    p_conclusao_53 = doc.add_paragraph()
+    _run(p_conclusao_53, f'Depreende-se do quadro anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no sistema SAV não se encontra compatível com seus estoques, contabilizado de acordo a metodologia adotada pela CGU, o que levou a estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=10)
+    
+    perc_fmt = f"{cnpj_data.get('percValSemComp', 0):.2f}%".replace('.', ',')
+    val_fmt = f"{cnpj_data.get('valSemComp', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    
+    _run(p_conclusao_53, perc_fmt, color='EF4444', size=10, bold=True)
+    _run(p_conclusao_53, ', que corresponde a um potencial desvio de recursos públicos no montante estimado de ', color='0F172A', size=10)
+    _run(p_conclusao_53, f'R$ {val_fmt}', color='EF4444', size=10, bold=True)
+    _run(p_conclusao_53, '.', color='0F172A', size=10)
     
     doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
     doc.add_paragraph('Monitoramento de picos de faturamento incompatíveis com a média histórica ou regional...')

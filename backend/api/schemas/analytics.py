@@ -394,6 +394,28 @@ class SociosResponse(BaseModel):
     data_processamento: Optional[date] = None
     from_cache: bool = False
 
+# ── Teia Societária (Grafos) ───────────────────────────
+class NetworkNodeSchema(BaseModel):
+    id: str
+    label: str
+    type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA' | 'PJ_OUTRA'
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+    situacao_rf: Optional[str] = None
+
+class NetworkEdgeSchema(BaseModel):
+    id: str
+    source: str               # ID do nó de origem
+    target: str               # ID do nó de destino
+    label: Optional[str] = None # Ex: '10.00%'
+    type: str = "socio"       # 'socio' | 'representante'
+
+class NetworkResponse(BaseModel):
+    cnpj: str
+    nodes: List[NetworkNodeSchema]
+    edges: List[NetworkEdgeSchema]
+    query_time_ms: Optional[float] = None
+
 
 # ── Memória de Cálculo — Movimentação por GTIN ──────────
 class MovimentacaoRowSchema(BaseModel):

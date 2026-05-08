@@ -28,6 +28,7 @@ from data_cache import (
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
     _sync_dados_socios,
+    _sync_socios_participacoes_externas,
     _sync_movimentacao,
 )
 
@@ -45,6 +46,8 @@ _CNPJ_PARQUETS = [
     "crm_horario.parquet",
     "crm_horario_eventos.parquet",
     "mediana_autorizacoes_horaria.parquet",
+    "network_nodes.parquet",
+    "network_edges.parquet",
 ]
 
 
@@ -220,6 +223,21 @@ def _schema_cnpj_parquet(pl):
             "hr_janela": pl.Int32,
             "mediana_hora": pl.Float64,
         },
+        "network_nodes.parquet": {
+            "id": pl.Utf8,
+            "label": pl.Utf8,
+            "type": pl.Utf8,
+            "municipio": pl.Utf8,
+            "uf": pl.Utf8,
+            "situacao_rf": pl.Utf8,
+        },
+        "network_edges.parquet": {
+            "id": pl.Utf8,
+            "source": pl.Utf8,
+            "target": pl.Utf8,
+            "label": pl.Utf8,
+            "type": pl.Utf8,
+        },
     }
 
 
@@ -307,6 +325,7 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
         ("crm_perfil_horario", lambda cnpj: AnalyticsService.get_crm_perfil_horario(cnpj)),
         ("crm_raiox_tx", lambda cnpj: AnalyticsService.sync_crm_raiox_tx(cnpj)),
         ("mediana_horaria", lambda cnpj: AnalyticsService.sync_mediana_autorizacoes_horaria(cnpj)),
+        ("teia_societaria", lambda cnpj: AnalyticsService.sync_network(cnpj)),
     ]
 
     for i, cnpj in enumerate(cnpjs, 1):
@@ -356,6 +375,7 @@ MODULOS = [
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
+    {"id": 11, "name": "Participações Externas",   "func": _sync_socios_participacoes_externas, "peso": "~médio"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ from ..schemas.analytics import (
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
-    SociosResponse
+    SociosResponse, NetworkResponse
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -29,6 +29,11 @@ def get_dados_farmacia(cnpj: str):
 def get_socios_farmacia(cnpj: str):
     """Retorna o quadro societário de um estabelecimento."""
     return AnalyticsService.get_socios_farmacia(cnpj)
+
+@router.get("/cnpj/{cnpj}/network", response_model=NetworkResponse)
+def get_socios_network(cnpj: str):
+    """Retorna a rede de relacionamentos societários (Teia) de um estabelecimento."""
+    return AnalyticsService.get_socios_network(cnpj, engine=None)
 
 
 @router.get("/resumo", response_model=AnalyticsResponse)

@@ -96,6 +96,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     sociosLoaded:  false,
     sociosError:   null,
 
+    // ── Teia Societária (Grafo de Relacionamentos) ────────────────────────────
+    networkData:    null,
+    networkLoading: false,
+    networkLoaded:  false,
+    networkError:   null,
+
     // ── Timing de Requisições (diagnóstico de performance) ───────────────────
     // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
     requestTimes: {},
@@ -238,6 +244,25 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.sociosError = ERROR_MSG;
       } finally {
         this.sociosLoading = false;
+      }
+    },
+
+    // ── Teia Societária ─────────────────────────────────────────────────────
+    async fetchNetwork(cnpj) {
+      if (!cnpj || this.networkLoaded === cnpj) return;
+      this.networkLoading = true;
+      this.networkError   = null;
+      try {
+        const t0 = performance.now();
+        const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(cnpj));
+        this.requestTimes['network'] = { label: 'Teia Societária', ms: Math.round(performance.now() - t0) };
+        this.networkData   = data;
+        this.networkLoaded = cnpj;
+      } catch (e) {
+        console.error('Erro ao buscar teia societária:', e);
+        this.networkError = ERROR_MSG;
+      } finally {
+        this.networkLoading = false;
       }
     },
 
@@ -479,6 +504,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.sociosLoading = false;
       this.sociosLoaded  = false;
       this.sociosError   = null;
+
+      this.networkData    = null;
+      this.networkLoading = false;
+      this.networkLoaded  = false;
+      this.networkError   = null;
     },
   },
 });

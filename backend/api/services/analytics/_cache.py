@@ -10,7 +10,11 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import (
+    get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
+    get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
+    get_df_dados_socios, get_df_socios_externos, get_cache_dir
+)
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -166,4 +170,120 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
             print(f"ℹ️  Modo Offline: Tabela mediana_autorizacoes_horaria não disponível.")
         else:
             print(f"⚠️ Erro ao sincronizar parquet de medianas horárias '{cnpj}': {e}")
+
+
+def sync_network(cnpj: str) -> None:
+    """Sincroniza o cache Parquet da Teia Societária para um CNPJ usando fontes Parquet.
+
+    Fontes:
+      - dados_farmacia (parquet): para o nó raiz (PJ_ALVO)
+      - dados_socios (parquet): para o Nível 1 (Sócios da farmácia)
+      - socios_participacoes_externas (parquet): para o Nível 2 (Outras empresas dos sócios)
+    """
+    import time
+    cnpj_dir = _get_cnpj_cache_dir(cnpj)
+    NODES_PATH = os.path.join(cnpj_dir, "network_nodes.parquet")
+    EDGES_PATH = os.path.join(cnpj_dir, "network_edges.parquet")
+
+    # Cache hit: já existe e é válido
+    if os.path.exists(NODES_PATH) and os.path.exists(EDGES_PATH):
+        try:
+            header = pl.scan_parquet(NODES_PATH).limit(0).collect()
+            if "id" in header.columns:
+                return
+        except Exception:
+            pass  # Corrompido → re-gera
+
+    try:
+        print(f"🗄️ [SYNC] Gerando Teia Societária (Parquet Source) para {cnpj}...")
+        t0 = time.perf_counter()
+
+        nodes: dict[str, dict] = {}
+        edges: list[dict]      = []
+
+        # ── 1. Nó raiz: dados do CNPJ alvo ──────────────────────────────────
+        df_farm = get_df_dados_farmacia()
+        raiz = df_farm.filter(pl.col("cnpj") == cnpj).to_dicts()
+        
+        if raiz:
+            r = raiz[0]
+            nodes[cnpj] = {
+                "id": cnpj,
+                "label": r.get("razaoSocial") or f"CNPJ {cnpj}",
+                "type": "PJ_ALVO",
+                "municipio": r.get("municipio"),
+                "uf": r.get("uf"),
+                "situacao_rf": r.get("situacaoCadastral"),
+            }
+        else:
+            nodes[cnpj] = {"id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", "municipio": None, "uf": None, "situacao_rf": None}
+
+        # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
+        df_soc = get_df_dados_socios()
+        socios_alvo = df_soc.filter(pl.col("cnpj") == cnpj).to_dicts()
+
+        cpfs_socios = []
+        for s in socios_alvo:
+            id_socio = s["cpf_cnpj_socio"]
+            cpfs_socios.append(id_socio)
+            
+            if id_socio not in nodes:
+                nodes[id_socio] = {
+                    "id": id_socio,
+                    "label": s["nome_socio"],
+                    "type": s["indicador_socio"] or "PF",
+                    "municipio": s.get("municipio"),
+                    "uf": s.get("uf"),
+                    "situacao_rf": None,
+                }
+
+            edges.append({
+                "id": f"{id_socio}->{cnpj}",
+                "source": id_socio,
+                "target": cnpj,
+                "label": f"{float(s['percentual_qualificacao'] or 0):.1f}%",
+                "type": "socio",
+            })
+
+        # ── 3. Nível 2: Outras empresas destes sócios ─────────────────────────
+        df_ext = get_df_socios_externos()
+        if not df_ext.is_empty() and cpfs_socios:
+            participacoes = df_ext.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_socios)).to_dicts()
+
+            for p in participacoes:
+                cnpj_ext = p["cnpj_empresa"]
+                id_socio = p["cpf_cnpj_socio"]
+
+                if cnpj_ext not in nodes:
+                    nodes[cnpj_ext] = {
+                        "id": cnpj_ext,
+                        "label": p["nome_empresa"],
+                        "type": "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA",
+                        "municipio": p["municipio"],
+                        "uf": p["uf"],
+                        "situacao_rf": p["situacao_rf"],
+                    }
+
+                edges.append({
+                    "id": f"{id_socio}->{cnpj_ext}",
+                    "source": id_socio,
+                    "target": cnpj_ext,
+                    "label": f"{float(p['percentual_qualificacao'] or 0):.1f}%",
+                    "type": "socio",
+                })
+
+        # ── Salva os dois Parquets ────────────────────────────────────────────────
+        df_nodes = pl.DataFrame(list(nodes.values()))
+        df_edges = pl.DataFrame(edges if edges else [], schema={
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8
+        })
+
+        df_nodes.write_parquet(NODES_PATH, compression="zstd")
+        df_edges.write_parquet(EDGES_PATH, compression="zstd")
+        
+        ms = (time.perf_counter() - t0) * 1000
+        print(f"✅ Teia Societária salva: {len(df_nodes)} nós, {len(df_edges)} arestas — {cnpj} ({ms:.1f}ms)")
+
+    except Exception as e:
+        print(f"⚠️ Erro ao gerar Teia Societária para {cnpj}: {e}")
 

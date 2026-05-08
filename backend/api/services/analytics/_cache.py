@@ -217,12 +217,13 @@ def sync_network(cnpj: str) -> None:
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
+                "is_ativo": True,
             }
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
                 "razao_social": None, "nome_fantasia": None, "id_cnae_principal": None,
-                "municipio": None, "uf": None, "situacao_rf": None
+                "municipio": None, "uf": None, "situacao_rf": None, "is_ativo": True
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -282,6 +283,7 @@ def sync_network(cnpj: str) -> None:
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
+                        "is_ativo": True,
                     }
 
                 edges.append({

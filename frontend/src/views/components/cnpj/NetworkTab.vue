@@ -28,7 +28,7 @@ const NODE_STYLES = {
   PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 64 },
   PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 68 },
   PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 64 },
-  PJ_OUTRA:    { bg: '#64748b', border: '#94a3b8', shape: 'roundrectangle', size: 64 },
+  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 64 },
 };
 
 const INITIAL_FIT_PADDING = 120;
@@ -248,8 +248,6 @@ function buildStylesheet() {
       'line-style': 'dashed',
       'line-color': '#94a3b8',
       'target-arrow-color': '#94a3b8',
-      'opacity': 0.5,
-      'width': 1
     }
   });
 
@@ -551,7 +549,7 @@ const typeLabels = {
 .graph-controls {
   position: absolute;
   top: 1rem;
-  right: 1rem;
+  left: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -650,16 +648,22 @@ const typeLabels = {
 
 /* Painel de detalhe ────────────────────────────────── */
 .node-detail-panel {
-  width: 260px;
-  flex-shrink: 0;
-  background: var(--card-bg);
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  width: 280px; /* Levemente maior para acomodar melhor os nomes */
+  background: color-mix(in srgb, var(--card-bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--tabs-border);
   border-radius: 12px;
-  padding: 1.2rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  align-self: flex-start;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  pointer-events: auto;
 }
 
 .panel-header {

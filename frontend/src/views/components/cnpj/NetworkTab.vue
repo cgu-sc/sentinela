@@ -33,8 +33,16 @@ const NODE_STYLES = {
 function buildGraph(data) {
   if (!cyContainer.value || !data) return;
 
-  // Destrói instância anterior
-  if (cy) { cy.destroy(); cy = null; }
+  // Destrói instância anterior com limpeza profunda
+  if (cy) {
+    try {
+      cy.stop();
+      cy.destroy();
+    } catch (e) {
+      console.warn("Erro ao destruir cytoscape:", e);
+    }
+    cy = null;
+  }
 
   const elements = [
     ...data.nodes.map(n => ({
@@ -80,20 +88,20 @@ function buildGraph(data) {
       padding: 50,
       randomize: true, // Garante que não comece tudo no (0,0)
     },
-    minZoom: 0.1,
     maxZoom: 3,
-    wheelSensitivity: 0.2,
   });
+
+  // Força o reconhecimento do tamanho do container
+  cy.resize();
 
   // Garante centralização após renderizar
   cy.one('layoutstop', () => {
-    cy.animate({
-      fit: { padding: 50 },
-      duration: 500
-    });
+    cy.fit(50);
+    cy.center();
   });
 
   cy.ready(() => {
+    cy.resize();
     cy.fit(50);
   });
 
@@ -157,12 +165,8 @@ function buildStylesheet() {
   styles.push({
     selector: 'node[type="PJ_ALVO"]',
     style: {
-      'border-width': 3,
-      'shadow-blur': 20,
-      'shadow-color': '#6366f1',
-      'shadow-opacity': 0.6,
-      'shadow-offset-x': 0,
-      'shadow-offset-y': 0,
+      'border-width': 4,
+      'border-color': '#818cf8',
     }
   });
 
@@ -342,17 +346,16 @@ const typeLabels = {
                 <i class="pi pi-times" />
               </button>
             </div>
-            <h3 class="panel-name">{{ selectedNode.fullLabel }}</h3>
+            <div class="panel-names">
+              <h3 class="panel-main-name">
+                {{ selectedNode.nome_fantasia || selectedNode.razao_social || selectedNode.fullLabel }}
+              </h3>
+              <div v-if="selectedNode.nome_fantasia && selectedNode.razao_social" class="panel-sub-name">
+                {{ selectedNode.razao_social }}
+              </div>
+            </div>
             <div class="panel-id">{{ selectedNode.id }}</div>
             <div class="panel-fields">
-              <div v-if="selectedNode.razao_social" class="panel-field info-block">
-                <div class="field-label">Razão Social</div>
-                <div class="field-value">{{ selectedNode.razao_social }}</div>
-              </div>
-              <div v-if="selectedNode.nome_fantasia" class="panel-field info-block">
-                <div class="field-label">Nome Fantasia</div>
-                <div class="field-value">{{ selectedNode.nome_fantasia }}</div>
-              </div>
               <div v-if="selectedNode.municipio" class="panel-field mt-1">
                 <i class="pi pi-map-marker" />
                 <span>{{ selectedNode.municipio }} / {{ selectedNode.uf }}</span>
@@ -626,12 +629,26 @@ const typeLabels = {
 
 .close-btn:hover { color: var(--text-color); }
 
-.panel-name {
+.panel-names {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.panel-main-name {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 800;
   color: var(--text-color);
+  line-height: 1.2;
+}
+
+.panel-sub-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
   line-height: 1.3;
+  opacity: 0.8;
 }
 
 .panel-id {

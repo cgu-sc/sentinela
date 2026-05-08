@@ -188,9 +188,9 @@ def sync_network(cnpj: str) -> None:
     # Cache hit: já existe e é válido
     if os.path.exists(NODES_PATH) and os.path.exists(EDGES_PATH):
         try:
-            header = pl.scan_parquet(NODES_PATH).limit(0).collect()
-            if "id" in header.columns:
-                return
+            # Apenas verifica se o arquivo está legível
+            pl.scan_parquet(NODES_PATH).limit(0).collect()
+            return
         except Exception:
             pass  # Corrompido → re-gera
 
@@ -209,7 +209,7 @@ def sync_network(cnpj: str) -> None:
             r = raiz[0]
             nodes[cnpj] = {
                 "id": cnpj,
-                "label": r.get("razao_social") or f"CNPJ {cnpj}",
+                "label": r.get("nome_fantasia") or r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
                 "razao_social": r.get("razao_social"),
                 "nome_fantasia": r.get("nome_fantasia"),
@@ -265,7 +265,7 @@ def sync_network(cnpj: str) -> None:
                 if cnpj_ext not in nodes:
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
-                        "label": p["razao_social"] or p["nome_fantasia"] or cnpj_ext,
+                        "label": p["nome_fantasia"] or p["razao_social"] or cnpj_ext,
                         "type": "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA",
                         "razao_social": p["razao_social"],
                         "nome_fantasia": p["nome_fantasia"],

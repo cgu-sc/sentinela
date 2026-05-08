@@ -72,6 +72,7 @@ def _sync_localidades(engine, progress_callback=None):
             FROM [temp_CGUSC].[fp].[jurisdicoes_pf] 
             GROUP BY codIBGE
         ) J ON J.codIBGE = I.id_ibge7
+        WHERE I.sg_uf <> 'BR'
         ORDER BY I.sg_uf, I.no_regiao_saude, I.no_municipio
     """
     pdf = pd.read_sql(sql, engine)

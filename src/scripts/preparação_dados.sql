@@ -499,13 +499,13 @@ LEFT JOIN  db_CPF.dbo.CPF                 AS cobi_rep  ON cobi_rep.CPF       = s
 LEFT JOIN  db_CNPJ.dbo.Qualificacao       AS qua_rep   ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
                                                        AND TRY_CAST(soc.IdQualificacaoRepresentante AS INT) > 0;
 
--- Busca por CPF/CNPJ do sócio (cruzamento: em quais empresas essa pessoa aparece)
-CREATE INDEX ix_sociosFP_cpf_cnpj_socio
-    ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio);
+-- Índice CLUSTERED: Organiza a tabela fisicamente por CPF para performance máxima em JOINs
+CREATE CLUSTERED INDEX cx_sociosFP_cpf_cnpj_socio
+    ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio, cnpj);
 
--- Padrão principal de consulta: todos os sócios de um CNPJ
-CREATE INDEX ix_sociosFP_cnpj_cpf
-    ON temp_CGUSC.fp.dados_socios (cnpj, cpf_cnpj_socio);
+-- Padrão de consulta por farmácia
+CREATE INDEX ix_sociosFP_cnpj
+    ON temp_CGUSC.fp.dados_socios (cnpj);
 
 
 --------------------------------------------------------------
@@ -587,11 +587,16 @@ LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = ra
 
 -- ── Índices na tabela final ──────────────────────────────────────────────────
 
--- Índice principal: busca por CPF/CNPJ do sócio (usado pelo sync_network)
-CREATE INDEX ix_partExt_cpf_cnpj_socio
-    ON temp_CGUSC.fp.socios_participacoes_externas (cpf_cnpj_socio);
+-- Índice CLUSTERED: Organiza a tabela fisicamente por CPF (Performance Industrial em cruzamentos)
+CREATE CLUSTERED INDEX cx_partExt_cpf_cnpj_socio
+    ON temp_CGUSC.fp.socios_participacoes_externas (cpf_cnpj_socio, cnpj_empresa);
 
--- Índice secundário: busca por empresa externa (análise inversa futura)
+-- Índice de Categoria: acelera buscas por ramo de atividade (ex: busca por outras farmácias)
+CREATE INDEX ix_partExt_cnae
+    ON temp_CGUSC.fp.socios_participacoes_externas (id_cnae_principal)
+    INCLUDE (is_farmacia_fp, razao_social);
+
+-- Índice secundário: busca por empresa externa
 CREATE INDEX ix_partExt_cnpj_empresa
     ON temp_CGUSC.fp.socios_participacoes_externas (cnpj_empresa);
 

@@ -10,7 +10,16 @@ const cnpjDetailStore = useCnpjDetailStore();
 const { sociosData, sociosLoading, sociosError, dadosCadastro } = storeToRefs(cnpjDetailStore);
 const { formatarData, formatPercent, formatTitleCase, formatCurrencyFull } = useFormatting();
 
-const socios = computed(() => sociosData.value?.socios || []);
+const mostrarApenasAtivos = ref(false);
+
+const socios = computed(() => {
+  const lista = sociosData.value?.socios || [];
+  if (mostrarApenasAtivos.value) {
+    return lista.filter(s => !s.data_exclusao_sociedade);
+  }
+  return lista;
+});
+
 const dataProcessamento = computed(() => sociosData.value?.data_processamento || null);
 
 const formatCpfCnpj = (v) => {
@@ -91,22 +100,27 @@ const copyAndSignal = (text, key) => {
         <div class="header-left">
           <i class="pi pi-users" />
           <div class="header-text">
-            <h2 class="title">QUADRO SOCIETÁRIO</h2>
-            <p class="subtitle">
-              Composição de sócios e administradores registrada na Receita Federal.
-            </p>
+            <h2 class="title">
+              QUADRO SOCIETÁRIO
+              <span v-if="dadosCadastro?.natureza_juridica" class="natureza-badge-inline">
+                {{ formatTitleCase(dadosCadastro.natureza_juridica) }}
+              </span>
+            </h2>
+            <p class="subtitle">Sócios e administradores registrados na Receita Federal.</p>
           </div>
         </div>
         
         <div class="header-right">
-          <div class="header-item">
-            <span class="label">Capital Social</span>
-            <span class="value">{{ formatCurrencyFull(dadosCadastro?.capital_social || 0) }}</span>
+          <div class="header-item filter-switch-group-horizontal" @click="mostrarApenasAtivos = !mostrarApenasAtivos">
+            <span class="label">APENAS ATIVOS</span>
+            <div class="custom-switch compact" :class="{ 'active': mostrarApenasAtivos }">
+              <div class="switch-slider"></div>
+            </div>
           </div>
           <div class="header-divider"></div>
           <div class="header-item">
-            <span class="label">Sócios Ativos</span>
-            <span class="value value-muted">{{ socios.filter(isAtivo).length }}</span>
+            <span class="label">Capital Social</span>
+            <span class="value">{{ formatCurrencyFull(dadosCadastro?.capital_social || 0) }}</span>
           </div>
           <div class="header-divider"></div>
           <div class="header-item" v-tooltip.top="'Data da última sincronização com a base oficial da Receita Federal.'">
@@ -275,6 +289,23 @@ const copyAndSignal = (text, key) => {
   gap: 0.5rem;
 }
 
+.natureza-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  border-radius: 6px;
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: none; /* Mantém o Title Case */
+  letter-spacing: 0;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
 .data-ref {
   background: color-mix(in srgb, var(--text-muted) 10%, transparent);
   color: var(--text-secondary);
@@ -305,6 +336,7 @@ const copyAndSignal = (text, key) => {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  table-layout: fixed; /* Força larguras fixas */
 }
 
 .premium-table th {
@@ -318,10 +350,21 @@ const copyAndSignal = (text, key) => {
   border-bottom: 2px solid var(--tabs-border);
 }
 
+/* Definindo larguras para cada coluna */
+.premium-table th:nth-child(1) { width: 35%; } /* Sócio */
+.premium-table th:nth-child(2) { width: 18%; } /* CPF/CNPJ */
+.premium-table th:nth-child(3) { width: 15%; } /* Qualificação */
+.premium-table th:nth-child(4) { width: 12%; } /* Localização */
+.premium-table th:nth-child(5) { width: 10%; } /* Participação */
+.premium-table th:nth-child(6) { width: 10%; } /* Entrada */
+
 .premium-table td {
   padding: 1rem;
   border-bottom: 1px solid var(--tabs-border);
   color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .premium-table tbody tr {
@@ -582,6 +625,50 @@ const copyAndSignal = (text, key) => {
 .header-item .value.value-muted {
   color: var(--text-color);
   opacity: 0.75;
+}
+
+.filter-switch-group-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.filter-switch-group-horizontal:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.custom-switch {
+  width: 40px;
+  height: 20px;
+  background: #334155;
+  border-radius: 99px;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-switch.active {
+  background: var(--primary-color);
+}
+
+.switch-slider {
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.custom-switch.active .switch-slider {
+  transform: translateX(20px);
 }
 
 .header-divider {

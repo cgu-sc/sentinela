@@ -209,14 +209,20 @@ def sync_network(cnpj: str) -> None:
             r = raiz[0]
             nodes[cnpj] = {
                 "id": cnpj,
-                "label": r.get("razaoSocial") or f"CNPJ {cnpj}",
+                "label": r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
+                "razao_social": r.get("razao_social"),
+                "nome_fantasia": r.get("nome_fantasia"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
-                "situacao_rf": r.get("situacaoCadastral"),
+                "situacao_rf": r.get("situacao_rf"),
             }
         else:
-            nodes[cnpj] = {"id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", "municipio": None, "uf": None, "situacao_rf": None}
+            nodes[cnpj] = {
+                "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
+                "razao_social": None, "nome_fantasia": None,
+                "municipio": None, "uf": None, "situacao_rf": None
+            }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
         df_soc = get_df_dados_socios()
@@ -232,6 +238,8 @@ def sync_network(cnpj: str) -> None:
                     "id": id_socio,
                     "label": s["nome_socio"],
                     "type": s["indicador_socio"] or "PF",
+                    "razao_social": s["nome_socio"],
+                    "nome_fantasia": None,
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
@@ -257,8 +265,10 @@ def sync_network(cnpj: str) -> None:
                 if cnpj_ext not in nodes:
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
-                        "label": p["nome_empresa"],
+                        "label": p["razao_social"] or p["nome_fantasia"] or cnpj_ext,
                         "type": "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA",
+                        "razao_social": p["razao_social"],
+                        "nome_fantasia": p["nome_fantasia"],
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],

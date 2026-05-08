@@ -46,6 +46,8 @@ function buildGraph(data) {
         municipio: n.municipio,
         uf: n.uf,
         situacao: n.situacao_rf,
+        razao_social: n.razao_social,
+        nome_fantasia: n.nome_fantasia,
       }
     })),
     ...data.edges.map(e => ({
@@ -68,15 +70,31 @@ function buildGraph(data) {
       animate: true,
       animationDuration: 800,
       nodeRepulsion: () => 8000,
-      idealEdgeLength: () => 120,
+      idealEdgeLength: () => 100,
       gravity: 1.2,
       numIter: 1000,
+      initialTemp: 1000,
+      coolingFactor: 0.99,
+      minTemp: 1.0,
       fit: true,
-      padding: 40,
+      padding: 50,
+      randomize: true, // Garante que não comece tudo no (0,0)
     },
-    minZoom: 0.2,
+    minZoom: 0.1,
     maxZoom: 3,
     wheelSensitivity: 0.2,
+  });
+
+  // Garante centralização após renderizar
+  cy.one('layoutstop', () => {
+    cy.animate({
+      fit: { padding: 50 },
+      duration: 500
+    });
+  });
+
+  cy.ready(() => {
+    cy.fit(50);
   });
 
   // Eventos interativos
@@ -327,7 +345,15 @@ const typeLabels = {
             <h3 class="panel-name">{{ selectedNode.fullLabel }}</h3>
             <div class="panel-id">{{ selectedNode.id }}</div>
             <div class="panel-fields">
-              <div v-if="selectedNode.municipio" class="panel-field">
+              <div v-if="selectedNode.razao_social" class="panel-field info-block">
+                <div class="field-label">Razão Social</div>
+                <div class="field-value">{{ selectedNode.razao_social }}</div>
+              </div>
+              <div v-if="selectedNode.nome_fantasia" class="panel-field info-block">
+                <div class="field-label">Nome Fantasia</div>
+                <div class="field-value">{{ selectedNode.nome_fantasia }}</div>
+              </div>
+              <div v-if="selectedNode.municipio" class="panel-field mt-1">
                 <i class="pi pi-map-marker" />
                 <span>{{ selectedNode.municipio }} / {{ selectedNode.uf }}</span>
               </div>
@@ -636,6 +662,32 @@ const typeLabels = {
   font-size: 0.75rem;
   flex-shrink: 0;
 }
+
+.info-block {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 0.1rem !important;
+  background: var(--bg-secondary);
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+
+.field-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.field-value {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+  line-height: 1.2;
+}
+
+.mt-1 { margin-top: 0.25rem; }
 
 .panel-hint {
   font-size: 0.65rem;

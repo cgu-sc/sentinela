@@ -253,7 +253,8 @@ def _sync_socios_participacoes_externas(engine, progress_callback=None):
     if total_rows == 0:
         print("   -> Nenhuma participação externa encontrada.")
         _df_socios_externos = pl.DataFrame(schema={
-            "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, "nome_empresa": pl.String,
+            "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
+            "razao_social": pl.String, "nome_fantasia": pl.String,
             "indicador_socio": pl.Categorical, "percentual_qualificacao": pl.Float32,
             "descricao_qualificacao": pl.Categorical, "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
@@ -280,7 +281,8 @@ def _sync_socios_participacoes_externas(engine, progress_callback=None):
     _df_socios_externos = df_full.with_columns([
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
-        pl.col("nome_empresa").cast(pl.String),
+        pl.col("razao_social").cast(pl.String),
+        pl.col("nome_fantasia").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("descricao_qualificacao").cast(pl.Categorical),

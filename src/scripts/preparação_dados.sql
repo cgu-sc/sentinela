@@ -333,7 +333,8 @@ CREATE CLUSTERED INDEX ix_socios_ext_cnpj
 SELECT DISTINCT
     raw.cpf_cnpj_socio,
     raw.cnpj_empresa,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.RazaoSocial, 100)) AS VARCHAR(100)) AS nome_empresa,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.RazaoSocial, 100)) AS VARCHAR(100)) AS razao_social,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.NomeFantasia, 100)) AS VARCHAR(100)) AS nome_fantasia,
     raw.indicador_socio,
     raw.percentual_qualificacao,
     CAST(temp_CGUSC.dbo.InitCapEachWord(raw.descricao_qualificacao) AS VARCHAR(60)) AS descricao_qualificacao,

@@ -227,6 +227,8 @@ def _schema_cnpj_parquet(pl):
             "id": pl.Utf8,
             "label": pl.Utf8,
             "type": pl.Utf8,
+            "razao_social": pl.Utf8,
+            "nome_fantasia": pl.Utf8,
             "municipio": pl.Utf8,
             "uf": pl.Utf8,
             "situacao_rf": pl.Utf8,

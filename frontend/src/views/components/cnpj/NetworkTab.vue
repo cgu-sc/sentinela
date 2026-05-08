@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, onActivated, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useRoute } from 'vue-router';
@@ -298,6 +298,14 @@ onBeforeUnmount(() => {
   cy?.destroy();
   cy = null;
 });
+
+onActivated(() => {
+  if (cy) {
+    cy.resize();
+  }
+});
+
+
 
 // ── Label do tipo de nó ─────────────────────────────────────────────────────
 const typeLabels = {

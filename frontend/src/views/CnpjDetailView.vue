@@ -386,8 +386,9 @@ const isInitialLoading = computed(() => {
         <template #header>
           <i class="pi pi-share-alt tab-icon" /><span>Teia Societária</span>
         </template>
-        <NetworkTab />
-
+        <KeepAlive>
+          <NetworkTab v-if="cnpjNav.activeTabIndex === TAB_INDEX.NETWORK" />
+        </KeepAlive>
       </TabPanel>
 
       <TabPanel>

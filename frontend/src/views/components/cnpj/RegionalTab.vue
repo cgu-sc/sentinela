@@ -6,7 +6,7 @@ import { useCnpjNavStore } from '@/stores/cnpjNav';
 import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
-import { useFrozenData } from '@/composables/useFrozenData';
+import { useStableTabState } from '@/composables/useStableTabState';
 import RegionalMunicipalTable from '../tables/RegionalMunicipalTable.vue';
 import RegionalPharmacyTable from '../tables/RegionalPharmacyTable.vue';
 import MunicipalMap from '../maps/MunicipalMap.vue';
@@ -23,12 +23,13 @@ const geoStore = useGeoStore();
 const filterStore = useFilterStore();
 const { isAnimating } = storeToRefs(filterStore);
 const { getApiParams } = useFilterParameters();
-const { regionalData, regionalLoading, regionalLoaded, fetchRegional } = useRegional();
+const { regionalData, regionalLoading, regionalLoaded, regionalError, fetchRegional } = useRegional();
 
-const cachedRegionalData = useFrozenData(regionalData, regionalLoading);
-const isRefreshing = computed(() =>
-  regionalLoading.value && cachedRegionalData.value !== null && !isAnimating.value
-);
+const {
+  cachedData: cachedRegionalData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(regionalData, regionalLoading, regionalError);
 
 // ibge7 do município atual do CNPJ (para pré-selecionar no mapa)
 const norm = s => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -77,13 +78,13 @@ const loadData = () => {
 };
 
 onMounted(() => {
-  if (props.geoData?.no_regiao_saude) {
+  if (props.geoData?.id_regiao_saude || props.geoData?.sg_uf) {
     loadData();
   }
 });
 
-watch(() => props.geoData?.no_regiao_saude, (newVal) => {
-  if (newVal) loadData();
+watch(() => [props.geoData?.id_regiao_saude, props.geoData?.sg_uf], ([regiaoId, uf]) => {
+  if (regiaoId || uf) loadData();
 });
 
 watch(
@@ -134,17 +135,33 @@ watch(
   <div class="tab-content regional-tab" :class="{ 'is-refreshing': isRefreshing }">
     <!-- Sem geo data -->
     <TabPlaceholder
-      v-if="!geoData?.no_regiao_saude"
+      v-if="!cnpjData"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
+    />
+
+    <TabPlaceholder
+      v-else-if="!geoData?.sg_uf"
       icon="pi-map-marker"
       title="Geolocalização indisponível"
       description="Não foi possível identificar a Região de Saúde deste estabelecimento para gerar o ranking comparativo."
     />
 
     <TabPlaceholder
-      v-else-if="regionalLoading && !cachedRegionalData"
+      v-else-if="shouldShowInitialLoading"
       variant="loading"
       title="Carregando ranking regional"
       :description="`Buscando dados da região ${geoData.no_regiao_saude}...`"
+    />
+
+    <TabPlaceholder
+      v-else-if="regionalError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="regionalError"
     />
 
     <TabPlaceholder

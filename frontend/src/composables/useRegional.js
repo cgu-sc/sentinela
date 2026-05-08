@@ -6,10 +6,13 @@
 import { ref } from 'vue';
 import { API_ENDPOINTS } from '@/config/api';
 
+const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
+
 export function useRegional() {
   const regionalData    = ref(null);
   const regionalLoading = ref(false);
   const regionalLoaded  = ref(false);
+  const regionalError   = ref(null);
 
   /**
    * Busca os dados regionais para a região informada.
@@ -42,14 +45,15 @@ export function useRegional() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       regionalData.value = await res.json();
       loadedRegion.value = cacheKey;
+      regionalError.value = null;
     } catch (e) {
       console.error('❌ Erro ao buscar dados regionais:', e);
-      regionalData.value = null;
+      regionalError.value = ERROR_MSG;
     } finally {
       regionalLoading.value = false;
       regionalLoaded.value  = true;
     }
   }
 
-  return { regionalData, regionalLoading, regionalLoaded, fetchRegional };
+  return { regionalData, regionalLoading, regionalLoaded, regionalError, fetchRegional };
 }

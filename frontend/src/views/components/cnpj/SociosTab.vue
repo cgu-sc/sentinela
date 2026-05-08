@@ -115,7 +115,7 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
               <td class="location-cell">
                 <div v-if="s.municipio" class="location-wrapper">
                   <i class="pi pi-map-marker" />
-                  <span>{{ s.municipio }} / {{ s.uf }}</span>
+                  <span>{{ formatTitleCase(s.municipio) }} / {{ s.uf }}</span>
                 </div>
                 <span v-else>—</span>
               </td>
@@ -292,6 +292,7 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   font-size: 0.8rem;
   color: var(--text-secondary);
   min-width: 120px;
+  text-transform: none !important;
 }
 
 .location-wrapper {

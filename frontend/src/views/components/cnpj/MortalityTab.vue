@@ -2,9 +2,8 @@
 import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { useFilterStore } from '@/stores/filters';
-import { useFrozenData } from '@/composables/useFrozenData';
+import { useStableTabState } from '@/composables/useStableTabState';
 import { useFormatting } from '@/composables/useFormatting';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
@@ -22,16 +21,14 @@ const props = defineProps({
 
 const filterStore = useFilterStore();
 const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
-const showRefreshingKPIs = useDelayedLoading(falecidosLoading);
 
 // Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
-const cachedFalecidosData = useFrozenData(falecidosData, falecidosLoading);
+const {
+  cachedData: cachedFalecidosData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(falecidosData, falecidosLoading, falecidosError);
 
-const isRefreshing = computed(() =>
-  falecidosLoading.value &&
-  cachedFalecidosData.value !== null &&
-  !filterStore.isAnimating
-);
 const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj, toLocalISO } = useFormatting();
 const analyticsStore = useAnalyticsStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -176,7 +173,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 <template>
   <div class="tab-content falecidos-tab" :class="{ 'is-refreshing': isRefreshing }">
     <TabPlaceholder
-      v-if="showRefreshingKPIs && !cachedFalecidosData"
+      v-if="shouldShowInitialLoading"
       variant="loading"
       title="Analisando base de óbitos"
       description="Cruzando dados com registros de falecimento..."
@@ -438,11 +435,12 @@ const falecidosAgrupadosFiltrados = computed(() => {
       </div>
     </template>
 
-    <div v-else class="tab-placeholder">
-      <i class="pi pi-exclamation-triangle placeholder-icon" />
-      <p>Clique na aba para processar a análise de óbitos.</p>
-    </div>
-
+    <TabPlaceholder
+      v-else
+      variant="loading"
+      title="Analisando base de óbitos"
+      description="Cruzando dados com registros de falecimento..."
+    />
     <MortalityTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
   </div>
 </template>

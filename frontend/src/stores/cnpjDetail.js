@@ -247,7 +247,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       if (this.falecidosLoaded === key) return;
 
       this.falecidosLoading = true;
-      this.falecidosError   = null;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
@@ -260,6 +259,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
         this.falecidosData   = data;
         this.falecidosLoaded = key;
+        this.falecidosError  = null;
       } catch (e) {
         console.error('Erro ao buscar dados de falecidos:', e);
         this.falecidosError = ERROR_MSG;
@@ -273,7 +273,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.prescritoresLoaded === key) return;
       this.prescritoresLoading = true;
-      this.prescritoresError   = null;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
@@ -284,6 +283,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.requestTimes['crm-data'] = { label: 'CRM Data', ms, detail: buildTimingDetail(data) };
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
+        this.prescritoresError  = null;
       } catch (e) {
         console.error('Erro ao buscar dados de prescritores:', e);
         this.prescritoresError = ERROR_MSG;

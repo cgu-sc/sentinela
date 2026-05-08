@@ -1,10 +1,9 @@
 <script setup>
-import { computed, ref, onMounted, watch } from "vue";
-import { useDelayedLoading } from '@/composables/useDelayedLoading';
+import { computed, ref } from "vue";
 import TabPlaceholder from './TabPlaceholder.vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-import { useFilterParameters } from "@/composables/useFilterParameters";
+import { useStableTabState } from '@/composables/useStableTabState';
 
 import CRMKpiGrid from './CRMKpiGrid.vue';
 import CRMCronologia from './CRMCronologia.vue';
@@ -20,24 +19,18 @@ const props = defineProps({
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode } = storeToRefs(cnpjDetailStore);
-const { getApiParams } = useFilterParameters();
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
-const cachedPrescritoresData = ref(prescritoresData.value);
-const showRefreshingKPIs = useDelayedLoading(prescritoresLoading);
 const filterStore = useFilterStore();
+const {
+  cachedData: cachedPrescritoresData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(prescritoresData, prescritoresLoading, prescritoresError);
 
-watch([prescritoresData, prescritoresLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedPrescritoresData.value = newData;
-}, { immediate: true });
 
-onMounted(() => {
-  // Dados agora são carregados centralizadamente pelo CnpjDetailView (Eager Load)
-});
 
 // ── Estado de Navegação (Agora via Store) ─────────────────────────────────
 const activeKpiFilter = ref(null);
-
-const isRefreshing = computed(() => showRefreshingKPIs.value && cachedPrescritoresData.value !== null);
 
 // ── Dados Base ────────────────────────────────────────────────────────────
 const summary = computed(() => cachedPrescritoresData.value?.summary || {});
@@ -152,14 +145,14 @@ defineExpose({
 <template>
   <div class="crm-tab-container">
     <TabPlaceholder
-      v-if="showRefreshingKPIs && !prescritoresData"
+      v-if="shouldShowInitialLoading"
       variant="loading"
       title="Carregando análise de prescritores"
       description="Buscando CRMs e histórico de prescrições..."
     />
 
     <TabPlaceholder
-      v-else-if="prescritoresError && !prescritoresData"
+      v-else-if="prescritoresError"
       variant="error"
       icon="pi-exclamation-circle"
       title="Erro ao carregar"
@@ -167,13 +160,13 @@ defineExpose({
     />
 
     <TabPlaceholder
-      v-else-if="!prescritoresData || crmsInteresse.length === 0"
-      :variant="prescritoresData?.tem_historico ? 'info' : 'success'"
+      v-else-if="!cachedPrescritoresData || crmsInteresse.length === 0"
+      :variant="cachedPrescritoresData?.tem_historico ? 'info' : 'success'"
       icon="pi-id-card"
-      :title="prescritoresData?.tem_historico ? 'Sem prescrições no período' : 'CNPJ livre de ocorrências'"
+      :title="cachedPrescritoresData?.tem_historico ? 'Sem prescrições no período' : 'CNPJ livre de ocorrências'"
     >
       <template #description>
-        <template v-if="prescritoresData?.tem_historico">
+        <template v-if="cachedPrescritoresData?.tem_historico">
           Não foram encontradas prescrições vinculadas a este CNPJ no período de 
           <span class="underline">{{ formatarData(filterStore.dataInicio) }}</span> até 
           <span class="underline">{{ formatarData(filterStore.dataFim) }}</span>.

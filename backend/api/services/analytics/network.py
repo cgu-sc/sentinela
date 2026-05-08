@@ -46,6 +46,7 @@ def get_socios_network(cnpj: str, engine) -> NetworkResponse:
             municipio=row.get("municipio"),
             uf=row.get("uf"),
             situacao_rf=row.get("situacao_rf"),
+            is_ativo=row.get("is_ativo", True)
         )
         for row in df_nodes.iter_rows(named=True)
     ]
@@ -57,6 +58,7 @@ def get_socios_network(cnpj: str, engine) -> NetworkResponse:
             target=row["target"],
             label=row["label"] or None,
             type=row["type"] or "socio",
+            is_ativo=row.get("is_ativo", True)
         )
         for row in df_edges.iter_rows(named=True)
     ] if not df_edges.is_empty() else []

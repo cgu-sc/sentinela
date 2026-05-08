@@ -405,6 +405,7 @@ class NetworkNodeSchema(BaseModel):
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None
+    is_ativo: bool = True
 
 class NetworkEdgeSchema(BaseModel):
     id: str
@@ -412,6 +413,7 @@ class NetworkEdgeSchema(BaseModel):
     target: str               # ID do nó de destino
     label: Optional[str] = None # Ex: '10.00%'
     type: str = "socio"       # 'socio' | 'representante'
+    is_ativo: bool = True
 
 class NetworkResponse(BaseModel):
     cnpj: str

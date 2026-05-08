@@ -62,6 +62,7 @@ function buildGraph(data) {
         situacao: n.situacao_rf,
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
+        is_ativo: n.is_ativo,
       }
     })),
     ...data.edges.map(e => ({
@@ -71,6 +72,7 @@ function buildGraph(data) {
         target: e.target,
         label: e.label || '',
         type: e.type,
+        is_ativo: e.is_ativo,
       }
     })),
   ];
@@ -227,6 +229,28 @@ function buildStylesheet() {
   styles.push({
     selector: '.highlighted',
     style: { 'opacity': 1, 'border-width': 3 }
+  });
+
+  // Nós inativos (apagados)
+  styles.push({
+    selector: 'node[!is_ativo]',
+    style: {
+      'opacity': 0.4,
+      'border-style': 'dashed',
+      'border-opacity': 0.5
+    }
+  });
+
+  // Vínculos inativos (tracejados)
+  styles.push({
+    selector: 'edge[!is_ativo]',
+    style: {
+      'line-style': 'dashed',
+      'line-color': '#94a3b8',
+      'target-arrow-color': '#94a3b8',
+      'opacity': 0.5,
+      'width': 1
+    }
   });
 
   return styles;

@@ -245,6 +245,7 @@ def sync_network(cnpj: str) -> None:
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
+                    "is_ativo": s.get("data_exclusao_sociedade") is None,
                 }
 
             edges.append({
@@ -253,6 +254,7 @@ def sync_network(cnpj: str) -> None:
                 "target": cnpj,
                 "label": f"{float(s['percentual_qualificacao'] or 0):.1f}%",
                 "type": "socio",
+                "is_ativo": s.get("data_exclusao_sociedade") is None
             })
 
         # ── 3. Nível 2: Outras empresas destes sócios ─────────────────────────
@@ -288,6 +290,7 @@ def sync_network(cnpj: str) -> None:
                     "target": cnpj_ext,
                     "label": f"{float(p['percentual_qualificacao'] or 0):.1f}%",
                     "type": "socio",
+                    "is_ativo": p.get("data_exclusao_sociedade") is None
                 })
 
         # ── Salva os dois Parquets ────────────────────────────────────────────────

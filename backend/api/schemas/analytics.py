@@ -379,6 +379,14 @@ class SocioSchema(BaseModel):
     data_entrada_sociedade: Optional[date] = None
     data_exclusao_sociedade: Optional[date] = None
     percentual_qualificacao: Optional[float] = 0.0
+    # Representante Legal
+    cpf_representante: Optional[str] = None
+    id_qualificacao_representante: Optional[str] = None
+    nome_representante: Optional[str] = None
+    descricao_qualificacao_representante: Optional[str] = None
+    # Datas de Nascimento (Novidade)
+    data_nascimento_socio: Optional[date] = None
+    data_nascimento_representante: Optional[date] = None
 
 class SociosResponse(BaseModel):
     cnpj: str

@@ -103,10 +103,26 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
           <tbody>
             <tr v-for="s in socios" :key="s.cpf_cnpj_socio" :class="{ 'row-inactive': !isAtivo(s) }">
               <td>
-                <div class="socio-name">
-                  {{ s.nome_socio || 'NOME NÃO INFORMADO' }}
+                  <div class="name-header">
+                    {{ s.nome_socio || 'NOME NÃO INFORMADO' }}
+                    <span v-if="s.data_nascimento_socio" class="socio-birth" v-tooltip.top="'Data de Nascimento'">
+                      ({{ formatarData(s.data_nascimento_socio) }})
+                    </span>
+                  </div>
                   <span v-if="s.indicador_socio" class="socio-type">{{ formatTipoSocio(s.indicador_socio) }}</span>
-                </div>
+                  
+                  <!-- Representante Legal (Se houver) -->
+                  <div v-if="s.cpf_representante" class="representante-info" v-tooltip.top="'Representante Legal'">
+                    <i class="pi pi-user-edit" />
+                    <div class="rep-content">
+                      <span class="rep-name">{{ s.nome_representante || 'REPRESENTANTE S/ NOME' }}</span>
+                      <span class="rep-meta">
+                        {{ formatCpfCnpj(s.cpf_representante) }}
+                        <span v-if="s.descricao_qualificacao_representante"> • {{ s.descricao_qualificacao_representante }} <span v-if="s.id_qualificacao_representante">({{ s.id_qualificacao_representante }})</span></span>
+                        <span v-if="s.data_nascimento_representante"> • {{ formatarData(s.data_nascimento_representante) }}</span>
+                      </span>
+                    </div>
+                  </div>
               </td>
               <td class="col-center font-mono">{{ formatCpfCnpj(s.cpf_cnpj_socio) }}</td>
               <td class="qualificacao-cell">
@@ -280,6 +296,55 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   margin-top: 0.1rem;
+}
+
+.name-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.socio-birth {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Representante Legal */
+.representante-info {
+  margin-top: 0.6rem;
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+  border-radius: 6px;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  border-left: 3px solid var(--primary-color);
+}
+
+.representante-info i {
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.rep-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.rep-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none !important;
+}
+
+.rep-meta {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
 }
 
 .qualificacao-cell {

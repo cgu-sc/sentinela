@@ -249,15 +249,25 @@ SELECT DISTINCT
     CAST(soc.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
     CAST(soc.percentualQualificacao / 100.0 AS DECIMAL(5,2)) AS percentual_qualificacao,
     CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
-    CAST(soc.CpfRepresentante AS CHAR(11))                                         AS cpf_representante,
+    NULLIF(CAST(soc.CpfRepresentante AS CHAR(11)), '00000000000')                  AS cpf_representante,
     CAST(soc.IdQualificacaoRepresentante AS CHAR(2))                               AS id_qualificacao_representante,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(cobi_rep.nome, 100))                       AS nome_representante,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(qua_rep.DescricaoQualificacao) AS VARCHAR(60)) AS descricao_qualificacao_representante,
+    CAST(cobi.dataNascimento AS DATE)                                              AS data_nascimento_socio,
+    CAST(cobi_rep.dataNascimento AS DATE)                                          AS data_nascimento_representante,
     CAST(GETDATE() AS SMALLDATETIME)                                               AS data_processamento
 INTO temp_CGUSC.fp.dados_socios
 FROM temp_CGUSC.fp.lista_cnpjs    AS lst
 INNER JOIN db_CNPJ.dbo.socios             AS soc       ON soc.cnpj           = lst.cnpj
 INNER JOIN db_CNPJ.dbo.CNPJ               AS cnpj      ON cnpj.cnpj          = lst.cnpj
 LEFT JOIN  db_CNPJ.dbo.Municipio          AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
-LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge;
+LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge
+LEFT JOIN  db_CPF.dbo.CPF                 AS cobi      ON cobi.CPF           = soc.cpfcnpjSocio AND soc.indSocio      = 'PF'
+LEFT JOIN  db_CPF.dbo.CPF                 AS cobi_rep  ON cobi_rep.CPF       = soc.CpfRepresentante
+                                                       AND soc.CpfRepresentante <> '00000000000'
+                                                       AND soc.CpfRepresentante IS NOT NULL
+LEFT JOIN  db_CNPJ.dbo.Qualificacao       AS qua_rep   ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
+                                                       AND TRY_CAST(soc.IdQualificacaoRepresentante AS INT) > 0;
 
 -- Busca por CPF/CNPJ do sócio (cruzamento: em quais empresas essa pessoa aparece)
 CREATE INDEX ix_sociosFP_cpf_cnpj_socio

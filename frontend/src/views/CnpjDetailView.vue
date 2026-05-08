@@ -522,8 +522,8 @@ const isInitialLoading = computed(() => {
   font-size: 0.82rem;
   font-weight: 700;
   min-width: 9.5rem;
-  min-height: 4rem;
-  padding: 0.7rem 1rem !important;
+  min-height: 3.35rem;
+  padding: 0.48rem 1rem 0.55rem !important;
   gap: 0.5rem;
   align-items: center;
   justify-content: center;

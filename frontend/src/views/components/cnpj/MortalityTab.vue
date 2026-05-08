@@ -189,8 +189,8 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
     <TabPlaceholder
       v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length"
-      :variant="cachedFalecidosData?.tem_historico ? 'default' : 'success'"
-      :icon="cachedFalecidosData?.tem_historico ? 'pi-filter-slash' : 'pi-check-circle'"
+      variant="success"
+      icon="pi-check-circle"
       :title="cachedFalecidosData?.tem_historico ? 'Sem ocorrências no período' : 'CNPJ livre de ocorrências'"
     >
       <template #description>

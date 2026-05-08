@@ -405,6 +405,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 
       <div v-if="error" class="error-state">
         <i class="pi pi-exclamation-triangle" />
+        <strong>Erro ao carregar</strong>
         <p>{{ error }}</p>
       </div>
 
@@ -854,8 +855,18 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 
 .error-state i {
   font-size: 2rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   opacity: 0.5;
+}
+
+.error-state strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.error-state p {
+  margin: 0;
 }
 
 /* Tabelas nativas para integrar com o tema Arbflow */

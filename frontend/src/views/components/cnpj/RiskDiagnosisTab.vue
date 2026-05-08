@@ -26,7 +26,7 @@ const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
 const { getApiParams } = useFilterParameters();
 const { toLocalISO } = useFormatting();
-const { regionalData, regionalLoading, fetchRegional } = useRegional();
+const { regionalData, regionalError, fetchRegional } = useRegional();
 
 // Escopo do scatter regional
 const regionalScope = ref('regiao');
@@ -304,6 +304,20 @@ const closeAnimationPreview = () => {
   filterStore.resetAnimationPreview();
 };
 
+const canShowAnimationControls = computed(() =>
+  props.isActive &&
+  !props.periodLoading &&
+  Boolean(props.cnpjData) &&
+  !regionalError.value &&
+  Boolean(props.geoData?.sg_uf)
+);
+
+watch(canShowAnimationControls, (canShow) => {
+  if (!canShow && filterStore.animationMode) {
+    closeAnimationPreview();
+  }
+});
+
 const playStep = () => {
   if (filterStore.animationSliderValue === null || filterStore.animationSliderValue === undefined) {
     stopPlay();
@@ -329,6 +343,8 @@ const startAnimation = () => {
 };
 
 const togglePlay = () => {
+  if (!canShowAnimationControls.value) return;
+
   if (isPlaying.value) {
     stopPlay();
     return;
@@ -505,7 +521,23 @@ const riskRankBadge = computed(() => {
     
     <!-- Aviso de GeoData ausente -->
     <TabPlaceholder
-      v-if="!geoData?.no_regiao_saude"
+      v-if="!cnpjData"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
+    />
+
+    <TabPlaceholder
+      v-else-if="regionalError"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="regionalError"
+    />
+
+    <TabPlaceholder
+      v-else-if="!geoData?.sg_uf"
       icon="pi-map-marker"
       title="Geolocalização indisponível"
       description="Informações geográficas incompletas para realizar o diagnóstico comparativo."
@@ -631,7 +663,7 @@ const riskRankBadge = computed(() => {
     <!-- Teleport to body: evita que o transform da animação tabContentEntry
          quebre o position:fixed do FAB durante os primeiros 400ms da aba -->
     <Teleport to="body">
-    <div v-if="props.isActive && !periodLoading" class="fab-container">
+    <div v-if="canShowAnimationControls" class="fab-container">
       
       <!-- Painel de Controle de Período (Slider) -->
       <Transition name="fade-slide-right">

@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useConfigStore } from '@/stores/config';
 import { useFormatting } from '@/composables/useFormatting';
-import { useFrozenData } from '@/composables/useFrozenData';
+import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 import TabPlaceholder from './TabPlaceholder.vue';
 
@@ -14,7 +14,11 @@ const configStore = useConfigStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
 
 // ── Cache de Dados para Transição Suave ──────────────────
-const cachedIndicadoresData = useFrozenData(indicadoresData, indicadoresLoading);
+const {
+  cachedData: cachedIndicadoresData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(indicadoresData, indicadoresLoading, indicadoresError);
 // Inicializa o filtro a partir do localStorage (persistência)
 const showOnlyHighRisk = ref(localStorage.getItem('sentinela_indicators_filter_only_risky') === 'true');
 
@@ -110,10 +114,10 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 </script>
 
 <template>
-  <div class="tab-content indicadores-tab">
+  <div class="tab-content indicadores-tab" :class="{ 'is-refreshing': isRefreshing }">
 
     <TabPlaceholder
-      v-if="indicadoresLoading && !cachedIndicadoresData"
+      v-if="shouldShowInitialLoading"
       variant="loading"
       title="Carregando indicadores"
       description="Buscando métricas de risco e comparativos regionais..."
@@ -129,9 +133,10 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
     <TabPlaceholder
       v-else-if="indicadoresLoaded && !Object.keys(cachedIndicadoresData?.indicadores ?? {}).length"
-      icon="pi-table"
-      title="Nenhum indicador encontrado"
-      description="Não há dados suficientes para gerar os indicadores de risco deste estabelecimento."
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
     />
 
     <template v-else-if="cachedIndicadoresData">
@@ -237,9 +242,9 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 
     <TabPlaceholder
       v-else
-      icon="pi-shield"
-      title="Indicadores de Risco"
-      description="Clique na aba para processar e carregar a análise detalhada."
+      variant="loading"
+      title="Carregando indicadores"
+      description="Buscando métricas de risco e comparativos regionais..."
     />
 
   </div>
@@ -251,6 +256,12 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.indicadores-tab.is-refreshing {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 .section-title {

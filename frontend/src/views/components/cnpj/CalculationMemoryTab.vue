@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFormatting } from '@/composables/useFormatting';
+import { useStableTabState } from '@/composables/useStableTabState';
 import TabPlaceholder from './TabPlaceholder.vue';
 
-const props = defineProps({
+defineProps({
   cnpj: { type: String, required: true }
 });
 
@@ -19,8 +20,13 @@ const loading = computed(() => cnpjDetailStore.movimentacaoLoading);
 const loaded  = computed(() => cnpjDetailStore.movimentacaoLoaded);
 const error   = computed(() => cnpjDetailStore.movimentacaoError);
 const data    = computed(() => cnpjDetailStore.movimentacaoData);
-const rows    = computed(() => data.value?.rows ?? []);
-const summary = computed(() => data.value?.summary ?? null);
+const {
+  cachedData: cachedMovimentacaoData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(data, loading, error);
+const rows    = computed(() => cachedMovimentacaoData.value?.rows ?? []);
+const summary = computed(() => cachedMovimentacaoData.value?.summary ?? null);
 
 // ── Agrupa linhas em seções por GTIN ─────────────────────────────────────────
 const sections = computed(() => {
@@ -76,8 +82,6 @@ function toggle(gtin) {
 }
 function expandAll()   { _expanded.value = new Set(sections.value.map(s => s.gtin)); }
 function collapseAll() { _expanded.value = new Set(); }
-
-const processarMovimentacao = () => { cnpjDetailStore.fetchMovimentacao(props.cnpj); };
 
 const copyToClipboard = (text) => {
   if (!text) return;
@@ -247,28 +251,20 @@ const pctIrregular = (section) => {
 </script>
 
 <template>
-  <div class="mov-tab">
+  <div class="mov-tab" :class="{ 'is-refreshing': isRefreshing }">
 
     <!-- ── ESTADO: Erro ──────────────────────────────────────────────────── -->
-    <div v-if="error" class="mov-loading-state tab-placeholder--error">
-      <div class="loading-inner">
-        <i class="pi pi-exclamation-circle loading-icon" style="color: var(--red-400)" />
-        <p class="loading-title">Falha ao carregar</p>
-        <p style="font-size: 0.85rem; opacity: 0.7; margin: 0;">{{ error }}</p>
-        <div class="mov-workspace-note">
-          <i class="pi pi-info-circle" />
-          <span>O acesso à Memória de Cálculo requer conexão à rede da CGU via <strong>WorkSpace</strong>.</span>
-        </div>
-        <button class="retry-btn" @click="processarMovimentacao">
-          <i class="pi pi-refresh" />
-          Tentar novamente
-        </button>
-      </div>
-    </div>
+    <TabPlaceholder
+      v-if="error"
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      :description="error"
+    />
 
     <!-- ── ESTADO: Carregando (inclui aguardando início do fetch) ───────────── -->
     <TabPlaceholder
-      v-else-if="loading || (!loaded && !error)"
+      v-else-if="shouldShowInitialLoading || (!loaded && !cachedMovimentacaoData)"
       variant="loading"
       title="Processando memória de cálculo"
       description="Buscando movimentações e calculando indicadores..."
@@ -277,13 +273,14 @@ const pctIrregular = (section) => {
     <!-- ── ESTADO: Sem dados ───────────────────────────────────────────────── -->
     <TabPlaceholder
       v-else-if="loaded && !rows.length"
-      icon="pi-database"
-      title="Nenhum dado encontrado"
-      description="Não há movimentações registradas para este CNPJ no período analisado."
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
     />
 
     <!-- ── ESTADO: Dados carregados ───────────────────────────────────────── -->
-    <template v-else-if="loaded && rows.length">
+    <template v-else-if="cachedMovimentacaoData && rows.length">
 
 
       <!-- Card de Ranking de Substâncias -->
@@ -534,57 +531,11 @@ const pctIrregular = (section) => {
 
 <style scoped>
 .mov-tab { padding: 0; display: flex; flex-direction: column; gap: 1.5rem; min-height: 300px; }
-.mov-workspace-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
-  border-radius: 8px;
-  font-size: 0.78rem;
-  color: var(--text-color);
-  opacity: 0.85;
-  text-align: left;
-  line-height: 1.5;
-  max-width: 360px;
+.mov-tab.is-refreshing {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
-.mov-workspace-note i {
-  color: var(--primary-color);
-  margin-top: 0.15rem;
-  flex-shrink: 0;
-}
-.retry-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: 0.55rem 1.5rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  font-family: inherit;
-  letter-spacing: 0.04em;
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-}
-.retry-btn:hover {
-  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
-  border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 20%, transparent);
-}
-.mov-loading-state { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4rem 2rem; }
-.loading-inner { display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 400px; text-align: center; }
-.loading-icon { font-size: 2.5rem; color: var(--primary-color); opacity: 0.8; }
-.loading-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0; }
-.mov-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--text-muted); opacity: 0.5; padding: 3rem; }
-.placeholder-icon { font-size: 3rem; }
-.mov-empty-state p { font-size: 0.875rem; margin: 0; }
 
 /* ── MAIN CARD & TOOLBAR REESTRUTURADA ─────────────────────────────────── */
 .mov-main-card {

@@ -3,8 +3,7 @@ import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { storeToRefs } from 'pinia';
-import { useFilterStore } from '@/stores/filters';
-import { useFrozenData } from '@/composables/useFrozenData';
+import { useStableTabState } from '@/composables/useStableTabState';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
@@ -31,14 +30,16 @@ const cnpj = computed(() => route.params.cnpj);
 
 const { formatCurrencyFull } = useFormatting();
 const { chartTheme, chartDataColors } = useChartTheme();
-const filterStore = useFilterStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError, evolucaoMensalGtin, evolucaoMensalGtinLoading } = storeToRefs(cnpjDetailStore);
 
 // ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
-// Mantém os dados do semestre anterior visíveis durante a animação de período.
-const cachedEvolucaoData = useFrozenData(evolucaoData, evolucaoLoading);
+const {
+  cachedData: cachedEvolucaoData,
+  shouldShowInitialLoading,
+  isRefreshing,
+} = useStableTabState(evolucaoData, evolucaoLoading, evolucaoError);
 
 const chartRef = ref(null);
 
@@ -58,10 +59,6 @@ function formatMesRange(mesInicio, mesFim) {
   return mi === mf ? mi : `${mi} – ${mf}`;
 }
 
-// Verdadeiro quando há dados anteriores visíveis E um novo fetch está em curso.
-// Usado para dimir os cards suavemente em vez de exibir o spinner novamente.
-// NOTA: Durante a animação (autoplay), mantemos a opacidade total para evitar flicker.
-const isRefreshing = computed(() => evolucaoLoading.value && cachedEvolucaoData.value !== null && !filterStore.isAnimating);
 const isMonthlyChartExpanded = ref(false);
 const hoveredSemestre = ref(null);
 
@@ -490,7 +487,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 <template>
   <div class="tab-content evolucao-tab">
     <TabPlaceholder
-      v-if="evolucaoLoading && !cachedEvolucaoData"
+      v-if="shouldShowInitialLoading"
       variant="loading"
       title="Carregando movimentação financeira"
       description="Buscando histórico semestral e mensal..."
@@ -506,9 +503,10 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
     <TabPlaceholder
       v-else-if="evolucaoLoaded && !cachedEvolucaoData?.semestres?.length"
-      icon="pi-chart-bar"
-      title="Nenhum dado encontrado"
-      description="Não há movimentações registradas para este CNPJ no período selecionado."
+      variant="error"
+      icon="pi-exclamation-circle"
+      title="Erro ao carregar"
+      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
     />
 
     <template v-else-if="cachedEvolucaoData">
@@ -854,10 +852,12 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </template>
       </Dialog>
     </template>
-    <div v-else class="tab-placeholder">
-      <i class="pi pi-chart-bar placeholder-icon" />
-      <p>Clique na aba para carregar os dados.</p>
-    </div>
+    <TabPlaceholder
+      v-else
+      variant="loading"
+      title="Carregando movimentação financeira"
+      description="Buscando histórico semestral e mensal..."
+    />
     
     <GtinDetalhamentoMensalSidebar
       v-model:visible="insightSidebarVisible"
@@ -1176,22 +1176,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 .trend-up      { color: var(--risk-high); }
 .trend-down    { color: var(--risk-low); }
 .trend-neutral { color: var(--text-muted); font-weight: 400; }
-
-.tab-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
-  gap: 1rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-.placeholder-icon {
-  font-size: 2.5rem;
-  color: var(--sidebar-border);
-  opacity: 0.7;
-}
 
 .mensal-gtin-chart-wrapper {
   margin-bottom: 1.25rem;

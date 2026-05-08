@@ -122,7 +122,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       if (this.evolucaoKey === key) return;
 
       this.evolucaoLoading = true;
-      this.evolucaoError   = null;
 
       try {
         const params = {};
@@ -135,6 +134,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.evolucaoFinanceira = data;
         this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
+        this.evolucaoError      = null;
       } catch (e) {
         console.error('Erro ao buscar evolução financeira:', e);
         this.evolucaoError = ERROR_MSG;
@@ -176,7 +176,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.gtinDetalhamentoMensalData = data;
       } catch (error) {
         console.error('Erro ao buscar detalhamento mensal de GTINs:', error);
-        this.gtinDetalhamentoMensalError = 'Falha ao carregar o detalhamento mensal de GTINs.';
+        this.gtinDetalhamentoMensalError = ERROR_MSG;
         this.gtinDetalhamentoMensalData = null;
       } finally {
         this.gtinDetalhamentoMensalLoading = false;
@@ -187,7 +187,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     async fetchMovimentacao(cnpj) {
       if (!cnpj) return;
       this.movimentacaoLoading = true;
-      this.movimentacaoError   = null;
       try {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
@@ -195,9 +194,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.requestTimes['movimentacao'] = { label: 'Memória de Cálculo', ms, detail: buildTimingDetail(data) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
+        this.movimentacaoError  = null;
       } catch (e) {
         console.error('Erro ao buscar movimentação:', e);
-        this.movimentacaoError = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
+        this.movimentacaoError = ERROR_MSG;
       } finally {
         this.movimentacaoLoading = false;
       }
@@ -207,13 +207,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     async fetchIndicadores(cnpj) {
       if (this.indicadoresLoaded) return;
       this.indicadoresLoading = true;
-      this.indicadoresError   = null;
       try {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(cnpj));
         this.requestTimes['indicadores'] = { label: 'Indicadores de Risco', ms: Math.round(performance.now() - t0) };
         this.indicadoresData   = data;
         this.indicadoresLoaded = true;
+        this.indicadoresError  = null;
       } catch (e) {
         console.error('Erro ao buscar indicadores:', e);
         this.indicadoresError = ERROR_MSG;

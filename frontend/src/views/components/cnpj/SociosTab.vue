@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { useFormatting } from "@/composables/useFormatting";
@@ -33,6 +33,29 @@ const formatTipoSocio = (v) => {
 
 // Determina se o sócio ainda é ativo (sem data de exclusão)
 const isAtivo = (socio) => !socio.data_exclusao_sociedade;
+
+const calcularIdade = (dataNasc) => {
+  if (!dataNasc) return null;
+  const hoje = new Date();
+  const nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
+    idade--;
+  }
+  return idade;
+};
+
+const copiedKey = ref(null);
+
+const copyAndSignal = (text, key) => {
+  if (!text) return;
+  navigator.clipboard.writeText(text);
+  copiedKey.value = key;
+  setTimeout(() => {
+    if (copiedKey.value === key) copiedKey.value = null;
+  }, 2000);
+};
 
 </script>
 
@@ -103,28 +126,53 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
           <tbody>
             <tr v-for="s in socios" :key="s.cpf_cnpj_socio" :class="{ 'row-inactive': !isAtivo(s) }">
               <td>
-                  <div class="name-header">
-                    {{ s.nome_socio || 'NOME NÃO INFORMADO' }}
-                    <span v-if="s.data_nascimento_socio" class="socio-birth" v-tooltip.top="'Data de Nascimento'">
-                      ({{ formatarData(s.data_nascimento_socio) }})
+                <div class="socio-name">
+                  <div class="name-row">
+                    <span class="main-name">{{ s.nome_socio || 'NOME NÃO INFORMADO' }}</span>
+                    <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-name' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']" 
+                       @click="copyAndSignal(s.nome_socio, s.cpf_cnpj_socio + '-name')" 
+                       v-tooltip.top="'Copiar Nome'" />
+                  </div>
+                  
+                  <div class="socio-meta">
+                    <span v-if="s.indicador_socio" class="socio-type">{{ formatTipoSocio(s.indicador_socio) }}</span>
+                    <span v-if="s.data_nascimento_socio" class="socio-age" v-tooltip.top="formatarData(s.data_nascimento_socio)">
+                      • {{ calcularIdade(s.data_nascimento_socio) }} anos
                     </span>
                   </div>
-                  <span v-if="s.indicador_socio" class="socio-type">{{ formatTipoSocio(s.indicador_socio) }}</span>
                   
                   <!-- Representante Legal (Se houver) -->
                   <div v-if="s.cpf_representante" class="representante-info" v-tooltip.top="'Representante Legal'">
                     <i class="pi pi-user-edit" />
                     <div class="rep-content">
-                      <span class="rep-name">{{ s.nome_representante || 'REPRESENTANTE S/ NOME' }}</span>
+                      <div class="rep-name-row">
+                        <span class="rep-name">{{ s.nome_representante || 'REPRESENTANTE S/ NOME' }}</span>
+                        <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-rep-name' ? 'pi-check text-success' : 'pi-copy', 'copy-btn small']" 
+                           @click="copyAndSignal(s.nome_representante, s.cpf_cnpj_socio + '-rep-name')" 
+                           v-tooltip.top="'Copiar Nome do Rep.'" />
+                      </div>
                       <span class="rep-meta">
-                        {{ formatCpfCnpj(s.cpf_representante) }}
+                        <span class="rep-cpf-row">
+                          {{ formatCpfCnpj(s.cpf_representante) }}
+                          <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-rep-cpf' ? 'pi-check text-success' : 'pi-copy', 'copy-btn small']" 
+                             @click="copyAndSignal(s.cpf_representante, s.cpf_cnpj_socio + '-rep-cpf')" 
+                             v-tooltip.top="'Copiar CPF'" />
+                        </span>
                         <span v-if="s.descricao_qualificacao_representante"> • {{ s.descricao_qualificacao_representante }} <span v-if="s.id_qualificacao_representante">({{ s.id_qualificacao_representante }})</span></span>
-                        <span v-if="s.data_nascimento_representante"> • {{ formatarData(s.data_nascimento_representante) }}</span>
+                        <span v-if="s.data_nascimento_representante"> • {{ calcularIdade(s.data_nascimento_representante) }} anos</span>
                       </span>
                     </div>
                   </div>
+                </div>
               </td>
-              <td class="col-center font-mono">{{ formatCpfCnpj(s.cpf_cnpj_socio) }}</td>
+              <td class="col-center font-mono">
+                <div class="cpf-cell-content">
+                  {{ formatCpfCnpj(s.cpf_cnpj_socio) }}
+                  <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-cpf' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']" 
+                     @click="copyAndSignal(s.cpf_cnpj_socio, s.cpf_cnpj_socio + '-cpf')" 
+                     v-tooltip.top="'Copiar CPF/CNPJ'" />
+                </div>
+              </td>
               <td class="qualificacao-cell">
                 {{ s.descricao_qualificacao || '—' }}
               </td>
@@ -298,17 +346,64 @@ const isAtivo = (socio) => !socio.data_exclusao_sociedade;
   margin-top: 0.1rem;
 }
 
-.name-header {
+.socio-meta {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
 }
 
-.socio-birth {
-  font-size: 0.75rem;
+.name-row, .rep-name-row, .cpf-cell-content, .rep-cpf-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cpf-cell-content {
+  justify-content: center;
+}
+
+.rep-cpf-row {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.copy-btn {
+  font-size: 0.7rem;
+  cursor: pointer;
   color: var(--text-muted);
-  font-weight: 400;
+  opacity: 0.4;
+  transition: all 0.2s;
+  width: 1.2rem;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.copy-btn.small {
+  font-size: 0.6rem;
+  width: 1rem;
+}
+
+.copy-btn.text-success {
+  color: #10b981 !important;
+  opacity: 1 !important;
+}
+
+.copy-btn:hover {
+  opacity: 1 !important;
+  color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.copy-btn:active {
+  transform: scale(0.9);
+}
+
+.socio-age {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* Representante Legal */

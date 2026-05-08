@@ -137,31 +137,41 @@ def get_cpf_timeline(
 
 @router.get("/regional-benchmarking", response_model=RegionalResponse)
 def get_regional_benchmarking(
-    regiao_saude: Optional[str] = Query(None, description="Nome da Região de Saúde (ex: 'GRANDE FLORIANOPOLIS'). Omitir para escopo estadual."),
     uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')"),
     data_inicio: Optional[date] = Query(None),
     data_fim: Optional[date] = Query(None),
+    regiao_id: Optional[int] = Query(None),
 ):
     """
     Retorna o resumo municipal e o ranking de farmácias por risco (Benchmarking Regional).
-    - Com regiao_saude: filtra pela região de saúde (+ UF opcional para desambiguação).
-    - Sem regiao_saude: filtra por UF inteiro (escopo estadual).
+    - Com regiao_id: filtra pela região de saúde.
+    - Sem regiao_id: filtra por UF inteiro (escopo estadual).
     """
-    return AnalyticsService.get_regional_benchmarking(regiao_saude, uf, data_inicio, data_fim)
+    return AnalyticsService.get_regional_benchmarking(
+        uf=uf, 
+        data_inicio=data_inicio, 
+        data_fim=data_fim, 
+        regiao_id=regiao_id
+    )
 
 
 @router.get("/regional-benchmarking-animation", response_model=RegionalAnimationResponse)
 def get_regional_benchmarking_animation(
-    regiao_saude: Optional[str] = Query(None, description="Nome da Região de Saúde. Omitir para escopo estadual."),
     uf: Optional[str] = Query(None, description="Sigla do Estado (ex: 'SC')"),
     data_inicio: Optional[date] = Query(None),
     data_fim: Optional[date] = Query(None),
+    regiao_id: Optional[int] = Query(None),
 ):
     """
     Retorna todos os trimestres do período em uma única chamada.
     Usado pela animação do scatter de posicionamento regional — evita N round-trips.
     """
-    return AnalyticsService.get_regional_benchmarking_animation(regiao_saude, uf, data_inicio, data_fim)
+    return AnalyticsService.get_regional_benchmarking_animation(
+        uf=uf, 
+        data_inicio=data_inicio, 
+        data_fim=data_fim, 
+        regiao_id=regiao_id
+    )
 
 
 @router.get("/cnpj/{cnpj}/crm-data", response_model=PrescritoresResponse)

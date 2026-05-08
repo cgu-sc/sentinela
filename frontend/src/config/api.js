@@ -4,18 +4,20 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
-  analyticsRegionalBenchmarking: (regiao, uf) => {
+  analyticsRegionalBenchmarking: (uf, regiaoId = null, inicio = null, fim = null) => {
     const params = new URLSearchParams();
-    if (regiao) params.set('regiao_saude', regiao);
-    if (uf)     params.set('uf', uf);
+    if (uf)       params.set('uf', uf);
+    if (regiaoId) params.set('regiao_id', String(regiaoId));
+    if (inicio)   params.set('data_inicio', inicio);
+    if (fim)      params.set('data_fim', fim);
     return `${BASE_URL}/api/v1/analytics/regional-benchmarking?${params.toString()}`;
   },
-  analyticsRegionalBenchmarkingAnimation: (regiao, uf, inicio, fim) => {
+  analyticsRegionalBenchmarkingAnimation: (uf, inicio, fim, regiaoId = null) => {
     const params = new URLSearchParams();
-    if (regiao) params.set('regiao_saude', regiao);
-    if (uf)     params.set('uf', uf);
-    if (inicio) params.set('data_inicio', inicio);
-    if (fim)    params.set('data_fim', fim);
+    if (uf)       params.set('uf', uf);
+    if (inicio)   params.set('data_inicio', inicio);
+    if (fim)      params.set('data_fim', fim);
+    if (regiaoId) params.set('regiao_id', String(regiaoId));
     return `${BASE_URL}/api/v1/analytics/regional-benchmarking-animation?${params.toString()}`;
   },
   geoLocalidades:       `${BASE_URL}/api/v1/geo/localidades`,

@@ -19,13 +19,15 @@ export function useRegional() {
   const loadedRegion = ref(null);
 
   /**
-   * @param {string|null} nomeRegiao - Nome da Região de Saúde, ou null para escopo estadual.
-   * @param {string}      uf         - Sigla do estado (obrigatório quando nomeRegiao é null).
+   * @param {string}      uf         - Sigla do estado (obrigatório quando regiaoId é null).
+   * @param {string|null} inicio     - Data de início no formato YYYY-MM-DD.
+   * @param {string|null} fim        - Data de fim no formato YYYY-MM-DD.
+   * @param {string|number|null} regiaoId - ID numérico da Região de Saúde (obrigatório para escopo regional).
    */
-  async function fetchRegional(nomeRegiao, uf, inicio = null, fim = null) {
-    if (!nomeRegiao && !uf) return;
-    const cacheKey = `${nomeRegiao ?? 'UF'}|${uf}|${inicio ?? ''}|${fim ?? ''}`;
-    
+  async function fetchRegional(uf, inicio = null, fim = null, regiaoId = null) {
+    if (!uf && !regiaoId) return;
+    const cacheKey = `${regiaoId ?? 'UF'}|${uf}|${inicio ?? ''}|${fim ?? ''}`;
+
     if (regionalLoaded.value && loadedRegion.value === cacheKey) {
       return;
     }
@@ -33,10 +35,8 @@ export function useRegional() {
     try {
       regionalLoading.value = true;
       regionalLoaded.value  = false;
-      
-      let url = API_ENDPOINTS.analyticsRegionalBenchmarking(nomeRegiao, uf);
-      if (inicio) url += `&data_inicio=${inicio}`;
-      if (fim)    url += `&data_fim=${fim}`;
+
+      const url = API_ENDPOINTS.analyticsRegionalBenchmarking(uf, regiaoId, inicio, fim);
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

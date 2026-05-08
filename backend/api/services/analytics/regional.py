@@ -148,7 +148,7 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
     except Exception as e:
         return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
-def get_regional_benchmarking(regiao_saude: str = None, uf: str = None, data_inicio: date = None, data_fim: date = None) -> RegionalResponse:
+def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim: date = None, regiao_id: int = None) -> RegionalResponse:
     """
     Constrói o payload completo de Benchmarking Regional.
     """
@@ -158,25 +158,38 @@ def get_regional_benchmarking(regiao_saude: str = None, uf: str = None, data_ini
         df_risco = get_df_matriz_risco()
         df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
+        # ── Resolução de Nome para Exibição ──────────────────────────────
+        nome_exibicao = uf or ""
+        id_regiao = regiao_id
+
+        if regiao_id:
+            loc_row = df_loc.filter(pl.col("id_regiao_saude").cast(pl.String) == str(regiao_id)).limit(1)
+            if not loc_row.is_empty():
+                nome_exibicao = loc_row.get_column("no_regiao_saude")[0]
+                # Se não passou UF, pegamos a UF da região
+                if not uf or uf == 'Todos':
+                    uf = loc_row.get_column("sg_uf")[0]
+
         # ── Filtros de Período ───────────────────────────────────────────
         MIN_DATA = date(2015, 7, 1)
         MAX_DATA = date(2024, 12, 31)
         inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
         fim = data_fim if data_fim else MAX_DATA
 
-        # ── Filtra movimentação para a região ou UF ──────────────────────────
+        # ── Filtra movimentação diretamente por ID ou UF ──────────────────
         mask = pl.col("periodo").is_between(inicio, fim)
-        if regiao_saude:
-            mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if uf and uf != 'Todos':
-                mask = mask & (pl.col("uf") == uf)
+        
+        if regiao_id:
+            # FILTRO PURO POR ID (Novo Padrão)
+            mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
         else:
+            # FILTRO POR UF (Escopo Estadual)
             mask = mask & (pl.col("uf") == uf)
             
         df_reg = df_mov.filter(mask)
-        nome_escopo = f"{regiao_saude or uf or ''}"
+
         if df_reg.is_empty():
-            return RegionalResponse(nome_regiao=nome_escopo, municipios=[], farmacias=[])
+            return RegionalResponse(nome_regiao=nome_exibicao, id_regiao=id_regiao, municipios=[], farmacias=[])
 
         # ── 1. Resumo por Município ─────────────────────────────────────────
         # Agrega CNPJs únicos e valores financeiros por município
@@ -302,7 +315,7 @@ def get_regional_benchmarking(regiao_saude: str = None, uf: str = None, data_ini
             ))
 
         return RegionalResponse(
-            nome_regiao=nome_escopo,
+            nome_regiao=nome_exibicao,
             id_regiao=id_regiao,
             municipios=municipios,
             farmacias=farmacias,
@@ -312,22 +325,31 @@ def get_regional_benchmarking(regiao_saude: str = None, uf: str = None, data_ini
         import traceback
         print(f"❌ ERRO AO CALCULAR DADOS REGIONAIS: {e}")
         print(traceback.format_exc())
-        return RegionalResponse(nome_regiao=regiao_saude, municipios=[], farmacias=[])
+        return RegionalResponse(nome_regiao=nome_exibicao if 'nome_exibicao' in locals() else "", municipios=[], farmacias=[])
 
 def get_regional_benchmarking_animation(
-    regiao_saude: str = None,
     uf: str = None,
     data_inicio: date = None,
     data_fim: date = None,
+    regiao_id: int = None
 ) -> RegionalAnimationResponse:
     """
-    Retorna todos os trimestres do período em uma única chamada para animação fluida.
-
-    Em vez de N requests separados, o Polars deriva a coluna de trimestre e agrupa
-    tudo em uma única passagem sobre o DataFrame em memória.
+    Retorna todos os trimestres do período em uma única chamada.
+    Usado pela animação do scatter de posicionamento regional — evita N round-trips.
     """
     try:
-        df_mov   = get_df()
+        df_mov = get_df()
+        df_loc = get_localidades_df()
+        
+        # Resolução de Nome para Exibição
+        nome_exibicao = uf or ""
+        if regiao_id:
+            loc_row = df_loc.filter(pl.col("id_regiao_saude").cast(pl.String) == str(regiao_id)).limit(1)
+            if not loc_row.is_empty():
+                nome_exibicao = loc_row.get_column("no_regiao_saude")[0]
+                if not uf or uf == 'Todos':
+                    uf = loc_row.get_column("sg_uf")[0]
+
         df_risco = get_df_matriz_risco()
         df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
@@ -336,19 +358,17 @@ def get_regional_benchmarking_animation(
         inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
         fim    = data_fim if data_fim else MAX_DATA
 
-        # ── Filtro geográfico + temporal ────────────────────────────────
+        # ── Filtro geográfico + temporal diretamente por ID ou UF ─────────
         mask = pl.col("periodo").is_between(inicio, fim)
-        if regiao_saude:
-            mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if uf and uf != "Todos":
-                mask = mask & (pl.col("uf") == uf)
+        if regiao_id:
+            mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
         else:
             mask = mask & (pl.col("uf") == uf)
 
-        df_reg = df_mov.filter(mask)
-        nome_escopo = regiao_saude or uf or ""
+        df_filtered = df_mov.filter(mask)
+        nome_escopo = nome_exibicao
 
-        if df_reg.is_empty():
+        if df_filtered.is_empty():
             return RegionalAnimationResponse(nome_regiao=nome_escopo, quarters=[])
 
         # ── Deriva índice de período relativo ao início do período ────
@@ -356,7 +376,7 @@ def get_regional_benchmarking_animation(
         # Janela de 2 meses para coincidir com PLAY_STEP=2 do slider de animação.
         inicio_year  = inicio.year
         inicio_month = inicio.month
-        df_q = df_reg.with_columns([
+        df_q = df_filtered.with_columns([
             (
                 (pl.col("periodo").dt.year() - inicio_year) * 12
                 + pl.col("periodo").dt.month()
@@ -459,13 +479,13 @@ def get_regional_benchmarking_animation(
             for v in sorted(quarters_map.values(), key=lambda x: x["inicio"])
         ]
 
-        return RegionalAnimationResponse(nome_regiao=nome_escopo, quarters=quarters)
+        return RegionalAnimationResponse(nome_regiao=nome_exibicao, quarters=quarters)
 
     except Exception as e:
         import traceback
-        print(f"❌ ERRO AO CALCULAR ANIMAÇÃO REGIONAL: {e}", flush=True)
+        print(f"❌ ERRO NA ANIMAÇÃO REGIONAL: {e}", flush=True)
         print(traceback.format_exc(), flush=True)
-        return RegionalAnimationResponse(nome_regiao=regiao_saude or "", quarters=[])
+        return RegionalAnimationResponse(nome_regiao=nome_exibicao if 'nome_exibicao' in locals() else "", quarters=[])
 
 # Conjunto de diretórios de CNPJ já criados nesta sessão — evita syscalls redundantes.
 _known_cnpj_dirs: set[str] = set()

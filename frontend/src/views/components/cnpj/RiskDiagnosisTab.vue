@@ -147,8 +147,12 @@ const loadRegional = () => {
       return;
     }
 
-    const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
-    fetchRegional(regiao, props.geoData.sg_uf, inicio, fim);
+    fetchRegional(
+      props.geoData.sg_uf,
+      inicio,
+      fim,
+      props.geoData.id_regiao_saude ?? null,
+    );
 };
 
 // Observa o gatilho de preload disparado pelo AppSidebar.
@@ -161,12 +165,11 @@ watch(() => filterStore.animationPreload.status, async (status) => {
   }
 
   try {
-    const regiao = regionalScope.value === 'regiao' ? props.geoData.no_regiao_saude : null;
     const scatterUrl = API_ENDPOINTS.analyticsRegionalBenchmarkingAnimation(
-      regiao,
       props.geoData.sg_uf,
       filterStore.animationPreload.dataInicio,
       filterStore.animationPreload.dataFim,
+      regionalScope.value === 'regiao' ? props.geoData.id_regiao_saude : null,
     );
     const percentilesUrl = API_ENDPOINTS.analyticsMetricPercentilesAnimation(
       riskScope.value,

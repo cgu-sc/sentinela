@@ -63,9 +63,14 @@ const filteredFarmacias = computed(() => {
 });
 
 const loadData = () => {
-  if (props.geoData?.no_regiao_saude) {
+  if (props.geoData?.id_regiao_saude || props.geoData?.sg_uf) {
     const { inicio, fim } = getApiParams();
-    fetchRegional(props.geoData.no_regiao_saude, props.geoData.sg_uf, inicio, fim);
+    fetchRegional(
+      props.geoData.sg_uf,
+      inicio,
+      fim,
+      props.geoData.id_regiao_saude ?? null,
+    );
   }
 };
 

@@ -31,14 +31,14 @@ def get_socios_farmacia(cnpj: str):
     return AnalyticsService.get_socios_farmacia(cnpj)
 
 @router.get("/cnpj/{cnpj}/network", response_model=NetworkResponse)
-def get_socios_network(cnpj: str):
+def get_teia_grafo_nivel2(cnpj: str):
     """Retorna a rede de relacionamentos societários (Teia) de um estabelecimento."""
-    return AnalyticsService.get_socios_network(cnpj, engine=None)
+    return AnalyticsService.get_teia_grafo_nivel2(cnpj, engine=None)
 
 @router.get("/cnpj/{cnpj}/network/expand/{target_cnpj}", response_model=NetworkResponse)
-def expand_network_node(cnpj: str, target_cnpj: str):
+def get_teia_grafo_nivel3_expansao(cnpj: str, target_cnpj: str):
     """Retorna os dados de expansão (Sócios Indiretos) para um nó PJ da teia."""
-    return AnalyticsService.expand_network_node(cnpj_alvo=cnpj, cnpj_para_expandir=target_cnpj)
+    return AnalyticsService.get_teia_grafo_nivel3_expansao(cnpj_alvo=cnpj, cnpj_para_expandir=target_cnpj)
 
 
 @router.get("/resumo", response_model=AnalyticsResponse)

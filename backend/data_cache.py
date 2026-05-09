@@ -254,7 +254,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
 
     if total_rows == 0:
         print("   -> Nenhuma participação externa encontrada.")
-        _df_socios_externos = pl.DataFrame(schema={
+        _df_teia_fonte_nivel2 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String, "nome_fantasia": pl.String,
             "indicador_socio": pl.Categorical, "percentual_qualificacao": pl.Float32,
@@ -263,7 +263,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
             "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8,
             "data_processamento": pl.Date
         })
-        _df_socios_externos.write_parquet(_SOCIOS_EXTERNOS_PARQUET_PATH, compression="zstd")
+        _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
         return
 
@@ -287,7 +287,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
 
     df_full = pl.concat(chunk_list)
     
-    _df_socios_externos = df_full.with_columns([
+    _df_teia_fonte_nivel2 = df_full.with_columns([
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
@@ -702,8 +702,8 @@ def get_cache_status() -> dict:
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
-        "socios_externos":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
-        "teia_indireta":  {"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
+        "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
+        "teia_fonte_nivel3":  {"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
     }
     modules_status = {

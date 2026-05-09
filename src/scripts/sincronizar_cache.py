@@ -369,7 +369,7 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
         progress_callback(100)
 
 
-def _sync_participacoes_e_teia(engine, progress_callback=None):
+def _sync_teia_niveis_2_e_3(engine, progress_callback=None):
     """Sincroniza participações externas (Grau 2) e a teia de sócios indiretos (Grau 3)."""
     print("\n  -> [1/2] Sincronizando Participações Externas (Grau 2)...")
     _sync_teia_fonte_nivel2(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
@@ -393,7 +393,7 @@ MODULOS = [
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
-    {"id": 11, "name": "Participações e Teia 3ºG", "func": _sync_participacoes_e_teia, "peso": "~pesado"},
+    {"id": 11, "name": "Teia (Níveis 2 e 3)", "func": _sync_teia_niveis_2_e_3, "peso": "~pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkRe
 from ._cache import _get_cnpj_cache_dir, sync_network
 
 
-def get_socios_network(cnpj: str, engine) -> NetworkResponse:
+def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     """
     Retorna a rede de relacionamentos societários de um CNPJ.
 
@@ -71,7 +71,7 @@ def get_socios_network(cnpj: str, engine) -> NetworkResponse:
     )
 
 
-def expand_network_node(cnpj_alvo: str, cnpj_para_expandir: str) -> NetworkResponse:
+def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> NetworkResponse:
     """
     Carrega os dados de expansão (Nível 3) para um nó específico que já está na teia.
     Lê os arquivos de expansão pré-gerados na pasta de cache do CNPJ alvo.

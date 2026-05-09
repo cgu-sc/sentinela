@@ -518,7 +518,7 @@ CREATE INDEX ix_sociosFP_cnpj
 --   Fase 2: enriquece apenas os registros filtrados com CNPJ/Municipio/IBGE
 --------------------------------------------------------------
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_socios_participacoes_indiretas;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2;
 
 -- ── FASE 1: Tabela temporária dos CPFs/CNPJs dos sócios FP ──────────────────
 -- Pequena e indexada para servir como lookup eficiente na tabela nacional
@@ -536,7 +536,7 @@ CREATE CLUSTERED INDEX ix_cpfs_lookup
 -- ── FASE 1b: Filtrar socios nacional apenas pelos CPFs conhecidos ────────────
 -- Evita scan completo — usa o lookup indexado acima
 
-DROP TABLE IF EXISTS #socios_externos_raw;
+DROP TABLE IF EXISTS #teia_fonte_nivel2_raw;
 
 SELECT
     s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
@@ -546,7 +546,7 @@ SELECT
     CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
-INTO #socios_externos_raw
+INTO #teia_fonte_nivel2_raw
 FROM #cpfs_socios_fp                AS fp
 INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
 -- Exclui CNPJs que já são farmácias FP (já estão em dados_socios)
@@ -554,8 +554,8 @@ WHERE NOT EXISTS (
     SELECT 1 FROM temp_CGUSC.fp.lista_cnpjs lst WHERE lst.cnpj = s.cnpj
 );
 
-CREATE CLUSTERED INDEX ix_socios_ext_cnpj
-    ON #socios_externos_raw (cnpj_empresa);
+CREATE CLUSTERED INDEX ix_teia_fonte_nivel2_cnpj
+    ON #teia_fonte_nivel2_raw (cnpj_empresa);
 
 -- ── FASE 2: Enriquecer com dados cadastrais (CNPJ, Municipio, IBGE) ─────────
 -- JOIN pesado acontece apenas sobre o conjunto já filtrado
@@ -578,7 +578,7 @@ SELECT DISTINCT
          ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
     CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
 INTO temp_CGUSC.fp.teia_fonte_nivel2
-FROM #socios_externos_raw                        AS raw
+FROM #teia_fonte_nivel2_raw                        AS raw
 INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
 LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
 LEFT  JOIN db_CNPJ.dbo.Municipio                 AS mun  ON mun.SkMunicipio = c.CodMunicipio

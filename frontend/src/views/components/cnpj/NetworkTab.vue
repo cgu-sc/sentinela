@@ -17,6 +17,7 @@ let cy = null;
 let resizeObserver = null;
 let currentLayout = null;
 let n2PresentationZoom = null;
+let n3PresentationZoom = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -88,18 +89,32 @@ function rememberN2PresentationZoom() {
   n2PresentationZoom = cy.zoom();
 }
 
-function applyRadialView({ rememberN2Zoom = false } = {}) {
+function rememberPresentationZoom(level) {
+  if (!cy) return;
+  if (level === 'N2') n2PresentationZoom = cy.zoom();
+  if (level === 'N3') n3PresentationZoom = cy.zoom();
+}
+
+function getPresentationZoom(level) {
+  const rememberedZoom = level === 'N3' ? n3PresentationZoom : n2PresentationZoom;
+  return Math.max(1, Math.min(rememberedZoom || 1.08, 1.16));
+}
+
+function applyRadialView({ rememberN2Zoom = false, rememberLevel = null } = {}) {
   applyN2RadialLayout();
   fitGraphToView(INITIAL_FIT_PADDING);
   if (rememberN2Zoom) {
     rememberN2PresentationZoom();
   }
+  if (rememberLevel) {
+    rememberPresentationZoom(rememberLevel);
+  }
 }
 
-function normalizeN2LayoutScale() {
+function normalizeLayoutScale(level = 'N2') {
   if (!cy || !cyContainer.value) return;
 
-  const targetZoom = Math.max(1, Math.min(n2PresentationZoom || 1.08, 1.16));
+  const targetZoom = getPresentationZoom(level);
   const visibleNodes = cy.nodes(':visible');
   if (visibleNodes.empty()) return;
   const root = visibleNodes.filter(node => node.data('type') === 'PJ_ALVO').first();
@@ -250,6 +265,16 @@ function runGraphLayout(preset = 'base', options = {}) {
       nodeOverlap: 18,
     };
 
+    if (preset === 'n3') return {
+      nodeRepulsion: () => 9000,
+      idealEdgeLength: () => 110,
+      gravity: 1.15,
+      numIter: 850,
+      randomize: true,
+      componentSpacing: 95,
+      nodeOverlap: 18,
+    };
+
     return {
       nodeRepulsion: () => 8500,
       idealEdgeLength: () => 58,
@@ -282,8 +307,8 @@ function runGraphLayout(preset = 'base', options = {}) {
     }
 
     applyVisibilityFilters();
-    if (preset === 'n2') {
-      normalizeN2LayoutScale();
+    if (preset === 'n2' || preset === 'n3') {
+      normalizeLayoutScale(preset === 'n3' ? 'N3' : 'N2');
     }
     if (fitAfter && !hasActiveSearch.value) {
       fitGraphToView(INITIAL_FIT_PADDING);
@@ -299,6 +324,7 @@ const mergeNetworkData = (newData, options = {}) => {
     layoutPreset = 'expanded',
     hideDuringLayout = true,
     animationDuration = 700,
+    rememberLevel = null,
   } = options;
   
   // Evitar duplicados
@@ -332,7 +358,7 @@ const mergeNetworkData = (newData, options = {}) => {
 
   if (newNodes.length > 0 || newEdges.length > 0) {
     if (layoutPreset === 'radial') {
-      applyRadialView();
+      applyRadialView({ rememberLevel });
     } else {
       runGraphLayout(layoutPreset, { hideDuringLayout, animationDuration });
     }
@@ -341,6 +367,7 @@ const mergeNetworkData = (newData, options = {}) => {
 
 const resetToN2 = async () => {
   if (!networkData.value) return;
+  currentLevel.value = 'N2';
   showInactiveCompanies.value = true;
   showInactivePartners.value = true;
   showOnlyPharmacies.value = false;
@@ -350,7 +377,6 @@ const resetToN2 = async () => {
   selectedNode.value = null;
   await buildGraph(networkData.value);
   expandedNodes.value = new Set();
-  currentLevel.value = 'N2';
 };
 
 const expandBatch = async (mode) => {
@@ -365,11 +391,13 @@ const expandBatch = async (mode) => {
       // Sempre reconstrói do N2 para limpar estado de N4 anterior
       await buildGraph(networkData.value);
       expandedNodes.value = new Set();
+      currentLevel.value = 'N3';
       data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
-      if (data) mergeNetworkData(data, { layoutPreset: 'radial' });
+      if (data) mergeNetworkData(data, { layoutPreset: 'radial', rememberLevel: 'N3' });
 
     } else if (mode === 'N4') {
       // N3 é pré-requisito do N4: carrega os dois em sequência
+      currentLevel.value = 'N4';
       const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
       if (dataN3) mergeNetworkData(dataN3);
       const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
@@ -545,6 +573,7 @@ const applyVisibilityFilters = () => {
     if (!selected.length || selected.hidden()) selectedNode.value = null;
   }
 
+  applyNodeDensitySizing();
   applyGraphHighlights();
 };
 
@@ -623,14 +652,45 @@ const expansionLabel = computed(() => {
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
-  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 118 },
-  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 72 },
-  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 76 },
-  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 72 },
-  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 72 },
-  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 58 },
-  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 72 },
+  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 100 },
+  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 61 },
+  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 65 },
+  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 61 },
+  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 61 },
+  PJ:          { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 54 },
+  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 49 },
+  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 61 },
 };
+
+function getNodeDensityScale() {
+  if (!cy || currentLevel.value !== 'N3') return 1;
+
+  const visibleCount = cy.nodes(':visible').length;
+  if (visibleCount <= 40) return 1;
+  if (visibleCount <= 65) return 0.92;
+  if (visibleCount <= 90) return 0.84;
+  if (visibleCount <= 130) return 0.76;
+  return 0.68;
+}
+
+function applyNodeDensitySizing() {
+  if (!cy) return;
+
+  const densityScale = getNodeDensityScale();
+  cy.nodes().forEach(node => {
+    const type = node.data('type');
+    const style = NODE_STYLES[type] || NODE_STYLES.PJ_OUTRA;
+    const nodeScale = type === 'PJ_ALVO'
+      ? Math.max(0.88, densityScale)
+      : densityScale;
+    const size = Math.round(style.size * nodeScale);
+
+    node.style({
+      width: size,
+      height: style.shape === 'ellipse' ? size * 0.78 : size * 0.68,
+    });
+  });
+}
 
 const INITIAL_FIT_PADDING = 48;
 const REFIT_DELAY_MS = 80;
@@ -937,8 +997,8 @@ function buildStylesheet() {
       'background-color': '#d946ef',
       'border-color': '#c026d3',
       'shape': 'roundrectangle',
-      'width': 64,
-      'height': 64 * 0.68,
+      'width': 54,
+      'height': 54 * 0.68,
     }
   });
 
@@ -982,6 +1042,10 @@ function resetLayout() {
   if (!cy) return;
   if (currentLevel.value === 'N2') {
     runGraphLayout('n2', { animationDuration: 650 });
+    return;
+  }
+  if (currentLevel.value === 'N3') {
+    runGraphLayout('n3', { animationDuration: 650 });
     return;
   }
   runGraphLayout('expanded', { animationDuration: 600 });
@@ -1055,27 +1119,6 @@ const typeLabels = {
     <div v-else class="network-layout animate-fade-in">
 
       <!-- Cabeçalho ─────────────────────────────────────────── -->
-      <div class="network-header">
-        <div class="header-info">
-          <i class="pi pi-share-alt" />
-          <div>
-            <h2 class="title">TEIA SOCIETÁRIA</h2>
-            <p class="subtitle">Grafo de relacionamentos e participações societárias identificadas</p>
-          </div>
-        </div>
-        <div class="header-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ totalNodes }}</span>
-            <span class="stat-label">Entidades</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-value">{{ totalEdges }}</span>
-            <span class="stat-label">Vínculos</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Conteúdo principal ────────────────────────────────── -->
       <div class="network-body">
 
@@ -1168,6 +1211,18 @@ const typeLabels = {
               </button>
             </div>
 
+          </div>
+
+          <div class="graph-stats-overlay" aria-label="Resumo da rede">
+            <div class="stat-item">
+              <span class="stat-value">{{ totalNodes }}</span>
+              <span class="stat-label">Entidades</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-value">{{ totalEdges }}</span>
+              <span class="stat-label">Vínculos</span>
+            </div>
           </div>
 
           <!-- Controles de Zoom (canto inferior direito) ───── -->
@@ -1265,47 +1320,23 @@ const typeLabels = {
   flex-direction: column;
 }
 
-/* Header ───────────────────────────────────────────── */
-.network-header {
+/* Resumo flutuante ─────────────────────────────────── */
+.graph-stats-overlay {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 1rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--tabs-border);
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.header-info i {
-  font-size: 1.1rem;
-  color: var(--primary-color);
-}
-
-.title {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-color);
-  opacity: 0.85;
-}
-
-.subtitle {
-  margin: 0.1rem 0 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.header-stats {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
+  gap: 0.9rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }
 
 .stat-item {
@@ -1315,14 +1346,14 @@ const typeLabels = {
 }
 
 .stat-value {
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--primary-color);
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   text-transform: uppercase;
   font-weight: 500;
   color: var(--text-muted);
@@ -1331,7 +1362,7 @@ const typeLabels = {
 
 .stat-divider {
   width: 1px;
-  height: 2.2rem;
+  height: 1.65rem;
   background: var(--tabs-border);
   opacity: 0.5;
 }
@@ -1378,7 +1409,7 @@ const typeLabels = {
   flex-wrap: wrap;
   gap: 0.5rem;
   z-index: 10;
-  max-width: calc(100% - 2rem);
+  max-width: calc(100% - 12rem);
 }
 
 .toolbar-pill {

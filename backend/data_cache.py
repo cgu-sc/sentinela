@@ -36,7 +36,7 @@ _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
 _DADOS_SOCIOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "socios.parquet")
-_SOCIOS_EXTERNOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "socios_participacoes_externas.parquet")
+_SOCIOS_EXTERNOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_socios_participacoes_indiretas.parquet")
 _TEIA_INDIRETA_PARQUET_PATH   = os.path.join(_CACHE_DIR, "teia_socios_indiretos.parquet")
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 
@@ -243,14 +243,14 @@ def _sync_dados_socios(engine, progress_callback=None):
     print(f"   -> Sincronização de Sócios finalizada ({len(_df_dados_socios):,} registros).")
 
 
-def _sync_socios_participacoes_externas(engine, progress_callback=None):
+def _sync_teia_socios_participacoes_indiretas(engine, progress_callback=None):
     """Tarefa: Sincroniza participações externas dos sócios encontrados nas farmácias."""
     global _df_socios_externos
     print("Sincronizando Participações Externas dos Sócios...")
-    sql = "SELECT * FROM [temp_CGUSC].[fp].[socios_participacoes_externas]"
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_socios_participacoes_indiretas]"
 
     with engine.connect() as conn:
-        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[socios_participacoes_externas]")).scalar()
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_socios_participacoes_indiretas]")).scalar()
 
     if total_rows == 0:
         print("   -> Nenhuma participação externa encontrada.")
@@ -558,7 +558,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
-        _df_socios_externos = _try_load("socios_participacoes_externas", _SOCIOS_EXTERNOS_PARQUET_PATH)
+        _df_socios_externos = _try_load("teia_socios_participacoes_indiretas", _SOCIOS_EXTERNOS_PARQUET_PATH)
         _df_teia_socios_indiretos = _try_load("teia_socios_indiretos", _TEIA_INDIRETA_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
 
@@ -583,7 +583,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         # {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)}, # OBSOLETO
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
-        {"name": "Participações Externas Sócios", "weight": 5, "func": lambda cb: _sync_socios_participacoes_externas(engine, cb)},
+        {"name": "Participações Externas Sócios", "weight": 5, "func": lambda cb: _sync_teia_socios_participacoes_indiretas(engine, cb)},
         {"name": "Sócios Indiretos (Expansão)",   "weight": 5, "func": lambda cb: _sync_teia_socios_indiretos(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 64, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]

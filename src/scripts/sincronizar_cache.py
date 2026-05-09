@@ -28,7 +28,7 @@ from data_cache import (
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
     _sync_dados_socios,
-    _sync_socios_participacoes_externas,
+    _sync_teia_socios_participacoes_indiretas,
     _sync_teia_socios_indiretos,
     _sync_movimentacao,
 )
@@ -369,7 +369,7 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
 def _sync_participacoes_e_teia(engine, progress_callback=None):
     """Sincroniza participações externas (Grau 2) e a teia de sócios indiretos (Grau 3)."""
     print("\n  -> [1/2] Sincronizando Participações Externas (Grau 2)...")
-    _sync_socios_participacoes_externas(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
+    _sync_teia_socios_participacoes_indiretas(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
     
     print("\n  -> [2/2] Sincronizando Teia de Sócios Indiretos (Grau 3)...")
     _sync_teia_socios_indiretos(engine, lambda p: progress_callback(int(50 + p * 0.5)) if progress_callback else None)

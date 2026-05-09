@@ -518,7 +518,7 @@ CREATE INDEX ix_sociosFP_cnpj
 --   Fase 2: enriquece apenas os registros filtrados com CNPJ/Municipio/IBGE
 --------------------------------------------------------------
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.socios_participacoes_externas;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_socios_participacoes_indiretas;
 
 -- ── FASE 1: Tabela temporária dos CPFs/CNPJs dos sócios FP ──────────────────
 -- Pequena e indexada para servir como lookup eficiente na tabela nacional
@@ -577,7 +577,7 @@ SELECT DISTINCT
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT)
          ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
     CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
-INTO temp_CGUSC.fp.socios_participacoes_externas
+INTO temp_CGUSC.fp.teia_socios_participacoes_indiretas
 FROM #socios_externos_raw                        AS raw
 INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
 LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
@@ -589,16 +589,16 @@ LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = ra
 
 -- Índice CLUSTERED: Organiza a tabela fisicamente por CPF (Performance Industrial em cruzamentos)
 CREATE CLUSTERED INDEX cx_partExt_cpf_cnpj_socio
-    ON temp_CGUSC.fp.socios_participacoes_externas (cpf_cnpj_socio, cnpj_empresa);
+    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (cpf_cnpj_socio, cnpj_empresa);
 
 -- Índice de Categoria: acelera buscas por ramo de atividade (ex: busca por outras farmácias)
 CREATE INDEX ix_partExt_cnae
-    ON temp_CGUSC.fp.socios_participacoes_externas (id_cnae_principal)
+    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (id_cnae_principal)
     INCLUDE (is_farmacia_fp, razao_social);
 
 -- Índice secundário: busca por empresa externa
 CREATE INDEX ix_partExt_cnpj_empresa
-    ON temp_CGUSC.fp.socios_participacoes_externas (cnpj_empresa);
+    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (cnpj_empresa);
 
 
 --------------------------------------------------------------
@@ -615,7 +615,7 @@ DROP TABLE IF EXISTS #cnpjs_irmas;
 
 SELECT DISTINCT cnpj_empresa
 INTO #cnpjs_irmas
-FROM temp_CGUSC.fp.socios_participacoes_externas;
+FROM temp_CGUSC.fp.teia_socios_participacoes_indiretas;
 
 CREATE CLUSTERED INDEX ix_cnpjs_irmas_lookup
     ON #cnpjs_irmas (cnpj_empresa);

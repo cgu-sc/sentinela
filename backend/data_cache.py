@@ -273,7 +273,14 @@ def _sync_socios_participacoes_externas(engine, progress_callback=None):
     CHUNK_SIZE = 10_000
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(pl.from_pandas(chunk))
+        df_chunk = pl.from_pandas(chunk)
+        # Força conversão de datas para evitar conflito de tipos (String vs Date) no concat
+        if "data_entrada_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
+        if "data_exclusao_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+            
+        chunk_list.append(df_chunk)
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         if progress_callback: progress_callback(p)
@@ -328,7 +335,14 @@ def _sync_teia_socios_indiretos(engine, progress_callback=None):
     CHUNK_SIZE = 25_000
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(pl.from_pandas(chunk))
+        df_chunk = pl.from_pandas(chunk)
+        # Força conversão de datas para evitar conflito de tipos no concat
+        if "data_entrada_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
+        if "data_exclusao_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+
+        chunk_list.append(df_chunk)
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         if progress_callback: progress_callback(p)

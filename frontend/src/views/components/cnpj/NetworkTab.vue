@@ -22,8 +22,12 @@ let n3PresentationZoom = null;
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
 const zoom = ref(1);
-const totalNodes = computed(() => networkData.value?.nodes?.length || 0);
-const totalEdges = computed(() => networkData.value?.edges?.length || 0);
+const graphReady = ref(false);
+const graphCounts = ref({ nodes: 0, edges: 0 });
+const baseTotalNodes = computed(() => networkData.value?.nodes?.length || 0);
+const baseTotalEdges = computed(() => networkData.value?.edges?.length || 0);
+const totalNodes = computed(() => graphReady.value ? graphCounts.value.nodes : baseTotalNodes.value);
+const totalEdges = computed(() => graphReady.value ? graphCounts.value.edges : baseTotalEdges.value);
 
 // Expansão
 const isExpanding = ref(false);
@@ -454,6 +458,18 @@ const hideOrphanPartners = () => {
     .hide();
 };
 
+const updateGraphCounts = () => {
+  graphCounts.value = cy
+    ? {
+        nodes: cy.nodes(':visible').length,
+        edges: cy.edges(':visible').length,
+      }
+    : {
+        nodes: networkData.value?.nodes?.length || 0,
+        edges: networkData.value?.edges?.length || 0,
+      };
+};
+
 const normalizeSearchText = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -574,6 +590,7 @@ const applyVisibilityFilters = () => {
   }
 
   applyNodeDensitySizing();
+  updateGraphCounts();
   applyGraphHighlights();
 };
 
@@ -714,6 +731,7 @@ async function buildGraph(data) {
     await new Promise(resolve => requestAnimationFrame(resolve));
     try { cy.destroy(); } catch (e) {}
     cy = null;
+    graphReady.value = false;
   }
 
   const elements = [
@@ -755,6 +773,7 @@ async function buildGraph(data) {
     minZoom: 0.35,
     maxZoom: 3,
   });
+  graphReady.value = true;
 
   // Força o reconhecimento do tamanho do container
   cy.resize();
@@ -1078,6 +1097,8 @@ onBeforeUnmount(() => {
   resizeObserver = null;
   cy?.destroy();
   cy = null;
+  graphReady.value = false;
+  updateGraphCounts();
 });
 
 onActivated(() => {
@@ -1109,7 +1130,7 @@ const typeLabels = {
     <TabPlaceholder v-else-if="networkError" variant="error" icon="pi-exclamation-circle"
       title="Erro ao carregar teia" :description="networkError"
     />
-    <TabPlaceholder v-else-if="!networkData || totalNodes === 0"
+    <TabPlaceholder v-else-if="!networkData || baseTotalNodes === 0"
       icon="pi-share-alt"
       title="Nenhuma conexão encontrada"
       description="Não foram encontrados relacionamentos societários para este estabelecimento."

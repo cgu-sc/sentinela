@@ -109,7 +109,7 @@ def _sync_rede(engine, progress_callback=None):
         pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
         pl.col("is_grande_rede").cast(pl.Boolean),
-    ])
+    ]).sort(["cnpj_raiz", "cnpj"])
     _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="zstd")
 
 def _sync_matriz_risco(engine, progress_callback=None):
@@ -133,7 +133,7 @@ def _sync_matriz_risco(engine, progress_callback=None):
         print(f"   -> Progresso Matriz: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
             
-    _df_matriz_risco = pl.concat(chunk_list)
+    _df_matriz_risco = pl.concat(chunk_list).sort("cnpj")
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
 
 def _sync_dados_farmacia(engine, progress_callback=None):
@@ -190,7 +190,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
         (pl.col("is_matriz") == "M").alias("is_matriz"),
         pl.col("id_cnae_principal").cast(pl.String),
         pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
-    ])
+    ]).sort("cnpj")
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
 
 
@@ -353,7 +353,7 @@ def _sync_teia_socios_indiretos(engine, progress_callback=None):
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("percentual_qualificacao").cast(pl.Float32),
-    ])
+    ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
     _df_teia_socios_indiretos.write_parquet(_TEIA_INDIRETA_PARQUET_PATH, compression="zstd")
     print(f"   -> Sincronização de Sócios Indiretos finalizada.")
@@ -375,7 +375,7 @@ def _sync_medicamentos(engine, progress_callback=None):
         pl.col("produto").cast(pl.Categorical),
         pl.col("laboratorio").cast(pl.Categorical),
         pl.col("patologia").cast(pl.Categorical),
-    ])
+    ]).sort("codigo_barra")
     _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="zstd")
 
 

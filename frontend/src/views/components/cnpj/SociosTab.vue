@@ -277,7 +277,7 @@ const copyAndSignal = (text, key) => {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-color);
-  opacity: 0.85;
+  opacity: 0.90;
 }
 
 .subtitle {
@@ -341,9 +341,9 @@ const copyAndSignal = (text, key) => {
 
 .premium-table th {
   text-align: left;
-  padding: 0.8rem 1rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -351,17 +351,19 @@ const copyAndSignal = (text, key) => {
 }
 
 /* Definindo larguras para cada coluna */
-.premium-table th:nth-child(1) { width: 35%; } /* Sócio */
-.premium-table th:nth-child(2) { width: 18%; } /* CPF/CNPJ */
+.premium-table th:nth-child(1) { width: 28%; } /* Sócio */
+.premium-table th:nth-child(2) { width: 15%; } /* CPF/CNPJ */
 .premium-table th:nth-child(3) { width: 15%; } /* Qualificação */
 .premium-table th:nth-child(4) { width: 12%; } /* Localização */
 .premium-table th:nth-child(5) { width: 10%; } /* Participação */
 .premium-table th:nth-child(6) { width: 10%; } /* Entrada */
+.premium-table th:nth-child(7) { width: 10%; } /* Saída / Situação */
 
 .premium-table td {
   padding: 1rem;
   border-bottom: 1px solid var(--tabs-border);
   color: var(--text-color);
+  opacity: 0.90;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -376,15 +378,26 @@ const copyAndSignal = (text, key) => {
 }
 
 .row-inactive {
-  opacity: 0.6;
-  background: color-mix(in srgb, var(--bg-color) 95%, black) !important;
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--color-error) 4%, var(--bg-color)) !important;
+  color: color-mix(in srgb, var(--color-error) 40%, var(--text-color));
+}
+
+.row-inactive .main-name {
+  color: color-mix(in srgb, var(--color-error) 60%, var(--text-color));
+  text-decoration: line-through rgba(239, 68, 68, 0.3);
 }
 
 .col-center { text-align: center; }
-.font-mono { font-family: var(--font-mono, monospace); font-size: 0.85rem; }
+.font-mono { 
+  font-family: var(--font-mono, monospace); 
+  font-size: 0.8rem; 
+  letter-spacing: -0.02em;
+}
 
 .socio-name {
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   display: flex;
   flex-direction: column;
   text-transform: none !important;
@@ -484,15 +497,15 @@ const copyAndSignal = (text, key) => {
 
 .rep-name {
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   text-transform: none !important;
 }
 
 .rep-meta {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .qualificacao-cell {
@@ -502,7 +515,7 @@ const copyAndSignal = (text, key) => {
 }
 
 .location-cell {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   min-width: 120px;
   text-transform: none !important;
@@ -546,16 +559,16 @@ const copyAndSignal = (text, key) => {
 }
 
 .pct-val {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--primary-color);
 }
 
 /* Badges de Status */
 .status-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
   border-radius: 4px;
   display: inline-block;
 }
@@ -567,9 +580,9 @@ const copyAndSignal = (text, key) => {
 }
 
 .status-badge.inactive {
-  background: rgba(100, 116, 139, 0.1);
-  color: var(--text-muted);
-  border: 1px solid rgba(100, 116, 139, 0.2);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 /* States */

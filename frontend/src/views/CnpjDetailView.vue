@@ -519,7 +519,7 @@ const isInitialLoading = computed(() => {
 
 :deep(.p-tabview-nav li .p-tabview-nav-link) {
   background: transparent !important;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 700;
   min-width: 9.5rem;
   min-height: 3.35rem;

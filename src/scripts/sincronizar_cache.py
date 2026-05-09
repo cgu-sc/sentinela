@@ -29,6 +29,7 @@ from data_cache import (
     _sync_dados_farmacia,
     _sync_dados_socios,
     _sync_socios_participacoes_externas,
+    _sync_teia_socios_indiretos,
     _sync_movimentacao,
 )
 
@@ -364,6 +365,18 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
     if progress_callback:
         progress_callback(100)
 
+
+def _sync_participacoes_e_teia(engine, progress_callback=None):
+    """Sincroniza participações externas (Grau 2) e a teia de sócios indiretos (Grau 3)."""
+    print("\n  -> [1/2] Sincronizando Participações Externas (Grau 2)...")
+    _sync_socios_participacoes_externas(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
+    
+    print("\n  -> [2/2] Sincronizando Teia de Sócios Indiretos (Grau 3)...")
+    _sync_teia_socios_indiretos(engine, lambda p: progress_callback(int(50 + p * 0.5)) if progress_callback else None)
+    
+    if progress_callback:
+        progress_callback(100)
+
 # ── Módulos disponíveis ────────────────────────────────────────────────────────
 
 MODULOS = [
@@ -377,7 +390,7 @@ MODULOS = [
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
-    {"id": 11, "name": "Participações Externas",   "func": _sync_socios_participacoes_externas, "peso": "~médio"},
+    {"id": 11, "name": "Participações e Teia 3ºG", "func": _sync_participacoes_e_teia, "peso": "~pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

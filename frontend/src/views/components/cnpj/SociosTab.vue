@@ -351,16 +351,16 @@ const copyAndSignal = (text, key) => {
 }
 
 /* Definindo larguras para cada coluna */
-.premium-table th:nth-child(1) { width: 28%; } /* Sócio */
+.premium-table th:nth-child(1) { width: 25%; } /* Sócio */
 .premium-table th:nth-child(2) { width: 15%; } /* CPF/CNPJ */
-.premium-table th:nth-child(3) { width: 15%; } /* Qualificação */
+.premium-table th:nth-child(3) { width: 13%; } /* Qualificação */
 .premium-table th:nth-child(4) { width: 12%; } /* Localização */
 .premium-table th:nth-child(5) { width: 10%; } /* Participação */
 .premium-table th:nth-child(6) { width: 10%; } /* Entrada */
-.premium-table th:nth-child(7) { width: 10%; } /* Saída / Situação */
+.premium-table th:nth-child(7) { width: 15%; } /* Saída / Situação */
 
 .premium-table td {
-  padding: 1rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--tabs-border);
   color: var(--text-color);
   opacity: 0.90;
@@ -388,7 +388,9 @@ const copyAndSignal = (text, key) => {
   text-decoration: line-through rgba(239, 68, 68, 0.3);
 }
 
-.col-center { text-align: center; }
+.col-center { 
+  text-align: center !important; 
+}
 .font-mono { 
   font-family: var(--font-mono, monospace); 
   font-size: 0.8rem; 
@@ -435,12 +437,12 @@ const copyAndSignal = (text, key) => {
 }
 
 .copy-btn {
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   cursor: pointer;
   color: var(--text-muted);
   opacity: 0.4;
   transition: all 0.2s;
-  width: 1.2rem;
+  width: 1.4rem;
   display: inline-flex;
   justify-content: center;
   flex-shrink: 0;

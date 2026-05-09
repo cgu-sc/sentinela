@@ -29,10 +29,78 @@ const isBatchExpanding = ref(false);
 const expandedNodes = ref(new Set());
 
 // Filtros de visibilidade
-const showInactiveCompanies = ref(true); // Ocultar empresas inativas (PJ)
-const showInactivePartners  = ref(true); // Ocultar sócios inativos (PF)
+const showInactiveCompanies = ref(true);
+const showInactivePartners  = ref(true);
+const showOnlyPharmacies = ref(false);
+const networkSearch = ref('');
+const searchMatchCount = ref(0);
+const hasActiveSearch = computed(() => networkSearch.value.trim().length > 0);
+const searchHasNoMatch = computed(() => hasActiveSearch.value && searchMatchCount.value === 0);
+
+// Nível de profundidade ativo no grafo
+const currentLevel = ref('N2');
+const loadingLevel = ref(null);
 
 // ── Funções de Utilitário para o Grafo ──────────────────────────────────
+function runGraphLayout(preset = 'base', options = {}) {
+  if (!cy) return;
+
+  const {
+    hideDuringLayout = false,
+    fitAfter = true,
+    animationDuration = preset === 'expanded' ? 700 : 800,
+  } = options;
+
+  if (currentLayout) {
+    try { currentLayout.stop(); } catch (e) {}
+  }
+
+  const layoutOptions = preset === 'expanded'
+    ? {
+        nodeRepulsion: () => 8000,
+        idealEdgeLength: () => 120,
+        gravity: 1.2,
+        numIter: 900,
+        randomize: true,
+      }
+    : {
+        nodeRepulsion: () => 8500,
+        idealEdgeLength: () => 58,
+        gravity: 1.35,
+        numIter: 900,
+        randomize: true,
+      };
+
+  if (hideDuringLayout && cyContainer.value) {
+    cyContainer.value.style.opacity = '0';
+  }
+
+  currentLayout = cy.elements(':visible').layout({
+    name: 'cose',
+    animate: true,
+    animationDuration,
+    fit: false,
+    initialTemp: 1000,
+    coolingFactor: 0.99,
+    minTemp: 1.0,
+    ...layoutOptions,
+  });
+
+  cy.one('layoutstop', () => {
+    if (cyContainer.value) {
+      cyContainer.value.style.opacity = '';
+      cyContainer.value.style.pointerEvents = '';
+    }
+
+    applyVisibilityFilters();
+    if (fitAfter && !hasActiveSearch.value) {
+      fitGraphToView(INITIAL_FIT_PADDING);
+    }
+  });
+
+  currentLayout.run();
+}
+
 const mergeNetworkData = (newData) => {
   if (!cy || !newData) return;
   
@@ -63,34 +131,24 @@ const mergeNetworkData = (newData) => {
     cy.add({ group: 'edges', data: { ...e } });
   });
 
+  applyVisibilityFilters();
+
   if (newNodes.length > 0 || newEdges.length > 0) {
-    if (currentLayout) { try { currentLayout.stop(); } catch (e) {} }
-    // animate: false → layout instantâneo, sem flash de nós empilhados
-    if (cyContainer.value) cyContainer.value.style.opacity = '0';
-    currentLayout = cy.layout({
-      name: 'cose',
-      animate: false,
-      randomize: false,
-      fit: true,
-      padding: 50,
-      nodeRepulsion: 8000,
-      idealEdgeLength: 100
-    });
-    cy.one('layoutstop', () => {
-      if (cyContainer.value) cyContainer.value.style.opacity = '';
-      fitGraphToView(INITIAL_FIT_PADDING);
-    });
-    currentLayout.run();
+    runGraphLayout('expanded', { hideDuringLayout: true, animationDuration: 700 });
   }
 };
 
 const resetToN2 = async () => {
   if (!networkData.value) return;
-  await buildGraph(networkData.value);
-  expandedNodes.value = new Set();
-  selectedNode.value = null;
   showInactiveCompanies.value = true;
   showInactivePartners.value = true;
+  showOnlyPharmacies.value = false;
+  networkSearch.value = '';
+  searchMatchCount.value = 0;
+  selectedNode.value = null;
+  await buildGraph(networkData.value);
+  expandedNodes.value = new Set();
+  currentLevel.value = 'N2';
 };
 
 const expandBatch = async (mode) => {
@@ -98,8 +156,9 @@ const expandBatch = async (mode) => {
   
   try {
     isBatchExpanding.value = true;
+    loadingLevel.value = mode;
     let data = null;
-    
+
     if (mode === 'N3') {
       // Sempre reconstrói do N2 para limpar estado de N4 anterior
       await buildGraph(networkData.value);
@@ -111,11 +170,12 @@ const expandBatch = async (mode) => {
       // N3 é pré-requisito do N4: carrega os dois em sequência
       const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
       if (dataN3) mergeNetworkData(dataN3);
-
       const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
       if (dataN4) mergeNetworkData(dataN4);
       data = dataN4;
     }
+
+    currentLevel.value = mode;
 
     // Marcar nós como expandidos para evitar botões redundantes no painel lateral
     if (data?.nodes) {
@@ -129,16 +189,115 @@ const expandBatch = async (mode) => {
     console.error("Erro na expansão em lote:", err);
   } finally {
     isBatchExpanding.value = false;
+    loadingLevel.value = null;
   }
 };
 
 const PJ_FILTERABLE = ['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'];
+const PHARMACY_NODE_TYPES = new Set(['PJ_ALVO', 'PJ_FARMACIA', 'PJ_FARMACIA_EXT']);
+const PHARMACY_CNAES = new Set(['4771701', '4771702']);
+
+const isCompanyNode = (node) => {
+  const type = node.data('type') || '';
+  return type === 'PJ_ALVO' || type.startsWith('PJ');
+};
+
+const isPharmacyNodeData = (data = {}) => {
+  if (PHARMACY_NODE_TYPES.has(data.type)) return true;
+  const cnae = data.id_cnae_principal == null ? '' : String(data.id_cnae_principal).replace(/\D/g, '');
+  return PHARMACY_CNAES.has(cnae);
+};
+
+const hideEdgesTouchingHiddenNodes = () => {
+  cy.edges()
+    .filter(e => e.source().hidden() || e.target().hidden())
+    .hide();
+};
+
+const hideOrphanPartners = () => {
+  cy.nodes()
+    .filter(n => n.data('type') === 'PF' && n.connectedEdges(':visible').length === 0)
+    .hide();
+};
+
+const normalizeSearchText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, '');
+
+const getNodeSearchText = (node) => normalizeSearchText([
+  node.id(),
+  node.data('fullLabel'),
+  node.data('label'),
+  node.data('razao_social'),
+  node.data('nome_fantasia'),
+].filter(Boolean).join(' '));
+
+const clearGraphHighlights = () => {
+  if (!cy) return;
+  cy.elements().removeClass('faded highlighted');
+};
+
+const applySelectedHighlight = () => {
+  if (!cy || !selectedNode.value?.id) return;
+
+  const node = cy.getElementById(selectedNode.value.id);
+  if (!node.length || node.hidden()) return;
+
+  const neighborhood = node.closedNeighborhood().filter(':visible');
+  cy.elements(':visible').not(neighborhood).addClass('faded');
+  neighborhood.addClass('highlighted');
+};
+
+const applySearchHighlight = () => {
+  if (!cy) return;
+
+  const query = normalizeSearchText(networkSearch.value);
+  searchMatchCount.value = 0;
+  if (!query) return;
+
+  const visibleNodes = cy.nodes(':visible');
+  const matches = visibleNodes.filter(node => getNodeSearchText(node).includes(query));
+  searchMatchCount.value = matches.length;
+
+  if (matches.empty()) {
+    cy.elements(':visible').addClass('faded');
+    return;
+  }
+
+  const connectedEdges = matches.connectedEdges(':visible');
+  const focusElements = matches.union(connectedEdges);
+  cy.elements(':visible').not(focusElements).addClass('faded');
+  focusElements.addClass('highlighted');
+};
+
+const applyGraphHighlights = () => {
+  if (!cy) return;
+  clearGraphHighlights();
+
+  if (hasActiveSearch.value) {
+    applySearchHighlight();
+    return;
+  }
+
+  searchMatchCount.value = 0;
+  applySelectedHighlight();
+};
 
 const applyVisibilityFilters = () => {
   if (!cy) return;
 
   // Parte do estado limpo a cada re-aplicação
   cy.elements().show();
+
+  if (showOnlyPharmacies.value) {
+    cy.nodes()
+      .filter(n => isCompanyNode(n) && !isPharmacyNodeData(n.data()))
+      .hide();
+    hideEdgesTouchingHiddenNodes();
+    hideOrphanPartners();
+  }
 
   if (!showInactiveCompanies.value) {
     // Oculta arestas inativas conectadas a empresas (não-alvo)
@@ -152,6 +311,7 @@ const applyVisibilityFilters = () => {
     cy.nodes()
       .filter(n => PJ_FILTERABLE.includes(n.data('type')) && n.connectedEdges(':visible').length === 0)
       .hide();
+    hideEdgesTouchingHiddenNodes();
   }
 
   if (!showInactivePartners.value) {
@@ -167,6 +327,18 @@ const applyVisibilityFilters = () => {
       .filter(n => n.data('type') === 'PF' && n.connectedEdges(':visible').length === 0)
       .hide();
   }
+
+  if (selectedNode.value?.id) {
+    const selected = cy.getElementById(selectedNode.value.id);
+    if (!selected.length || selected.hidden()) selectedNode.value = null;
+  }
+
+  applyGraphHighlights();
+};
+
+const toggleOnlyPharmacies = () => {
+  showOnlyPharmacies.value = !showOnlyPharmacies.value;
+  applyVisibilityFilters();
 };
 
 const toggleInactiveCompanies = () => {
@@ -177,6 +349,19 @@ const toggleInactiveCompanies = () => {
 const toggleInactivePartners = () => {
   showInactivePartners.value = !showInactivePartners.value;
   applyVisibilityFilters();
+};
+
+const clearNodeSearch = () => {
+  networkSearch.value = '';
+  selectedNode.value = null;
+  clearGraphHighlights();
+  searchMatchCount.value = 0;
+  fitGraphToView(INITIAL_FIT_PADDING);
+};
+
+const closeSelectedNode = () => {
+  selectedNode.value = null;
+  applyGraphHighlights();
 };
 
 const exportPng = () => {
@@ -224,7 +409,7 @@ const NODE_STYLES = {
   ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 64 },
 };
 
-const INITIAL_FIT_PADDING = 40; // Reduzido para aproveitar o máximo da largura do card
+const INITIAL_FIT_PADDING = 96; // Reserva espaço para a toolbar flutuante no topo.
 const REFIT_DELAY_MS = 80;
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
@@ -260,6 +445,7 @@ async function buildGraph(data) {
         situacao: n.situacao_rf,
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
+        id_cnae_principal: n.id_cnae_principal,
         is_ativo: n.is_ativo,
       }
     })),
@@ -289,16 +475,17 @@ async function buildGraph(data) {
 
   // Força o reconhecimento do tamanho do container
   cy.resize();
+  applyVisibilityFilters();
 
   // Layout manual rastreado em currentLayout para poder ser cancelado antes do destroy
   currentLayout = cy.layout({
     name: 'cose',
     animate: true,
     animationDuration: 800,
-    nodeRepulsion: () => 15000,
-    idealEdgeLength: () => 80,
-    gravity: 0.9,
-    numIter: 1000,
+    nodeRepulsion: () => 8500,
+    idealEdgeLength: () => 58,
+    gravity: 1.35,
+    numIter: 900,
     initialTemp: 1000,
     coolingFactor: 0.99,
     minTemp: 1.0,
@@ -312,30 +499,35 @@ async function buildGraph(data) {
       cyContainer.value.style.opacity = '';
       cyContainer.value.style.pointerEvents = '';
     }
-    fitGraphToView(INITIAL_FIT_PADDING);
+    if (hasActiveSearch.value) {
+      applyGraphHighlights();
+    } else {
+      fitGraphToView(INITIAL_FIT_PADDING);
+    }
   });
   currentLayout.run();
 
   cy.ready(() => {
-    setTimeout(() => fitGraphToView(INITIAL_FIT_PADDING), REFIT_DELAY_MS);
+    setTimeout(() => {
+      if (hasActiveSearch.value) {
+        applyGraphHighlights();
+      } else {
+        fitGraphToView(INITIAL_FIT_PADDING);
+      }
+    }, REFIT_DELAY_MS);
   });
 
   // Eventos interativos
   cy.on('tap', 'node', e => {
     const node = e.target;
     selectedNode.value = node.data();
-    // Destaca vizinhos
-    cy.elements().removeClass('faded highlighted');
-    const neighborhood = node.closedNeighborhood();
-    cy.elements().not(neighborhood).addClass('faded');
-    neighborhood.addClass('highlighted');
+    applyGraphHighlights();
   });
 
   cy.on('tap', e => {
     if (e.target === cy) {
-      // Clique no fundo: remove destaques
-      cy.elements().removeClass('faded highlighted');
       selectedNode.value = null;
+      applyGraphHighlights();
     }
   });
 
@@ -372,8 +564,11 @@ async function expandNode(nodeId) {
             is_expanded_node: true,
             is_ativo: n.is_ativo,
             razao_social: n.razao_social,
+            nome_fantasia: n.nome_fantasia,
+            id_cnae_principal: n.id_cnae_principal,
             municipio: n.municipio,
             uf: n.uf,
+            situacao: n.situacao_rf,
             situacao_rf: n.situacao_rf
           },
           position: { ...cy.getElementById(nodeId).position() }
@@ -412,10 +607,7 @@ async function expandNode(nodeId) {
       currentLayout.run();
       
       // Destaca vizinhos do nó expandido
-      cy.elements().removeClass('faded highlighted');
-      const neighborhood = cy.getElementById(nodeId).closedNeighborhood();
-      cy.elements().not(neighborhood).addClass('faded');
-      neighborhood.addClass('highlighted');
+      applyVisibilityFilters();
     }
     expandedNodes.value.add(nodeId);
   } catch (error) {
@@ -431,16 +623,25 @@ function fitGraphToView(padding = INITIAL_FIT_PADDING) {
   const { clientWidth, clientHeight } = cyContainer.value;
   if (!clientWidth || !clientHeight) return;
 
+  const visibleElements = cy.elements(':visible');
+  if (visibleElements.empty()) return;
+
   cy.resize();
-  cy.fit(cy.elements(), padding);
-  cy.center(cy.elements());
+  cy.fit(visibleElements, padding);
+  cy.center(visibleElements);
   zoom.value = Math.round(cy.zoom() * 100);
 }
 
 function observeGraphContainer() {
   if (!cyContainer.value || resizeObserver) return;
 
-  resizeObserver = new ResizeObserver(() => fitGraphToView(INITIAL_FIT_PADDING));
+  resizeObserver = new ResizeObserver(() => {
+    if (hasActiveSearch.value) {
+      applyGraphHighlights();
+    } else {
+      fitGraphToView(INITIAL_FIT_PADDING);
+    }
+  });
   resizeObserver.observe(cyContainer.value);
 }
 
@@ -545,17 +746,16 @@ function truncateLabel(text, maxLen) {
 // ── Controles de zoom ───────────────────────────────────────────────────────
 function zoomIn()  { cy?.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cyContainer.value.clientWidth / 2, y: cyContainer.value.clientHeight / 2 } }); }
 function zoomOut() { cy?.zoom({ level: cy.zoom() * 0.8,  renderedPosition: { x: cyContainer.value.clientWidth / 2, y: cyContainer.value.clientHeight / 2 } }); }
-function fitGraph() { fitGraphToView(80); }
+function fitGraph() {
+  if (hasActiveSearch.value) {
+    applyGraphHighlights();
+    return;
+  }
+  fitGraphToView(80);
+}
 function resetLayout() {
   if (!cy) return;
-  if (currentLayout) { try { currentLayout.stop(); } catch (e) {} }
-  currentLayout = cy.layout({
-    name: 'cose', animate: true, animationDuration: 600,
-    nodeRepulsion: () => 8000, idealEdgeLength: () => 120,
-    gravity: 1.2, numIter: 800, fit: false,
-  });
-  currentLayout.run();
-  cy.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
+  runGraphLayout('expanded', { animationDuration: 600 });
 }
 
 // ── Watchers ────────────────────────────────────────────────────────────────
@@ -565,6 +765,10 @@ watch(networkData, async (data) => {
     await buildGraph(data);
   }
 }, { immediate: true });
+
+watch(networkSearch, () => {
+  applyGraphHighlights();
+});
 
 onMounted(async () => {
   if (!networkData.value) {
@@ -586,6 +790,7 @@ onBeforeUnmount(() => {
 onActivated(() => {
   if (cy) {
     cy.resize();
+    if (hasActiveSearch.value) applyGraphHighlights();
   }
 });
 
@@ -594,10 +799,9 @@ onActivated(() => {
 const typeLabels = {
   PJ_ALVO:     { label: 'CNPJ em Análise', color: '#6366f1' },
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
-  PJ_FARMACIA: { label: 'Farmácia FP',     color: '#10b981' },
-  PJ_FARMACIA_EXT: { label: 'Outra Farmácia (Não FP)', color: '#f59e0b' },
-  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' }, 
-  PJ:          { label: 'Sócio PJ (Holding)', color: '#d946ef' },
+  PJ_FARMACIA: { label: 'Farmácia Popular', color: '#10b981' },
+  PJ_FARMACIA_EXT: { label: 'Farmácia (Não FP)', color: '#f59e0b' },
+  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' },
 };
 </script>
 
@@ -649,34 +853,85 @@ const typeLabels = {
         <!-- Grafo ─────────────────────────────────────────────── -->
         <div class="graph-wrapper">
           <div ref="cyContainer" class="cy-canvas"></div>
+          <!-- Toolbar (topo esquerdo) ─────────────────────── -->
+          <div class="toolbar-overlay">
 
-          <!-- Toolbar de Investigação (canto superior esquerdo) -->
-          <div class="toolbar-batch">
-            <button class="tool-btn" @click="resetToN2" :disabled="isBatchExpanding" v-tooltip.bottom="'Voltar ao estado inicial (apenas N2)'">
-               <i class="pi pi-refresh" />
-               <span>Nível 2</span>
-            </button>
-            <div class="tool-sep"></div>
-            <button class="tool-btn main" @click="expandBatch('N3')" :disabled="isBatchExpanding" v-tooltip.bottom="'Carregar sócios das empresas (N3)'">
-               <i :class="isBatchExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-users'" />
-               <span>Nível 3</span>
-            </button>
-            <button class="tool-btn main" @click="expandBatch('N4')" :disabled="isBatchExpanding" v-tooltip.bottom="'Carregar sócios N3 + empresas deles (N4)'">
-               <i :class="isBatchExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-building'" />
-               <span>Nível 4</span>
-            </button>
-            <div class="tool-sep"></div>
-            <button class="tool-btn" :class="{ 'active': !showInactiveCompanies }" @click="toggleInactiveCompanies" v-tooltip.bottom="'Ocultar empresas baixadas/inativas (PJ)'">
-               <i :class="showInactiveCompanies ? 'pi pi-building' : 'pi pi-building'" />
-               <span>{{ showInactiveCompanies ? 'Emp. Inativas' : 'Emp. Inativas ✔' }}</span>
-            </button>
-            <button class="tool-btn" :class="{ 'active': !showInactivePartners }" @click="toggleInactivePartners" v-tooltip.bottom="'Ocultar sócios sem vínculo ativo (PF)'">
-               <i class="pi pi-user" />
-               <span>{{ showInactivePartners ? 'Sócios Inativos' : 'Sócios Inativos ✔' }}</span>
-            </button>
-            <button class="tool-btn" @click="exportPng" v-tooltip.bottom="'Exportar imagem PNG'">
-               <i class="pi pi-camera" />
-            </button>
+            <!-- Pill de profundidade -->
+            <div class="toolbar-pill">
+              <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N2' }"
+                @click="resetToN2" :disabled="isBatchExpanding"
+                v-tooltip.bottom="'Voltar ao nível 2 inicial'">
+                <i class="pi pi-refresh" />
+                <span>Nível 2</span>
+              </button>
+              <div class="pill-sep"></div>
+              <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N3' }"
+                @click="expandBatch('N3')" :disabled="isBatchExpanding"
+                v-tooltip.bottom="'Carregar nível 3: sócios das empresas irmãs'">
+                <i :class="loadingLevel === 'N3' ? 'pi pi-spin pi-spinner' : 'pi pi-users'" />
+                <span>Nível 3</span>
+              </button>
+              <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N4' }"
+                @click="expandBatch('N4')" :disabled="isBatchExpanding"
+                v-tooltip.bottom="'Carregar nível 4: empresas dos sócios de N3'">
+                <i :class="loadingLevel === 'N4' ? 'pi pi-spin pi-spinner' : 'pi pi-sitemap'" />
+                <span>Nível 4</span>
+              </button>
+            </div>
+
+            <!-- Pill de filtros + export -->
+            <div class="toolbar-pill">
+              <button class="filter-btn" :class="{ filtering: showOnlyPharmacies }"
+                @click="toggleOnlyPharmacies"
+                v-tooltip.bottom="showOnlyPharmacies ? 'Mostrar todas as empresas' : 'Mostrar apenas farmácias'">
+                <i class="pi pi-filter" />
+                <span>Farmácias</span>
+                <i :class="showOnlyPharmacies ? 'pi pi-eye-slash state-icon' : 'pi pi-eye state-icon'" />
+              </button>
+              <div class="pill-sep"></div>
+              <button class="filter-btn" :class="{ filtering: !showInactiveCompanies }"
+                @click="toggleInactiveCompanies"
+                v-tooltip.bottom="showInactiveCompanies ? 'Ocultar empresas inativas' : 'Mostrar empresas inativas'">
+                <i class="pi pi-building" />
+                <span>Empresas</span>
+                <i :class="showInactiveCompanies ? 'pi pi-eye state-icon' : 'pi pi-eye-slash state-icon'" />
+              </button>
+              <button class="filter-btn" :class="{ filtering: !showInactivePartners }"
+                @click="toggleInactivePartners"
+                v-tooltip.bottom="showInactivePartners ? 'Ocultar sócios inativos' : 'Mostrar sócios inativos'">
+                <i class="pi pi-user" />
+                <span>Sócios</span>
+                <i :class="showInactivePartners ? 'pi pi-eye state-icon' : 'pi pi-eye-slash state-icon'" />
+              </button>
+              <div class="pill-sep"></div>
+              <button class="filter-btn icon-only" @click="exportPng" v-tooltip.bottom="'Exportar PNG'">
+                <i class="pi pi-camera" />
+              </button>
+            </div>
+
+            <!-- Busca de nó -->
+            <div class="toolbar-pill search-pill" :class="{ searching: hasActiveSearch, 'no-match': searchHasNoMatch }">
+              <i class="pi pi-search search-icon" />
+              <input
+                v-model="networkSearch"
+                class="node-search-input"
+                type="text"
+                placeholder="Localizar nó"
+                aria-label="Localizar nó por CNPJ, CPF ou nome"
+                @keydown.esc="clearNodeSearch"
+              />
+              <span v-if="hasActiveSearch" class="search-count">{{ searchMatchCount }}</span>
+              <button
+                v-if="hasActiveSearch"
+                class="search-clear-btn"
+                type="button"
+                @click="clearNodeSearch"
+                v-tooltip.bottom="'Limpar busca'"
+              >
+                <i class="pi pi-times" />
+              </button>
+            </div>
+
           </div>
 
           <!-- Controles de Zoom (canto inferior direito) ───── -->
@@ -717,7 +972,7 @@ const typeLabels = {
               <div class="panel-type-badge" :style="{ background: typeLabels[selectedNode.type]?.color }">
                 {{ typeLabels[selectedNode.type]?.label || selectedNode.type }}
               </div>
-              <button class="close-btn" @click="selectedNode = null; cy?.elements().removeClass('faded highlighted')">
+              <button class="close-btn" @click="closeSelectedNode">
                 <i class="pi pi-times" />
               </button>
             </div>
@@ -794,7 +1049,7 @@ const typeLabels = {
 .title {
   margin: 0;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-color);
@@ -821,7 +1076,7 @@ const typeLabels = {
 
 .stat-value {
   font-size: 1.3rem;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--primary-color);
   line-height: 1;
 }
@@ -829,7 +1084,7 @@ const typeLabels = {
 .stat-label {
   font-size: 0.6rem;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.04em;
 }
@@ -873,73 +1128,191 @@ const typeLabels = {
   min-height: 520px;
 }
 
-/* Toolbar de Investigação (topo central) ──────────── */
-.toolbar-batch {
+/* Toolbar Overlay ──────────────────────────────────── */
+.toolbar-overlay {
   position: absolute;
   top: 1rem;
   left: 1rem;
-  transform: none;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50px;
-  padding: 6px 10px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+  flex-wrap: wrap;
+  gap: 0.5rem;
   z-index: 10;
-  white-space: nowrap;
+  max-width: calc(100% - 2rem);
 }
 
-.tool-btn {
+.toolbar-pill {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 50px;
+  padding: 4px 6px;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+}
+
+/* Botões de profundidade (segmented control) */
+.seg-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
-  padding: 6px 12px;
+  color: #64748b;
+  padding: 5px 11px;
   border-radius: 20px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  gap: 5px;
+  font-size: 0.71rem;
+  font-weight: 500;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
   white-space: nowrap;
 }
 
-.tool-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
+.seg-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
 }
 
-.tool-btn.main {
+.seg-btn.seg-active {
   background: var(--primary-color);
-  color: white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.38);
 }
 
-.tool-btn.main:hover:not(:disabled) {
-  background: #818cf8;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
-}
-
-.tool-btn.active {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-.tool-sep {
-  width: 1px;
-  height: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: 0 2px;
-}
-
-.tool-btn:disabled {
-  opacity: 0.45;
+.seg-btn:disabled {
+  opacity: 0.38;
   cursor: not-allowed;
+}
+
+/* Botões de filtro */
+.filter-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  padding: 5px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.71rem;
+  font-weight: 500;
+  transition: background 0.18s, color 0.18s;
+  white-space: nowrap;
+}
+
+.filter-btn.icon-only {
+  padding: 5px 8px;
+}
+
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+}
+
+.filter-btn .state-icon {
+  font-size: 0.6rem;
+  opacity: 0.55;
+}
+
+.filter-btn.filtering {
+  color: #fbbf24;
+}
+
+.filter-btn.filtering .state-icon {
+  opacity: 1;
+}
+
+.search-pill {
+  gap: 6px;
+  min-width: 210px;
+  max-width: 280px;
+  padding: 4px 8px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.search-pill.searching {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(56, 189, 248, 0.1);
+}
+
+.search-pill.no-match {
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.search-icon {
+  color: #64748b;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.node-search-input {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.node-search-input::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.search-count {
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.28rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.search-pill.no-match .search-count {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
+
+.search-clear-btn {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.58rem;
+  flex-shrink: 0;
+  transition: background 0.18s, color 0.18s;
+}
+
+.search-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+.pill-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 /* Controles de Zoom (canto inferior direito) ──────── */
@@ -982,7 +1355,7 @@ const typeLabels = {
 
 .zoom-level {
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-muted);
   width: 2rem;
   text-align: center;
@@ -1072,7 +1445,7 @@ const typeLabels = {
 
 .panel-type-badge {
   font-size: 0.62rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #fff;
@@ -1102,7 +1475,7 @@ const typeLabels = {
 .panel-main-name {
   margin: 0;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--text-color);
   line-height: 1.2;
 }
@@ -1156,7 +1529,7 @@ const typeLabels = {
 .field-label {
   font-size: 0.6rem;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.02em;
 }
@@ -1193,7 +1566,7 @@ const typeLabels = {
   border: none;
   border-radius: 8px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);

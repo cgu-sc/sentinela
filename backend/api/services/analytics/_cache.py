@@ -13,7 +13,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
-    get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, get_cache_dir
+    get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, 
+    get_df_teia_fonte_nivel4, get_cache_dir
 )
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -180,6 +181,7 @@ def sync_network(cnpj: str) -> None:
       - dados_socios (parquet): para o Nível 1 (Sócios da farmácia)
       - teia_fonte_nivel2 (parquet): para o Nível 2 (Outras empresas dos sócios)
       - teia_fonte_nivel3 (parquet): para o Nível 3 (Sócios das outras empresas - expansão)
+      - teia_fonte_nivel4 (parquet): para o Nível 4 (Empresas dos sócios de N3)
     """
     import time
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
@@ -187,9 +189,11 @@ def sync_network(cnpj: str) -> None:
     EDGES_PATH     = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
     EXP_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
     EXP_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
+    N4_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
+    N4_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
 
-    # Cache hit: se os 4 arquivos existem e o principal é válido, assume sucesso
-    if os.path.exists(NODES_PATH) and os.path.exists(EXP_NODES_PATH):
+    # Cache hit: se os 6 arquivos existem e o principal é válido, assume sucesso
+    if all(os.path.exists(p) for p in [NODES_PATH, EXP_NODES_PATH, N4_NODES_PATH]):
         try:
             pl.scan_parquet(NODES_PATH).limit(0).collect()
             return
@@ -214,7 +218,6 @@ def sync_network(cnpj: str) -> None:
                 "label": r.get("nome_fantasia") or r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
                 "razao_social": r.get("razao_social"),
-                "nome_fantasia": r.get("nome_fantasia"),
                 "id_cnae_principal": r.get("id_cnae_principal"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
@@ -224,7 +227,7 @@ def sync_network(cnpj: str) -> None:
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
-                "razao_social": None, "nome_fantasia": None, "id_cnae_principal": None,
+                "razao_social": None, "id_cnae_principal": None,
                 "municipio": None, "uf": None, "situacao_rf": None, "is_ativo": True
             }
 
@@ -243,7 +246,6 @@ def sync_network(cnpj: str) -> None:
                     "label": s["nome_socio"],
                     "type": s["indicador_socio"] or "PF",
                     "razao_social": s["nome_socio"],
-                    "nome_fantasia": None,
                     "id_cnae_principal": None,
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
@@ -278,22 +280,21 @@ def sync_network(cnpj: str) -> None:
 
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
-                        "label": p["nome_fantasia"] or p["razao_social"] or cnpj_ext,
+                        "label": p["razao_social"] or cnpj_ext,
                         "type": tipo,
                         "razao_social": p["razao_social"],
-                        "nome_fantasia": p["nome_fantasia"],
                         "id_cnae_principal": p.get("id_cnae_principal"),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
-                        "is_ativo": True,
+                        "is_ativo": (p["situacao_rf"] or "").strip().lower() == "ativa",
                     }
 
                 edges.append({
                     "id": f"{id_socio}->{cnpj_ext}",
                     "source": id_socio,
                     "target": cnpj_ext,
-                    "label": f"{float(p['percentual_qualificacao'] or 0):.1f}%",
+                    "label": "sócio",
                     "type": "socio",
                     "is_ativo": p.get("data_exclusao_sociedade") is None
                 })
@@ -335,7 +336,7 @@ def sync_network(cnpj: str) -> None:
                         "id": edge_id,
                         "source": id_socio,
                         "target": cnpj_pai,
-                        "label": f"{float(row['percentual_qualificacao'] or 0):.1f}%",
+                        "label": "sócio",
                         "type": "socio",
                         "is_ativo": row.get("data_exclusao_sociedade") is None
                     })
@@ -354,6 +355,60 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(exp_edges if exp_edges else [], schema={
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         }).unique(subset=["id"], keep="first").write_parquet(EXP_EDGES_PATH, compression="zstd")
+
+        # ── 5. Nível 4: Expansão (Outras empresas dos sócios de N3) ─────────
+        df_n4_source = get_df_teia_fonte_nivel4()
+        n4_nodes_dict: dict[str, dict] = {}
+        n4_edges: list[dict] = []
+        
+        # CPFs que entraram no Nível 3 (expansão)
+        cpfs_n3 = list(exp_nodes_dict.keys())
+        
+        if not df_n4_source.is_empty() and cpfs_n3:
+            df_n4_filtered = df_n4_source.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_n3))
+            
+            for row in df_n4_filtered.iter_rows(named=True):
+                cnpj_ext = row["cnpj_empresa"]
+                id_socio = row["cpf_cnpj_socio"]
+                
+                # Se a empresa já existe na teia (N2), não duplicamos
+                if cnpj_ext not in nodes and cnpj_ext not in n4_nodes_dict:
+                    tipo = "PJ_FARMACIA" if row["is_farmacia_fp"] else "PJ_OUTRA"
+                    if tipo == "PJ_OUTRA" and row.get("id_cnae_principal") in [4771701, 4771702]:
+                        tipo = "PJ_FARMACIA_EXT"
+                        
+                    n4_nodes_dict[cnpj_ext] = {
+                        "id": cnpj_ext,
+                        "label": row["razao_social"] or cnpj_ext,
+                        "type": tipo,
+                        "razao_social": row["razao_social"],
+                        "id_cnae_principal": row.get("id_cnae_principal"),
+                        "municipio": row["municipio"],
+                        "uf": row["uf"],
+                        "situacao_rf": row["situacao_rf"],
+                        "is_ativo": (row["situacao_rf"] or "").strip().lower() == "ativa",
+                    }
+                
+                edge_id = f"{id_socio}->{cnpj_ext}"
+                if not any(e["id"] == edge_id for e in n4_edges):
+                    n4_edges.append({
+                        "id": edge_id,
+                        "source": id_socio,
+                        "target": cnpj_ext,
+                        "label": "sócio",
+                        "type": "socio",
+                        "is_ativo": row.get("data_exclusao_sociedade") is None
+                    })
+
+        # ── Salva Parquets Nível 4 ──────────────────────────────────────────
+        pl.DataFrame(list(n4_nodes_dict.values()) if n4_nodes_dict else [], schema={
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8, "is_ativo": pl.Boolean
+        }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
+        
+        pl.DataFrame(n4_edges if n4_edges else [], schema={
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+        }).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")
         
         ms = (time.perf_counter() - t0) * 1000
         print(f"✅ Teia Completa (+Expansão) salva para {cnpj} ({ms:.1f}ms)")

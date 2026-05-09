@@ -277,6 +277,18 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchNetworkLevel(cnpj, level) {
+      if (!cnpj || !level) return null;
+      try {
+        const endpoint = level === 3 ? API_ENDPOINTS.analyticsNetworkLevel3(cnpj) : API_ENDPOINTS.analyticsNetworkLevel4(cnpj);
+        const { data } = await axios.get(endpoint);
+        return data;
+      } catch (e) {
+        console.error(`Erro ao buscar nível ${level}:`, e);
+        return null;
+      }
+    },
+
     // ── Falecidos ─────────────────────────────────────────────────────────────
     async fetchFalecidos(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;

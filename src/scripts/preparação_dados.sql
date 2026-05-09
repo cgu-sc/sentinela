@@ -540,10 +540,10 @@ SELECT DISTINCT cnpj_empresa INTO #universo_cnpjs FROM #teia_fonte_nivel2_raw;
 DROP TABLE IF EXISTS #metadata_empresas;
 SELECT DISTINCT
     u.cnpj_empresa,
-    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)) AS razao_social,
+    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(c.RazaoSocial), 100) AS VARCHAR(100)) AS razao_social,
     TRY_CAST(c.CnaeFiscal AS INT) AS id_cnae_principal,
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)) AS situacao_rf,
-    CAST(ibge.no_municipio AS VARCHAR(60)) AS municipio,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60)) AS municipio,
     CAST(ibge.sg_uf AS CHAR(2)) AS uf
 INTO #metadata_empresas
 FROM #universo_cnpjs u
@@ -585,9 +585,9 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
 SELECT DISTINCT
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
-    CAST(LEFT(s.nomeSocio, 120) AS VARCHAR(120))            AS nome_socio,
+    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.nomeSocio), 120) AS VARCHAR(120))  AS nome_socio,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(LEFT(s.descQualificacaoSocio, 50) AS VARCHAR(50))  AS descricao_qualificacao,
+    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.descQualificacaoSocio), 50) AS VARCHAR(50)) AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO temp_CGUSC.fp.teia_fonte_nivel3
@@ -607,13 +607,12 @@ SELECT
     s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
+    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.descQualificacaoSocio), 60) AS VARCHAR(60)) AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel4_raw
 FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
-INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-WHERE NOT EXISTS (SELECT 1 FROM #teia_fonte_nivel2_raw r2 WHERE r2.cnpj_empresa = s.cnpj);
+INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio;
 
 -- 2. Enriquecer metadados apenas para as NOVAS empresas do Nível 4
 DROP TABLE IF EXISTS #universo_n4;
@@ -622,10 +621,10 @@ SELECT DISTINCT cnpj_empresa INTO #universo_n4 FROM #teia_fonte_nivel4_raw;
 INSERT INTO #metadata_empresas
 SELECT DISTINCT
     u.cnpj_empresa,
-    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)),
+    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(c.RazaoSocial), 100) AS VARCHAR(100)),
     TRY_CAST(c.CnaeFiscal AS INT),
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)),
-    CAST(ibge.no_municipio AS VARCHAR(60)),
+    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60)),
     CAST(ibge.sg_uf AS CHAR(2))
 FROM #universo_n4 u
 INNER JOIN db_CNPJ.dbo.CNPJ c ON c.cnpj = u.cnpj_empresa

@@ -134,3 +134,111 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
     except Exception as e:
         print(f"⚠️ Erro ao expandir nó {cnpj_para_expandir} na teia {cnpj_alvo}: {e}")
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+
+def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> NetworkResponse:
+    """
+    Carrega os dados de expansão (Nível 4) para um SÓCIO específico.
+    Lê os arquivos de expansão N4 pré-gerados na pasta de cache do CNPJ alvo.
+    """
+    t0 = time.perf_counter()
+    cnpj_dir = _get_cnpj_cache_dir(cnpj_alvo)
+    N4_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
+    N4_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
+
+    if not os.path.exists(N4_NODES_PATH) or not os.path.exists(N4_EDGES_PATH):
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+    try:
+        # Filtra arestas onde o SÓCIO é a fonte (source)
+        df_n4_edges = pl.read_parquet(N4_EDGES_PATH).filter(pl.col("source") == cpf_para_expandir)
+        
+        if df_n4_edges.is_empty():
+            return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+        # Pega os IDs das empresas encontradas
+        cnpjs_empresas = df_n4_edges["target"].unique().to_list()
+        
+        # Busca detalhes das empresas
+        df_n4_nodes = pl.read_parquet(N4_NODES_PATH).filter(pl.col("id").is_in(cnpjs_empresas))
+
+        nodes = [
+            NetworkNodeSchema(
+                id=row["id"],
+                label=row["label"] or "",
+                type=row["type"] or "PJ_OUTRA",
+                razao_social=row.get("razao_social"),
+                municipio=row.get("municipio"),
+                uf=row.get("uf"),
+                situacao_rf=row.get("situacao_rf"),
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_n4_nodes.iter_rows(named=True)
+        ]
+
+        edges = [
+            NetworkEdgeSchema(
+                id=row["id"],
+                source=row["source"],
+                target=row["target"],
+                label=row["label"] or None,
+                type=row["type"] or "socio",
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_n4_edges.iter_rows(named=True)
+        ]
+
+        return NetworkResponse(
+            cnpj=cnpj_alvo, 
+            nodes=nodes, 
+            edges=edges,
+            query_time_ms=round((time.perf_counter() - t0) * 1000, 1)
+        )
+
+    except Exception as e:
+        print(f"⚠️ Erro ao expandir sócio {cpf_para_expandir} na teia {cnpj_alvo}: {e}")
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
+    """Retorna TODOS os sócios de nível 3 (Sócios de N2) em lote."""
+    CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
+    NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_nodes.parquet")
+    EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_edges.parquet")
+
+    if not os.path.exists(NODES_PATH):
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+    try:
+        df_nodes = pl.read_parquet(NODES_PATH)
+        df_edges = pl.read_parquet(EDGES_PATH)
+
+        nodes = [NetworkNodeSchema(**row) for row in df_nodes.iter_rows(named=True)]
+        edges = [NetworkEdgeSchema(**row) for row in df_edges.iter_rows(named=True)]
+
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
+    except Exception as e:
+        print(f"[ NETWORK ] ERRO BATCH N3 EM {cnpj_alvo}: {e}")
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
+    """Retorna TODAS as empresas de nível 4 (Participações de N3) em lote."""
+    CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
+    NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_nodes.parquet")
+    EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_edges.parquet")
+
+    if not os.path.exists(NODES_PATH):
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+    try:
+        df_nodes = pl.read_parquet(NODES_PATH)
+        df_edges = pl.read_parquet(EDGES_PATH)
+
+        nodes = [NetworkNodeSchema(**row) for row in df_nodes.iter_rows(named=True)]
+        edges = [NetworkEdgeSchema(**row) for row in df_edges.iter_rows(named=True)]
+
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
+    except Exception as e:
+        print(f"[ NETWORK ] ERRO BATCH N4 EM {cnpj_alvo}: {e}")
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+
+

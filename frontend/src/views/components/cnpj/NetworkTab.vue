@@ -24,7 +24,178 @@ const totalEdges = computed(() => networkData.value?.edges?.length || 0);
 
 // Expansão
 const isExpanding = ref(false);
+const isBatchExpanding = ref(false);
 const expandedNodes = ref(new Set());
+
+// Filtros de visibilidade
+const showInactiveCompanies = ref(true); // Ocultar empresas inativas (PJ)
+const showInactivePartners  = ref(true); // Ocultar sócios inativos (PF)
+
+// ── Funções de Utilitário para o Grafo ──────────────────────────────────
+const mergeNetworkData = (newData) => {
+  if (!cy || !newData) return;
+  
+  // Evitar duplicados
+  const existingNodes = new Set(cy.nodes().map(n => n.id()));
+  const existingEdges = new Set(cy.edges().map(e => e.id()));
+
+  const newNodes = (newData.nodes || []).filter(n => !existingNodes.has(n.id));
+  const newEdges = (newData.edges || []).filter(e => !existingEdges.has(e.id));
+
+  // Adicionar nós
+  newNodes.forEach(n => {
+    cy.add({
+      group: 'nodes',
+      data: {
+        ...n,
+        label: truncateLabel(n.label, 20),
+        fullLabel: n.label,
+        is_expanded_node: true
+      },
+      // Posição inicial próxima ao centro para batch expansion
+      position: { x: cy.width() / 2, y: cy.height() / 2 }
+    });
+  });
+
+  // Adicionar arestas
+  newEdges.forEach(e => {
+    cy.add({ group: 'edges', data: { ...e } });
+  });
+
+  if (newNodes.length > 0) {
+    // Roda layout apenas se houver novos nós relevantes
+    const layout = cy.layout({ 
+      name: 'cose', 
+      animate: true, 
+      randomize: false,
+      fit: true,
+      padding: 50,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 100
+    });
+    layout.run();
+  }
+};
+
+const resetToN2 = () => {
+  if (!cy || !networkData.value) return;
+  // Reconstrói o grafo apenas com os dados originais (N2)
+  buildGraph(networkData.value);
+  expandedNodes.value = new Set();
+  selectedNode.value = null;
+  showInactive.value = true;
+};
+
+const expandBatch = async (mode) => {
+  if (isBatchExpanding.value) return;
+  
+  try {
+    isBatchExpanding.value = true;
+    let data = null;
+    
+    if (mode === 'N3') {
+      // Carrega apenas N3
+      data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+      if (data) mergeNetworkData(data);
+
+    } else if (mode === 'N4') {
+      // N3 é pré-requisito do N4: carrega os dois em sequência
+      const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+      if (dataN3) mergeNetworkData(dataN3);
+
+      const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
+      if (dataN4) mergeNetworkData(dataN4);
+      data = dataN4;
+    }
+
+    // Marcar nós como expandidos para evitar botões redundantes no painel lateral
+    if (data?.nodes) {
+      data.nodes.forEach(n => {
+        if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ', 'PF'].includes(n.type)) {
+          expandedNodes.value.add(n.id);
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Erro na expansão em lote:", err);
+  } finally {
+    isBatchExpanding.value = false;
+  }
+};
+
+const toggleInactiveCompanies = () => {
+  showInactiveCompanies.value = !showInactiveCompanies.value;
+  if (!cy) return;
+
+  const PJ_TYPES = ['PJ_ALVO', 'PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'];
+
+  if (showInactiveCompanies.value) {
+    // Restaura todos os nós PJ
+    cy.nodes().filter(n => PJ_TYPES.includes(n.data('type'))).show();
+    cy.edges().show();
+  } else {
+    // Esconde empresas inativas (is_ativo === false em nós PJ)
+    const inactiveCompanies = cy.nodes().filter(n =>
+      PJ_TYPES.includes(n.data('type')) && n.data('is_ativo') === false
+    );
+    inactiveCompanies.hide();
+    // Esconde arestas órfãs
+    cy.edges().filter(e => e.connectedNodes(':visible').length < 2).hide();
+  }
+};
+
+const toggleInactivePartners = () => {
+  showInactivePartners.value = !showInactivePartners.value;
+  if (!cy) return;
+
+  if (showInactivePartners.value) {
+    // Restaura todos os nós PF
+    cy.nodes().filter(n => n.data('type') === 'PF').show();
+    cy.edges().show();
+  } else {
+    // Esconde sócios inativos (is_ativo === false em nós PF)
+    const inactivePartners = cy.nodes().filter(n =>
+      n.data('type') === 'PF' && n.data('is_ativo') === false
+    );
+    inactivePartners.hide();
+    // Esconde arestas órfãs
+    cy.edges().filter(e => e.connectedNodes(':visible').length < 2).hide();
+  }
+};
+
+const exportPng = () => {
+  if (!cy) return;
+  const options = {
+    bg: '#0f172a',
+    full: true,
+    scale: 2,
+    maxWidth: 2000,
+  };
+  const pngData = cy.png(options);
+  const link = document.createElement('a');
+  link.href = pngData;
+  link.download = `teia_${cnpj.value}_${new Date().toISOString().slice(0,10)}.png`;
+  link.click();
+};
+
+const canExpand = computed(() => {
+  if (!selectedNode.value) return false;
+  const { type, id } = selectedNode.value;
+  // Empresas podem expandir (para N3) exceto a principal (que já vem aberta)
+  // Incluímos 'PJ' (tipo genérico para sócios PJ) na lista
+  if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'].includes(type) && id !== cnpj.value) return true;
+  // Pessoas (Sócios) podem expandir (para N4)
+  if (type === 'PF') return true;
+  return false;
+});
+
+const expansionLabel = computed(() => {
+  if (!selectedNode.value) return '';
+  if (expandedNodes.value.has(selectedNode.value.id)) return 'Já Expandido';
+  if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'].includes(selectedNode.value.type)) return 'Expandir Sócios (N3)';
+  if (selectedNode.value.type === 'PF') return 'Expandir Empresas (N4)';
+  return 'Expandir';
+});
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
@@ -167,7 +338,10 @@ async function expandNode(nodeId) {
             type: n.type || 'PF',
             is_expanded_node: true,
             is_ativo: n.is_ativo,
-            razao_social: n.razao_social
+            razao_social: n.razao_social,
+            municipio: n.municipio,
+            uf: n.uf,
+            situacao_rf: n.situacao_rf
           },
           position: { ...cy.getElementById(nodeId).position() }
         });
@@ -296,6 +470,18 @@ function buildStylesheet() {
     }
   });
 
+  // Estilo específico para Sócios PJ (para não ficarem sem estilo se vierem como 'PJ')
+  styles.push({
+    selector: 'node[type="PJ"]',
+    style: {
+      'background-color': '#d946ef',
+      'border-color': '#c026d3',
+      'shape': 'roundrectangle',
+      'width': 64,
+      'height': 64 * 0.68,
+    }
+  });
+
   // Arestas de representante
   styles.push({
     selector: 'edge[type="representante"]',
@@ -373,7 +559,8 @@ const typeLabels = {
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
   PJ_FARMACIA: { label: 'Farmácia FP',     color: '#10b981' },
   PJ_FARMACIA_EXT: { label: 'Outra Farmácia (Não FP)', color: '#f59e0b' },
-  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' }, // Sincronizado com o Fuchsia do NODE_STYLES
+  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' }, 
+  PJ:          { label: 'Sócio PJ (Holding)', color: '#d946ef' },
 };
 </script>
 
@@ -426,7 +613,36 @@ const typeLabels = {
         <div class="graph-wrapper">
           <div ref="cyContainer" class="cy-canvas"></div>
 
-          <!-- Controles flutuantes ──────────────────────────── -->
+          <!-- Toolbar de Investigação (canto superior esquerdo) -->
+          <div class="toolbar-batch">
+            <button class="tool-btn" @click="resetToN2" :disabled="isBatchExpanding" v-tooltip.bottom="'Voltar ao estado inicial (apenas N2)'">
+               <i class="pi pi-refresh" />
+               <span>Nível 2</span>
+            </button>
+            <div class="tool-sep"></div>
+            <button class="tool-btn main" @click="expandBatch('N3')" :disabled="isBatchExpanding" v-tooltip.bottom="'Carregar sócios das empresas (N3)'">
+               <i :class="isBatchExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-users'" />
+               <span>Nível 3</span>
+            </button>
+            <button class="tool-btn main" @click="expandBatch('N4')" :disabled="isBatchExpanding" v-tooltip.bottom="'Carregar sócios N3 + empresas deles (N4)'">
+               <i :class="isBatchExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-building'" />
+               <span>Nível 4</span>
+            </button>
+            <div class="tool-sep"></div>
+            <button class="tool-btn" :class="{ 'active': !showInactiveCompanies }" @click="toggleInactiveCompanies" v-tooltip.bottom="'Ocultar empresas baixadas/inativas (PJ)'">
+               <i :class="showInactiveCompanies ? 'pi pi-building' : 'pi pi-building'" />
+               <span>{{ showInactiveCompanies ? 'Emp. Inativas' : 'Emp. Inativas ✔' }}</span>
+            </button>
+            <button class="tool-btn" :class="{ 'active': !showInactivePartners }" @click="toggleInactivePartners" v-tooltip.bottom="'Ocultar sócios sem vínculo ativo (PF)'">
+               <i class="pi pi-user" />
+               <span>{{ showInactivePartners ? 'Sócios Inativos' : 'Sócios Inativos ✔' }}</span>
+            </button>
+            <button class="tool-btn" @click="exportPng" v-tooltip.bottom="'Exportar imagem PNG'">
+               <i class="pi pi-camera" />
+            </button>
+          </div>
+
+          <!-- Controles de Zoom (canto inferior direito) ───── -->
           <div class="graph-controls">
             <button class="ctrl-btn" @click="zoomIn"     v-tooltip.left="'Ampliar'">
               <i class="pi pi-plus" />
@@ -489,14 +705,14 @@ const typeLabels = {
             </div>
             
             <!-- Ações de Expansão -->
-            <div v-if="['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA'].includes(selectedNode.type) && selectedNode.id !== cnpj" class="panel-actions mt-3">
+            <div v-if="canExpand" class="panel-actions mt-3">
               <button 
                 class="expand-btn" 
                 :disabled="isExpanding || expandedNodes.has(selectedNode.id)"
                 @click="expandNode(selectedNode.id)"
               >
                 <i :class="isExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-plus-circle'" />
-                <span>{{ expandedNodes.has(selectedNode.id) ? 'Já Expandido' : 'Expandir Sócios (Nível 3)' }}</span>
+                <span>{{ expansionLabel }}</span>
               </button>
             </div>
 
@@ -620,21 +836,91 @@ const typeLabels = {
   min-height: 520px;
 }
 
-/* Controles flutuantes ─────────────────────────────── */
-.graph-controls {
+/* Toolbar de Investigação (topo central) ──────────── */
+.toolbar-batch {
   position: absolute;
   top: 1rem;
   left: 1rem;
+  transform: none;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.tool-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.tool-btn.main {
+  background: var(--primary-color);
+  color: white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+
+.tool-btn.main:hover:not(:disabled) {
+  background: #818cf8;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+}
+
+.tool-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.tool-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Controles de Zoom (canto inferior direito) ──────── */
+.graph-controls {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
-  background: var(--card-bg);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--tabs-border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 0.5rem;
-  backdrop-filter: blur(8px);
-  z-index: 10;
+  gap: 0.4rem;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
 }
 
 .ctrl-btn {

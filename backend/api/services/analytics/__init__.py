@@ -19,7 +19,13 @@ from .dashboard import (
 from .falecidos import get_falecidos_data, get_timeline_cpf
 from .farmacia import get_dados_farmacia, get_movimentacao_data
 from .socios import get_socios_farmacia
-from .network import get_teia_grafo_nivel2, get_teia_grafo_nivel3_expansao
+from .network import (
+    get_teia_grafo_nivel2, 
+    get_teia_grafo_nivel3_expansao, 
+    get_teia_grafo_nivel4_expansao,
+    get_teia_grafo_nivel3_full,
+    get_teia_grafo_nivel4_full,
+)
 from .financeiro import (
     get_evolucao_financeira,
     get_evolucao_mensal_gtin,
@@ -71,6 +77,9 @@ class AnalyticsService:
     get_socios_farmacia = staticmethod(get_socios_farmacia)
     get_teia_grafo_nivel2 = staticmethod(get_teia_grafo_nivel2)
     get_teia_grafo_nivel3_expansao = staticmethod(get_teia_grafo_nivel3_expansao)
+    get_teia_grafo_nivel4_expansao = staticmethod(get_teia_grafo_nivel4_expansao)
+    get_teia_grafo_nivel3_full = staticmethod(get_teia_grafo_nivel3_full)
+    get_teia_grafo_nivel4_full = staticmethod(get_teia_grafo_nivel4_full)
     sync_network = staticmethod(sync_network)
     get_metric_percentiles = staticmethod(get_metric_percentiles)
     get_metric_percentiles_animation = staticmethod(get_metric_percentiles_animation)

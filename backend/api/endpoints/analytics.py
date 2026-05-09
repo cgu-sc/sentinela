@@ -35,10 +35,29 @@ def get_teia_grafo_nivel2(cnpj: str):
     """Retorna a rede de relacionamentos societários (Teia) de um estabelecimento."""
     return AnalyticsService.get_teia_grafo_nivel2(cnpj, engine=None)
 
-@router.get("/cnpj/{cnpj}/network/expand/{target_cnpj}", response_model=NetworkResponse)
-def get_teia_grafo_nivel3_expansao(cnpj: str, target_cnpj: str):
-    """Retorna os dados de expansão (Sócios Indiretos) para um nó PJ da teia."""
-    return AnalyticsService.get_teia_grafo_nivel3_expansao(cnpj_alvo=cnpj, cnpj_para_expandir=target_cnpj)
+@router.get("/cnpj/{cnpj}/network/expand/{target_id}", response_model=NetworkResponse)
+def get_teia_network_expansion(cnpj: str, target_id: str):
+    """
+    Retorna os dados de expansão para um nó da teia.
+    - Se target_id for CNPJ (14 dígitos): expande para Sócios (Nível 3).
+    - Se target_id for CPF (11 dígitos): expande para outras Empresas (Nível 4).
+    """
+    clean_id = target_id.replace(".", "").replace("/", "").replace("-", "")
+    if len(clean_id) == 11:
+        return AnalyticsService.get_teia_grafo_nivel4_expansao(cnpj_alvo=cnpj, cpf_para_expandir=clean_id)
+    else:
+        return AnalyticsService.get_teia_grafo_nivel3_expansao(cnpj_alvo=cnpj, cnpj_para_expandir=clean_id)
+
+@router.get("/cnpj/{cnpj}/network/level/3", response_model=NetworkResponse)
+def get_teia_batch_level3(cnpj: str):
+    """Retorna todos os sócios de nível 3 em lote."""
+    return AnalyticsService.get_teia_grafo_nivel3_full(cnpj)
+
+@router.get("/cnpj/{cnpj}/network/level/4", response_model=NetworkResponse)
+def get_teia_batch_level4(cnpj: str):
+    """Retorna todas as participações de nível 4 em lote."""
+    return AnalyticsService.get_teia_grafo_nivel4_full(cnpj)
+
 
 
 @router.get("/resumo", response_model=AnalyticsResponse)

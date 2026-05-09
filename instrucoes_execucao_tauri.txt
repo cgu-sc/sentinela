@@ -8,3 +8,7 @@ Get-NetTCPConnection -LocalPort 8002 | Stop-Process -Id {$_.OwningProcess} -Forc
 
 set MAPBOX_TOKEN=pk.eyJ1IjoiZ3VpbXciLCJhIjoiY21iaDJ0OTNtMDVhMzJrb244dDZnZDA4byJ9.yS0bJNixqGupXkwkHhQkmg
 python atualizar_coordenadas.py
+
+
+
+pygount --suffix=py,vue --format=summary

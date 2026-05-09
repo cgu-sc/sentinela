@@ -55,6 +55,9 @@ DECLARE @nu_cnpjs_fonte INT;
 DECLARE @nu_ufs_processadas INT = 0;
 DECLARE @nu_alertas_total_geral INT = 0;
 DECLARE @fonte_atual_ok BIT = 0;
+DECLARE @id_lote_log BIGINT;
+DECLARE @qtd_cnpjs_lote INT;
+DECLARE @dt_fim_lote DATETIME;
 
 IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
@@ -419,6 +422,34 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_controle') IS NULL
         CONSTRAINT PK_ConcentracaoMultiploControle PRIMARY KEY CLUSTERED (id_cnpj)
     );
 
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_lote_log') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.crm_concentracao_multiplo_lote_log (
+        id_lote_log                    BIGINT IDENTITY(1,1) NOT NULL,
+        uf_farmacia                    CHAR(2)      NOT NULL,
+        pipeline_versao                VARCHAR(40)  NOT NULL,
+        dt_data_inicio                 DATE         NOT NULL,
+        dt_data_fim                    DATE         NOT NULL,
+        lote_num                       INT          NOT NULL,
+        dt_inicio_lote                 DATETIME     NOT NULL,
+        dt_fim_lote                    DATETIME     NULL,
+        segundos_lote                  INT          NULL,
+        milissegundos_lote             INT          NULL,
+        qtd_cnpjs_lote                 INT          NULL,
+        nu_alertas_lote                INT          NULL,
+        nu_alertas_total_uf            INT          NULL,
+        nu_cnpjs_processados_acumulado INT          NULL,
+        nu_cnpjs_total                 INT          NULL,
+        status                         VARCHAR(20)  NOT NULL,
+        observacao                     VARCHAR(400) NULL,
+        CONSTRAINT PK_CrmConcentracaoMultiploLoteLog PRIMARY KEY CLUSTERED (id_lote_log)
+    );
+
+    CREATE INDEX IDX_CrmConcentracaoMultiploLoteLog_UfPeriodo
+        ON temp_CGUSC.fp.crm_concentracao_multiplo_lote_log
+            (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, lote_num);
+END;
+
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
 BEGIN
     CREATE TABLE temp_CGUSC.fp.crm_concentracao_multiplo_alertas (
@@ -517,6 +548,18 @@ WHILE EXISTS (SELECT 1 FROM #cnpjs_pendentes)
 BEGIN
     SET @lote_num += 1;
     SET @t1 = GETDATE();
+    SET @id_lote_log = NULL;
+    SET @qtd_cnpjs_lote = NULL;
+    SET @dt_fim_lote = NULL;
+
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_multiplo_lote_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, lote_num,
+         dt_inicio_lote, status, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @lote_num,
+         @t1, 'PROCESSANDO', 'Lote iniciado.');
+
+    SET @id_lote_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     -- ── Pegar próximo lote da fila ────────────────────────────────────────
     SET @t_bloco = GETDATE();
@@ -526,6 +569,12 @@ BEGIN
     INTO #lote_atual
     FROM #cnpjs_pendentes
     ORDER BY id_cnpj;
+
+    SET @qtd_cnpjs_lote = (SELECT COUNT(*) FROM #lote_atual);
+
+    UPDATE temp_CGUSC.fp.crm_concentracao_multiplo_lote_log
+    SET qtd_cnpjs_lote = @qtd_cnpjs_lote
+    WHERE id_lote_log = @id_lote_log;
 
     PRINT '      3.0 Selecionar lote: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
@@ -761,6 +810,21 @@ BEGIN
     SET @nu_processados += (SELECT COUNT(*) FROM #lote_atual);
 
     PRINT '      3.F Remover da fila: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
+    SET @dt_fim_lote = GETDATE();
+
+    UPDATE temp_CGUSC.fp.crm_concentracao_multiplo_lote_log
+    SET dt_fim_lote = @dt_fim_lote,
+        segundos_lote = DATEDIFF(SECOND, @t1, @dt_fim_lote),
+        milissegundos_lote = DATEDIFF(MILLISECOND, @t1, @dt_fim_lote),
+        qtd_cnpjs_lote = @qtd_cnpjs_lote,
+        nu_alertas_lote = @nu_alertas_lote,
+        nu_alertas_total_uf = @nu_alertas_total,
+        nu_cnpjs_processados_acumulado = @nu_ja_processados + @nu_processados,
+        nu_cnpjs_total = @nu_total,
+        status = 'OK',
+        observacao = 'Lote finalizado.'
+    WHERE id_lote_log = @id_lote_log;
 
     PRINT '   Lote ' + RIGHT('0000' + CAST(@lote_num AS VARCHAR), 4) +
           ' | ' + CAST(@nu_ja_processados + @nu_processados AS VARCHAR) + '/' + CAST(@nu_total AS VARCHAR) + ' CNPJs' +

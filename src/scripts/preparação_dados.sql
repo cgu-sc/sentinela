@@ -577,7 +577,7 @@ SELECT DISTINCT
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT)
          ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
     CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
-INTO temp_CGUSC.fp.teia_socios_participacoes_indiretas
+INTO temp_CGUSC.fp.teia_fonte_nivel2
 FROM #socios_externos_raw                        AS raw
 INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
 LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
@@ -589,16 +589,16 @@ LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = ra
 
 -- Índice CLUSTERED: Organiza a tabela fisicamente por CPF (Performance Industrial em cruzamentos)
 CREATE CLUSTERED INDEX cx_partExt_cpf_cnpj_socio
-    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (cpf_cnpj_socio, cnpj_empresa);
+    ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
 
 -- Índice de Categoria: acelera buscas por ramo de atividade (ex: busca por outras farmácias)
 CREATE INDEX ix_partExt_cnae
-    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (id_cnae_principal)
+    ON temp_CGUSC.fp.teia_fonte_nivel2 (id_cnae_principal)
     INCLUDE (is_farmacia_fp, razao_social);
 
 -- Índice secundário: busca por empresa externa
 CREATE INDEX ix_partExt_cnpj_empresa
-    ON temp_CGUSC.fp.teia_socios_participacoes_indiretas (cnpj_empresa);
+    ON temp_CGUSC.fp.teia_fonte_nivel2 (cnpj_empresa);
 
 
 --------------------------------------------------------------
@@ -607,7 +607,7 @@ CREATE INDEX ix_partExt_cnpj_empresa
 -- a expansão dinâmica na Teia Societária.
 --------------------------------------------------------------
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_socios_indiretos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
 
 -- ── FASE 1: Extrair CNPJs únicos das participações externas ────────────────
 -- Criamos um lookup indexado para que o JOIN nacional seja cirúrgico.
@@ -615,7 +615,7 @@ DROP TABLE IF EXISTS #cnpjs_irmas;
 
 SELECT DISTINCT cnpj_empresa
 INTO #cnpjs_irmas
-FROM temp_CGUSC.fp.teia_socios_participacoes_indiretas;
+FROM temp_CGUSC.fp.teia_fonte_nivel2;
 
 CREATE CLUSTERED INDEX ix_cnpjs_irmas_lookup
     ON #cnpjs_irmas (cnpj_empresa);
@@ -631,7 +631,7 @@ SELECT DISTINCT
     CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(s.descQualificacaoSocio, 50)) AS VARCHAR(50)) AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
-INTO temp_CGUSC.fp.teia_socios_indiretos
+INTO temp_CGUSC.fp.teia_fonte_nivel3
 FROM #cnpjs_irmas                    AS irmas
 INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cnpj = irmas.cnpj_empresa
 WHERE s.cpfcnpjSocio <> '99999999999999';
@@ -640,10 +640,10 @@ WHERE s.cpfcnpjSocio <> '99999999999999';
 -- O índice clustered por cnpj_empresa garante que a expansão de um nó PJ 
 -- leve milissegundos para filtrar os sócios.
 CREATE CLUSTERED INDEX cx_teiaInd_cnpj_empresa
-    ON temp_CGUSC.fp.teia_socios_indiretos (cnpj_empresa, cpf_cnpj_socio);
+    ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
 
 CREATE INDEX ix_teiaInd_cpf_socio
-    ON temp_CGUSC.fp.teia_socios_indiretos (cpf_cnpj_socio);
+    ON temp_CGUSC.fp.teia_fonte_nivel3 (cpf_cnpj_socio);
 
 
 --------------------------------------------------------------

@@ -28,8 +28,8 @@ from data_cache import (
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
     _sync_dados_socios,
-    _sync_teia_socios_participacoes_indiretas,
-    _sync_teia_socios_indiretos,
+    _sync_teia_fonte_nivel2,
+    _sync_teia_fonte_nivel3,
     _sync_movimentacao,
 )
 
@@ -47,8 +47,10 @@ _CNPJ_PARQUETS = [
     "crm_horario.parquet",
     "crm_horario_eventos.parquet",
     "mediana_autorizacoes_horaria.parquet",
-    "network_nodes.parquet",
-    "network_edges.parquet",
+    "teia_grafo_nivel2_nodes.parquet",
+    "teia_grafo_nivel2_edges.parquet",
+    "teia_grafo_nivel3_nodes.parquet",
+    "teia_grafo_nivel3_edges.parquet",
 ]
 
 
@@ -224,22 +226,23 @@ def _schema_cnpj_parquet(pl):
             "hr_janela": pl.Int32,
             "mediana_hora": pl.Float64,
         },
-        "network_nodes.parquet": {
-            "id": pl.Utf8,
-            "label": pl.Utf8,
-            "type": pl.Utf8,
-            "razao_social": pl.Utf8,
-            "nome_fantasia": pl.Utf8,
-            "municipio": pl.Utf8,
-            "uf": pl.Utf8,
-            "situacao_rf": pl.Utf8,
+        "teia_grafo_nivel2_nodes.parquet": {
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "razao_social": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Utf8,
+            "is_ativo": pl.Boolean
         },
-        "network_edges.parquet": {
-            "id": pl.Utf8,
-            "source": pl.Utf8,
-            "target": pl.Utf8,
-            "label": pl.Utf8,
-            "type": pl.Utf8,
+        "teia_grafo_nivel2_edges.parquet": {
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+        },
+        "teia_grafo_nivel3_nodes.parquet": {
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "razao_social": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Utf8,
+            "is_ativo": pl.Boolean
+        },
+        "teia_grafo_nivel3_edges.parquet": {
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         },
     }
 
@@ -369,10 +372,10 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
 def _sync_participacoes_e_teia(engine, progress_callback=None):
     """Sincroniza participações externas (Grau 2) e a teia de sócios indiretos (Grau 3)."""
     print("\n  -> [1/2] Sincronizando Participações Externas (Grau 2)...")
-    _sync_teia_socios_participacoes_indiretas(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
+    _sync_teia_fonte_nivel2(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
     
     print("\n  -> [2/2] Sincronizando Teia de Sócios Indiretos (Grau 3)...")
-    _sync_teia_socios_indiretos(engine, lambda p: progress_callback(int(50 + p * 0.5)) if progress_callback else None)
+    _sync_teia_fonte_nivel3(engine, lambda p: progress_callback(int(50 + p * 0.5)) if progress_callback else None)
     
     if progress_callback:
         progress_callback(100)

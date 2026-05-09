@@ -36,8 +36,8 @@ _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
 _DADOS_SOCIOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "socios.parquet")
-_SOCIOS_EXTERNOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_socios_participacoes_indiretas.parquet")
-_TEIA_INDIRETA_PARQUET_PATH   = os.path.join(_CACHE_DIR, "teia_socios_indiretos.parquet")
+_TEIA_FONTE_NIVEL2_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel2.parquet")
+_TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.parquet")
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
@@ -53,8 +53,8 @@ _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
 _df_dados_socios:   pl.DataFrame | None = None
-_df_socios_externos: pl.DataFrame | None = None
-_df_teia_socios_indiretos: pl.DataFrame | None = None
+_df_teia_fonte_nivel2: pl.DataFrame | None = None
+_df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 
 _cache_progress: int = 0
@@ -243,14 +243,14 @@ def _sync_dados_socios(engine, progress_callback=None):
     print(f"   -> Sincronização de Sócios finalizada ({len(_df_dados_socios):,} registros).")
 
 
-def _sync_teia_socios_participacoes_indiretas(engine, progress_callback=None):
+def _sync_teia_fonte_nivel2(engine, progress_callback=None):
     """Tarefa: Sincroniza participações externas dos sócios encontrados nas farmácias."""
-    global _df_socios_externos
+    global _df_teia_fonte_nivel2
     print("Sincronizando Participações Externas dos Sócios...")
-    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_socios_participacoes_indiretas]"
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_fonte_nivel2]"
 
     with engine.connect() as conn:
-        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_socios_participacoes_indiretas]")).scalar()
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_fonte_nivel2]")).scalar()
 
     if total_rows == 0:
         print("   -> Nenhuma participação externa encontrada.")
@@ -304,28 +304,28 @@ def _sync_teia_socios_participacoes_indiretas(engine, progress_callback=None):
         pl.col("data_processamento").cast(pl.Date),
     ]).sort("cpf_cnpj_socio")
 
-    _df_socios_externos.write_parquet(_SOCIOS_EXTERNOS_PARQUET_PATH, compression="zstd")
-    print(f"   -> Sincronização de Participações Externas finalizada ({len(_df_socios_externos):,} registros).")
+    _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
+    print(f"   -> Sincronização de Participações Externas finalizada ({len(_df_teia_fonte_nivel2):,} registros).")
 
 
-def _sync_teia_socios_indiretos(engine, progress_callback=None):
+def _sync_teia_fonte_nivel3(engine, progress_callback=None):
     """Tarefa: Sincroniza os sócios das empresas irmãs (Expansão de 3º Grau)."""
-    global _df_teia_socios_indiretos
+    global _df_teia_fonte_nivel3
     print("Sincronizando Sócios das Empresas Irmãs (Expansão Teia)...")
-    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_socios_indiretos]"
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_fonte_nivel3]"
 
     with engine.connect() as conn:
-        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_socios_indiretos]")).scalar()
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_fonte_nivel3]")).scalar()
 
     if total_rows == 0:
         print("   -> Nenhum sócio indireto encontrado.")
-        _df_teia_socios_indiretos = pl.DataFrame(schema={
+        _df_teia_fonte_nivel3 = pl.DataFrame(schema={
             "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String, 
             "nome_socio": pl.String, "indicador_socio": pl.Categorical,
             "percentual_qualificacao": pl.Float32, "descricao_qualificacao": pl.Categorical,
             "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date
         })
-        _df_teia_socios_indiretos.write_parquet(_TEIA_INDIRETA_PARQUET_PATH, compression="zstd")
+        _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
         return
 
@@ -347,7 +347,7 @@ def _sync_teia_socios_indiretos(engine, progress_callback=None):
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         if progress_callback: progress_callback(p)
 
-    _df_teia_socios_indiretos = pl.concat(chunk_list).with_columns([
+    _df_teia_fonte_nivel3 = pl.concat(chunk_list).with_columns([
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
@@ -355,7 +355,7 @@ def _sync_teia_socios_indiretos(engine, progress_callback=None):
         pl.col("percentual_qualificacao").cast(pl.Float32),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
-    _df_teia_socios_indiretos.write_parquet(_TEIA_INDIRETA_PARQUET_PATH, compression="zstd")
+    _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
     print(f"   -> Sincronização de Sócios Indiretos finalizada.")
 
 
@@ -530,7 +530,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_socios_externos, _df_teia_socios_indiretos, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -558,8 +558,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
-        _df_socios_externos = _try_load("teia_socios_participacoes_indiretas", _SOCIOS_EXTERNOS_PARQUET_PATH)
-        _df_teia_socios_indiretos = _try_load("teia_socios_indiretos", _TEIA_INDIRETA_PARQUET_PATH)
+        _df_teia_fonte_nivel2 = _try_load("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
+
+        _df_teia_fonte_nivel3 = _try_load("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
 
         if missing:
@@ -583,8 +584,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         # {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)}, # OBSOLETO
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
-        {"name": "Participações Externas Sócios", "weight": 5, "func": lambda cb: _sync_teia_socios_participacoes_indiretas(engine, cb)},
-        {"name": "Sócios Indiretos (Expansão)",   "weight": 5, "func": lambda cb: _sync_teia_socios_indiretos(engine, cb)},
+        {"name": "Participações Externas",  "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
+        {"name": "Sócios Indiretos (Expansão)",   "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 64, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
@@ -666,15 +667,15 @@ def get_df_dados_socios() -> pl.DataFrame:
         raise RuntimeError("Cache de Dados dos Sócios não carregado. Execute uma sincronização.")
     return _df_dados_socios
 
-def get_df_socios_externos() -> pl.DataFrame:
-    if _df_socios_externos is None:
+def get_df_teia_fonte_nivel2() -> pl.DataFrame:
+    if _df_teia_fonte_nivel2 is None:
         raise RuntimeError("Cache de Participações Externas dos Sócios não carregado. Execute uma sincronização.")
-    return _df_socios_externos
+    return _df_teia_fonte_nivel2
 
-def get_df_teia_socios_indiretos() -> pl.DataFrame:
-    if _df_teia_socios_indiretos is None:
+def get_df_teia_fonte_nivel3() -> pl.DataFrame:
+    if _df_teia_fonte_nivel3 is None:
         raise RuntimeError("Cache de Sócios Indiretos não carregado. Execute uma sincronização.")
-    return _df_teia_socios_indiretos
+    return _df_teia_fonte_nivel3
 
 def get_medicamentos_df() -> pl.DataFrame:
     global _df_medicamentos
@@ -701,8 +702,8 @@ def get_cache_status() -> dict:
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
-        "socios_externos":{"label": "Participações Externas",  "path": _SOCIOS_EXTERNOS_PARQUET_PATH, "loaded": _df_socios_externos is not None},
-        "teia_indireta":  {"label": "Sócios Indiretos",        "path": _TEIA_INDIRETA_PARQUET_PATH,   "loaded": _df_teia_socios_indiretos is not None},
+        "socios_externos":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
+        "teia_indireta":  {"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
     }
     modules_status = {

@@ -266,6 +266,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async expandNetworkNode(cnpj, targetCnpj) {
+      if (!cnpj || !targetCnpj) return null;
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsNetworkExpand(cnpj, targetCnpj));
+        return data;
+      } catch (e) {
+        console.error(`Erro ao expandir nó ${targetCnpj}:`, e);
+        return null;
+      }
+    },
+
     // ── Falecidos ─────────────────────────────────────────────────────────────
     async fetchFalecidos(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;

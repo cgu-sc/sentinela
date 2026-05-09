@@ -22,6 +22,10 @@ const zoom = ref(1);
 const totalNodes = computed(() => networkData.value?.nodes?.length || 0);
 const totalEdges = computed(() => networkData.value?.edges?.length || 0);
 
+// Expansão
+const isExpanding = ref(false);
+const expandedNodes = ref(new Set());
+
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
   PJ_ALVO:     { bg: '#6366f1', border: '#818cf8', shape: 'roundrectangle', size: 88 },
@@ -29,6 +33,8 @@ const NODE_STYLES = {
   PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 68 },
   PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 64 },
   PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 64 },
+  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 52 }, 
+  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 64 },
 };
 
 const INITIAL_FIT_PADDING = 40; // Reduzido para aproveitar o máximo da largura do card
@@ -136,6 +142,81 @@ function buildGraph(data) {
   zoom.value = 100;
 }
 
+// ── Lógica de Expansão (Nível 3) ─────────────────────────────────────────────
+async function expandNode(nodeId) {
+  if (isExpanding.value || expandedNodes.value.has(nodeId)) return;
+
+  isExpanding.value = true;
+  try {
+    const expansionData = await cnpjDetailStore.expandNetworkNode(cnpj.value, nodeId);
+    
+    if (!expansionData || !expansionData.nodes || expansionData.nodes.length === 0) {
+      expandedNodes.value.add(nodeId);
+      return;
+    }
+
+    const newElements = [];
+    expansionData.nodes.forEach(n => {
+      if (!cy.getElementById(n.id).length) {
+        newElements.push({
+          group: 'nodes',
+          data: {
+            id: n.id,
+            label: truncateLabel(n.label, 20),
+            fullLabel: n.label,
+            type: n.type || 'PF',
+            is_expanded_node: true,
+            is_ativo: n.is_ativo,
+            razao_social: n.razao_social
+          },
+          position: { ...cy.getElementById(nodeId).position() }
+        });
+      }
+    });
+
+    expansionData.edges.forEach(e => {
+      if (!cy.getElementById(e.id).length) {
+        newElements.push({
+          group: 'edges',
+          data: {
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            label: e.label,
+            type: e.type,
+            is_ativo: e.is_ativo
+          }
+        });
+      }
+    });
+
+    if (newElements.length > 0) {
+      const added = cy.add(newElements);
+      const expansionLayout = added.union(cy.getElementById(nodeId)).layout({
+        name: 'cose',
+        animate: true,
+        animationDuration: 600,
+        randomize: false,
+        fit: false,
+        nodeRepulsion: () => 8000,
+        idealEdgeLength: () => 60,
+      });
+      expansionLayout.run();
+      
+      // Destaca vizinhos do nó expandido
+      cy.elements().removeClass('faded highlighted');
+      const neighborhood = cy.getElementById(nodeId).closedNeighborhood();
+      cy.elements().not(neighborhood).addClass('faded');
+      neighborhood.addClass('highlighted');
+    }
+    expandedNodes.value.add(nodeId);
+  } catch (error) {
+    console.error("Falha na expansão:", error);
+  } finally {
+    isExpanding.value = false;
+  }
+}
+
 function fitGraphToView(padding = INITIAL_FIT_PADDING) {
   if (!cy || !cyContainer.value || cy.elements().empty()) return;
 
@@ -231,25 +312,7 @@ function buildStylesheet() {
     style: { 'opacity': 1, 'border-width': 3 }
   });
 
-  // Nós inativos (apagados)
-  styles.push({
-    selector: 'node[!is_ativo]',
-    style: {
-      'opacity': 0.4,
-      'border-style': 'dashed',
-      'border-opacity': 0.5
-    }
-  });
 
-  // Vínculos inativos (tracejados)
-  styles.push({
-    selector: 'edge[!is_ativo]',
-    style: {
-      'line-style': 'dashed',
-      'line-color': '#94a3b8',
-      'target-arrow-color': '#94a3b8',
-    }
-  });
 
   return styles;
 }
@@ -305,13 +368,12 @@ onActivated(() => {
 
 
 
-// ── Label do tipo de nó ─────────────────────────────────────────────────────
 const typeLabels = {
   PJ_ALVO:     { label: 'CNPJ em Análise', color: '#6366f1' },
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
   PJ_FARMACIA: { label: 'Farmácia FP',     color: '#10b981' },
   PJ_FARMACIA_EXT: { label: 'Outra Farmácia (Não FP)', color: '#f59e0b' },
-  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#64748b' },
+  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' }, // Sincronizado com o Fuchsia do NODE_STYLES
 };
 </script>
 
@@ -425,6 +487,19 @@ const typeLabels = {
                 <span>Situação RF: {{ selectedNode.situacao }}</span>
               </div>
             </div>
+            
+            <!-- Ações de Expansão -->
+            <div v-if="['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA'].includes(selectedNode.type) && selectedNode.id !== cnpj" class="panel-actions mt-3">
+              <button 
+                class="expand-btn" 
+                :disabled="isExpanding || expandedNodes.has(selectedNode.id)"
+                @click="expandNode(selectedNode.id)"
+              >
+                <i :class="isExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-plus-circle'" />
+                <span>{{ expandedNodes.has(selectedNode.id) ? 'Já Expandido' : 'Expandir Sócios (Nível 3)' }}</span>
+              </button>
+            </div>
+
             <div class="panel-hint">
               <i class="pi pi-mouse" /> Clique no fundo para fechar
             </div>
@@ -781,6 +856,37 @@ const typeLabels = {
   gap: 0.3rem;
   margin-top: auto;
 }
+
+/* Botão de Expansão Estilizado */
+.expand-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+.expand-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-color) 85%, black);
+  transform: translateY(-1px);
+}
+.expand-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--text-muted);
+  box-shadow: none;
+}
+
+.mt-3 { margin-top: 0.75rem; }
 
 /* Animações ────────────────────────────────────────── */
 .animate-fade-in { animation: fadeIn 0.4s ease-out; }

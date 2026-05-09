@@ -13,7 +13,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
-    get_df_dados_socios, get_df_socios_externos, get_cache_dir
+    get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, get_cache_dir
 )
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -178,21 +178,23 @@ def sync_network(cnpj: str) -> None:
     Fontes:
       - dados_farmacia (parquet): para o nó raiz (PJ_ALVO)
       - dados_socios (parquet): para o Nível 1 (Sócios da farmácia)
-      - socios_participacoes_externas (parquet): para o Nível 2 (Outras empresas dos sócios)
+      - teia_fonte_nivel2 (parquet): para o Nível 2 (Outras empresas dos sócios)
+      - teia_fonte_nivel3 (parquet): para o Nível 3 (Sócios das outras empresas - expansão)
     """
     import time
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    NODES_PATH = os.path.join(cnpj_dir, "network_nodes.parquet")
-    EDGES_PATH = os.path.join(cnpj_dir, "network_edges.parquet")
+    NODES_PATH     = os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")
+    EDGES_PATH     = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
+    EXP_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
+    EXP_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
 
-    # Cache hit: já existe e é válido
-    if os.path.exists(NODES_PATH) and os.path.exists(EDGES_PATH):
+    # Cache hit: se os 4 arquivos existem e o principal é válido, assume sucesso
+    if os.path.exists(NODES_PATH) and os.path.exists(EXP_NODES_PATH):
         try:
-            # Apenas verifica se o arquivo está legível
             pl.scan_parquet(NODES_PATH).limit(0).collect()
             return
         except Exception:
-            pass  # Corrompido → re-gera
+            pass
 
     try:
         print(f"🗄️ [SYNC] Gerando Teia Societária (Parquet Source) para {cnpj}...")
@@ -259,16 +261,17 @@ def sync_network(cnpj: str) -> None:
             })
 
         # ── 3. Nível 2: Outras empresas destes sócios ─────────────────────────
-        df_ext = get_df_socios_externos()
+        df_ext = get_df_teia_fonte_nivel2()
+        cnpjs_externos = []
         if not df_ext.is_empty() and cpfs_socios:
             participacoes = df_ext.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_socios)).to_dicts()
 
             for p in participacoes:
                 cnpj_ext = p["cnpj_empresa"]
                 id_socio = p["cpf_cnpj_socio"]
+                cnpjs_externos.append(cnpj_ext)
 
                 if cnpj_ext not in nodes:
-                    # Classifica como PJ_FARMACIA_EXT se for CNAE de farmácia mas não for FP
                     tipo = "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA"
                     if tipo == "PJ_OUTRA" and p.get("id_cnae_principal") in [4771701, 4771702]:
                         tipo = "PJ_FARMACIA_EXT"
@@ -295,18 +298,68 @@ def sync_network(cnpj: str) -> None:
                     "is_ativo": p.get("data_exclusao_sociedade") is None
                 })
 
-        # ── Salva os dois Parquets ────────────────────────────────────────────────
-        df_nodes = pl.DataFrame(list(nodes.values()))
-        df_edges = pl.DataFrame(edges if edges else [], schema={
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8
-        })
+        # ── 4. Nível 3: Expansão (Sócios das empresas irmãs) ─────────────────
+        # Estes dados ficam em arquivos separados para carregamento on-demand no frontend
+        df_exp_source = get_df_teia_fonte_nivel3()
+        exp_nodes_dict: dict[str, dict] = {}
+        exp_edges: list[dict] = []
+        
+        if not df_exp_source.is_empty() and cnpjs_externos:
+            # Filtra sócios de todas as empresas irmãs mapeadas
+            df_exp_filtered = df_exp_source.filter(pl.col("cnpj_empresa").is_in(cnpjs_externos))
+            
+            for row in df_exp_filtered.iter_rows(named=True):
+                id_socio = row["cpf_cnpj_socio"]
+                cnpj_pai = row["cnpj_empresa"]
+                
+                # Se o sócio já existe na teia principal (Nível 1), não precisamos duplicar o nó
+                if id_socio not in nodes and id_socio not in exp_nodes_dict:
+                    exp_nodes_dict[id_socio] = {
+                        "id": id_socio,
+                        "label": row["nome_socio"],
+                        "type": row["indicador_socio"] or "PF",
+                        "razao_social": row["nome_socio"],
+                        "nome_fantasia": None,
+                        "id_cnae_principal": None,
+                        "municipio": None, # Dados slim para expansão
+                        "uf": None,
+                        "situacao_rf": None,
+                        "is_ativo": row.get("data_exclusao_sociedade") is None
+                    }
+                
+                edge_id = f"{id_socio}->{cnpj_pai}"
+                
+                # Deduplicação: se o mesmo sócio aparecer com dois cargos, mantemos apenas o primeiro (evita duplicar linhas no grafo)
+                if not any(e["id"] == edge_id for e in exp_edges):
+                    exp_edges.append({
+                        "id": edge_id,
+                        "source": id_socio,
+                        "target": cnpj_pai,
+                        "label": f"{float(row['percentual_qualificacao'] or 0):.1f}%",
+                        "type": "socio",
+                        "is_ativo": row.get("data_exclusao_sociedade") is None
+                    })
 
-        df_nodes.write_parquet(NODES_PATH, compression="zstd")
-        df_edges.write_parquet(EDGES_PATH, compression="zstd")
+        # ── Salva Parquets Principais ────────────────────────────────────────
+        pl.DataFrame(list(nodes.values())).write_parquet(NODES_PATH, compression="zstd")
+        pl.DataFrame(edges if edges else [], schema={
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+        }).unique(subset=["id"], keep="first").write_parquet(EDGES_PATH, compression="zstd")
+
+        # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
+        pl.DataFrame(list(exp_nodes_dict.values()) if exp_nodes_dict else [], schema={
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8, "is_ativo": pl.Boolean
+        }).unique(subset=["id"], keep="first").write_parquet(EXP_NODES_PATH, compression="zstd")
+        
+        pl.DataFrame(exp_edges if exp_edges else [], schema={
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+        }).unique(subset=["id"], keep="first").write_parquet(EXP_EDGES_PATH, compression="zstd")
         
         ms = (time.perf_counter() - t0) * 1000
-        print(f"✅ Teia Societária salva: {len(df_nodes)} nós, {len(df_edges)} arestas — {cnpj} ({ms:.1f}ms)")
+        print(f"✅ Teia Completa (+Expansão) salva para {cnpj} ({ms:.1f}ms)")
 
     except Exception as e:
+        import traceback
         print(f"⚠️ Erro ao gerar Teia Societária para {cnpj}: {e}")
+        print(traceback.format_exc())
 

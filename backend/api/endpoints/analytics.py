@@ -35,6 +35,11 @@ def get_socios_network(cnpj: str):
     """Retorna a rede de relacionamentos societários (Teia) de um estabelecimento."""
     return AnalyticsService.get_socios_network(cnpj, engine=None)
 
+@router.get("/cnpj/{cnpj}/network/expand/{target_cnpj}", response_model=NetworkResponse)
+def expand_network_node(cnpj: str, target_cnpj: str):
+    """Retorna os dados de expansão (Sócios Indiretos) para um nó PJ da teia."""
+    return AnalyticsService.expand_network_node(cnpj_alvo=cnpj, cnpj_para_expandir=target_cnpj)
+
 
 @router.get("/resumo", response_model=AnalyticsResponse)
 def get_analytics_summary(

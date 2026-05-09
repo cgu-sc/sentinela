@@ -509,168 +509,158 @@ CREATE INDEX ix_sociosFP_cnpj
 
 
 --------------------------------------------------------------
--- ETAPA 3: Participações externas dos sócios das farmácias FP
--- Para cada sócio identificado nas farmácias FP, busca TODAS as
--- outras empresas onde esse CPF/CNPJ aparece na base nacional.
---
--- Estratégia em 2 fases para evitar scan completo de db_CNPJ.dbo.socios:
---   Fase 1: extrai CPFs distintos (pequeno conjunto) + filtra socios
---   Fase 2: enriquece apenas os registros filtrados com CNPJ/Municipio/IBGE
+-- ETAPA 3: Mapeamento das Participações Externas (Nível 2 e 4)
 --------------------------------------------------------------
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2;
-
--- ── FASE 1: Tabela temporária dos CPFs/CNPJs dos sócios FP ──────────────────
--- Pequena e indexada para servir como lookup eficiente na tabela nacional
-
+-- 1. CPFs dos sócios das farmácias FP
 DROP TABLE IF EXISTS #cpfs_socios_fp;
+SELECT DISTINCT cpf_cnpj_socio INTO #cpfs_socios_fp FROM temp_CGUSC.fp.dados_socios WHERE cpf_cnpj_socio IS NOT NULL;
+CREATE CLUSTERED INDEX ix_cpfs_lookup ON #cpfs_socios_fp (cpf_cnpj_socio);
 
-SELECT DISTINCT cpf_cnpj_socio
-INTO #cpfs_socios_fp
-FROM temp_CGUSC.fp.dados_socios
-WHERE cpf_cnpj_socio IS NOT NULL;
-
-CREATE CLUSTERED INDEX ix_cpfs_lookup
-    ON #cpfs_socios_fp (cpf_cnpj_socio);
-
--- ── FASE 1b: Filtrar socios nacional apenas pelos CPFs conhecidos ────────────
--- Evita scan completo — usa o lookup indexado acima
-
+-- 2. Nível 2 Raw (Outras empresas dos sócios originais)
 DROP TABLE IF EXISTS #teia_fonte_nivel2_raw;
-
 SELECT
     s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(s.percentualQualificacao / 100.0 AS DECIMAL(5,2))  AS percentual_qualificacao,
     CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel2_raw
-FROM #cpfs_socios_fp                AS fp
-INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
--- Exclui CNPJs que já são farmácias FP (já estão em dados_socios)
-WHERE NOT EXISTS (
-    SELECT 1 FROM temp_CGUSC.fp.lista_cnpjs lst WHERE lst.cnpj = s.cnpj
-);
+FROM #cpfs_socios_fp fp
+INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = fp.cpf_cnpj_socio;
 
-CREATE CLUSTERED INDEX ix_teia_fonte_nivel2_cnpj
-    ON #teia_fonte_nivel2_raw (cnpj_empresa);
+CREATE CLUSTERED INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
 
--- ── FASE 2: Enriquecer com dados cadastrais (CNPJ, Municipio, IBGE) ─────────
--- JOIN pesado acontece apenas sobre o conjunto já filtrado
+-- 3. Universo de CNPJs para Enriquecimento (Para garantir que só expandimos o que existe)
+DROP TABLE IF EXISTS #universo_cnpjs;
+SELECT DISTINCT cnpj_empresa INTO #universo_cnpjs FROM #teia_fonte_nivel2_raw;
 
+-- 4. Dicionário de Metadados (Garantindo 1:1 com DISTINCT)
+DROP TABLE IF EXISTS #metadata_empresas;
+SELECT DISTINCT
+    u.cnpj_empresa,
+    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)) AS razao_social,
+    TRY_CAST(c.CnaeFiscal AS INT) AS id_cnae_principal,
+    CAST(sit.ds_situacao_cnpj AS VARCHAR(60)) AS situacao_rf,
+    CAST(ibge.no_municipio AS VARCHAR(60)) AS municipio,
+    CAST(ibge.sg_uf AS CHAR(2)) AS uf
+INTO #metadata_empresas
+FROM #universo_cnpjs u
+INNER JOIN db_CNPJ.dbo.CNPJ c ON c.cnpj = u.cnpj_empresa
+LEFT JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj sit ON sit.cd_situacao_cnpj = c.SituacaoCadastral
+LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = c.CodMunicipio
+LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge;
+
+CREATE CLUSTERED INDEX ix_meta_cnpj ON #metadata_empresas (cnpj_empresa);
+
+--------------------------------------------------------------
+-- ETAPA 4: Montagem Final Nível 2 e Expansão Nível 3
+--------------------------------------------------------------
+
+-- Gerar Teia Nível 2 Final (Apenas o que tem metadados, para manter paridade)
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2;
 SELECT DISTINCT
     raw.cpf_cnpj_socio,
     raw.cnpj_empresa,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.RazaoSocial, 100)) AS VARCHAR(100)) AS razao_social,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(c.NomeFantasia, 100)) AS VARCHAR(100)) AS nome_fantasia,
-    TRY_CAST(c.CnaeFiscal AS INT)                                                  AS id_cnae_principal,
+    m.razao_social,
+    m.id_cnae_principal,
     raw.indicador_socio,
-    raw.percentual_qualificacao,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(raw.descricao_qualificacao) AS VARCHAR(60)) AS descricao_qualificacao,
+    raw.descricao_qualificacao,
     raw.data_entrada_sociedade,
     raw.data_exclusao_sociedade,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(sit.ds_situacao_cnpj) AS VARCHAR(60))        AS situacao_rf,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60))          AS municipio,
-    CAST(ibge.sg_uf AS CHAR(2))                                                     AS uf,
-    CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT)
-         ELSE CAST(0 AS TINYINT) END                                                AS is_farmacia_fp,
-    CAST(GETDATE() AS SMALLDATETIME)                                                AS data_processamento
+    m.situacao_rf,
+    m.municipio,
+    m.uf,
+    CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp
 INTO temp_CGUSC.fp.teia_fonte_nivel2
-FROM #teia_fonte_nivel2_raw                        AS raw
-INNER JOIN db_CNPJ.dbo.CNPJ                      AS c    ON c.cnpj          = raw.cnpj_empresa
-LEFT  JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj AS sit  ON sit.cd_situacao_cnpj = c.SituacaoCadastral
-LEFT  JOIN db_CNPJ.dbo.Municipio                 AS mun  ON mun.SkMunicipio = c.CodMunicipio
-LEFT  JOIN temp_CGUSC.fp.dados_ibge              AS ibge ON ibge.id_ibge7   = mun.CodIbge
-LEFT  JOIN temp_CGUSC.fp.lista_cnpjs             AS lst  ON lst.cnpj        = raw.cnpj_empresa;
+FROM #teia_fonte_nivel2_raw raw
+INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
+LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa;
 
--- ── Índices na tabela final ──────────────────────────────────────────────────
+CREATE CLUSTERED INDEX cx_t2_final ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
 
--- Índice CLUSTERED: Organiza a tabela fisicamente por CPF (Performance Industrial em cruzamentos)
-CREATE CLUSTERED INDEX cx_partExt_cpf_cnpj_socio
-    ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
-
--- Índice de Categoria: acelera buscas por ramo de atividade (ex: busca por outras farmácias)
-CREATE INDEX ix_partExt_cnae
-    ON temp_CGUSC.fp.teia_fonte_nivel2 (id_cnae_principal)
-    INCLUDE (is_farmacia_fp, razao_social);
-
--- Índice secundário: busca por empresa externa
-CREATE INDEX ix_partExt_cnpj_empresa
-    ON temp_CGUSC.fp.teia_fonte_nivel2 (cnpj_empresa);
-
-
---------------------------------------------------------------
--- ETAPA 4: Sócios das Empresas Irmãs (Expansão de 3º Grau)
--- Identifica quem são os sócios das "empresas irmãs" para permitir
--- a expansão dinâmica na Teia Societária.
---------------------------------------------------------------
-
+-- Gerar Teia Nível 3 (Sócios das empresas que REALMENTE apareceram no Nível 2)
 DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
-
--- ── FASE 1: Extrair CNPJs únicos das participações externas ────────────────
--- Criamos um lookup indexado para que o JOIN nacional seja cirúrgico.
-DROP TABLE IF EXISTS #cnpjs_irmas;
-
-SELECT DISTINCT cnpj_empresa
-INTO #cnpjs_irmas
-FROM temp_CGUSC.fp.teia_fonte_nivel2;
-
-CREATE CLUSTERED INDEX ix_cnpjs_irmas_lookup
-    ON #cnpjs_irmas (cnpj_empresa);
-
--- ── FASE 2: Buscar sócios dessas empresas na base nacional ─────────────────
--- Buscamos todos os sócios que compõem o quadro das empresas do 2º grau.
 SELECT DISTINCT
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(s.nomeSocio, 120)) AS VARCHAR(120)) AS nome_socio,
+    CAST(LEFT(s.nomeSocio, 120) AS VARCHAR(120))            AS nome_socio,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(s.percentualQualificacao / 100.0 AS DECIMAL(5,2))  AS percentual_qualificacao,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(s.descQualificacaoSocio, 50)) AS VARCHAR(50)) AS descricao_qualificacao,
+    CAST(LEFT(s.descQualificacaoSocio, 50) AS VARCHAR(50))  AS descricao_qualificacao,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO temp_CGUSC.fp.teia_fonte_nivel3
-FROM #cnpjs_irmas                    AS irmas
-INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cnpj = irmas.cnpj_empresa
+FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
+INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
 WHERE s.cpfcnpjSocio <> '99999999999999';
 
--- ── Índices para performance instantânea na expansão ───────────────────────
--- O índice clustered por cnpj_empresa garante que a expansão de um nó PJ 
--- leve milissegundos para filtrar os sócios.
-CREATE CLUSTERED INDEX cx_teiaInd_cnpj_empresa
-    ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
+CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
 
-CREATE INDEX ix_teiaInd_cpf_socio
-    ON temp_CGUSC.fp.teia_fonte_nivel3 (cpf_cnpj_socio);
+--------------------------------------------------------------
+-- ETAPA 5: Mapeamento e Montagem Final Nível 4
+--------------------------------------------------------------
+
+-- 1. Raw Nível 4
+DROP TABLE IF EXISTS #teia_fonte_nivel4_raw;
+SELECT
+    s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
+    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
+    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+INTO #teia_fonte_nivel4_raw
+FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
+INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+WHERE NOT EXISTS (SELECT 1 FROM #teia_fonte_nivel2_raw r2 WHERE r2.cnpj_empresa = s.cnpj);
+
+-- 2. Enriquecer metadados apenas para as NOVAS empresas do Nível 4
+DROP TABLE IF EXISTS #universo_n4;
+SELECT DISTINCT cnpj_empresa INTO #universo_n4 FROM #teia_fonte_nivel4_raw;
+
+INSERT INTO #metadata_empresas
+SELECT DISTINCT
+    u.cnpj_empresa,
+    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)),
+    TRY_CAST(c.CnaeFiscal AS INT),
+    CAST(sit.ds_situacao_cnpj AS VARCHAR(60)),
+    CAST(ibge.no_municipio AS VARCHAR(60)),
+    CAST(ibge.sg_uf AS CHAR(2))
+FROM #universo_n4 u
+INNER JOIN db_CNPJ.dbo.CNPJ c ON c.cnpj = u.cnpj_empresa
+LEFT JOIN db_CNPJ.dbo.dime_situacao_cadastral_cnpj sit ON sit.cd_situacao_cnpj = c.SituacaoCadastral
+LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = c.CodMunicipio
+LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
+WHERE NOT EXISTS (SELECT 1 FROM #metadata_empresas m WHERE m.cnpj_empresa = u.cnpj_empresa);
+
+-- 3. Gerar Teia Nível 4 Final (Sem Nome Fantasia para economizar espaço)
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel4;
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa,
+    m.razao_social,
+    m.id_cnae_principal,
+    raw.indicador_socio,
+    raw.descricao_qualificacao,
+    raw.data_entrada_sociedade,
+    raw.data_exclusao_sociedade,
+    m.situacao_rf,
+    m.municipio,
+    m.uf,
+    CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp
+INTO temp_CGUSC.fp.teia_fonte_nivel4
+FROM #teia_fonte_nivel4_raw raw
+INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
+LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa;
+
+CREATE CLUSTERED INDEX cx_t4_final ON temp_CGUSC.fp.teia_fonte_nivel4 (cpf_cnpj_socio, cnpj_empresa);
 
 
 --------------------------------------------------------------
--- ETAPA 5: Estimativa de Estoque Inicial
+-- ETAPA 6: Estimativa de Estoque Inicial
 --------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- definir os estoques iniciais com critério da soma das duas últimas aquisições anteriores a primeira venda na base de --producao
-
 
 
 DROP TABLE IF EXISTS TEMP_CGUSC.dbo.farmacia_inicio_venda_gtin

@@ -30,6 +30,7 @@ from data_cache import (
     _sync_dados_socios,
     _sync_teia_fonte_nivel2,
     _sync_teia_fonte_nivel3,
+    _sync_teia_fonte_nivel4,
     _sync_movimentacao,
 )
 
@@ -51,6 +52,8 @@ _CNPJ_PARQUETS = [
     "teia_grafo_nivel2_edges.parquet",
     "teia_grafo_nivel3_nodes.parquet",
     "teia_grafo_nivel3_edges.parquet",
+    "teia_grafo_nivel4_nodes.parquet",
+    "teia_grafo_nivel4_edges.parquet",
 ]
 
 
@@ -229,7 +232,7 @@ def _schema_cnpj_parquet(pl):
         "teia_grafo_nivel2_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Utf8,
+            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
             "is_ativo": pl.Boolean
         },
         "teia_grafo_nivel2_edges.parquet": {
@@ -238,10 +241,19 @@ def _schema_cnpj_parquet(pl):
         "teia_grafo_nivel3_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Utf8,
+            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
             "is_ativo": pl.Boolean
         },
         "teia_grafo_nivel3_edges.parquet": {
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+        },
+        "teia_grafo_nivel4_nodes.parquet": {
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
+            "is_ativo": pl.Boolean
+        },
+        "teia_grafo_nivel4_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         },
     }
@@ -369,13 +381,16 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
         progress_callback(100)
 
 
-def _sync_teia_niveis_2_e_3(engine, progress_callback=None):
-    """Sincroniza participações externas (Grau 2) e a teia de sócios indiretos (Grau 3)."""
-    print("\n  -> [1/2] Sincronizando Participações Externas (Grau 2)...")
-    _sync_teia_fonte_nivel2(engine, lambda p: progress_callback(int(p * 0.5)) if progress_callback else None)
+def _sync_teia_expansao_completa(engine, progress_callback=None):
+    """Sincroniza participações externas (G2), sócios indiretos (G3) e expansão nacional (G4)."""
+    print("\n  -> [1/3] Sincronizando Participações Externas (Grau 2)...")
+    _sync_teia_fonte_nivel2(engine, lambda p: progress_callback(int(p * 0.33)) if progress_callback else None)
     
-    print("\n  -> [2/2] Sincronizando Teia de Sócios Indiretos (Grau 3)...")
-    _sync_teia_fonte_nivel3(engine, lambda p: progress_callback(int(50 + p * 0.5)) if progress_callback else None)
+    print("\n  -> [2/3] Sincronizando Sócios Indiretos (Grau 3)...")
+    _sync_teia_fonte_nivel3(engine, lambda p: progress_callback(int(33 + p * 0.33)) if progress_callback else None)
+
+    print("\n  -> [3/3] Sincronizando Expansão Nacional (Grau 4)...")
+    _sync_teia_fonte_nivel4(engine, lambda p: progress_callback(int(66 + p * 0.34)) if progress_callback else None)
     
     if progress_callback:
         progress_callback(100)
@@ -393,7 +408,7 @@ MODULOS = [
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
-    {"id": 11, "name": "Teia (Níveis 2 e 3)", "func": _sync_teia_niveis_2_e_3, "peso": "~pesado"},
+    {"id": 11, "name": "Teia (Expansão Grau 2, 3 e 4)", "func": _sync_teia_expansao_completa, "peso": "~pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

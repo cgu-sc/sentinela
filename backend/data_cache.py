@@ -38,6 +38,7 @@ _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
 _DADOS_SOCIOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "socios.parquet")
 _TEIA_FONTE_NIVEL2_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel2.parquet")
 _TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.parquet")
+_TEIA_FONTE_NIVEL4_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel4.parquet")
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
@@ -55,6 +56,7 @@ _df_dados_farmacia: pl.DataFrame | None = None
 _df_dados_socios:   pl.DataFrame | None = None
 _df_teia_fonte_nivel2: pl.DataFrame | None = None
 _df_teia_fonte_nivel3: pl.DataFrame | None = None
+_df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 
 _cache_progress: int = 0
@@ -256,12 +258,11 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         print("   -> Nenhuma participação externa encontrada.")
         _df_teia_fonte_nivel2 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
-            "razao_social": pl.String, "nome_fantasia": pl.String,
-            "indicador_socio": pl.Categorical, "percentual_qualificacao": pl.Float32,
+            "razao_social": pl.String,
+            "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical, "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
             "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8,
-            "data_processamento": pl.Date
         })
         _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
@@ -291,9 +292,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
-        pl.col("nome_fantasia").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
-        pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("data_entrada_sociedade").cast(pl.Date),
         pl.col("data_exclusao_sociedade").cast(pl.Date),
@@ -301,7 +300,6 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("municipio").cast(pl.Categorical),
         pl.col("uf").cast(pl.Categorical),
         pl.col("is_farmacia_fp").cast(pl.Int8),
-        pl.col("data_processamento").cast(pl.Date),
     ]).sort("cpf_cnpj_socio")
 
     _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
@@ -322,7 +320,7 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         _df_teia_fonte_nivel3 = pl.DataFrame(schema={
             "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String, 
             "nome_socio": pl.String, "indicador_socio": pl.Categorical,
-            "percentual_qualificacao": pl.Float32, "descricao_qualificacao": pl.Categorical,
+            "descricao_qualificacao": pl.Categorical,
             "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date
         })
         _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
@@ -352,11 +350,68 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
-        pl.col("percentual_qualificacao").cast(pl.Float32),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
     _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
     print(f"   -> Sincronização de Sócios Indiretos finalizada.")
+
+
+def _sync_teia_fonte_nivel4(engine, progress_callback=None):
+    """Tarefa: Sincroniza participações de 4º grau (Empresas dos sócios de 3º grau)."""
+    global _df_teia_fonte_nivel4
+    print("Sincronizando Expansão de 4º Grau (Teia Nacional)...")
+    sql = "SELECT * FROM [temp_CGUSC].[fp].[teia_fonte_nivel4]"
+
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[teia_fonte_nivel4]")).scalar()
+
+    if total_rows == 0:
+        print("   -> Nenhuma participação de 4º grau encontrada.")
+        _df_teia_fonte_nivel4 = pl.DataFrame(schema={
+            "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
+            "razao_social": pl.String,
+            "indicador_socio": pl.Categorical,
+            "descricao_qualificacao": pl.Categorical, "data_entrada_sociedade": pl.Date,
+            "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
+            "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8
+        })
+        _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
+        if progress_callback: progress_callback(100)
+        return
+
+    print(f"   -> Registros de 4º Grau: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 50_000 # Chunk maior para processar os 4M de linhas com eficiência
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        df_chunk = pl.from_pandas(chunk)
+        if "data_entrada_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
+        if "data_exclusao_sociedade" in df_chunk.columns:
+            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+            
+        chunk_list.append(df_chunk)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        if progress_callback: progress_callback(p)
+
+    _df_teia_fonte_nivel4 = pl.concat(chunk_list).with_columns([
+        pl.col("cpf_cnpj_socio").cast(pl.String),
+        pl.col("cnpj_empresa").cast(pl.String),
+        pl.col("razao_social").cast(pl.String),
+        pl.col("indicador_socio").cast(pl.Categorical),
+        pl.col("descricao_qualificacao").cast(pl.Categorical),
+        pl.col("data_entrada_sociedade").cast(pl.Date),
+        pl.col("data_exclusao_sociedade").cast(pl.Date),
+        pl.col("situacao_rf").cast(pl.Categorical),
+        pl.col("municipio").cast(pl.Categorical),
+        pl.col("uf").cast(pl.Categorical),
+        pl.col("is_farmacia_fp").cast(pl.Int8),
+    ]).sort("cpf_cnpj_socio")
+
+    _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
+    print(f"   -> Sincronização de 4º Grau finalizada ({len(_df_teia_fonte_nivel4):,} registros).")
 
 
 def _sync_medicamentos(engine, progress_callback=None):
@@ -530,7 +585,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -561,6 +616,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel2 = _try_load("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
 
         _df_teia_fonte_nivel3 = _try_load("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
+        _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
 
         if missing:
@@ -585,8 +641,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
         {"name": "Participações Externas",  "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
-        {"name": "Sócios Indiretos (Expansão)",   "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
-        {"name": "Movimentação (Vendas)", "weight": 64, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Sócios Indiretos (Expansão)",   "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
+        {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
+        {"name": "Movimentação (Vendas)", "weight": 52, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -677,6 +734,11 @@ def get_df_teia_fonte_nivel3() -> pl.DataFrame:
         raise RuntimeError("Cache de Sócios Indiretos não carregado. Execute uma sincronização.")
     return _df_teia_fonte_nivel3
 
+def get_df_teia_fonte_nivel4() -> pl.DataFrame:
+    if _df_teia_fonte_nivel4 is None:
+        raise RuntimeError("Cache de Teia Nacional (N4) não carregado. Execute uma sincronização.")
+    return _df_teia_fonte_nivel4
+
 def get_medicamentos_df() -> pl.DataFrame:
     global _df_medicamentos
     if _df_medicamentos is None:
@@ -703,7 +765,8 @@ def get_cache_status() -> dict:
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
         "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
-        "teia_fonte_nivel3":  {"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
+        "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
+        "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
     }
     modules_status = {

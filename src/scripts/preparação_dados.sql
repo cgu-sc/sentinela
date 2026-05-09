@@ -601,14 +601,54 @@ CREATE INDEX ix_partExt_cnpj_empresa
     ON temp_CGUSC.fp.socios_participacoes_externas (cnpj_empresa);
 
 
+--------------------------------------------------------------
+-- ETAPA 4: Sócios das Empresas Irmãs (Expansão de 3º Grau)
+-- Identifica quem são os sócios das "empresas irmãs" para permitir
+-- a expansão dinâmica na Teia Societária.
+--------------------------------------------------------------
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_socios_indiretos;
+
+-- ── FASE 1: Extrair CNPJs únicos das participações externas ────────────────
+-- Criamos um lookup indexado para que o JOIN nacional seja cirúrgico.
+DROP TABLE IF EXISTS #cnpjs_irmas;
+
+SELECT DISTINCT cnpj_empresa
+INTO #cnpjs_irmas
+FROM temp_CGUSC.fp.socios_participacoes_externas;
+
+CREATE CLUSTERED INDEX ix_cnpjs_irmas_lookup
+    ON #cnpjs_irmas (cnpj_empresa);
+
+-- ── FASE 2: Buscar sócios dessas empresas na base nacional ─────────────────
+-- Buscamos todos os sócios que compõem o quadro das empresas do 2º grau.
+SELECT DISTINCT
+    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(s.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(s.nomeSocio, 120)) AS VARCHAR(120)) AS nome_socio,
+    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(s.percentualQualificacao / 100.0 AS DECIMAL(5,2))  AS percentual_qualificacao,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(s.descQualificacaoSocio, 50)) AS VARCHAR(50)) AS descricao_qualificacao,
+    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+INTO temp_CGUSC.fp.teia_socios_indiretos
+FROM #cnpjs_irmas                    AS irmas
+INNER JOIN db_CNPJ.dbo.socios       AS s  ON s.cnpj = irmas.cnpj_empresa
+WHERE s.cpfcnpjSocio <> '99999999999999';
+
+-- ── Índices para performance instantânea na expansão ───────────────────────
+-- O índice clustered por cnpj_empresa garante que a expansão de um nó PJ 
+-- leve milissegundos para filtrar os sócios.
+CREATE CLUSTERED INDEX cx_teiaInd_cnpj_empresa
+    ON temp_CGUSC.fp.teia_socios_indiretos (cnpj_empresa, cpf_cnpj_socio);
+
+CREATE INDEX ix_teiaInd_cpf_socio
+    ON temp_CGUSC.fp.teia_socios_indiretos (cpf_cnpj_socio);
 
 
-
-
-
-
-
-
+--------------------------------------------------------------
+-- ETAPA 5: Estimativa de Estoque Inicial
+--------------------------------------------------------------
 
 
 

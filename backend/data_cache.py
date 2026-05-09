@@ -535,7 +535,7 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
             if progress_callback:
                 progress_callback(int(((i+1)/total) * 100))
         except Exception as e:
-            print(f"   ⚠️ Erro ao exportar benchmark {key}: {e}")
+            print(f"   [AVISO] Erro ao exportar benchmark {key}: {e}")
 
     if progress_callback:
         progress_callback(100)
@@ -552,7 +552,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
                 res = conn.execute(text("SELECT DISTINCT cnpj FROM temp_CGUSC.fp.matriz_risco_consolidada"))
                 cnpjs = [r[0] for r in res]
         except Exception as e:
-            print(f"❌ Erro ao buscar lista de CNPJs: {e}")
+            print(f"[ERRO] Erro ao buscar lista de CNPJs: {e}")
             return
 
     total = len(cnpjs)
@@ -576,7 +576,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
                 p = int((i / total) * 100)
                 progress_callback(p)
         except Exception as e:
-            print(f"\n⚠️  Erro ao sincronizar CNPJ {cnpj}: {e}")
+            print(f"\n[AVISO]  Erro ao sincronizar CNPJ {cnpj}: {e}")
 
     if progress_callback:
         progress_callback(100)
@@ -600,7 +600,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             try:
                 return pl.read_parquet(path)
             except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● {name} ● ⚠️ ERRO DE LEITURA ({e})")
+                print(f"[ CACHE ] GLOBAL ● {name} ● [AVISO] ERRO DE LEITURA ({e})")
                 missing.append(name)
                 return None
 
@@ -620,14 +620,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
 
         if missing:
-            print(f"⚠️  Cache incompleto — módulos ausentes: {', '.join(missing)}")
-            print("ℹ️  Sistema iniciado em modo degradado. Sincronize pela interface para carregar os dados.")
+            print(f"[AVISO]  Cache incompleto — módulos ausentes: {', '.join(missing)}")
+            print("[INFO]  Sistema iniciado em modo degradado. Sincronize pela interface para carregar os dados.")
             _cache_status = "idle"
             _cache_progress = 0
         else:
             _cache_progress = 100
             _cache_status = "ready"
-            print(f"🚀 Caches carregados via Parquet.")
+            print(f"[OK] Caches carregados via Parquet.")
         return
 
     # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
@@ -665,14 +665,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
 
         _cache_progress = 100
         _cache_status = "ready"
-        print(f"🚀 Sincronização concluída em {time.perf_counter() - t0:.1f}s")
+        print(f"[OK] Sincronização concluída em {time.perf_counter() - t0:.1f}s")
 
     except Exception as e:
         _cache_status = "error"
         _cache_progress = 0
         _cache_error_message = str(e)
         import traceback
-        print(f"❌ Erro Crítico na Sincronização: {e}")
+        print(f"[ERRO] Erro Crítico na Sincronização: {e}")
         print(traceback.format_exc())
 
 def refresh_cache(engine) -> None:
@@ -748,7 +748,7 @@ def get_medicamentos_df() -> pl.DataFrame:
                 _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
                 return _df_medicamentos
             except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● medicamentos ● ⚠️ ERRO DE LEITURA ({e})")
+                print(f"[ CACHE ] GLOBAL ● medicamentos ● [AVISO] ERRO DE LEITURA ({e})")
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 

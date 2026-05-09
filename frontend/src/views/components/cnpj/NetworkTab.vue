@@ -15,6 +15,7 @@ const { networkData, networkLoading, networkError } = storeToRefs(cnpjDetailStor
 const cyContainer = ref(null);
 let cy = null;
 let resizeObserver = null;
+let currentLayout = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -62,28 +63,34 @@ const mergeNetworkData = (newData) => {
     cy.add({ group: 'edges', data: { ...e } });
   });
 
-  if (newNodes.length > 0) {
-    // Roda layout apenas se houver novos nós relevantes
-    const layout = cy.layout({ 
-      name: 'cose', 
-      animate: true, 
+  if (newNodes.length > 0 || newEdges.length > 0) {
+    if (currentLayout) { try { currentLayout.stop(); } catch (e) {} }
+    // animate: false → layout instantâneo, sem flash de nós empilhados
+    if (cyContainer.value) cyContainer.value.style.opacity = '0';
+    currentLayout = cy.layout({
+      name: 'cose',
+      animate: false,
       randomize: false,
       fit: true,
       padding: 50,
       nodeRepulsion: 8000,
       idealEdgeLength: 100
     });
-    layout.run();
+    cy.one('layoutstop', () => {
+      if (cyContainer.value) cyContainer.value.style.opacity = '';
+      fitGraphToView(INITIAL_FIT_PADDING);
+    });
+    currentLayout.run();
   }
 };
 
-const resetToN2 = () => {
-  if (!cy || !networkData.value) return;
-  // Reconstrói o grafo apenas com os dados originais (N2)
-  buildGraph(networkData.value);
+const resetToN2 = async () => {
+  if (!networkData.value) return;
+  await buildGraph(networkData.value);
   expandedNodes.value = new Set();
   selectedNode.value = null;
-  showInactive.value = true;
+  showInactiveCompanies.value = true;
+  showInactivePartners.value = true;
 };
 
 const expandBatch = async (mode) => {
@@ -94,7 +101,9 @@ const expandBatch = async (mode) => {
     let data = null;
     
     if (mode === 'N3') {
-      // Carrega apenas N3
+      // Sempre reconstrói do N2 para limpar estado de N4 anterior
+      await buildGraph(networkData.value);
+      expandedNodes.value = new Set();
       data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
       if (data) mergeNetworkData(data);
 
@@ -123,44 +132,51 @@ const expandBatch = async (mode) => {
   }
 };
 
-const toggleInactiveCompanies = () => {
-  showInactiveCompanies.value = !showInactiveCompanies.value;
+const PJ_FILTERABLE = ['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'];
+
+const applyVisibilityFilters = () => {
   if (!cy) return;
 
-  const PJ_TYPES = ['PJ_ALVO', 'PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'];
+  // Parte do estado limpo a cada re-aplicação
+  cy.elements().show();
 
-  if (showInactiveCompanies.value) {
-    // Restaura todos os nós PJ
-    cy.nodes().filter(n => PJ_TYPES.includes(n.data('type'))).show();
-    cy.edges().show();
-  } else {
-    // Esconde empresas inativas (is_ativo === false em nós PJ)
-    const inactiveCompanies = cy.nodes().filter(n =>
-      PJ_TYPES.includes(n.data('type')) && n.data('is_ativo') === false
-    );
-    inactiveCompanies.hide();
-    // Esconde arestas órfãs
-    cy.edges().filter(e => e.connectedNodes(':visible').length < 2).hide();
+  if (!showInactiveCompanies.value) {
+    // Oculta arestas inativas conectadas a empresas (não-alvo)
+    cy.edges()
+      .filter(e => !e.data('is_ativo') && (
+        PJ_FILTERABLE.includes(e.source().data('type')) ||
+        PJ_FILTERABLE.includes(e.target().data('type'))
+      ))
+      .hide();
+    // Oculta empresas que ficaram sem nenhuma aresta visível
+    cy.nodes()
+      .filter(n => PJ_FILTERABLE.includes(n.data('type')) && n.connectedEdges(':visible').length === 0)
+      .hide();
   }
+
+  if (!showInactivePartners.value) {
+    // Oculta arestas inativas conectadas a pessoas físicas
+    cy.edges()
+      .filter(e => !e.data('is_ativo') && (
+        e.source().data('type') === 'PF' ||
+        e.target().data('type') === 'PF'
+      ))
+      .hide();
+    // Oculta PFs que ficaram sem nenhuma aresta visível
+    cy.nodes()
+      .filter(n => n.data('type') === 'PF' && n.connectedEdges(':visible').length === 0)
+      .hide();
+  }
+};
+
+const toggleInactiveCompanies = () => {
+  showInactiveCompanies.value = !showInactiveCompanies.value;
+  applyVisibilityFilters();
 };
 
 const toggleInactivePartners = () => {
   showInactivePartners.value = !showInactivePartners.value;
-  if (!cy) return;
-
-  if (showInactivePartners.value) {
-    // Restaura todos os nós PF
-    cy.nodes().filter(n => n.data('type') === 'PF').show();
-    cy.edges().show();
-  } else {
-    // Esconde sócios inativos (is_ativo === false em nós PF)
-    const inactivePartners = cy.nodes().filter(n =>
-      n.data('type') === 'PF' && n.data('is_ativo') === false
-    );
-    inactivePartners.hide();
-    // Esconde arestas órfãs
-    cy.edges().filter(e => e.connectedNodes(':visible').length < 2).hide();
-  }
+  applyVisibilityFilters();
 };
 
 const exportPng = () => {
@@ -212,18 +228,23 @@ const INITIAL_FIT_PADDING = 40; // Reduzido para aproveitar o máximo da largura
 const REFIT_DELAY_MS = 80;
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
-function buildGraph(data) {
+async function buildGraph(data) {
   if (!cyContainer.value || !data) return;
   observeGraphContainer();
 
-  // Destrói instância anterior com limpeza profunda
+  if (cyContainer.value) cyContainer.value.style.pointerEvents = 'none';
+
+  // Para o layout — impede que agende novos RAFs
+  if (currentLayout) {
+    try { currentLayout.stop(); } catch (e) {}
+    currentLayout = null;
+  }
   if (cy) {
-    try {
-      cy.stop();
-      cy.destroy();
-    } catch (e) {
-      console.warn("Erro ao destruir cytoscape:", e);
-    }
+    try { cy.stop(); } catch (e) {}
+    // Drena o RAF pendente antes de destruir: o callback do cose já agendado
+    // executa aqui, vê que está parado e encerra — sem acessar _private nulo
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    try { cy.destroy(); } catch (e) {}
     cy = null;
   }
 
@@ -254,24 +275,14 @@ function buildGraph(data) {
     })),
   ];
 
+  // Oculta o canvas até o layout terminar — evita flash de nós empilhados em (0,0)
+  if (cyContainer.value) cyContainer.value.style.opacity = '0';
+
   cy = cytoscape({
     container: cyContainer.value,
     elements,
     style: buildStylesheet(),
-    layout: {
-      name: 'cose',
-      animate: true,
-      animationDuration: 800,
-      nodeRepulsion: () => 15000,
-      idealEdgeLength: () => 80,
-      gravity: 0.9,               // Sweet spot de 0.9
-      numIter: 1000,
-      initialTemp: 1000,
-      coolingFactor: 0.99,
-      minTemp: 1.0,
-      fit: false,
-      randomize: true,
-    },
+    layout: { name: 'preset' }, // sem auto-layout — controlamos manualmente via currentLayout
     minZoom: 0.35,
     maxZoom: 3,
   });
@@ -279,11 +290,33 @@ function buildGraph(data) {
   // Força o reconhecimento do tamanho do container
   cy.resize();
 
-  // Garante centralização após renderizar
-  cy.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
+  // Layout manual rastreado em currentLayout para poder ser cancelado antes do destroy
+  currentLayout = cy.layout({
+    name: 'cose',
+    animate: true,
+    animationDuration: 800,
+    nodeRepulsion: () => 15000,
+    idealEdgeLength: () => 80,
+    gravity: 0.9,
+    numIter: 1000,
+    initialTemp: 1000,
+    coolingFactor: 0.99,
+    minTemp: 1.0,
+    fit: false,
+    randomize: true,
+  });
+
+  cy.one('layoutstop', () => {
+    // Revela o grafo e reabilita eventos apenas após o layout terminar
+    if (cyContainer.value) {
+      cyContainer.value.style.opacity = '';
+      cyContainer.value.style.pointerEvents = '';
+    }
+    fitGraphToView(INITIAL_FIT_PADDING);
+  });
+  currentLayout.run();
 
   cy.ready(() => {
-    fitGraphToView(INITIAL_FIT_PADDING);
     setTimeout(() => fitGraphToView(INITIAL_FIT_PADDING), REFIT_DELAY_MS);
   });
 
@@ -366,7 +399,8 @@ async function expandNode(nodeId) {
 
     if (newElements.length > 0) {
       const added = cy.add(newElements);
-      const expansionLayout = added.union(cy.getElementById(nodeId)).layout({
+      if (currentLayout) { try { currentLayout.stop(); } catch (e) {} }
+      currentLayout = added.union(cy.getElementById(nodeId)).layout({
         name: 'cose',
         animate: true,
         animationDuration: 600,
@@ -375,7 +409,7 @@ async function expandNode(nodeId) {
         nodeRepulsion: () => 8000,
         idealEdgeLength: () => 60,
       });
-      expansionLayout.run();
+      currentLayout.run();
       
       // Destaca vizinhos do nó expandido
       cy.elements().removeClass('faded highlighted');
@@ -513,19 +547,22 @@ function zoomIn()  { cy?.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: 
 function zoomOut() { cy?.zoom({ level: cy.zoom() * 0.8,  renderedPosition: { x: cyContainer.value.clientWidth / 2, y: cyContainer.value.clientHeight / 2 } }); }
 function fitGraph() { fitGraphToView(80); }
 function resetLayout() {
-  cy?.layout({
+  if (!cy) return;
+  if (currentLayout) { try { currentLayout.stop(); } catch (e) {} }
+  currentLayout = cy.layout({
     name: 'cose', animate: true, animationDuration: 600,
     nodeRepulsion: () => 8000, idealEdgeLength: () => 120,
     gravity: 1.2, numIter: 800, fit: false,
-  }).run();
-  cy?.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
+  });
+  currentLayout.run();
+  cy.one('layoutstop', () => fitGraphToView(INITIAL_FIT_PADDING));
 }
 
 // ── Watchers ────────────────────────────────────────────────────────────────
 watch(networkData, async (data) => {
   if (data) {
     await nextTick();
-    buildGraph(data);
+    await buildGraph(data);
   }
 }, { immediate: true });
 
@@ -535,7 +572,7 @@ onMounted(async () => {
   } else {
     await nextTick();
     observeGraphContainer();
-    buildGraph(networkData.value);
+    await buildGraph(networkData.value);
   }
 });
 

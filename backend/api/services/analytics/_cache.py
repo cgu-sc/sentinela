@@ -201,11 +201,12 @@ def sync_network(cnpj: str) -> None:
             pass
 
     try:
-        print(f"🗄️ [SYNC] Gerando Teia Societária (Parquet Source) para {cnpj}...")
+        print(f"[SYNC] Gerando Teia Societaria (Parquet Source) para {cnpj}...")
         t0 = time.perf_counter()
 
         nodes: dict[str, dict] = {}
         edges: list[dict]      = []
+        df_exp_filtered        = pl.DataFrame() # Inicializa vazio
 
         # ── 1. Nó raiz: dados do CNPJ alvo ──────────────────────────────────
         df_farm = get_df_dados_farmacia()
@@ -262,16 +263,16 @@ def sync_network(cnpj: str) -> None:
                 "is_ativo": s.get("data_exclusao_sociedade") is None
             })
 
-        # ── 3. Nível 2: Outras empresas destes sócios ─────────────────────────
         df_ext = get_df_teia_fonte_nivel2()
         cnpjs_externos = []
         if not df_ext.is_empty() and cpfs_socios:
             participacoes = df_ext.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_socios)).to_dicts()
+            print(f"   -> Nivel 2: Encontradas {len(participacoes)} participacoes para {len(cpfs_socios)} socios.")
 
             for p in participacoes:
                 cnpj_ext = p["cnpj_empresa"]
                 id_socio = p["cpf_cnpj_socio"]
-                cnpjs_externos.append(cnpj_ext)
+                cnpjs_externos.append(cnpj_ext) # Sempre adiciona para disparar N3/N4
 
                 if cnpj_ext not in nodes:
                     tipo = "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA"
@@ -307,7 +308,9 @@ def sync_network(cnpj: str) -> None:
         
         if not df_exp_source.is_empty() and cnpjs_externos:
             # Filtra sócios de todas as empresas irmãs mapeadas
-            df_exp_filtered = df_exp_source.filter(pl.col("cnpj_empresa").is_in(cnpjs_externos))
+            cnpjs_externos_unicos = list(set(cnpjs_externos))
+            df_exp_filtered = df_exp_source.filter(pl.col("cnpj_empresa").is_in(cnpjs_externos_unicos))
+            print(f"   -> Nivel 3: Encontrados {df_exp_filtered.height} vinculos de socios para {len(cnpjs_externos_unicos)} empresas N2.")
             
             for row in df_exp_filtered.iter_rows(named=True):
                 id_socio = row["cpf_cnpj_socio"]
@@ -361,17 +364,21 @@ def sync_network(cnpj: str) -> None:
         n4_nodes_dict: dict[str, dict] = {}
         n4_edges: list[dict] = []
         
-        # CPFs que entraram no Nível 3 (expansão)
-        cpfs_n3 = list(exp_nodes_dict.keys())
+        # CPFs que disparam o Nível 4 (todos os sócios de empresas irmãs)
+        cpfs_n3_trigger = []
+        if not df_exp_source.is_empty() and cnpjs_externos:
+            cpfs_n3_trigger = df_exp_filtered.select("cpf_cnpj_socio").unique().to_series().to_list()
         
-        if not df_n4_source.is_empty() and cpfs_n3:
-            df_n4_filtered = df_n4_source.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_n3))
+        print(f"   -> Nivel 4: Disparando busca para {len(cpfs_n3_trigger)} CPFs do Nivel 3...")
+        if not df_n4_source.is_empty() and cpfs_n3_trigger:
+            df_n4_filtered = df_n4_source.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_n3_trigger))
+            print(f"   -> Nivel 4: Encontradas {df_n4_filtered.height} empresas de expansao.")
             
             for row in df_n4_filtered.iter_rows(named=True):
                 cnpj_ext = row["cnpj_empresa"]
                 id_socio = row["cpf_cnpj_socio"]
                 
-                # Se a empresa já existe na teia (N2), não duplicamos
+                # Se a empresa já existe na teia (N2 ou Alvo), não duplicamos
                 if cnpj_ext not in nodes and cnpj_ext not in n4_nodes_dict:
                     tipo = "PJ_FARMACIA" if row["is_farmacia_fp"] else "PJ_OUTRA"
                     if tipo == "PJ_OUTRA" and row.get("id_cnae_principal") in [4771701, 4771702]:
@@ -411,10 +418,10 @@ def sync_network(cnpj: str) -> None:
         }).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")
         
         ms = (time.perf_counter() - t0) * 1000
-        print(f"✅ Teia Completa (+Expansão) salva para {cnpj} ({ms:.1f}ms)")
+        print(f"Teia Completa (+Expansao) salva para {cnpj} ({ms:.1f}ms)")
 
     except Exception as e:
         import traceback
-        print(f"⚠️ Erro ao gerar Teia Societária para {cnpj}: {e}")
+        print(f"Erro ao gerar Teia Societaria para {cnpj}: {e}")
         print(traceback.format_exc())
 

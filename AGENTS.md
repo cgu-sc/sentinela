@@ -1,20 +1,15 @@
 ﻿<claude-mem-context>
 # Memory Context
 
-# [sentinela] recent context, 2026-05-09 2:34pm GMT-3
+# [sentinela] recent context, 2026-05-09 4:12pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (18.870t read) | 730.100t work | 97% savings
+Stats: 50 obs (19.069t read) | 597.167t work | 97% savings
 
-### May 5, 2026
-101 7:34p 🔵 analytics.py Real Location and Current State Pre-Refactor
-102 " 🔄 analytics.py Split into 8-Module Sub-package with Façade
 ### May 7, 2026
-103 11:39a ⚖️ Design: Add fp.dados_socios Table for Partner/Shareholder Data
-104 " 🔵 Sentinela Project Structure Mapped
 105 11:40a 🔵 Nota Técnica Generation: Full Architecture of nota_tecnica.py
 106 " 🔵 Frontend Wiring: generateNote Event Bubbles to Parent Component
 107 " 🔵 preparação_dados.sql Already Contains fp.dados_socios Creation Script
@@ -72,8 +67,12 @@ S68 Fix Pyrefly type checker errors in analytics package — repeated stale-file
 148 11:57a 🔵 SQL Materialization Query for CRM Movement Data by UF
 149 12:02p 🔵 SQL Script Fails with Subquery-in-Scalar-Context Errors
 150 2:04p 🔵 CNPJ Network Materialized Data Statistics
+151 2:34p ✅ Data Materialization MS Executed Successfully
+152 3:59p 🔵 SQL Materialization Benchmark — Script-Style Approach
+153 4:00p 🟣 Per-Stage Timing Instrumentation Added to CRM Concentration Pipelines
+154 4:09p 🔵 SQL Server CRM Multi-CRM Temporal Concentration Detection Pipeline
 
-Access 730k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 597k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
 # ID-FIRST REGIONAL POLICY
 - **PROIBIDO**: no_regiao_saude em lógica, filtros ou parâmetros.

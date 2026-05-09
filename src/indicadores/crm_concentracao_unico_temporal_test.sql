@@ -57,6 +57,8 @@ DECLARE @fonte_atual_ok BIT = 0;
 DECLARE @id_lote_log BIGINT;
 DECLARE @qtd_cnpjs_lote INT;
 DECLARE @dt_fim_lote DATETIME;
+DECLARE @dt_fim_etapa DATETIME;
+DECLARE @nu_registros_etapa BIGINT;
 
 IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
@@ -124,6 +126,29 @@ IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'status_concentracao_uni
 
 IF COL_LENGTH('temp_CGUSC.fp.crm_pipeline_uf_controle', 'dt_concentracao_unico') IS NULL
     ALTER TABLE temp_CGUSC.fp.crm_pipeline_uf_controle ADD dt_concentracao_unico DATETIME NULL;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_etapa_log') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_etapa_log (
+        id_etapa_log       BIGINT IDENTITY(1,1) NOT NULL,
+        uf_farmacia        CHAR(2)      NOT NULL,
+        pipeline_versao    VARCHAR(40)  NOT NULL,
+        dt_data_inicio     DATE         NOT NULL,
+        dt_data_fim        DATE         NOT NULL,
+        etapa              VARCHAR(80)  NOT NULL,
+        dt_inicio_etapa    DATETIME     NOT NULL,
+        dt_fim_etapa       DATETIME     NULL,
+        segundos_etapa     INT          NULL,
+        milissegundos_etapa INT         NULL,
+        nu_registros       BIGINT       NULL,
+        observacao         VARCHAR(400) NULL,
+        CONSTRAINT PK_CrmConcentracaoUnicoEtapaLog PRIMARY KEY CLUSTERED (id_etapa_log)
+    );
+
+    CREATE INDEX IDX_CrmConcentracaoUnicoEtapaLog_UfPeriodo
+        ON temp_CGUSC.fp.crm_concentracao_unico_etapa_log
+            (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa);
+END;
 
 EXEC sp_executesql
     N'INSERT INTO temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -256,6 +281,22 @@ BEGIN
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual;
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual_metadata;
 
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET etapa = ''MATERIALIZANDO_FONTE_UF_SELECT_INTO'',
+              dt_atualizacao = GETDATE()
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
+
+    SET @t_bloco = GETDATE();
+
     SELECT
         F.id AS id_cnpj,
         CAST(M.cnpj AS CHAR(14)) AS cnpj,
@@ -286,12 +327,95 @@ BEGIN
           WHERE PAT.codigo_barra = M.codigo_barra
       );
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @dt_fim_etapa = GETDATE();
+
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+         dt_inicio_etapa, dt_fim_etapa, segundos_etapa, milissegundos_etapa,
+         nu_registros, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_SELECT_INTO',
+         @t_bloco, @dt_fim_etapa, DATEDIFF(SECOND, @t_bloco, @dt_fim_etapa),
+         DATEDIFF(MILLISECOND, @t_bloco, @dt_fim_etapa), @nu_registros_etapa,
+         'SELECT INTO #crm_movimentacao_uf_atual.');
+
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET etapa = ''MATERIALIZANDO_FONTE_UF_IDX_CLUSTERED'',
+              dt_atualizacao = GETDATE()
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
+
+    SET @t_bloco = GETDATE();
+
     CREATE CLUSTERED INDEX IDX_CrmMovimentacaoUfAtual_CnpjData
         ON #crm_movimentacao_uf_atual(id_cnpj, data_hora);
+
+    SET @dt_fim_etapa = GETDATE();
+
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+         dt_inicio_etapa, dt_fim_etapa, segundos_etapa, milissegundos_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_IDX_CLUSTERED',
+         @t_bloco, @dt_fim_etapa, DATEDIFF(SECOND, @t_bloco, @dt_fim_etapa),
+         DATEDIFF(MILLISECOND, @t_bloco, @dt_fim_etapa),
+         'Indice clustered #crm_movimentacao_uf_atual(id_cnpj, data_hora).');
+
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET etapa = ''MATERIALIZANDO_FONTE_UF_IDX_CRM_DIA'',
+              dt_atualizacao = GETDATE()
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
+
+    SET @t_bloco = GETDATE();
 
     CREATE NONCLUSTERED INDEX IDX_CrmMovimentacaoUfAtual_CrmDia
         ON #crm_movimentacao_uf_atual(id_cnpj, crm, crm_uf, data_hora)
         INCLUDE (cnpj, num_autorizacao, valor_pago, codigo_barra);
+
+    SET @dt_fim_etapa = GETDATE();
+
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+         dt_inicio_etapa, dt_fim_etapa, segundos_etapa, milissegundos_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_IDX_CRM_DIA',
+         @t_bloco, @dt_fim_etapa, DATEDIFF(SECOND, @t_bloco, @dt_fim_etapa),
+         DATEDIFF(MILLISECOND, @t_bloco, @dt_fim_etapa),
+         'Indice nonclustered #crm_movimentacao_uf_atual(id_cnpj, crm, crm_uf, data_hora).');
+
+    EXEC sp_executesql
+        N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+          SET etapa = ''MATERIALIZANDO_FONTE_UF_CONTAGEM'',
+              dt_atualizacao = GETDATE()
+          WHERE uf_farmacia = @uf
+            AND pipeline_versao = @versao
+            AND dt_data_inicio = @inicio
+            AND dt_data_fim = @fim;',
+        N'@uf CHAR(2), @versao VARCHAR(40), @inicio DATE, @fim DATE',
+        @uf = @uf_farmacia,
+        @versao = @pipeline_versao,
+        @inicio = @DataInicio,
+        @fim = @DataFim;
+
+    SET @t_bloco = GETDATE();
 
     SELECT @nu_registros_fonte_uf = ISNULL(SUM(P.rows), 0)
     FROM tempdb.sys.partitions P
@@ -302,6 +426,18 @@ BEGIN
         SELECT COUNT(DISTINCT id_cnpj)
         FROM #crm_movimentacao_uf_atual
     );
+
+    SET @dt_fim_etapa = GETDATE();
+
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+         dt_inicio_etapa, dt_fim_etapa, segundos_etapa, milissegundos_etapa,
+         nu_registros, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CONTAGEM',
+         @t_bloco, @dt_fim_etapa, DATEDIFF(SECOND, @t_bloco, @dt_fim_etapa),
+         DATEDIFF(MILLISECOND, @t_bloco, @dt_fim_etapa), @nu_registros_fonte_uf,
+         'Contagem de linhas e CNPJs materializados.');
 
     CREATE TABLE #crm_movimentacao_uf_atual_metadata (
         id_pipeline       TINYINT     NOT NULL,

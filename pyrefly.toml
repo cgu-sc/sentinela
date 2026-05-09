@@ -1,0 +1,21 @@
+project-includes = [
+  "backend/**/*.py",
+  "src/**/*.py",
+  "desktop.py",
+]
+
+project-excludes = [
+  "**/__pycache__",
+  "**/.venv",
+  "**/node_modules",
+]
+
+search-path = [
+  ".",
+  "backend",
+]
+
+python-interpreter-path = ".venv/Scripts/python.exe"
+site-package-path = [
+  ".venv/Lib/site-packages",
+]

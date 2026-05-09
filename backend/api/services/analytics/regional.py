@@ -54,7 +54,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: int = None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -155,7 +155,7 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
     except Exception as e:
         return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
-def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim: date = None, regiao_id: int = None) -> RegionalResponse:
+def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[date] = None, data_fim: Optional[date] = None, regiao_id: Optional[int] = None) -> RegionalResponse:
     """
     Constrói o payload completo de Benchmarking Regional.
     """
@@ -167,7 +167,7 @@ def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim
 
         # ── Resolução de Nome para Exibição ──────────────────────────────
         nome_exibicao = uf or ""
-        id_regiao = regiao_id
+        id_regiao: Optional[str] = str(regiao_id) if regiao_id is not None else None
 
         if regiao_id:
             loc_row = df_loc.filter(pl.col("id_regiao_saude").cast(pl.String) == str(regiao_id)).limit(1)
@@ -344,10 +344,10 @@ def get_regional_benchmarking(uf: str = None, data_inicio: date = None, data_fim
         return RegionalResponse(nome_regiao=nome_exibicao if 'nome_exibicao' in locals() else "", municipios=[], farmacias=[])
 
 def get_regional_benchmarking_animation(
-    uf: str = None,
-    data_inicio: date = None,
-    data_fim: date = None,
-    regiao_id: int = None
+    uf: Optional[str] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    regiao_id: Optional[int] = None
 ) -> RegionalAnimationResponse:
     """
     Retorna todos os trimestres do período em uma única chamada.
@@ -506,7 +506,7 @@ def get_regional_benchmarking_animation(
 # Conjunto de diretórios de CNPJ já criados nesta sessão — evita syscalls redundantes.
 _known_cnpj_dirs: set[str] = set()
 
-def get_metric_percentiles(scope: str, uf: str = None, regiao_id: str = None, metric: str = 'score', data_inicio: date = None, data_fim: date = None) -> list[dict]:
+def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Optional[str] = None, metric: str = 'score', data_inicio: Optional[date] = None, data_fim: Optional[date] = None) -> list[dict]:
     """
     Calcula a curva de percentis de score ou percentual de não comprovação (1% a 100%) para diferentes escopos.
     """
@@ -602,11 +602,11 @@ def get_metric_percentiles(scope: str, uf: str = None, regiao_id: str = None, me
 
 def get_metric_percentiles_animation(
     scope: str,
-    uf: str = None,
-    regiao_id: str = None,
+    uf: Optional[str] = None,
+    regiao_id: Optional[str] = None,
     metric: str = 'score',
-    data_inicio: date = None,
-    data_fim: date = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
 ) -> dict:
     """
     Retorna os percentis de métrica para cada janela de 2 meses no período.

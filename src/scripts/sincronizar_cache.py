@@ -313,7 +313,7 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
     if not cnpjs:
         cnpjs = _buscar_cnpjs_matriz(engine)
 
-    cnpjs = [str(cnpj).strip() for cnpj in cnpjs if str(cnpj).strip()]
+    cnpjs = [cnpj.strip() for cnpj in cnpjs if cnpj.strip()]
     total = len(cnpjs)
     print(f"Sincronizando todos os parquets por CNPJ para {total} estabelecimento(s)...")
 

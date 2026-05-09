@@ -54,7 +54,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: List[str] = None, regiao_id: int = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -108,8 +108,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         mask = pl.col("periodo").is_between(inicio, fim)
         if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
         if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        elif regiao_saude and regiao_saude != 'Todos': 
-            from data_cache import get_localidades_df
+        elif regiao_saude and regiao_saude != 'Todos':
             df_loc = get_localidades_df()
             reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
             if not reg_row.is_empty():
@@ -318,7 +317,7 @@ def get_resultado_sentinela(db: Session) -> List[ResultadoSentinelaSchema]:
             FROM [temp_CGUSC].[fp].[resultado_sentinela]
         """)
         result = db.execute(sql).fetchall()
-        return [ResultadoSentinelaSchema(**row._mapping) for row in result]
+        return [ResultadoSentinelaSchema.model_validate(dict(row._mapping)) for row in result]
     except Exception as e:
         import traceback
         print("❌ ERRO AO BUSCAR RESULTADOS DETALHADOS:")

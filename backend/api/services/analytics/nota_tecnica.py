@@ -3,8 +3,9 @@ import os
 import polars as pl
 from decimal import Decimal
 from datetime import date
+from typing import Any, Optional
 from docx import Document
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Emu, Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
 from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
@@ -212,7 +213,7 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
     doc.add_page_break()
 
 
-def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_txt: str):
+def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_txt: str):
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
     doc.add_paragraph()
     p_title = doc.add_paragraph()
@@ -269,8 +270,9 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: float, periodo_tx
 
     # Nota de Rodapé do Quadro
     total_mov = Decimal(str(data.get('total_mov') or 0.0))
-    relacao_pct = (total_mov / capital_social * 100) if capital_social > 0 else 0
-    vezes = (total_mov / capital_social) if capital_social > 0 else 0
+    cap_social_dec = Decimal(str(capital_social))
+    relacao_pct = (total_mov / cap_social_dec * 100) if capital_social > 0 else 0
+    vezes = (total_mov / cap_social_dec) if capital_social > 0 else 0
     
     p_nota = doc.add_paragraph()
     p_nota.paragraph_format.space_before = Pt(6)
@@ -393,16 +395,16 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
 
 # ── Geração do documento ─────────────────────────────────────────────────────
 
-def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: date = None):
+def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, data_fim: Optional[date] = None):
     """Gera a Nota Técnica Preliminar em formato .docx."""
 
     # 1. Coleta de dados
     cadastro_obj = get_dados_farmacia(cnpj)
-    cadastro = cadastro_obj.model_dump() if hasattr(cadastro_obj, 'model_dump') else cadastro_obj.dict() if hasattr(cadastro_obj, 'dict') else {}
+    cadastro = cadastro_obj.model_dump() if cadastro_obj is not None else {}
 
     resumo = get_dashboard_data(db, data_inicio, data_fim, cnpjs=[cnpj])
     cnpj_data_obj = resumo.resultado_cnpjs[0] if hasattr(resumo, 'resultado_cnpjs') and resumo.resultado_cnpjs else None
-    cnpj_data = cnpj_data_obj.model_dump() if cnpj_data_obj and hasattr(cnpj_data_obj, 'model_dump') else cnpj_data_obj.dict() if cnpj_data_obj and hasattr(cnpj_data_obj, 'dict') else {}
+    cnpj_data = cnpj_data_obj.model_dump() if cnpj_data_obj is not None else {}
 
     # Coleta de sócios
     socios_res = get_socios_farmacia(cnpj)
@@ -439,13 +441,13 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
 
     # 3. Documento e margens
     doc = Document()
-    style_normal = doc.styles['Normal']
+    style_normal: Any = doc.styles['Normal']
     style_normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     
     # Aplica o tema Grafite Médio (Slate 700) para as Seções/Títulos
     for i in range(1, 4):
         try:
-            style_heading = doc.styles[f'Heading {i}']
+            style_heading: Any = doc.styles[f'Heading {i}']
             style_heading.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
         except Exception:
             pass
@@ -503,7 +505,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: date = None, data_fim: dat
     tbl_resumo = doc.add_table(rows=1, cols=2)
     tbl_resumo.autofit = False
     tbl_resumo.columns[0].width = Inches(4.5)
-    tbl_resumo.columns[1].width = PAGE_W - Inches(4.5)
+    tbl_resumo.columns[1].width = Emu(PAGE_W - Inches(4.5))
     _tbl_no_borders(tbl_resumo)
     
     # Coluna 1: Dados do Estabelecimento

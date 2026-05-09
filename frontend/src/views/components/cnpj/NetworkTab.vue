@@ -669,25 +669,24 @@ const expansionLabel = computed(() => {
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
-  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 100 },
-  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 61 },
-  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 65 },
-  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 61 },
-  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 61 },
-  PJ:          { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 54 },
-  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 49 },
-  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 61 },
+  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 85 },
+  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 52 },
+  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 55 },
+  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 52 },
+  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 52 },
+  PJ:          { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 46 },
+  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 42 },
+  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 52 },
 };
 
 function getNodeDensityScale() {
   if (!cy || currentLevel.value !== 'N3') return 1;
 
   const visibleCount = cy.nodes(':visible').length;
-  if (visibleCount <= 40) return 1;
-  if (visibleCount <= 65) return 0.92;
-  if (visibleCount <= 90) return 0.84;
-  if (visibleCount <= 130) return 0.76;
-  return 0.68;
+  if (visibleCount <= 20) return 1;
+  if (visibleCount <= 40) return 0.8;
+  if (visibleCount <= 80) return 0.7;
+  return 0.5;
 }
 
 function applyNodeDensitySizing() {
@@ -1153,20 +1152,20 @@ const typeLabels = {
             <div class="toolbar-pill">
               <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N2' }"
                 @click="resetToN2" :disabled="isBatchExpanding"
-                v-tooltip.bottom="'Voltar ao nível 2 inicial'">
+                v-tooltip.bottom="'Nível 2: CNPJ em análise, sócios diretos e empresas ligadas a esses sócios'">
                 <i class="pi pi-refresh" />
                 <span>Nível 2</span>
               </button>
               <div class="pill-sep"></div>
               <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N3' }"
                 @click="expandBatch('N3')" :disabled="isBatchExpanding"
-                v-tooltip.bottom="'Carregar nível 3: sócios das empresas irmãs'">
+                v-tooltip.bottom="'Nível 3: sócios das empresas encontradas no nível 2'">
                 <i :class="loadingLevel === 'N3' ? 'pi pi-spin pi-spinner' : 'pi pi-users'" />
                 <span>Nível 3</span>
               </button>
               <button class="seg-btn" :class="{ 'seg-active': currentLevel === 'N4' }"
                 @click="expandBatch('N4')" :disabled="isBatchExpanding"
-                v-tooltip.bottom="'Carregar nível 4: empresas dos sócios de N3'">
+                v-tooltip.bottom="'Nível 4: empresas ligadas aos sócios encontrados no nível 3'">
                 <i :class="loadingLevel === 'N4' ? 'pi pi-spin pi-spinner' : 'pi pi-sitemap'" />
                 <span>Nível 4</span>
               </button>
@@ -1256,8 +1255,8 @@ const typeLabels = {
               <i class="pi pi-minus" />
             </button>
             <div class="ctrl-sep"></div>
-            <button class="ctrl-btn" @click="fitGraph"   v-tooltip.left="'Ajustar ao ecrã'">
-              <i class="pi pi-expand" />
+            <button class="ctrl-btn" @click="fitGraph"   v-tooltip.left="'Ajustar à tela'">
+              <i class="pi pi-arrows-alt" />
             </button>
             <button
               class="ctrl-btn"

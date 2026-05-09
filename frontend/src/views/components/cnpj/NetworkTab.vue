@@ -16,6 +16,7 @@ const cyContainer = ref(null);
 let cy = null;
 let resizeObserver = null;
 let currentLayout = null;
+let n2PresentationZoom = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -32,6 +33,7 @@ const expandedNodes = ref(new Set());
 const showInactiveCompanies = ref(true);
 const showInactivePartners  = ref(true);
 const showOnlyPharmacies = ref(false);
+const showOnlyPopularPharmacies = ref(false);
 const networkSearch = ref('');
 const searchMatchCount = ref(0);
 const hasActiveSearch = computed(() => networkSearch.value.trim().length > 0);
@@ -41,7 +43,181 @@ const searchHasNoMatch = computed(() => hasActiveSearch.value && searchMatchCoun
 const currentLevel = ref('N2');
 const loadingLevel = ref(null);
 
+function getLayoutBoundingBox() {
+  if (!cy || !cyContainer.value) return undefined;
+
+  const width = cyContainer.value.clientWidth || cy.width();
+  const height = cyContainer.value.clientHeight || cy.height();
+  if (!width || !height) return undefined;
+
+  return {
+    x1: -width * 0.15,
+    y1: height * 0.04,
+    w: width * 1.3,
+    h: height * 0.82,
+  };
+}
+
 // ── Funções de Utilitário para o Grafo ──────────────────────────────────
+function sortGraphNodes(nodes) {
+  return nodes.sort((a, b) => {
+    const labelA = a.data('fullLabel') || a.data('label') || a.id();
+    const labelB = b.data('fullLabel') || b.data('label') || b.id();
+    return String(labelA).localeCompare(String(labelB), 'pt-BR');
+  });
+}
+
+function positionOnEllipse(center, radiusX, radiusY, angle) {
+  return {
+    x: center.x + Math.cos(angle) * radiusX,
+    y: center.y + Math.sin(angle) * radiusY,
+  };
+}
+
+function circularMeanAngle(angles) {
+  if (!angles.length) return 0;
+  const sum = angles.reduce((acc, angle) => ({
+    x: acc.x + Math.cos(angle),
+    y: acc.y + Math.sin(angle),
+  }), { x: 0, y: 0 });
+  return Math.atan2(sum.y, sum.x);
+}
+
+function rememberN2PresentationZoom() {
+  if (!cy || currentLevel.value !== 'N2') return;
+  n2PresentationZoom = cy.zoom();
+}
+
+function applyRadialView({ rememberN2Zoom = false } = {}) {
+  applyN2RadialLayout();
+  fitGraphToView(INITIAL_FIT_PADDING);
+  if (rememberN2Zoom) {
+    rememberN2PresentationZoom();
+  }
+}
+
+function normalizeN2LayoutScale() {
+  if (!cy || !cyContainer.value) return;
+
+  const targetZoom = Math.max(1, Math.min(n2PresentationZoom || 1.08, 1.16));
+  const visibleNodes = cy.nodes(':visible');
+  if (visibleNodes.empty()) return;
+  const root = visibleNodes.filter(node => node.data('type') === 'PJ_ALVO').first();
+  if (!root.length) return;
+
+  const { clientWidth, clientHeight } = cyContainer.value;
+  if (!clientWidth || !clientHeight) return;
+
+  const rootPosition = root.position();
+  const targetCenter = {
+    x: clientWidth / 2,
+    y: clientHeight * 0.54,
+  };
+  const available = {
+    left: Math.max(80, (targetCenter.x - INITIAL_FIT_PADDING) / targetZoom),
+    right: Math.max(80, (clientWidth - targetCenter.x - INITIAL_FIT_PADDING) / targetZoom),
+    top: Math.max(80, (targetCenter.y - INITIAL_FIT_PADDING) / targetZoom),
+    bottom: Math.max(80, (clientHeight - targetCenter.y - INITIAL_FIT_PADDING) / targetZoom),
+  };
+  const extents = visibleNodes.reduce((acc, node) => {
+    const position = node.position();
+    const dx = position.x - rootPosition.x;
+    const dy = position.y - rootPosition.y;
+    return {
+      left: Math.max(acc.left, Math.max(0, -dx)),
+      right: Math.max(acc.right, Math.max(0, dx)),
+      top: Math.max(acc.top, Math.max(0, -dy)),
+      bottom: Math.max(acc.bottom, Math.max(0, dy)),
+    };
+  }, { left: 0, right: 0, top: 0, bottom: 0 });
+  const scale = Math.min(
+    1,
+    extents.left ? available.left / extents.left : 1,
+    extents.right ? available.right / extents.right : 1,
+    extents.top ? available.top / extents.top : 1,
+    extents.bottom ? available.bottom / extents.bottom : 1,
+  );
+  if (scale >= 0.98) return;
+
+  visibleNodes.positions(node => {
+    const position = node.position();
+    return {
+      x: rootPosition.x + (position.x - rootPosition.x) * scale,
+      y: rootPosition.y + (position.y - rootPosition.y) * scale,
+    };
+  });
+}
+
+function applyN2RadialLayout() {
+  if (!cy || !cyContainer.value) return;
+
+  const width = cyContainer.value.clientWidth || cy.width();
+  const height = cyContainer.value.clientHeight || cy.height();
+  if (!width || !height) return;
+
+  const visibleNodes = cy.nodes(':visible');
+  if (visibleNodes.empty()) return;
+
+  const root = visibleNodes.filter(node => node.data('type') === 'PJ_ALVO').first();
+  if (!root.length) return;
+
+  const center = { x: width / 2, y: height * 0.54 };
+  root.position(center);
+
+  const rootId = root.id();
+  const directPartners = sortGraphNodes(
+    root.connectedEdges(':visible')
+      .connectedNodes(':visible')
+      .filter(node => node.id() !== rootId)
+      .toArray()
+  );
+
+  const partnerIds = new Set(directPartners.map(node => node.id()));
+  const partnerAngle = new Map();
+  const innerRadiusX = Math.max(230, Math.min(width * 0.24, 380));
+  const innerRadiusY = Math.max(120, Math.min(height * 0.24, 190));
+
+  directPartners.forEach((node, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(directPartners.length, 1);
+    partnerAngle.set(node.id(), angle);
+    node.position(positionOnEllipse(center, innerRadiusX, innerRadiusY, angle));
+  });
+
+  const outerNodes = sortGraphNodes(
+    visibleNodes
+      .filter(node => node.id() !== rootId && !partnerIds.has(node.id()))
+      .toArray()
+  );
+
+  const outerRadiusX = Math.max(420, Math.min(width * 0.43, 760));
+  const outerRadiusY = Math.max(200, Math.min(height * 0.36, 310));
+  const groupedByAngle = new Map();
+
+  outerNodes.forEach((node, fallbackIndex) => {
+    const connectedAngles = node.connectedEdges(':visible')
+      .connectedNodes(':visible')
+      .filter(other => partnerIds.has(other.id()))
+      .map(other => partnerAngle.get(other.id()))
+      .filter(angle => Number.isFinite(angle));
+    const baseAngle = connectedAngles.length
+      ? circularMeanAngle(connectedAngles)
+      : -Math.PI / 2 + (Math.PI * 2 * fallbackIndex) / Math.max(outerNodes.length, 1);
+    const key = String(Math.round(baseAngle * 100) / 100);
+    if (!groupedByAngle.has(key)) groupedByAngle.set(key, []);
+    groupedByAngle.get(key).push({ node, baseAngle });
+  });
+
+  groupedByAngle.forEach(group => {
+    const spread = Math.min(0.7, Math.max(0.22, group.length * 0.14));
+    group.forEach(({ node, baseAngle }, index) => {
+      const offset = group.length === 1
+        ? 0
+        : -spread / 2 + (spread * index) / (group.length - 1);
+      node.position(positionOnEllipse(center, outerRadiusX, outerRadiusY, baseAngle + offset));
+    });
+  });
+}
+
 function runGraphLayout(preset = 'base', options = {}) {
   if (!cy) return;
 
@@ -55,21 +231,33 @@ function runGraphLayout(preset = 'base', options = {}) {
     try { currentLayout.stop(); } catch (e) {}
   }
 
-  const layoutOptions = preset === 'expanded'
-    ? {
+  const layoutOptions = (() => {
+    if (preset === 'expanded') return {
         nodeRepulsion: () => 8000,
         idealEdgeLength: () => 120,
         gravity: 1.2,
         numIter: 900,
         randomize: true,
-      }
-    : {
-        nodeRepulsion: () => 8500,
-        idealEdgeLength: () => 58,
-        gravity: 1.35,
-        numIter: 900,
-        randomize: true,
       };
+
+    if (preset === 'n2') return {
+      nodeRepulsion: () => 11000,
+      idealEdgeLength: () => 96,
+      gravity: 1.05,
+      numIter: 800,
+      randomize: true,
+      componentSpacing: 90,
+      nodeOverlap: 18,
+    };
+
+    return {
+      nodeRepulsion: () => 8500,
+      idealEdgeLength: () => 58,
+      gravity: 1.35,
+      numIter: 900,
+      randomize: true,
+    };
+  })();
 
   if (hideDuringLayout && cyContainer.value) {
     cyContainer.value.style.opacity = '0';
@@ -83,6 +271,7 @@ function runGraphLayout(preset = 'base', options = {}) {
     initialTemp: 1000,
     coolingFactor: 0.99,
     minTemp: 1.0,
+    boundingBox: getLayoutBoundingBox(),
     ...layoutOptions,
   });
 
@@ -93,6 +282,9 @@ function runGraphLayout(preset = 'base', options = {}) {
     }
 
     applyVisibilityFilters();
+    if (preset === 'n2') {
+      normalizeN2LayoutScale();
+    }
     if (fitAfter && !hasActiveSearch.value) {
       fitGraphToView(INITIAL_FIT_PADDING);
     }
@@ -101,8 +293,13 @@ function runGraphLayout(preset = 'base', options = {}) {
   currentLayout.run();
 }
 
-const mergeNetworkData = (newData) => {
+const mergeNetworkData = (newData, options = {}) => {
   if (!cy || !newData) return;
+  const {
+    layoutPreset = 'expanded',
+    hideDuringLayout = true,
+    animationDuration = 700,
+  } = options;
   
   // Evitar duplicados
   const existingNodes = new Set(cy.nodes().map(n => n.id()));
@@ -134,7 +331,11 @@ const mergeNetworkData = (newData) => {
   applyVisibilityFilters();
 
   if (newNodes.length > 0 || newEdges.length > 0) {
-    runGraphLayout('expanded', { hideDuringLayout: true, animationDuration: 700 });
+    if (layoutPreset === 'radial') {
+      applyRadialView();
+    } else {
+      runGraphLayout(layoutPreset, { hideDuringLayout, animationDuration });
+    }
   }
 };
 
@@ -143,6 +344,7 @@ const resetToN2 = async () => {
   showInactiveCompanies.value = true;
   showInactivePartners.value = true;
   showOnlyPharmacies.value = false;
+  showOnlyPopularPharmacies.value = false;
   networkSearch.value = '';
   searchMatchCount.value = 0;
   selectedNode.value = null;
@@ -164,7 +366,7 @@ const expandBatch = async (mode) => {
       await buildGraph(networkData.value);
       expandedNodes.value = new Set();
       data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
-      if (data) mergeNetworkData(data);
+      if (data) mergeNetworkData(data, { layoutPreset: 'radial' });
 
     } else if (mode === 'N4') {
       // N3 é pré-requisito do N4: carrega os dois em sequência
@@ -207,6 +409,10 @@ const isPharmacyNodeData = (data = {}) => {
   const cnae = data.id_cnae_principal == null ? '' : String(data.id_cnae_principal).replace(/\D/g, '');
   return PHARMACY_CNAES.has(cnae);
 };
+
+const isPopularPharmacyNodeData = (data = {}) => (
+  data.type === 'PJ_ALVO' || data.type === 'PJ_FARMACIA'
+);
 
 const hideEdgesTouchingHiddenNodes = () => {
   cy.edges()
@@ -291,7 +497,13 @@ const applyVisibilityFilters = () => {
   // Parte do estado limpo a cada re-aplicação
   cy.elements().show();
 
-  if (showOnlyPharmacies.value) {
+  if (showOnlyPopularPharmacies.value) {
+    cy.nodes()
+      .filter(n => isCompanyNode(n) && !isPopularPharmacyNodeData(n.data()))
+      .hide();
+    hideEdgesTouchingHiddenNodes();
+    hideOrphanPartners();
+  } else if (showOnlyPharmacies.value) {
     cy.nodes()
       .filter(n => isCompanyNode(n) && !isPharmacyNodeData(n.data()))
       .hide();
@@ -338,6 +550,17 @@ const applyVisibilityFilters = () => {
 
 const toggleOnlyPharmacies = () => {
   showOnlyPharmacies.value = !showOnlyPharmacies.value;
+  if (!showOnlyPharmacies.value) {
+    showOnlyPopularPharmacies.value = false;
+  }
+  applyVisibilityFilters();
+};
+
+const toggleOnlyPopularPharmacies = () => {
+  showOnlyPopularPharmacies.value = !showOnlyPopularPharmacies.value;
+  if (showOnlyPopularPharmacies.value) {
+    showOnlyPharmacies.value = true;
+  }
   applyVisibilityFilters();
 };
 
@@ -400,16 +623,16 @@ const expansionLabel = computed(() => {
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
-  PJ_ALVO:     { bg: '#6366f1', border: '#818cf8', shape: 'roundrectangle', size: 88 },
-  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 64 },
-  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 68 },
-  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 64 },
-  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 64 },
-  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 52 }, 
-  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 64 },
+  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 118 },
+  PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 72 },
+  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 76 },
+  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 72 },
+  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 72 },
+  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 58 },
+  ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 72 },
 };
 
-const INITIAL_FIT_PADDING = 96; // Reserva espaço para a toolbar flutuante no topo.
+const INITIAL_FIT_PADDING = 48;
 const REFIT_DELAY_MS = 80;
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
@@ -489,6 +712,7 @@ async function buildGraph(data) {
     initialTemp: 1000,
     coolingFactor: 0.99,
     minTemp: 1.0,
+    boundingBox: getLayoutBoundingBox(),
     fit: false,
     randomize: true,
   });
@@ -502,7 +726,7 @@ async function buildGraph(data) {
     if (hasActiveSearch.value) {
       applyGraphHighlights();
     } else {
-      fitGraphToView(INITIAL_FIT_PADDING);
+      applyRadialView({ rememberN2Zoom: true });
     }
   });
   currentLayout.run();
@@ -512,7 +736,7 @@ async function buildGraph(data) {
       if (hasActiveSearch.value) {
         applyGraphHighlights();
       } else {
-        fitGraphToView(INITIAL_FIT_PADDING);
+        applyRadialView({ rememberN2Zoom: true });
       }
     }, REFIT_DELAY_MS);
   });
@@ -662,7 +886,7 @@ function buildStylesheet() {
         'label': 'data(label)',
         'text-valign': 'bottom',
         'text-halign': 'center',
-        'font-size': '10px',
+        'font-size': '12px',
         'font-family': 'Inter, system-ui, sans-serif',
         'font-weight': '600',
         'color': '#e2e8f0',
@@ -679,8 +903,9 @@ function buildStylesheet() {
   styles.push({
     selector: 'node[type="PJ_ALVO"]',
     style: {
-      'border-width': 4,
-      'border-color': '#818cf8',
+      'border-width': 5,
+      'border-color': '#c7d2fe',
+      'z-index': 20,
     }
   });
 
@@ -755,6 +980,10 @@ function fitGraph() {
 }
 function resetLayout() {
   if (!cy) return;
+  if (currentLevel.value === 'N2') {
+    runGraphLayout('n2', { animationDuration: 650 });
+    return;
+  }
   runGraphLayout('expanded', { animationDuration: 600 });
 }
 
@@ -888,6 +1117,13 @@ const typeLabels = {
                 <span>Farmácias</span>
                 <i :class="showOnlyPharmacies ? 'pi pi-eye-slash state-icon' : 'pi pi-eye state-icon'" />
               </button>
+              <button class="filter-btn" :class="{ filtering: showOnlyPopularPharmacies }"
+                @click="toggleOnlyPopularPharmacies"
+                v-tooltip.bottom="showOnlyPopularPharmacies ? 'Mostrar todas as farmácias' : 'Mostrar apenas Farmácia Popular'">
+                <i class="pi pi-check-circle" />
+                <span>FP</span>
+                <i :class="showOnlyPopularPharmacies ? 'pi pi-eye-slash state-icon' : 'pi pi-eye state-icon'" />
+              </button>
               <div class="pill-sep"></div>
               <button class="filter-btn" :class="{ filtering: !showInactiveCompanies }"
                 @click="toggleInactiveCompanies"
@@ -947,7 +1183,11 @@ const typeLabels = {
             <button class="ctrl-btn" @click="fitGraph"   v-tooltip.left="'Ajustar ao ecrã'">
               <i class="pi pi-expand" />
             </button>
-            <button class="ctrl-btn" @click="resetLayout" v-tooltip.left="'Reorganizar'">
+            <button
+              class="ctrl-btn"
+              @click="resetLayout"
+              v-tooltip.left="'Reorganizar'"
+            >
               <i class="pi pi-sync" />
             </button>
           </div>

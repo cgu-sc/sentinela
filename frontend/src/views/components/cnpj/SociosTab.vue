@@ -37,6 +37,7 @@ const formatCpfCnpj = (v) => {
 const formatTipoSocio = (v) => {
   if (v === "PF") return "Pessoa Física";
   if (v === "PJ") return "Pessoa Jurídica";
+  if (v === "ES" || v === "EX") return "PF/PJ DOMICILIADO NO EXTERIOR";
   return v;
 };
 

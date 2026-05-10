@@ -193,20 +193,25 @@ def sync_network(cnpj: str) -> None:
     N4_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
 
     # Cache hit: se os arquivos existem e são válidos, assume sucesso
-    if all(os.path.exists(p) for p in [N2_NODES_PATH, N2_EDGES_PATH, N3_NODES_PATH, N4_NODES_PATH]):
+    if all(os.path.exists(p) for p in [N2_NODES_PATH, N2_EDGES_PATH, N3_NODES_PATH, N3_EDGES_PATH, N4_NODES_PATH, N4_EDGES_PATH]):
         try:
             def has_required_columns(path: str, columns: set[str]) -> bool:
                 return columns.issubset(set(pl.scan_parquet(path).limit(0).collect().columns))
 
+            edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
                 raise ValueError("N2 nodes cache com schema antigo")
             if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio"}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
                 raise ValueError("N4 nodes cache com schema antigo")
+            if not has_required_columns(N2_EDGES_PATH, edge_columns):
+                raise ValueError("N2 edges cache com schema antigo")
+            if not has_required_columns(N3_EDGES_PATH, edge_columns):
+                raise ValueError("N3 edges cache com schema antigo")
+            if not has_required_columns(N4_EDGES_PATH, edge_columns):
+                raise ValueError("N4 edges cache com schema antigo")
 
-            pl.scan_parquet(N2_EDGES_PATH).limit(0).collect()
-            pl.scan_parquet(N4_NODES_PATH).limit(0).collect()
             return
         except Exception:
             pass
@@ -252,6 +257,8 @@ def sync_network(cnpj: str) -> None:
                 "label": "representante",
                 "type": "representante",
                 "is_ativo": active,
+                "data_entrada_sociedade": row.get("data_entrada_sociedade"),
+                "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
             })
 
         # ── 1. Nó raiz: dados do CNPJ alvo ──────────────────────────────────
@@ -305,7 +312,9 @@ def sync_network(cnpj: str) -> None:
                 "target": cnpj,
                 "label": f"{float(s['percentual_qualificacao'] or 0):.1f}%",
                 "type": "socio",
-                "is_ativo": s.get("data_exclusao_sociedade") is None
+                "is_ativo": s.get("data_exclusao_sociedade") is None,
+                "data_entrada_sociedade": s.get("data_entrada_sociedade"),
+                "data_exclusao_sociedade": s.get("data_exclusao_sociedade"),
             })
             add_representative_link(
                 s,
@@ -348,7 +357,9 @@ def sync_network(cnpj: str) -> None:
                     "target": cnpj_ext,
                     "label": "sócio",
                     "type": "socio",
-                    "is_ativo": p.get("data_exclusao_sociedade") is None
+                    "is_ativo": p.get("data_exclusao_sociedade") is None,
+                    "data_entrada_sociedade": p.get("data_entrada_sociedade"),
+                    "data_exclusao_sociedade": p.get("data_exclusao_sociedade"),
                 })
                 add_representative_link(
                     p,
@@ -397,7 +408,9 @@ def sync_network(cnpj: str) -> None:
                         "target": cnpj_pai,
                         "label": "sócio",
                         "type": "socio",
-                        "is_ativo": row.get("data_exclusao_sociedade") is None
+                        "is_ativo": row.get("data_exclusao_sociedade") is None,
+                        "data_entrada_sociedade": row.get("data_entrada_sociedade"),
+                        "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
                     })
                 add_representative_link(
                     row,
@@ -421,9 +434,18 @@ def sync_network(cnpj: str) -> None:
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
-        pl.DataFrame(edges if edges else [], schema={
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
+        edge_schema = {
+            "id": pl.Utf8,
+            "source": pl.Utf8,
+            "target": pl.Utf8,
+            "label": pl.Utf8,
+            "type": pl.Utf8,
+            "is_ativo": pl.Boolean,
+            "data_entrada_sociedade": pl.Date,
+            "data_exclusao_sociedade": pl.Date,
+        }
+
+        pl.DataFrame(edges if edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
         n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf"]
@@ -432,9 +454,7 @@ def sync_network(cnpj: str) -> None:
             "municipio": pl.Utf8, "uf": pl.Utf8,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
-        pl.DataFrame(exp_edges if exp_edges else [], schema={
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
+        pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
 
         # ── 5. Nível 4: Expansão (Outras empresas dos sócios de N3) ─────────
         df_n4_source = get_df_teia_fonte_nivel4()
@@ -481,7 +501,9 @@ def sync_network(cnpj: str) -> None:
                         "target": cnpj_ext,
                         "label": "sócio",
                         "type": "socio",
-                        "is_ativo": row.get("data_exclusao_sociedade") is None
+                        "is_ativo": row.get("data_exclusao_sociedade") is None,
+                        "data_entrada_sociedade": row.get("data_entrada_sociedade"),
+                        "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
                     })
                 add_representative_link(
                     row,
@@ -500,9 +522,7 @@ def sync_network(cnpj: str) -> None:
             "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
-        pl.DataFrame(n4_edges if n4_edges else [], schema={
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")
+        pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")
 
         ms = (time.perf_counter() - t0) * 1000
         print(f"Teia Completa (+Expansao) salva para {cnpj} ({ms:.1f}ms)")

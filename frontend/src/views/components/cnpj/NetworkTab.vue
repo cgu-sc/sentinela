@@ -44,6 +44,14 @@ const formatCpfCnpj = (v) => {
   return v;
 };
 
+const formatSocietyDate = (value) => {
+  if (!value) return "—";
+  const dateText = String(value).slice(0, 10);
+  const match = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  return String(value);
+};
+
 const copyAndSignal = (text, key) => {
   if (!text) return;
   navigator.clipboard.writeText(text);
@@ -941,6 +949,48 @@ const getNodeSearchText = (node) =>
       .join(" "),
   );
 
+const getNodePanelName = (node) =>
+  node.data("nome_socio") ||
+  node.data("nome_fantasia") ||
+  node.data("razao_social") ||
+  node.data("fullLabel") ||
+  node.data("label") ||
+  node.id();
+
+const buildSelectedNodePayload = (node) => {
+  const selectedId = node.id();
+  const societyLinks = node
+    .connectedEdges()
+    .filter((edge) => edge.data("type") === "socio")
+    .map((edge) => {
+      const source = edge.source();
+      const target = edge.target();
+      const other = source.id() === selectedId ? target : source;
+
+      return {
+        id: edge.id(),
+        label: edge.data("label"),
+        is_ativo: edge.data("is_ativo") !== false,
+        data_entrada_sociedade: edge.data("data_entrada_sociedade"),
+        data_exclusao_sociedade: edge.data("data_exclusao_sociedade"),
+        otherId: other.id(),
+        otherName: getNodePanelName(other),
+        otherType: other.data("type"),
+      };
+    })
+    .sort((a, b) => {
+      if (a.is_ativo !== b.is_ativo) return a.is_ativo ? -1 : 1;
+      return String(b.data_entrada_sociedade || "").localeCompare(
+        String(a.data_entrada_sociedade || ""),
+      );
+    });
+
+  return {
+    ...node.data(),
+    societyLinks,
+  };
+};
+
 const clearGraphHighlights = () => {
   if (!cy) return;
   cy.elements().removeClass("faded highlighted");
@@ -1254,6 +1304,8 @@ async function buildGraph(data) {
         label: e.label || "",
         type: e.type,
         is_ativo: e.is_ativo,
+        data_entrada_sociedade: e.data_entrada_sociedade,
+        data_exclusao_sociedade: e.data_exclusao_sociedade,
       },
     })),
   ];
@@ -1321,7 +1373,7 @@ async function buildGraph(data) {
   // Eventos interativos
   cy.on("tap", "node", (e) => {
     const node = e.target;
-    selectedNode.value = node.data();
+    selectedNode.value = buildSelectedNodePayload(node);
     applyGraphHighlights();
   });
 
@@ -1399,6 +1451,8 @@ async function expandNode(nodeId) {
             label: e.label,
             type: e.type,
             is_ativo: e.is_ativo,
+            data_entrada_sociedade: e.data_entrada_sociedade,
+            data_exclusao_sociedade: e.data_exclusao_sociedade,
             expansion_level: expansionLevel,
           },
         });
@@ -2243,6 +2297,47 @@ const typeLabels = {
               </div>
             </div>
 
+            <!-- Vínculos societários -->
+            <div
+              v-if="selectedNode.societyLinks?.length"
+              class="panel-relationships"
+            >
+              <div class="panel-section-title">Vínculos societários</div>
+              <div
+                v-for="link in selectedNode.societyLinks"
+                :key="link.id"
+                class="relationship-card"
+              >
+                <div class="relationship-header">
+                  <span class="relationship-name">{{ link.otherName }}</span>
+                  <span
+                    class="relationship-status"
+                    :class="{ inactive: !link.is_ativo }"
+                  >
+                    {{ link.is_ativo ? "Ativo" : "Inativo" }}
+                  </span>
+                </div>
+                <div class="relationship-meta">
+                  <span>{{ formatCpfCnpj(link.otherId) }}</span>
+                  <span v-if="link.label">{{ link.label }}</span>
+                </div>
+                <div class="relationship-dates">
+                  <div>
+                    <span class="field-label">Entrada</span>
+                    <span class="field-value">{{
+                      formatSocietyDate(link.data_entrada_sociedade)
+                    }}</span>
+                  </div>
+                  <div>
+                    <span class="field-label">Saída</span>
+                    <span class="field-value">{{
+                      formatSocietyDate(link.data_exclusao_sociedade)
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Ações de Expansão -->
             <div v-if="canExpand" class="panel-actions mt-3">
               <button
@@ -2869,6 +2964,8 @@ const typeLabels = {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
   pointer-events: auto;
 }
@@ -2980,6 +3077,82 @@ const typeLabels = {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.panel-relationships {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.panel-section-title {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.relationship-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem;
+  background: var(--bg-secondary);
+  border: 1px solid color-mix(in srgb, var(--tabs-border) 72%, transparent);
+  border-radius: 6px;
+}
+
+.relationship-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.relationship-name {
+  min-width: 0;
+  color: var(--text-color);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.relationship-status {
+  flex-shrink: 0;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.relationship-status.inactive {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+.relationship-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.relationship-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.relationship-dates > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
 }
 
 .panel-field {

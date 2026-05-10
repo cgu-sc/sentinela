@@ -414,6 +414,8 @@ class NetworkEdgeSchema(BaseModel):
     label: Optional[str] = None # Ex: '10.00%'
     type: str = "socio"       # 'socio' | 'representante'
     is_ativo: bool = True
+    data_entrada_sociedade: Optional[date] = None
+    data_exclusao_sociedade: Optional[date] = None
 
 class NetworkResponse(BaseModel):
     cnpj: str

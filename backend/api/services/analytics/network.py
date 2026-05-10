@@ -28,6 +28,19 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
     )
 
 
+def _build_network_edge(row: dict) -> NetworkEdgeSchema:
+    return NetworkEdgeSchema(
+        id=row["id"],
+        source=row["source"],
+        target=row["target"],
+        label=row["label"] or None,
+        type=row.get("type") or "socio",
+        is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True,
+        data_entrada_sociedade=row.get("data_entrada_sociedade"),
+        data_exclusao_sociedade=row.get("data_exclusao_sociedade"),
+    )
+
+
 def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     """
     Retorna a rede de relacionamentos societários de um CNPJ.
@@ -59,17 +72,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     # ── Reconstrói os schemas a partir dos DataFrames ─────────────────────────
     nodes = [_build_network_node(row) for row in df_nodes.iter_rows(named=True)]
 
-    edges = [
-        NetworkEdgeSchema(
-            id=row["id"],
-            source=row["source"],
-            target=row["target"],
-            label=row["label"] or None,
-            type=row["type"] or "socio",
-            is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-        )
-        for row in df_edges.iter_rows(named=True)
-    ] if not df_edges.is_empty() else []
+    edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)] if not df_edges.is_empty() else []
 
     return NetworkResponse(
         cnpj=cnpj,
@@ -115,17 +118,7 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
 
         nodes = [_build_network_node(row, default_type="PF") for row in df_exp_nodes.iter_rows(named=True)]
 
-        edges = [
-            NetworkEdgeSchema(
-                id=row["id"],
-                source=row["source"],
-                target=row["target"],
-                label=row["label"] or None,
-                type=row["type"] or "socio",
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_exp_edges.iter_rows(named=True)
-        ]
+        edges = [_build_network_edge(row) for row in df_exp_edges.iter_rows(named=True)]
 
         return NetworkResponse(
             cnpj=cnpj_alvo, 
@@ -174,17 +167,7 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
 
         nodes = [_build_network_node(row, default_type="PJ") for row in df_n4_nodes.iter_rows(named=True)]
 
-        edges = [
-            NetworkEdgeSchema(
-                id=row["id"],
-                source=row["source"],
-                target=row["target"],
-                label=row["label"] or None,
-                type=row["type"] or "socio",
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_n4_edges.iter_rows(named=True)
-        ]
+        edges = [_build_network_edge(row) for row in df_n4_edges.iter_rows(named=True)]
 
         return NetworkResponse(
             cnpj=cnpj_alvo, 
@@ -213,17 +196,7 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
 
         nodes = [_build_network_node(row, default_type="PF") for row in df_nodes.iter_rows(named=True)]
         
-        edges = [
-            NetworkEdgeSchema(
-                id=row["id"],
-                source=row["source"],
-                target=row["target"],
-                label=row["label"] or None,
-                type=row.get("type") or "socio",
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_edges.iter_rows(named=True)
-        ]
+        edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
     except Exception as e:
@@ -246,17 +219,7 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
 
         nodes = [_build_network_node(row, default_type="PJ") for row in df_nodes.iter_rows(named=True)]
         
-        edges = [
-            NetworkEdgeSchema(
-                id=row["id"],
-                source=row["source"],
-                target=row["target"],
-                label=row["label"] or None,
-                type=row.get("type") or "socio",
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_edges.iter_rows(named=True)
-        ]
+        edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
     except Exception as e:

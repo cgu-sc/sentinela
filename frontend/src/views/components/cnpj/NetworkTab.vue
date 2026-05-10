@@ -453,15 +453,15 @@ const mergeNetworkData = (newData, options = {}) => {
 
 const resetToN2 = async () => {
   if (!networkData.value) return;
+  const preservedLayerFilters = getLayerFilterSnapshot();
   currentLevel.value = "N2";
-  Object.keys(layerFilters.value).forEach((key) => {
-    layerFilters.value[key] = true;
-  });
   showFiltersMenu.value = false;
   networkSearch.value = "";
   searchMatchCount.value = 0;
   selectedNode.value = null;
   await buildGraph(networkData.value);
+  restoreLayerFilterSnapshot(preservedLayerFilters);
+  applyVisibilityFilters();
   expandedNodes.value = new Set();
 };
 

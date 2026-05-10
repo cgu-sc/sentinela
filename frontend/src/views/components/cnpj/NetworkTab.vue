@@ -407,6 +407,8 @@ const mergeNetworkData = (newData, options = {}) => {
     hideDuringLayout = true,
     animationDuration = 700,
     rememberLevel = null,
+    placeNewNodesNearAnchors = false,
+    fadeInNewElements = false,
   } = options;
 
   // Evitar duplicados
@@ -420,33 +422,123 @@ const mergeNetworkData = (newData, options = {}) => {
     (e) => !existingEdges.has(e.id),
   );
 
+  const visibleNodesBeforeMerge = cy.nodes(":visible");
+  const visibleBox = visibleNodesBeforeMerge.length
+    ? visibleNodesBeforeMerge.boundingBox({ includeLabels: false })
+    : { x1: 0, x2: cy.width(), y1: 0, y2: cy.height() };
+  const graphCenter = {
+    x: (visibleBox.x1 + visibleBox.x2) / 2,
+    y: (visibleBox.y1 + visibleBox.y2) / 2,
+  };
+  const anchorByNodeId = new Map();
+  if (placeNewNodesNearAnchors) {
+    (newData.edges || []).forEach((edge) => {
+      if (existingNodes.has(edge.source) && !existingNodes.has(edge.target)) {
+        anchorByNodeId.set(edge.target, edge.source);
+      }
+      if (existingNodes.has(edge.target) && !existingNodes.has(edge.source)) {
+        anchorByNodeId.set(edge.source, edge.target);
+      }
+    });
+  }
+  const anchorGroups = new Map();
+  if (placeNewNodesNearAnchors) {
+    newNodes.forEach((node) => {
+      const groupKey = anchorByNodeId.get(node.id) || "__center__";
+      if (!anchorGroups.has(groupKey)) anchorGroups.set(groupKey, []);
+      anchorGroups.get(groupKey).push(node.id);
+    });
+  }
+  const targetPositions = new Map();
+
   // Adicionar nós
-  newNodes.forEach((n) => {
+  newNodes.forEach((n, index) => {
+    const anchorId = anchorByNodeId.get(n.id);
+    const anchor = anchorId ? cy.getElementById(anchorId) : null;
+    const groupKey = anchorId || "__center__";
+    const group = anchorGroups.get(groupKey) || newNodes.map((node) => node.id);
+    const groupIndex = Math.max(0, group.indexOf(n.id));
+    const basePosition =
+      anchor?.length && !anchor.hidden() ? anchor.position() : graphCenter;
+    const baseAngle =
+      anchor?.length && !anchor.hidden()
+        ? Math.atan2(basePosition.y - graphCenter.y, basePosition.x - graphCenter.x)
+        : (Math.PI * 2 * index) / Math.max(newNodes.length, 1);
+    const spread = Math.min(Math.PI * 1.05, Math.max(0.32, (group.length - 1) * 0.28));
+    const angle =
+      group.length <= 1
+        ? baseAngle
+        : baseAngle - spread / 2 + (spread * groupIndex) / (group.length - 1);
+    const targetRadius = Math.min(280, 125 + Math.sqrt(group.length) * 42);
+    const startRadius = 28;
+    const position = {
+      x: basePosition.x + Math.cos(angle) * startRadius,
+      y: basePosition.y + Math.sin(angle) * startRadius,
+    };
+    targetPositions.set(n.id, {
+      x: basePosition.x + Math.cos(angle) * targetRadius,
+      y: basePosition.y + Math.sin(angle) * targetRadius,
+    });
+
     cy.add({
       group: "nodes",
+      classes: fadeInNewElements ? "entering" : "",
       data: {
         ...n,
         label: truncateLabel(n.label, 20),
         fullLabel: n.label,
         is_expanded_node: true,
       },
-      // Posição inicial próxima ao centro para batch expansion
-      position: { x: cy.width() / 2, y: cy.height() / 2 },
+      position,
     });
   });
 
   // Adicionar arestas
   newEdges.forEach((e) => {
-    cy.add({ group: "edges", data: { ...e } });
+    cy.add({
+      group: "edges",
+      classes: fadeInNewElements ? "entering" : "",
+      data: { ...e },
+    });
   });
 
   applyVisibilityFilters();
 
   if (newNodes.length > 0 || newEdges.length > 0) {
-    if (layoutPreset === "radial") {
+    if (layoutPreset === "anchored") {
+      targetPositions.forEach((position, nodeId) => {
+        const node = cy.getElementById(nodeId);
+        if (!node.length) return;
+        if (node.hidden()) {
+          node.position(position);
+          return;
+        }
+        node.animate(
+          { position },
+          { duration: animationDuration, easing: "ease-out-cubic" },
+        );
+      });
+      if (!hasActiveSearch.value) {
+        fitGraphToView(INITIAL_FIT_PADDING, {
+          animate: true,
+          duration: Math.min(650, animationDuration),
+        });
+        window.setTimeout(() => {
+          fitGraphToView(INITIAL_FIT_PADDING, { animate: true, duration: 360 });
+          if (rememberLevel) rememberPresentationZoom(rememberLevel);
+        }, animationDuration + 40);
+      }
+    } else if (layoutPreset === "radial") {
       applyRadialView({ rememberLevel });
     } else {
       runGraphLayout(layoutPreset, { hideDuringLayout, animationDuration });
+    }
+
+    if (fadeInNewElements) {
+      window.setTimeout(() => {
+        if (!cy) return;
+        cy.elements(".entering").removeClass("entering");
+      }, 80);
     }
   }
 };
@@ -475,14 +567,22 @@ const expandBatch = async (mode) => {
     let data = null;
 
     if (mode === "N3") {
-      // Sempre reconstrói do N2 para limpar estado de N4 anterior
-      await buildGraph(networkData.value);
-      restoreLayerFilterSnapshot(preservedLayerFilters);
+      if (currentLevel.value !== "N2" || !cy) {
+        await buildGraph(networkData.value);
+        restoreLayerFilterSnapshot(preservedLayerFilters);
+      }
       expandedNodes.value = new Set();
       currentLevel.value = "N3";
       data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
       if (data)
-        mergeNetworkData(data, { layoutPreset: "radial", rememberLevel: "N3" });
+        mergeNetworkData(data, {
+          layoutPreset: "anchored",
+          hideDuringLayout: false,
+          animationDuration: 900,
+          rememberLevel: "N3",
+          placeNewNodesNearAnchors: true,
+          fadeInNewElements: true,
+        });
     } else if (mode === "N4") {
       // N3 é pré-requisito do N4: carrega os dois em sequência
       currentLevel.value = "N4";
@@ -524,7 +624,7 @@ const expandBatch = async (mode) => {
 
 const hideEdgesTouchingHiddenNodes = () => {
   cy.edges()
-    .filter((e) => e.source().hidden() || e.target().hidden())
+    .filter((e) => e.source().style('display') === 'none' || e.target().style('display') === 'none')
     .hide();
 };
 
@@ -660,7 +760,7 @@ const applyVisibilityFilters = () => {
 
     hideEdgesTouchingHiddenNodes();
     cy.nodes('[type != "PJ_ALVO"]')
-      .filter((node) => node.connectedEdges(":visible").length === 0)
+      .filter((node) => node.connectedEdges().filter(e => e.style('display') !== 'none').length === 0)
       .hide();
     hideEdgesTouchingHiddenNodes();
   });
@@ -1043,7 +1143,10 @@ async function expandNode(nodeId) {
   }
 }
 
-function fitGraphToView(padding = INITIAL_FIT_PADDING) {
+function fitGraphToView(
+  padding = INITIAL_FIT_PADDING,
+  { animate = false, duration = 420 } = {},
+) {
   if (!cy || !cyContainer.value || cy.elements().empty()) return;
 
   const { clientWidth, clientHeight } = cyContainer.value;
@@ -1053,6 +1156,18 @@ function fitGraphToView(padding = INITIAL_FIT_PADDING) {
   if (visibleElements.empty()) return;
 
   cy.resize();
+  if (animate) {
+    cy.animate(
+      { fit: { eles: visibleElements, padding } },
+      {
+        duration,
+        complete: () => {
+          zoom.value = Math.round(cy.zoom() * 100);
+        },
+      },
+    );
+    return;
+  }
   cy.fit(visibleElements, padding);
   cy.center(visibleElements);
   zoom.value = Math.round(cy.zoom() * 100);
@@ -1187,6 +1302,10 @@ function buildStylesheet() {
   styles.push({
     selector: ".highlighted",
     style: { opacity: 1, "border-width": 3 },
+  });
+  styles.push({
+    selector: ".entering",
+    style: { opacity: 0 },
   });
 
   return styles;

@@ -223,8 +223,33 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [NetworkNodeSchema(**row) for row in df_nodes.iter_rows(named=True)]
-        edges = [NetworkEdgeSchema(**row) for row in df_edges.iter_rows(named=True)]
+        nodes = [
+            NetworkNodeSchema(
+                id=row["id"],
+                label=row["label"] or "",
+                type=row.get("type") or "PF",
+                razao_social=row.get("razao_social"),
+                nome_fantasia=row.get("nome_fantasia"),
+                id_cnae_principal=row.get("id_cnae_principal"),
+                municipio=row.get("municipio"),
+                uf=row.get("uf"),
+                situacao_rf=row.get("situacao_rf"),
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_nodes.iter_rows(named=True)
+        ]
+        
+        edges = [
+            NetworkEdgeSchema(
+                id=row["id"],
+                source=row["source"],
+                target=row["target"],
+                label=row["label"] or None,
+                type=row.get("type") or "socio",
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_edges.iter_rows(named=True)
+        ]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
     except Exception as e:
@@ -245,8 +270,33 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [NetworkNodeSchema(**row) for row in df_nodes.iter_rows(named=True)]
-        edges = [NetworkEdgeSchema(**row) for row in df_edges.iter_rows(named=True)]
+        nodes = [
+            NetworkNodeSchema(
+                id=row["id"],
+                label=row["label"] or "",
+                type=row.get("type") or "PJ",
+                razao_social=row.get("razao_social"),
+                nome_fantasia=row.get("nome_fantasia"),
+                id_cnae_principal=row.get("id_cnae_principal"),
+                municipio=row.get("municipio"),
+                uf=row.get("uf"),
+                situacao_rf=row.get("situacao_rf"),
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_nodes.iter_rows(named=True)
+        ]
+        
+        edges = [
+            NetworkEdgeSchema(
+                id=row["id"],
+                source=row["source"],
+                target=row["target"],
+                label=row["label"] or None,
+                type=row.get("type") or "socio",
+                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
+            )
+            for row in df_edges.iter_rows(named=True)
+        ]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
     except Exception as e:

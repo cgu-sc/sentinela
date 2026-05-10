@@ -28,6 +28,8 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 *.log
+AGENTS.md
+CLAUDE.md
 
 # === ARQUIVOS DE DADOS DO PROJETO ===
 relatorios/

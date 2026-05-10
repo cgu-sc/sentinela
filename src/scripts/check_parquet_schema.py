@@ -27,6 +27,10 @@ try:
         _BENCH_CRM_REGIAO_PATH,
         _BENCH_CRM_BR_PATH,
         _DADOS_FARMACIA_PARQUET_PATH,
+        _DADOS_SOCIOS_PARQUET_PATH,
+        _TEIA_FONTE_NIVEL2_PARQUET_PATH,
+        _TEIA_FONTE_NIVEL3_PARQUET_PATH,
+        _TEIA_FONTE_NIVEL4_PARQUET_PATH,
         _MEDICAMENTOS_PARQUET_PATH,
     )
 except ImportError as e:
@@ -44,28 +48,32 @@ ARQUIVOS = [
     {"id": 6, "name": "Benchmark CRM (Região)",   "path": _BENCH_CRM_REGIAO_PATH},
     {"id": 7, "name": "Benchmark CRM (Brasil)",   "path": _BENCH_CRM_BR_PATH},
     {"id": 8, "name": "Dados das Farmácias",      "path": _DADOS_FARMACIA_PARQUET_PATH},
-    {"id": 9, "name": "Cadastro de Medicamentos", "path": _MEDICAMENTOS_PARQUET_PATH},
+    {"id": 9, "name": "Dados dos Sócios",         "path": _DADOS_SOCIOS_PARQUET_PATH},
+    {"id": 10, "name": "Teia Fonte G2 (Participações)", "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH},
+    {"id": 11, "name": "Teia Fonte G3 (Indiretos)",    "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH},
+    {"id": 12, "name": "Teia Fonte G4 (Nacional)",     "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH},
+    {"id": 13, "name": "Cadastro de Medicamentos", "path": _MEDICAMENTOS_PARQUET_PATH},
 ]
 
 # ── Funções de Interface ───────────────────────────────────────────────────────
 
 def exibir_menu():
-    print("\n" + "═" * 60)
-    print("   SENTINELA — INSPEÇÃO DE ARQUIVOS PARQUET (CACHE)")
-    print("═" * 60)
+    print("\n" + "=" * 60)
+    print("   SENTINELA - INSPECAO DE ARQUIVOS PARQUET (CACHE)")
+    print("=" * 60)
     for a in ARQUIVOS:
-        status = "✅" if os.path.exists(a["path"]) else "❌"
+        status = "[OK]" if os.path.exists(a["path"]) else "[--]"
         print(f"  [{a['id']}] {status} {a['name']:<30}")
     print("-" * 60)
     print("  [0] Sair")
-    print("═" * 60)
+    print("=" * 60)
 
 def inspecionar_arquivo(item: dict):
     path = item["path"]
     nome = item["name"]
 
     if not os.path.exists(path):
-        print(f"\n⚠️  Arquivo não encontrado: {path}")
+        print(f"\n[!] Arquivo nao encontrado: {path}")
         return
 
     try:
@@ -81,21 +89,21 @@ def inspecionar_arquivo(item: dict):
         tamanho_mb = info.st_size / (1024 * 1024)
 
         print("-" * 60)
-        print(f"📄 ARQUIVO: {nome}")
-        print(f"📍 PATH:    {path}")
-        print(f"📅 MODIFICADO EM: {data_mod}")
-        print(f"📦 TAMANHO:      {tamanho_mb:.2f} MB")
-        print(f"🔢 REGISTROS:    {len(df):,}")
+        print(f"\n[ INSPECIONANDO: {nome} ]")
+        print(f"  Path: {path}")
+        print(f"  Modificado em: {data_mod}")
+        print(f"  Tamanho: {tamanho_mb:.2f} MB")
+        print(f"  Registros: {len(df):,}")
         print("-" * 60)
 
-        print("\n🛠️  ESQUEMA COMPLETO (ORDEM ALFABÉTICA):")
+        print("\nESQUEMA COMPLETO (ORDEM ALFABETICA):")
         schema = df.schema
         sorted_cols = sorted(schema.keys())
         for col in sorted_cols:
             dtype = schema[col]
-            print(f"  • {col:<30} | {dtype}")
+            print(f"  - {col:<30} | {dtype}")
 
-        print("\n🔍 AMOSTRA DE DADOS (TOP 3):")
+        print("\nAMOSTRA DE DADOS (TOP 3):")
         # Se for muito larga, mostra cada registro como um bloco vertical
         if len(df.columns) > 8:
             for i in range(min(3, len(df))):
@@ -109,7 +117,7 @@ def inspecionar_arquivo(item: dict):
         input("\nPressione ENTER para voltar ao menu...")
 
     except Exception as e:
-        print(f"\n❌ Erro ao ler arquivo: {e}")
+        print(f"\n[ERRO] Erro ao ler arquivo: {e}")
         input("\nPressione ENTER para voltar ao menu...")
 
 # ── Loop Principal ─────────────────────────────────────────────────────────────
@@ -130,9 +138,9 @@ def main():
             if selecionado:
                 inspecionar_arquivo(selecionado)
             else:
-                print("\n⚠️  Opção inválida.")
+                print("\n[!] Opcao invalida.")
         except ValueError:
-            print("\n⚠️  Digite um número válido.")
+            print("\n[!] Digite um numero valido.")
         except KeyboardInterrupt:
             print("\n\nEncerrando.")
             break

@@ -729,6 +729,20 @@ function markExpandedNodesFromData(data) {
   });
 }
 
+function getExpansionRingSizes(nodeCount) {
+  if (nodeCount <= 0) return [];
+  if (nodeCount <= 8) return [nodeCount];
+
+  const ringCount = Math.ceil(nodeCount / 6);
+  const baseSize = Math.floor(nodeCount / ringCount);
+  const extra = nodeCount % ringCount;
+
+  return Array.from(
+    { length: ringCount },
+    (_, index) => baseSize + (index < extra ? 1 : 0),
+  );
+}
+
 const expandBatch = async (mode) => {
   if (isBatchExpanding.value) return;
   const preservedLayerFilters = getLayerFilterSnapshot();
@@ -1266,6 +1280,8 @@ async function expandNode(nodeId) {
       return;
     }
 
+    const anchorNode = cy.getElementById(nodeId);
+    const expansionLevel = anchorNode.data("type") === "PF" ? "N4" : "N3";
     const newElements = [];
     expansionData.nodes.forEach((n) => {
       if (!cy.getElementById(n.id).length) {
@@ -1277,6 +1293,7 @@ async function expandNode(nodeId) {
             fullLabel: n.label,
             type: n.type || "PF",
             is_expanded_node: true,
+            expansion_level: expansionLevel,
             is_ativo: n.is_ativo,
             razao_social: n.razao_social,
             nome_fantasia: n.nome_fantasia,
@@ -1302,6 +1319,7 @@ async function expandNode(nodeId) {
             label: e.label,
             type: e.type,
             is_ativo: e.is_ativo,
+            expansion_level: expansionLevel,
           },
         });
       }
@@ -1314,19 +1332,95 @@ async function expandNode(nodeId) {
           currentLayout.stop();
         } catch (e) {}
       }
-      currentLayout = added.union(cy.getElementById(nodeId)).layout({
-        name: "cose",
-        animate: true,
-        animationDuration: 600,
-        randomize: false,
-        fit: false,
-        nodeRepulsion: () => 8000,
-        idealEdgeLength: () => 60,
+      currentLayout = null;
+
+      const anchorPosition = anchorNode.position();
+      const visibleBox = cy.nodes(":visible").boundingBox({
+        includeLabels: false,
       });
-      currentLayout.run();
+      const graphCenter = {
+        x: (visibleBox.x1 + visibleBox.x2) / 2,
+        y: (visibleBox.y1 + visibleBox.y2) / 2,
+      };
+      const baseAngle =
+        Math.abs(anchorPosition.x - graphCenter.x) +
+          Math.abs(anchorPosition.y - graphCenter.y) >
+        12
+          ? Math.atan2(
+              anchorPosition.y - graphCenter.y,
+              anchorPosition.x - graphCenter.x,
+            )
+          : -Math.PI / 2;
+      const addedNodes = sortGraphNodes(added.nodes().toArray());
+      const addedNodeCount = addedNodes.length;
+      const ringSizes = getExpansionRingSizes(addedNodeCount);
+      const fanSpread = Math.min(
+        Math.PI * 1.65,
+        Math.max(Math.PI * 0.55, addedNodeCount * 0.32),
+      );
+      const baseRadius = Math.min(
+        220,
+        Math.max(118, 82 + addedNodeCount * 14),
+      );
+      const ringGap = Math.min(
+        130,
+        Math.max(72, 48 + addedNodeCount * 7),
+      );
+      const animationDuration = 620;
+      let nodeIndex = 0;
+
+      ringSizes.forEach((ringSize, ring) => {
+        const ringSpread =
+          ringSizes.length === 1
+            ? fanSpread
+            : Math.min(
+                fanSpread,
+                Math.max(Math.PI * 0.5, ringSize * 0.42),
+              );
+        const radius = baseRadius + ring * ringGap;
+        const stagger =
+          ring > 0 && ringSize > 1 ? ringSpread / Math.max(ringSize * 2, 2) : 0;
+
+        for (let indexInRing = 0; indexInRing < ringSize; indexInRing += 1) {
+          const node = addedNodes[nodeIndex];
+          nodeIndex += 1;
+          const angle =
+            ringSize === 1
+              ? baseAngle
+              : baseAngle -
+                ringSpread / 2 +
+                (ringSpread * indexInRing) / Math.max(ringSize - 1, 1) +
+                stagger;
+
+          node.animate(
+            {
+              position: {
+                x: anchorPosition.x + Math.cos(angle) * radius,
+                y: anchorPosition.y + Math.sin(angle) * radius,
+              },
+            },
+            { duration: animationDuration, easing: "ease-out-cubic" },
+          );
+        }
+      });
 
       // Destaca vizinhos do nó expandido
       applyVisibilityFilters();
+      if (!hasActiveSearch.value) {
+        window.setTimeout(() => {
+          fitGraphToView(INITIAL_FIT_PADDING, {
+            animate: true,
+            duration: 420,
+          });
+        }, 140);
+        window.setTimeout(() => {
+          fitGraphToView(INITIAL_FIT_PADDING, {
+            animate: true,
+            duration: 420,
+          });
+          rememberPresentationZoom(expansionLevel);
+        }, animationDuration + 80);
+      }
     }
     expandedNodes.value.add(nodeId);
   } catch (error) {

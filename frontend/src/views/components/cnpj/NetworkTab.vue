@@ -32,6 +32,24 @@ let n4PresentationZoom = null;
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
 const zoom = ref(1);
+const copiedKey = ref(null);
+
+const formatCpfCnpj = (v) => {
+  if (!v) return "—";
+  const clean = v.replace(/\D/g, "");
+  if (clean.length === 11)
+    return clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  if (clean.length === 14)
+    return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  return v;
+};
+
+const copyAndSignal = (text, key) => {
+  if (!text) return;
+  navigator.clipboard.writeText(text);
+  copiedKey.value = key;
+  setTimeout(() => { if (copiedKey.value === key) copiedKey.value = null; }, 2000);
+};
 const graphReady = ref(false);
 const graphCounts = ref({ nodes: 0, edges: 0 });
 let graphCountUpdateFrame = null;
@@ -2203,7 +2221,15 @@ const typeLabels = {
                 {{ selectedNode.razao_social }}
               </div>
             </div>
-            <div class="panel-id">{{ selectedNode.id }}</div>
+            <div class="panel-id">
+              <span class="panel-id-label">{{ selectedNode.id?.replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ' }}</span>
+              <span class="panel-id-value">{{ formatCpfCnpj(selectedNode.id) }}</span>
+              <i
+                :class="['pi', copiedKey === selectedNode.id ? 'pi-check' : 'pi-copy', 'copy-btn', copiedKey === selectedNode.id ? 'text-success' : '']"
+                v-tooltip.top="'Copiar'"
+                @click="copyAndSignal(selectedNode.id, selectedNode.id)"
+              />
+            </div>
             <div class="panel-fields">
               <div v-if="selectedNode.municipio" class="panel-field mt-1">
                 <i class="pi pi-map-marker" />
@@ -2902,11 +2928,52 @@ const typeLabels = {
 
 .panel-id {
   font-size: 0.75rem;
-  font-family: var(--font-mono, monospace);
   color: var(--text-muted);
   background: var(--bg-secondary);
   border-radius: 6px;
   padding: 0.3rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.panel-id-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.panel-id-value {
+  flex: none;
+}
+
+.copy-btn {
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.4;
+  transition: all 0.2s;
+  width: 1.4rem;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.copy-btn.text-success {
+  color: #10b981 !important;
+  opacity: 1 !important;
+}
+
+.copy-btn:hover {
+  opacity: 1 !important;
+  color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.copy-btn:active {
+  transform: scale(0.9);
 }
 
 .panel-fields {

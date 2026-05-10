@@ -426,9 +426,10 @@ def sync_network(cnpj: str) -> None:
         }).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
-        n3_node_columns = ["id", "label", "type", "nome_socio"]
+        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf"]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema={

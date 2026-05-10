@@ -5,7 +5,9 @@ Utilitário profissional para inspeção de arquivos Parquet do Sentinela.
 Permite visualizar colunas, tipos de dados, contagem de registros e amostras.
 
 Uso:
-    python src/scripts/check_parquet_schema.py
+    python src/scripts/check_parquet_schema.py                   # menu interativo
+    python src/scripts/check_parquet_schema.py --teia            # inspeciona N2/N3/N4 globais
+    python src/scripts/check_parquet_schema.py --cnpj 00447821001223  # parquets de um CNPJ
 """
 
 import sys
@@ -19,6 +21,7 @@ sys.path.insert(0, os.path.join(ROOT_DIR, 'backend'))
 
 try:
     from data_cache import (
+        _CACHE_DIR,
         _PARQUET_PATH,
         _LOCALIDADES_PARQUET_PATH,
         _REDE_PARQUET_PATH,
@@ -34,8 +37,17 @@ try:
         _MEDICAMENTOS_PARQUET_PATH,
     )
 except ImportError as e:
-    print(f"❌ Erro: Não foi possível importar as definições do backend.\n   Detalhe: {e}")
+    print(f"Erro: Nao foi possivel importar as definicoes do backend.\n   Detalhe: {e}")
     sys.exit(1)
+
+CNPJ_PARQUET_NAMES = [
+    "teia_grafo_nivel2_nodes.parquet",
+    "teia_grafo_nivel2_edges.parquet",
+    "teia_grafo_nivel3_nodes.parquet",
+    "teia_grafo_nivel3_edges.parquet",
+    "teia_grafo_nivel4_nodes.parquet",
+    "teia_grafo_nivel4_edges.parquet",
+]
 
 # ── Configuração dos Arquivos ──────────────────────────────────────────────────
 
@@ -65,10 +77,32 @@ def exibir_menu():
         status = "[OK]" if os.path.exists(a["path"]) else "[--]"
         print(f"  [{a['id']}] {status} {a['name']:<30}")
     print("-" * 60)
+    print("  [C] Inspecionar parquets de um CNPJ especifico")
     print("  [0] Sair")
     print("=" * 60)
 
-def inspecionar_arquivo(item: dict):
+def inspecionar_cnpj(cnpj: str):
+    cnpj = cnpj.strip().zfill(14)
+    cnpj_dir = os.path.join(_CACHE_DIR, cnpj)
+
+    if not os.path.isdir(cnpj_dir):
+        print(f"\n[!] Diretorio nao encontrado para CNPJ {cnpj}: {cnpj_dir}")
+        return
+
+    arquivos_cnpj = [
+        {"name": nome, "path": os.path.join(cnpj_dir, nome)}
+        for nome in CNPJ_PARQUET_NAMES
+    ]
+
+    print(f"\n{'=' * 60}")
+    print(f"   CNPJ: {cnpj}")
+    print(f"   Dir:  {cnpj_dir}")
+    print(f"{'=' * 60}")
+
+    for item in arquivos_cnpj:
+        inspecionar_arquivo(item, pausar=False)
+
+def inspecionar_arquivo(item: dict, pausar: bool = True):
     path = item["path"]
     nome = item["name"]
 
@@ -114,15 +148,33 @@ def inspecionar_arquivo(item: dict):
         else:
             print(df.head(3))
         
-        input("\nPressione ENTER para voltar ao menu...")
+        if pausar:
+            input("\nPressione ENTER para voltar ao menu...")
 
     except Exception as e:
         print(f"\n[ERRO] Erro ao ler arquivo: {e}")
-        input("\nPressione ENTER para voltar ao menu...")
+        if pausar:
+            input("\nPressione ENTER para voltar ao menu...")
 
 # ── Loop Principal ─────────────────────────────────────────────────────────────
 
 def main():
+    # Modo --teia: inspeciona os parquets globais N2/N3/N4 sem interação
+    if "--teia" in sys.argv:
+        for item in ARQUIVOS:
+            if item["id"] in {10, 11, 12}:
+                inspecionar_arquivo(item, pausar=False)
+        return
+
+    # Modo --cnpj <CNPJ>: inspeciona os 6 parquets do CNPJ sem interação
+    if "--cnpj" in sys.argv:
+        idx = sys.argv.index("--cnpj")
+        if idx + 1 >= len(sys.argv):
+            print("[!] Informe o CNPJ apos --cnpj. Ex: --cnpj 00447821001223")
+            sys.exit(1)
+        inspecionar_cnpj(sys.argv[idx + 1])
+        return
+
     while True:
         exibir_menu()
         opcao = input("\nSelecione um arquivo para inspecionar: ").strip()
@@ -131,10 +183,15 @@ def main():
             print("\nEncerrando inspetor.")
             break
 
+        if opcao.upper() == 'C':
+            cnpj = input("Digite o CNPJ (so numeros): ").strip()
+            inspecionar_cnpj(cnpj)
+            continue
+
         try:
             op_int = int(opcao)
             selecionado = next((a for a in ARQUIVOS if a["id"] == op_int), None)
-            
+
             if selecionado:
                 inspecionar_arquivo(selecionado)
             else:

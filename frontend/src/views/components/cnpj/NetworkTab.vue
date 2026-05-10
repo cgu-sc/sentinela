@@ -34,6 +34,7 @@ const selectedNode = ref(null);
 const zoom = ref(1);
 const graphReady = ref(false);
 const graphCounts = ref({ nodes: 0, edges: 0 });
+let graphCountUpdateFrame = null;
 const baseTotalNodes = computed(() => networkData.value?.nodes?.length || 0);
 const baseTotalEdges = computed(() => networkData.value?.edges?.length || 0);
 const totalNodes = computed(() =>
@@ -514,6 +515,7 @@ const mergeNetworkData = (newData, options = {}) => {
   });
 
   applyVisibilityFilters();
+  scheduleGraphCountsUpdate();
 
   if (newNodes.length > 0 || newEdges.length > 0) {
     if (layoutPreset === "anchored") {
@@ -549,10 +551,12 @@ const mergeNetworkData = (newData, options = {}) => {
       window.setTimeout(() => {
         if (!cy) return;
         cy.elements(".entering").removeClass("entering");
+        scheduleGraphCountsUpdate();
       }, 80);
     }
   }
 
+  scheduleGraphCountsUpdate();
   return newNodes.length > 0 || newEdges.length > 0;
 };
 
@@ -679,6 +683,7 @@ async function collapseToGraphLevel(targetLevel, allowedIds = null) {
     expandedNodes.value = new Set();
   }
   applyVisibilityFilters();
+  scheduleGraphCountsUpdate();
 
   if (!hasActiveSearch.value) {
     fitGraphToView(INITIAL_FIT_PADDING, { animate: true, duration: 520 });
@@ -840,8 +845,8 @@ const hideEdgesTouchingHiddenNodes = () => {
     .hide();
 };
 
-const updateGraphCounts = () => {
-  graphCounts.value = cy
+const readGraphCounts = () =>
+  cy
     ? {
         nodes: cy.nodes(":visible").length,
         edges: cy.edges(":visible").length,
@@ -850,7 +855,28 @@ const updateGraphCounts = () => {
         nodes: networkData.value?.nodes?.length || 0,
         edges: networkData.value?.edges?.length || 0,
       };
+
+const updateGraphCounts = () => {
+  graphCounts.value = readGraphCounts();
 };
+
+function scheduleGraphCountsUpdate() {
+  if (graphCountUpdateFrame) {
+    window.cancelAnimationFrame(graphCountUpdateFrame);
+  }
+
+  graphCountUpdateFrame = window.requestAnimationFrame(() => {
+    graphCountUpdateFrame = null;
+    updateGraphCounts();
+  });
+}
+
+function bindGraphCountUpdates() {
+  if (!cy) return;
+
+  cy.off("add remove show hide", scheduleGraphCountsUpdate);
+  cy.on("add remove show hide", scheduleGraphCountsUpdate);
+}
 
 const normalizeSearchText = (value) =>
   String(value || "")
@@ -1006,7 +1032,7 @@ const applyVisibilityFilters = () => {
   }
 
   applyNodeDensitySizing();
-  updateGraphCounts();
+  scheduleGraphCountsUpdate();
   applyGraphHighlights();
 };
 
@@ -1222,10 +1248,12 @@ async function buildGraph(data) {
     maxZoom: 3,
   });
   graphReady.value = true;
+  bindGraphCountUpdates();
 
   // Força o reconhecimento do tamanho do container
   cy.resize();
   applyVisibilityFilters();
+  scheduleGraphCountsUpdate();
 
   // Layout manual rastreado em currentLayout para poder ser cancelado antes do destroy
   currentLayout = cy.layout({
@@ -1725,6 +1753,10 @@ onBeforeUnmount(() => {
   document.removeEventListener("click", handleFiltersMenuOutsideClick);
   resizeObserver?.disconnect();
   resizeObserver = null;
+  if (graphCountUpdateFrame) {
+    window.cancelAnimationFrame(graphCountUpdateFrame);
+    graphCountUpdateFrame = null;
+  }
   cy?.destroy();
   cy = null;
   graphReady.value = false;

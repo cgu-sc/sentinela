@@ -27,6 +27,7 @@ let resizeObserver = null;
 let currentLayout = null;
 let n2PresentationZoom = null;
 let n3PresentationZoom = null;
+let n4PresentationZoom = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -134,11 +135,15 @@ function rememberPresentationZoom(level) {
   if (!cy) return;
   if (level === "N2") n2PresentationZoom = cy.zoom();
   if (level === "N3") n3PresentationZoom = cy.zoom();
+  if (level === "N4") n4PresentationZoom = cy.zoom();
 }
 
 function getPresentationZoom(level) {
-  const rememberedZoom =
-    level === "N3" ? n3PresentationZoom : n2PresentationZoom;
+  const rememberedZoom = {
+    N2: n2PresentationZoom,
+    N3: n3PresentationZoom,
+    N4: n4PresentationZoom,
+  }[level];
   return Math.max(1, Math.min(rememberedZoom || 1.08, 1.16));
 }
 
@@ -401,12 +406,13 @@ function runGraphLayout(preset = "base", options = {}) {
 }
 
 const mergeNetworkData = (newData, options = {}) => {
-  if (!cy || !newData) return;
+  if (!cy || !newData) return false;
   const {
     layoutPreset = "expanded",
     hideDuringLayout = true,
     animationDuration = 700,
     rememberLevel = null,
+    expansionLevel = rememberLevel,
     placeNewNodesNearAnchors = false,
     fadeInNewElements = false,
   } = options;
@@ -488,6 +494,7 @@ const mergeNetworkData = (newData, options = {}) => {
         label: truncateLabel(n.label, 20),
         fullLabel: n.label,
         is_expanded_node: true,
+        expansion_level: expansionLevel,
       },
       position,
     });
@@ -498,7 +505,7 @@ const mergeNetworkData = (newData, options = {}) => {
     cy.add({
       group: "edges",
       classes: fadeInNewElements ? "entering" : "",
-      data: { ...e },
+      data: { ...e, expansion_level: expansionLevel },
     });
   });
 
@@ -541,6 +548,8 @@ const mergeNetworkData = (newData, options = {}) => {
       }, 80);
     }
   }
+
+  return newNodes.length > 0 || newEdges.length > 0;
 };
 
 const wait = (duration) =>
@@ -553,16 +562,41 @@ function getBaseGraphIds() {
   };
 }
 
-function getCollapseTargetPosition(node, baseNodeIds) {
-  const baseNeighbors = node
+async function getGraphIdsForLevel(level) {
+  const ids = getBaseGraphIds();
+
+  if (level === "N2") return ids;
+
+  const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+  (dataN3?.nodes || []).forEach((node) => ids.nodeIds.add(node.id));
+  (dataN3?.edges || []).forEach((edge) => ids.edgeIds.add(edge.id));
+
+  if (level === "N3") return ids;
+
+  const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
+  (dataN4?.nodes || []).forEach((node) => ids.nodeIds.add(node.id));
+  (dataN4?.edges || []).forEach((edge) => ids.edgeIds.add(edge.id));
+
+  return ids;
+}
+
+function addDataToGraphIds(ids, data) {
+  (data?.nodes || []).forEach((node) => ids.nodeIds.add(node.id));
+  (data?.edges || []).forEach((edge) => ids.edgeIds.add(edge.id));
+  return ids;
+}
+
+function getCollapseTargetPosition(node, allowedNodeIds) {
+  const allowedNeighbors = node
     .connectedEdges()
     .connectedNodes()
     .filter(
-      (neighbor) => baseNodeIds.has(neighbor.id()) && neighbor.id() !== node.id(),
+      (neighbor) =>
+        allowedNodeIds.has(neighbor.id()) && neighbor.id() !== node.id(),
     );
 
-  if (baseNeighbors.length) {
-    const positionSum = baseNeighbors.reduce(
+  if (allowedNeighbors.length) {
+    const positionSum = allowedNeighbors.reduce(
       (acc, neighbor) => ({
         x: acc.x + neighbor.position("x"),
         y: acc.y + neighbor.position("y"),
@@ -570,8 +604,8 @@ function getCollapseTargetPosition(node, baseNodeIds) {
       { x: 0, y: 0 },
     );
     return {
-      x: positionSum.x / baseNeighbors.length,
-      y: positionSum.y / baseNeighbors.length,
+      x: positionSum.x / allowedNeighbors.length,
+      y: positionSum.y / allowedNeighbors.length,
     };
   }
 
@@ -586,21 +620,20 @@ function getCollapseTargetPosition(node, baseNodeIds) {
   };
 }
 
-async function collapseToBaseGraph() {
+async function collapseToGraphLevel(targetLevel, allowedIds = null) {
   if (!cy || !networkData.value) return false;
 
-  const { nodeIds: baseNodeIds, edgeIds: baseEdgeIds } = getBaseGraphIds();
+  const { nodeIds: allowedNodeIds, edgeIds: allowedEdgeIds } =
+    allowedIds || (await getGraphIdsForLevel(targetLevel));
   const nodesToRemove = cy
     .nodes()
-    .filter(
-      (node) => node.data("is_expanded_node") || !baseNodeIds.has(node.id()),
-    );
+    .filter((node) => !allowedNodeIds.has(node.id()));
   const nodeIdsToRemove = new Set(nodesToRemove.map((node) => node.id()));
   const edgesToRemove = cy
     .edges()
     .filter(
       (edge) =>
-        !baseEdgeIds.has(edge.id()) ||
+        !allowedEdgeIds.has(edge.id()) ||
         nodeIdsToRemove.has(edge.source().id()) ||
         nodeIdsToRemove.has(edge.target().id()),
     );
@@ -626,7 +659,7 @@ async function collapseToBaseGraph() {
   nodesToRemove.forEach((node) => {
     node.animate(
       {
-        position: getCollapseTargetPosition(node, baseNodeIds),
+        position: getCollapseTargetPosition(node, allowedNodeIds),
         style: { opacity: 0 },
       },
       { duration: collapseDuration, easing: "ease-in-out-cubic" },
@@ -637,14 +670,16 @@ async function collapseToBaseGraph() {
   if (!cy) return true;
 
   elementsToRemove.remove();
-  currentLevel.value = "N2";
-  expandedNodes.value = new Set();
+  currentLevel.value = targetLevel;
+  if (targetLevel === "N2") {
+    expandedNodes.value = new Set();
+  }
   applyVisibilityFilters();
 
   if (!hasActiveSearch.value) {
     fitGraphToView(INITIAL_FIT_PADDING, { animate: true, duration: 520 });
     await wait(560);
-    rememberPresentationZoom("N2");
+    rememberPresentationZoom(targetLevel);
   }
 
   return true;
@@ -665,7 +700,7 @@ const resetToN2 = async () => {
     selectedNode.value = null;
     restoreLayerFilterSnapshot(preservedLayerFilters);
 
-    const collapsed = await collapseToBaseGraph();
+    const collapsed = await collapseToGraphLevel("N2");
     if (!collapsed) {
       await buildGraph(networkData.value);
       restoreLayerFilterSnapshot(preservedLayerFilters);
@@ -678,6 +713,22 @@ const resetToN2 = async () => {
   }
 };
 
+function markExpandedNodesFromData(data) {
+  (data?.nodes || []).forEach((node) => {
+    if (
+      [
+        "PJ_FARMACIA_POPULAR",
+        "PJ_OUTRAS_FARMACIAS",
+        "PJ_DEMAIS_EMPRESAS",
+        "PJ",
+        "PF",
+      ].includes(node.type)
+    ) {
+      expandedNodes.value.add(node.id);
+    }
+  });
+}
+
 const expandBatch = async (mode) => {
   if (isBatchExpanding.value) return;
   const preservedLayerFilters = getLayerFilterSnapshot();
@@ -685,56 +736,77 @@ const expandBatch = async (mode) => {
   try {
     isBatchExpanding.value = true;
     loadingLevel.value = mode;
-    let data = null;
-
     if (mode === "N3") {
-      if (currentLevel.value !== "N2" || !cy) {
+      const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+
+      if (currentLevel.value === "N4" && cy) {
+        const allowedIds = addDataToGraphIds(getBaseGraphIds(), dataN3);
+        await collapseToGraphLevel("N3", allowedIds);
+        expandedNodes.value = new Set();
+        markExpandedNodesFromData(dataN3);
+      } else {
+        if (currentLevel.value !== "N2" || !cy) {
+          await buildGraph(networkData.value);
+          restoreLayerFilterSnapshot(preservedLayerFilters);
+        }
+        expandedNodes.value = new Set();
+        currentLevel.value = "N3";
+        if (dataN3)
+          mergeNetworkData(dataN3, {
+            layoutPreset: "anchored",
+            hideDuringLayout: false,
+            animationDuration: 900,
+            rememberLevel: "N3",
+            expansionLevel: "N3",
+            placeNewNodesNearAnchors: true,
+            fadeInNewElements: true,
+          });
+        markExpandedNodesFromData(dataN3);
+      }
+    } else if (mode === "N4") {
+      const shouldMergeN3First = !cy || currentLevel.value === "N2";
+      // N3 é pré-requisito do N4: carrega os dois em sequência
+      if (!cy) {
         await buildGraph(networkData.value);
         restoreLayerFilterSnapshot(preservedLayerFilters);
       }
-      expandedNodes.value = new Set();
-      currentLevel.value = "N3";
-      data = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
-      if (data)
-        mergeNetworkData(data, {
+
+      currentLevel.value = "N4";
+      restoreLayerFilterSnapshot(preservedLayerFilters);
+
+      if (shouldMergeN3First) {
+        expandedNodes.value = new Set();
+        const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+        const mergedN3 = mergeNetworkData(dataN3, {
           layoutPreset: "anchored",
           hideDuringLayout: false,
-          animationDuration: 900,
+          animationDuration: 760,
           rememberLevel: "N3",
+          expansionLevel: "N3",
           placeNewNodesNearAnchors: true,
           fadeInNewElements: true,
         });
-    } else if (mode === "N4") {
-      // N3 é pré-requisito do N4: carrega os dois em sequência
-      currentLevel.value = "N4";
-      restoreLayerFilterSnapshot(preservedLayerFilters);
-      const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
-      if (dataN3) mergeNetworkData(dataN3);
+        markExpandedNodesFromData(dataN3);
+        if (mergedN3) await wait(1180);
+      }
+
       const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
-      if (dataN4) mergeNetworkData(dataN4);
-      data = dataN4;
+      if (dataN4)
+        mergeNetworkData(dataN4, {
+          layoutPreset: "anchored",
+          hideDuringLayout: false,
+          animationDuration: 900,
+          rememberLevel: "N4",
+          expansionLevel: "N4",
+          placeNewNodesNearAnchors: true,
+          fadeInNewElements: true,
+        });
+      markExpandedNodesFromData(dataN4);
     }
 
     currentLevel.value = mode;
     restoreLayerFilterSnapshot(preservedLayerFilters);
     applyVisibilityFilters();
-
-    // Marcar nós como expandidos para evitar botões redundantes no painel lateral
-    if (data?.nodes) {
-      data.nodes.forEach((n) => {
-        if (
-          [
-            "PJ_FARMACIA_POPULAR",
-            "PJ_OUTRAS_FARMACIAS",
-            "PJ_DEMAIS_EMPRESAS",
-            "PJ",
-            "PF",
-          ].includes(n.type)
-        ) {
-          expandedNodes.value.add(n.id);
-        }
-      });
-    }
   } catch (err) {
     console.error("Erro na expansão em lote:", err);
   } finally {

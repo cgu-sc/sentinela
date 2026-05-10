@@ -1612,7 +1612,7 @@ function buildStylesheet() {
   styles.push({
     selector: 'edge[type="representante"]',
     style: {
-      "line-style": "dashed",
+      "line-style": "dotted",
       "line-color": "#f59e0b",
       "target-arrow-color": "#f59e0b",
       "font-size": "12px",
@@ -2095,11 +2095,11 @@ const typeLabels = {
                     <span class="legend-label">{{ t.label }}</span>
                   </div>
                   <div class="legend-item">
-                    <span class="legend-line dashed"></span>
+                    <span class="legend-line" style="border-top: 2px dotted #f59e0b; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
                     <span class="legend-label">Representante</span>
                   </div>
                   <div class="legend-item">
-                    <span class="legend-line dotted"></span>
+                    <span class="legend-line" style="border-top: 2px dotted #ef4444; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
                     <span class="legend-label">Vínculo Inativo</span>
                   </div>
                 </div>
@@ -2156,7 +2156,7 @@ const typeLabels = {
               <span class="legend-label">{{ t.label }}</span>
             </div>
             <div class="legend-item">
-              <span class="legend-line dashed"></span>
+              <span class="legend-line" style="border-top: 2px dotted #f59e0b; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
               <span class="legend-label">Representante</span>
             </div>
             <div class="legend-item">

@@ -232,17 +232,14 @@ def _schema_cnpj_parquet(pl):
         "teia_grafo_nivel2_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
-            "is_ativo": pl.Boolean
+            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "id_cnae_principal": pl.Int32,
         },
         "teia_grafo_nivel2_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         },
         "teia_grafo_nivel3_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
-            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
-            "is_ativo": pl.Boolean
+            "nome_socio": pl.Utf8,
         },
         "teia_grafo_nivel3_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
@@ -250,8 +247,7 @@ def _schema_cnpj_parquet(pl):
         "teia_grafo_nivel4_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "id_cnae_principal": pl.Int32,
-            "is_ativo": pl.Boolean
+            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "id_cnae_principal": pl.Int32,
         },
         "teia_grafo_nivel4_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean

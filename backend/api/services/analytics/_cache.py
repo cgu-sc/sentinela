@@ -195,9 +195,17 @@ def sync_network(cnpj: str) -> None:
     # Cache hit: se os arquivos existem e são válidos, assume sucesso
     if all(os.path.exists(p) for p in [N2_NODES_PATH, N2_EDGES_PATH, N3_NODES_PATH, N4_NODES_PATH]):
         try:
-            pl.scan_parquet(N2_NODES_PATH).limit(0).collect()
+            def has_required_columns(path: str, columns: set[str]) -> bool:
+                return columns.issubset(set(pl.scan_parquet(path).limit(0).collect().columns))
+
+            if not has_required_columns(N2_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
+                raise ValueError("N2 nodes cache com schema antigo")
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio"}):
+                raise ValueError("N3 nodes cache com schema antigo")
+            if not has_required_columns(N4_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
+                raise ValueError("N4 nodes cache com schema antigo")
+
             pl.scan_parquet(N2_EDGES_PATH).limit(0).collect()
-            pl.scan_parquet(N3_NODES_PATH).limit(0).collect()
             pl.scan_parquet(N4_NODES_PATH).limit(0).collect()
             return
         except Exception:
@@ -229,13 +237,12 @@ def sync_network(cnpj: str) -> None:
                     "id": representative_id,
                     "label": representative_name,
                     "type": "PF",
-                    "razao_social": representative_name,
+                    "nome_socio": representative_name,
                     "nome_fantasia": None,
                     "id_cnae_principal": None,
                     "municipio": None,
                     "uf": None,
                     "situacao_rf": None,
-                    "is_ativo": True,
                 }
 
             edge_list.append({
@@ -258,17 +265,17 @@ def sync_network(cnpj: str) -> None:
                 "label": r.get("nome_fantasia") or r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
                 "razao_social": r.get("razao_social"),
+                "nome_socio": None,
                 "id_cnae_principal": r.get("id_cnae_principal"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
-                "is_ativo": True,
             }
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
-                "razao_social": None, "id_cnae_principal": None,
-                "municipio": None, "uf": None, "situacao_rf": None, "is_ativo": True
+                "razao_social": None, "nome_socio": None, "id_cnae_principal": None,
+                "municipio": None, "uf": None, "situacao_rf": None
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -285,12 +292,11 @@ def sync_network(cnpj: str) -> None:
                     "id": id_socio,
                     "label": s["nome_socio"],
                     "type": s["indicador_socio"] or "PF",
-                    "razao_social": s["nome_socio"],
+                    "nome_socio": s["nome_socio"],
                     "id_cnae_principal": None,
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
-                    "is_ativo": s.get("data_exclusao_sociedade") is None,
                 }
 
             edges.append({
@@ -329,11 +335,11 @@ def sync_network(cnpj: str) -> None:
                         "label": p["razao_social"] or cnpj_ext,
                         "type": tipo,
                         "razao_social": p["razao_social"],
+                        "nome_socio": None,
                         "id_cnae_principal": p.get("id_cnae_principal"),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
-                        "is_ativo": (p["situacao_rf"] or "").strip().lower() == "ativa",
                     }
 
                 edges.append({
@@ -373,13 +379,12 @@ def sync_network(cnpj: str) -> None:
                         "id": id_socio,
                         "label": row["nome_socio"],
                         "type": row["indicador_socio"] or "PF",
-                        "razao_social": row["nome_socio"],
+                        "nome_socio": row["nome_socio"],
                         "nome_fantasia": None,
                         "id_cnae_principal": None,
                         "municipio": None, # Dados slim para expansão
                         "uf": None,
                         "situacao_rf": None,
-                        "is_ativo": row.get("data_exclusao_sociedade") is None
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_pai}"
@@ -402,14 +407,28 @@ def sync_network(cnpj: str) -> None:
                 )
 
         # ── Salva Parquets Principais ────────────────────────────────────────
-        pl.DataFrame(list(nodes.values())).write_parquet(N2_NODES_PATH, compression="zstd")
+        def project_rows(rows: list[dict], columns: list[str]) -> list[dict]:
+            return [{column: row.get(column) for column in columns} for row in rows]
+
+        n2_node_columns = [
+            "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf",
+        ]
+        n2_node_schema = {
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
+            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+        }
+
+        pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
         pl.DataFrame(edges if edges else [], schema={
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         }).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
-        pl.DataFrame(list(exp_nodes_dict.values()) if exp_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8, "is_ativo": pl.Boolean
+        n3_node_columns = ["id", "label", "type", "nome_socio"]
+        pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema={
@@ -446,11 +465,11 @@ def sync_network(cnpj: str) -> None:
                         "label": row["razao_social"] or cnpj_ext,
                         "type": tipo,
                         "razao_social": row["razao_social"],
+                        "nome_socio": None,
                         "id_cnae_principal": row.get("id_cnae_principal"),
                         "municipio": row["municipio"],
                         "uf": row["uf"],
                         "situacao_rf": row["situacao_rf"],
-                        "is_ativo": (row["situacao_rf"] or "").strip().lower() == "ativa",
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_ext}"
@@ -471,9 +490,13 @@ def sync_network(cnpj: str) -> None:
                 )
 
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
-        pl.DataFrame(list(n4_nodes_dict.values()) if n4_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
-            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8, "is_ativo": pl.Boolean
+        n4_node_columns = [
+            "id", "label", "type", "razao_social", "nome_socio",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf",
+        ]
+        pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8, "nome_socio": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema={

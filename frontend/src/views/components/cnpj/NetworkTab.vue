@@ -490,7 +490,9 @@ const mergeNetworkData = (newData, options = {}) => {
 
     cy.add({
       group: "nodes",
-      classes: fadeInNewElements ? "entering" : "",
+      classes: [fadeInNewElements ? "entering" : "", getNodeClasses(n)]
+        .filter(Boolean)
+        .join(" "),
       data: {
         ...n,
         label: truncateLabel(n.label, 20),
@@ -857,12 +859,33 @@ const normalizeSearchText = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
+function isInactiveCompanyStatus(value) {
+  const situacao = normalizeSearchText(value);
+  return [
+    "baixad",
+    "inapt",
+    "suspens",
+    "nula",
+    "inativ",
+  ].some((status) => situacao.includes(status));
+}
+
+function isCompanyNodeInactive(node) {
+  if (!node || node.type === "PF") return false;
+  return isInactiveCompanyStatus(node.situacao_rf || node.situacao);
+}
+
+function getNodeClasses(node) {
+  return isCompanyNodeInactive(node) ? "inactive-company" : "";
+}
+
 const getNodeSearchText = (node) =>
   normalizeSearchText(
     [
       node.id(),
       node.data("fullLabel"),
       node.data("label"),
+      node.data("nome_socio"),
       node.data("razao_social"),
       node.data("nome_fantasia"),
     ]
@@ -950,7 +973,9 @@ const applyVisibilityFilters = () => {
         .hide();
     }
     if (!layerFilters.value.empresasInativas) {
-      cy.nodes('[!is_ativo][type != "PF"][type != "PJ_ALVO"]').hide();
+      cy.nodes(".inactive-company")
+        .filter((node) => node.data("type") !== "PJ_ALVO")
+        .hide();
     }
 
     if (!layerFilters.value.sociosInativos) {
@@ -1158,6 +1183,7 @@ async function buildGraph(data) {
 
   const elements = [
     ...data.nodes.map((n) => ({
+      classes: getNodeClasses(n),
       data: {
         id: n.id,
         label: truncateLabel(n.label, 22),
@@ -1166,10 +1192,10 @@ async function buildGraph(data) {
         municipio: n.municipio,
         uf: n.uf,
         situacao: n.situacao_rf,
+        nome_socio: n.nome_socio,
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
         id_cnae_principal: n.id_cnae_principal,
-        is_ativo: n.is_ativo,
       },
     })),
     ...data.edges.map((e) => ({
@@ -1290,6 +1316,7 @@ async function expandNode(nodeId) {
       if (!cy.getElementById(n.id).length) {
         newElements.push({
           group: "nodes",
+          classes: getNodeClasses(n),
           data: {
             id: n.id,
             label: truncateLabel(n.label, 20),
@@ -1297,7 +1324,7 @@ async function expandNode(nodeId) {
             type: n.type || "PF",
             is_expanded_node: true,
             expansion_level: expansionLevel,
-            is_ativo: n.is_ativo,
+            nome_socio: n.nome_socio,
             razao_social: n.razao_social,
             nome_fantasia: n.nome_fantasia,
             id_cnae_principal: n.id_cnae_principal,
@@ -1563,7 +1590,7 @@ function buildStylesheet() {
 
   // Empresas Baixadas/Inativas (Mantém a cor original, mas fica transparente com borda tracejada vermelha)
   styles.push({
-    selector: 'node[!is_ativo][type != "PF"]',
+    selector: "node.inactive-company",
     style: {
       opacity: 0.35,
       "border-width": 3,
@@ -2094,6 +2121,7 @@ const typeLabels = {
             <div class="panel-names">
               <h3 class="panel-main-name">
                 {{
+                  selectedNode.nome_socio ||
                   selectedNode.nome_fantasia ||
                   selectedNode.razao_social ||
                   selectedNode.fullLabel

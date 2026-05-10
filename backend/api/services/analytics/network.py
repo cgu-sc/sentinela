@@ -1,8 +1,31 @@
 import os
 import time
+from typing import Optional
 import polars as pl
 from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkResponse
 from ._cache import _get_cnpj_cache_dir, sync_network
+
+
+def _is_pf_node(node_type: Optional[str]) -> bool:
+    return str(node_type or "").upper() == "PF"
+
+
+def _build_network_node(row: dict, default_type: Optional[str] = None) -> NetworkNodeSchema:
+    node_type = row.get("type") or default_type or "PF"
+    is_pf = _is_pf_node(node_type)
+
+    return NetworkNodeSchema(
+        id=row["id"],
+        label=row["label"] or "",
+        type=node_type,
+        razao_social=None if is_pf else row.get("razao_social"),
+        nome_socio=row.get("nome_socio") if is_pf else None,
+        nome_fantasia=row.get("nome_fantasia"),
+        id_cnae_principal=row.get("id_cnae_principal"),
+        municipio=row.get("municipio"),
+        uf=row.get("uf"),
+        situacao_rf=row.get("situacao_rf"),
+    )
 
 
 def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
@@ -34,21 +57,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
         return NetworkResponse(cnpj=cnpj, nodes=[], edges=[])
 
     # ── Reconstrói os schemas a partir dos DataFrames ─────────────────────────
-    nodes = [
-        NetworkNodeSchema(
-            id=row["id"],
-            label=row["label"] or "",
-            type=row["type"],
-            razao_social=row.get("razao_social"),
-            nome_fantasia=row.get("nome_fantasia"),
-            id_cnae_principal=row.get("id_cnae_principal"),
-            municipio=row.get("municipio"),
-            uf=row.get("uf"),
-            situacao_rf=row.get("situacao_rf"),
-            is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-        )
-        for row in df_nodes.iter_rows(named=True)
-    ]
+    nodes = [_build_network_node(row) for row in df_nodes.iter_rows(named=True)]
 
     edges = [
         NetworkEdgeSchema(
@@ -104,16 +113,7 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
         node_ids.discard(cnpj_para_expandir)
         df_exp_nodes = pl.read_parquet(EXP_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
-        nodes = [
-            NetworkNodeSchema(
-                id=row["id"],
-                label=row["label"] or "",
-                type=row["type"] or "PF",
-                razao_social=row.get("razao_social"),
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_exp_nodes.iter_rows(named=True)
-        ]
+        nodes = [_build_network_node(row, default_type="PF") for row in df_exp_nodes.iter_rows(named=True)]
 
         edges = [
             NetworkEdgeSchema(
@@ -172,19 +172,7 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
         # Busca detalhes das empresas
         df_n4_nodes = pl.read_parquet(N4_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
-        nodes = [
-            NetworkNodeSchema(
-                id=row["id"],
-                label=row["label"] or "",
-                type=row["type"],
-                razao_social=row.get("razao_social"),
-                municipio=row.get("municipio"),
-                uf=row.get("uf"),
-                situacao_rf=row.get("situacao_rf"),
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_n4_nodes.iter_rows(named=True)
-        ]
+        nodes = [_build_network_node(row, default_type="PJ") for row in df_n4_nodes.iter_rows(named=True)]
 
         edges = [
             NetworkEdgeSchema(
@@ -223,21 +211,7 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [
-            NetworkNodeSchema(
-                id=row["id"],
-                label=row["label"] or "",
-                type=row.get("type") or "PF",
-                razao_social=row.get("razao_social"),
-                nome_fantasia=row.get("nome_fantasia"),
-                id_cnae_principal=row.get("id_cnae_principal"),
-                municipio=row.get("municipio"),
-                uf=row.get("uf"),
-                situacao_rf=row.get("situacao_rf"),
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_nodes.iter_rows(named=True)
-        ]
+        nodes = [_build_network_node(row, default_type="PF") for row in df_nodes.iter_rows(named=True)]
         
         edges = [
             NetworkEdgeSchema(
@@ -270,21 +244,7 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [
-            NetworkNodeSchema(
-                id=row["id"],
-                label=row["label"] or "",
-                type=row.get("type") or "PJ",
-                razao_social=row.get("razao_social"),
-                nome_fantasia=row.get("nome_fantasia"),
-                id_cnae_principal=row.get("id_cnae_principal"),
-                municipio=row.get("municipio"),
-                uf=row.get("uf"),
-                situacao_rf=row.get("situacao_rf"),
-                is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True
-            )
-            for row in df_nodes.iter_rows(named=True)
-        ]
+        nodes = [_build_network_node(row, default_type="PJ") for row in df_nodes.iter_rows(named=True)]
         
         edges = [
             NetworkEdgeSchema(

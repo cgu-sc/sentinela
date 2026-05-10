@@ -400,12 +400,12 @@ class NetworkNodeSchema(BaseModel):
     label: str
     type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA_POPULAR' | 'PJ_OUTRAS_FARMACIAS' | 'PJ_DEMAIS_EMPRESAS'
     razao_social: Optional[str] = None
+    nome_socio: Optional[str] = None
     nome_fantasia: Optional[str] = None
     id_cnae_principal: Optional[int] = None
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None
-    is_ativo: bool = True
 
 class NetworkEdgeSchema(BaseModel):
     id: str

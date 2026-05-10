@@ -39,8 +39,8 @@ const TAB_INDEX = {
   INDICATORS: 3,
   CRMS: 4,
   MORTALITY: 5,
-  SOCIOS:   6,
-  NETWORK:  7,
+  SOCIOS: 6,
+  NETWORK: 7,
   REGIONAL: 8,
 };
 
@@ -51,7 +51,8 @@ const cnpj = computed(() => route.params.cnpj);
 const analyticsStore = useAnalyticsStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { resultadoCnpjs } = storeToRefs(analyticsStore);
-const { dadosCadastro, evolucaoFinanceira, evolucaoLoading } = storeToRefs(cnpjDetailStore);
+const { dadosCadastro, evolucaoFinanceira, evolucaoLoading } =
+  storeToRefs(cnpjDetailStore);
 
 const geoStore = useGeoStore();
 const { localidades } = storeToRefs(geoStore);
@@ -114,24 +115,24 @@ const isGeneratingNote = ref(false);
 const handleGenerateNote = async () => {
   const { inicio, fim } = getApiParams();
   const url = `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?data_inicio=${inicio}&data_fim=${fim}`;
-  
+
   try {
     isGeneratingNote.value = true;
-    
+
     // Baixa o arquivo como blob para não sair da página
     const response = await fetch(url);
     if (!response.ok) throw new Error("Erro ao gerar nota técnica");
-    
+
     const blob = await response.blob();
     const blobUrl = window.URL.createObjectURL(blob);
-    
+
     // Cria um link temporário para o download
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = blobUrl;
-    link.setAttribute('download', `Nota_Tecnica_${cnpj.value}.docx`);
+    link.setAttribute("download", `Nota_Tecnica_${cnpj.value}.docx`);
     document.body.appendChild(link);
     link.click();
-    
+
     // Cleanup
     document.body.removeChild(link);
     window.URL.revokeObjectURL(blobUrl);
@@ -157,7 +158,7 @@ const cnpjData = computed(
 const periodSummary = computed(() => {
   const semestres = evolucaoFinanceira.value?.semestres;
   if (!semestres?.length) return null;
-  const totalMov   = semestres.reduce((a, s) => a + s.total,     0);
+  const totalMov = semestres.reduce((a, s) => a + s.total, 0);
   const valSemComp = semestres.reduce((a, s) => a + s.irregular, 0);
   const percValSemComp = totalMov > 0 ? (valSemComp / totalMov) * 100 : 0;
   return { totalMov, valSemComp, percValSemComp };
@@ -210,7 +211,6 @@ watch(
   },
   { deep: true },
 );
-
 
 const recentCnpjStore = useRecentCnpjStore();
 
@@ -269,8 +269,10 @@ const isInitialLoading = computed(() => {
   return (
     cnpjDetailStore.dadosCadastroLoading ||
     cnpjDetailStore.cnpjsAvulsosLoading ||
-    (cnpjDetailStore.prescritoresLoading && !cnpjDetailStore.prescritoresData) ||
-    (cnpjDetailStore.crmPerfilDiarioLoading && !cnpjDetailStore.crmPerfilDiario) ||
+    (cnpjDetailStore.prescritoresLoading &&
+      !cnpjDetailStore.prescritoresData) ||
+    (cnpjDetailStore.crmPerfilDiarioLoading &&
+      !cnpjDetailStore.crmPerfilDiario) ||
     (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira)
   );
 });
@@ -282,10 +284,10 @@ const isInitialLoading = computed(() => {
     <Transition name="fade-blur">
       <div v-if="isInitialLoading" class="global-loading-overlay">
         <div class="loader-content">
-          <ProgressSpinner 
-            style="width: 64px; height: 64px" 
-            strokeWidth="3" 
-            animationDuration=".8s" 
+          <ProgressSpinner
+            style="width: 64px; height: 64px"
+            strokeWidth="3"
+            animationDuration=".8s"
           />
           <div class="loader-text">
             <h3>Sincronizando Dados</h3>
@@ -321,7 +323,10 @@ const isInitialLoading = computed(() => {
             >Movimentação Financeira</span
           ></template
         >
-        <FinancialMovementTab ref="financialMovementTabRef" class="tab-content" />
+        <FinancialMovementTab
+          ref="financialMovementTabRef"
+          class="tab-content"
+        />
       </TabPanel>
 
       <TabPanel>
@@ -343,7 +348,9 @@ const isInitialLoading = computed(() => {
 
       <TabPanel>
         <template #header
-          ><i class="pi pi-list tab-icon" /><span>Memória de Cálculo</span></template
+          ><i class="pi pi-list tab-icon" /><span
+            >Memória de Cálculo</span
+          ></template
         >
         <CalculationMemoryTab :cnpj="cnpj" class="tab-content" />
       </TabPanel>
@@ -379,7 +386,7 @@ const isInitialLoading = computed(() => {
             >Quadro Societário</span
           ></template
         >
-        <SociosTab />
+        <SociosTab class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -387,7 +394,10 @@ const isInitialLoading = computed(() => {
           <i class="pi pi-share-alt tab-icon" /><span>Teia Societária</span>
         </template>
         <KeepAlive>
-          <NetworkTab v-if="cnpjNav.activeTabIndex === TAB_INDEX.NETWORK" />
+          <NetworkTab
+            v-if="cnpjNav.activeTabIndex === TAB_INDEX.NETWORK"
+            class="tab-content"
+          />
         </KeepAlive>
       </TabPanel>
 
@@ -474,7 +484,8 @@ const isInitialLoading = computed(() => {
 
 :deep(.p-tabview-nav) {
   background: var(--establishment-header-bg) !important;
-  border-top: 2px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
+  border-top: 2px solid
+    color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
   border-bottom: 1px solid var(--tabs-border);
   padding: 0.5rem 1.25rem 0;
   display: flex;
@@ -487,7 +498,8 @@ const isInitialLoading = computed(() => {
   overflow-x: auto !important;
   overflow-y: hidden !important;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent)
+    transparent;
 }
 
 :deep(.p-tabview-nav-container::-webkit-scrollbar),
@@ -528,7 +540,9 @@ const isInitialLoading = computed(() => {
   align-items: center;
   justify-content: center;
   /* Transição cirúrgica: apenas no que importa, sem animar bordas (evita o flash) */
-  transition: color 0.2s, background-color 0.2s;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
   color: var(--text-secondary) !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em;
@@ -548,7 +562,11 @@ const isInitialLoading = computed(() => {
 /* Estado Ativo Cirúrgico (Sem Linha Dupla e Sem Flash) */
 :deep(.p-tabview-nav li.p-highlight .p-tabview-nav-link),
 :deep(.p-tabview-nav li .p-tabview-nav-link[aria-selected="true"]) {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 10%,
+    transparent
+  ) !important;
   color: var(--primary-color) !important;
   position: relative;
   border: 0 !important;
@@ -594,10 +612,10 @@ const isInitialLoading = computed(() => {
 
 .tab-content {
   padding: 1rem;
-  min-height: calc(100vh - 450px); /* Garante que a aba tenha uma altura mínima respeitável */
+  min-height: calc(
+    100vh - 450px
+  ); /* Garante que a aba tenha uma altura mínima respeitável */
 }
-
-
 
 /* ── GLOBAL LOADING OVERLAY (PREMIUM & ESTÁVEL) ── */
 .global-loading-overlay {
@@ -611,13 +629,15 @@ const isInitialLoading = computed(() => {
   align-items: center;
   justify-content: center;
   pointer-events: all;
-  
+
   /* Ajuste de contexto de layout: compensa sidebar e navbar */
   padding-left: var(--sidebar-width, 280px);
   padding-top: 56px;
-  
+
   /* Sincronização com as transições do layout global */
-  transition: padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+  transition:
+    padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.4s ease;
 }
 
 .loader-content {
@@ -645,7 +665,9 @@ const isInitialLoading = computed(() => {
 /* Transição suave */
 .fade-blur-enter-active,
 .fade-blur-leave-active {
-  transition: opacity 0.5s ease, backdrop-filter 0.5s ease;
+  transition:
+    opacity 0.5s ease,
+    backdrop-filter 0.5s ease;
 }
 
 .fade-blur-enter-from,

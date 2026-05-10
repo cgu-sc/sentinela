@@ -460,6 +460,42 @@ ON
 
 
 --------------------------------------------------------------
+-- ETAPA 1.2: Dicionário Central de CPFs (Otimização)
+-- Coleta metadados apenas para os CPFs envolvidos neste audit
+--------------------------------------------------------------
+DROP TABLE IF EXISTS #cpfs_vivos;
+SELECT DISTINCT cpf_cnpj_socio AS cpf INTO #cpfs_vivos 
+FROM (
+    -- CPFs das farmácias (Responsáveis)
+    SELECT cpfResponsavel AS cpf_cnpj_socio FROM temp_CGUSC.fp.dados_farmacia WHERE cpfResponsavel IS NOT NULL
+    UNION
+    -- CPFs dos sócios formais
+    SELECT soc.cpfcnpjSocio FROM temp_CGUSC.fp.lista_cnpjs lst
+    INNER JOIN db_CNPJ.dbo.socios soc ON soc.cnpj = lst.cnpj WHERE soc.indSocio = 'PF'
+) AS u;
+
+CREATE CLUSTERED INDEX ix_cpfs_vivos ON #cpfs_vivos(cpf);
+
+DROP TABLE IF EXISTS #temp_metadata_cpfs;
+SELECT 
+    c.CPF,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
+    CAST(c.dataNascimento AS DATE) AS dataNascimento
+INTO #temp_metadata_cpfs
+FROM #cpfs_vivos v
+INNER JOIN db_CPF.dbo.CPF c ON c.CPF = v.cpf
+WHERE c.CPF IS NOT NULL;
+
+-- Remove duplicatas históricas da tabela de metadados
+WITH CTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY dataNascimento DESC) as rn
+    FROM #temp_metadata_cpfs
+)
+DELETE FROM CTE WHERE rn > 1;
+
+CREATE CLUSTERED INDEX ix_meta_cpfs ON #temp_metadata_cpfs(CPF);
+
+--------------------------------------------------------------
 -- ETAPA 2: Sócios das farmácias credenciadas
 --------------------------------------------------------------
 
@@ -478,23 +514,55 @@ SELECT DISTINCT
     CAST(temp_CGUSC.dbo.InitCapEachWord(soc.descQualificacaoSocio) AS VARCHAR(60)) AS descricao_qualificacao,
     NULLIF(CAST(soc.CpfRepresentante AS CHAR(11)), '00000000000')                  AS cpf_representante,
     NULLIF(TRY_CAST(soc.IdQualificacaoRepresentante AS TINYINT), 0)                AS id_qualificacao_representante,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(cobi_rep.nome, 100))                       AS nome_representante,
+    cobi_rep.nome                                                  AS nome_representante,
     CAST(temp_CGUSC.dbo.InitCapEachWord(qua_rep.DescricaoQualificacao) AS VARCHAR(60)) AS descricao_qualificacao_representante,
     CAST(cobi.dataNascimento AS DATE)                                              AS data_nascimento_socio,
     CAST(cobi_rep.dataNascimento AS DATE)                                          AS data_nascimento_representante,
     CAST(GETDATE() AS SMALLDATETIME)                                               AS data_processamento
 INTO temp_CGUSC.fp.dados_socios
-FROM temp_CGUSC.fp.lista_cnpjs    AS lst
-INNER JOIN db_CNPJ.dbo.socios             AS soc       ON soc.cnpj           = lst.cnpj
-INNER JOIN db_CNPJ.dbo.CNPJ               AS cnpj      ON cnpj.cnpj          = lst.cnpj
-LEFT JOIN  db_CNPJ.dbo.Municipio          AS mun       ON mun.SkMunicipio    = soc.CodMunicipio
-LEFT JOIN  temp_CGUSC.fp.dados_ibge       AS ibge      ON ibge.id_ibge7       = mun.CodIbge
-LEFT JOIN  db_CPF.dbo.CPF                 AS cobi      ON cobi.CPF           = soc.cpfcnpjSocio AND soc.indSocio      = 'PF'
-LEFT JOIN  db_CPF.dbo.CPF                 AS cobi_rep  ON cobi_rep.CPF       = soc.CpfRepresentante
-                                                       AND soc.CpfRepresentante <> '00000000000'
-                                                       AND soc.CpfRepresentante IS NOT NULL
-LEFT JOIN  db_CNPJ.dbo.Qualificacao       AS qua_rep   ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
-                                                       AND TRY_CAST(soc.IdQualificacaoRepresentante AS INT) > 0;
+FROM temp_CGUSC.fp.lista_cnpjs lst
+INNER JOIN db_CNPJ.dbo.socios soc ON soc.cnpj = lst.cnpj
+INNER JOIN db_CNPJ.dbo.CNPJ cnpj ON cnpj.cnpj = soc.cnpj
+LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = soc.CodMunicipio
+LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
+LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = soc.cpfcnpjSocio AND soc.indSocio = 'PF'
+LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = soc.CpfRepresentante AND soc.CpfRepresentante <> '00000000000'
+LEFT JOIN db_CNPJ.dbo.Qualificacao AS qua_rep ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT);
+
+--------------------------------------------------------------
+-- ETAPA 2.1: Incluir Responsáveis de Empresas Individuais/MEI
+-- (Empresas que não possuem registros na db_CNPJ.dbo.socios)
+--------------------------------------------------------------
+INSERT INTO temp_CGUSC.fp.dados_socios (
+    cpf_cnpj_socio,
+    cnpj,
+    indicador_socio,
+    nome_socio,
+    municipio,
+    uf,
+    data_entrada_sociedade,
+    percentual_qualificacao,
+    descricao_qualificacao,
+    data_nascimento_socio,
+    data_processamento
+)
+SELECT 
+    f.cpfResponsavel,
+    f.cnpj,
+    'PF'                                    AS indicador_socio,
+    f.nome_responsavel,
+    f.municipio,
+    f.uf,
+    f.dataSituacaoCadastral                  AS data_entrada_sociedade,
+    100.00                                  AS percentual_qualificacao,
+    f.descricaoQualificacaoResponsavel,
+    CAST(cobi.dataNascimento AS DATE)       AS data_nascimento_socio,
+    CAST(GETDATE() AS SMALLDATETIME)        AS data_processamento
+FROM temp_CGUSC.fp.dados_farmacia f
+LEFT JOIN temp_CGUSC.fp.dados_socios s ON s.cnpj = f.cnpj
+LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = f.cpfResponsavel
+WHERE s.cnpj IS NULL
+  AND f.cpfResponsavel IS NOT NULL;
 
 -- Índice CLUSTERED: Organiza a tabela fisicamente por CPF para performance máxima em JOINs
 CREATE CLUSTERED INDEX cx_sociosFP_cpf_cnpj_socio
@@ -514,24 +582,48 @@ DROP TABLE IF EXISTS #cpfs_socios_fp;
 SELECT DISTINCT cpf_cnpj_socio INTO #cpfs_socios_fp FROM temp_CGUSC.fp.dados_socios WHERE cpf_cnpj_socio IS NOT NULL;
 CREATE CLUSTERED INDEX ix_cpfs_lookup ON #cpfs_socios_fp (cpf_cnpj_socio);
 
--- 2. Nível 2 Raw (Outras empresas dos sócios originais)
+-- 2. Identificar CPFs Representantes do Nível 2 que ainda não estão no dicionário
+INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento)
+SELECT 
+    c.CPF,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
+    CAST(c.dataNascimento AS DATE) AS dataNascimento
+FROM (
+    SELECT DISTINCT CpfRepresentante FROM db_CNPJ.dbo.socios s
+    INNER JOIN #cpfs_socios_fp fp ON fp.cpf_cnpj_socio = s.cpfcnpjSocio
+    WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
+) AS novos
+INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.CpfRepresentante
+WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.CpfRepresentante);
+
+-- Limpa possíveis duplicatas da nova inserção
+WITH CTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY dataNascimento DESC) as rn
+    FROM #temp_metadata_cpfs
+)
+DELETE FROM CTE WHERE rn > 1;
+
+-- 3. Nível 2 Raw (Outras empresas dos sócios originais)
 DROP TABLE IF EXISTS #teia_fonte_nivel2_raw;
 SELECT
-    s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
-    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
-    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
-    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
-    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
-    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+    raw.cpfcnpjSocio                                         AS cpf_cnpj_socio,
+    CAST(raw.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(raw.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(raw.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
+    NULLIF(CAST(raw.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    cobi_rep.nome                                            AS nome_representante,
+    CAST(raw.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(raw.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel2_raw
-FROM #cpfs_socios_fp fp
-INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
-LEFT JOIN db_CPF.dbo.CPF cobi_rep
-    ON cobi_rep.CPF = s.CpfRepresentante
-   AND s.CpfRepresentante <> '00000000000'
-   AND s.CpfRepresentante IS NOT NULL;
+FROM (
+    SELECT 
+        s.*,
+        ROW_NUMBER() OVER (PARTITION BY s.cpfcnpjSocio, s.cnpj ORDER BY s.dataEntradaSociedade DESC) as rn_hist
+    FROM #cpfs_socios_fp fp
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
+) AS raw
+LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.CpfRepresentante AND raw.CpfRepresentante <> '00000000000'
+WHERE raw.rn_hist = 1;
 
 CREATE CLUSTERED INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
 
@@ -588,29 +680,58 @@ LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa;
 CREATE CLUSTERED INDEX cx_t2_final ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
 
 -- Gerar Teia Nível 3 (Sócios das empresas que REALMENTE apareceram no Nível 2)
+-- Primeiro, alimentar o dicionário com os novos sócios do N3
+INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento)
+SELECT 
+    c.CPF,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
+    CAST(c.dataNascimento AS DATE) AS dataNascimento
+FROM (
+    SELECT DISTINCT s.cpfcnpjSocio FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
+    WHERE s.indSocio = 'PF' AND s.cpfcnpjSocio <> '99999999999999'
+    UNION
+    SELECT DISTINCT s.CpfRepresentante FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
+    WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
+) AS novos
+INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpfcnpjSocio
+WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpfcnpjSocio);
+
+-- Limpa possíveis duplicatas
+WITH CTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY dataNascimento DESC) as rn
+    FROM #temp_metadata_cpfs
+)
+DELETE FROM CTE WHERE rn > 1;
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
-SELECT DISTINCT
-    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
-    CAST(s.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
-    CAST(LEFT(s.nomeSocio, 120) AS VARCHAR(120))             AS nome_socio,
-    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(LEFT(s.descQualificacaoSocio, 50) AS VARCHAR(50))   AS descricao_qualificacao,
-    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
-    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
-    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
+SELECT
+    CAST(raw.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(raw.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
+    cobi.nome                                                AS nome_socio,
+    CAST(raw.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(LEFT(raw.descQualificacaoSocio, 50) AS VARCHAR(50))   AS descricao_qualificacao,
+    NULLIF(CAST(raw.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    cobi_rep.nome                                            AS nome_representante,
+    CAST(raw.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(raw.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
     CAST(ibge.no_municipio AS VARCHAR(60))                  AS municipio,
     CAST(ibge.sg_uf AS CHAR(2))                             AS uf
 INTO temp_CGUSC.fp.teia_fonte_nivel3
-FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
-INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
-LEFT JOIN db_CPF.dbo.CPF cobi_rep
-    ON cobi_rep.CPF = s.CpfRepresentante
-   AND s.CpfRepresentante <> '00000000000'
-   AND s.CpfRepresentante IS NOT NULL
-LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = s.CodMunicipio
+FROM (
+    SELECT 
+        s.*,
+        ROW_NUMBER() OVER (PARTITION BY s.cnpj, s.cpfcnpjSocio ORDER BY s.dataEntradaSociedade DESC) as rn_hist
+    FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
+    WHERE s.cpfcnpjSocio <> '99999999999999'
+) AS raw
+LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpfcnpjSocio AND raw.indSocio = 'PF'
+LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.CpfRepresentante AND raw.CpfRepresentante <> '00000000000'
+LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = raw.CodMunicipio
 LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
-WHERE s.cpfcnpjSocio <> '99999999999999';
+WHERE raw.rn_hist = 1;
 
 CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
 
@@ -619,23 +740,47 @@ CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empr
 --------------------------------------------------------------
 
 -- 1. Raw Nível 4
+-- Alimentar dicionário com novos representantes do N4
+INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento)
+SELECT 
+    c.CPF,
+    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
+    CAST(c.dataNascimento AS DATE) AS dataNascimento
+FROM (
+    SELECT DISTINCT s.CpfRepresentante FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+    WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
+) AS novos
+INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.CpfRepresentante
+WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.CpfRepresentante);
+
+-- Limpa possíveis duplicatas
+WITH CTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY dataNascimento DESC) as rn
+    FROM #temp_metadata_cpfs
+)
+DELETE FROM CTE WHERE rn > 1;
+
 DROP TABLE IF EXISTS #teia_fonte_nivel4_raw;
 SELECT
-    s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
-    CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
-    CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(LEFT(s.descQualificacaoSocio, 60) AS VARCHAR(60))   AS descricao_qualificacao,
-    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
-    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
-    CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+    raw.cpfcnpjSocio                                         AS cpf_cnpj_socio,
+    CAST(raw.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
+    CAST(raw.indSocio AS CHAR(2))                             AS indicador_socio,
+    CAST(LEFT(raw.descQualificacaoSocio, 60) AS VARCHAR(60))   AS descricao_qualificacao,
+    NULLIF(CAST(raw.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    cobi_rep.nome                                            AS nome_representante,
+    CAST(raw.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
+    CAST(raw.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel4_raw
-FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
-INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-LEFT JOIN db_CPF.dbo.CPF cobi_rep
-    ON cobi_rep.CPF = s.CpfRepresentante
-   AND s.CpfRepresentante <> '00000000000'
-   AND s.CpfRepresentante IS NOT NULL;
+FROM (
+    SELECT 
+        s.*,
+        ROW_NUMBER() OVER (PARTITION BY s.cpfcnpjSocio, s.cnpj ORDER BY s.dataEntradaSociedade DESC) as rn_hist
+    FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
+    INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+) AS raw
+LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.CpfRepresentante AND raw.CpfRepresentante <> '00000000000'
+WHERE raw.rn_hist = 1;
 
 -- 2. Enriquecer metadados apenas para as NOVAS empresas do Nível 4
 DROP TABLE IF EXISTS #universo_n4;
@@ -700,7 +845,7 @@ CREATE CLUSTERED INDEX cx_t4_final ON temp_CGUSC.fp.teia_fonte_nivel4 (cpf_cnpj_
 DROP TABLE IF EXISTS TEMP_CGUSC.dbo.farmacia_inicio_venda_gtin
 select a.cnpj, a.codigo_barra, min(data_hora) as data_inicio_venda
 into TEMP_CGUSC.dbo.farmacia_inicio_venda_gtin
-from FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
+from db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
 inner join temp_CGUSC.dbo.medicamentosPatologiaFP B on B.codigo_barra = A.codigo_barra
 inner join temp_CGUSC.fp.lista_cnpjs C on C.cnpj = A.cnpj
 WHERE 

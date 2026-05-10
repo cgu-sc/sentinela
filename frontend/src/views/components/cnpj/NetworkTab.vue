@@ -1023,7 +1023,13 @@ function buildStylesheet() {
   // Arestas de representante
   styles.push({
     selector: 'edge[type="representante"]',
-    style: { 'line-style': 'dashed', 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b' }
+    style: { 
+      'line-style': 'dashed', 
+      'line-color': '#f59e0b', 
+      'target-arrow-color': '#f59e0b',
+      'font-size': '12px',
+      'font-weight': '700'
+    }
   });
 
   // Estados: faded / highlighted

@@ -521,11 +521,17 @@ SELECT
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
     CAST(s.descQualificacaoSocio AS VARCHAR(60))             AS descricao_qualificacao,
+    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel2_raw
 FROM #cpfs_socios_fp fp
-INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = fp.cpf_cnpj_socio;
+INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = fp.cpf_cnpj_socio
+LEFT JOIN db_CPF.dbo.CPF cobi_rep
+    ON cobi_rep.CPF = s.CpfRepresentante
+   AND s.CpfRepresentante <> '00000000000'
+   AND s.CpfRepresentante IS NOT NULL;
 
 CREATE CLUSTERED INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
 
@@ -564,6 +570,8 @@ SELECT DISTINCT
     m.id_cnae_principal,
     raw.indicador_socio,
     raw.descricao_qualificacao,
+    raw.cpf_representante,
+    raw.nome_representante,
     raw.data_entrada_sociedade,
     raw.data_exclusao_sociedade,
     m.situacao_rf,
@@ -682,7 +690,6 @@ inner join temp_CGUSC.fp.lista_cnpjs C on C.cnpj = A.cnpj
 WHERE 
 a.data_hora >= '2015-07-01' and a.data_hora <= '2024-12-10'
 group by A.cnpj,A.codigo_barra
-
 
 CREATE NONCLUSTERED INDEX indiceCodigoBarra ON TEMP_CGUSC.dbo.farmacia_inicio_venda_gtin(codigo_barra)
 CREATE NONCLUSTERED INDEX indicecnpj ON TEMP_CGUSC.dbo.farmacia_inicio_venda_gtin(cnpj)

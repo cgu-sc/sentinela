@@ -260,7 +260,10 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
             "indicador_socio": pl.Categorical,
-            "descricao_qualificacao": pl.Categorical, "data_entrada_sociedade": pl.Date,
+            "descricao_qualificacao": pl.Categorical,
+            "cpf_representante": pl.String,
+            "nome_representante": pl.String,
+            "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
             "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8,
         })
@@ -275,11 +278,11 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         df_chunk = pl.from_pandas(chunk)
-        # Força conversão de datas para evitar conflito de tipos (String vs Date) no concat
-        if "data_entrada_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
-        if "data_exclusao_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+        # CAST DIRETO (SEM FALLBACKS)
+        df_chunk = df_chunk.with_columns([
+            pl.col("data_entrada_sociedade").cast(pl.Date, strict=False),
+            pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False)
+        ])
             
         chunk_list.append(df_chunk)
         rows_processed += len(chunk)
@@ -294,6 +297,8 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("razao_social").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
+        pl.col("cpf_representante").cast(pl.String),
+        pl.col("nome_representante").cast(pl.String),
         pl.col("data_entrada_sociedade").cast(pl.Date),
         pl.col("data_exclusao_sociedade").cast(pl.Date),
         pl.col("situacao_rf").cast(pl.Categorical),
@@ -336,11 +341,11 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         df_chunk = pl.from_pandas(chunk)
-        # Força conversão de datas para evitar conflito de tipos no concat
-        if "data_entrada_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
-        if "data_exclusao_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+        # CAST DIRETO
+        df_chunk = df_chunk.with_columns([
+            pl.col("data_entrada_sociedade").cast(pl.Date, strict=False),
+            pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False)
+        ])
 
         chunk_list.append(df_chunk)
         rows_processed += len(chunk)
@@ -393,10 +398,11 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         df_chunk = pl.from_pandas(chunk)
-        if "data_entrada_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_entrada_sociedade").cast(pl.Date, strict=False))
-        if "data_exclusao_sociedade" in df_chunk.columns:
-            df_chunk = df_chunk.with_columns(pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False))
+        # CAST DIRETO
+        df_chunk = df_chunk.with_columns([
+            pl.col("data_entrada_sociedade").cast(pl.Date, strict=False),
+            pl.col("data_exclusao_sociedade").cast(pl.Date, strict=False)
+        ])
             
         chunk_list.append(df_chunk)
         rows_processed += len(chunk)
@@ -639,35 +645,38 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             print(f"[OK] Caches carregados via Parquet.")
         return
 
-    # 2. Sincronização Inteligente (Task-Based) com Pesos Ponderados
-    # Definimos pesos baseados no tempo estimado de execução (total = 100)
-    TASKS = [
+    from typing import TypedDict, Callable, List
+
+    class SyncTask(TypedDict):
+        name: str
+        weight: int
+        func: Callable[[Callable[[int], None]], None]
+
+    TASKS: List[SyncTask] = [
         {"name": "Cadastro Medicamentos", "weight": 5,  "func": lambda cb: _sync_medicamentos(engine, cb)},
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
-        # {"name": "Benchmarks CRM",        "weight": 3,  "func": lambda cb: _sync_crm_benchmarks(engine, cb)}, # OBSOLETO
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
-        {"name": "Participações Externas",  "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
-        {"name": "Sócios Indiretos (Expansão)",   "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
+        {"name": "Participações e Representantes", "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
+        {"name": "Sócios Indiretos (Expansão)", "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 52, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
-    total_tasks = len(TASKS)
     acumulado_weight = 0
 
     try:
-        for index, task in enumerate(TASKS):
+        for task in TASKS:
             _cache_status = task["name"]
             current_weight = task["weight"]
-            print(f"[{index+1}/{total_tasks}] {task['name']}...")
+            print(f"[*] {task['name']}...")
 
-            def update_global_progress(task_internal_p, _base=acumulado_weight, _w=current_weight):
+            def update_global_progress(p_int: int, _base=acumulado_weight, _w=current_weight):
                 global _cache_progress
-                _cache_progress = int(_base + (task_internal_p / 100 * _w))
+                _cache_progress = int(_base + (p_int / 100 * _w))
 
             task["func"](update_global_progress)
             acumulado_weight += current_weight

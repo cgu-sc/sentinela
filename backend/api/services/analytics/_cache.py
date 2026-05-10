@@ -214,12 +214,6 @@ def sync_network(cnpj: str) -> None:
         def has_value(value) -> bool:
             return value is not None and str(value).strip() not in {"", "00000000000"}
 
-        def require_columns(df: pl.DataFrame, columns: list[str], source_name: str) -> None:
-            missing = [column for column in columns if column not in df.columns]
-            if missing:
-                raise RuntimeError(
-                    f"{source_name} sem colunas obrigatorias para representantes: {', '.join(missing)}"
-                )
 
         def add_representative_link(row: dict, node_dict: dict, edge_list: list[dict], active: bool = True) -> None:
             represented_id = row["cpf_cnpj_socio"]
@@ -279,11 +273,6 @@ def sync_network(cnpj: str) -> None:
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
         df_soc = get_df_dados_socios()
-        require_columns(
-            df_soc,
-            ["cpf_representante", "nome_representante"],
-            "dados_socios"
-        )
         socios_alvo = df_soc.filter(pl.col("cnpj") == cnpj).to_dicts()
 
         cpfs_socios = []
@@ -355,15 +344,16 @@ def sync_network(cnpj: str) -> None:
                     "type": "socio",
                     "is_ativo": p.get("data_exclusao_sociedade") is None
                 })
+                add_representative_link(
+                    p,
+                    nodes,
+                    edges,
+                    active=p.get("data_exclusao_sociedade") is None
+                )
 
         # ── 4. Nível 3: Expansão (Sócios das empresas irmãs) ─────────────────
         # Estes dados ficam em arquivos separados para carregamento on-demand no frontend
         df_exp_source = get_df_teia_fonte_nivel3()
-        require_columns(
-            df_exp_source,
-            ["cpf_representante", "nome_representante"],
-            "teia_fonte_nivel3"
-        )
         exp_nodes_dict: dict[str, dict] = {}
         exp_edges: list[dict] = []
         
@@ -428,11 +418,6 @@ def sync_network(cnpj: str) -> None:
 
         # ── 5. Nível 4: Expansão (Outras empresas dos sócios de N3) ─────────
         df_n4_source = get_df_teia_fonte_nivel4()
-        require_columns(
-            df_n4_source,
-            ["cpf_representante", "nome_representante"],
-            "teia_fonte_nivel4"
-        )
         n4_nodes_dict: dict[str, dict] = {}
         n4_edges: list[dict] = []
         

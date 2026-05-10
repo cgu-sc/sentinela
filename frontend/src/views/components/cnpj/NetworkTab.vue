@@ -50,7 +50,9 @@ const expandedNodes = ref(new Set());
 
 // Filtros de visibilidade
 const showFiltersMenu = ref(false);
+const showLegendMenu = ref(false);
 const layersMenuRoot = ref(null);
+const legendMenuRoot = ref(null);
 const layerFilters = ref({
   fp: true,
   outrasFarmacias: true,
@@ -695,6 +697,7 @@ const resetToN2 = async () => {
     loadingLevel.value = "N2";
     currentLevel.value = "N2";
     showFiltersMenu.value = false;
+    showLegendMenu.value = false;
     networkSearch.value = "";
     searchMatchCount.value = 0;
     selectedNode.value = null;
@@ -1660,10 +1663,22 @@ watch(networkSearch, () => {
 });
 
 function handleFiltersMenuOutsideClick(event) {
-  if (!showFiltersMenu.value) return;
-  const root = layersMenuRoot.value;
-  if (root && !root.contains(event.target)) {
+  const layersRoot = layersMenuRoot.value;
+  if (
+    showFiltersMenu.value &&
+    layersRoot &&
+    !layersRoot.contains(event.target)
+  ) {
     showFiltersMenu.value = false;
+  }
+
+  const legendRoot = legendMenuRoot.value;
+  if (
+    showLegendMenu.value &&
+    legendRoot &&
+    !legendRoot.contains(event.target)
+  ) {
+    showLegendMenu.value = false;
   }
 }
 
@@ -1798,7 +1813,10 @@ const typeLabels = {
                   class="filter-btn layer-menu-btn"
                   :class="{ filtering: hiddenLayerCount > 0 || showFiltersMenu }"
                   type="button"
-                  @click="showFiltersMenu = !showFiltersMenu"
+                  @click="
+                    showFiltersMenu = !showFiltersMenu;
+                    showLegendMenu = false;
+                  "
                   v-tooltip.bottom="'Controle de camadas e filtros'"
                 >
                   <i class="pi pi-sliders-h" />
@@ -1914,6 +1932,82 @@ const typeLabels = {
               >
                 <i class="pi pi-times" />
               </button>
+            </div>
+
+            <div class="toolbar-pill zoom-pill">
+              <button class="ctrl-btn" @click="zoomIn" v-tooltip.bottom="'Ampliar'">
+                <i class="pi pi-plus" />
+              </button>
+              <span class="zoom-level">{{ zoom }}%</span>
+              <button
+                class="ctrl-btn"
+                @click="zoomOut"
+                v-tooltip.bottom="'Reduzir'"
+              >
+                <i class="pi pi-minus" />
+              </button>
+              <div class="pill-sep"></div>
+              <button
+                class="ctrl-btn"
+                @click="fitGraph"
+                v-tooltip.bottom="'Ajustar à tela'"
+              >
+                <i class="pi pi-arrows-alt" />
+              </button>
+              <button
+                class="ctrl-btn"
+                @click="resetLayout"
+                v-tooltip.bottom="'Reorganizar'"
+              >
+                <i class="pi pi-sync" />
+              </button>
+            </div>
+
+            <div class="toolbar-pill legend-pill">
+              <div ref="legendMenuRoot" class="legend-menu-root">
+                <button
+                  class="filter-btn legend-menu-btn"
+                  :class="{ filtering: showLegendMenu }"
+                  type="button"
+                  @click="
+                    showLegendMenu = !showLegendMenu;
+                    showFiltersMenu = false;
+                  "
+                  v-tooltip.bottom="'Legenda do grafo'"
+                >
+                  <i class="pi pi-info-circle" />
+                  <span>Legenda</span>
+                  <i
+                    :class="
+                      showLegendMenu
+                        ? 'pi pi-chevron-up state-icon'
+                        : 'pi pi-chevron-down state-icon'
+                    "
+                  />
+                </button>
+
+                <div v-if="showLegendMenu" class="legend-menu" @click.stop>
+                  <div
+                    v-for="(t, key) in typeLabels"
+                    :key="key"
+                    class="legend-item"
+                  >
+                    <span
+                      class="legend-dot"
+                      :style="{ background: t.color }"
+                    ></span>
+                    <span class="legend-label">{{ t.label }}</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-line dashed"></span>
+                    <span class="legend-label">Representante</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-line dotted"></span>
+                    <span class="legend-label">Vínculo Inativo</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2250,8 +2344,21 @@ const typeLabels = {
   display: inline-flex;
 }
 
+.legend-pill {
+  position: relative;
+}
+
+.legend-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+
 .layer-menu-btn {
   min-width: 104px;
+}
+
+.legend-menu-btn {
+  min-width: 92px;
 }
 
 .layer-count {
@@ -2276,6 +2383,24 @@ const typeLabels = {
   z-index: 40;
   width: 244px;
   padding: 0.45rem;
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 10px;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.38),
+    0 0 0 1px color-mix(in srgb, var(--tabs-border) 34%, transparent);
+}
+
+.legend-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 40;
+  width: 218px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
   background: var(--card-bg);
   border: 1px solid var(--tabs-border);
   border-radius: 10px;
@@ -2432,6 +2557,19 @@ const typeLabels = {
   flex-shrink: 0;
 }
 
+.zoom-pill {
+  gap: 3px;
+}
+
+.zoom-pill .ctrl-btn {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+
+.zoom-pill .zoom-level {
+  width: 2.15rem;
+}
+
 /* Controles de Zoom (canto inferior direito) ──────── */
 .graph-controls {
   position: absolute;
@@ -2448,6 +2586,10 @@ const typeLabels = {
   padding: 0.5rem;
   gap: 0.4rem;
   box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
+}
+
+.graph-controls {
+  display: none;
 }
 
 .ctrl-btn {
@@ -2502,6 +2644,10 @@ const typeLabels = {
   padding: 0.7rem 1rem;
   backdrop-filter: blur(8px);
   z-index: 10;
+}
+
+.graph-legend {
+  display: none;
 }
 
 .legend-item {

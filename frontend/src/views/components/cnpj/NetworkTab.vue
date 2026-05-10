@@ -543,18 +543,139 @@ const mergeNetworkData = (newData, options = {}) => {
   }
 };
 
+const wait = (duration) =>
+  new Promise((resolve) => window.setTimeout(resolve, duration));
+
+function getBaseGraphIds() {
+  return {
+    nodeIds: new Set((networkData.value?.nodes || []).map((node) => node.id)),
+    edgeIds: new Set((networkData.value?.edges || []).map((edge) => edge.id)),
+  };
+}
+
+function getCollapseTargetPosition(node, baseNodeIds) {
+  const baseNeighbors = node
+    .connectedEdges()
+    .connectedNodes()
+    .filter(
+      (neighbor) => baseNodeIds.has(neighbor.id()) && neighbor.id() !== node.id(),
+    );
+
+  if (baseNeighbors.length) {
+    const positionSum = baseNeighbors.reduce(
+      (acc, neighbor) => ({
+        x: acc.x + neighbor.position("x"),
+        y: acc.y + neighbor.position("y"),
+      }),
+      { x: 0, y: 0 },
+    );
+    return {
+      x: positionSum.x / baseNeighbors.length,
+      y: positionSum.y / baseNeighbors.length,
+    };
+  }
+
+  const root = cy
+    ?.nodes('[type="PJ_ALVO"]')
+    .first();
+  if (root?.length) return root.position();
+
+  return {
+    x: cy?.width() ? cy.width() / 2 : 0,
+    y: cy?.height() ? cy.height() / 2 : 0,
+  };
+}
+
+async function collapseToBaseGraph() {
+  if (!cy || !networkData.value) return false;
+
+  const { nodeIds: baseNodeIds, edgeIds: baseEdgeIds } = getBaseGraphIds();
+  const nodesToRemove = cy
+    .nodes()
+    .filter(
+      (node) => node.data("is_expanded_node") || !baseNodeIds.has(node.id()),
+    );
+  const nodeIdsToRemove = new Set(nodesToRemove.map((node) => node.id()));
+  const edgesToRemove = cy
+    .edges()
+    .filter(
+      (edge) =>
+        !baseEdgeIds.has(edge.id()) ||
+        nodeIdsToRemove.has(edge.source().id()) ||
+        nodeIdsToRemove.has(edge.target().id()),
+    );
+  const elementsToRemove = nodesToRemove.union(edgesToRemove);
+
+  if (elementsToRemove.empty()) return false;
+
+  if (currentLayout) {
+    try {
+      currentLayout.stop();
+    } catch (e) {}
+  }
+
+  const collapseDuration = 420;
+  cy.elements().stop();
+  clearGraphHighlights();
+
+  edgesToRemove.animate(
+    { style: { opacity: 0 } },
+    { duration: collapseDuration * 0.75, easing: "ease-out-cubic" },
+  );
+
+  nodesToRemove.forEach((node) => {
+    node.animate(
+      {
+        position: getCollapseTargetPosition(node, baseNodeIds),
+        style: { opacity: 0 },
+      },
+      { duration: collapseDuration, easing: "ease-in-out-cubic" },
+    );
+  });
+
+  await wait(collapseDuration + 40);
+  if (!cy) return true;
+
+  elementsToRemove.remove();
+  currentLevel.value = "N2";
+  expandedNodes.value = new Set();
+  applyVisibilityFilters();
+
+  if (!hasActiveSearch.value) {
+    fitGraphToView(INITIAL_FIT_PADDING, { animate: true, duration: 520 });
+    await wait(560);
+    rememberPresentationZoom("N2");
+  }
+
+  return true;
+}
+
 const resetToN2 = async () => {
   if (!networkData.value) return;
+  if (isBatchExpanding.value) return;
   const preservedLayerFilters = getLayerFilterSnapshot();
-  currentLevel.value = "N2";
-  showFiltersMenu.value = false;
-  networkSearch.value = "";
-  searchMatchCount.value = 0;
-  selectedNode.value = null;
-  await buildGraph(networkData.value);
-  restoreLayerFilterSnapshot(preservedLayerFilters);
-  applyVisibilityFilters();
-  expandedNodes.value = new Set();
+
+  try {
+    isBatchExpanding.value = true;
+    loadingLevel.value = "N2";
+    currentLevel.value = "N2";
+    showFiltersMenu.value = false;
+    networkSearch.value = "";
+    searchMatchCount.value = 0;
+    selectedNode.value = null;
+    restoreLayerFilterSnapshot(preservedLayerFilters);
+
+    const collapsed = await collapseToBaseGraph();
+    if (!collapsed) {
+      await buildGraph(networkData.value);
+      restoreLayerFilterSnapshot(preservedLayerFilters);
+      applyVisibilityFilters();
+      expandedNodes.value = new Set();
+    }
+  } finally {
+    loadingLevel.value = null;
+    isBatchExpanding.value = false;
+  }
 };
 
 const expandBatch = async (mode) => {

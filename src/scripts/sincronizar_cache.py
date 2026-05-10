@@ -403,12 +403,12 @@ MODULOS = [
     {"id": 3, "name": "Matriz de Risco",           "func": _sync_matriz_risco,   "peso": "~médio"},
     {"id": 4, "name": "Falecidos por Farmácia",    "func": _sync_falecidos,      "peso": "~médio"},
     {"id": 5, "name": "Benchmarks CRM",            "func": _sync_crm_benchmarks, "peso": "~rápido"},
-    {"id": 6, "name": "Todos por CNPJ (parquets)", "func": _sync_cnpj_parquets,  "peso": "~muito pesado"},
     {"id": 7, "name": "Dados das Farmácias",       "func": _sync_dados_farmacia, "peso": "~médio"},
     {"id": 8, "name": "Movimentação Mensal",       "func": _sync_movimentacao,   "peso": "~muito pesado"},
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
     {"id": 11, "name": "Teia (Expansão Grau 2, 3 e 4)", "func": _sync_teia_expansao_completa, "peso": "~pesado"},
+    {"id": 6, "name": "Todos por CNPJ (parquets)", "func": _sync_cnpj_parquets,  "peso": "~muito pesado"},
 ]
 
 # ── Menu ───────────────────────────────────────────────────────────────────────

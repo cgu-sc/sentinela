@@ -321,6 +321,8 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
             "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String, 
             "nome_socio": pl.String, "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical,
+            "cpf_representante": pl.String,
+            "nome_representante": pl.String,
             "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date
         })
         _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
@@ -350,6 +352,8 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
+        pl.col("cpf_representante").cast(pl.String),
+        pl.col("nome_representante").cast(pl.String),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
     _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
@@ -371,7 +375,10 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
             "indicador_socio": pl.Categorical,
-            "descricao_qualificacao": pl.Categorical, "data_entrada_sociedade": pl.Date,
+            "descricao_qualificacao": pl.Categorical,
+            "cpf_representante": pl.String,
+            "nome_representante": pl.String,
+            "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
             "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8
         })
@@ -402,6 +409,8 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
         pl.col("razao_social").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
+        pl.col("cpf_representante").cast(pl.String),
+        pl.col("nome_representante").cast(pl.String),
         pl.col("data_entrada_sociedade").cast(pl.Date),
         pl.col("data_exclusao_sociedade").cast(pl.Date),
         pl.col("situacao_rf").cast(pl.Categorical),

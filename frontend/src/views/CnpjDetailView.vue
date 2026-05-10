@@ -476,7 +476,7 @@ const isInitialLoading = computed(() => {
   background: var(--establishment-header-bg) !important;
   border-top: 2px solid color-mix(in srgb, var(--primary-color) 40%, var(--tabs-border));
   border-bottom: 1px solid var(--tabs-border);
-  padding: 0.75rem 1.25rem 0;
+  padding: 0.5rem 1.25rem 0;
   display: flex;
   flex-wrap: nowrap;
   min-width: max-content;
@@ -522,8 +522,8 @@ const isInitialLoading = computed(() => {
   font-size: 0.75rem;
   font-weight: 700;
   min-width: 9.5rem;
-  min-height: 3.35rem;
-  padding: 0.48rem 1rem 0.55rem !important;
+  min-height: 2.75rem;
+  padding: 0.35rem 1rem !important;
   gap: 0.5rem;
   align-items: center;
   justify-content: center;
@@ -593,7 +593,7 @@ const isInitialLoading = computed(() => {
 }
 
 .tab-content {
-  padding: 1.5rem;
+  padding: 1rem;
   min-height: calc(100vh - 450px); /* Garante que a aba tenha uma altura mínima respeitável */
 }
 

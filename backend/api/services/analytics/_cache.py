@@ -9,6 +9,7 @@ import os
 import zlib
 import json
 import copy
+import unicodedata
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
@@ -16,6 +17,7 @@ from data_cache import (
     get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, 
     get_df_teia_fonte_nivel4, get_cache_dir
 )
+
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -58,6 +60,47 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalSummary,
     GtinDetalhamentoMensalItem,
 )
+
+COMPANY_CLASSIFICATION_VERSION = 2
+PHARMACY_CNAES = {"4771701", "4771702"}
+PHARMACY_NAME_TERMS = ("farmacia", "drogaria")
+
+
+def _normalize_company_text(value) -> str:
+    text = unicodedata.normalize("NFD", str(value or "").lower())
+    return "".join(char for char in text if unicodedata.category(char) != "Mn")
+
+
+def _normalize_cnae(value) -> str:
+    return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def _is_truthy_flag(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "t", "sim", "yes"}
+    return bool(value)
+
+
+def _is_pharmacy_by_activity_or_name(row: dict) -> bool:
+    if _normalize_cnae(row.get("id_cnae_principal")) in PHARMACY_CNAES:
+        return True
+
+    searchable_name = " ".join(
+        [
+            _normalize_company_text(row.get("razao_social")),
+            _normalize_company_text(row.get("nome_fantasia")),
+        ]
+    )
+    return any(term in searchable_name for term in PHARMACY_NAME_TERMS)
+
+
+def _classify_company_node(row: dict) -> str:
+    if _is_truthy_flag(row.get("is_farmacia_fp")):
+        return "PJ_FARMACIA_POPULAR"
+    if _is_pharmacy_by_activity_or_name(row):
+        return "PJ_OUTRAS_FARMACIAS"
+    return "PJ_DEMAIS_EMPRESAS"
+
 _known_cnpj_dirs: set[str] = set()
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
@@ -198,12 +241,16 @@ def sync_network(cnpj: str) -> None:
             def has_required_columns(path: str, columns: set[str]) -> bool:
                 return columns.issubset(set(pl.scan_parquet(path).limit(0).collect().columns))
 
+            n2_n4_node_columns = {
+                "id", "label", "type", "razao_social", "nome_socio",
+                "nome_fantasia", "classification_version",
+            }
             edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
-            if not has_required_columns(N2_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
+            if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
             if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio"}):
                 raise ValueError("N3 nodes cache com schema antigo")
-            if not has_required_columns(N4_NODES_PATH, {"id", "label", "type", "razao_social", "nome_socio"}):
+            if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
             if not has_required_columns(N2_EDGES_PATH, edge_columns):
                 raise ValueError("N2 edges cache com schema antigo")
@@ -272,17 +319,20 @@ def sync_network(cnpj: str) -> None:
                 "label": r.get("nome_fantasia") or r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
                 "razao_social": r.get("razao_social"),
+                "nome_fantasia": r.get("nome_fantasia"),
                 "nome_socio": None,
                 "id_cnae_principal": r.get("id_cnae_principal"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
+                "classification_version": COMPANY_CLASSIFICATION_VERSION,
             }
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
-                "razao_social": None, "nome_socio": None, "id_cnae_principal": None,
-                "municipio": None, "uf": None, "situacao_rf": None
+                "razao_social": None, "nome_fantasia": None, "nome_socio": None,
+                "id_cnae_principal": None, "municipio": None, "uf": None,
+                "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -335,20 +385,20 @@ def sync_network(cnpj: str) -> None:
                 cnpjs_externos.append(cnpj_ext) # Sempre adiciona para disparar N3/N4
 
                 if cnpj_ext not in nodes:
-                    tipo = "PJ_FARMACIA_POPULAR" if p["is_farmacia_fp"] else "PJ_DEMAIS_EMPRESAS"
-                    if tipo == "PJ_DEMAIS_EMPRESAS" and p.get("id_cnae_principal") in [4771701, 4771702]:
-                        tipo = "PJ_OUTRAS_FARMACIAS"
+                    tipo = _classify_company_node(p)
 
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
-                        "label": p["razao_social"] or cnpj_ext,
+                        "label": p.get("nome_fantasia") or p["razao_social"] or cnpj_ext,
                         "type": tipo,
                         "razao_social": p["razao_social"],
+                        "nome_fantasia": p.get("nome_fantasia"),
                         "nome_socio": None,
                         "id_cnae_principal": p.get("id_cnae_principal"),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
+                        "classification_version": COMPANY_CLASSIFICATION_VERSION,
                     }
 
                 edges.append({
@@ -425,12 +475,13 @@ def sync_network(cnpj: str) -> None:
 
         n2_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version",
         ]
         n2_node_schema = {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
             "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "classification_version": pl.Int16,
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
@@ -477,20 +528,20 @@ def sync_network(cnpj: str) -> None:
                 
                 # Se a empresa já existe na teia (N2 ou Alvo), não duplicamos
                 if cnpj_ext not in nodes and cnpj_ext not in n4_nodes_dict:
-                    tipo = "PJ_FARMACIA_POPULAR" if row["is_farmacia_fp"] else "PJ_DEMAIS_EMPRESAS"
-                    if tipo == "PJ_DEMAIS_EMPRESAS" and row.get("id_cnae_principal") in [4771701, 4771702]:
-                        tipo = "PJ_OUTRAS_FARMACIAS"
+                    tipo = _classify_company_node(row)
                         
                     n4_nodes_dict[cnpj_ext] = {
                         "id": cnpj_ext,
-                        "label": row["razao_social"] or cnpj_ext,
+                        "label": row.get("nome_fantasia") or row["razao_social"] or cnpj_ext,
                         "type": tipo,
                         "razao_social": row["razao_social"],
+                        "nome_fantasia": row.get("nome_fantasia"),
                         "nome_socio": None,
                         "id_cnae_principal": row.get("id_cnae_principal"),
                         "municipio": row["municipio"],
                         "uf": row["uf"],
                         "situacao_rf": row["situacao_rf"],
+                        "classification_version": COMPANY_CLASSIFICATION_VERSION,
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_ext}"
@@ -514,12 +565,14 @@ def sync_network(cnpj: str) -> None:
 
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
-            "id", "label", "type", "razao_social", "nome_socio",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf",
+            "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version",
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8, "nome_socio": pl.Utf8,
-            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
+            "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "classification_version": pl.Int16,
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")

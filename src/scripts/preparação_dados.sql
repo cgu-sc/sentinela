@@ -544,6 +544,7 @@ DROP TABLE IF EXISTS #metadata_empresas;
 SELECT DISTINCT
     u.cnpj_empresa,
     CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)) AS razao_social,
+    CAST(LEFT(c.NomeFantasia, 100) AS VARCHAR(100)) AS nome_fantasia,
     TRY_CAST(c.CnaeFiscal AS INT) AS id_cnae_principal,
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)) AS situacao_rf,
     CAST(ibge.no_municipio AS VARCHAR(60)) AS municipio,
@@ -567,6 +568,7 @@ SELECT DISTINCT
     raw.cpf_cnpj_socio,
     raw.cnpj_empresa,
     m.razao_social,
+    m.nome_fantasia,
     m.id_cnae_principal,
     raw.indicador_socio,
     raw.descricao_qualificacao,
@@ -639,10 +641,19 @@ LEFT JOIN db_CPF.dbo.CPF cobi_rep
 DROP TABLE IF EXISTS #universo_n4;
 SELECT DISTINCT cnpj_empresa INTO #universo_n4 FROM #teia_fonte_nivel4_raw;
 
-INSERT INTO #metadata_empresas
+INSERT INTO #metadata_empresas (
+    cnpj_empresa,
+    razao_social,
+    nome_fantasia,
+    id_cnae_principal,
+    situacao_rf,
+    municipio,
+    uf
+)
 SELECT DISTINCT
     u.cnpj_empresa,
     CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)),
+    CAST(LEFT(c.NomeFantasia, 100) AS VARCHAR(100)),
     TRY_CAST(c.CnaeFiscal AS INT),
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)),
     CAST(ibge.no_municipio AS VARCHAR(60)),
@@ -654,12 +665,13 @@ LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = c.CodMunicipio
 LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
 WHERE NOT EXISTS (SELECT 1 FROM #metadata_empresas m WHERE m.cnpj_empresa = u.cnpj_empresa);
 
--- 3. Gerar Teia Nível 4 Final (Sem Nome Fantasia para economizar espaço)
+-- 3. Gerar Teia Nível 4 Final
 DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel4;
 SELECT DISTINCT
     raw.cpf_cnpj_socio,
     raw.cnpj_empresa,
     m.razao_social,
+    m.nome_fantasia,
     m.id_cnae_principal,
     raw.indicador_socio,
     raw.descricao_qualificacao,

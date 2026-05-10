@@ -259,6 +259,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         _df_teia_fonte_nivel2 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
+            "nome_fantasia": pl.String,
             "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical,
             "cpf_representante": pl.String,
@@ -295,6 +296,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
+        pl.col("nome_fantasia").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("cpf_representante").cast(pl.String),
@@ -382,6 +384,7 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
         _df_teia_fonte_nivel4 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
+            "nome_fantasia": pl.String,
             "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical,
             "cpf_representante": pl.String,
@@ -412,10 +415,13 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         if progress_callback: progress_callback(p)
 
-    _df_teia_fonte_nivel4 = pl.concat(chunk_list).with_columns([
+    df_full = pl.concat(chunk_list)
+
+    _df_teia_fonte_nivel4 = df_full.with_columns([
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
+        pl.col("nome_fantasia").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("cpf_representante").cast(pl.String),

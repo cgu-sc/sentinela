@@ -232,25 +232,33 @@ def _schema_cnpj_parquet(pl):
         "teia_grafo_nivel2_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "id_cnae_principal": pl.Int32,
+            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "classification_version": pl.Int16,
         },
         "teia_grafo_nivel2_edges.parquet": {
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,
+            "type": pl.Utf8, "is_ativo": pl.Boolean,
+            "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date,
         },
         "teia_grafo_nivel3_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "nome_socio": pl.Utf8,
         },
         "teia_grafo_nivel3_edges.parquet": {
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,
+            "type": pl.Utf8, "is_ativo": pl.Boolean,
+            "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date,
         },
         "teia_grafo_nivel4_nodes.parquet": {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "id_cnae_principal": pl.Int32,
+            "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "classification_version": pl.Int16,
         },
         "teia_grafo_nivel4_edges.parquet": {
-            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
+            "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,
+            "type": pl.Utf8, "is_ativo": pl.Boolean,
+            "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date,
         },
     }
 

@@ -1350,10 +1350,10 @@ const typeLabels = {
   align-items: center;
   gap: 0.9rem;
   padding: 0.45rem 0.65rem;
-  background: rgba(15, 23, 42, 0.88);
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--tabs-border);
   border-radius: 12px;
   box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
   pointer-events: none;
@@ -1436,20 +1436,20 @@ const typeLabels = {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(15, 23, 42, 0.88);
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--tabs-border);
   border-radius: 50px;
   padding: 4px 6px;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
 }
 
 /* Botões de profundidade (segmented control) */
 .seg-btn {
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-secondary);
   padding: 5px 11px;
   border-radius: 20px;
   cursor: pointer;
@@ -1482,7 +1482,7 @@ const typeLabels = {
 .filter-btn {
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-secondary);
   padding: 5px 10px;
   border-radius: 20px;
   cursor: pointer;
@@ -1510,7 +1510,7 @@ const typeLabels = {
 }
 
 .filter-btn.filtering {
-  color: #fbbf24;
+  color: var(--primary-color);
 }
 
 .filter-btn.filtering .state-icon {
@@ -1615,7 +1615,7 @@ const typeLabels = {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(15, 23, 42, 0.85);
+  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
   backdrop-filter: blur(10px);
   border: 1px solid var(--tabs-border);
   border-radius: 12px;

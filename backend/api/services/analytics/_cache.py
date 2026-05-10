@@ -382,8 +382,8 @@ def sync_network(cnpj: str) -> None:
                         "nome_socio": row["nome_socio"],
                         "nome_fantasia": None,
                         "id_cnae_principal": None,
-                        "municipio": None, # Dados slim para expansão
-                        "uf": None,
+                        "municipio": row.get("municipio"),
+                        "uf": row.get("uf"),
                         "situacao_rf": None,
                     }
                 

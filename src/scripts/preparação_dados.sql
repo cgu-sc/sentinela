@@ -596,7 +596,9 @@ SELECT DISTINCT
     NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
     CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
-    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
+    CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade,
+    CAST(ibge.no_municipio AS VARCHAR(60))                  AS municipio,
+    CAST(ibge.sg_uf AS CHAR(2))                             AS uf
 INTO temp_CGUSC.fp.teia_fonte_nivel3
 FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
 INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
@@ -604,6 +606,8 @@ LEFT JOIN db_CPF.dbo.CPF cobi_rep
     ON cobi_rep.CPF = s.CpfRepresentante
    AND s.CpfRepresentante <> '00000000000'
    AND s.CpfRepresentante IS NOT NULL
+LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = s.CodMunicipio
+LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
 WHERE s.cpfcnpjSocio <> '99999999999999';
 
 CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);

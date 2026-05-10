@@ -323,12 +323,13 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
     if total_rows == 0:
         print("   -> Nenhum sócio indireto encontrado.")
         _df_teia_fonte_nivel3 = pl.DataFrame(schema={
-            "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String, 
+            "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String,
             "nome_socio": pl.String, "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical,
             "cpf_representante": pl.String,
             "nome_representante": pl.String,
-            "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date
+            "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date,
+            "municipio": pl.String, "uf": pl.String,
         })
         _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
@@ -359,6 +360,8 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("descricao_qualificacao").cast(pl.Categorical),
         pl.col("cpf_representante").cast(pl.String),
         pl.col("nome_representante").cast(pl.String),
+        pl.col("municipio").cast(pl.String),
+        pl.col("uf").cast(pl.String),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
     _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")

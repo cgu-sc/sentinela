@@ -1032,6 +1032,29 @@ function buildStylesheet() {
     }
   });
 
+  // Empresas Baixadas/Inativas (Mantém a cor original, mas fica transparente com borda tracejada vermelha)
+  styles.push({
+    selector: 'node[!is_ativo][type != "PF"]',
+    style: {
+      'opacity': 0.35,
+      'border-width': 3,
+      'border-style': 'dashed',
+      'border-color': '#ef4444'     // Borda vermelha para destacar a inatividade
+    }
+  });
+
+  // Vínculos Inativos (Ex-sócios)
+  styles.push({
+    selector: 'edge[!is_ativo]',
+    style: {
+      'line-style': 'dotted',       // Volta para o pontilhado original (mais sutil)
+      'line-color': '#ef4444',      // Mas agora em vermelho
+      'target-arrow-color': '#ef4444',
+      'color': '#fca5a5',
+      'opacity': 0.65               // Mantém a transparência suave
+    }
+  });
+
   // Estados: faded / highlighted
   styles.push({
     selector: '.faded',
@@ -1041,8 +1064,6 @@ function buildStylesheet() {
     selector: '.highlighted',
     style: { 'opacity': 1, 'border-width': 3 }
   });
-
-
 
   return styles;
 }
@@ -1120,7 +1141,7 @@ const typeLabels = {
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
   PJ_FARMACIA_POPULAR: { label: 'Farmácia Popular', color: '#10b981' },
   PJ_OUTRAS_FARMACIAS: { label: 'Farmácia (Não FP)', color: '#f59e0b' },
-  PJ_DEMAIS_EMPRESAS: { label: 'Outra Empresa', color: '#a855f7' },
+  PJ_DEMAIS_EMPRESAS: { label: 'Outros Segmentos', color: '#a855f7' },
 };
 </script>
 
@@ -1282,6 +1303,10 @@ const typeLabels = {
             <div class="legend-item">
               <span class="legend-line dashed"></span>
               <span class="legend-label">Representante</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-line" style="border-top: 2px dotted #ef4444; width: 14px; margin-right: 6px;"></span>
+              <span class="legend-label">Vínculo Inativo</span>
             </div>
           </div>
         </div>

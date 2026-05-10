@@ -1,7 +1,7 @@
 ﻿<claude-mem-context>
 # Memory Context
 
-# [sentinela] recent context, 2026-05-09 9:29pm GMT-3
+# [sentinela] recent context, 2026-05-09 11:45pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
@@ -42,7 +42,6 @@ Stats: 50 obs (17.176t read) | 676.951t work | 97% savings
 165 " ✅ Complete layout tracking refactor in resetLayout function
 166 " 🔴 Fix state inconsistency when switching from N4 to N3 expansion level
 167 4:58p 🔴 Fix resetToN2 null check and filter variable references
-S81 Apply opacity/layoutstop lifecycle pattern to batch expansion (mergeNetworkData) matching buildGraph implementation (May 9, 5:05 PM)
 S82 Behavior analysis of "Sócios Inativos" toggle — does it filter by CNPJ or globally? (May 9, 5:07 PM)
 S83 Debug discrepancy between DB source and frontend for active socios of CNPJ 02162827000127 (May 9, 5:23 PM)
 168 5:29p 🔵 Frontend/DB Discrepancy in Active Socios for CNPJ 02162827000127
@@ -65,11 +64,38 @@ S89 NetworkTab.vue toolbar redesign + font-weight normalization across all CSS s
 179 5:52p 🟣 NetworkTab Toolbar Split into Two Semantic Pills
 180 " 🟣 Depth Level State Machine Wired into expandBatch and resetToN2
 181 5:53p 🟣 Final Toolbar Template Replaced: toolbar-overlay with Two toolbar-pill Components
+S90 Sentinela UI: Redesign confusing pill filters + add "Apenas Farmácias" and "Localizar Nó" features (May 9, 5:53 PM)
 182 5:59p 🟣 UI Pill Filter Redesign + Two New Network Graph Features Planned
-S90 Sentinela UI: Redesign confusing pill filters + add "Apenas Farmácias" and "Localizar Nó" features (May 9, 5:59 PM)
 183 6:04p ⚖️ NetworkTab.vue Feature Plan: Pharmacy Filter + Node Locator
 184 " 🟣 NetworkTab.vue Toolbar Redesigned: Segmented Pills + Active Level Tracking
 185 " 🔵 NetworkTab.vue: Node Data Model and Pharmacy Classification Logic
+S91 Analysis of crms_detalhado_test.sql and its relationship to the loteado/pre_global pipeline scripts (May 9, 11:25 PM)
+**Investigated**: - Full content of src/indicadores/crms_detalhado_test.sql (1300 lines, v5)
+    - First 220 lines of src/indicadores/crms_detalhado_pre_global_test.sql
+    - First 260 lines of src/indicadores/crms_detalhado_loteado_test.sql
+    - Cross-references between all CRM-related SQL scripts using rg searches
+    - All files under src/indicadores/ containing "crm" or "crms" in the filename
+
+**Learned**: - crms_detalhado_test.sql is the MONOLITHIC version (v5): reads directly from temp_CGUSC.fp.teste_mov_SC (single-state test table), processes the entire dataset at once in temp tables (#base_horaria_mestra, etc.), and produces all outputs in one shot
+    - The PIPELINE has been split into 3 scripts:
+      1. crms_detalhado_pre_global_test.sql — creates dados_medico and crm_prescricoes_todos_estabelecimentos nationally
+      2. crms_detalhado_loteado_test.sql — processes CNPJs by UF with checkpoint/resume logic via crm_pipeline_uf_controle, materializes crm_mov_fonte_atual per UF, builds dados_crm_detalhado incrementally
+      3. A post-global script (referenced but not read) — creates alertas_crm_geografico, alertas_crm_registro, alertas_crm, crm_export, benchmarks
+    - crms_detalhado_test.sql still references teste_mov_SC (legacy test table), while the loteado version uses crm_mov_fonte_atual (proper UF-materialized source from Relatorio_movimentacaoFP + carga_2024)
+    - The temporal concentration tables (crm_concentracao_unico_alertas, crm_concentracao_multiplo_alertas) are EXTERNAL prerequisites produced by crm_concentracao_unico_temporal_test.sql and crm_concentracao_multiplo_temporal_test.sql — those were completed in a prior session
+    - alertas_crm uses BIT flags (flag_concentracao, flag_geografico, flag_registro) rather than text columns — this is a v5 refactor
+    - HHI (Herfindahl-Hirschman Index) is computed per pharmacy for concentration risk matrix, with benchmarks at UF, health region, and national level
+    - Modified Z-Score (MZS > 4.5, volume >= 10) used for hourly anomaly detection on prescription bursts
+
+**Completed**: - Full structural analysis of crms_detalhado_test.sql completed
+    - Identified that crms_detalhado_test.sql is the monolithic predecessor to the loteado pipeline
+    - Confirmed the 3-script pipeline structure: pre_global → loteado → pos_global
+    - Confirmed temporal concentration tables are already prerequisites (produced by earlier scripts that ran successfully)
+
+**Next Steps**: - Claude is about to compare crms_detalhado_test.sql (monolithic) with the loteado pipeline to identify what differences/improvements need to be made or validated
+    - The goal appears to be understanding whether crms_detalhado_test.sql needs to be updated to use crm_mov_fonte_atual instead of teste_mov_SC, or whether the loteado pipeline is the canonical path forward
+    - Likely next: read the post-global script and assess the full pipeline completeness
+
 
 Access 677k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

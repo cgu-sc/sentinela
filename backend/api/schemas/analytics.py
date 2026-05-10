@@ -398,7 +398,7 @@ class SociosResponse(BaseModel):
 class NetworkNodeSchema(BaseModel):
     id: str
     label: str
-    type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA' | 'PJ_OUTRA'
+    type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA_POPULAR' | 'PJ_OUTRAS_FARMACIAS' | 'PJ_DEMAIS_EMPRESAS'
     razao_social: Optional[str] = None
     nome_fantasia: Optional[str] = None
     id_cnae_principal: Optional[int] = None

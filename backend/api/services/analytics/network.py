@@ -23,8 +23,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
 
     # ── Cache miss: gera o Parquet ────────────────────────────────────────────
     # Agora o sync_network gera 4 arquivos (nodes, edges + expansion_nodes, expansion_edges) sob o novo padrão teia_grafo_*
-    if not os.path.exists(NODES_PATH):
-        sync_network(cnpj)
+    sync_network(cnpj)
 
     # ── Lê do Parquet ─────────────────────────────────────────────────────────
     try:
@@ -39,7 +38,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
         NetworkNodeSchema(
             id=row["id"],
             label=row["label"] or "",
-            type=row["type"] or "PJ_OUTRA",
+            type=row["type"],
             razao_social=row.get("razao_social"),
             nome_fantasia=row.get("nome_fantasia"),
             id_cnae_principal=row.get("id_cnae_principal"),
@@ -81,25 +80,29 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
     EXP_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
     EXP_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
 
+    sync_network(cnpj_alvo)
     if not os.path.exists(EXP_NODES_PATH) or not os.path.exists(EXP_EDGES_PATH):
-        # Se não existe, tenta rodar o sync uma vez (caso o cache seja de versão antiga)
-        sync_network(cnpj_alvo)
-        if not os.path.exists(EXP_NODES_PATH):
-            return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
     try:
-        # Filtra apenas as arestas que saem ou entram na empresa sendo expandida
-        # (Neste nível de cache, o target é sempre o CNPJ_IRMÃ que queremos abrir)
-        df_exp_edges = pl.read_parquet(EXP_EDGES_PATH).filter(pl.col("target") == cnpj_para_expandir)
+        df_all_edges = pl.read_parquet(EXP_EDGES_PATH)
+        df_soc_edges = df_all_edges.filter(pl.col("target") == cnpj_para_expandir)
         
-        if df_exp_edges.is_empty():
+        if df_soc_edges.is_empty():
             return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
         # Pega os IDs dos sócios encontrados para esta expansão
-        cpfs_socios = df_exp_edges["source"].unique().to_list()
+        cpfs_socios = df_soc_edges["source"].unique().to_list()
+        df_rep_edges = df_all_edges.filter(
+            (pl.col("type") == "representante") &
+            (pl.col("target").is_in(cpfs_socios))
+        )
+        df_exp_edges = pl.concat([df_soc_edges, df_rep_edges]).unique(subset=["id"], keep="first")
         
         # Busca os detalhes destes nós no arquivo de expansão
-        df_exp_nodes = pl.read_parquet(EXP_NODES_PATH).filter(pl.col("id").is_in(cpfs_socios))
+        node_ids = set(df_exp_edges["source"].to_list()) | set(df_exp_edges["target"].to_list())
+        node_ids.discard(cnpj_para_expandir)
+        df_exp_nodes = pl.read_parquet(EXP_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
         nodes = [
             NetworkNodeSchema(
@@ -146,27 +149,34 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
     N4_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
     N4_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
 
+    sync_network(cnpj_alvo)
     if not os.path.exists(N4_NODES_PATH) or not os.path.exists(N4_EDGES_PATH):
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
     try:
-        # Filtra arestas onde o SÓCIO é a fonte (source)
-        df_n4_edges = pl.read_parquet(N4_EDGES_PATH).filter(pl.col("source") == cpf_para_expandir)
+        df_all_edges = pl.read_parquet(N4_EDGES_PATH)
+        df_company_edges = df_all_edges.filter(pl.col("source") == cpf_para_expandir)
+        df_rep_edges = df_all_edges.filter(
+            (pl.col("type") == "representante") &
+            (pl.col("target") == cpf_para_expandir)
+        )
+        df_n4_edges = pl.concat([df_company_edges, df_rep_edges]).unique(subset=["id"], keep="first")
         
         if df_n4_edges.is_empty():
             return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
         # Pega os IDs das empresas encontradas
-        cnpjs_empresas = df_n4_edges["target"].unique().to_list()
+        node_ids = set(df_n4_edges["source"].to_list()) | set(df_n4_edges["target"].to_list())
+        node_ids.discard(cpf_para_expandir)
         
         # Busca detalhes das empresas
-        df_n4_nodes = pl.read_parquet(N4_NODES_PATH).filter(pl.col("id").is_in(cnpjs_empresas))
+        df_n4_nodes = pl.read_parquet(N4_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
         nodes = [
             NetworkNodeSchema(
                 id=row["id"],
                 label=row["label"] or "",
-                type=row["type"] or "PJ_OUTRA",
+                type=row["type"],
                 razao_social=row.get("razao_social"),
                 municipio=row.get("municipio"),
                 uf=row.get("uf"),
@@ -205,6 +215,7 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
     NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_nodes.parquet")
     EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_edges.parquet")
 
+    sync_network(cnpj_alvo)
     if not os.path.exists(NODES_PATH):
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
@@ -226,6 +237,7 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
     NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_nodes.parquet")
     EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_edges.parquet")
 
+    sync_network(cnpj_alvo)
     if not os.path.exists(NODES_PATH):
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
 
@@ -240,5 +252,3 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
     except Exception as e:
         print(f"[ NETWORK ] ERRO BATCH N4 EM {cnpj_alvo}: {e}")
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
-
-

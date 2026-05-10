@@ -414,7 +414,7 @@ const expandBatch = async (mode) => {
     // Marcar nós como expandidos para evitar botões redundantes no painel lateral
     if (data?.nodes) {
       data.nodes.forEach(n => {
-        if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ', 'PF'].includes(n.type)) {
+        if (['PJ_FARMACIA_POPULAR', 'PJ_OUTRAS_FARMACIAS', 'PJ_DEMAIS_EMPRESAS', 'PJ', 'PF'].includes(n.type)) {
           expandedNodes.value.add(n.id);
         }
       });
@@ -427,8 +427,8 @@ const expandBatch = async (mode) => {
   }
 };
 
-const PJ_FILTERABLE = ['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'];
-const PHARMACY_NODE_TYPES = new Set(['PJ_ALVO', 'PJ_FARMACIA', 'PJ_FARMACIA_EXT']);
+const PJ_FILTERABLE = ['PJ_FARMACIA_POPULAR', 'PJ_OUTRAS_FARMACIAS', 'PJ_DEMAIS_EMPRESAS', 'PJ'];
+const PHARMACY_NODE_TYPES = new Set(['PJ_ALVO', 'PJ_FARMACIA_POPULAR', 'PJ_OUTRAS_FARMACIAS']);
 const PHARMACY_CNAES = new Set(['4771701', '4771702']);
 
 const isCompanyNode = (node) => {
@@ -443,7 +443,7 @@ const isPharmacyNodeData = (data = {}) => {
 };
 
 const isPopularPharmacyNodeData = (data = {}) => (
-  data.type === 'PJ_ALVO' || data.type === 'PJ_FARMACIA'
+  data.type === 'PJ_ALVO' || data.type === 'PJ_FARMACIA_POPULAR'
 );
 
 const hideEdgesTouchingHiddenNodes = () => {
@@ -653,7 +653,7 @@ const canExpand = computed(() => {
   const { type, id } = selectedNode.value;
   // Empresas podem expandir (para N3) exceto a principal (que já vem aberta)
   // Incluímos 'PJ' (tipo genérico para sócios PJ) na lista
-  if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'].includes(type) && id !== cnpj.value) return true;
+  if (['PJ_FARMACIA_POPULAR', 'PJ_OUTRAS_FARMACIAS', 'PJ_DEMAIS_EMPRESAS', 'PJ'].includes(type) && id !== cnpj.value) return true;
   // Pessoas (Sócios) podem expandir (para N4)
   if (type === 'PF') return true;
   return false;
@@ -662,20 +662,19 @@ const canExpand = computed(() => {
 const expansionLabel = computed(() => {
   if (!selectedNode.value) return '';
   if (expandedNodes.value.has(selectedNode.value.id)) return 'Já Expandido';
-  if (['PJ_FARMACIA', 'PJ_FARMACIA_EXT', 'PJ_OUTRA', 'PJ'].includes(selectedNode.value.type)) return 'Expandir Sócios (N3)';
+  if (['PJ_FARMACIA_POPULAR', 'PJ_OUTRAS_FARMACIAS', 'PJ_DEMAIS_EMPRESAS', 'PJ'].includes(selectedNode.value.type)) return 'Expandir Sócios (N3)';
   if (selectedNode.value.type === 'PF') return 'Expandir Empresas (N4)';
   return 'Expandir';
 });
 
 // ── Paleta de cores por tipo de nó ─────────────────────────────────────────
 const NODE_STYLES = {
-  PJ_ALVO:     { bg: '#6366f1', border: '#c7d2fe', shape: 'roundrectangle', size: 85 },
+  PJ_ALVO:     { bg: '#ef4444', border: '#fca5a5', shape: 'roundrectangle', size: 85 },
   PF:          { bg: '#0ea5e9', border: '#38bdf8', shape: 'ellipse',        size: 52 },
-  PJ_FARMACIA: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 55 },
-  PJ_FARMACIA_EXT: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 52 },
-  PJ_OUTRA:    { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 52 },
-  PJ:          { bg: '#d946ef', border: '#c026d3', shape: 'roundrectangle', size: 46 },
-  EXPANDED:    { bg: '#64748b', border: '#94a3b8', shape: 'ellipse',        size: 42 },
+  PJ_FARMACIA_POPULAR: { bg: '#10b981', border: '#34d399', shape: 'roundrectangle', size: 55 },
+  PJ_OUTRAS_FARMACIAS: { bg: '#f59e0b', border: '#fbbf24', shape: 'roundrectangle', size: 52 },
+  PJ_DEMAIS_EMPRESAS: { bg: '#a855f7', border: '#d8b4fe', shape: 'roundrectangle', size: 52 },
+  PJ:          { bg: '#a855f7', border: '#d8b4fe', shape: 'roundrectangle', size: 46 },
   ES:          { bg: '#475569', border: '#64748b', shape: 'ellipse',        size: 52 },
 };
 
@@ -695,7 +694,8 @@ function applyNodeDensitySizing() {
   const densityScale = getNodeDensityScale();
   cy.nodes().forEach(node => {
     const type = node.data('type');
-    const style = NODE_STYLES[type] || NODE_STYLES.PJ_OUTRA;
+    const style = NODE_STYLES[type];
+    if (!style) return;
     const nodeScale = type === 'PJ_ALVO'
       ? Math.max(0.88, densityScale)
       : densityScale;
@@ -982,7 +982,7 @@ function buildStylesheet() {
     selector: 'node[type="PJ_ALVO"]',
     style: {
       'border-width': 5,
-      'border-color': '#c7d2fe',
+      'border-color': '#fca5a5',
       'z-index': 20,
     }
   });
@@ -1012,8 +1012,8 @@ function buildStylesheet() {
   styles.push({
     selector: 'node[type="PJ"]',
     style: {
-      'background-color': '#d946ef',
-      'border-color': '#c026d3',
+      'background-color': '#a855f7',
+      'border-color': '#d8b4fe',
       'shape': 'roundrectangle',
       'width': 54,
       'height': 54 * 0.68,
@@ -1110,11 +1110,11 @@ onActivated(() => {
 
 
 const typeLabels = {
-  PJ_ALVO:     { label: 'CNPJ em Análise', color: '#6366f1' },
+  PJ_ALVO:     { label: 'CNPJ em Análise', color: '#ef4444' },
   PF:          { label: 'Pessoa Física',   color: '#0ea5e9' },
-  PJ_FARMACIA: { label: 'Farmácia Popular', color: '#10b981' },
-  PJ_FARMACIA_EXT: { label: 'Farmácia (Não FP)', color: '#f59e0b' },
-  PJ_OUTRA:    { label: 'Outra Empresa',   color: '#d946ef' },
+  PJ_FARMACIA_POPULAR: { label: 'Farmácia Popular', color: '#10b981' },
+  PJ_OUTRAS_FARMACIAS: { label: 'Farmácia (Não FP)', color: '#f59e0b' },
+  PJ_DEMAIS_EMPRESAS: { label: 'Outra Empresa', color: '#a855f7' },
 };
 </script>
 

@@ -119,9 +119,6 @@ WHERE A.rn = 1 OR A.rn IS NULL; -- Seleciona apenas o primeiro registro por CNPJ
 
 
 
-
-
-
 --**************************************************************************************************************************************
 -- criar tabelas [processamentosFP], dadosProcessamentosFP e movimentacaoMensalCodigoBarraFP
 --**************************************************************************************************************************************
@@ -540,10 +537,10 @@ SELECT DISTINCT cnpj_empresa INTO #universo_cnpjs FROM #teia_fonte_nivel2_raw;
 DROP TABLE IF EXISTS #metadata_empresas;
 SELECT DISTINCT
     u.cnpj_empresa,
-    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(c.RazaoSocial), 100) AS VARCHAR(100)) AS razao_social,
+    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)) AS razao_social,
     TRY_CAST(c.CnaeFiscal AS INT) AS id_cnae_principal,
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)) AS situacao_rf,
-    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60)) AS municipio,
+    CAST(ibge.no_municipio AS VARCHAR(60)) AS municipio,
     CAST(ibge.sg_uf AS CHAR(2)) AS uf
 INTO #metadata_empresas
 FROM #universo_cnpjs u
@@ -585,14 +582,20 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
 SELECT DISTINCT
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.cpfcnpjSocio AS VARCHAR(14))                     AS cpf_cnpj_socio,
-    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.nomeSocio), 120) AS VARCHAR(120))  AS nome_socio,
+    CAST(LEFT(s.nomeSocio, 120) AS VARCHAR(120))             AS nome_socio,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.descQualificacaoSocio), 50) AS VARCHAR(50)) AS descricao_qualificacao,
+    CAST(LEFT(s.descQualificacaoSocio, 50) AS VARCHAR(50))   AS descricao_qualificacao,
+    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO temp_CGUSC.fp.teia_fonte_nivel3
 FROM (SELECT DISTINCT cnpj_empresa FROM temp_CGUSC.fp.teia_fonte_nivel2) n2
 INNER JOIN db_CNPJ.dbo.socios s ON s.cnpj = n2.cnpj_empresa
+LEFT JOIN db_CPF.dbo.CPF cobi_rep
+    ON cobi_rep.CPF = s.CpfRepresentante
+   AND s.CpfRepresentante <> '00000000000'
+   AND s.CpfRepresentante IS NOT NULL
 WHERE s.cpfcnpjSocio <> '99999999999999';
 
 CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
@@ -607,12 +610,18 @@ SELECT
     s.cpfcnpjSocio                                          AS cpf_cnpj_socio,
     CAST(s.cnpj AS VARCHAR(14))                             AS cnpj_empresa,
     CAST(s.indSocio AS CHAR(2))                             AS indicador_socio,
-    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(s.descQualificacaoSocio), 60) AS VARCHAR(60)) AS descricao_qualificacao,
+    CAST(LEFT(s.descQualificacaoSocio, 60) AS VARCHAR(60))   AS descricao_qualificacao,
+    NULLIF(CAST(s.CpfRepresentante AS CHAR(11)), '00000000000') AS cpf_representante,
+    CAST(LEFT(cobi_rep.nome, 100) AS VARCHAR(100))           AS nome_representante,
     CAST(s.dataEntradaSociedade AS DATE)                    AS data_entrada_sociedade,
     CAST(s.dataExclusaoSociedade AS DATE)                   AS data_exclusao_sociedade
 INTO #teia_fonte_nivel4_raw
 FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL) n3
-INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio;
+INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+LEFT JOIN db_CPF.dbo.CPF cobi_rep
+    ON cobi_rep.CPF = s.CpfRepresentante
+   AND s.CpfRepresentante <> '00000000000'
+   AND s.CpfRepresentante IS NOT NULL;
 
 -- 2. Enriquecer metadados apenas para as NOVAS empresas do Nível 4
 DROP TABLE IF EXISTS #universo_n4;
@@ -621,10 +630,10 @@ SELECT DISTINCT cnpj_empresa INTO #universo_n4 FROM #teia_fonte_nivel4_raw;
 INSERT INTO #metadata_empresas
 SELECT DISTINCT
     u.cnpj_empresa,
-    CAST(LEFT(temp_CGUSC.dbo.InitCapEachWord(c.RazaoSocial), 100) AS VARCHAR(100)),
+    CAST(LEFT(c.RazaoSocial, 100) AS VARCHAR(100)),
     TRY_CAST(c.CnaeFiscal AS INT),
     CAST(sit.ds_situacao_cnpj AS VARCHAR(60)),
-    CAST(temp_CGUSC.dbo.InitCapEachWord(ibge.no_municipio) AS VARCHAR(60)),
+    CAST(ibge.no_municipio AS VARCHAR(60)),
     CAST(ibge.sg_uf AS CHAR(2))
 FROM #universo_n4 u
 INNER JOIN db_CNPJ.dbo.CNPJ c ON c.cnpj = u.cnpj_empresa
@@ -642,6 +651,8 @@ SELECT DISTINCT
     m.id_cnae_principal,
     raw.indicador_socio,
     raw.descricao_qualificacao,
+    raw.cpf_representante,
+    raw.nome_representante,
     raw.data_entrada_sociedade,
     raw.data_exclusao_sociedade,
     m.situacao_rf,
@@ -735,14 +746,7 @@ select A.cnpj_estabelecimento,A.quantidade as qnt, A.codigo_barra, A.dataEmissao
 into temp_CGUSC.dbo.notas_estoque_inicialFP
 from #notas_estoque_inicialFP_temp2 A
 inner join temp_CGUSC.dbo.estoque_inicialFP b on b.cnpj_estabelecimento = A.cnpj_estabelecimento and b.codigo_barra = A.codigo_barra
-where row_num < 3 
+where row_num < 3
 
 CREATE NONCLUSTERED INDEX index1 ON temp_CGUSC.dbo.notas_estoque_inicialFP(cnpj_estabelecimento)
 CREATE NONCLUSTERED INDEX index2 ON temp_CGUSC.dbo.notas_estoque_inicialFP(codigo_barra)
-   
-   
-
-
-
-   
-      

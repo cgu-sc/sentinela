@@ -185,17 +185,20 @@ def sync_network(cnpj: str) -> None:
     """
     import time
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    NODES_PATH     = os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")
-    EDGES_PATH     = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
-    EXP_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
-    EXP_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
+    N2_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")
+    N2_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
+    N3_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
+    N3_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
     N4_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
     N4_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
 
-    # Cache hit: se os 6 arquivos existem e o principal é válido, assume sucesso
-    if all(os.path.exists(p) for p in [NODES_PATH, EXP_NODES_PATH, N4_NODES_PATH]):
+    # Cache hit: se os arquivos existem e são válidos, assume sucesso
+    if all(os.path.exists(p) for p in [N2_NODES_PATH, N2_EDGES_PATH, N3_NODES_PATH, N4_NODES_PATH]):
         try:
-            pl.scan_parquet(NODES_PATH).limit(0).collect()
+            pl.scan_parquet(N2_NODES_PATH).limit(0).collect()
+            pl.scan_parquet(N2_EDGES_PATH).limit(0).collect()
+            pl.scan_parquet(N3_NODES_PATH).limit(0).collect()
+            pl.scan_parquet(N4_NODES_PATH).limit(0).collect()
             return
         except Exception:
             pass
@@ -207,6 +210,48 @@ def sync_network(cnpj: str) -> None:
         nodes: dict[str, dict] = {}
         edges: list[dict]      = []
         df_exp_filtered        = pl.DataFrame() # Inicializa vazio
+
+        def has_value(value) -> bool:
+            return value is not None and str(value).strip() not in {"", "00000000000"}
+
+        def require_columns(df: pl.DataFrame, columns: list[str], source_name: str) -> None:
+            missing = [column for column in columns if column not in df.columns]
+            if missing:
+                raise RuntimeError(
+                    f"{source_name} sem colunas obrigatorias para representantes: {', '.join(missing)}"
+                )
+
+        def add_representative_link(row: dict, node_dict: dict, edge_list: list[dict], active: bool = True) -> None:
+            represented_id = row["cpf_cnpj_socio"]
+            representative_id = row["cpf_representante"]
+            if not has_value(represented_id) or not has_value(representative_id):
+                return
+            if represented_id == representative_id:
+                return
+
+            representative_name = row["nome_representante"] or representative_id
+            if representative_id not in nodes and representative_id not in node_dict:
+                node_dict[representative_id] = {
+                    "id": representative_id,
+                    "label": representative_name,
+                    "type": "PF",
+                    "razao_social": representative_name,
+                    "nome_fantasia": None,
+                    "id_cnae_principal": None,
+                    "municipio": None,
+                    "uf": None,
+                    "situacao_rf": None,
+                    "is_ativo": True,
+                }
+
+            edge_list.append({
+                "id": f"{representative_id}->{represented_id}:representante",
+                "source": representative_id,
+                "target": represented_id,
+                "label": "representante",
+                "type": "representante",
+                "is_ativo": active,
+            })
 
         # ── 1. Nó raiz: dados do CNPJ alvo ──────────────────────────────────
         df_farm = get_df_dados_farmacia()
@@ -234,6 +279,11 @@ def sync_network(cnpj: str) -> None:
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
         df_soc = get_df_dados_socios()
+        require_columns(
+            df_soc,
+            ["cpf_representante", "nome_representante"],
+            "dados_socios"
+        )
         socios_alvo = df_soc.filter(pl.col("cnpj") == cnpj).to_dicts()
 
         cpfs_socios = []
@@ -262,6 +312,12 @@ def sync_network(cnpj: str) -> None:
                 "type": "socio",
                 "is_ativo": s.get("data_exclusao_sociedade") is None
             })
+            add_representative_link(
+                s,
+                nodes,
+                edges,
+                active=s.get("data_exclusao_sociedade") is None
+            )
 
         df_ext = get_df_teia_fonte_nivel2()
         cnpjs_externos = []
@@ -275,9 +331,9 @@ def sync_network(cnpj: str) -> None:
                 cnpjs_externos.append(cnpj_ext) # Sempre adiciona para disparar N3/N4
 
                 if cnpj_ext not in nodes:
-                    tipo = "PJ_FARMACIA" if p["is_farmacia_fp"] else "PJ_OUTRA"
-                    if tipo == "PJ_OUTRA" and p.get("id_cnae_principal") in [4771701, 4771702]:
-                        tipo = "PJ_FARMACIA_EXT"
+                    tipo = "PJ_FARMACIA_POPULAR" if p["is_farmacia_fp"] else "PJ_DEMAIS_EMPRESAS"
+                    if tipo == "PJ_DEMAIS_EMPRESAS" and p.get("id_cnae_principal") in [4771701, 4771702]:
+                        tipo = "PJ_OUTRAS_FARMACIAS"
 
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
@@ -303,6 +359,11 @@ def sync_network(cnpj: str) -> None:
         # ── 4. Nível 3: Expansão (Sócios das empresas irmãs) ─────────────────
         # Estes dados ficam em arquivos separados para carregamento on-demand no frontend
         df_exp_source = get_df_teia_fonte_nivel3()
+        require_columns(
+            df_exp_source,
+            ["cpf_representante", "nome_representante"],
+            "teia_fonte_nivel3"
+        )
         exp_nodes_dict: dict[str, dict] = {}
         exp_edges: list[dict] = []
         
@@ -343,24 +404,35 @@ def sync_network(cnpj: str) -> None:
                         "type": "socio",
                         "is_ativo": row.get("data_exclusao_sociedade") is None
                     })
+                add_representative_link(
+                    row,
+                    exp_nodes_dict,
+                    exp_edges,
+                    active=row.get("data_exclusao_sociedade") is None
+                )
 
         # ── Salva Parquets Principais ────────────────────────────────────────
-        pl.DataFrame(list(nodes.values())).write_parquet(NODES_PATH, compression="zstd")
+        pl.DataFrame(list(nodes.values())).write_parquet(N2_NODES_PATH, compression="zstd")
         pl.DataFrame(edges if edges else [], schema={
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(EDGES_PATH, compression="zstd")
+        }).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
         pl.DataFrame(list(exp_nodes_dict.values()) if exp_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(EXP_NODES_PATH, compression="zstd")
+        }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema={
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
-        }).unique(subset=["id"], keep="first").write_parquet(EXP_EDGES_PATH, compression="zstd")
+        }).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
 
         # ── 5. Nível 4: Expansão (Outras empresas dos sócios de N3) ─────────
         df_n4_source = get_df_teia_fonte_nivel4()
+        require_columns(
+            df_n4_source,
+            ["cpf_representante", "nome_representante"],
+            "teia_fonte_nivel4"
+        )
         n4_nodes_dict: dict[str, dict] = {}
         n4_edges: list[dict] = []
         
@@ -380,9 +452,9 @@ def sync_network(cnpj: str) -> None:
                 
                 # Se a empresa já existe na teia (N2 ou Alvo), não duplicamos
                 if cnpj_ext not in nodes and cnpj_ext not in n4_nodes_dict:
-                    tipo = "PJ_FARMACIA" if row["is_farmacia_fp"] else "PJ_OUTRA"
-                    if tipo == "PJ_OUTRA" and row.get("id_cnae_principal") in [4771701, 4771702]:
-                        tipo = "PJ_FARMACIA_EXT"
+                    tipo = "PJ_FARMACIA_POPULAR" if row["is_farmacia_fp"] else "PJ_DEMAIS_EMPRESAS"
+                    if tipo == "PJ_DEMAIS_EMPRESAS" and row.get("id_cnae_principal") in [4771701, 4771702]:
+                        tipo = "PJ_OUTRAS_FARMACIAS"
                         
                     n4_nodes_dict[cnpj_ext] = {
                         "id": cnpj_ext,
@@ -406,6 +478,12 @@ def sync_network(cnpj: str) -> None:
                         "type": "socio",
                         "is_ativo": row.get("data_exclusao_sociedade") is None
                     })
+                add_representative_link(
+                    row,
+                    n4_nodes_dict,
+                    n4_edges,
+                    active=row.get("data_exclusao_sociedade") is None
+                )
 
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         pl.DataFrame(list(n4_nodes_dict.values()) if n4_nodes_dict else [], schema={
@@ -416,7 +494,7 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(n4_edges if n4_edges else [], schema={
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "is_ativo": pl.Boolean
         }).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")
-        
+
         ms = (time.perf_counter() - t0) * 1000
         print(f"Teia Completa (+Expansao) salva para {cnpj} ({ms:.1f}ms)")
 

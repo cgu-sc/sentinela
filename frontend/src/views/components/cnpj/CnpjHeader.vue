@@ -576,7 +576,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 /* ── CABEÇALHO RESUMO (SOLTO) ────────────────── */
 .detail-header-new {
   background: var(--establishment-header-bg);
-  padding: 1.25rem 2rem 1.25rem;
+  padding: 1rem 2rem 0.75rem;
   border: 1px solid var(--establishment-header-border);
   border-bottom: none; /* Fundido com o TabView abaixo */
   border-radius: 12px 12px 0 0; /* Apenas cantos superiores */
@@ -1182,7 +1182,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  padding-top: 1.25rem;
+  padding-top: 1rem;
   padding-bottom: 0.5rem;
   border-top: 1px solid var(--card-border);
 }

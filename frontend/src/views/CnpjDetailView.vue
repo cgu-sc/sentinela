@@ -1,5 +1,5 @@
 <script setup>
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { computed, onMounted, ref, watch } from "vue";
 import { useAnalyticsStore } from "@/stores/analytics";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
@@ -45,7 +45,9 @@ const TAB_INDEX = {
 };
 
 const route = useRoute();
-const cnpj = computed(() => route.params.cnpj);
+const router = useRouter();
+const normalizeCnpj = (value) => String(value ?? "").replace(/\D/g, "");
+const cnpj = computed(() => normalizeCnpj(route.params.cnpj));
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
@@ -164,6 +166,51 @@ const periodSummary = computed(() => {
   return { totalMov, valSemComp, percValSemComp };
 });
 
+const hasCnpjAccessIssue = computed(() =>
+  ["invalid_format", "not_in_program", "error"].includes(
+    cnpjDetailStore.cnpjAccessStatus,
+  ),
+);
+
+const canRenderDetail = computed(
+  () => cnpjDetailStore.cnpjAccessStatus === "valid",
+);
+
+const accessState = computed(() => {
+  const status = cnpjDetailStore.cnpjAccessStatus;
+  if (status === "invalid_format") {
+    return {
+      icon: "pi pi-id-card",
+      badge: "Formato invalido",
+      title: "Identificador invalido",
+      description: "A rota recebeu um identificador que nao possui 14 digitos. A tela de estabelecimento aceita apenas CNPJ completo.",
+      severity: "warning",
+    };
+  }
+  if (status === "not_in_program") {
+    return {
+      icon: "pi pi-search",
+      badge: "Fora da base PFPB",
+      title: "CNPJ nao encontrado no Farmacia Popular",
+      description: "O CNPJ informado tem formato valido, mas nao consta na base carregada do Programa Farmacia Popular.",
+      severity: "warning",
+    };
+  }
+  return {
+    icon: "pi pi-exclamation-triangle",
+    badge: "Servico indisponivel",
+    title: "Validacao indisponivel",
+    description: "Nao foi possivel consultar a base de estabelecimentos neste momento.",
+    severity: "error",
+  };
+});
+
+const goToEstablishments = () => {
+  router.push("/estabelecimentos");
+};
+
+let cnpjValidationRequest = 0;
+
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
@@ -172,6 +219,16 @@ watch(
       cnpjDetailStore.resetAll();
       cnpjNav.reset(TAB_INDEX.EVOLUTION);
     }
+    const requestId = ++cnpjValidationRequest;
+    if (!newCnpj) {
+      cnpjDetailStore.setInvalidCnpjFormat(newCnpj);
+      return;
+    }
+
+    const access = await cnpjDetailStore.validateCnpjAccess(newCnpj);
+    if (requestId !== cnpjValidationRequest || cnpj.value !== newCnpj) return;
+    if (access?.status !== "valid") return;
+
     if (newCnpj) {
       // Eager load: dispara todos os fetches ao carregar a página
       const { inicio, fim } = getApiParams();
@@ -200,6 +257,7 @@ watch(
   () => filterStore.periodo,
   () => {
     if (!cnpj.value) return;
+    if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
     if (filterStore.isAnimating) return;
     const { inicio, fim } = getApiParams();
     cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
@@ -267,6 +325,7 @@ const formatCnpj = (v) => {
 const isInitialLoading = computed(() => {
   // Consideramos carregamento inicial se os dados básicos ou os dashboards principais ainda não voltaram
   return (
+    cnpjDetailStore.cnpjAccessStatus === "checking" ||
     cnpjDetailStore.dadosCadastroLoading ||
     cnpjDetailStore.cnpjsAvulsosLoading ||
     (cnpjDetailStore.prescritoresLoading &&
@@ -297,8 +356,36 @@ const isInitialLoading = computed(() => {
       </div>
     </Transition>
 
+    <section
+      v-if="hasCnpjAccessIssue"
+      class="cnpj-access-state"
+      :class="`cnpj-access-state--${accessState.severity}`"
+    >
+      <div class="access-state-glow" />
+      <div class="access-state-icon">
+        <i :class="accessState.icon" />
+      </div>
+      <div class="access-state-copy">
+        <div class="access-state-meta">
+          <p class="access-state-kicker">Consulta de estabelecimento</p>
+          <span class="access-state-badge">{{ accessState.badge }}</span>
+        </div>
+        <h2>{{ accessState.title }}</h2>
+        <p>{{ accessState.description }}</p>
+        <div v-if="cnpjDetailStore.cnpjAccessCnpj" class="access-state-query">
+          <span>CNPJ pesquisado</span>
+          <strong>{{ formatCnpj(cnpjDetailStore.cnpjAccessCnpj) }}</strong>
+        </div>
+      </div>
+      <button class="access-state-action" type="button" @click="goToEstablishments">
+        <i class="pi pi-arrow-left" />
+        <span>Voltar para estabelecimentos</span>
+      </button>
+    </section>
+
     <!-- HEADER (COMPONENTE ISOLADO) -->
     <CnpjHeader
+      v-if="canRenderDetail"
       :cnpj="cnpj"
       :cnpj-data="cnpjData"
       :geo-data="geoData"
@@ -313,6 +400,7 @@ const isInitialLoading = computed(() => {
 
     <!-- TABS -->
     <TabView
+      v-if="canRenderDetail"
       class="detail-tabs"
       :activeIndex="cnpjNav.activeTabIndex"
       @tab-change="cnpjNav.activeTabIndex = $event.index"
@@ -426,6 +514,224 @@ const isInitialLoading = computed(() => {
   position: relative; /* Referência para o overlay de loading */
   gap: 0;
   background: transparent;
+}
+
+/* Estado de acesso da rota do estabelecimento */
+.cnpj-access-state {
+  --access-accent: var(--primary-color);
+  --access-accent-strong: var(--primary-color);
+  --access-glass-highlight: color-mix(in srgb, var(--text-color) 6%, transparent);
+  --access-soft-shadow: color-mix(in srgb, var(--text-color) 8%, transparent);
+  min-height: 22rem;
+  margin: 1rem 0 2rem;
+  padding: 3rem 3.5rem;
+  border: 1px solid color-mix(in srgb, var(--tabs-border) 72%, var(--text-color) 8%);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--card-bg) 94%, var(--primary-color) 2%),
+      color-mix(in srgb, var(--card-bg) 96%, transparent)
+    );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 12px 34px var(--access-soft-shadow),
+    inset 0 1px 0 var(--access-glass-highlight);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2rem;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+.access-state-glow {
+  position: absolute;
+  inset: -35% auto auto -8%;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--primary-color) 8%, transparent) 0%,
+    transparent 66%
+  );
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.cnpj-access-state--warning {
+  --access-accent: var(--amber-500);
+  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color));
+}
+
+.cnpj-access-state--error {
+  --access-accent: var(--color-error);
+  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color));
+}
+
+.access-state-icon {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--access-accent) 11%, var(--card-bg)),
+      color-mix(in srgb, var(--access-accent) 4%, transparent)
+    );
+  border: 1px solid color-mix(in srgb, var(--access-accent) 20%, var(--tabs-border));
+  color: var(--access-accent-strong);
+  font-size: 1.75rem;
+  box-shadow: inset 0 1px 0 var(--access-glass-highlight);
+}
+
+.cnpj-access-state--warning .access-state-icon {
+  --access-accent: var(--amber-500);
+  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color));
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--access-accent) 11%, var(--card-bg)),
+      color-mix(in srgb, var(--access-accent) 4%, transparent)
+    );
+  border-color: color-mix(in srgb, var(--access-accent) 22%, var(--tabs-border));
+  color: var(--access-accent-strong);
+}
+
+.cnpj-access-state--error .access-state-icon {
+  --access-accent: var(--color-error);
+  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color));
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--access-accent) 11%, var(--card-bg)),
+      color-mix(in srgb, var(--access-accent) 4%, transparent)
+    );
+  border-color: color-mix(in srgb, var(--access-accent) 22%, var(--tabs-border));
+  color: var(--access-accent-strong);
+}
+
+.access-state-copy {
+  min-width: 0;
+  max-width: 58rem;
+}
+
+.access-state-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.65rem;
+}
+
+.access-state-kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.access-state-badge {
+  height: 1.65rem;
+  padding: 0 0.65rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--access-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--access-accent) 7%, transparent);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cnpj-access-state--error .access-state-badge {
+  border-color: color-mix(in srgb, var(--access-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--access-accent) 7%, transparent);
+  color: var(--text-secondary);
+}
+
+.access-state-copy h2 {
+  margin: 0;
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  font-size: 2.05rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.access-state-copy p:not(.access-state-kicker) {
+  max-width: 46rem;
+  margin: 0.65rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+.access-state-query {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.access-state-query span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.access-state-query strong {
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.access-state-action {
+  height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--tabs-border));
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)),
+      color-mix(in srgb, var(--primary-color) 4%, transparent)
+    );
+  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 var(--access-glass-highlight);
+}
+
+.access-state-action i {
+  color: var(--primary-color);
+}
+
+.access-state-action:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary-color) 10%, var(--card-bg)),
+      color-mix(in srgb, var(--primary-color) 5%, transparent)
+    );
 }
 
 /* ── CARD MESTRE DE DADOS (ABAS + CONTEÚDO UNIFICADOS - OPÇÃO B) ── */

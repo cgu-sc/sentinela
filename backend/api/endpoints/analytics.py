@@ -7,7 +7,7 @@ from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
-    PrescritoresResponse, DadosFarmaciaSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
+    PrescritoresResponse, DadosFarmaciaSchema, CnpjAccessStatusSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
@@ -18,6 +18,12 @@ from fastapi.responses import StreamingResponse
 import urllib.parse
 
 router = APIRouter()
+
+
+@router.get("/cnpj/{cnpj}/status", response_model=CnpjAccessStatusSchema)
+def get_cnpj_access_status(cnpj: str):
+    """Valida se o identificador da rota e um CNPJ do Programa Farmacia Popular."""
+    return AnalyticsService.get_cnpj_access_status(cnpj)
 
 
 @router.get("/cnpj/{cnpj}/cadastro", response_model=DadosFarmaciaSchema)

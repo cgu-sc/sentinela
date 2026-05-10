@@ -2,6 +2,10 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
+function normalizeCnpj(value) {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
 const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
 
 function buildTimingDetail(data) {
@@ -65,6 +69,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos:        new Map(),
     cnpjsAvulsosLoading: false,
+    cnpjAccessStatus:    'idle',
+    cnpjAccessCnpj:      null,
+    cnpjAccessMessage:   null,
+    cnpjAccessData:      null,
 
     // ── Municípios da região do CNPJ (para RegionalTab) ──────────────────────
     municipiosRegiao:        [],
@@ -108,6 +116,59 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
   }),
 
   actions: {
+    setInvalidCnpjFormat(cnpj) {
+      const clean = normalizeCnpj(cnpj);
+      this.cnpjAccessStatus = 'invalid_format';
+      this.cnpjAccessCnpj = clean;
+      this.cnpjAccessMessage = clean.length
+        ? `O identificador informado tem ${clean.length} digitos. A tela de estabelecimento aceita CNPJ com 14 digitos.`
+        : 'Informe um CNPJ com 14 digitos para abrir a tela de estabelecimento.';
+      this.cnpjAccessData = null;
+      return {
+        status: this.cnpjAccessStatus,
+        cnpj: clean,
+        message: this.cnpjAccessMessage,
+      };
+    },
+
+    async validateCnpjAccess(cnpj) {
+      const clean = normalizeCnpj(cnpj);
+      if (clean.length !== 14) {
+        return this.setInvalidCnpjFormat(clean);
+      }
+
+      this.cnpjAccessStatus = 'checking';
+      this.cnpjAccessCnpj = clean;
+      this.cnpjAccessMessage = null;
+      this.cnpjAccessData = null;
+
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCnpjStatus(clean));
+        this.cnpjAccessStatus = 'valid';
+        this.cnpjAccessData = data;
+        this.cnpjAccessMessage = null;
+        return data;
+      } catch (error) {
+        const statusCode = error?.response?.status;
+        const detail = error?.response?.data?.detail;
+        if (statusCode === 404) {
+          this.cnpjAccessStatus = detail?.status || 'not_in_program';
+          this.cnpjAccessMessage = detail?.message || 'CNPJ nao encontrado na base carregada do Programa Farmacia Popular.';
+        } else if (statusCode === 422) {
+          this.cnpjAccessStatus = detail?.status || 'invalid_format';
+          this.cnpjAccessMessage = detail?.message || 'A tela de estabelecimento aceita apenas CNPJ com 14 digitos.';
+        } else {
+          this.cnpjAccessStatus = 'error';
+          this.cnpjAccessMessage = ERROR_MSG;
+        }
+        this.cnpjAccessData = null;
+        return {
+          status: this.cnpjAccessStatus,
+          cnpj: clean,
+          message: this.cnpjAccessMessage,
+        };
+      }
+    },
     // ── Cadastro ──────────────────────────────────────────────────────────────
     async fetchDadosCadastro(cnpj) {
       if (!cnpj) return;
@@ -514,6 +575,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
       this.cnpjsAvulsos        = new Map();
       this.cnpjsAvulsosLoading = false;
+      this.cnpjAccessStatus    = 'idle';
+      this.cnpjAccessCnpj      = null;
+      this.cnpjAccessMessage   = null;
+      this.cnpjAccessData      = null;
 
       this.municipiosRegiao        = [];
       this.municipiosRegiaoKey     = null;

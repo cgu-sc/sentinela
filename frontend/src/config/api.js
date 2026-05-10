@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
     if (hour != null) url += `&hour=${hour}`;
     return url;
   },
+  analyticsCnpjStatus: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/status`,
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsSocios:   (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/socios`,
   analyticsNetwork:  (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/network`,

@@ -368,6 +368,15 @@ class DadosFarmaciaSchema(BaseModel):
     situacao_rf: Optional[str] = None
     porte_empresa: Optional[str] = None
 
+class CnpjAccessStatusSchema(BaseModel):
+    cnpj: str
+    status: str
+    in_program: bool
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+
 class SocioSchema(BaseModel):
     cnpj: str
     cpf_cnpj_socio: str

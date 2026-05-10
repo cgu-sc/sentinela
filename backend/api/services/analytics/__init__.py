@@ -17,7 +17,7 @@ from .dashboard import (
     get_resultado_sentinela,
 )
 from .falecidos import get_falecidos_data, get_timeline_cpf
-from .farmacia import get_dados_farmacia, get_movimentacao_data
+from .farmacia import get_cnpj_access_status, get_dados_farmacia, get_movimentacao_data
 from .socios import get_socios_farmacia
 from .network import (
     get_teia_grafo_nivel2, 
@@ -73,6 +73,7 @@ class AnalyticsService:
     sync_mediana_autorizacoes_horaria = staticmethod(sync_mediana_autorizacoes_horaria)
     get_crm_raio_x = staticmethod(get_crm_raio_x)
     get_dados_farmacia = staticmethod(get_dados_farmacia)
+    get_cnpj_access_status = staticmethod(get_cnpj_access_status)
     get_movimentacao_data = staticmethod(get_movimentacao_data)
     get_socios_farmacia = staticmethod(get_socios_farmacia)
     get_teia_grafo_nivel2 = staticmethod(get_teia_grafo_nivel2)

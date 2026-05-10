@@ -52,22 +52,79 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalResponse,
     GtinDetalhamentoMensalSummary,
     GtinDetalhamentoMensalItem,
+    CnpjAccessStatusSchema,
 )
 
 from ._cache import _get_cnpj_cache_dir
 
+def _clean_cnpj(value: str) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+def get_cnpj_access_status(cnpj: str) -> CnpjAccessStatusSchema:
+    clean_cnpj = _clean_cnpj(cnpj)
+    if len(clean_cnpj) != 14:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "invalid_format",
+                "message": "A tela de estabelecimento aceita apenas CNPJ com 14 digitos.",
+                "cnpj": clean_cnpj,
+            },
+        )
+
+    df = get_df_dados_farmacia()
+    rows = df.filter(pl.col("cnpj") == clean_cnpj)
+    if rows.is_empty():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "status": "not_in_program",
+                "message": "CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
+                "cnpj": clean_cnpj,
+            },
+        )
+
+    row = rows.select([
+        "cnpj",
+        "razao_social",
+        "nome_fantasia",
+        "municipio",
+        "uf",
+    ]).row(0, named=True)
+    return CnpjAccessStatusSchema(
+        cnpj=row["cnpj"],
+        status="valid",
+        in_program=True,
+        razao_social=row.get("razao_social"),
+        nome_fantasia=row.get("nome_fantasia"),
+        municipio=row.get("municipio"),
+        uf=row.get("uf"),
+    )
+
 def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
     """Retorna os dados cadastrais e geográficos de uma farmácia específica."""
     try:
-        from data_cache import get_df_dados_farmacia
+        clean_cnpj = _clean_cnpj(cnpj)
+        if len(clean_cnpj) != 14:
+            raise HTTPException(
+                status_code=422,
+                detail="A tela de estabelecimento aceita apenas CNPJ com 14 digitos.",
+            )
         df = get_df_dados_farmacia()
-        rows = df.filter(pl.col("cnpj") == cnpj)
+        rows = df.filter(pl.col("cnpj") == clean_cnpj)
         if rows.is_empty():
-            return DadosFarmaciaSchema(cnpj=cnpj)
+            raise HTTPException(
+                status_code=404,
+                detail="CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
+            )
         return DadosFarmaciaSchema(**rows.row(0, named=True))
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"⚠️ Erro ao buscar dados cadastrais da farmácia {cnpj}: {e}")
-        return DadosFarmaciaSchema(cnpj=cnpj)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar dados cadastrais da farmacia: {e}",
+        ) from e
 
 def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> MovimentacaoResponse:
     """

@@ -52,8 +52,10 @@ const expandedNodes = ref(new Set());
 // Filtros de visibilidade
 const showFiltersMenu = ref(false);
 const showLegendMenu = ref(false);
+const showLevelHelpMenu = ref(false);
 const layersMenuRoot = ref(null);
 const legendMenuRoot = ref(null);
+const levelHelpMenuRoot = ref(null);
 const layerFilters = ref({
   fp: true,
   outrasFarmacias: true,
@@ -705,6 +707,7 @@ const resetToN2 = async () => {
     currentLevel.value = "N2";
     showFiltersMenu.value = false;
     showLegendMenu.value = false;
+    showLevelHelpMenu.value = false;
     networkSearch.value = "";
     searchMatchCount.value = 0;
     selectedNode.value = null;
@@ -760,6 +763,7 @@ const expandBatch = async (mode) => {
   try {
     isBatchExpanding.value = true;
     loadingLevel.value = mode;
+    showLevelHelpMenu.value = false;
     if (mode === "N3") {
       const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
 
@@ -1735,6 +1739,15 @@ function handleFiltersMenuOutsideClick(event) {
   ) {
     showLegendMenu.value = false;
   }
+
+  const levelHelpRoot = levelHelpMenuRoot.value;
+  if (
+    showLevelHelpMenu.value &&
+    levelHelpRoot &&
+    !levelHelpRoot.contains(event.target)
+  ) {
+    showLevelHelpMenu.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -1819,9 +1832,6 @@ const typeLabels = {
                 :class="{ 'seg-active': currentLevel === 'N2' }"
                 @click="resetToN2"
                 :disabled="isBatchExpanding"
-                v-tooltip.bottom="
-                  'Nível 2: CNPJ em análise, sócios diretos e empresas ligadas a esses sócios'
-                "
               >
                 <i class="pi pi-refresh" />
                 <span>Nível 2</span>
@@ -1832,9 +1842,6 @@ const typeLabels = {
                 :class="{ 'seg-active': currentLevel === 'N3' }"
                 @click="expandBatch('N3')"
                 :disabled="isBatchExpanding"
-                v-tooltip.bottom="
-                  'Nível 3: sócios das empresas encontradas no nível 2'
-                "
               >
                 <i
                   :class="
@@ -1850,9 +1857,6 @@ const typeLabels = {
                 :class="{ 'seg-active': currentLevel === 'N4' }"
                 @click="expandBatch('N4')"
                 :disabled="isBatchExpanding"
-                v-tooltip.bottom="
-                  'Nível 4: empresas ligadas aos sócios encontrados no nível 3'
-                "
               >
                 <i
                   :class="
@@ -1863,6 +1867,37 @@ const typeLabels = {
                 />
                 <span>Nível 4</span>
               </button>
+              <div class="pill-sep"></div>
+              <div ref="levelHelpMenuRoot" class="level-help-menu-root">
+                <button
+                  class="seg-btn level-help-btn"
+                  :class="{ 'seg-active': showLevelHelpMenu }"
+                  type="button"
+                  aria-label="Ajuda sobre níveis"
+                  @click="
+                    showLevelHelpMenu = !showLevelHelpMenu;
+                    showFiltersMenu = false;
+                    showLegendMenu = false;
+                  "
+                >
+                  <i class="pi pi-question-circle" />
+                </button>
+
+                <div v-if="showLevelHelpMenu" class="level-help-menu" @click.stop>
+                  <div class="level-help-item">
+                    <strong>Nível 2</strong>
+                    <span>CNPJ em análise, sócios diretos e empresas ligadas a esses sócios.</span>
+                  </div>
+                  <div class="level-help-item">
+                    <strong>Nível 3</strong>
+                    <span>Adiciona os sócios das empresas encontradas no nível 2.</span>
+                  </div>
+                  <div class="level-help-item">
+                    <strong>Nível 4</strong>
+                    <span>Adiciona empresas ligadas aos sócios encontrados no nível 3.</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Pill de filtros + export -->
@@ -1875,6 +1910,7 @@ const typeLabels = {
                   @click="
                     showFiltersMenu = !showFiltersMenu;
                     showLegendMenu = false;
+                    showLevelHelpMenu = false;
                   "
                   v-tooltip.bottom="'Controle de camadas e filtros'"
                 >
@@ -2031,6 +2067,7 @@ const typeLabels = {
                   @click="
                     showLegendMenu = !showLegendMenu;
                     showFiltersMenu = false;
+                    showLevelHelpMenu = false;
                   "
                   v-tooltip.bottom="'Legenda do grafo'"
                 >
@@ -2352,6 +2389,50 @@ const typeLabels = {
 .seg-btn:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+.level-help-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.level-help-btn {
+  width: 28px;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+}
+
+.level-help-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 40;
+  width: 286px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--card-bg);
+  border: 1px solid var(--tabs-border);
+  border-radius: 10px;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.38),
+    0 0 0 1px color-mix(in srgb, var(--tabs-border) 34%, transparent);
+}
+
+.level-help-item {
+  display: grid;
+  gap: 0.18rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.level-help-item strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
 }
 
 /* Botões de filtro */

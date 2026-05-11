@@ -26,6 +26,7 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
         uf=row.get("uf"),
         situacao_rf=row.get("situacao_rf"),
         is_falecido=row.get("is_falecido", False),
+        is_cadunico=row["is_cadunico"],
     )
 
 

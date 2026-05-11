@@ -942,9 +942,14 @@ function isDeceasedPersonNode(node) {
   return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_falecido);
 }
 
+function isCadunicoPersonNode(node) {
+  return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_cadunico);
+}
+
 function getNodeClasses(node) {
   return [
     isCompanyNodeInactive(node) ? "inactive-company" : "",
+    isCadunicoPersonNode(node) ? "cadunico-pf" : "",
     isDeceasedPersonNode(node) ? "deceased-pf" : "",
   ]
     .filter(Boolean)
@@ -1311,6 +1316,7 @@ async function buildGraph(data) {
         nome_fantasia: n.nome_fantasia,
         id_cnae_principal: n.id_cnae_principal,
         is_falecido: isTruthyFlag(n.is_falecido),
+        is_cadunico: isTruthyFlag(n.is_cadunico),
       },
     })),
     ...data.edges.map((e) => ({
@@ -1452,6 +1458,7 @@ async function expandNode(nodeId) {
             situacao: n.situacao_rf,
             situacao_rf: n.situacao_rf,
             is_falecido: isTruthyFlag(n.is_falecido),
+            is_cadunico: isTruthyFlag(n.is_cadunico),
           },
           position: { ...cy.getElementById(nodeId).position() },
         });
@@ -1706,6 +1713,20 @@ function buildStylesheet() {
       shape: "roundrectangle",
       width: 54,
       height: 54 * 0.68,
+    },
+  });
+
+  // Pessoa Fisica inscrita no CadUnico
+  styles.push({
+    selector: "node.cadunico-pf",
+    style: {
+      "border-width": 4,
+      "border-color": "#f59e0b",
+      "underlay-color": "#f59e0b",
+      "underlay-opacity": 0.2,
+      "underlay-padding": 5,
+      "underlay-shape": "ellipse",
+      "z-index": 11,
     },
   });
 
@@ -2227,6 +2248,10 @@ const typeLabels = {
                     <span class="legend-label">Representante</span>
                   </div>
                   <div class="legend-item">
+                    <span class="legend-cadunico-ring"></span>
+                    <span class="legend-label">CadÚnico</span>
+                  </div>
+                  <div class="legend-item">
                     <span class="legend-line" style="border-top: 2px dotted #ef4444; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
                     <span class="legend-label">Vínculo Inativo</span>
                   </div>
@@ -2288,6 +2313,10 @@ const typeLabels = {
               <span class="legend-label">Representante</span>
             </div>
             <div class="legend-item">
+              <span class="legend-cadunico-ring"></span>
+              <span class="legend-label">CadÚnico</span>
+            </div>
+            <div class="legend-item">
               <span
                 class="legend-line"
                 style="
@@ -2341,6 +2370,14 @@ const typeLabels = {
               />
             </div>
             <div class="panel-fields">
+              <div
+                v-if="selectedNode.type === 'PF' && selectedNode.is_cadunico"
+                class="panel-field cadunico-field"
+              >
+                <i class="pi pi-id-card" />
+                <span>CadÚnico</span>
+                <span class="cadunico-badge">Inscrito</span>
+              </div>
               <div v-if="selectedNode.municipio" class="panel-field mt-1">
                 <i class="pi pi-map-marker" />
                 <span
@@ -2981,6 +3018,16 @@ const typeLabels = {
   flex-shrink: 0;
 }
 
+.legend-cadunico-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 15%, transparent);
+  flex-shrink: 0;
+}
+
 .legend-line {
   width: 18px;
   height: 2px;
@@ -3223,6 +3270,27 @@ const typeLabels = {
   color: var(--primary-color);
   font-size: 0.75rem;
   flex-shrink: 0;
+}
+
+.cadunico-field {
+  color: color-mix(in srgb, #f59e0b 75%, var(--text-color));
+}
+
+.cadunico-field i {
+  color: #f59e0b;
+}
+
+.cadunico-badge {
+  margin-left: auto;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .info-block {

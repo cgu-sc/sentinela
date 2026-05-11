@@ -243,12 +243,12 @@ def sync_network(cnpj: str) -> None:
 
             n2_n4_node_columns = {
                 "id", "label", "type", "razao_social", "nome_socio",
-                "nome_fantasia", "classification_version", "is_falecido"
+                "nome_fantasia", "classification_version", "is_falecido", "is_cadunico"
             }
             edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido"}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico"}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -295,6 +295,8 @@ def sync_network(cnpj: str) -> None:
                     "municipio": None,
                     "uf": None,
                     "situacao_rf": None,
+                    "is_falecido": False,
+                    "is_cadunico": False,
                 }
 
             edge_list.append({
@@ -326,6 +328,8 @@ def sync_network(cnpj: str) -> None:
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
                 "classification_version": COMPANY_CLASSIFICATION_VERSION,
+                "is_falecido": False,
+                "is_cadunico": False,
             }
         else:
             nodes[cnpj] = {
@@ -333,6 +337,7 @@ def sync_network(cnpj: str) -> None:
                 "razao_social": None, "nome_fantasia": None, "nome_socio": None,
                 "id_cnae_principal": None, "municipio": None, "uf": None,
                 "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
+                "is_falecido": False, "is_cadunico": False,
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -355,6 +360,7 @@ def sync_network(cnpj: str) -> None:
                     "uf": s.get("uf"),
                     "situacao_rf": None,
                     "is_falecido": bool(s.get("is_falecido", 0)),
+                    "is_cadunico": bool(s["is_cadunico"]),
                 }
 
             edges.append({
@@ -400,6 +406,8 @@ def sync_network(cnpj: str) -> None:
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
                         "classification_version": COMPANY_CLASSIFICATION_VERSION,
+                        "is_falecido": False,
+                        "is_cadunico": False,
                     }
 
                 edges.append({
@@ -448,6 +456,7 @@ def sync_network(cnpj: str) -> None:
                         "uf": row.get("uf"),
                         "situacao_rf": None,
                         "is_falecido": bool(row.get("is_falecido", 0)),
+                        "is_cadunico": bool(row["is_cadunico"]),
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_pai}"
@@ -477,13 +486,13 @@ def sync_network(cnpj: str) -> None:
 
         n2_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido"
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido", "is_cadunico"
         ]
         n2_node_schema = {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
             "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "classification_version": pl.Int16, "is_falecido": pl.Boolean,
+            "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
@@ -501,10 +510,10 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(edges if edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
-        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf", "is_falecido"]
+        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf", "is_falecido", "is_cadunico"]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
-            "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
@@ -544,6 +553,8 @@ def sync_network(cnpj: str) -> None:
                         "uf": row["uf"],
                         "situacao_rf": row["situacao_rf"],
                         "classification_version": COMPANY_CLASSIFICATION_VERSION,
+                        "is_falecido": False,
+                        "is_cadunico": False,
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_ext}"
@@ -568,13 +579,13 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido"
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido", "is_cadunico"
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
             "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "classification_version": pl.Int16, "is_falecido": pl.Boolean,
+            "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")

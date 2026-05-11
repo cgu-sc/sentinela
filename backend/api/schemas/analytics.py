@@ -417,6 +417,7 @@ class NetworkNodeSchema(BaseModel):
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None
     is_falecido: Optional[bool] = False
+    is_cadunico: bool
 
 class NetworkEdgeSchema(BaseModel):
     id: str

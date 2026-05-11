@@ -268,6 +268,12 @@ SELECT
     temp_CGUSC.dbo.InitCapEachWord(cnae_p.DescSubClasseCNAE)   AS cnae_principal,
     cnae_s_base.idSubClasseCNAE                                AS id_cnae_secundario,
     temp_CGUSC.dbo.InitCapEachWord(cnae_s.DescSubClasseCNAE)   AS cnae_secundario,
+    CASE
+        WHEN TRY_CAST(c.CnaeFiscal AS INT) IN (4771701, 4771702)
+          OR TRY_CAST(cnae_s_base.idSubClasseCNAE AS INT) IN (4771701, 4771702)
+        THEN CAST(0 AS TINYINT)
+        ELSE CAST(1 AS TINYINT)
+    END                                                        AS is_cnae_farmacia_ausente,
     c.Telefone1                                                AS telefone_1,
     c.Telefone2                                                AS telefone_2,
     LOWER(c.CorreioEletronico)                                 AS correio_eletronico,
@@ -332,6 +338,7 @@ SELECT
     f.cnae_principal,
     f.id_cnae_secundario,
     f.cnae_secundario,
+    f.is_cnae_farmacia_ausente,
     f.telefone_1,
     f.telefone_2,
     f.correio_eletronico,

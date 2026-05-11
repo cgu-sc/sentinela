@@ -3,6 +3,7 @@ import os
 import polars as pl
 from decimal import Decimal
 from datetime import date
+from statistics import median
 from typing import Any, Optional
 from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
@@ -11,11 +12,14 @@ from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-from data_cache import get_df_matriz_risco
+from data_cache import get_df_matriz_risco, get_localidades_df, get_medicamentos_df
+from ._cache import _get_cnpj_cache_dir
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
+from .financeiro import get_evolucao_mensal_gtin
 from .socios import get_socios_farmacia
 from .indicadores import _INDICATOR_FLAGS
+from .regional import get_regional_benchmarking
 
 
 # ── Helpers XML ──────────────────────────────────────────────────────────────
@@ -121,6 +125,340 @@ def _format_cpf_cnpj(v: str | None) -> str:
     if len(clean) == 14:
         return f"{clean[:2]}.{clean[2:5]}.{clean[5:8]}/{clean[8:12]}-{clean[12:]}"
     return v
+
+
+def _format_decimal_pt(value: float, decimals: int = 2) -> str:
+    """Formata numero decimal no padrao brasileiro."""
+    return f"{value:,.{decimals}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _format_list_pt(items: list[str]) -> str:
+    """Formata lista em portugues: A, B e C."""
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        raise RuntimeError("Lista de municipios obrigatoria para comparacao regional da Nota Tecnica.")
+    if len(unique_items) == 1:
+        return unique_items[0]
+    if len(unique_items) == 2:
+        return f"{unique_items[0]} e {unique_items[1]}"
+    return f"{', '.join(unique_items[:-1])} e {unique_items[-1]}"
+
+
+def _resolve_regional_context(cadastro: dict) -> dict[str, Any]:
+    """Resolve id_regiao_saude a partir do id_ibge7 cadastral da farmacia."""
+    id_ibge7 = cadastro.get("id_ibge7")
+    if id_ibge7 in (None, "", "None"):
+        raise RuntimeError("id_ibge7 e obrigatorio para resolver a Regiao de Saude da Nota Tecnica.")
+
+    df_loc = get_localidades_df()
+    required_cols = {"id_ibge7", "id_regiao_saude", "sg_uf", "no_regiao_saude"}
+    missing_cols = required_cols - set(df_loc.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Cache de localidades sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    rows = df_loc.filter(pl.col("id_ibge7").cast(pl.String) == str(id_ibge7))
+    if rows.is_empty():
+        raise RuntimeError(f"id_ibge7 {id_ibge7} nao encontrado no cache de localidades.")
+
+    row = rows.row(0, named=True)
+    id_regiao_saude = row.get("id_regiao_saude")
+    uf = row.get("sg_uf")
+    nome_regiao = row.get("no_regiao_saude")
+    if id_regiao_saude in (None, "", "None") or not uf:
+        raise RuntimeError(f"Localidade {id_ibge7} sem id_regiao_saude/UF obrigatorios para Nota Tecnica.")
+    if nome_regiao in (None, "", "None"):
+        raise RuntimeError(f"Localidade {id_ibge7} sem no_regiao_saude obrigatorio para texto da Nota Tecnica.")
+
+    return {
+        "id_regiao_saude": int(id_regiao_saude),
+        "uf": str(uf),
+        "nome_regiao": str(nome_regiao),
+    }
+
+
+def _build_regional_comparison_context(
+    cnpj_data: dict,
+    cadastro: dict,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Calcula comparacao do percentual do CNPJ contra a mediana regional no periodo."""
+    regional_context = _resolve_regional_context(cadastro)
+    regional = get_regional_benchmarking(
+        uf=regional_context["uf"],
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        regiao_id=regional_context["id_regiao_saude"],
+    )
+
+    if not regional.farmacias:
+        raise RuntimeError("Benchmarking regional sem farmacias para o periodo da Nota Tecnica.")
+
+    percentual_cnpj = cnpj_data.get("percValSemComp")
+    if percentual_cnpj is None:
+        raise RuntimeError("percValSemComp e obrigatorio para comparacao regional da Nota Tecnica.")
+
+    percentuais_regionais = [
+        float(f.percValSemComp)
+        for f in regional.farmacias
+        if f.percValSemComp is not None
+    ]
+    if not percentuais_regionais:
+        raise RuntimeError("Percentuais regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
+
+    mediana_regional = float(median(percentuais_regionais))
+    if mediana_regional <= 0:
+        raise RuntimeError("Mediana regional deve ser maior que zero para calcular o multiplicador da Nota Tecnica.")
+
+    municipios = [m.municipio for m in regional.municipios if m.municipio]
+    if not municipios:
+        raise RuntimeError("Municipios regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
+
+    return {
+        **regional_context,
+        "multiplicador": float(percentual_cnpj) / mediana_regional,
+        "mediana_regional": mediana_regional,
+        "qtd_farmacias": len(regional.farmacias),
+        "municipios": municipios,
+    }
+
+
+def _normalize_gtin(value: Any) -> str:
+    """Normaliza GTIN/codigo de barras preservando zeros quando vier como texto."""
+    text = str(value).strip()
+    return text.split(".")[0] if "." in text else text
+
+
+def _build_medicamentos_lookup() -> dict[str, str]:
+    """Monta lookup GTIN -> descricao obrigatoria do medicamento."""
+    df_med = get_medicamentos_df()
+    required_cols = {"codigo_barra"}
+    missing_cols = required_cols - set(df_med.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Cache de medicamentos sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    lookup: dict[str, str] = {}
+    for row in df_med.iter_rows(named=True):
+        codigo = row.get("codigo_barra")
+        if codigo in (None, "", "None"):
+            continue
+        descricao = row.get("principio_ativo") or row.get("produto") or row.get("descricao")
+        if descricao in (None, "", "None"):
+            continue
+        gtin = _normalize_gtin(codigo)
+        lookup[gtin] = str(descricao)
+
+    if not lookup:
+        raise RuntimeError("Cache de medicamentos sem descricoes validas para Nota Tecnica.")
+    return lookup
+
+
+def _build_gtin_sem_comprovacao_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    concentration_target: float = 0.80,
+) -> dict[str, Any]:
+    """Agrega todos os GTINs com valor sem comprovacao no periodo e calcula concentracao."""
+    get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
+
+    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), "movimentacao_mensal_gtin.parquet")
+    if not os.path.exists(parquet_path):
+        raise RuntimeError(f"Parquet mensal por GTIN obrigatorio nao encontrado para Nota Tecnica: {parquet_path}.")
+
+    df = pl.read_parquet(parquet_path)
+    required_cols = {
+        "codigo_barra",
+        "periodo",
+        "qnt_vendas_sem_comprovacao",
+        "valor_sem_comprovacao",
+    }
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Parquet mensal por GTIN sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    df = df.with_columns([
+        pl.col("codigo_barra").cast(pl.String),
+        pl.col("periodo").cast(pl.Date),
+        pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64, strict=False).fill_null(0),
+        pl.col("valor_sem_comprovacao").cast(pl.Float64, strict=False).fill_null(0.0),
+    ])
+    if data_inicio:
+        df = df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        df = df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+
+    if df.is_empty():
+        raise RuntimeError("Movimentacao mensal por GTIN vazia no periodo da Nota Tecnica.")
+
+    agg = (
+        df.group_by("codigo_barra")
+        .agg([
+            pl.sum("qnt_vendas_sem_comprovacao").alias("qtd_sem_comprovacao"),
+            pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+        ])
+        .filter(pl.col("valor_sem_comprovacao") > 0)
+        .sort("valor_sem_comprovacao", descending=True)
+    )
+    if agg.is_empty():
+        raise RuntimeError("Nenhum GTIN com valor sem comprovacao encontrado no periodo da Nota Tecnica.")
+
+    medicamentos_lookup = _build_medicamentos_lookup()
+    rows: list[dict[str, Any]] = []
+    missing_descriptions: list[str] = []
+    for r in agg.iter_rows(named=True):
+        gtin = _normalize_gtin(r["codigo_barra"])
+        descricao = medicamentos_lookup.get(gtin)
+        if not descricao:
+            missing_descriptions.append(gtin)
+            continue
+        rows.append({
+            "gtin": gtin,
+            "descricao": descricao,
+            "qtd_sem_comprovacao": int(r["qtd_sem_comprovacao"] or 0),
+            "valor_sem_comprovacao": round(float(r["valor_sem_comprovacao"] or 0.0), 2),
+        })
+
+    if missing_descriptions:
+        preview = ", ".join(missing_descriptions[:10])
+        raise RuntimeError(f"Descricao obrigatoria ausente para GTIN(s) da Nota Tecnica: {preview}.")
+    if not rows:
+        raise RuntimeError("Lista de GTINs sem comprovacao vazia apos enriquecimento de medicamentos.")
+
+    total_valor = round(sum(r["valor_sem_comprovacao"] for r in rows), 2)
+    total_qtd = sum(r["qtd_sem_comprovacao"] for r in rows)
+    target_value = total_valor * concentration_target
+    acumulado = 0.0
+    representativos_count = 0
+    for row in rows:
+        if acumulado >= target_value and representativos_count > 0:
+            break
+        acumulado += row["valor_sem_comprovacao"]
+        representativos_count += 1
+
+    representativos_valor = round(acumulado, 2)
+    representativos_pct = (representativos_valor / total_valor * 100) if total_valor > 0 else 0.0
+
+    return {
+        "rows": rows,
+        "total_gtins": len(rows),
+        "total_qtd": total_qtd,
+        "total_valor": total_valor,
+        "representativos_count": representativos_count,
+        "representativos_valor": representativos_valor,
+        "representativos_pct": representativos_pct,
+        "concentration_target_pct": concentration_target * 100,
+    }
+
+
+def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str):
+    """Adiciona quadro compacto comparando a farmacia auditada com a mediana regional."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=5, cols=2)
+    table.style = 'Table Grid'
+
+    hdr_cells = table.rows[0].cells
+    _run(hdr_cells[0].paragraphs[0], 'Métrica', bold=True)
+    _run(hdr_cells[1].paragraphs[0], 'Valor', bold=True)
+    for cell in hdr_cells:
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _cell_bg(cell, 'E2E8F0')
+
+    rows = [
+        ('Percentual da farmácia auditada', f'{_format_decimal_pt(float(cnpj_data["percValSemComp"]), 2)}%'),
+        ('Mediana regional', f'{_format_decimal_pt(regional_comp["mediana_regional"], 2)}%'),
+        ('Multiplicador sobre a mediana regional', f'{_format_decimal_pt(regional_comp["multiplicador"], 2)} vezes'),
+        ('Farmácias consideradas na região', f'{regional_comp["qtd_farmacias"]}'),
+    ]
+
+    for idx, (label, value) in enumerate(rows, start=1):
+        cells = table.rows[idx].cells
+        _run(cells[0].paragraphs[0], label, color='475569', size=9)
+        value_para = cells[1].paragraphs[0]
+        value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(value_para, value, color='0F172A', size=9, bold=True)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+
+    p_foot = doc.add_paragraph()
+    _run(p_foot, f'Fonte: Sistema Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
+
+
+def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gtin_comp: dict[str, Any], periodo_txt: str):
+    """Adiciona quadro com todos os GTINs com vendas sem comprovacao no periodo."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoques amparados em notas fiscais de suas aquisições, no período de {periodo_txt}.',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    rows_data = gtin_comp["rows"]
+    table = doc.add_table(rows=len(rows_data) + 2, cols=4)
+    table.style = 'Table Grid'
+
+    headers = [
+        'GTIN/Código de Barras',
+        'Descrição',
+        'Quantidade de vendas sem comprovação',
+        'Valor em venda sem comprovação (R$)',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        _run(cells[0].paragraphs[0], item["gtin"], color='0F172A', size=8)
+        _run(cells[1].paragraphs[0], item["descricao"], color='0F172A', size=8)
+        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[2].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
+        cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _run(cells[3].paragraphs[0], _format_decimal_pt(item["valor_sem_comprovacao"], 2), color='0F172A', size=8)
+
+    total_cells = table.rows[-1].cells
+    total_cells[0].merge(total_cells[1])
+    _run(total_cells[0].paragraphs[0], 'TOTAIS', color='0F172A', size=8, bold=True)
+    total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    total_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(total_cells[2].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
+    total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(total_cells[3].paragraphs[0], _format_decimal_pt(gtin_comp["total_valor"], 2), color='0F172A', size=8, bold=True)
+    for cell in total_cells:
+        _cell_bg(cell, 'F8FAFC')
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _run(p_foot, f'Fonte: informações acerca das dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
 
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
@@ -414,7 +752,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     razao_social = (cadastro.get('razao_social') or cnpj_data.get('razao_social') or 'NÃO INFORMADO').upper()
     municipio = cnpj_data.get('municipio') or cadastro.get('municipio') or '—'
     uf = cnpj_data.get('uf') or cadastro.get('uf') or '—'
-    regiao_saude = cadastro.get('no_regiao_saude') or cnpj_data.get('no_regiao_saude') or ''
     cnpj_fmt = f'{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}' if len(cnpj) == 14 and cnpj.isdigit() else cnpj
 
     logradouro = ' '.join(p for p in [cadastro.get('tipo_logradouro') or '', cadastro.get('logradouro') or ''] if p).strip()
@@ -870,6 +1207,43 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_conclusao_53, ', que corresponde a um potencial desvio de recursos públicos no montante estimado de ', color='0F172A', size=10)
     _run(p_conclusao_53, f'R$ {val_fmt}', color='EF4444', size=10, bold=True)
     _run(p_conclusao_53, '.', color='0F172A', size=10)
+
+    regional_comp = _build_regional_comparison_context(cnpj_data, cadastro, data_inicio, data_fim)
+    multiplicador_fmt = _format_decimal_pt(regional_comp["multiplicador"], 2)
+    qtd_farmacias = regional_comp["qtd_farmacias"]
+    farmacia_txt = "farmácia" if qtd_farmacias == 1 else "farmácias"
+    opera_txt = "opera" if qtd_farmacias == 1 else "operam"
+    municipios_txt = _format_list_pt(regional_comp["municipios"])
+
+    p_regional_53 = doc.add_paragraph()
+    _run(p_regional_53, 'Esse percentual corresponde a ', color='0F172A', size=10)
+    _run(p_regional_53, f'{multiplicador_fmt} vezes', color='EF4444', size=10, bold=True)
+    _run(p_regional_53, f' a mediana regional dos percentuais de “vendas sem comprovação” observada entre as farmácias da Região de Saúde “{regional_comp["nome_regiao"]}”. No período analisado, essa região reunia ', color='0F172A', size=10)
+    _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='0F172A', size=10, bold=True)
+    _run(p_regional_53, f' {opera_txt} no PFPB, distribuídas nos seguintes municípios: {municipios_txt}.', color='0F172A', size=10)
+
+    _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
+
+    gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
+    p_gtin_intro = doc.add_paragraph()
+    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoques amparados em notas fiscais de suas aquisições, constantes do levantamento consolidado apresentado no Quadro 02, relacionam-se os seguintes GTINs com vendas sem comprovação no período analisado:', color='0F172A', size=10)
+
+    _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
+
+    p_gtin_conclusao = doc.add_paragraph()
+    gtins_txt = "GTIN" if gtin_comp["total_gtins"] == 1 else "GTINs"
+    representativos_txt = "GTIN" if gtin_comp["representativos_count"] == 1 else "GTINs"
+    _run(p_gtin_conclusao, f'Conforme o Quadro 04, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='0F172A', size=10, bold=True)
+    _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, '. Observa-se, contudo, concentração relevante em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{gtin_comp["representativos_count"]} {representativos_txt}', color='0F172A', size=10, bold=True)
+    _run(p_gtin_conclusao, ', que respondem por ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["representativos_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, ', equivalentes a ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{_format_decimal_pt(gtin_comp["representativos_pct"], 1)}%', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, f' do total listado, considerando o menor conjunto de GTINs necessário para atingir ao menos {_format_decimal_pt(gtin_comp["concentration_target_pct"], 0)}% do valor sem comprovação.', color='0F172A', size=10)
     
     doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
     doc.add_paragraph('Monitoramento de picos de faturamento incompatíveis com a média histórica ou regional...')

@@ -233,8 +233,11 @@ def _schema_cnpj_parquet(pl):
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
-            "id_cnae_principal": pl.Int32, "classification_version": pl.Int16,
+            "id_cnae_principal": pl.Int32, "cnae_principal": pl.Utf8,
+            "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
+            "classification_version": pl.Int16,
             "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         },
         "teia_grafo_nivel2_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,
@@ -245,6 +248,7 @@ def _schema_cnpj_parquet(pl):
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "nome_socio": pl.Utf8, "municipio": pl.Utf8, "uf": pl.Utf8,
             "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         },
         "teia_grafo_nivel3_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,
@@ -255,8 +259,11 @@ def _schema_cnpj_parquet(pl):
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
-            "id_cnae_principal": pl.Int32, "classification_version": pl.Int16,
+            "id_cnae_principal": pl.Int32, "cnae_principal": pl.Utf8,
+            "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
+            "classification_version": pl.Int16,
             "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         },
         "teia_grafo_nivel4_edges.parquet": {
             "id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8, "label": pl.Utf8,

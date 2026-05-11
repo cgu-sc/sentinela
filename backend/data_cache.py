@@ -160,6 +160,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.cnae_principal as cnae_principal,
                D.id_cnae_secundario as id_cnae_secundario, 
                D.cnae_secundario as cnae_secundario,
+               D.is_cnae_farmacia_ausente as is_cnae_farmacia_ausente,
                D.data_abertura as data_abertura,
                D.data_processamento as data_processamento,
                D.natureza_juridica as natureza_juridica,
@@ -192,6 +193,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
         (pl.col("is_matriz") == "M").alias("is_matriz"),
         pl.col("id_cnae_principal").cast(pl.String),
         pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
+        pl.col("is_cnae_farmacia_ausente").cast(pl.Int8),
     ]).sort("cnpj")
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
 
@@ -630,6 +632,13 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _cache_status = "loading_parquet"
         missing = []
         required_columns = {
+            "dados_farmacia": {
+                "id_cnae_principal",
+                "cnae_principal",
+                "id_cnae_secundario",
+                "cnae_secundario",
+                "is_cnae_farmacia_ausente",
+            },
             "dados_socios": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel2": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel3": {"is_cadunico", "is_falecido"},

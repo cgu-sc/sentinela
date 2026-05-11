@@ -22,11 +22,15 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
         nome_socio=row.get("nome_socio") if is_pf else None,
         nome_fantasia=row.get("nome_fantasia"),
         id_cnae_principal=row.get("id_cnae_principal"),
+        cnae_principal=None if is_pf else row.get("cnae_principal"),
+        id_cnae_secundario=None if is_pf else row.get("id_cnae_secundario"),
+        cnae_secundario=None if is_pf else row.get("cnae_secundario"),
         municipio=row.get("municipio"),
         uf=row.get("uf"),
         situacao_rf=row.get("situacao_rf"),
         is_falecido=row.get("is_falecido", False),
         is_cadunico=row["is_cadunico"],
+        is_cnae_farmacia_ausente=row["is_cnae_farmacia_ausente"],
     )
 
 

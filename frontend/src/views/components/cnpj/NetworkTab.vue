@@ -52,6 +52,11 @@ const formatSocietyDate = (value) => {
   return String(value);
 };
 
+const formatCnaeEvidence = (id, description) => {
+  const code = id ? String(id) : "Não informado";
+  return description ? `${code} - ${description}` : code;
+};
+
 const copyAndSignal = (text, key) => {
   if (!text) return;
   navigator.clipboard.writeText(text);
@@ -69,6 +74,81 @@ const totalNodes = computed(() =>
 const totalEdges = computed(() =>
   graphReady.value ? graphCounts.value.edges : baseTotalEdges.value,
 );
+
+const getPersonAlertName = (node) =>
+  node.nome_socio || node.fullLabel || node.label || node.id;
+
+const getCompanyAlertName = (node) =>
+  node.nome_fantasia || node.razao_social || node.fullLabel || node.label || node.id;
+
+const readAlertNodes = () => {
+  if (graphReady.value && cy) {
+    return cy
+      .nodes(":visible")
+      .map((node) => ({
+        id: node.id(),
+        type: node.data("type"),
+        nome_socio: node.data("nome_socio"),
+        nome_fantasia: node.data("nome_fantasia"),
+        razao_social: node.data("razao_social"),
+        fullLabel: node.data("fullLabel"),
+        label: node.data("label"),
+        is_falecido: node.data("is_falecido"),
+        is_cadunico: node.data("is_cadunico"),
+        is_cnae_farmacia_ausente: node.data("is_cnae_farmacia_ausente"),
+      }));
+  }
+
+  return (networkData.value?.nodes || []).map((node) => ({
+    ...node,
+    fullLabel: node.label,
+  }));
+};
+
+const networkAlertGroups = computed(() => {
+  graphCounts.value;
+  const alertNodes = readAlertNodes();
+  const people = alertNodes
+    .filter((node) => (node.type || "PF") === "PF")
+    .map((node) => ({
+      id: node.id,
+      name: getPersonAlertName(node),
+      is_falecido: isTruthyFlag(node.is_falecido),
+      is_cadunico: isTruthyFlag(node.is_cadunico),
+    }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  const companies = alertNodes
+    .filter((node) => (node.type || "PF") !== "PF")
+    .map((node) => ({
+      id: node.id,
+      name: getCompanyAlertName(node),
+      is_cnae_farmacia_ausente: isTruthyFlag(node.is_cnae_farmacia_ausente),
+    }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+
+  return [
+    {
+      key: "cnae-ausente",
+      label: "CNAE ausente",
+      icon: "legend-cnae-alert",
+      items: companies.filter((node) => node.is_cnae_farmacia_ausente),
+    },
+    {
+      key: "falecidos",
+      label: "Falecidos",
+      icon: "legend-deceased-cross",
+      items: people.filter((node) => node.is_falecido),
+    },
+    {
+      key: "cadunico",
+      label: "CadÚnico",
+      icon: "legend-cadunico-ring",
+      items: people.filter((node) => node.is_cadunico),
+    },
+  ].filter((group) => group.items.length > 0);
+});
+
+const hasNetworkAlerts = computed(() => networkAlertGroups.value.length > 0);
 
 // Expansão
 const isExpanding = ref(false);
@@ -121,11 +201,13 @@ function getLayoutBoundingBox() {
   const height = cyContainer.value.clientHeight || cy.height();
   if (!width || !height) return undefined;
 
+  const rightReserve = getGraphRightReservePx(width);
+
   return {
     x1: -width * 0.15,
-    y1: height * 0.04,
-    w: width * 1.3,
-    h: height * 0.82,
+    y1: height * 0.12,
+    w: Math.max(width * 0.82, width * 1.3 - rightReserve),
+    h: height * 0.74,
   };
 }
 
@@ -1012,6 +1094,14 @@ const buildSelectedNodePayload = (node) => {
   };
 };
 
+function selectGraphNode(nodeId) {
+  if (!cy || !nodeId) return;
+  const node = cy.getElementById(nodeId);
+  if (!node.length || node.hidden()) return;
+  selectedNode.value = buildSelectedNodePayload(node);
+  applyGraphHighlights();
+}
+
 const clearGraphHighlights = () => {
   if (!cy) return;
   cy.elements().removeClass("faded highlighted");
@@ -1260,9 +1350,74 @@ function applyNodeDensitySizing() {
 }
 
 const INITIAL_FIT_PADDING = 48;
+const GRAPH_RIGHT_OVERLAY_GAP = 24;
+const GRAPH_RIGHT_RESERVE_MAX_RATIO = 0.32;
 const REFIT_DELAY_MS = 80;
 const DENSE_GRAPH_NODE_THRESHOLD = 28;
 const MAX_DENSE_LAYOUT_SCALE = 2.8;
+
+function getGraphRightReservePx(containerWidth) {
+  if (!cyContainer.value || !containerWidth) return 0;
+
+  const wrapper = cyContainer.value.parentElement;
+  if (!wrapper) return 0;
+
+  const overlaySelectors = [
+    ".node-detail-panel",
+    ".graph-alerts-overlay",
+    ".graph-stats-overlay",
+    ".graph-controls",
+  ];
+  const overlayWidth = overlaySelectors.reduce((maxWidth, selector) => {
+    const element = wrapper.querySelector(selector);
+    if (!element) return maxWidth;
+    return Math.max(maxWidth, element.getBoundingClientRect().width || 0);
+  }, 0);
+
+  if (!overlayWidth) return 0;
+
+  return Math.min(
+    overlayWidth + GRAPH_RIGHT_OVERLAY_GAP,
+    containerWidth * GRAPH_RIGHT_RESERVE_MAX_RATIO,
+  );
+}
+
+function getGraphFitViewport(elements, padding, rightReserve = 0) {
+  if (!cy || !cyContainer.value || elements.empty()) return null;
+
+  const { clientWidth, clientHeight } = cyContainer.value;
+  if (!clientWidth || !clientHeight) return null;
+
+  const leftPadding = padding;
+  const rightPadding = padding + rightReserve;
+  const topPadding = padding;
+  const bottomPadding = padding;
+  const availableWidth = Math.max(80, clientWidth - leftPadding - rightPadding);
+  const availableHeight = Math.max(80, clientHeight - topPadding - bottomPadding);
+  const box = elements.boundingBox({ includeLabels: true });
+  const boxWidth = Math.max(1, box.w);
+  const boxHeight = Math.max(1, box.h);
+  const zoom = Math.max(
+    cy.minZoom(),
+    Math.min(cy.maxZoom(), Math.min(availableWidth / boxWidth, availableHeight / boxHeight)),
+  );
+  const graphCenter = {
+    x: box.x1 + boxWidth / 2,
+    y: box.y1 + boxHeight / 2,
+  };
+  const viewportCenter = {
+    x: leftPadding + availableWidth / 2,
+    y: topPadding + availableHeight / 2,
+  };
+
+  return {
+    zoom,
+    pan: {
+      x: viewportCenter.x - graphCenter.x * zoom,
+      y: viewportCenter.y - graphCenter.y * zoom,
+    },
+  };
+}
 
 function getDenseLayoutScale(nodeCount) {
   if (nodeCount <= DENSE_GRAPH_NODE_THRESHOLD) return 1;
@@ -1315,8 +1470,12 @@ async function buildGraph(data) {
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
         id_cnae_principal: n.id_cnae_principal,
+        cnae_principal: n.cnae_principal,
+        id_cnae_secundario: n.id_cnae_secundario,
+        cnae_secundario: n.cnae_secundario,
         is_falecido: isTruthyFlag(n.is_falecido),
         is_cadunico: isTruthyFlag(n.is_cadunico),
+        is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
       },
     })),
     ...data.edges.map((e) => ({
@@ -1396,8 +1555,7 @@ async function buildGraph(data) {
   // Eventos interativos
   cy.on("tap", "node", (e) => {
     const node = e.target;
-    selectedNode.value = buildSelectedNodePayload(node);
-    applyGraphHighlights();
+    selectGraphNode(node.id());
   });
 
   cy.on("tap", (e) => {
@@ -1453,12 +1611,16 @@ async function expandNode(nodeId) {
             razao_social: n.razao_social,
             nome_fantasia: n.nome_fantasia,
             id_cnae_principal: n.id_cnae_principal,
+            cnae_principal: n.cnae_principal,
+            id_cnae_secundario: n.id_cnae_secundario,
+            cnae_secundario: n.cnae_secundario,
             municipio: n.municipio,
             uf: n.uf,
             situacao: n.situacao_rf,
             situacao_rf: n.situacao_rf,
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
+            is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
           },
           position: { ...cy.getElementById(nodeId).position() },
         });
@@ -1602,9 +1764,13 @@ function fitGraphToView(
   if (visibleElements.empty()) return;
 
   cy.resize();
+  const rightReserve = getGraphRightReservePx(clientWidth);
+  const targetViewport = getGraphFitViewport(visibleElements, padding, rightReserve);
+  if (!targetViewport) return;
+
   if (animate) {
     cy.animate(
-      { fit: { eles: visibleElements, padding } },
+      targetViewport,
       {
         duration,
         complete: () => {
@@ -1614,8 +1780,7 @@ function fitGraphToView(
     );
     return;
   }
-  cy.fit(visibleElements, padding);
-  cy.center(visibleElements);
+  cy.viewport(targetViewport);
   zoom.value = Math.round(cy.zoom() * 100);
 }
 
@@ -2249,6 +2414,10 @@ const typeLabels = {
                     <span class="legend-label">CadÚnico</span>
                   </div>
                   <div class="legend-item">
+                    <span class="legend-deceased-cross"></span>
+                    <span class="legend-label">Falecido</span>
+                  </div>
+                  <div class="legend-item">
                     <span class="legend-line" style="border-top: 2px dotted #ef4444; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
                     <span class="legend-label">Vínculo Inativo</span>
                   </div>
@@ -2266,6 +2435,35 @@ const typeLabels = {
             <div class="stat-item">
               <span class="stat-value">{{ totalEdges }}</span>
               <span class="stat-label">Vínculos</span>
+            </div>
+          </div>
+
+          <div
+            v-if="hasNetworkAlerts"
+            class="graph-alerts-overlay"
+            aria-label="Alertas da teia"
+          >
+            <div class="alerts-title">Alertas</div>
+            <div
+              v-for="group in networkAlertGroups"
+              :key="group.key"
+              class="alert-group"
+            >
+              <div class="alert-group-header">
+                <span :class="group.icon"></span>
+                <span>{{ group.label }}</span>
+                <span class="alert-count">{{ group.items.length }}</span>
+              </div>
+              <button
+                v-for="item in group.items"
+                :key="`${group.key}-${item.id}`"
+                type="button"
+                class="alert-person"
+                :class="{ active: selectedNode?.id === item.id }"
+                @click="selectGraphNode(item.id)"
+              >
+                <span class="alert-person-name">{{ item.name }}</span>
+              </button>
             </div>
           </div>
 
@@ -2312,6 +2510,10 @@ const typeLabels = {
             <div class="legend-item">
               <span class="legend-cadunico-ring"></span>
               <span class="legend-label">CadÚnico</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-deceased-cross"></span>
+              <span class="legend-label">Falecido</span>
             </div>
             <div class="legend-item">
               <span
@@ -2368,12 +2570,41 @@ const typeLabels = {
             </div>
             <div class="panel-fields">
               <div
+                v-if="selectedNode.type === 'PF' && selectedNode.is_falecido"
+                class="panel-field deceased-field"
+              >
+                <i class="pi pi-times-circle" />
+                <span>Falecido</span>
+                <span class="deceased-badge">Óbito</span>
+              </div>
+              <div
                 v-if="selectedNode.type === 'PF' && selectedNode.is_cadunico"
                 class="panel-field cadunico-field"
               >
                 <i class="pi pi-id-card" />
                 <span>CadÚnico</span>
                 <span class="cadunico-badge">Inscrito</span>
+              </div>
+              <div
+                v-if="selectedNode.type !== 'PF' && selectedNode.is_cnae_farmacia_ausente"
+                class="panel-field cnae-alert-field"
+              >
+                <i class="pi pi-exclamation-triangle" />
+                <span>CNAE farmácia</span>
+                <span class="cnae-alert-badge">Ausente</span>
+              </div>
+              <div
+                v-if="selectedNode.type !== 'PF' && selectedNode.is_cnae_farmacia_ausente"
+                class="cnae-evidence"
+              >
+                <div class="cnae-evidence-row">
+                  <span>Principal</span>
+                  <strong>{{ formatCnaeEvidence(selectedNode.id_cnae_principal, selectedNode.cnae_principal) }}</strong>
+                </div>
+                <div class="cnae-evidence-row">
+                  <span>Secundário</span>
+                  <strong>{{ formatCnaeEvidence(selectedNode.id_cnae_secundario, selectedNode.cnae_secundario) }}</strong>
+                </div>
               </div>
               <div v-if="selectedNode.municipio" class="panel-field mt-1">
                 <i class="pi pi-map-marker" />
@@ -2467,8 +2698,10 @@ const typeLabels = {
   top: 1rem;
   right: 1rem;
   z-index: 10;
+  width: var(--graph-side-panel-width);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.9rem;
   padding: 0.45rem 0.65rem;
   background: color-mix(in srgb, var(--card-bg) 88%, transparent);
@@ -2508,6 +2741,92 @@ const typeLabels = {
   opacity: 0.5;
 }
 
+.graph-alerts-overlay {
+  position: absolute;
+  top: 4.35rem;
+  right: 1rem;
+  z-index: 10;
+  width: var(--graph-side-panel-width, 176px);
+  max-width: calc(100% - 2rem);
+  max-height: 38vh;
+  overflow: auto;
+  padding: 0.55rem;
+  background: color-mix(in srgb, var(--card-bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--tabs-border) 82%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.55);
+}
+
+.alerts-title {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0.1rem 0.42rem;
+}
+
+.alert-group + .alert-group {
+  margin-top: 0.42rem;
+  padding-top: 0.42rem;
+  border-top: 1px solid color-mix(in srgb, var(--tabs-border) 58%, transparent);
+}
+
+.alert-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin: 0 0.1rem 0.26rem;
+}
+
+.alert-count {
+  margin-left: auto;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.alert-person {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0.32rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.alert-person:hover,
+.alert-person.active {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 26%, transparent);
+}
+
+.alert-person-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
 /* Layout principal ─────────────────────────────────── */
 .network-layout {
   display: flex;
@@ -2526,6 +2845,7 @@ const typeLabels = {
 
 /* Canvas do grafo ──────────────────────────────────── */
 .graph-wrapper {
+  --graph-side-panel-width: 156px;
   flex: 1;
   position: relative;
   background: var(--bg-secondary);
@@ -3024,6 +3344,56 @@ const typeLabels = {
   flex-shrink: 0;
 }
 
+.legend-cnae-alert {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, #ef4444 18%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 72%, transparent);
+  flex-shrink: 0;
+}
+
+.legend-cnae-alert::before {
+  content: "!";
+  color: #ef4444;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.legend-deceased-cross {
+  width: 15px;
+  height: 15px;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-deceased-cross::before,
+.legend-deceased-cross::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  border-radius: 999px;
+  background: #64748b;
+  transform: translate(-50%, -50%);
+}
+
+.legend-deceased-cross::before {
+  height: 15px;
+}
+
+.legend-deceased-cross::after {
+  width: 11px;
+  height: 3px;
+  top: 38%;
+}
+
 .legend-line {
   width: 18px;
   height: 2px;
@@ -3283,6 +3653,78 @@ const typeLabels = {
   border-radius: 999px;
   background: color-mix(in srgb, #f59e0b 16%, transparent);
   color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cnae-alert-field {
+  color: color-mix(in srgb, #ef4444 76%, var(--text-color));
+}
+
+.cnae-alert-field i {
+  color: #ef4444;
+}
+
+.cnae-alert-badge {
+  margin-left: auto;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid color-mix(in srgb, #ef4444 44%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: color-mix(in srgb, #ef4444 84%, var(--text-color));
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cnae-evidence {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: -0.1rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid color-mix(in srgb, #ef4444 22%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, #ef4444 7%, transparent);
+}
+
+.cnae-evidence-row {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.cnae-evidence-row span {
+  color: var(--text-muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cnae-evidence-row strong {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.deceased-field {
+  color: color-mix(in srgb, #94a3b8 78%, var(--text-color));
+}
+
+.deceased-field i {
+  color: #94a3b8;
+}
+
+.deceased-badge {
+  margin-left: auto;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid color-mix(in srgb, #94a3b8 44%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #94a3b8 15%, transparent);
+  color: color-mix(in srgb, #94a3b8 86%, var(--text-color));
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;

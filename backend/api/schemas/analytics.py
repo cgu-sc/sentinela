@@ -354,6 +354,7 @@ class DadosFarmaciaSchema(BaseModel):
     cnae_principal: Optional[str] = None
     id_cnae_secundario: Optional[str] = None
     cnae_secundario: Optional[str] = None
+    is_cnae_farmacia_ausente: Optional[bool] = False
     data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
     natureza_juridica: Optional[str] = None
@@ -413,11 +414,15 @@ class NetworkNodeSchema(BaseModel):
     nome_socio: Optional[str] = None
     nome_fantasia: Optional[str] = None
     id_cnae_principal: Optional[int] = None
+    cnae_principal: Optional[str] = None
+    id_cnae_secundario: Optional[int] = None
+    cnae_secundario: Optional[str] = None
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None
     is_falecido: Optional[bool] = False
     is_cadunico: bool
+    is_cnae_farmacia_ausente: bool
 
 class NetworkEdgeSchema(BaseModel):
     id: str

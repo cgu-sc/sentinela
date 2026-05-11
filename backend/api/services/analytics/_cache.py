@@ -243,12 +243,14 @@ def sync_network(cnpj: str) -> None:
 
             n2_n4_node_columns = {
                 "id", "label", "type", "razao_social", "nome_socio",
-                "nome_fantasia", "classification_version", "is_falecido", "is_cadunico"
+                "nome_fantasia", "classification_version", "is_falecido", "is_cadunico",
+                "is_cnae_farmacia_ausente", "id_cnae_principal", "cnae_principal",
+                "id_cnae_secundario", "cnae_secundario"
             }
             edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico"}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -292,11 +294,15 @@ def sync_network(cnpj: str) -> None:
                     "nome_socio": representative_name,
                     "nome_fantasia": None,
                     "id_cnae_principal": None,
+                    "cnae_principal": None,
+                    "id_cnae_secundario": None,
+                    "cnae_secundario": None,
                     "municipio": None,
                     "uf": None,
                     "situacao_rf": None,
                     "is_falecido": False,
                     "is_cadunico": False,
+                    "is_cnae_farmacia_ausente": False,
                 }
 
             edge_list.append({
@@ -313,6 +319,17 @@ def sync_network(cnpj: str) -> None:
         # ── 1. Nó raiz: dados do CNPJ alvo ──────────────────────────────────
         df_farm = get_df_dados_farmacia()
         raiz = df_farm.filter(pl.col("cnpj") == cnpj).to_dicts()
+        cnae_info_by_cnpj = {
+            str(row["cnpj"]): row
+            for row in df_farm.select([
+                "cnpj",
+                "id_cnae_principal",
+                "cnae_principal",
+                "id_cnae_secundario",
+                "cnae_secundario",
+                "is_cnae_farmacia_ausente",
+            ]).to_dicts()
+        }
         
         if raiz:
             r = raiz[0]
@@ -324,20 +341,25 @@ def sync_network(cnpj: str) -> None:
                 "nome_fantasia": r.get("nome_fantasia"),
                 "nome_socio": None,
                 "id_cnae_principal": r.get("id_cnae_principal"),
+                "cnae_principal": r.get("cnae_principal"),
+                "id_cnae_secundario": r.get("id_cnae_secundario"),
+                "cnae_secundario": r.get("cnae_secundario"),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
                 "classification_version": COMPANY_CLASSIFICATION_VERSION,
                 "is_falecido": False,
                 "is_cadunico": False,
+                "is_cnae_farmacia_ausente": bool(r["is_cnae_farmacia_ausente"]),
             }
         else:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
                 "razao_social": None, "nome_fantasia": None, "nome_socio": None,
-                "id_cnae_principal": None, "municipio": None, "uf": None,
+                "id_cnae_principal": None, "cnae_principal": None, "id_cnae_secundario": None,
+                "cnae_secundario": None, "municipio": None, "uf": None,
                 "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
-                "is_falecido": False, "is_cadunico": False,
+                "is_falecido": False, "is_cadunico": False, "is_cnae_farmacia_ausente": False,
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -356,11 +378,15 @@ def sync_network(cnpj: str) -> None:
                     "type": s["indicador_socio"] or "PF",
                     "nome_socio": s["nome_socio"],
                     "id_cnae_principal": None,
+                    "cnae_principal": None,
+                    "id_cnae_secundario": None,
+                    "cnae_secundario": None,
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
                     "is_falecido": bool(s.get("is_falecido", 0)),
                     "is_cadunico": bool(s["is_cadunico"]),
+                    "is_cnae_farmacia_ausente": False,
                 }
 
             edges.append({
@@ -393,6 +419,7 @@ def sync_network(cnpj: str) -> None:
 
                 if cnpj_ext not in nodes:
                     tipo = _classify_company_node(p)
+                    cnae_info = cnae_info_by_cnpj.get(str(cnpj_ext), {})
 
                     nodes[cnpj_ext] = {
                         "id": cnpj_ext,
@@ -402,12 +429,16 @@ def sync_network(cnpj: str) -> None:
                         "nome_fantasia": p.get("nome_fantasia"),
                         "nome_socio": None,
                         "id_cnae_principal": p.get("id_cnae_principal"),
+                        "cnae_principal": cnae_info.get("cnae_principal"),
+                        "id_cnae_secundario": cnae_info.get("id_cnae_secundario"),
+                        "cnae_secundario": cnae_info.get("cnae_secundario"),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
                         "classification_version": COMPANY_CLASSIFICATION_VERSION,
                         "is_falecido": False,
                         "is_cadunico": False,
+                        "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
                     }
 
                 edges.append({
@@ -452,11 +483,15 @@ def sync_network(cnpj: str) -> None:
                         "nome_socio": row["nome_socio"],
                         "nome_fantasia": None,
                         "id_cnae_principal": None,
+                        "cnae_principal": None,
+                        "id_cnae_secundario": None,
+                        "cnae_secundario": None,
                         "municipio": row.get("municipio"),
                         "uf": row.get("uf"),
                         "situacao_rf": None,
                         "is_falecido": bool(row.get("is_falecido", 0)),
                         "is_cadunico": bool(row["is_cadunico"]),
+                        "is_cnae_farmacia_ausente": False,
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_pai}"
@@ -486,13 +521,18 @@ def sync_network(cnpj: str) -> None:
 
         n2_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido", "is_cadunico"
+            "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
+            "municipio", "uf", "situacao_rf", "classification_version",
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
         ]
         n2_node_schema = {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
-            "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
+            "id_cnae_principal": pl.Int32, "cnae_principal": pl.Utf8,
+            "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
@@ -510,10 +550,14 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(edges if edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
-        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf", "is_falecido", "is_cadunico"]
+        n3_node_columns = [
+            "id", "label", "type", "nome_socio", "municipio", "uf",
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
+        ]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
@@ -540,6 +584,7 @@ def sync_network(cnpj: str) -> None:
                 # Se a empresa já existe na teia (N2 ou Alvo), não duplicamos
                 if cnpj_ext not in nodes and cnpj_ext not in n4_nodes_dict:
                     tipo = _classify_company_node(row)
+                    cnae_info = cnae_info_by_cnpj.get(str(cnpj_ext), {})
                         
                     n4_nodes_dict[cnpj_ext] = {
                         "id": cnpj_ext,
@@ -549,12 +594,16 @@ def sync_network(cnpj: str) -> None:
                         "nome_fantasia": row.get("nome_fantasia"),
                         "nome_socio": None,
                         "id_cnae_principal": row.get("id_cnae_principal"),
+                        "cnae_principal": cnae_info.get("cnae_principal"),
+                        "id_cnae_secundario": cnae_info.get("id_cnae_secundario"),
+                        "cnae_secundario": cnae_info.get("cnae_secundario"),
                         "municipio": row["municipio"],
                         "uf": row["uf"],
                         "situacao_rf": row["situacao_rf"],
                         "classification_version": COMPANY_CLASSIFICATION_VERSION,
                         "is_falecido": False,
                         "is_cadunico": False,
+                        "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_ext}"
@@ -579,13 +628,17 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido", "is_cadunico"
+            "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
+            "municipio", "uf", "situacao_rf", "classification_version",
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
             "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
+            "cnae_principal": pl.Utf8, "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
+            "is_cnae_farmacia_ausente": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")

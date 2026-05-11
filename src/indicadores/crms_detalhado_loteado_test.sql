@@ -422,6 +422,7 @@ ProximaUF:
 
     DROP TABLE IF EXISTS #crm_mov_fonte_atual;
     DROP TABLE IF EXISTS #crm_mov_fonte_atual_metadata;
+    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
     PRINT '>> [CRM DETALHADO LOTEADO] Materializando fonte temporaria da UF ' + @uf_farmacia + '...';
 
@@ -655,8 +656,18 @@ ProximaUF:
         WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
           AND P.index_id IN (0, 1);
 
-        SELECT @nu_cnpjs_fonte = COUNT(DISTINCT id_cnpj)
-        FROM #crm_mov_fonte_atual;
+        SELECT
+            id_cnpj,
+            MIN(cnpj) AS cnpj
+        INTO #crm_cnpjs_fonte_atual
+        FROM #crm_mov_fonte_atual
+        GROUP BY id_cnpj;
+
+        CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+            ON #crm_cnpjs_fonte_atual(id_cnpj);
+
+        SELECT @nu_cnpjs_fonte = COUNT(*)
+        FROM #crm_cnpjs_fonte_atual;
 
         SET @dt_fim_etapa = GETDATE();
 
@@ -1176,23 +1187,17 @@ SET @t1 = GETDATE();
 
 DROP TABLE IF EXISTS #cnpjs_pendentes;
 
-SELECT DISTINCT
-    F.id AS id_cnpj,
-    CAST(F.cnpj AS CHAR(14)) AS cnpj
+SELECT
+    C.id_cnpj,
+    C.cnpj
 INTO #cnpjs_pendentes
-FROM #crm_mov_fonte_atual M
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = M.cnpj
-WHERE M.crm_uf IS NOT NULL
-  AND M.crm IS NOT NULL
-  AND M.crm_uf <> 'BR'
-  AND M.data_hora >= @DataInicio
-  AND M.data_hora < DATEADD(DAY, 1, @DataFim)
-  AND F.id NOT IN (
-      SELECT id_cnpj
-      FROM temp_CGUSC.fp.crm_detalhado_lote_controle
-      WHERE status = 'OK'
-  );
+FROM #crm_cnpjs_fonte_atual C
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.crm_detalhado_lote_controle L
+    WHERE L.id_cnpj = C.id_cnpj
+      AND L.status = 'OK'
+);
 
 SET @nu_pendentes      = (SELECT COUNT(*) FROM #cnpjs_pendentes);
 SET @nu_ja_processados = (
@@ -1201,7 +1206,7 @@ SET @nu_ja_processados = (
     WHERE C.status = 'OK'
       AND EXISTS (
           SELECT 1
-          FROM #crm_mov_fonte_atual F
+          FROM #crm_cnpjs_fonte_atual F
           WHERE F.id_cnpj = C.id_cnpj
       )
 );
@@ -1980,7 +1985,7 @@ SET status = CASE
         WHEN EXISTS (
             SELECT 1
             FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-            INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+            INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
             WHERE C.status <> 'OK'
         ) THEN 'INCOMPLETO'
         ELSE 'OK'
@@ -1995,7 +2000,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
             WHEN EXISTS (
                 SELECT 1
                 FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-                INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                 WHERE C.status <> 'OK'
             ) THEN 'PROCESSANDO'
             ELSE 'OK'
@@ -2004,7 +2009,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
             WHEN EXISTS (
                 SELECT 1
                 FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-                INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                 WHERE C.status <> 'OK'
             ) THEN 'LOTEADO_INCOMPLETO'
             ELSE 'UF_OK'
@@ -2013,7 +2018,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
             WHEN EXISTS (
                 SELECT 1
                 FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-                INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                 WHERE C.status <> 'OK'
             ) THEN 'INCOMPLETO'
             ELSE 'OK'
@@ -2022,7 +2027,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
             WHEN EXISTS (
                 SELECT 1
                 FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-                INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                 WHERE C.status <> 'OK'
             ) THEN dt_crm_detalhado_loteado
             ELSE GETDATE()
@@ -2031,7 +2036,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
             WHEN EXISTS (
                 SELECT 1
                 FROM temp_CGUSC.fp.crm_detalhado_lote_controle C
-                INNER JOIN #crm_mov_fonte_atual F ON F.id_cnpj = C.id_cnpj
+                INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                 WHERE C.status <> 'OK'
             ) THEN dt_fim
             ELSE GETDATE()
@@ -2046,6 +2051,7 @@ SET @nu_ufs_processadas += 1;
 
 DROP TABLE IF EXISTS #crm_mov_fonte_atual;
 DROP TABLE IF EXISTS #crm_mov_fonte_atual_metadata;
+DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 DROP TABLE IF EXISTS #cnpjs_pendentes;
 DROP TABLE IF EXISTS #lote_atual;
 

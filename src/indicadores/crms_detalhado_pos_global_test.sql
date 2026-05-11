@@ -53,6 +53,18 @@ BEGIN
     RETURN;
 END;
 
+IF OBJECT_ID('temp_CGUSC.sus.tb_ibge') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.sus.tb_ibge nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.fnCalcular_Distancia_KM') IS NULL
+BEGIN
+    RAISERROR('Funcao temp_CGUSC.fp.fnCalcular_Distancia_KM nao encontrada.', 16, 1);
+    RETURN;
+END;
+
 IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pre_global_metadata') IS NULL
 BEGIN
     RAISERROR('Metadata pre-global temp_CGUSC.fp.crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);

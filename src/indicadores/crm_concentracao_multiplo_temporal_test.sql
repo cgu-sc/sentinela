@@ -333,6 +333,7 @@ BEGIN
       );
 
     SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @nu_registros_teste_mov_sc = @nu_registros_etapa;
     SET @dt_fim_etapa = GETDATE();
 
     INSERT INTO temp_CGUSC.fp.crm_concentracao_multiplo_etapa_log
@@ -453,11 +454,6 @@ BEGIN
 
     SET @t_bloco = GETDATE();
 
-    SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-    FROM tempdb.sys.partitions P
-    WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
-      AND P.index_id IN (0, 1);
-
     SELECT
         F.id AS id_cnpj
     INTO #crm_cnpjs_fonte_atual
@@ -555,10 +551,13 @@ BEGIN
     );
 END;
 
-SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-FROM tempdb.sys.partitions P
-WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
-  AND P.index_id IN (0, 1);
+SELECT @nu_registros_teste_mov_sc = nu_registros_fonte
+FROM #crm_mov_fonte_atual_metadata
+WHERE id_pipeline = 1
+  AND pipeline_versao = @pipeline_versao
+  AND dt_data_inicio = @DataInicio
+  AND dt_data_fim = @DataFim
+  AND status = 'OK';
 
 PRINT '>> [CRM MULTIPLO] Iniciando detecção de concentração temporal...';
 PRINT '   UF fonte: ' + @uf_farmacia;

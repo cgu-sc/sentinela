@@ -647,16 +647,11 @@ ProximaUF:
              dt_inicio_etapa, observacao)
         VALUES
             (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS',
-             @t_etapa, 'Contagem de linhas por tempdb.sys.partitions em andamento.');
+             @t_etapa, 'Contagem de linhas ja capturada pelo SELECT INTO.');
 
         SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
         RAISERROR('   MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS iniciado.', 0, 1) WITH NOWAIT;
-
-        SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-        FROM tempdb.sys.partitions P
-        WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
-          AND P.index_id IN (0, 1);
 
         SET @dt_fim_etapa = GETDATE();
 
@@ -665,7 +660,7 @@ ProximaUF:
             segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
             milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
             nu_registros = @nu_registros_teste_mov_sc,
-            observacao = 'Contagem de linhas por tempdb.sys.partitions.'
+            observacao = 'Contagem de linhas capturada pelo @@ROWCOUNT do SELECT INTO.'
         WHERE id_etapa_log = @id_etapa_log;
 
         RAISERROR('   MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS concluido.', 0, 1) WITH NOWAIT;
@@ -698,6 +693,7 @@ ProximaUF:
           );
 
         SET @nu_registros_etapa = @@ROWCOUNT;
+        SET @nu_registros_teste_mov_sc = @nu_registros_etapa;
         SET @dt_fim_etapa = GETDATE();
 
         UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
@@ -827,10 +823,13 @@ BEGIN
     RETURN;
 END;
 
-SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
-FROM tempdb.sys.partitions P
-WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
-  AND P.index_id IN (0, 1);
+SELECT @nu_registros_teste_mov_sc = nu_registros_fonte
+FROM #crm_mov_fonte_atual_metadata
+WHERE id_pipeline = 1
+  AND pipeline_versao = @pipeline_versao
+  AND dt_data_inicio = @DataInicio
+  AND dt_data_fim = @DataFim
+  AND status = 'OK';
 
 UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
 SET etapa = 'VALIDANDO_PRE_GLOBAL',

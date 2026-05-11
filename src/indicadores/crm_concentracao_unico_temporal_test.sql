@@ -330,6 +330,7 @@ BEGIN
       );
 
     SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @nu_registros_fonte_uf = @nu_registros_etapa;
     SET @dt_fim_etapa = GETDATE();
 
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
@@ -418,11 +419,6 @@ BEGIN
         @fim = @DataFim;
 
     SET @t_bloco = GETDATE();
-
-    SELECT @nu_registros_fonte_uf = ISNULL(SUM(P.rows), 0)
-    FROM tempdb.sys.partitions P
-    WHERE P.object_id = OBJECT_ID('tempdb..#crm_movimentacao_uf_atual')
-      AND P.index_id IN (0, 1);
 
     SELECT
         F.id AS id_cnpj,
@@ -521,10 +517,14 @@ BEGIN
     );
 END;
 
-SELECT @nu_registros_fonte_uf = ISNULL(SUM(P.rows), 0)
-FROM tempdb.sys.partitions P
-WHERE P.object_id = OBJECT_ID('tempdb..#crm_movimentacao_uf_atual')
-  AND P.index_id IN (0, 1);
+SELECT @nu_registros_fonte_uf = nu_registros
+FROM #crm_movimentacao_uf_atual_metadata
+WHERE id_pipeline = 1
+  AND pipeline_versao = @pipeline_versao
+  AND dt_data_inicio = @DataInicio
+  AND dt_data_fim = @DataFim
+  AND uf_farmacia = @uf_farmacia
+  AND status = 'OK';
 
 PRINT '>> [CRM ÚNICO] Iniciando detecção de concentração temporal por médico...';
 PRINT '   UF fonte: ' + @uf_farmacia;

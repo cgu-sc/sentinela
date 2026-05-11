@@ -1647,6 +1647,17 @@ function buildStylesheet() {
     },
   });
 
+  // Nó falecido (PF)
+  styles.push({
+    selector: "node.deceased-pf",
+    style: {
+      "border-width": 4,
+      "border-color": "#475569",
+      "background-blacken": 0.5,
+      "text-outline-color": "#1e293b",
+    },
+  });
+
   // Arestas
   styles.push({
     selector: "edge",
@@ -1677,6 +1688,17 @@ function buildStylesheet() {
       shape: "roundrectangle",
       width: 54,
       height: 54 * 0.68,
+    },
+  });
+
+  // Nó falecido (PF)
+  styles.push({
+    selector: "node.deceased-pf",
+    style: {
+      "border-width": 4,
+      "border-color": "#475569",
+      "background-blacken": 0.5,
+      "text-outline-color": "#1e293b",
     },
   });
 
@@ -3270,3 +3292,8 @@ const typeLabels = {
   transform: translateX(20px);
 }
 </style>
+
+
+
+
+

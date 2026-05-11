@@ -154,6 +154,9 @@ const copyAndSignal = (text, key) => {
                 <div class="socio-name">
                   <div class="name-row">
                     <span class="main-name">{{ s.nome_socio || 'NOME NÃO INFORMADO' }}</span>
+                    <span v-if="s.is_falecido" class="deceased-badge-inline" v-tooltip.top="'Sócio consta como falecido na base unificada.'">
+                      <i class="pi pi-exclamation-triangle" /> FALECIDO
+                    </span>
                     <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-name' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']" 
                        @click="copyAndSignal(s.nome_socio, s.cpf_cnpj_socio + '-name')" 
                        v-tooltip.top="'Copiar Nome'" />
@@ -221,6 +224,9 @@ const copyAndSignal = (text, key) => {
               <td class="col-center">
                 <span v-if="s.data_exclusao_sociedade" class="status-badge inactive">
                   Saída em {{ formatarData(s.data_exclusao_sociedade) }}
+                </span>
+                <span v-else-if="s.is_falecido" class="status-badge deceased">
+                  <i class="pi pi-exclamation-circle" /> Falecido
                 </span>
                 <span v-else class="status-badge active">Ativo</span>
               </td>
@@ -586,6 +592,29 @@ const copyAndSignal = (text, key) => {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.status-badge.deceased {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.deceased-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
 }
 
 /* States */

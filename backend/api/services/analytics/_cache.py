@@ -354,6 +354,7 @@ def sync_network(cnpj: str) -> None:
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
+                    "is_falecido": bool(s.get("is_falecido", 0)),
                 }
 
             edges.append({
@@ -446,6 +447,7 @@ def sync_network(cnpj: str) -> None:
                         "municipio": row.get("municipio"),
                         "uf": row.get("uf"),
                         "situacao_rf": None,
+                        "is_falecido": bool(row.get("is_falecido", 0)),
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_pai}"

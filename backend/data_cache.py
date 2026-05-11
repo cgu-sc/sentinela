@@ -239,6 +239,7 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("data_exclusao_sociedade").cast(pl.Date),
         pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("data_processamento").cast(pl.Date),
+        pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cnpj")
 
     _df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="zstd")
@@ -267,6 +268,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
             "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
             "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8,
+            "is_falecido": pl.Int8,
         })
         _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
@@ -307,6 +309,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("municipio").cast(pl.Categorical),
         pl.col("uf").cast(pl.Categorical),
         pl.col("is_farmacia_fp").cast(pl.Int8),
+        pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cpf_cnpj_socio")
 
     _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
@@ -364,6 +367,7 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("nome_representante").cast(pl.String),
         pl.col("municipio").cast(pl.String),
         pl.col("uf").cast(pl.String),
+        pl.col("is_falecido").cast(pl.Int8),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
     _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
@@ -391,7 +395,8 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
             "nome_representante": pl.String,
             "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date, "situacao_rf": pl.Categorical,
-            "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8
+            "municipio": pl.Categorical, "uf": pl.Categorical, "is_farmacia_fp": pl.Int8,
+            "is_falecido": pl.Int8
         })
         _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
         if progress_callback: progress_callback(100)
@@ -432,6 +437,7 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
         pl.col("municipio").cast(pl.Categorical),
         pl.col("uf").cast(pl.Categorical),
         pl.col("is_farmacia_fp").cast(pl.Int8),
+        pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cpf_cnpj_socio")
 
     _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")

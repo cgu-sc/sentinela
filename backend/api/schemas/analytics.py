@@ -396,6 +396,7 @@ class SocioSchema(BaseModel):
     # Datas de Nascimento (Novidade)
     data_nascimento_socio: Optional[date] = None
     data_nascimento_representante: Optional[date] = None
+    is_falecido: Optional[bool] = False
 
 class SociosResponse(BaseModel):
     cnpj: str
@@ -415,6 +416,7 @@ class NetworkNodeSchema(BaseModel):
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None
+    is_falecido: Optional[bool] = False
 
 class NetworkEdgeSchema(BaseModel):
     id: str

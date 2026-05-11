@@ -1722,10 +1722,7 @@ function buildStylesheet() {
     style: {
       "border-width": 4,
       "border-color": "#f59e0b",
-      "underlay-color": "#f59e0b",
-      "underlay-opacity": 0.2,
-      "underlay-padding": 5,
-      "underlay-shape": "ellipse",
+      "border-style": "double",
       "z-index": 11,
     },
   });
@@ -3022,9 +3019,8 @@ const typeLabels = {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  border: 2px solid #f59e0b;
-  background: color-mix(in srgb, #f59e0b 18%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 15%, transparent);
+  border: 4px double #f59e0b;
+  background: #0ea5e9;
   flex-shrink: 0;
 }
 

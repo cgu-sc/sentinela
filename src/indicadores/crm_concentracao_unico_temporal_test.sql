@@ -227,6 +227,7 @@ IF @reset_fonte_uf = 1
 BEGIN
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual;
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual_metadata;
+    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 END;
 
 SET @fonte_atual_ok = 0;
@@ -280,6 +281,7 @@ BEGIN
 
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual;
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual_metadata;
+    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
     EXEC sp_executesql
         N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -422,9 +424,24 @@ BEGIN
     WHERE P.object_id = OBJECT_ID('tempdb..#crm_movimentacao_uf_atual')
       AND P.index_id IN (0, 1);
 
+    SELECT
+        F.id AS id_cnpj,
+        CAST(F.cnpj AS CHAR(14)) AS cnpj
+    INTO #crm_cnpjs_fonte_atual
+    FROM temp_CGUSC.fp.dados_farmacia F
+    WHERE F.uf = @uf_farmacia
+      AND EXISTS (
+          SELECT 1
+          FROM #crm_movimentacao_uf_atual M
+          WHERE M.id_cnpj = F.id
+      );
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+        ON #crm_cnpjs_fonte_atual(id_cnpj);
+
     SET @nu_cnpjs_fonte = (
-        SELECT COUNT(DISTINCT id_cnpj)
-        FROM #crm_movimentacao_uf_atual
+        SELECT COUNT(*)
+        FROM #crm_cnpjs_fonte_atual
     );
 
     SET @dt_fim_etapa = GETDATE();
@@ -480,6 +497,29 @@ BEGIN
 
     PRINT '   Fonte UF materializada em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 END
+
+IF OBJECT_ID('tempdb..#crm_cnpjs_fonte_atual') IS NULL
+BEGIN
+    SELECT
+        F.id AS id_cnpj,
+        CAST(F.cnpj AS CHAR(14)) AS cnpj
+    INTO #crm_cnpjs_fonte_atual
+    FROM temp_CGUSC.fp.dados_farmacia F
+    WHERE F.uf = @uf_farmacia
+      AND EXISTS (
+          SELECT 1
+          FROM #crm_movimentacao_uf_atual M
+          WHERE M.id_cnpj = F.id
+      );
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+        ON #crm_cnpjs_fonte_atual(id_cnpj);
+
+    SET @nu_cnpjs_fonte = (
+        SELECT COUNT(*)
+        FROM #crm_cnpjs_fonte_atual
+    );
+END;
 
 SELECT @nu_registros_fonte_uf = ISNULL(SUM(P.rows), 0)
 FROM tempdb.sys.partitions P
@@ -629,19 +669,17 @@ SET @t1 = GETDATE();
 
 DROP TABLE IF EXISTS #cnpjs_pendentes;
 
-SELECT DISTINCT F.id AS id_cnpj, A.cnpj
+SELECT
+    C.id_cnpj,
+    C.cnpj
 INTO #cnpjs_pendentes
-FROM #crm_movimentacao_uf_atual A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
-INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = A.cnpj
-WHERE A.crm    IS NOT NULL
-  AND A.crm_uf IS NOT NULL
-  AND A.crm_uf <> 'BR'
-  AND A.data_hora >= @DataInicio
-  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
-  AND F.id NOT IN (
-      SELECT id_cnpj FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle WHERE status = 'OK'
-  );
+FROM #crm_cnpjs_fonte_atual C
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle L
+    WHERE L.id_cnpj = C.id_cnpj
+      AND L.status = 'OK'
+);
 
 SET @nu_pendentes      = (SELECT COUNT(*) FROM #cnpjs_pendentes);
 SET @nu_ja_processados = (
@@ -650,7 +688,7 @@ SET @nu_ja_processados = (
     WHERE C.status = 'OK'
       AND EXISTS (
           SELECT 1
-          FROM #crm_movimentacao_uf_atual F
+          FROM #crm_cnpjs_fonte_atual F
           WHERE F.id_cnpj = C.id_cnpj
       )
 );
@@ -742,11 +780,7 @@ BEGIN
         CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(13)) AS id_medico
     INTO #base_lote
     FROM #crm_movimentacao_uf_atual A
-    INNER JOIN temp_CGUSC.fp.medicamentos_patologia PA ON PA.codigo_barra = A.codigo_barra
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = A.cnpj
-    INNER JOIN #lote_atual L ON L.id_cnpj = F.id
-    WHERE A.crm    IS NOT NULL AND A.crm_uf    IS NOT NULL AND A.crm_uf    <> 'BR'
-      AND A.data_hora >= @DataInicio AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+    INNER JOIN #lote_atual L ON L.id_cnpj = A.id_cnpj
     GROUP BY L.id_cnpj, A.data_hora, A.num_autorizacao, A.crm, A.crm_uf;
 
     CREATE INDEX IDX_BaseLote ON #base_lote(id_cnpj, id_medico, dt_dia, data_hora);
@@ -978,7 +1012,7 @@ SET status = CASE
         WHEN EXISTS (
             SELECT 1
             FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
-            INNER JOIN #crm_movimentacao_uf_atual F ON F.id_cnpj = C.id_cnpj
+            INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
             WHERE C.status <> 'OK'
         ) THEN 'INCOMPLETO'
         ELSE 'OK'
@@ -995,7 +1029,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
                   WHEN EXISTS (
                       SELECT 1
                       FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
-                      INNER JOIN #crm_movimentacao_uf_atual F ON F.id_cnpj = C.id_cnpj
+                      INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''CONCENTRACAO_UNICO_INCOMPLETA''
                   ELSE ''CONCENTRACAO_UNICO_OK''
@@ -1004,7 +1038,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
                   WHEN EXISTS (
                       SELECT 1
                       FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
-                      INNER JOIN #crm_movimentacao_uf_atual F ON F.id_cnpj = C.id_cnpj
+                      INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''INCOMPLETO''
                   ELSE ''OK''

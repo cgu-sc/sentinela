@@ -646,25 +646,111 @@ ProximaUF:
             (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
              dt_inicio_etapa, observacao)
         VALUES
-            (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CONTAGEM',
-             @t_etapa, 'Contagem em andamento.');
+            (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS',
+             @t_etapa, 'Contagem de linhas por tempdb.sys.partitions em andamento.');
 
         SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS iniciado.', 0, 1) WITH NOWAIT;
 
         SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
         FROM tempdb.sys.partitions P
         WHERE P.object_id = OBJECT_ID('tempdb..#crm_mov_fonte_atual')
           AND P.index_id IN (0, 1);
 
+        SET @dt_fim_etapa = GETDATE();
+
+        UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+        SET dt_fim_etapa = @dt_fim_etapa,
+            segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+            milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+            nu_registros = @nu_registros_teste_mov_sc,
+            observacao = 'Contagem de linhas por tempdb.sys.partitions.'
+        WHERE id_etapa_log = @id_etapa_log;
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CONTAGEM_LINHAS concluido.', 0, 1) WITH NOWAIT;
+
+        SET @t_etapa = GETDATE();
+        SET @id_etapa_log = NULL;
+
+        INSERT INTO temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+            (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+             dt_inicio_etapa, observacao)
+        VALUES
+            (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CNPJS_SELECT_INTO',
+             @t_etapa, 'Criacao de #crm_cnpjs_fonte_atual por dados_farmacia + EXISTS em andamento.');
+
+        SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_SELECT_INTO iniciado.', 0, 1) WITH NOWAIT;
+
         SELECT
-            id_cnpj,
-            MIN(cnpj) AS cnpj
+            F.id AS id_cnpj,
+            CAST(F.cnpj AS CHAR(14)) AS cnpj
         INTO #crm_cnpjs_fonte_atual
-        FROM #crm_mov_fonte_atual
-        GROUP BY id_cnpj;
+        FROM temp_CGUSC.fp.dados_farmacia F
+        WHERE F.uf = @uf_farmacia
+          AND EXISTS (
+              SELECT 1
+              FROM #crm_mov_fonte_atual M
+              WHERE M.uf_farmacia = @uf_farmacia
+                AND M.id_cnpj = F.id
+          );
+
+        SET @nu_registros_etapa = @@ROWCOUNT;
+        SET @dt_fim_etapa = GETDATE();
+
+        UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+        SET dt_fim_etapa = @dt_fim_etapa,
+            segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+            milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+            nu_registros = @nu_registros_etapa,
+            observacao = 'Criacao de #crm_cnpjs_fonte_atual por dados_farmacia + EXISTS.'
+        WHERE id_etapa_log = @id_etapa_log;
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_SELECT_INTO concluido.', 0, 1) WITH NOWAIT;
+
+        SET @t_etapa = GETDATE();
+        SET @id_etapa_log = NULL;
+
+        INSERT INTO temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+            (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+             dt_inicio_etapa, observacao)
+        VALUES
+            (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CNPJS_IDX',
+             @t_etapa, 'Indice clustered de #crm_cnpjs_fonte_atual em andamento.');
+
+        SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_IDX iniciado.', 0, 1) WITH NOWAIT;
 
         CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
             ON #crm_cnpjs_fonte_atual(id_cnpj);
+
+        SET @dt_fim_etapa = GETDATE();
+
+        UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+        SET dt_fim_etapa = @dt_fim_etapa,
+            segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+            milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+            observacao = 'Indice clustered #crm_cnpjs_fonte_atual(id_cnpj).'
+        WHERE id_etapa_log = @id_etapa_log;
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_IDX concluido.', 0, 1) WITH NOWAIT;
+
+        SET @t_etapa = GETDATE();
+        SET @id_etapa_log = NULL;
+
+        INSERT INTO temp_CGUSC.fp.crm_detalhado_lote_etapa_log
+            (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
+             dt_inicio_etapa, observacao)
+        VALUES
+            (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, 'MATERIALIZANDO_FONTE_UF_CNPJS_COUNT',
+             @t_etapa, 'Contagem de CNPJs materializados em andamento.');
+
+        SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_COUNT iniciado.', 0, 1) WITH NOWAIT;
 
         SELECT @nu_cnpjs_fonte = COUNT(*)
         FROM #crm_cnpjs_fonte_atual;
@@ -675,9 +761,11 @@ ProximaUF:
         SET dt_fim_etapa = @dt_fim_etapa,
             segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
             milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
-            nu_registros = @nu_registros_teste_mov_sc,
-            observacao = 'Contagem de linhas e CNPJs materializados.'
+            nu_registros = @nu_cnpjs_fonte,
+            observacao = 'Contagem de CNPJs materializados.'
         WHERE id_etapa_log = @id_etapa_log;
+
+        RAISERROR('   MATERIALIZANDO_FONTE_UF_CNPJS_COUNT concluido.', 0, 1) WITH NOWAIT;
 
         CREATE TABLE #crm_mov_fonte_atual_metadata (
             id_pipeline          TINYINT      NOT NULL,

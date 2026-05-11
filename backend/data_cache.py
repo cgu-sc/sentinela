@@ -183,7 +183,12 @@ def _sync_dados_farmacia(engine, progress_callback=None):
     CHUNK_SIZE = 5_000
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
-        chunk_list.append(pl.from_pandas(chunk))
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnae_principal").cast(pl.String),
+            pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
+            pl.col("is_cnae_farmacia_ausente").cast(pl.Int8),
+        ])
+        chunk_list.append(chunk_df)
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Dados Farmácias: {p}% ({rows_processed:,} / {total_rows:,})")
@@ -191,9 +196,6 @@ def _sync_dados_farmacia(engine, progress_callback=None):
 
     _df_dados_farmacia = pl.concat(chunk_list).with_columns([
         (pl.col("is_matriz") == "M").alias("is_matriz"),
-        pl.col("id_cnae_principal").cast(pl.String),
-        pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
-        pl.col("is_cnae_farmacia_ausente").cast(pl.Int8),
     ]).sort("cnpj")
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
 

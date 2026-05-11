@@ -931,8 +931,24 @@ function isCompanyNodeInactive(node) {
   return isInactiveCompanyStatus(node.situacao_rf || node.situacao);
 }
 
+function isTruthyFlag(value) {
+  if (typeof value === "string") {
+    return ["1", "true", "t", "sim", "yes"].includes(value.trim().toLowerCase());
+  }
+  return Boolean(value);
+}
+
+function isDeceasedPersonNode(node) {
+  return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_falecido);
+}
+
 function getNodeClasses(node) {
-  return isCompanyNodeInactive(node) ? "inactive-company" : "";
+  return [
+    isCompanyNodeInactive(node) ? "inactive-company" : "",
+    isDeceasedPersonNode(node) ? "deceased-pf" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 const getNodeSearchText = (node) =>
@@ -1294,6 +1310,7 @@ async function buildGraph(data) {
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
         id_cnae_principal: n.id_cnae_principal,
+        is_falecido: isTruthyFlag(n.is_falecido),
       },
     })),
     ...data.edges.map((e) => ({
@@ -1434,6 +1451,7 @@ async function expandNode(nodeId) {
             uf: n.uf,
             situacao: n.situacao_rf,
             situacao_rf: n.situacao_rf,
+            is_falecido: isTruthyFlag(n.is_falecido),
           },
           position: { ...cy.getElementById(nodeId).position() },
         });
@@ -1609,6 +1627,17 @@ function observeGraphContainer() {
 
 function buildStylesheet() {
   const styles = [];
+  const deceasedMarker = `url("data:image/svg+xml;utf8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <defs>
+        <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#020617" flood-opacity="0.7"/>
+        </filter>
+      </defs>
+      <path d="M25 8v31M15 19h21" fill="none" stroke="#f8fafc" stroke-width="7" stroke-linecap="round" filter="url(#shadow)"/>
+      <path d="M25 8v31M15 19h21" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  `)}")`;
 
   // Estilo base de nÃ³s por tipo
   Object.entries(NODE_STYLES).forEach(([type, s]) => {
@@ -1647,17 +1676,6 @@ function buildStylesheet() {
     },
   });
 
-  // Nó falecido (PF)
-  styles.push({
-    selector: "node.deceased-pf",
-    style: {
-      "border-width": 4,
-      "border-color": "#475569",
-      "background-blacken": 0.5,
-      "text-outline-color": "#1e293b",
-    },
-  });
-
   // Arestas
   styles.push({
     selector: "edge",
@@ -1691,14 +1709,26 @@ function buildStylesheet() {
     },
   });
 
-  // Nó falecido (PF)
+  // No falecido (PF)
   styles.push({
     selector: "node.deceased-pf",
     style: {
+      opacity: 0.68,
       "border-width": 4,
-      "border-color": "#475569",
-      "background-blacken": 0.5,
+      "border-color": "#64748b",
+      "border-style": "double",
+      "background-blacken": 0.42,
+      "background-image": deceasedMarker,
+      "background-fit": "none",
+      "background-width": "72%",
+      "background-height": "72%",
+      "background-position-x": "50%",
+      "background-position-y": "50%",
+      "background-offset-x": 0,
+      "background-offset-y": 0,
+      "background-opacity": 0.98,
       "text-outline-color": "#1e293b",
+      "z-index": 12,
     },
   });
 
@@ -1745,6 +1775,10 @@ function buildStylesheet() {
   styles.push({
     selector: ".highlighted",
     style: { opacity: 1, "border-width": 3 },
+  });
+  styles.push({
+    selector: "node.deceased-pf.highlighted",
+    style: { opacity: 0.82, "border-width": 4 },
   });
   styles.push({
     selector: ".entering",

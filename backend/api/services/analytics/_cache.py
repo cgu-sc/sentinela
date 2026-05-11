@@ -243,12 +243,12 @@ def sync_network(cnpj: str) -> None:
 
             n2_n4_node_columns = {
                 "id", "label", "type", "razao_social", "nome_socio",
-                "nome_fantasia", "classification_version",
+                "nome_fantasia", "classification_version", "is_falecido"
             }
             edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio"}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido"}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -477,13 +477,13 @@ def sync_network(cnpj: str) -> None:
 
         n2_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido"
         ]
         n2_node_schema = {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
             "id_cnae_principal": pl.Int32, "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "classification_version": pl.Int16,
+            "classification_version": pl.Int16, "is_falecido": pl.Boolean,
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
@@ -501,10 +501,10 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(edges if edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N2_EDGES_PATH, compression="zstd")
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
-        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf"]
+        n3_node_columns = ["id", "label", "type", "nome_socio", "municipio", "uf", "is_falecido"]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
-            "municipio": pl.Utf8, "uf": pl.Utf8,
+            "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
@@ -568,13 +568,13 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version",
+            "id_cnae_principal", "municipio", "uf", "situacao_rf", "classification_version", "is_falecido"
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
             "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
-            "classification_version": pl.Int16,
+            "classification_version": pl.Int16, "is_falecido": pl.Boolean,
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")

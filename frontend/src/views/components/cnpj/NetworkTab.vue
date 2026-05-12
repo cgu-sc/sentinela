@@ -31,6 +31,7 @@ let n4PresentationZoom = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
+const previewedAlertNodeId = ref(null);
 const zoom = ref(1);
 const copiedKey = ref(null);
 
@@ -1102,20 +1103,39 @@ function selectGraphNode(nodeId) {
   applyGraphHighlights();
 }
 
+function previewAlertNode(nodeId) {
+  if (!cy || !nodeId) return;
+  const node = cy.getElementById(nodeId);
+  if (!node.length || node.hidden()) return;
+  previewedAlertNodeId.value = nodeId;
+  applyGraphHighlights();
+}
+
+function clearAlertNodePreview(nodeId) {
+  if (previewedAlertNodeId.value !== nodeId) return;
+  previewedAlertNodeId.value = null;
+  applyGraphHighlights();
+}
+
 const clearGraphHighlights = () => {
   if (!cy) return;
   cy.elements().removeClass("faded highlighted");
 };
 
-const applySelectedHighlight = () => {
-  if (!cy || !selectedNode.value?.id) return;
+const applyNodeHighlight = (nodeId) => {
+  if (!cy || !nodeId) return false;
 
-  const node = cy.getElementById(selectedNode.value.id);
-  if (!node.length || node.hidden()) return;
+  const node = cy.getElementById(nodeId);
+  if (!node.length || node.hidden()) return false;
 
   const neighborhood = node.closedNeighborhood().filter(":visible");
   cy.elements(":visible").not(neighborhood).addClass("faded");
   neighborhood.addClass("highlighted");
+  return true;
+};
+
+const applySelectedHighlight = () => {
+  applyNodeHighlight(selectedNode.value?.id);
 };
 
 const applySearchHighlight = () => {
@@ -1145,6 +1165,11 @@ const applySearchHighlight = () => {
 const applyGraphHighlights = () => {
   if (!cy) return;
   clearGraphHighlights();
+
+  if (previewedAlertNodeId.value) {
+    if (applyNodeHighlight(previewedAlertNodeId.value)) return;
+    previewedAlertNodeId.value = null;
+  }
 
   if (hasActiveSearch.value) {
     applySearchHighlight();
@@ -1212,6 +1237,11 @@ const applyVisibilityFilters = () => {
   if (selectedNode.value?.id) {
     const selected = cy.getElementById(selectedNode.value.id);
     if (!selected.length || selected.hidden()) selectedNode.value = null;
+  }
+
+  if (previewedAlertNodeId.value) {
+    const previewed = cy.getElementById(previewedAlertNodeId.value);
+    if (!previewed.length || previewed.hidden()) previewedAlertNodeId.value = null;
   }
 
   applyNodeDensitySizing();
@@ -2459,7 +2489,14 @@ const typeLabels = {
                 :key="`${group.key}-${item.id}`"
                 type="button"
                 class="alert-person"
-                :class="{ active: selectedNode?.id === item.id }"
+                :class="{
+                  active: selectedNode?.id === item.id,
+                  preview: previewedAlertNodeId === item.id,
+                }"
+                @mouseenter="previewAlertNode(item.id)"
+                @mouseleave="clearAlertNodePreview(item.id)"
+                @focus="previewAlertNode(item.id)"
+                @blur="clearAlertNodePreview(item.id)"
                 @click="selectGraphNode(item.id)"
               >
                 <span class="alert-person-name">{{ item.name }}</span>
@@ -2812,6 +2849,7 @@ const typeLabels = {
 }
 
 .alert-person:hover,
+.alert-person.preview,
 .alert-person.active {
   background: color-mix(in srgb, var(--primary-color) 10%, transparent);
   border-color: color-mix(in srgb, var(--primary-color) 26%, transparent);

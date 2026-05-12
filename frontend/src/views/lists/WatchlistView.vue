@@ -1,16 +1,21 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import axios from "axios";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
-import { useAnalyticsStore } from "@/stores/analytics";
-import { useGeoStore } from "@/stores/geo";
+import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
+import { useFilterParameters } from "@/composables/useFilterParameters";
+import { API_ENDPOINTS } from "@/config/api";
 
 const router = useRouter();
 const farmaciaLists = useFarmaciaListsStore();
-const analyticsStore = useAnalyticsStore();
-const geoStore = useGeoStore();
+const filterStore = useFilterStore();
 const { formatBRL } = useFormatting();
+const { getApiParams } = useFilterParameters();
+const watchlistAnalytics = ref([]);
+const watchlistLoading = ref(false);
+const watchlistError = ref(null);
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -26,19 +31,50 @@ const formatDate = (iso) => {
   });
 };
 
-// Map O(1): cnpj → dados analíticos (percValSemComp, score, totalMov, valSemComp, municipio, uf)
+const monitoredCnpjs = computed(() =>
+  farmaciaLists.interesse.map((item) => item.cnpj).filter(Boolean),
+);
+
+const monitoredCnpjsKey = computed(() => monitoredCnpjs.value.join("|"));
+const periodKey = computed(() =>
+  Array.isArray(filterStore.periodo)
+    ? filterStore.periodo.map((date) => date?.getTime?.() ?? String(date ?? "")).join("|")
+    : "",
+);
+
+async function fetchWatchlistAnalytics() {
+  if (!monitoredCnpjs.value.length) {
+    watchlistAnalytics.value = [];
+    watchlistError.value = null;
+    return;
+  }
+
+  const { inicio, fim } = getApiParams();
+  const params = new URLSearchParams();
+  if (inicio) params.append("data_inicio", inicio);
+  if (fim) params.append("data_fim", fim);
+  monitoredCnpjs.value.forEach((cnpj) => params.append("cnpjs", cnpj));
+
+  watchlistLoading.value = true;
+  watchlistError.value = null;
+  try {
+    const response = await axios.get(`${API_ENDPOINTS.analyticsResumo}?${params.toString()}`);
+    watchlistAnalytics.value = response.data?.resultado_cnpjs || [];
+  } catch (error) {
+    console.error("Erro ao buscar dados da lista de interesse:", error);
+    watchlistAnalytics.value = [];
+    watchlistError.value = "Não foi possível carregar os indicadores da lista.";
+  } finally {
+    watchlistLoading.value = false;
+  }
+}
+
+watch([monitoredCnpjsKey, periodKey], fetchWatchlistAnalytics, { immediate: true });
+
+// Map O(1): cnpj → dados analíticos da consulta dedicada da lista
 const analyticsMap = computed(() => {
   const map = new Map();
-  for (const e of (analyticsStore.resultadoCnpjs || [])) {
-    map.set(e.cnpj, e);
-  }
-  return map;
-});
-
-// Map O(1): cnpj → geo (municipio, uf) — fallback quando não está no escopo dos filtros
-const geoMap = computed(() => {
-  const map = new Map();
-  for (const e of geoStore.estabelecimentos) {
+  for (const e of watchlistAnalytics.value) {
     map.set(e.cnpj, e);
   }
   return map;
@@ -55,17 +91,16 @@ const RISCO_COLOR = {
 const listaEnriquecida = computed(() =>
   farmaciaLists.interesse.map((item) => {
     const a = analyticsMap.value.get(item.cnpj) ?? {};
-    const g = geoMap.value.get(item.cnpj)      ?? {};
     return {
       ...item,
-      razaoSocial:    item.razaoSocial || a.razao_social || g.razao_social || '—',
-      municipio:      a.municipio      || g.municipio    || '—',
-      uf:             a.uf             || g.uf           || '—',
-      percValSemComp: a.percValSemComp ?? g.percValSemComp ?? null,
-      scoreRisco:     a.score_risco_final ?? g.score_risco ?? null,
-      classificacao:  a.classificacao_risco ?? g.classificacao_risco ?? null,
-      totalMov:       a.totalMov   ?? g.totalMov   ?? null,
-      valSemComp:     a.valSemComp ?? g.valSemComp ?? null,
+      razaoSocial:    item.razaoSocial || a.razao_social || '—',
+      municipio:      a.municipio || '—',
+      uf:             a.uf || '—',
+      percValSemComp: a.percValSemComp ?? null,
+      scoreRisco:     a.score_risco_final ?? null,
+      classificacao:  a.classificacao_risco ?? null,
+      totalMov:       a.totalMov ?? null,
+      valSemComp:     a.valSemComp ?? null,
     };
   })
 );
@@ -110,7 +145,9 @@ function formatScore(v) {
           <i class="pi pi-table" />
           <span>Estabelecimentos monitorados</span>
         </div>
-        <span v-if="totalBadge > 0" class="card-count">{{ totalBadge }} registros</span>
+        <span v-if="watchlistLoading" class="card-count">Atualizando indicadores...</span>
+        <span v-else-if="watchlistError" class="card-count card-error">{{ watchlistError }}</span>
+        <span v-else-if="totalBadge > 0" class="card-count">{{ totalBadge }} registros</span>
       </div>
 
       <div class="lists-content">
@@ -308,6 +345,10 @@ function formatScore(v) {
   font-size: 0.7rem;
   font-weight: 500;
   color: var(--text-muted);
+}
+
+.card-error {
+  color: var(--risk-critical);
 }
 
 .lists-content {

@@ -3,6 +3,7 @@ import os
 import polars as pl
 from decimal import Decimal
 from datetime import date
+from statistics import median
 from typing import Any, Optional
 from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
@@ -10,12 +11,16 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
 from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from PIL import Image, ImageDraw, ImageFont
 
-from data_cache import get_df_matriz_risco
+from data_cache import get_df_matriz_risco, get_localidades_df, get_medicamentos_df
+from ._cache import _get_cnpj_cache_dir
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
+from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
 from .socios import get_socios_farmacia
 from .indicadores import _INDICATOR_FLAGS
+from .regional import get_regional_benchmarking
 
 
 # ── Helpers XML ──────────────────────────────────────────────────────────────
@@ -121,6 +126,775 @@ def _format_cpf_cnpj(v: str | None) -> str:
     if len(clean) == 14:
         return f"{clean[:2]}.{clean[2:5]}.{clean[5:8]}/{clean[8:12]}-{clean[12:]}"
     return v
+
+
+def _format_decimal_pt(value: float, decimals: int = 2) -> str:
+    """Formata numero decimal no padrao brasileiro."""
+    return f"{value:,.{decimals}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _format_list_pt(items: list[str]) -> str:
+    """Formata lista em portugues: A, B e C."""
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        raise RuntimeError("Lista de municipios obrigatoria para comparacao regional da Nota Tecnica.")
+    if len(unique_items) == 1:
+        return unique_items[0]
+    if len(unique_items) == 2:
+        return f"{unique_items[0]} e {unique_items[1]}"
+    return f"{', '.join(unique_items[:-1])} e {unique_items[-1]}"
+
+
+def _hex_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Converte cor hexadecimal para RGB."""
+    clean = hex_color.strip().lstrip("#")
+    return int(clean[0:2], 16), int(clean[2:4], 16), int(clean[4:6], 16)
+
+
+def _load_chart_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Carrega fonte do sistema para graficos da Nota Tecnica."""
+    candidates = [
+        r"C:\Windows\Fonts\seguisb.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf",
+        r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size=size)
+    return ImageFont.load_default()
+
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
+    """Mede texto em pixels com compatibilidade entre versoes do Pillow."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+
+def _draw_dashed_line(
+    draw: ImageDraw.ImageDraw,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    fill: tuple[int, int, int, int],
+    width: int = 2,
+    dash: int = 12,
+    gap: int = 10,
+):
+    """Desenha linha horizontal tracejada."""
+    x1, y1 = start
+    x2, y2 = end
+    x = x1
+    while x < x2:
+        draw.line((x, y1, min(x + dash, x2), y2), fill=fill, width=width)
+        x += dash + gap
+
+
+def _draw_rotated_text(
+    image: Image.Image,
+    text: str,
+    center: tuple[int, int],
+    *,
+    font: ImageFont.ImageFont,
+    fill: tuple[int, int, int],
+    angle: int = -38,
+):
+    """Desenha texto rotacionado com ancoragem central."""
+    temp = Image.new("RGBA", (360, 90), (255, 255, 255, 0))
+    temp_draw = ImageDraw.Draw(temp)
+    text_w, text_h = _text_size(temp_draw, text, font)
+    temp_draw.text(((temp.width - text_w) // 2, (temp.height - text_h) // 2), text, fill=(*fill, 255), font=font)
+    rotated = temp.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+    x = center[0] - rotated.width // 2
+    y = center[1] - rotated.height // 2
+    image.alpha_composite(rotated, (x, y))
+
+
+def _axis_currency_label(value: float) -> str:
+    """Formata valores compactos para eixo financeiro."""
+    if value >= 1_000_000:
+        return f'R$ {_format_decimal_pt(value / 1_000_000, 1)} mi'
+    if value >= 1_000:
+        return f'R$ {_format_decimal_pt(value / 1_000, 0)} mil'
+    return f'R$ {_format_decimal_pt(value, 0)}'
+
+
+def _nice_axis_max(value: float) -> float:
+    """Calcula limite superior arredondado para o eixo Y."""
+    if value <= 0:
+        return 1.0
+    magnitude = 10 ** (len(str(int(value))) - 1)
+    normalized = value / magnitude
+    if normalized <= 1:
+        nice = 1
+    elif normalized <= 2:
+        nice = 2
+    elif normalized <= 5:
+        nice = 5
+    else:
+        nice = 10
+    return nice * magnitude
+
+
+def _draw_gradient_rect(
+    image: Image.Image,
+    box: tuple[int, int, int, int],
+    *,
+    top_color: str,
+    bottom_color: str,
+    radius: int = 0,
+    top_only: bool = False,
+):
+    """Desenha retangulo vertical com gradiente e cantos opcionais."""
+    x1, y1, x2, y2 = box
+    width = max(1, x2 - x1)
+    height = max(1, y2 - y1)
+    top = _hex_rgb(top_color)
+    bottom = _hex_rgb(bottom_color)
+
+    gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    grad_draw = ImageDraw.Draw(gradient)
+    for y in range(height):
+        ratio = y / max(height - 1, 1)
+        color = tuple(int(top[i] * (1 - ratio) + bottom[i] * ratio) for i in range(3))
+        grad_draw.line((0, y, width, y), fill=(*color, 255))
+
+    mask = Image.new("L", (width, height), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    if radius > 0:
+        mask_draw.rounded_rectangle((0, 0, width, height), radius=radius, fill=255)
+        if top_only:
+            mask_draw.rectangle((0, min(radius, height), width, height), fill=255)
+    else:
+        mask_draw.rectangle((0, 0, width, height), fill=255)
+    gradient.putalpha(mask)
+    image.alpha_composite(gradient, (x1, y1))
+
+
+def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesIO:
+    """Gera grafico PNG de evolucao financeira no estilo visual do ECharts."""
+    rows = evolucao_comp["rows"]
+    width, height = 1800, 900
+    left, right, top, bottom = 165, 75, 120, 210
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    plot_bottom = top + plot_h
+
+    img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    font_title = _load_chart_font(34, bold=True)
+    font_axis = _load_chart_font(24)
+    font_axis_bold = _load_chart_font(20, bold=True)
+    font_small = _load_chart_font(20)
+    text_color = _hex_rgb("0F172A")
+    muted = _hex_rgb("64748B")
+    grid = (15, 23, 42, 24)
+    regular_top = "34D399"
+    regular_bottom = "10B981"
+    irregular_top = "F43F5E"
+    irregular_bottom = "E11D48"
+
+    title = "Evolução semestral das transferências e vendas sem comprovação"
+    title_w, _ = _text_size(draw, title, font_title)
+    draw.text(((width - title_w) // 2, 34), title, fill=text_color, font=font_title)
+
+    legend_y = 83
+    legend_items = [
+        ("Vendas regulares", regular_top, regular_bottom),
+        ("Vendas sem comprovação", irregular_top, irregular_bottom),
+    ]
+    legend_total_w = 0
+    for label, _, _ in legend_items:
+        label_w, _ = _text_size(draw, label, font_small)
+        legend_total_w += 34 + 10 + label_w + 36
+    legend_x = (width - legend_total_w) // 2
+    for label, top_c, bottom_c in legend_items:
+        _draw_gradient_rect(img, (legend_x, legend_y + 4, legend_x + 34, legend_y + 22), top_color=top_c, bottom_color=bottom_c, radius=7)
+        draw.text((legend_x + 44, legend_y), label, fill=muted, font=font_small)
+        label_w, _ = _text_size(draw, label, font_small)
+        legend_x += 34 + 10 + label_w + 36
+
+    max_total = max(float(row["total"]) for row in rows)
+    axis_max = _nice_axis_max(max_total * 1.10)
+    tick_count = 5
+    for idx in range(tick_count + 1):
+        value = axis_max * idx / tick_count
+        y = int(plot_bottom - (value / axis_max) * plot_h)
+        _draw_dashed_line(draw, (left, y), (width - right, y), fill=grid, width=2)
+        label = _axis_currency_label(value)
+        label_w, label_h = _text_size(draw, label, font_axis)
+        draw.text((left - label_w - 18, y - label_h // 2), label, fill=muted, font=font_axis)
+
+    n = len(rows)
+    slot = plot_w / max(n, 1)
+    bar_w = int(min(58, max(22, slot * 0.58)))
+    radius = max(8, min(18, bar_w // 3))
+
+    for idx, row in enumerate(rows):
+        center_x = int(left + slot * idx + slot / 2)
+        x1 = center_x - bar_w // 2
+        x2 = center_x + bar_w // 2
+        regular = max(float(row["regular"]), 0.0)
+        irregular = max(float(row["irregular"]), 0.0)
+        total = max(float(row["total"]), 0.0)
+        if total <= 0:
+            continue
+
+        total_h = max(2, int((total / axis_max) * plot_h))
+        regular_h = int((regular / axis_max) * plot_h)
+        irregular_h = max(0, total_h - regular_h)
+        y_total = plot_bottom - total_h
+        y_regular = plot_bottom - regular_h
+
+        if regular_h > 0:
+            regular_radius = radius if irregular_h == 0 else 0
+            _draw_gradient_rect(
+                img,
+                (x1, y_regular, x2, plot_bottom),
+                top_color=regular_top,
+                bottom_color=regular_bottom,
+                radius=regular_radius,
+                top_only=irregular_h == 0,
+            )
+        if irregular_h > 0:
+            _draw_gradient_rect(
+                img,
+                (x1, y_total, x2, y_regular),
+                top_color=irregular_top,
+                bottom_color=irregular_bottom,
+                radius=radius,
+                top_only=True,
+            )
+
+        label = row["semestre"]
+        _draw_rotated_text(
+            img,
+            label,
+            (center_x + 9, plot_bottom + 54),
+            font=font_axis_bold,
+            fill=muted,
+            angle=-38,
+        )
+
+    img = img.convert("RGB")
+    stream = io.BytesIO()
+    img.save(stream, format="PNG", optimize=True)
+    stream.seek(0)
+    return stream
+
+
+def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any]):
+    """Insere figura da evolucao financeira no documento."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        f'Figura 01 - Evolução semestral dos recursos recebidos e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    chart_stream = _build_evolucao_financeira_chart(evolucao_comp)
+    p_img = doc.add_paragraph()
+    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+
+def _resolve_regional_context(cadastro: dict) -> dict[str, Any]:
+    """Resolve id_regiao_saude a partir do id_ibge7 cadastral da farmacia."""
+    id_ibge7 = cadastro.get("id_ibge7")
+    if id_ibge7 in (None, "", "None"):
+        raise RuntimeError("id_ibge7 e obrigatorio para resolver a Regiao de Saude da Nota Tecnica.")
+
+    df_loc = get_localidades_df()
+    required_cols = {"id_ibge7", "id_regiao_saude", "sg_uf", "no_regiao_saude"}
+    missing_cols = required_cols - set(df_loc.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Cache de localidades sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    rows = df_loc.filter(pl.col("id_ibge7").cast(pl.String) == str(id_ibge7))
+    if rows.is_empty():
+        raise RuntimeError(f"id_ibge7 {id_ibge7} nao encontrado no cache de localidades.")
+
+    row = rows.row(0, named=True)
+    id_regiao_saude = row.get("id_regiao_saude")
+    uf = row.get("sg_uf")
+    nome_regiao = row.get("no_regiao_saude")
+    if id_regiao_saude in (None, "", "None") or not uf:
+        raise RuntimeError(f"Localidade {id_ibge7} sem id_regiao_saude/UF obrigatorios para Nota Tecnica.")
+    if nome_regiao in (None, "", "None"):
+        raise RuntimeError(f"Localidade {id_ibge7} sem no_regiao_saude obrigatorio para texto da Nota Tecnica.")
+
+    return {
+        "id_regiao_saude": int(id_regiao_saude),
+        "uf": str(uf),
+        "nome_regiao": str(nome_regiao),
+    }
+
+
+def _build_regional_comparison_context(
+    cnpj_data: dict,
+    cadastro: dict,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Calcula comparacao do percentual do CNPJ contra a mediana regional no periodo."""
+    regional_context = _resolve_regional_context(cadastro)
+    regional = get_regional_benchmarking(
+        uf=regional_context["uf"],
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        regiao_id=regional_context["id_regiao_saude"],
+    )
+
+    if not regional.farmacias:
+        raise RuntimeError("Benchmarking regional sem farmacias para o periodo da Nota Tecnica.")
+
+    percentual_cnpj = cnpj_data.get("percValSemComp")
+    if percentual_cnpj is None:
+        raise RuntimeError("percValSemComp e obrigatorio para comparacao regional da Nota Tecnica.")
+
+    percentuais_regionais = [
+        float(f.percValSemComp)
+        for f in regional.farmacias
+        if f.percValSemComp is not None
+    ]
+    if not percentuais_regionais:
+        raise RuntimeError("Percentuais regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
+
+    mediana_regional = float(median(percentuais_regionais))
+    if mediana_regional <= 0:
+        raise RuntimeError("Mediana regional deve ser maior que zero para calcular o multiplicador da Nota Tecnica.")
+
+    municipios = [m.municipio for m in regional.municipios if m.municipio]
+    if not municipios:
+        raise RuntimeError("Municipios regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
+
+    return {
+        **regional_context,
+        "multiplicador": float(percentual_cnpj) / mediana_regional,
+        "mediana_regional": mediana_regional,
+        "qtd_farmacias": len(regional.farmacias),
+        "municipios": municipios,
+    }
+
+
+def _normalize_gtin(value: Any) -> str:
+    """Normaliza GTIN/codigo de barras preservando zeros quando vier como texto."""
+    text = str(value).strip()
+    return text.split(".")[0] if "." in text else text
+
+
+def _build_medicamentos_lookup() -> dict[str, str]:
+    """Monta lookup GTIN -> descricao obrigatoria do medicamento."""
+    df_med = get_medicamentos_df()
+    required_cols = {"codigo_barra"}
+    missing_cols = required_cols - set(df_med.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Cache de medicamentos sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    lookup: dict[str, str] = {}
+    for row in df_med.iter_rows(named=True):
+        codigo = row.get("codigo_barra")
+        if codigo in (None, "", "None"):
+            continue
+        descricao = row.get("principio_ativo") or row.get("produto") or row.get("descricao")
+        if descricao in (None, "", "None"):
+            continue
+        gtin = _normalize_gtin(codigo)
+        lookup[gtin] = str(descricao)
+
+    if not lookup:
+        raise RuntimeError("Cache de medicamentos sem descricoes validas para Nota Tecnica.")
+    return lookup
+
+
+def _build_gtin_sem_comprovacao_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    concentration_target: float = 0.80,
+) -> dict[str, Any]:
+    """Agrega todos os GTINs com valor sem comprovacao no periodo e calcula concentracao."""
+    get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
+
+    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), "movimentacao_mensal_gtin.parquet")
+    if not os.path.exists(parquet_path):
+        raise RuntimeError(f"Parquet mensal por GTIN obrigatorio nao encontrado para Nota Tecnica: {parquet_path}.")
+
+    df = pl.read_parquet(parquet_path)
+    required_cols = {
+        "codigo_barra",
+        "periodo",
+        "qnt_vendas_sem_comprovacao",
+        "valor_sem_comprovacao",
+    }
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        raise RuntimeError(
+            f"Parquet mensal por GTIN sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
+        )
+
+    df = df.with_columns([
+        pl.col("codigo_barra").cast(pl.String),
+        pl.col("periodo").cast(pl.Date),
+        pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64, strict=False).fill_null(0),
+        pl.col("valor_sem_comprovacao").cast(pl.Float64, strict=False).fill_null(0.0),
+    ])
+    if data_inicio:
+        df = df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        df = df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+
+    if df.is_empty():
+        raise RuntimeError("Movimentacao mensal por GTIN vazia no periodo da Nota Tecnica.")
+
+    agg = (
+        df.group_by("codigo_barra")
+        .agg([
+            pl.sum("qnt_vendas_sem_comprovacao").alias("qtd_sem_comprovacao"),
+            pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+        ])
+        .filter(pl.col("valor_sem_comprovacao") > 0)
+        .sort("valor_sem_comprovacao", descending=True)
+    )
+    if agg.is_empty():
+        raise RuntimeError("Nenhum GTIN com valor sem comprovacao encontrado no periodo da Nota Tecnica.")
+
+    medicamentos_lookup = _build_medicamentos_lookup()
+    rows: list[dict[str, Any]] = []
+    missing_descriptions: list[str] = []
+    for r in agg.iter_rows(named=True):
+        gtin = _normalize_gtin(r["codigo_barra"])
+        descricao = medicamentos_lookup.get(gtin)
+        if not descricao:
+            missing_descriptions.append(gtin)
+            continue
+        rows.append({
+            "gtin": gtin,
+            "descricao": descricao,
+            "qtd_sem_comprovacao": int(r["qtd_sem_comprovacao"] or 0),
+            "valor_sem_comprovacao": round(float(r["valor_sem_comprovacao"] or 0.0), 2),
+        })
+
+    if missing_descriptions:
+        preview = ", ".join(missing_descriptions[:10])
+        raise RuntimeError(f"Descricao obrigatoria ausente para GTIN(s) da Nota Tecnica: {preview}.")
+    if not rows:
+        raise RuntimeError("Lista de GTINs sem comprovacao vazia apos enriquecimento de medicamentos.")
+
+    total_valor = round(sum(r["valor_sem_comprovacao"] for r in rows), 2)
+    total_qtd = sum(r["qtd_sem_comprovacao"] for r in rows)
+    target_value = total_valor * concentration_target
+    acumulado = 0.0
+    representativos_count = 0
+    for row in rows:
+        if acumulado >= target_value and representativos_count > 0:
+            break
+        acumulado += row["valor_sem_comprovacao"]
+        representativos_count += 1
+
+    representativos_valor = round(acumulado, 2)
+    representativos_pct = (representativos_valor / total_valor * 100) if total_valor > 0 else 0.0
+
+    return {
+        "rows": rows,
+        "total_gtins": len(rows),
+        "total_qtd": total_qtd,
+        "total_valor": total_valor,
+        "representativos_count": representativos_count,
+        "representativos_valor": representativos_valor,
+        "representativos_pct": representativos_pct,
+        "concentration_target_pct": concentration_target * 100,
+    }
+
+
+def _model_to_dict(model: Any) -> dict[str, Any]:
+    """Converte modelos Pydantic ou dicts em dicionario simples."""
+    if isinstance(model, dict):
+        return model
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    if hasattr(model, "dict"):
+        return model.dict()
+    raise TypeError(f"Objeto semestral inesperado para Nota Tecnica: {type(model)!r}.")
+
+
+def _build_evolucao_financeira_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    growth_threshold_pct: float = 50.0,
+) -> dict[str, Any]:
+    """Monta a evolucao financeira semestral e identifica saltos relevantes."""
+    evolucao = get_evolucao_financeira(cnpj, data_inicio, data_fim)
+    semestres_raw = getattr(evolucao, "semestres", None)
+    if semestres_raw is None:
+        raise RuntimeError("Resposta de evolucao financeira sem campo semestres para Nota Tecnica.")
+    if not semestres_raw:
+        raise RuntimeError("Evolucao financeira obrigatoria vazia para Nota Tecnica.")
+
+    rows: list[dict[str, Any]] = []
+    for sem in semestres_raw:
+        item = _model_to_dict(sem)
+        for col in ("semestre", "total", "regular", "irregular", "pct_irregular"):
+            if col not in item:
+                raise RuntimeError(f"Evolucao financeira sem coluna obrigatoria para Nota Tecnica: {col}.")
+        total = float(item["total"] or 0.0)
+        irregular = float(item["irregular"] or 0.0)
+        regular = float(item["regular"] or 0.0)
+        pct_irregular = float(item["pct_irregular"] or 0.0)
+        rows.append({
+            "semestre": str(item["semestre"]),
+            "total": round(total, 2),
+            "regular": round(regular, 2),
+            "irregular": round(irregular, 2),
+            "pct_irregular": round(pct_irregular, 2),
+        })
+
+    if not rows:
+        raise RuntimeError("Evolucao financeira sem linhas validas para Nota Tecnica.")
+
+    total_geral = round(sum(row["total"] for row in rows), 2)
+    irregular_geral = round(sum(row["irregular"] for row in rows), 2)
+    regular_geral = round(sum(row["regular"] for row in rows), 2)
+    pct_irregular_geral = (irregular_geral / total_geral * 100) if total_geral > 0 else 0.0
+
+    crescimento_relevante: list[dict[str, Any]] = []
+    previous: dict[str, Any] | None = None
+    for row in rows:
+        if previous and previous["total"] > 0:
+            crescimento_pct = ((row["total"] - previous["total"]) / previous["total"]) * 100
+            row["crescimento_pct"] = round(crescimento_pct, 2)
+            row["semestre_anterior"] = previous["semestre"]
+            if crescimento_pct > growth_threshold_pct:
+                crescimento_relevante.append(row)
+        else:
+            row["crescimento_pct"] = None
+            row["semestre_anterior"] = None
+        previous = row
+
+    semestres_irregulares = [
+        row for row in rows
+        if row["irregular"] > 0
+    ]
+    top_irregulares = sorted(semestres_irregulares, key=lambda row: row["irregular"], reverse=True)[:3]
+
+    return {
+        "rows": rows,
+        "total": total_geral,
+        "regular": regular_geral,
+        "irregular": irregular_geral,
+        "pct_irregular": pct_irregular_geral,
+        "primeiro_semestre": rows[0]["semestre"],
+        "ultimo_semestre": rows[-1]["semestre"],
+        "periodo_semestres": (
+            rows[0]["semestre"] if rows[0]["semestre"] == rows[-1]["semestre"]
+            else f'{rows[0]["semestre"]} a {rows[-1]["semestre"]}'
+        ),
+        "growth_threshold_pct": growth_threshold_pct,
+        "crescimento_relevante": crescimento_relevante,
+        "top_irregulares": top_irregulares,
+    }
+
+
+def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str):
+    """Adiciona quadro compacto comparando a farmacia auditada com a mediana regional."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=5, cols=2)
+    table.style = 'Table Grid'
+
+    hdr_cells = table.rows[0].cells
+    _run(hdr_cells[0].paragraphs[0], 'Métrica', bold=True)
+    _run(hdr_cells[1].paragraphs[0], 'Valor', bold=True)
+    for cell in hdr_cells:
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _cell_bg(cell, 'E2E8F0')
+
+    rows = [
+        ('Percentual da farmácia auditada', f'{_format_decimal_pt(float(cnpj_data["percValSemComp"]), 2)}%'),
+        ('Mediana regional', f'{_format_decimal_pt(regional_comp["mediana_regional"], 2)}%'),
+        ('Multiplicador sobre a mediana regional', f'{_format_decimal_pt(regional_comp["multiplicador"], 2)} vezes'),
+        ('Farmácias consideradas na região', f'{regional_comp["qtd_farmacias"]}'),
+    ]
+
+    for idx, (label, value) in enumerate(rows, start=1):
+        cells = table.rows[idx].cells
+        _run(cells[0].paragraphs[0], label, color='475569', size=9)
+        value_para = cells[1].paragraphs[0]
+        value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(value_para, value, color='0F172A', size=9, bold=True)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+
+    p_foot = doc.add_paragraph()
+    _run(p_foot, f'Fonte: Sistema Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
+
+
+def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gtin_comp: dict[str, Any], periodo_txt: str):
+    """Adiciona quadro com todos os GTINs com vendas sem comprovacao no periodo."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoques amparados em notas fiscais de suas aquisições, no período de {periodo_txt}.',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    rows_data = gtin_comp["rows"]
+    table = doc.add_table(rows=len(rows_data) + 2, cols=4)
+    table.style = 'Table Grid'
+
+    headers = [
+        'GTIN/Código de Barras',
+        'Descrição',
+        'Quantidade de vendas sem comprovação',
+        'Valor em venda sem comprovação (R$)',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        _run(cells[0].paragraphs[0], item["gtin"], color='0F172A', size=8)
+        _run(cells[1].paragraphs[0], item["descricao"], color='0F172A', size=8)
+        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[2].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
+        cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _run(cells[3].paragraphs[0], _format_decimal_pt(item["valor_sem_comprovacao"], 2), color='0F172A', size=8)
+
+    total_cells = table.rows[-1].cells
+    total_cells[0].merge(total_cells[1])
+    _run(total_cells[0].paragraphs[0], 'TOTAIS', color='0F172A', size=8, bold=True)
+    total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    total_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(total_cells[2].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
+    total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(total_cells[3].paragraphs[0], _format_decimal_pt(gtin_comp["total_valor"], 2), color='0F172A', size=8, bold=True)
+    for cell in total_cells:
+        _cell_bg(cell, 'F8FAFC')
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _run(p_foot, f'Fonte: informações acerca das dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
+
+
+def _add_quadro_evolucao_financeira(
+    doc,
+    razao_social: str,
+    cnpj_fmt: str,
+    evolucao_comp: dict[str, Any],
+):
+    """Adiciona quadro semestral de transferencias e vendas sem comprovacao."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        f'Quadro 05 - Recebimento de recursos do Ministério da Saúde e “vendas sem comprovação” relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período de {evolucao_comp["periodo_semestres"]}.',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    rows_data = evolucao_comp["rows"]
+    table = doc.add_table(rows=len(rows_data) + 2, cols=5)
+    table.style = 'Table Grid'
+
+    headers = [
+        'Semestre',
+        'Total',
+        'Vendas regulares',
+        'Vendas sem comprovação',
+        '% sem comprovação',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[0].paragraphs[0], item["semestre"], color='0F172A', size=8)
+        for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):
+            cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color='0F172A', size=8)
+        cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        pct_color = 'EF4444' if item["pct_irregular"] >= 50 else '0F172A'
+        _run(
+            cells[4].paragraphs[0],
+            f'{_format_decimal_pt(item["pct_irregular"], 2)}%',
+            color=pct_color,
+            size=8,
+            bold=item["pct_irregular"] >= 50,
+        )
+
+    total_cells = table.rows[-1].cells
+    _run(total_cells[0].paragraphs[0], 'TOTAL', color='0F172A', size=8, bold=True)
+    total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    totals = [
+        f'R$ {_format_decimal_pt(evolucao_comp["total"], 2)}',
+        f'R$ {_format_decimal_pt(evolucao_comp["regular"], 2)}',
+        f'R$ {_format_decimal_pt(evolucao_comp["irregular"], 2)}',
+        f'{_format_decimal_pt(evolucao_comp["pct_irregular"], 2)}%',
+    ]
+    for col_idx, value in enumerate(totals, start=1):
+        total_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT if col_idx < 4 else WD_ALIGN_PARAGRAPH.CENTER
+        _run(total_cells[col_idx].paragraphs[0], value, color='0F172A', size=8, bold=True)
+    for cell in total_cells:
+        _cell_bg(cell, 'F8FAFC')
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_obs = doc.add_paragraph()
+    _run(
+        p_obs,
+        'Obs. De acordo com o SIAFI, esta empresa possui a conta bancária: xxxxx-x, agência: xxxx, banco: xxx. Informação pendente de integração/fonte.',
+        color='EF4444',
+        size=8,
+        bold=True,
+    )
+
+    p_foot = doc.add_paragraph()
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, aba “Evolução Financeira”, a partir das dispensações informadas no Sistema Autorizador de Vendas do PFPB e do levantamento de “vendas sem comprovação”.',
+        color='64748B',
+        size=8,
+    )
 
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
@@ -414,7 +1188,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     razao_social = (cadastro.get('razao_social') or cnpj_data.get('razao_social') or 'NÃO INFORMADO').upper()
     municipio = cnpj_data.get('municipio') or cadastro.get('municipio') or '—'
     uf = cnpj_data.get('uf') or cadastro.get('uf') or '—'
-    regiao_saude = cadastro.get('no_regiao_saude') or cnpj_data.get('no_regiao_saude') or ''
     cnpj_fmt = f'{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}' if len(cnpj) == 14 and cnpj.isdigit() else cnpj
 
     logradouro = ' '.join(p for p in [cadastro.get('tipo_logradouro') or '', cadastro.get('logradouro') or ''] if p).strip()
@@ -870,9 +1643,79 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_conclusao_53, ', que corresponde a um potencial desvio de recursos públicos no montante estimado de ', color='0F172A', size=10)
     _run(p_conclusao_53, f'R$ {val_fmt}', color='EF4444', size=10, bold=True)
     _run(p_conclusao_53, '.', color='0F172A', size=10)
+
+    regional_comp = _build_regional_comparison_context(cnpj_data, cadastro, data_inicio, data_fim)
+    multiplicador_fmt = _format_decimal_pt(regional_comp["multiplicador"], 2)
+    qtd_farmacias = regional_comp["qtd_farmacias"]
+    farmacia_txt = "farmácia" if qtd_farmacias == 1 else "farmácias"
+    opera_txt = "opera" if qtd_farmacias == 1 else "operam"
+    municipios_txt = _format_list_pt(regional_comp["municipios"])
+
+    p_regional_53 = doc.add_paragraph()
+    _run(p_regional_53, 'Esse percentual corresponde a ', color='0F172A', size=10)
+    _run(p_regional_53, f'{multiplicador_fmt} vezes', color='EF4444', size=10, bold=True)
+    _run(p_regional_53, f' a mediana regional dos percentuais de “vendas sem comprovação” observada entre as farmácias da Região de Saúde “{regional_comp["nome_regiao"]}”. No período analisado, essa região reunia ', color='0F172A', size=10)
+    _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='0F172A', size=10, bold=True)
+    _run(p_regional_53, f' {opera_txt} no PFPB, distribuídas nos seguintes municípios: {municipios_txt}.', color='0F172A', size=10)
+
+    _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
+
+    gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
+    p_gtin_intro = doc.add_paragraph()
+    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoques amparados em notas fiscais de suas aquisições, constantes do levantamento consolidado apresentado no Quadro 02, relacionam-se os seguintes GTINs com vendas sem comprovação no período analisado:', color='0F172A', size=10)
+
+    _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
+
+    p_gtin_conclusao = doc.add_paragraph()
+    gtins_txt = "GTIN" if gtin_comp["total_gtins"] == 1 else "GTINs"
+    representativos_txt = "GTIN" if gtin_comp["representativos_count"] == 1 else "GTINs"
+    _run(p_gtin_conclusao, f'Conforme o Quadro 04, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='0F172A', size=10, bold=True)
+    _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, '. Observa-se, contudo, concentração relevante em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{gtin_comp["representativos_count"]} {representativos_txt}', color='0F172A', size=10, bold=True)
+    _run(p_gtin_conclusao, ', que respondem por ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["representativos_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, ', equivalentes a ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'{_format_decimal_pt(gtin_comp["representativos_pct"], 1)}%', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, f' do total listado, considerando o menor conjunto de GTINs necessário para atingir ao menos {_format_decimal_pt(gtin_comp["concentration_target_pct"], 0)}% do valor sem comprovação.', color='0F172A', size=10)
     
     doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
-    doc.add_paragraph('Monitoramento de picos de faturamento incompatíveis com a média histórica ou regional...')
+
+    evolucao_comp = _build_evolucao_financeira_context(cnpj, data_inicio, data_fim)
+
+    p_54_contexto = doc.add_paragraph()
+    _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e demasiados que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
+
+    p_54_analise = doc.add_paragraph()
+    _run(p_54_analise, f'A Farmácia {razao_social} recebeu recursos provenientes do Ministério da Saúde, referentes ao PFPB, no período de ', color='0F172A', size=10)
+    _run(p_54_analise, evolucao_comp["periodo_semestres"], color='0F172A', size=10, bold=True)
+    _run(p_54_analise, '. ', color='0F172A', size=10)
+
+    crescimento_relevante = evolucao_comp["crescimento_relevante"]
+    if crescimento_relevante:
+        crescimento_labels = _format_list_pt([row["semestre"] for row in crescimento_relevante])
+        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências em ', color='0F172A', size=10)
+        _run(p_54_analise, crescimento_labels, color='EF4444', size=10, bold=True)
+        _run(p_54_analise, f', quando comparadas aos semestres imediatamente anteriores, considerando-se como relevante crescimento superior a {_format_decimal_pt(evolucao_comp["growth_threshold_pct"], 0)}%. ', color='0F172A', size=10)
+    else:
+        _run(p_54_analise, f'No recorte analisado, não foram identificados saltos semestrais superiores a {_format_decimal_pt(evolucao_comp["growth_threshold_pct"], 0)}%, mas a série financeira evidencia a distribuição temporal dos recursos e das possíveis vendas sem comprovação. ', color='0F172A', size=10)
+
+    top_irregulares = evolucao_comp["top_irregulares"]
+    if top_irregulares:
+        top_labels = _format_list_pt([row["semestre"] for row in top_irregulares])
+        top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
+        _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” em ', color='0F172A', size=10)
+        _run(p_54_analise, top_labels, color='EF4444', size=10, bold=True)
+        _run(p_54_analise, ', que somam ', color='0F172A', size=10)
+        _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='EF4444', size=10, bold=True)
+        _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
+    else:
+        _run(p_54_analise, 'Não há valores de “vendas sem comprovação” registrados na série semestral do período analisado, conforme quadro e figura a seguir.', color='0F172A', size=10)
+
+    _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
+    _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
 
     for key, num, title in _SECAO5_MAP:
         if key in criticos:

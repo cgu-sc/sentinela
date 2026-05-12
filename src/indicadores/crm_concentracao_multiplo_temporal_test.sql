@@ -46,7 +46,7 @@ DECLARE @nu_pendentes       INT;
 DECLARE @nu_ja_processados  INT;
 DECLARE @nu_total           INT;
 DECLARE @pipeline_nome      VARCHAR(80) = 'crm_concentracao_multiplo';
-DECLARE @pipeline_versao    VARCHAR(40) = 'v2_2026_05_07';
+DECLARE @pipeline_versao    VARCHAR(40) = 'v3_2026_05_12';
 DECLARE @nu_registros_teste_mov_sc BIGINT;
 DECLARE @uf_farmacia CHAR(2);
 DECLARE @uf_farmacia_alvo CHAR(2) = NULL;
@@ -60,6 +60,7 @@ DECLARE @qtd_cnpjs_lote INT;
 DECLARE @dt_fim_lote DATETIME;
 DECLARE @dt_fim_etapa DATETIME;
 DECLARE @nu_registros_etapa BIGINT;
+DECLARE @alertas_criada BIT = 0;
 
 IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
@@ -654,13 +655,17 @@ BEGIN
             (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, lote_num);
 END;
 
+SET @alertas_criada = 0;
+
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
 BEGIN
+    SET @alertas_criada = 1;
+
     CREATE TABLE temp_CGUSC.fp.crm_concentracao_multiplo_alertas (
         id_cnpj             INT             NOT NULL,
         dt_dia              DATE            NOT NULL,
-        dt_ini_concentracao SMALLDATETIME   NOT NULL,
-        dt_fim_concentracao SMALLDATETIME   NOT NULL,
+        dt_ini_concentracao DATETIME        NOT NULL,
+        dt_fim_concentracao DATETIME        NOT NULL,
         nu_minutos_span     TINYINT         NOT NULL,
         nu_crms_distintos   TINYINT         NOT NULL,
         nu_5min             SMALLINT        NOT NULL,
@@ -670,11 +675,40 @@ BEGIN
         nu_25min            SMALLINT        NOT NULL,
         nu_30min            SMALLINT        NOT NULL,
         nu_60min            SMALLINT        NOT NULL,
-        severidade          VARCHAR(10)     NOT NULL
+        id_severidade       TINYINT         NOT NULL,
+        janela_pior_ritmo_minutos TINYINT   NOT NULL,
+        nu_autorizacoes_pior_ritmo SMALLINT NOT NULL,
+        taxa_hora_pior_ritmo DECIMAL(7,2)   NOT NULL,
+        criterio_pior_ritmo VARCHAR(30)     NOT NULL
     );
     CREATE CLUSTERED INDEX IDX_ConcentracaoMultiploAlertas
         ON temp_CGUSC.fp.crm_concentracao_multiplo_alertas(id_cnpj, dt_dia);
 END
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NOT NULL
+   AND (
+       COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'severidade') IS NOT NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'id_severidade') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'janela_pior_ritmo_minutos') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'nu_autorizacoes_pior_ritmo') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'taxa_hora_pior_ritmo') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_multiplo_alertas', 'criterio_pior_ritmo') IS NULL
+   )
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_multiplo_alertas existe com schema antigo. Recrie a tabela e o controle de lotes para a versao atual.', 16, 1);
+    RETURN;
+END;
+
+IF @alertas_criada = 1
+   AND EXISTS (
+       SELECT 1
+       FROM temp_CGUSC.fp.crm_concentracao_multiplo_controle
+       WHERE status = 'OK'
+   )
+BEGIN
+    RAISERROR('Tabela de alertas foi criada vazia, mas o controle de lotes ja possui CNPJs OK. Recrie tambem o controle de lotes para recalcular os alertas.', 16, 1);
+    RETURN;
+END;
 
 PRINT '   Passo 0 concluido em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 
@@ -927,25 +961,33 @@ BEGIN
     SET @t_bloco = GETDATE();
     INSERT INTO temp_CGUSC.fp.crm_concentracao_multiplo_alertas
         (id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-         nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade)
+         nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+         id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+         taxa_hora_pior_ritmo, criterio_pior_ritmo)
     SELECT id_cnpj, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-           nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade
+           nu_crms_distintos, nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+           id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+           taxa_hora_pior_ritmo, criterio_pior_ritmo
     FROM (
         SELECT
-            id_cnpj,
-            CAST(janela_inicio AS DATE)                                     AS dt_dia,
-            CAST(janela_inicio AS SMALLDATETIME)                            AS dt_ini_concentracao,
-            CAST(dt_fim_real AS SMALLDATETIME)                              AS dt_fim_concentracao,
-            CAST(DATEDIFF(MINUTE, janela_inicio, dt_fim_real) AS TINYINT)    AS nu_minutos_span,
-            CAST(nu_crms_distintos AS TINYINT)                              AS nu_crms_distintos,
-            CAST(nu_5min AS SMALLINT)                                       AS nu_5min,
-            CAST(nu_10min AS SMALLINT)                                      AS nu_10min,
-            CAST(nu_15min AS SMALLINT)                                      AS nu_15min,
-            CAST(nu_20min AS SMALLINT)                                      AS nu_20min,
-            CAST(nu_25min AS SMALLINT)                                      AS nu_25min,
-            CAST(nu_30min AS SMALLINT)                                      AS nu_30min,
-            CAST(nu_60min AS SMALLINT)                                      AS nu_60min,
-            severidade
+            Base.id_cnpj,
+            CAST(Base.janela_inicio AS DATE)                                      AS dt_dia,
+            CAST(Base.janela_inicio AS DATETIME)                                  AS dt_ini_concentracao,
+            CAST(Base.dt_fim_real AS DATETIME)                                    AS dt_fim_concentracao,
+            CAST(DATEDIFF(MINUTE, Base.janela_inicio, Base.dt_fim_real) AS TINYINT) AS nu_minutos_span,
+            CAST(Base.nu_crms_distintos AS TINYINT)                               AS nu_crms_distintos,
+            CAST(Base.nu_5min AS SMALLINT)                                        AS nu_5min,
+            CAST(Base.nu_10min AS SMALLINT)                                       AS nu_10min,
+            CAST(Base.nu_15min AS SMALLINT)                                       AS nu_15min,
+            CAST(Base.nu_20min AS SMALLINT)                                       AS nu_20min,
+            CAST(Base.nu_25min AS SMALLINT)                                       AS nu_25min,
+            CAST(Base.nu_30min AS SMALLINT)                                       AS nu_30min,
+            CAST(Base.nu_60min AS SMALLINT)                                       AS nu_60min,
+            Base.id_severidade,
+            Ritmo.janela_pior_ritmo_minutos,
+            Ritmo.nu_autorizacoes_pior_ritmo,
+            Ritmo.taxa_hora_pior_ritmo,
+            Ritmo.criterio_pior_ritmo
         FROM (
             SELECT
                 *,
@@ -962,22 +1004,47 @@ BEGIN
                     WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN fim_real_60min
                 END AS dt_fim_real,
                 CASE
-                    WHEN nu_5min  >=  8 THEN 'EXTREMO'
-                    WHEN nu_10min >= 11 THEN 'EXTREMO'
-                    WHEN nu_5min  >=  6 THEN 'CRÍTICO'
-                    WHEN nu_10min >=  8 THEN 'CRÍTICO'
-                    WHEN nu_15min >= 10 THEN 'GRAVE'
-                    WHEN nu_20min >= 11 THEN 'GRAVE'
-                    WHEN nu_25min >= 12 THEN 'ALTO'
-                    WHEN nu_30min >= 12 THEN 'ALTO'
-                    WHEN nu_60min >= 18 THEN 'ALTO'
-                    WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 'ALTO'
-                END AS severidade
+                    WHEN nu_5min  >=  8 THEN 4
+                    WHEN nu_10min >= 11 THEN 4
+                    WHEN nu_5min  >=  6 THEN 3
+                    WHEN nu_10min >=  8 THEN 3
+                    WHEN nu_15min >= 10 THEN 2
+                    WHEN nu_20min >= 11 THEN 2
+                    WHEN nu_25min >= 12 THEN 1
+                    WHEN nu_30min >= 12 THEN 1
+                    WHEN nu_60min >= 18 THEN 1
+                    WHEN nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 THEN 1
+                END AS id_severidade
             FROM #concentracao_dedup
             WHERE rn = 1
-        ) sub
+        ) Base
+        CROSS APPLY (
+            SELECT TOP 1
+                V.janela_pior_ritmo_minutos,
+                V.nu_autorizacoes_pior_ritmo,
+                CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
+                V.criterio_pior_ritmo
+            FROM (VALUES
+                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(4 AS TINYINT), CAST(1 AS TINYINT), CAST('8_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 8 THEN 1 ELSE 0 END),
+                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(4 AS TINYINT), CAST(2 AS TINYINT), CAST('11_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 11 THEN 1 ELSE 0 END),
+                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(3 AS TINYINT), CAST(3 AS TINYINT), CAST('6_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 6 THEN 1 ELSE 0 END),
+                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(3 AS TINYINT), CAST(4 AS TINYINT), CAST('8_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 8 THEN 1 ELSE 0 END),
+                (CAST(15 AS TINYINT), CAST(Base.nu_15min AS SMALLINT), CAST(2 AS TINYINT), CAST(5 AS TINYINT), CAST('10_EM_15MIN' AS VARCHAR(30)), CASE WHEN Base.nu_15min >= 10 THEN 1 ELSE 0 END),
+                (CAST(20 AS TINYINT), CAST(Base.nu_20min AS SMALLINT), CAST(2 AS TINYINT), CAST(6 AS TINYINT), CAST('11_EM_20MIN' AS VARCHAR(30)), CASE WHEN Base.nu_20min >= 11 THEN 1 ELSE 0 END),
+                (CAST(25 AS TINYINT), CAST(Base.nu_25min AS SMALLINT), CAST(1 AS TINYINT), CAST(7 AS TINYINT), CAST('12_EM_25MIN' AS VARCHAR(30)), CASE WHEN Base.nu_25min >= 12 THEN 1 ELSE 0 END),
+                (CAST(30 AS TINYINT), CAST(Base.nu_30min AS SMALLINT), CAST(1 AS TINYINT), CAST(8 AS TINYINT), CAST('12_EM_30MIN' AS VARCHAR(30)), CASE WHEN Base.nu_30min >= 12 THEN 1 ELSE 0 END),
+                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(9 AS TINYINT), CAST('18_EM_60MIN' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 18 THEN 1 ELSE 0 END),
+                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(10 AS TINYINT), CAST('TAXA_20_HORA' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 15 AND Base.nu_minutos_span_full <= Base.nu_60min * 3 THEN 1 ELSE 0 END)
+            ) V(janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
+            WHERE V.atingiu = 1
+            ORDER BY
+                V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) DESC,
+                V.id_severidade_criterio DESC,
+                V.prioridade_criterio ASC
+        ) Ritmo
+        WHERE Base.id_severidade IS NOT NULL
     ) sub
-    WHERE severidade IS NOT NULL;
+    WHERE id_severidade IS NOT NULL;
 
     SET @nu_alertas_lote  = @@ROWCOUNT;
     SET @nu_alertas_total += @nu_alertas_lote;
@@ -1145,18 +1212,25 @@ EXEC sp_executesql
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NOT NULL
 BEGIN
     SELECT
-        severidade,
+        id_severidade,
+        CASE id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+        END AS severidade,
         'Multi-CRM'                AS tipo,
         COUNT(*)                   AS qtd_alertas,
         COUNT(DISTINCT id_cnpj)    AS qtd_cnpjs,
         AVG(nu_crms_distintos)     AS media_crms_distintos,
         AVG(nu_minutos_span)       AS media_minutos_span,
+        AVG(taxa_hora_pior_ritmo)  AS media_taxa_hora_pior_ritmo,
         MIN(dt_ini_concentracao)   AS primeiro_alerta,
         MAX(dt_ini_concentracao)   AS ultimo_alerta
     FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
-    GROUP BY severidade
+    GROUP BY id_severidade
     ORDER BY
-        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END,
+        id_severidade DESC,
         tipo;
 
     -- Top 30 piores casos
@@ -1167,15 +1241,27 @@ BEGIN
         dt_fim_concentracao,
         nu_minutos_span,
         nu_crms_distintos,
+        nu_5min,
         nu_10min,
         nu_15min,
         nu_20min,
         nu_25min,
         nu_30min,
         nu_60min,
-        severidade
+        id_severidade,
+        CASE id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+        END AS severidade,
+        janela_pior_ritmo_minutos,
+        nu_autorizacoes_pior_ritmo,
+        taxa_hora_pior_ritmo,
+        criterio_pior_ritmo
     FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas
     ORDER BY
-        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END ASC,
+        id_severidade DESC,
+        taxa_hora_pior_ritmo DESC,
         nu_60min DESC;
 END;

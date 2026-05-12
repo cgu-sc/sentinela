@@ -29,6 +29,7 @@ import TabPanel from "primevue/tabpanel";
 import Tag from "primevue/tag";
 import Chip from "primevue/chip";
 import ProgressSpinner from "primevue/progressspinner";
+import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
 
 // ── Índices das abas (evita números mágicos no template) ──
@@ -68,6 +69,7 @@ const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
   useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
+const toast = useToast();
 
 import { usePdfExport } from "@/composables/usePdfExport";
 const { isExporting, exportCnpjPdf } = usePdfExport();
@@ -140,6 +142,12 @@ const handleGenerateNote = async () => {
     window.URL.revokeObjectURL(blobUrl);
   } catch (error) {
     console.error("Erro ao gerar Nota Técnica:", error);
+    toast.add({
+      severity: "error",
+      summary: "Erro ao gerar Nota Técnica",
+      detail: "Não foi possível gerar o arquivo. Tente novamente em instantes.",
+      life: 5000,
+    });
   } finally {
     isGeneratingNote.value = false;
   }

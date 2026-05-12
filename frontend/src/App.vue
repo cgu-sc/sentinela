@@ -9,6 +9,7 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
+import Toast from 'primevue/toast';
 
 const resultadoStore = useResultadoStore();
 const analyticsStore = useAnalyticsStore();
@@ -141,6 +142,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <Toast />
+
   <!-- OVERLAY DE CARREGAMENTO GLOBAL -->
   <div v-if="isAppLoading" class="app-boot-overlay">
 

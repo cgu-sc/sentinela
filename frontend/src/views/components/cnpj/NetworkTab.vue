@@ -869,6 +869,7 @@ function getExpansionRingSizes(nodeCount) {
 
 const expandBatch = async (mode) => {
   if (isBatchExpanding.value) return;
+  if (currentLevel.value === mode) return;
   const preservedLayerFilters = getLayerFilterSnapshot();
 
   try {
@@ -2190,7 +2191,7 @@ const typeLabels = {
                 class="seg-btn"
                 :class="{ 'seg-active': currentLevel === 'N2' }"
                 @click="resetToN2"
-                :disabled="isBatchExpanding"
+                :disabled="isBatchExpanding || currentLevel === 'N2'"
               >
                 <i class="pi pi-refresh" />
                 <span>Nível 2</span>
@@ -2200,7 +2201,7 @@ const typeLabels = {
                 class="seg-btn"
                 :class="{ 'seg-active': currentLevel === 'N3' }"
                 @click="expandBatch('N3')"
-                :disabled="isBatchExpanding"
+                :disabled="isBatchExpanding || currentLevel === 'N3'"
               >
                 <i
                   :class="
@@ -2215,7 +2216,7 @@ const typeLabels = {
                 class="seg-btn"
                 :class="{ 'seg-active': currentLevel === 'N4' }"
                 @click="expandBatch('N4')"
-                :disabled="isBatchExpanding"
+                :disabled="isBatchExpanding || currentLevel === 'N4'"
               >
                 <i
                   :class="

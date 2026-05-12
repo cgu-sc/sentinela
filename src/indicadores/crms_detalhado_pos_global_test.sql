@@ -45,11 +45,12 @@ END;
 
 IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'codibge') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia existe, mas nao possui o schema minimo esperado: id, cnpj, uf, codibge, id_regiao_saude.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia existe, mas nao possui o schema minimo esperado: id, cnpj, municipio, uf, codibge, id_regiao_saude.', 16, 1);
     RETURN;
 END;
 
@@ -247,11 +248,12 @@ END;
 
 IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+    OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'codibge') IS NULL
     OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia existe, mas nao possui o schema minimo esperado: id, cnpj, uf, codibge, id_regiao_saude.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia existe, mas nao possui o schema minimo esperado: id, cnpj, municipio, uf, codibge, id_regiao_saude.', 16, 1);
     RETURN;
 END;
 
@@ -464,6 +466,7 @@ SELECT
     D.dt_prescricao_final_medico,
     G.latitude,
     G.longitude,
+    F.municipio AS no_municipio,
     F.uf AS sg_uf
 INTO #base_com_geo
 FROM temp_CGUSC.fp.dados_crm_detalhado D
@@ -485,11 +488,13 @@ CREATE CLUSTERED INDEX IDX_GeoBase
         T1.nu_cnpj AS cnpj_a,
         T1.dt_prescricao_inicial_medico AS dt_ini_a,
         T1.dt_prescricao_final_medico AS dt_fim_a,
+        T1.no_municipio AS no_municipio_a,
         T1.sg_uf AS sg_uf_a,
         T1.nu_prescricoes_medico AS nu_prescricoes_a,
         T2.nu_cnpj AS cnpj_b,
         T2.dt_prescricao_inicial_medico AS dt_ini_b,
         T2.dt_prescricao_final_medico AS dt_fim_b,
+        T2.no_municipio AS no_municipio_b,
         T2.sg_uf AS sg_uf_b,
         T2.nu_prescricoes_medico AS nu_prescricoes_b,
         CASE
@@ -527,11 +532,13 @@ SELECT
     P.id_medico,
     P.competencia,
     P.cnpj_a,
+    P.no_municipio_a,
     CAST(P.sg_uf_a AS VARCHAR(2)) AS sg_uf_a,
     P.dt_ini_a,
     P.dt_fim_a,
     P.nu_prescricoes_a,
     P.cnpj_b,
+    P.no_municipio_b,
     CAST(P.sg_uf_b AS VARCHAR(2)) AS sg_uf_b,
     P.dt_ini_b,
     P.dt_fim_b,

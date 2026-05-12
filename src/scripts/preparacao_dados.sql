@@ -352,10 +352,73 @@ SELECT
 INTO #tempDadosFarmacias2
 FROM #tempDadosFarmacias AS f;
 
+-- Chave estavel de farmacia: preserva o mesmo id para cada CNPJ mesmo apos
+-- recriar temp_CGUSC.fp.dados_farmacia.
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia_chave') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.dados_farmacia_chave (
+        id         INT IDENTITY(1,1) NOT NULL,
+        cnpj       CHAR(14)          NOT NULL,
+        dt_criacao DATETIME          NOT NULL
+            CONSTRAINT DF_DadosFarmaciaChave_DtCriacao DEFAULT GETDATE(),
+        CONSTRAINT PK_DadosFarmaciaChave PRIMARY KEY CLUSTERED (id),
+        CONSTRAINT UQ_DadosFarmaciaChave_Cnpj UNIQUE (cnpj)
+    );
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia') IS NOT NULL
+   AND COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NOT NULL
+   AND COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NOT NULL
+BEGIN
+    SET IDENTITY_INSERT temp_CGUSC.fp.dados_farmacia_chave ON;
+
+    INSERT INTO temp_CGUSC.fp.dados_farmacia_chave (id, cnpj)
+    SELECT DISTINCT CAST(f.id AS INT) AS id, CAST(f.cnpj AS CHAR(14)) AS cnpj
+    FROM temp_CGUSC.fp.dados_farmacia AS f
+    WHERE f.id IS NOT NULL
+      AND f.cnpj IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.dados_farmacia_chave AS k
+          WHERE k.cnpj = CAST(f.cnpj AS CHAR(14))
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM temp_CGUSC.fp.dados_farmacia_chave AS k
+          WHERE k.id = CAST(f.id AS INT)
+      );
+
+    SET IDENTITY_INSERT temp_CGUSC.fp.dados_farmacia_chave OFF;
+END;
+
+INSERT INTO temp_CGUSC.fp.dados_farmacia_chave (cnpj)
+SELECT DISTINCT CAST(f.cnpj AS CHAR(14)) AS cnpj
+FROM #tempDadosFarmacias2 AS f
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia_chave AS k
+    WHERE k.cnpj = CAST(f.cnpj AS CHAR(14))
+);
+
 -- Colunas de controle e georreferenciamento
-ALTER TABLE #tempDadosFarmacias2 ADD id        INT IDENTITY;
+ALTER TABLE #tempDadosFarmacias2 ADD id        INT;
 ALTER TABLE #tempDadosFarmacias2 ADD latitude  DECIMAL(9, 6);
 ALTER TABLE #tempDadosFarmacias2 ADD longitude DECIMAL(9, 6);
+
+UPDATE f
+SET id = k.id
+FROM #tempDadosFarmacias2 AS f
+INNER JOIN temp_CGUSC.fp.dados_farmacia_chave AS k
+    ON k.cnpj = CAST(f.cnpj AS CHAR(14));
+
+IF EXISTS (SELECT 1 FROM #tempDadosFarmacias2 WHERE id IS NULL)
+BEGIN
+    RAISERROR('Falha ao mapear id estavel para um ou mais CNPJs em dados_farmacia_chave.', 16, 1);
+    RETURN;
+END;
+
+ALTER TABLE #tempDadosFarmacias2
+    ALTER COLUMN id INT NOT NULL;
 
 ALTER TABLE #tempDadosFarmacias2
     ADD PRIMARY KEY (id);
@@ -402,9 +465,8 @@ FROM #tempDadosFarmacias2                  AS f
 LEFT JOIN #tempDatasMovimentacao           AS mov ON mov.cnpj = f.cnpj
 LEFT JOIN db_CNPJ_CapitalSocial.dbo.CNPJ_CapitalSocial AS cs  ON cs.NumCNPJ = f.cnpj;
 
--- Adiciona a Chave Primária e garante o IDENTITY (se o SELECT INTO não manteve)
--- No SQL Server, o IDENTITY costuma ser mantido no SELECT INTO se a origem for IDENTITY.
--- Vamos apenas garantir a PK e o índice.
+-- O id ja vem de temp_CGUSC.fp.dados_farmacia_chave; aqui apenas garantimos
+-- a PK e os indices da tabela final.
 ALTER TABLE temp_CGUSC.fp.dados_farmacia
     ADD PRIMARY KEY (id);
 

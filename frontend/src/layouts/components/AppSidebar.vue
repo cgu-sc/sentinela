@@ -207,10 +207,14 @@ const isLockedRoute = (path) => LOCKED_ROUTES.some((r) => path.startsWith(r));
 const isEstabelecimentoRoute = computed(() =>
   route.path.startsWith("/estabelecimentos/"),
 );
+const isWatchlistRoute = computed(() => route.path.startsWith("/listas"));
+const isPeriodOnlyRoute = computed(
+  () => isEstabelecimentoRoute.value || isWatchlistRoute.value,
+);
 
 // Bloqueia todos os filtros exceto o Período (usado pelo template em cada seção)
 const allFiltersLocked = computed(
-  () => filtersLocked.value || isEstabelecimentoRoute.value,
+  () => filtersLocked.value || isPeriodOnlyRoute.value,
 );
 
 watch(
@@ -295,6 +299,9 @@ const isFilterActive = (field) => {
 
 const isIndicadoresRoute = computed(() =>
   route.path.startsWith("/indicadores"),
+);
+const periodFilterLocked = computed(
+  () => (filtersLocked.value && !isPeriodOnlyRoute.value) || isIndicadoresRoute.value,
 );
 
 const activeFilterCount = computed(() => {
@@ -427,7 +434,7 @@ onBeforeUnmount(() => {
       <!-- BANNER DE FILTROS BLOQUEADOS -->
       <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
-        <span v-if="isEstabelecimentoRoute"
+        <span v-if="isPeriodOnlyRoute"
           >Apenas o Período de Análise está disponível nesta tela</span
         >
         <span v-else>Filtros indisponíveis nesta tela</span>
@@ -770,7 +777,7 @@ onBeforeUnmount(() => {
 
       <div
         class="filter-section"
-        :class="{ 'filter-locked-alt': filtersLocked || isIndicadoresRoute }"
+        :class="{ 'filter-locked-alt': periodFilterLocked }"
       >
         <label class="filter-label" style="pointer-events: auto">
           Período de Análise
@@ -799,7 +806,7 @@ onBeforeUnmount(() => {
         <div
           class="slider-container"
           :class="{
-            'filter-locked': filtersLocked || isIndicadoresRoute,
+            'filter-locked': periodFilterLocked,
             'filter-active-box': isFilterActive('sliderValue'),
           }"
         >
@@ -812,7 +819,7 @@ onBeforeUnmount(() => {
                 'perc-chip-active': isYearActive(year),
                 'perc-chip-disabled': isYearDisabled(year),
               }"
-              :disabled="isYearDisabled(year) || isIndicadoresRoute"
+              :disabled="isYearDisabled(year) || periodFilterLocked"
               @click="toggleAnalysisYear(year)"
             >
               {{ year }}
@@ -822,7 +829,7 @@ onBeforeUnmount(() => {
             <div class="period-stepper-group">
               <button
                 class="period-step-btn"
-                :disabled="timeSliderValue[0] === 0 || isIndicadoresRoute"
+                :disabled="timeSliderValue[0] === 0 || periodFilterLocked"
                 @click="stepStart(-1)"
               >
                 <i class="pi pi-chevron-left" />
@@ -832,7 +839,7 @@ onBeforeUnmount(() => {
                 class="period-step-btn"
                 :disabled="
                   timeSliderValue[0] >= timeSliderValue[1] - 1 ||
-                  isIndicadoresRoute
+                  periodFilterLocked
                 "
                 @click="stepStart(1)"
               >
@@ -844,7 +851,7 @@ onBeforeUnmount(() => {
                 class="period-step-btn"
                 :disabled="
                   timeSliderValue[1] <= timeSliderValue[0] + 1 ||
-                  isIndicadoresRoute
+                  periodFilterLocked
                 "
                 @click="stepEnd(-1)"
               >
@@ -855,7 +862,7 @@ onBeforeUnmount(() => {
                 class="period-step-btn"
                 :disabled="
                   timeSliderValue[1] === availableMonths.length - 1 ||
-                  isIndicadoresRoute
+                  periodFilterLocked
                 "
                 @click="stepEnd(1)"
               >
@@ -870,7 +877,7 @@ onBeforeUnmount(() => {
               :min="0"
               :max="availableMonths.length - 1"
               class="w-full time-slider"
-              :disabled="isIndicadoresRoute"
+              :disabled="periodFilterLocked"
               @slideend="onSliderEnd"
             />
           </div>

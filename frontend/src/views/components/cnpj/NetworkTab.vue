@@ -13,6 +13,14 @@ import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { useRoute } from "vue-router";
 import cytoscape from "cytoscape";
 import TabPlaceholder from "./TabPlaceholder.vue";
+import NetworkAlertsOverlay from "./network/NetworkAlertsOverlay.vue";
+import NetworkNodeDetailPanel from "./network/NetworkNodeDetailPanel.vue";
+import NetworkStatsOverlay from "./network/NetworkStatsOverlay.vue";
+import {
+  NETWORK_NODE_STYLES,
+  NETWORK_TYPE_LABELS,
+} from "@/utils/network/networkConstants";
+import { buildNetworkStylesheet } from "@/utils/network/networkStylesheet";
 
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
@@ -34,29 +42,6 @@ const selectedNode = ref(null);
 const previewedAlertNodeId = ref(null);
 const zoom = ref(1);
 const copiedKey = ref(null);
-
-const formatCpfCnpj = (v) => {
-  if (!v) return "—";
-  const clean = v.replace(/\D/g, "");
-  if (clean.length === 11)
-    return clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
-  if (clean.length === 14)
-    return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-  return v;
-};
-
-const formatSocietyDate = (value) => {
-  if (!value) return "—";
-  const dateText = String(value).slice(0, 10);
-  const match = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-  return String(value);
-};
-
-const formatCnaeEvidence = (id, description) => {
-  const code = id ? String(id) : "Não informado";
-  return description ? `${code} - ${description}` : code;
-};
 
 const copyAndSignal = (text, key) => {
   if (!text) return;
@@ -1762,37 +1747,6 @@ const expansionLabel = computed(() => {
   return "Expandir";
 });
 
-// ── Paleta de cores por tipo de nó ─────────────────────────────────────────
-const NODE_STYLES = {
-  PJ_ALVO: {
-    bg: "#ef4444",
-    border: "#fca5a5",
-    shape: "roundrectangle",
-    size: 85,
-  },
-  PF: { bg: "#0ea5e9", border: "#38bdf8", shape: "ellipse", size: 52 },
-  PJ_FARMACIA_POPULAR: {
-    bg: "#10b981",
-    border: "#34d399",
-    shape: "roundrectangle",
-    size: 55,
-  },
-  PJ_OUTRAS_FARMACIAS: {
-    bg: "#f59e0b",
-    border: "#fbbf24",
-    shape: "roundrectangle",
-    size: 52,
-  },
-  PJ_DEMAIS_EMPRESAS: {
-    bg: "#a855f7",
-    border: "#d8b4fe",
-    shape: "roundrectangle",
-    size: 52,
-  },
-  PJ: { bg: "#a855f7", border: "#d8b4fe", shape: "roundrectangle", size: 46 },
-  ES: { bg: "#475569", border: "#64748b", shape: "ellipse", size: 52 },
-};
-
 function getNodeDensityScale() {
   if (!cy) return 1;
 
@@ -1809,7 +1763,7 @@ function applyNodeDensitySizing() {
   const densityScale = getNodeDensityScale();
   cy.nodes().forEach((node) => {
     const type = node.data("type");
-    const style = NODE_STYLES[type];
+    const style = NETWORK_NODE_STYLES[type];
     if (!style) return;
     const nodeScale =
       type === "PJ_ALVO" ? Math.max(0.88, densityScale) : densityScale;
@@ -1973,7 +1927,7 @@ async function buildGraph(data) {
   cy = cytoscape({
     container: cyContainer.value,
     elements,
-    style: buildStylesheet(),
+    style: buildNetworkStylesheet(),
     layout: { name: "preset" }, // sem auto-layout — controlamos manualmente via currentLayout
     minZoom: 0.18,
     maxZoom: 3,
@@ -2271,180 +2225,6 @@ function observeGraphContainer() {
   resizeObserver.observe(cyContainer.value);
 }
 
-function buildStylesheet() {
-  const styles = [];
-  const deceasedMarker = `url("data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-      <defs>
-        <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#020617" flood-opacity="0.7"/>
-        </filter>
-      </defs>
-      <path d="M25 8v31M15 19h21" fill="none" stroke="#f8fafc" stroke-width="7" stroke-linecap="round" filter="url(#shadow)"/>
-      <path d="M25 8v31M15 19h21" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
-    </svg>
-  `)}")`;
-
-  // Estilo base de nós por tipo
-  Object.entries(NODE_STYLES).forEach(([type, s]) => {
-    styles.push({
-      selector: `node[type="${type}"]`,
-      style: {
-        "background-color": s.bg,
-        "border-color": s.border,
-        "border-width": 2,
-        shape: s.shape,
-        width: s.size,
-        height: s.shape === "ellipse" ? s.size * 0.78 : s.size * 0.68,
-        label: "data(label)",
-        "text-valign": "bottom",
-        "text-halign": "center",
-        "font-size": "12px",
-        "font-family": "Inter, system-ui, sans-serif",
-        "font-weight": "600",
-        color: "#e2e8f0",
-        "text-outline-width": 2,
-        "text-outline-color": "#0f172a",
-        "text-margin-y": 4,
-        "transition-property": "opacity, border-width, background-color",
-        "transition-duration": "0.2s",
-      },
-    });
-  });
-
-  // Nó alvo maior
-  styles.push({
-    selector: 'node[type="PJ_ALVO"]',
-    style: {
-      "border-width": 5,
-      "border-color": "#fca5a5",
-      "z-index": 20,
-    },
-  });
-
-  // Arestas
-  styles.push({
-    selector: "edge",
-    style: {
-      "curve-style": "bezier",
-      width: 1.5,
-      "line-color": "#334155",
-      "target-arrow-color": "#334155",
-      "target-arrow-shape": "triangle",
-      "arrow-scale": 0.8,
-      label: "data(label)",
-      "font-size": "8px",
-      color: "#94a3b8",
-      "text-outline-width": 1.5,
-      "text-outline-color": "#0f172a",
-      "text-rotation": "autorotate",
-      "transition-property": "opacity, line-color",
-      "transition-duration": "0.2s",
-    },
-  });
-
-  // Estilo específico para Sócios PJ (para não ficarem sem estilo se vierem como 'PJ')
-  styles.push({
-    selector: 'node[type="PJ"]',
-    style: {
-      "background-color": "#a855f7",
-      "border-color": "#d8b4fe",
-      shape: "roundrectangle",
-      width: 54,
-      height: 54 * 0.68,
-    },
-  });
-
-  // Pessoa Fisica inscrita no CadUnico
-  styles.push({
-    selector: "node.cadunico-pf",
-    style: {
-      "border-width": 4,
-      "border-color": "#f59e0b",
-      "border-style": "double",
-      "z-index": 11,
-    },
-  });
-
-  // No falecido (PF)
-  styles.push({
-    selector: "node.deceased-pf",
-    style: {
-      opacity: 0.68,
-      "border-width": 4,
-      "border-color": "#64748b",
-      "border-style": "double",
-      "background-blacken": 0.42,
-      "background-image": deceasedMarker,
-      "background-fit": "none",
-      "background-width": "72%",
-      "background-height": "72%",
-      "background-position-x": "50%",
-      "background-position-y": "50%",
-      "background-offset-x": 0,
-      "background-offset-y": 0,
-      "background-opacity": 0.98,
-      "text-outline-color": "#1e293b",
-      "z-index": 12,
-    },
-  });
-
-  // Arestas de representante
-  styles.push({
-    selector: 'edge[type="representante"]',
-    style: {
-      "line-style": "dotted",
-      "line-color": "#f59e0b",
-      "target-arrow-color": "#f59e0b",
-      "font-size": "12px",
-      "font-weight": "700",
-    },
-  });
-
-  // Empresas Baixadas/Inativas (Mantém a cor original, mas fica transparente com borda tracejada vermelha)
-  styles.push({
-    selector: "node.inactive-company",
-    style: {
-      opacity: 0.35,
-      "border-width": 3,
-      "border-style": "dashed",
-      "border-color": "#ef4444", // Borda vermelha para destacar a inatividade
-    },
-  });
-
-  // Vínculos Inativos (Ex-sócios)
-  styles.push({
-    selector: "edge[!is_ativo]",
-    style: {
-      "line-style": "dotted", // Volta para o pontilhado original (mais sutil)
-      "line-color": "#ef4444", // Mas agora em vermelho
-      "target-arrow-color": "#ef4444",
-      color: "#fca5a5",
-      opacity: 0.65, // Mantém a transparência suave
-    },
-  });
-
-  // Estados: faded / highlighted
-  styles.push({
-    selector: ".faded",
-    style: { opacity: 0.08 },
-  });
-  styles.push({
-    selector: ".highlighted",
-    style: { opacity: 1, "border-width": 3 },
-  });
-  styles.push({
-    selector: "node.deceased-pf.highlighted",
-    style: { opacity: 0.82, "border-width": 4 },
-  });
-  styles.push({
-    selector: ".entering",
-    style: { opacity: 0 },
-  });
-
-  return styles;
-}
-
 function truncateLabel(text, maxLen) {
   if (!text) return "—";
   return text.length > maxLen ? text.slice(0, maxLen) + "…" : text;
@@ -2580,13 +2360,7 @@ onActivated(() => {
   }
 });
 
-const typeLabels = {
-  PJ_ALVO: { label: "CNPJ em Análise", color: "#ef4444" },
-  PF: { label: "Pessoa Física", color: "#0ea5e9" },
-  PJ_FARMACIA_POPULAR: { label: "Farmácia Popular", color: "#10b981" },
-  PJ_OUTRAS_FARMACIAS: { label: "Farmácia (Não FP)", color: "#f59e0b" },
-  PJ_DEMAIS_EMPRESAS: { label: "Outros Segmentos", color: "#a855f7" },
-};
+const typeLabels = NETWORK_TYPE_LABELS;
 </script>
 
 <template>
@@ -2921,53 +2695,17 @@ const typeLabels = {
             </div>
           </div>
 
-          <div class="graph-stats-overlay" aria-label="Resumo da rede">
-            <div class="stat-item">
-              <span class="stat-value">{{ totalNodes }}</span>
-              <span class="stat-label">Entidades</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <span class="stat-value">{{ totalEdges }}</span>
-              <span class="stat-label">Vínculos</span>
-            </div>
-          </div>
+          <NetworkStatsOverlay :total-nodes="totalNodes" :total-edges="totalEdges" />
 
-          <div
+          <NetworkAlertsOverlay
             v-if="hasNetworkAlerts"
-            class="graph-alerts-overlay"
-            aria-label="Alertas da teia"
-          >
-            <div class="alerts-title">Alertas</div>
-            <div
-              v-for="group in networkAlertGroups"
-              :key="group.key"
-              class="alert-group"
-            >
-              <div class="alert-group-header">
-                <span :class="group.icon"></span>
-                <span>{{ group.label }}</span>
-                <span class="alert-count">{{ group.items.length }}</span>
-              </div>
-              <button
-                v-for="item in group.items"
-                :key="`${group.key}-${item.id}`"
-                type="button"
-                class="alert-person"
-                :class="{
-                  active: selectedNode?.id === item.id,
-                  preview: previewedAlertNodeId === item.id,
-                }"
-                @mouseenter="previewAlertNode(item.id)"
-                @mouseleave="clearAlertNodePreview(item.id)"
-                @focus="previewAlertNode(item.id)"
-                @blur="clearAlertNodePreview(item.id)"
-                @click="selectGraphNode(item.id)"
-              >
-                <span class="alert-person-name">{{ item.name }}</span>
-              </button>
-            </div>
-          </div>
+            :groups="networkAlertGroups"
+            :selected-node-id="selectedNode?.id"
+            :previewed-node-id="previewedAlertNodeId"
+            @preview="previewAlertNode"
+            @clear-preview="clearAlertNodePreview"
+            @select="selectGraphNode"
+          />
 
           <!-- Controles de Zoom (canto inferior direito) ───── -->
           <div class="graph-controls">
@@ -3033,157 +2771,19 @@ const typeLabels = {
           </div>
         </div>
 
-        <!-- Painel de detalhe do nó selecionado ──────────────── -->
-        <transition name="slide-in">
-          <div v-if="selectedNode" class="node-detail-panel">
-            <div class="panel-header">
-              <div
-                class="panel-type-badge"
-                :style="{ background: typeLabels[selectedNode.type]?.color }"
-              >
-                {{ typeLabels[selectedNode.type]?.label || selectedNode.type }}
-              </div>
-              <button class="close-btn" @click="closeSelectedNode">
-                <i class="pi pi-times" />
-              </button>
-            </div>
-            <div class="panel-names">
-              <h3 class="panel-main-name">
-                {{
-                  selectedNode.nome_socio ||
-                  selectedNode.nome_fantasia ||
-                  selectedNode.razao_social ||
-                  selectedNode.fullLabel
-                }}
-              </h3>
-              <div
-                v-if="selectedNode.nome_fantasia && selectedNode.razao_social"
-                class="panel-sub-name"
-              >
-                {{ selectedNode.razao_social }}
-              </div>
-            </div>
-            <div class="panel-id">
-              <span class="panel-id-label">{{ selectedNode.id?.replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ' }}</span>
-              <span class="panel-id-value">{{ formatCpfCnpj(selectedNode.id) }}</span>
-              <i
-                :class="['pi', copiedKey === selectedNode.id ? 'pi-check' : 'pi-copy', 'copy-btn', copiedKey === selectedNode.id ? 'text-success' : '']"
-                v-tooltip.top="'Copiar'"
-                @click="copyAndSignal(selectedNode.id, selectedNode.id)"
-              />
-            </div>
-            <div class="panel-fields">
-              <div
-                v-if="selectedNode.type === 'PF' && selectedNode.is_falecido"
-                class="panel-field deceased-field"
-              >
-                <i class="pi pi-times-circle" />
-                <span>Falecido</span>
-                <span class="deceased-badge">Óbito</span>
-              </div>
-              <div
-                v-if="selectedNode.type === 'PF' && selectedNode.is_cadunico"
-                class="panel-field cadunico-field"
-              >
-                <i class="pi pi-id-card" />
-                <span>CadÚnico</span>
-                <span class="cadunico-badge">Inscrito</span>
-              </div>
-              <div
-                v-if="selectedNode.type !== 'PF' && selectedNode.is_cnae_farmacia_ausente"
-                class="panel-field cnae-alert-field"
-              >
-                <i class="pi pi-exclamation-triangle" />
-                <span>CNAE farmácia</span>
-                <span class="cnae-alert-badge">Ausente</span>
-              </div>
-              <div
-                v-if="selectedNode.type !== 'PF' && selectedNode.is_cnae_farmacia_ausente"
-                class="cnae-evidence"
-              >
-                <div class="cnae-evidence-row">
-                  <span>Principal</span>
-                  <strong>{{ formatCnaeEvidence(selectedNode.id_cnae_principal, selectedNode.cnae_principal) }}</strong>
-                </div>
-                <div class="cnae-evidence-row">
-                  <span>Secundário</span>
-                  <strong>{{ formatCnaeEvidence(selectedNode.id_cnae_secundario, selectedNode.cnae_secundario) }}</strong>
-                </div>
-              </div>
-              <div v-if="selectedNode.municipio" class="panel-field mt-1">
-                <i class="pi pi-map-marker" />
-                <span
-                  >{{ selectedNode.municipio }} / {{ selectedNode.uf }}</span
-                >
-              </div>
-              <div v-if="selectedNode.situacao_rf" class="panel-field">
-                <i class="pi pi-info-circle" />
-                <span>Situação RF: {{ selectedNode.situacao_rf }}</span>
-              </div>
-            </div>
-
-            <!-- Vínculos societários -->
-            <div
-              v-if="selectedNode.societyLinks?.length"
-              class="panel-relationships"
-            >
-              <div class="panel-section-title">Vínculos societários</div>
-              <div
-                v-for="link in selectedNode.societyLinks"
-                :key="link.id"
-                class="relationship-card"
-              >
-                <div class="relationship-header">
-                  <span class="relationship-name">{{ link.otherName }}</span>
-                  <span
-                    class="relationship-status"
-                    :class="{ inactive: !link.is_ativo }"
-                  >
-                    {{ link.is_ativo ? "Ativo" : "Inativo" }}
-                  </span>
-                </div>
-                <div class="relationship-meta">
-                  <span>{{ formatCpfCnpj(link.otherId) }}</span>
-                  <span v-if="link.label">{{ link.label }}</span>
-                </div>
-                <div class="relationship-dates">
-                  <div>
-                    <span class="field-label">Entrada</span>
-                    <span class="field-value">{{
-                      formatSocietyDate(link.data_entrada_sociedade)
-                    }}</span>
-                  </div>
-                  <div>
-                    <span class="field-label">Saída</span>
-                    <span class="field-value">{{
-                      formatSocietyDate(link.data_exclusao_sociedade)
-                    }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Ações de Expansão -->
-            <div v-if="canExpand" class="panel-actions mt-3">
-              <button
-                class="expand-btn"
-                :disabled="isExpanding || expandedNodes.has(selectedNode.id)"
-                @click="expandNode(selectedNode.id)"
-              >
-                <i
-                  :class="
-                    isExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-plus-circle'
-                  "
-                />
-                <span>{{ expansionLabel }}</span>
-              </button>
-            </div>
-
-            <div class="panel-hint">
-              <i class="pi pi-mouse" /> Clique no fundo para fechar
-            </div>
-          </div>
-        </transition>
+        <NetworkNodeDetailPanel
+          v-if="selectedNode"
+          :node="selectedNode"
+          :type-labels="typeLabels"
+          :copied-key="copiedKey"
+          :can-expand="canExpand"
+          :is-expanding="isExpanding"
+          :is-expanded="expandedNodes.has(selectedNode.id)"
+          :expansion-label="expansionLabel"
+          @close="closeSelectedNode"
+          @copy="copyAndSignal"
+          @expand="expandNode"
+        />
       </div>
     </div>
   </div>
@@ -3194,142 +2794,6 @@ const typeLabels = {
   height: 100%;
   display: flex;
   flex-direction: column;
-}
-
-/* Resumo flutuante ─────────────────────────────────── */
-.graph-stats-overlay {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
-  width: var(--graph-side-panel-width);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.9rem;
-  padding: 0.45rem 0.65rem;
-  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--tabs-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.stat-value {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--primary-color);
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 0.56rem;
-  text-transform: uppercase;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 1.65rem;
-  background: var(--tabs-border);
-  opacity: 0.5;
-}
-
-.graph-alerts-overlay {
-  position: absolute;
-  top: 4.35rem;
-  right: 1rem;
-  z-index: 10;
-  width: var(--graph-side-panel-width, 176px);
-  max-width: calc(100% - 2rem);
-  max-height: 38vh;
-  overflow: auto;
-  padding: 0.55rem;
-  background: color-mix(in srgb, var(--card-bg) 86%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--tabs-border) 82%, transparent);
-  border-radius: 10px;
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.55);
-}
-
-.alerts-title {
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0.1rem 0.42rem;
-}
-
-.alert-group + .alert-group {
-  margin-top: 0.42rem;
-  padding-top: 0.42rem;
-  border-top: 1px solid color-mix(in srgb, var(--tabs-border) 58%, transparent);
-}
-
-.alert-group-header {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-  font-weight: 800;
-  margin: 0 0.1rem 0.26rem;
-}
-
-.alert-count {
-  margin-left: auto;
-  min-width: 1.1rem;
-  height: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
-  color: var(--text-secondary);
-  font-size: 0.58rem;
-  font-weight: 800;
-}
-
-.alert-person {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  padding: 0.32rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  text-align: left;
-  cursor: pointer;
-}
-
-.alert-person:hover,
-.alert-person.preview,
-.alert-person.active {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  border-color: color-mix(in srgb, var(--primary-color) 26%, transparent);
-}
-
-.alert-person-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-color);
 }
 
 /* Layout principal ─────────────────────────────────── */
@@ -3922,392 +3386,6 @@ const typeLabels = {
   font-weight: 600;
 }
 
-/* Painel de detalhe ────────────────────────────────── */
-.node-detail-panel {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 1000;
-  width: 280px; /* Levemente maior para acomodar melhor os nomes */
-  background: color-mix(in srgb, var(--card-bg) 92%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--tabs-border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-  max-height: calc(100% - 2rem);
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-  pointer-events: auto;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-type-badge {
-  font-size: 0.62rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #fff;
-  padding: 0.2rem 0.6rem;
-  border-radius: 99px;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.75rem;
-  padding: 0.2rem;
-  border-radius: 4px;
-  transition: color 0.2s;
-}
-
-.close-btn:hover {
-  color: var(--text-color);
-}
-
-.panel-names {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.panel-main-name {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-color);
-  line-height: 1.2;
-}
-
-.panel-sub-name {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  line-height: 1.3;
-  opacity: 0.8;
-}
-
-.panel-id {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.panel-id-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-
-.panel-id-value {
-  flex: none;
-}
-
-.copy-btn {
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  opacity: 0.4;
-  transition: all 0.2s;
-  width: 1.4rem;
-  display: inline-flex;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.copy-btn.text-success {
-  color: #10b981 !important;
-  opacity: 1 !important;
-}
-
-.copy-btn:hover {
-  opacity: 1 !important;
-  color: var(--primary-color);
-  transform: scale(1.1);
-}
-
-.copy-btn:active {
-  transform: scale(0.9);
-}
-
-.panel-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.panel-relationships {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.panel-section-title {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.03em;
-}
-
-.relationship-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.55rem;
-  background: var(--bg-secondary);
-  border: 1px solid color-mix(in srgb, var(--tabs-border) 72%, transparent);
-  border-radius: 6px;
-}
-
-.relationship-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.relationship-name {
-  min-width: 0;
-  color: var(--text-color);
-  font-size: 0.74rem;
-  font-weight: 650;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.relationship-status {
-  flex-shrink: 0;
-  padding: 0.12rem 0.42rem;
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.14);
-  color: #34d399;
-  font-size: 0.58rem;
-  font-weight: 700;
-}
-
-.relationship-status.inactive {
-  background: rgba(239, 68, 68, 0.14);
-  color: #fca5a5;
-}
-
-.relationship-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.65rem;
-  font-weight: 500;
-}
-
-.relationship-dates {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.45rem;
-}
-
-.relationship-dates > div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.08rem;
-}
-
-.panel-field {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
-.panel-field i {
-  color: var(--primary-color);
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.cadunico-field {
-  color: color-mix(in srgb, #f59e0b 75%, var(--text-color));
-}
-
-.cadunico-field i {
-  color: #f59e0b;
-}
-
-.cadunico-badge {
-  margin-left: auto;
-  padding: 0.1rem 0.42rem;
-  border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, #f59e0b 16%, transparent);
-  color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.cnae-alert-field {
-  color: color-mix(in srgb, #ef4444 76%, var(--text-color));
-}
-
-.cnae-alert-field i {
-  color: #ef4444;
-}
-
-.cnae-alert-badge {
-  margin-left: auto;
-  padding: 0.1rem 0.42rem;
-  border: 1px solid color-mix(in srgb, #ef4444 44%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, #ef4444 14%, transparent);
-  color: color-mix(in srgb, #ef4444 84%, var(--text-color));
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.cnae-evidence {
-  display: grid;
-  gap: 0.35rem;
-  margin-top: -0.1rem;
-  padding: 0.55rem 0.6rem;
-  border: 1px solid color-mix(in srgb, #ef4444 22%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, #ef4444 7%, transparent);
-}
-
-.cnae-evidence-row {
-  display: grid;
-  gap: 0.12rem;
-}
-
-.cnae-evidence-row span {
-  color: var(--text-muted);
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.cnae-evidence-row strong {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  font-weight: 650;
-  line-height: 1.25;
-}
-
-.deceased-field {
-  color: color-mix(in srgb, #94a3b8 78%, var(--text-color));
-}
-
-.deceased-field i {
-  color: #94a3b8;
-}
-
-.deceased-badge {
-  margin-left: auto;
-  padding: 0.1rem 0.42rem;
-  border: 1px solid color-mix(in srgb, #94a3b8 44%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, #94a3b8 15%, transparent);
-  color: color-mix(in srgb, #94a3b8 86%, var(--text-color));
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.info-block {
-  flex-direction: column;
-  align-items: flex-start !important;
-  gap: 0.1rem !important;
-  background: var(--bg-secondary);
-  padding: 0.5rem;
-  border-radius: 6px;
-}
-
-.field-label {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-}
-
-.field-value {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-color);
-  line-height: 1.2;
-}
-
-.mt-1 {
-  margin-top: 0.25rem;
-}
-
-.panel-hint {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  opacity: 0.6;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: auto;
-}
-
-/* Botão de Expansão Estilizado */
-.expand-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0.75rem;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px
-    color-mix(in srgb, var(--primary-color) 30%, transparent);
-}
-.expand-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-color) 85%, black);
-  transform: translateY(-1px);
-}
-.expand-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  background: var(--text-muted);
-  box-shadow: none;
-}
-
-.mt-3 {
-  margin-top: 0.75rem;
-}
-
 /* Animações ────────────────────────────────────────── */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out;
@@ -4324,18 +3402,6 @@ const typeLabels = {
   }
 }
 
-.slide-in-enter-active,
-.slide-in-leave-active {
-  transition:
-    opacity 0.25s,
-    transform 0.25s;
-}
-
-.slide-in-enter-from,
-.slide-in-leave-to {
-  opacity: 0;
-  transform: translateX(20px);
-}
 </style>
 
 

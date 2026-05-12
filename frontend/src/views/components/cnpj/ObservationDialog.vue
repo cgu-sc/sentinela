@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Textarea from "primevue/textarea";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
@@ -13,7 +13,7 @@ const props = defineProps({
 const emit = defineEmits(["update:visible"]);
 const farmaciaLists = useFarmaciaListsStore();
 const tempObs = ref("");
-const textareaRef = ref(null);
+const shouldSelectOnFocus = ref(false);
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -21,16 +21,22 @@ const dialogVisible = computed({
 });
 
 watch(
-  () => props.visible,
-  async (visible) => {
-    if (visible) tempObs.value = farmaciaLists.getObservacao(props.cnpj);
-    if (visible) {
-      await nextTick();
-      textareaRef.value?.$el?.focus?.();
-      textareaRef.value?.$el?.select?.();
-    }
+  () => [props.visible, props.cnpj],
+  ([visible]) => {
+    if (!visible) return;
+
+    tempObs.value = farmaciaLists.getObservacao(props.cnpj);
+    shouldSelectOnFocus.value = true;
   },
+  { immediate: true },
 );
+
+function selectTextareaOnFocus(event) {
+  if (!shouldSelectOnFocus.value) return;
+
+  event.target.select();
+  shouldSelectOnFocus.value = false;
+}
 
 const saveObs = () => {
   farmaciaLists.setObservacao(props.cnpj, tempObs.value);
@@ -53,12 +59,13 @@ const saveObs = () => {
         </label>
         <Textarea
           id="obs"
-          ref="textareaRef"
           v-model="tempObs"
           rows="5"
           autoResize
+          autofocus
           placeholder="Digite aqui os motivos do interesse ou observações importantes..."
           class="custom-textarea"
+          @focus="selectTextareaOnFocus"
         />
       </div>
     </div>
@@ -99,14 +106,31 @@ const saveObs = () => {
 }
 
 .footer-btn--save {
-  background: var(--primary-color);
-  color: white;
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 75%, transparent);
+  color: var(--primary-color);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 8px 22px color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .footer-btn--save:hover {
-  background: color-mix(in srgb, var(--primary-color) 90%, black);
+  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
+  border-color: var(--primary-color);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 20%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 10px 26px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.footer-btn--save:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--primary-color) 35%, transparent),
+    0 10px 26px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .custom-textarea {
@@ -123,4 +147,5 @@ const saveObs = () => {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
+
 </style>

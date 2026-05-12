@@ -7,6 +7,7 @@ import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { API_ENDPOINTS } from "@/config/api";
+import ObservationDialog from "@/views/components/cnpj/ObservationDialog.vue";
 
 const router = useRouter();
 const farmaciaLists = useFarmaciaListsStore();
@@ -16,6 +17,8 @@ const { getApiParams } = useFilterParameters();
 const watchlistAnalytics = ref([]);
 const watchlistLoading = ref(false);
 const watchlistError = ref(null);
+const showObsDialog = ref(false);
+const obsTarget = ref(null);
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -115,6 +118,11 @@ function abrirEstabelecimento(cnpj) {
   router.push(`/estabelecimentos/${cnpj}`);
 }
 
+function editarObservacao(item) {
+  obsTarget.value = item;
+  showObsDialog.value = true;
+}
+
 function formatPerc(v) {
   if (v == null) return '—';
   return `${v.toFixed(1)}%`;
@@ -187,11 +195,21 @@ function formatScore(v) {
             <td class="col-cnpj">{{ formatCnpj(item.cnpj) }}</td>
             <td class="col-razao">{{ item.razaoSocial }}</td>
             <td class="col-obs">
-              <div v-if="item.observacao" class="obs-content" v-tooltip.top="item.observacao">
-                <i class="pi pi-comment mr-1 opacity-60" />
-                <span class="obs-text">{{ item.observacao }}</span>
+              <div class="obs-cell">
+                <div v-if="item.observacao" class="obs-content" v-tooltip.top="item.observacao">
+                  <i class="pi pi-comment mr-1 opacity-60" />
+                  <span class="obs-text">{{ item.observacao }}</span>
+                </div>
+                <span v-else class="col-vazio">—</span>
+                <button
+                  class="obs-edit-btn"
+                  @click.stop="editarObservacao(item)"
+                  v-tooltip.top="item.observacao ? 'Editar Observação' : 'Adicionar Observação'"
+                  aria-label="Editar observação"
+                >
+                  <i :class="item.observacao ? 'pi pi-comment' : 'pi pi-pencil'" />
+                </button>
               </div>
-              <span v-else class="col-vazio">—</span>
             </td>
             <td class="col-loc">
               <span v-if="item.municipio !== '—'">{{ item.municipio }}</span>
@@ -244,6 +262,12 @@ function formatScore(v) {
       </table>
       </div><!-- /lists-content -->
     </div><!-- /lists-card -->
+    <ObservationDialog
+      v-if="obsTarget"
+      v-model:visible="showObsDialog"
+      :cnpj="obsTarget.cnpj"
+      :entity-name="obsTarget.razaoSocial || formatCnpj(obsTarget.cnpj)"
+    />
   </div>
 </template>
 
@@ -412,9 +436,17 @@ function formatScore(v) {
 .col-cnpj  { font-size: 0.75rem; white-space: nowrap; opacity: 0.7; }
 .col-razao { font-weight: 400; max-width: 220px; }
 .col-obs   { max-width: 250px; }
+.obs-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .obs-content {
   display: flex;
   align-items: center;
+  min-width: 0;
+  flex: 1;
   font-size: 0.75rem;
   color: var(--text-color);
   opacity: 0.8;
@@ -428,6 +460,34 @@ function formatScore(v) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.obs-edit-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.72;
+  transition: all 0.15s ease;
+}
+
+.obs-edit-btn:hover {
+  opacity: 1;
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 45%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+.obs-edit-btn i {
+  font-size: 0.76rem;
+}
+
 .col-date  { opacity: 0.55; font-size: 0.76rem; white-space: nowrap; }
 .col-right { text-align: right; }
 .col-vazio { opacity: 0.3; }

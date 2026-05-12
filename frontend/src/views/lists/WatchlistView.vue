@@ -4,22 +4,30 @@ import { useRouter } from "vue-router";
 import axios from "axios";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
+import { useGeoStore } from "@/stores/geo";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
+import { usePdfExport } from "@/composables/usePdfExport";
 import { API_ENDPOINTS } from "@/config/api";
 import ObservationDialog from "@/views/components/cnpj/ObservationDialog.vue";
+import { useToast } from "primevue/usetoast";
 
 const router = useRouter();
 const farmaciaLists = useFarmaciaListsStore();
 const filterStore = useFilterStore();
-const { formatBRL } = useFormatting();
+const geoStore = useGeoStore();
+const toast = useToast();
+const { formatBRL, formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { getApiParams } = useFilterParameters();
+const { exportCnpjPdf } = usePdfExport();
 const watchlistAnalytics = ref([]);
 const watchlistLoading = ref(false);
 const watchlistError = ref(null);
 const showObsDialog = ref(false);
 const obsTarget = ref(null);
 const copiedCnpj = ref(null);
+const exportingReportCnpj = ref(null);
+const generatingNoteCnpj = ref(null);
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -139,6 +147,79 @@ async function copyCnpj(cnpj) {
   window.setTimeout(() => {
     if (copiedCnpj.value === cnpj) copiedCnpj.value = null;
   }, 1400);
+}
+
+async function gerarRelatorio(item) {
+  if (exportingReportCnpj.value) return;
+
+  exportingReportCnpj.value = item.cnpj;
+  try {
+    await exportCnpjPdf({
+      cnpjData: {
+        cnpj: item.cnpj,
+        razao_social: item.razaoSocial,
+        municipio: item.municipio !== "—" ? item.municipio : null,
+        uf: item.uf !== "—" ? item.uf : null,
+        percValSemComp: item.percValSemComp,
+        score_risco_final: item.scoreRisco,
+        classificacao_risco: item.classificacao,
+        totalMov: item.totalMov ?? 0,
+        valSemComp: item.valSemComp ?? 0,
+      },
+      geoData: {
+        no_municipio: item.municipio !== "—" ? item.municipio : null,
+        sg_uf: item.uf !== "—" ? item.uf : null,
+      },
+      cadastro: null,
+      cnpj: item.cnpj,
+      qtdMunicipiosRegiao: null,
+      financialMovementTabRef: { value: null },
+      indicatorsTabRef: { value: null },
+      crmsTabRef: { value: null },
+      falecidosTabRef: { value: null },
+      cnpjNavStore: { activeTabIndex: 0 },
+      geoStore,
+      resultadoMunicipios: [],
+      formatCurrencyFull,
+      formatNumberFull,
+      formatarData,
+    });
+  } finally {
+    exportingReportCnpj.value = null;
+  }
+}
+
+async function gerarNotaTecnica(item) {
+  if (generatingNoteCnpj.value) return;
+
+  const { inicio, fim } = getApiParams();
+  const url = `${API_ENDPOINTS.analyticsNotaTecnica(item.cnpj)}?data_inicio=${inicio}&data_fim=${fim}`;
+
+  generatingNoteCnpj.value = item.cnpj;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Erro ao gerar nota técnica");
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.setAttribute("download", `Nota_Tecnica_${item.cnpj}.docx`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Erro ao gerar Nota Técnica:", error);
+    toast.add({
+      severity: "error",
+      summary: "Erro ao gerar Nota Técnica",
+      detail: "Não foi possível gerar o arquivo. Tente novamente em instantes.",
+      life: 5000,
+    });
+  } finally {
+    generatingNoteCnpj.value = null;
+  }
 }
 
 function editarObservacao(item) {
@@ -295,6 +376,22 @@ function formatScore(v) {
                   v-tooltip.top="'Abrir detalhamento'"
                 >
                   <i class="pi pi-arrow-up-right" />
+                </button>
+                <button
+                  class="action-btn report"
+                  @click.stop="gerarRelatorio(item)"
+                  :disabled="!!exportingReportCnpj"
+                  v-tooltip.top="'Gerar relatório PDF'"
+                >
+                  <i :class="exportingReportCnpj === item.cnpj ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+                </button>
+                <button
+                  class="action-btn note"
+                  @click.stop="gerarNotaTecnica(item)"
+                  :disabled="!!generatingNoteCnpj"
+                  v-tooltip.top="'Gerar nota técnica'"
+                >
+                  <i :class="generatingNoteCnpj === item.cnpj ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
                 </button>
                 <button
                   class="action-btn remove"
@@ -497,7 +594,7 @@ function formatScore(v) {
 .lists-table th:nth-child(7) { width: 11%; }
 .lists-table th:nth-child(8) { width: 10%; }
 .lists-table th:nth-child(9) { width: 8%; }
-.lists-table th:nth-child(10) { width: 76px; }
+.lists-table th:nth-child(10) { width: 136px; }
 
 .lists-table td {
   padding: 0.7rem 0.9rem;
@@ -719,7 +816,7 @@ function formatScore(v) {
   border-radius: 3px;
 }
 
-.col-actions { width: 80px; text-align: center; }
+.col-actions { width: 136px; text-align: center; }
 
 .action-btns {
   display: flex;
@@ -735,18 +832,47 @@ function formatScore(v) {
   justify-content: center;
   border-radius: 6px;
   border: 1px solid var(--tabs-border);
-  background: none;
+  background: color-mix(in srgb, var(--text-color) 3%, transparent);
   cursor: pointer;
   transition: all 0.15s ease;
   font-size: 0.72rem;
   color: var(--text-color);
   opacity: 0.6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.action-btn:disabled {
+  cursor: wait;
+  opacity: 0.45;
 }
 .action-btn:hover { opacity: 1; }
 .action-btn.open:hover {
   border-color: var(--primary-color);
   color: var(--primary-color);
   background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+.action-btn.report {
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+.action-btn.report:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+.action-btn.note {
+  --btn-note-color: #a855f7;
+  color: var(--btn-note-color);
+  border-color: color-mix(in srgb, var(--btn-note-color) 30%, transparent);
+  background: color-mix(in srgb, var(--btn-note-color) 8%, transparent);
+}
+.action-btn.note:hover {
+  --btn-note-color: #a855f7;
+  border-color: var(--btn-note-color);
+  color: var(--btn-note-color);
+  background: color-mix(in srgb, var(--btn-note-color) 15%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-note-color) 25%, transparent);
 }
 .action-btn.remove:hover {
   border-color: var(--risk-critical);

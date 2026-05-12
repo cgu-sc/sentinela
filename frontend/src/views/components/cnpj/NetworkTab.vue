@@ -14,8 +14,12 @@ import { useRoute } from "vue-router";
 import cytoscape from "cytoscape";
 import TabPlaceholder from "./TabPlaceholder.vue";
 import NetworkAlertsOverlay from "./network/NetworkAlertsOverlay.vue";
+import NetworkLayerFiltersMenu from "./network/NetworkLayerFiltersMenu.vue";
+import NetworkLegendItems from "./network/NetworkLegendItems.vue";
 import NetworkNodeDetailPanel from "./network/NetworkNodeDetailPanel.vue";
+import NetworkSearchBox from "./network/NetworkSearchBox.vue";
 import NetworkStatsOverlay from "./network/NetworkStatsOverlay.vue";
+import NetworkZoomControls from "./network/NetworkZoomControls.vue";
 import {
   NETWORK_NODE_STYLES,
   NETWORK_TYPE_LABELS,
@@ -193,6 +197,13 @@ const restoreLayerFilterSnapshot = (snapshot) => {
   layerFilters.value = {
     ...layerFilters.value,
     ...snapshot,
+  };
+};
+
+const updateLayerFilter = (key, value) => {
+  layerFilters.value = {
+    ...layerFilters.value,
+    [key]: value,
   };
 };
 
@@ -2499,72 +2510,11 @@ const typeLabels = NETWORK_TYPE_LABELS;
                   />
                 </button>
 
-                <div v-if="showFiltersMenu" class="filters-menu" @click.stop>
-                  <div class="filters-section">
-                    <div class="filters-section-title">Tipos de Empresa</div>
-                    <label class="filter-option" :class="{ muted: !layerFilters.fp }">
-                      <input v-model="layerFilters.fp" type="checkbox" />
-                      <span>Farmácia Popular</span>
-                    </label>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.outrasFarmacias }"
-                    >
-                      <input v-model="layerFilters.outrasFarmacias" type="checkbox" />
-                      <span>Outras Farmácias</span>
-                    </label>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.outrosSegmentos }"
-                    >
-                      <input v-model="layerFilters.outrosSegmentos" type="checkbox" />
-                      <span>Outros Segmentos</span>
-                    </label>
-                  </div>
-
-                  <div class="filters-section">
-                    <div class="filters-section-title">Pessoas e Vínculos</div>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.sociosAtuais }"
-                    >
-                      <input v-model="layerFilters.sociosAtuais" type="checkbox" />
-                      <span>Sócios Atuais</span>
-                    </label>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.sociosInativos }"
-                    >
-                      <input v-model="layerFilters.sociosInativos" type="checkbox" />
-                      <span>Vínculos Inativos</span>
-                    </label>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.exSociosAlvo }"
-                    >
-                      <input v-model="layerFilters.exSociosAlvo" type="checkbox" />
-                      <span>Ex-sócios da Empresa</span>
-                    </label>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.representantes }"
-                    >
-                      <input v-model="layerFilters.representantes" type="checkbox" />
-                      <span>Representantes Legais</span>
-                    </label>
-                  </div>
-
-                  <div class="filters-section">
-                    <div class="filters-section-title">Status Cadastral</div>
-                    <label
-                      class="filter-option"
-                      :class="{ muted: !layerFilters.empresasInativas }"
-                    >
-                      <input v-model="layerFilters.empresasInativas" type="checkbox" />
-                      <span>Empresas Inativas</span>
-                    </label>
-                  </div>
-                </div>
+                <NetworkLayerFiltersMenu
+                  v-if="showFiltersMenu"
+                  :filters="layerFilters"
+                  @update-filter="updateLayerFilter"
+                />
               </div>
               <div class="pill-sep"></div>
               <button
@@ -2576,67 +2526,23 @@ const typeLabels = NETWORK_TYPE_LABELS;
                 <i class="pi pi-camera" />
               </button>
             </div>
-            <!-- Busca de nó -->
-            <div
-              class="toolbar-pill search-pill"
-              :class="{
-                searching: hasActiveSearch,
-                'no-match': searchHasNoMatch,
-              }"
-            >
-              <i class="pi pi-search search-icon" />
-              <input
-                v-model="networkSearch"
-                class="node-search-input"
-                type="text"
-                placeholder="Localizar nó"
-                aria-label="Localizar nó por CNPJ, CPF ou nome"
-                @keydown.esc="clearNodeSearch"
-              />
-              <span v-if="hasActiveSearch" class="search-count">{{
-                searchMatchCount
-              }}</span>
-              <button
-                v-if="hasActiveSearch"
-                class="search-clear-btn"
-                type="button"
-                @click="clearNodeSearch"
-                v-tooltip.bottom="'Limpar busca'"
-              >
-                <i class="pi pi-times" />
-              </button>
-            </div>
+            <NetworkSearchBox
+              v-model="networkSearch"
+              :match-count="searchMatchCount"
+              :has-active-search="hasActiveSearch"
+              :search-has-no-match="searchHasNoMatch"
+              @clear="clearNodeSearch"
+            />
 
-            <div class="toolbar-pill zoom-pill">
-              <button class="ctrl-btn" @click="zoomIn" v-tooltip.bottom="'Ampliar'">
-                <i class="pi pi-plus" />
-              </button>
-              <span class="zoom-level">{{ zoom }}%</span>
-              <button
-                class="ctrl-btn"
-                @click="zoomOut"
-                v-tooltip.bottom="'Reduzir'"
-              >
-                <i class="pi pi-minus" />
-              </button>
-              <div class="pill-sep"></div>
-              <button
-                class="ctrl-btn"
-                @click="fitGraph"
-                v-tooltip.bottom="'Ajustar à tela'"
-              >
-                <i class="pi pi-arrows-alt" />
-              </button>
-              <button
-                class="ctrl-btn"
-                @click="resetLayout"
-                :title="reorganizeTooltip"
-                :aria-label="reorganizeTooltip"
-                v-tooltip.bottom="reorganizeTooltip"
-              >
-                <i class="pi pi-sync" />
-              </button>
-            </div>
+            <NetworkZoomControls
+              variant="pill"
+              :zoom="zoom"
+              :reorganize-tooltip="reorganizeTooltip"
+              @zoom-in="zoomIn"
+              @zoom-out="zoomOut"
+              @fit="fitGraph"
+              @reset-layout="resetLayout"
+            />
 
             <div class="toolbar-pill legend-pill">
               <div ref="legendMenuRoot" class="legend-menu-root">
@@ -2663,33 +2569,7 @@ const typeLabels = NETWORK_TYPE_LABELS;
                 </button>
 
                 <div v-if="showLegendMenu" class="legend-menu" @click.stop>
-                  <div
-                    v-for="(t, key) in typeLabels"
-                    :key="key"
-                    class="legend-item"
-                  >
-                    <span
-                      class="legend-dot"
-                      :style="{ background: t.color }"
-                    ></span>
-                    <span class="legend-label">{{ t.label }}</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="border-top: 2px dotted #f59e0b; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
-                    <span class="legend-label">Representante</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-cadunico-ring"></span>
-                    <span class="legend-label">CadÚnico</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-deceased-cross"></span>
-                    <span class="legend-label">Falecido</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="border-top: 2px dotted #ef4444; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
-                    <span class="legend-label">Vínculo Inativo</span>
-                  </div>
+                  <NetworkLegendItems :type-labels="typeLabels" />
                 </div>
               </div>
             </div>
@@ -2707,67 +2587,18 @@ const typeLabels = NETWORK_TYPE_LABELS;
             @select="selectGraphNode"
           />
 
-          <!-- Controles de Zoom (canto inferior direito) ───── -->
-          <div class="graph-controls">
-            <button class="ctrl-btn" @click="zoomIn" v-tooltip.left="'Ampliar'">
-              <i class="pi pi-plus" />
-            </button>
-            <span class="zoom-level">{{ zoom }}%</span>
-            <button
-              class="ctrl-btn"
-              @click="zoomOut"
-              v-tooltip.left="'Reduzir'"
-            >
-              <i class="pi pi-minus" />
-            </button>
-            <div class="ctrl-sep"></div>
-            <button
-              class="ctrl-btn"
-              @click="fitGraph"
-              v-tooltip.left="'Ajustar à tela'"
-            >
-              <i class="pi pi-arrows-alt" />
-            </button>
-            <button
-              class="ctrl-btn"
-              @click="resetLayout"
-              :title="reorganizeTooltip"
-              :aria-label="reorganizeTooltip"
-              v-tooltip.left="reorganizeTooltip"
-            >
-              <i class="pi pi-sync" />
-            </button>
-          </div>
+          <NetworkZoomControls
+            :zoom="zoom"
+            :reorganize-tooltip="reorganizeTooltip"
+            @zoom-in="zoomIn"
+            @zoom-out="zoomOut"
+            @fit="fitGraph"
+            @reset-layout="resetLayout"
+          />
 
           <!-- Legenda ───────────────────────────────────────── -->
           <div class="graph-legend">
-            <div v-for="(t, key) in typeLabels" :key="key" class="legend-item">
-              <span class="legend-dot" :style="{ background: t.color }"></span>
-              <span class="legend-label">{{ t.label }}</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-line" style="border-top: 2px dotted #f59e0b; width: 14px; margin-right: 6px; background: transparent; height: 0;"></span>
-              <span class="legend-label">Representante</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-cadunico-ring"></span>
-              <span class="legend-label">CadÚnico</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-deceased-cross"></span>
-              <span class="legend-label">Falecido</span>
-            </div>
-            <div class="legend-item">
-              <span
-                class="legend-line"
-                style="
-                  border-top: 2px dotted #ef4444;
-                  width: 14px;
-                  margin-right: 6px;
-                "
-              ></span>
-              <span class="legend-label">Vínculo Inativo</span>
-            </div>
+            <NetworkLegendItems :type-labels="typeLabels" />
           </div>
         </div>
 
@@ -3017,21 +2848,6 @@ const typeLabels = NETWORK_TYPE_LABELS;
   line-height: 1;
 }
 
-.filters-menu {
-  position: absolute;
-  top: calc(100% + 0.55rem);
-  left: 0;
-  z-index: 40;
-  width: 244px;
-  padding: 0.45rem;
-  background: var(--card-bg);
-  border: 1px solid var(--tabs-border);
-  border-radius: 10px;
-  box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.38),
-    0 0 0 1px color-mix(in srgb, var(--tabs-border) 34%, transparent);
-}
-
 .legend-menu {
   position: absolute;
   top: calc(100% + 0.55rem);
@@ -3050,146 +2866,6 @@ const typeLabels = NETWORK_TYPE_LABELS;
     0 0 0 1px color-mix(in srgb, var(--tabs-border) 34%, transparent);
 }
 
-.filters-section {
-  padding: 0.45rem 0.35rem;
-}
-
-.filters-section + .filters-section {
-  border-top: 1px solid color-mix(in srgb, var(--tabs-border) 76%, transparent);
-}
-
-.filters-section-title {
-  margin-bottom: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.filter-option {
-  min-height: 1.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.3rem;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 500;
-  transition:
-    background 0.18s,
-    color 0.18s,
-    opacity 0.18s;
-}
-
-.filter-option:hover {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--text-color);
-}
-
-.filter-option.muted {
-  color: var(--text-muted);
-  opacity: 0.74;
-}
-
-.filter-option input {
-  width: 0.95rem;
-  height: 0.95rem;
-  accent-color: var(--primary-color);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.search-pill {
-  gap: 6px;
-  min-width: 210px;
-  max-width: 280px;
-  padding: 4px 8px;
-  transition:
-    border-color 0.18s,
-    box-shadow 0.18s;
-}
-
-.search-pill.searching {
-  border-color: rgba(56, 189, 248, 0.35);
-  box-shadow:
-    0 8px 24px -4px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(56, 189, 248, 0.1);
-}
-
-.search-pill.no-match {
-  border-color: rgba(251, 191, 36, 0.45);
-}
-
-.search-icon {
-  color: #64748b;
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.node-search-input {
-  width: 100%;
-  min-width: 0;
-  height: 24px;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #e2e8f0;
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-.node-search-input::placeholder {
-  color: #64748b;
-  opacity: 1;
-}
-
-.search-count {
-  min-width: 1rem;
-  height: 1rem;
-  padding: 0 0.28rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(56, 189, 248, 0.14);
-  color: #7dd3fc;
-  font-size: 0.6rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.search-pill.no-match .search-count {
-  background: rgba(251, 191, 36, 0.14);
-  color: #fbbf24;
-}
-
-.search-clear-btn {
-  width: 1.35rem;
-  height: 1.35rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 0.58rem;
-  flex-shrink: 0;
-  transition:
-    background 0.18s,
-    color 0.18s;
-}
-
-.search-clear-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-}
-
 .pill-sep {
   width: 1px;
   height: 16px;
@@ -3198,79 +2874,7 @@ const typeLabels = NETWORK_TYPE_LABELS;
   flex-shrink: 0;
 }
 
-.zoom-pill {
-  gap: 3px;
-}
-
-.zoom-pill .ctrl-btn {
-  width: 1.65rem;
-  height: 1.65rem;
-}
-
-.zoom-pill .zoom-level {
-  width: 2.15rem;
-}
-
 /* Controles de Zoom (canto inferior direito) ──────── */
-.graph-controls {
-  position: absolute;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--tabs-border);
-  border-radius: 12px;
-  padding: 0.5rem;
-  gap: 0.4rem;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
-}
-
-.graph-controls {
-  display: none;
-}
-
-.ctrl-btn {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.75rem;
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-
-.ctrl-btn:hover {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  color: var(--primary-color);
-}
-
-.zoom-level {
-  font-size: 0.65rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  width: 2rem;
-  text-align: center;
-}
-
-.ctrl-sep {
-  width: 1.5rem;
-  height: 1px;
-  background: var(--tabs-border);
-  opacity: 0.5;
-  margin: 0.1rem 0;
-}
-
 /* Legenda ──────────────────────────────────────────── */
 .graph-legend {
   position: absolute;
@@ -3289,101 +2893,6 @@ const typeLabels = NETWORK_TYPE_LABELS;
 
 .graph-legend {
   display: none;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.legend-cadunico-ring {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 4px double #f59e0b;
-  background: #0ea5e9;
-  flex-shrink: 0;
-}
-
-.legend-cnae-alert {
-  width: 14px;
-  height: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: color-mix(in srgb, #ef4444 18%, transparent);
-  border: 1px solid color-mix(in srgb, #ef4444 72%, transparent);
-  flex-shrink: 0;
-}
-
-.legend-cnae-alert::before {
-  content: "!";
-  color: #ef4444;
-  font-size: 0.62rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.legend-deceased-cross {
-  width: 15px;
-  height: 15px;
-  position: relative;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.legend-deceased-cross::before,
-.legend-deceased-cross::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 3px;
-  border-radius: 999px;
-  background: #64748b;
-  transform: translate(-50%, -50%);
-}
-
-.legend-deceased-cross::before {
-  height: 15px;
-}
-
-.legend-deceased-cross::after {
-  width: 11px;
-  height: 3px;
-  top: 38%;
-}
-
-.legend-line {
-  width: 18px;
-  height: 2px;
-  background: #f59e0b;
-  flex-shrink: 0;
-}
-
-.legend-line.dashed {
-  background: repeating-linear-gradient(
-    to right,
-    #f59e0b 0px,
-    #f59e0b 4px,
-    transparent 4px,
-    transparent 8px
-  );
-}
-
-.legend-label {
-  font-size: 0.68rem;
-  color: var(--text-secondary);
-  font-weight: 600;
 }
 
 /* Animações ────────────────────────────────────────── */

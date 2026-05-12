@@ -1,0 +1,107 @@
+<script setup>
+defineProps({
+  typeLabels: {
+    type: Object,
+    required: true,
+  },
+});
+</script>
+
+<template>
+  <div v-for="(typeInfo, key) in typeLabels" :key="key" class="legend-item">
+    <span class="legend-dot" :style="{ background: typeInfo.color }"></span>
+    <span class="legend-label">{{ typeInfo.label }}</span>
+  </div>
+  <div class="legend-item">
+    <span class="legend-line representative"></span>
+    <span class="legend-label">Representante</span>
+  </div>
+  <div class="legend-item">
+    <span class="legend-cadunico-ring"></span>
+    <span class="legend-label">CadÚnico</span>
+  </div>
+  <div class="legend-item">
+    <span class="legend-deceased-cross"></span>
+    <span class="legend-label">Falecido</span>
+  </div>
+  <div class="legend-item">
+    <span class="legend-line inactive"></span>
+    <span class="legend-label">Vínculo Inativo</span>
+  </div>
+</template>
+
+<style scoped>
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-cadunico-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 4px double #f59e0b;
+  background: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.legend-deceased-cross {
+  width: 15px;
+  height: 15px;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-deceased-cross::before,
+.legend-deceased-cross::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  border-radius: 999px;
+  background: #64748b;
+  transform: translate(-50%, -50%);
+}
+
+.legend-deceased-cross::before {
+  height: 15px;
+}
+
+.legend-deceased-cross::after {
+  width: 11px;
+  height: 3px;
+  top: 38%;
+}
+
+.legend-line {
+  width: 14px;
+  height: 0;
+  margin-right: 6px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.legend-line.representative {
+  border-top: 2px dotted #f59e0b;
+}
+
+.legend-line.inactive {
+  border-top: 2px dotted #ef4444;
+}
+
+.legend-label {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+</style>

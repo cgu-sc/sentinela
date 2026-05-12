@@ -91,6 +91,65 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
   margin: 0 0.1rem 0.26rem;
 }
 
+.legend-cadunico-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 4px double #f59e0b;
+  background: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.legend-cnae-alert {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, #ef4444 18%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 72%, transparent);
+  flex-shrink: 0;
+}
+
+.legend-cnae-alert::before {
+  content: "!";
+  color: #ef4444;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.legend-deceased-cross {
+  width: 15px;
+  height: 15px;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-deceased-cross::before,
+.legend-deceased-cross::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  border-radius: 999px;
+  background: #64748b;
+  transform: translate(-50%, -50%);
+}
+
+.legend-deceased-cross::before {
+  height: 15px;
+}
+
+.legend-deceased-cross::after {
+  width: 11px;
+  height: 3px;
+  top: 38%;
+}
+
 .alert-count {
   margin-left: auto;
   min-width: 1.1rem;

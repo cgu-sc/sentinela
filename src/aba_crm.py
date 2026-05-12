@@ -176,6 +176,7 @@ def buscar_top20_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                 MAX(nu_estabelecimentos) as qtd_estabelecimentos_atua,
                 MIN(dt_primeira_prescricao) as dt_primeira_prescricao,
                 MAX(dt_inscricao_crm) as dt_inscricao_crm,
+                MAX(CASE WHEN M.id_medico IS NULL THEN 0 ELSE 1 END) as crm_existe_dados_medico,
                 MAX(CAST(flag_crm_invalido AS INT)) as flag_crm_invalido,
                 MAX(CAST(flag_prescricao_antes_registro AS INT)) as flag_prescricao_antes_registro,
                 -- Flag Robô Aqui: Média do período > 30
@@ -201,6 +202,7 @@ def buscar_top20_prescritores(cursor, cnpj, data_inicio=None, data_fim=None):
                 MAX(CAST(flag_distancia_geografica AS INT)) as alerta_geografico
             FROM temp_CGUSC.fp.crm_export E
             INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj
+            LEFT JOIN temp_CGUSC.fp.dados_medico M ON M.id_medico = E.id_medico
             WHERE F.cnpj = ? AND competencia BETWEEN {comp_ini} AND {comp_fim}
             GROUP BY E.id_medico
             ORDER BY nu_prescricoes DESC
@@ -677,6 +679,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
             dt_primeira_prescricao = presc.get('dt_primeira_prescricao', None)
 
             dt_inscricao_crm = presc.get('dt_inscricao_crm', None)
+            crm_existe_dados_medico = int(_get_valor(presc, 'crm_existe_dados_medico'))
 
             alerta1 = presc.get('alerta1_crm_invalido', '') or presc.get('alerta1', '') or ''
             alerta2 = presc.get('alerta_concentracao_unico_crm', '') or ''
@@ -696,7 +699,7 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
                     alerta2 or
                     alerta_geo or
                     is_exclusivo or
-                    not dt_inscricao_crm  # CRM inexistente
+                    not dt_inscricao_crm
             )
 
             if tem_alerta_linha:
@@ -747,7 +750,8 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
                     # Se houver erro na conversão, exibe normalmente
                     ws.write(row_top, col, dt_inscricao_crm, f_celula_data)
             else:
-                ws.write(row_top, col, "Inexistente", fmt_alerta_vermelho)
+                texto_sem_registro = "Sem data registro" if crm_existe_dados_medico else "Inexistente"
+                ws.write(row_top, col, texto_sem_registro, fmt_alerta_vermelho)
             col += 1
 
             ws.write(row_top, col, nu_prescricoes, f_celula_numero);
@@ -828,14 +832,54 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
     row_evidencias += 2
 
     # --- 1. EVIDÊNCIAS DE DISTÂNCIA GEOGRÁFICA ---
-    evidencias_geo = [m.get('alerta_geografico') for m in top20_prescritores if m.get('alerta_geografico')]
-    if evidencias_geo:
-        ws.merge_range(row_evidencias, 1, row_evidencias, 19, "📍 DISTÂNCIA GEOGRÁFICA (>400KM)", wb.add_format({'bold': True, 'font_color': '#8b5cf6', 'font_size': 11}))
-        row_evidencias += 1
-        for txt in list(set(evidencias_geo)): # distinct
-            ws.merge_range(row_evidencias, 1, row_evidencias + 1, 19, f"• {txt}", wb.add_format({'text_wrap': True, 'valign': 'top', 'font_size': 9, 'italic': True}))
-            row_evidencias += 2
-        row_evidencias += 1
+    if cursor:
+        try:
+            def to_comp_geo(d):
+                if not d: return None
+                if isinstance(d, str): return int(d.replace('-', '')[:6])
+                return int(d.strftime('%Y%m'))
+
+            comp_ini_geo = to_comp_geo(data_inicio) or 201501
+            comp_fim_geo = to_comp_geo(data_fim) or 203012
+
+            cursor.execute(f"""
+                SELECT TOP 20
+                    G.id_medico,
+                    G.competencia,
+                    G.cnpj_a,
+                    G.no_municipio_a,
+                    G.sg_uf_a,
+                    G.nu_prescricoes_a,
+                    G.cnpj_b,
+                    G.no_municipio_b,
+                    G.sg_uf_b,
+                    G.nu_prescricoes_b,
+                    G.distancia_km,
+                    G.total_pares
+                FROM temp_CGUSC.fp.alertas_crm_geografico G
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F
+                    ON F.cnpj = G.cnpj_a OR F.cnpj = G.cnpj_b
+                WHERE F.cnpj = ?
+                  AND G.competencia BETWEEN {comp_ini_geo} AND {comp_fim_geo}
+                ORDER BY G.distancia_km DESC, G.total_pares DESC, G.competencia DESC
+            """, cnpj)
+
+            evidencias_geo = cursor.fetchall()
+            if evidencias_geo:
+                ws.merge_range(row_evidencias, 1, row_evidencias, 19, "📍 DISTÂNCIA GEOGRÁFICA (>400KM)", wb.add_format({'bold': True, 'font_color': '#8b5cf6', 'font_size': 11}))
+                row_evidencias += 1
+                for geo in evidencias_geo:
+                    txt = (
+                        f"CRM {geo[0]} em {geo[1]}: "
+                        f"{geo[3]}/{geo[4]} ({geo[5]} prescrições, CNPJ {geo[2]}) x "
+                        f"{geo[7]}/{geo[8]} ({geo[9]} prescrições, CNPJ {geo[6]}), "
+                        f"distância {float(geo[10] or 0):,.0f} km; {geo[11]} par(es) distante(s) no mês."
+                    )
+                    ws.merge_range(row_evidencias, 1, row_evidencias + 1, 19, f"• {txt}", wb.add_format({'text_wrap': True, 'valign': 'top', 'font_size': 9, 'italic': True}))
+                    row_evidencias += 2
+                row_evidencias += 1
+        except Exception as e:
+            logging.error(f"Erro ao buscar evidências geográficas para {cnpj}: {e}")
 
     # --- 2. EVIDÊNCIAS DE RAJADAS (CONCENTRAÇÃO MESMO CRM) ---
     if cursor:
@@ -851,32 +895,27 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
 
             # Busca todas as rajadas detalhadas no período (lista completa)
             cursor.execute(f"""
-                WITH Base AS (
-                    SELECT A.id_medico, A.dt_dia, 
-                           CASE 
-                               WHEN A.nu_5min  >=  7 THEN A.nu_5min 
-                               WHEN A.nu_10min >= 10 THEN A.nu_10min 
-                               WHEN A.nu_5min  >=  6 THEN A.nu_5min 
-                               WHEN A.nu_10min >=  8 THEN A.nu_10min 
-                               WHEN A.nu_15min >=  8 THEN A.nu_15min 
-                               WHEN A.nu_20min >=  9 THEN A.nu_20min 
-                               WHEN A.nu_30min >=  9 THEN A.nu_30min 
-                               WHEN A.nu_60min >= 14 THEN A.nu_60min 
-                               WHEN A.nu_25min >=  8 THEN A.nu_25min 
-                               WHEN A.nu_60min >= 10 THEN A.nu_60min 
-                           END as nu_prescricoes, 
-                           A.nu_minutos_span
-                    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                    WHERE F.cnpj = ? AND A.dt_dia BETWEEN ? AND ?
-                )
-                SELECT id_medico, dt_dia, nu_prescricoes, nu_minutos_span,
-                       CAST(CASE WHEN nu_minutos_span = 0 THEN 0 ELSE nu_prescricoes * 60.0 / nu_minutos_span END AS DECIMAL(10,2)) as taxa_hora
-                FROM Base
-                ORDER BY dt_dia DESC, taxa_hora DESC
+                SELECT TOP 50
+                       A.id_medico,
+                       A.dt_dia,
+                       A.nu_autorizacoes_pior_ritmo,
+                       A.janela_pior_ritmo_minutos,
+                       CAST(A.taxa_hora_pior_ritmo AS FLOAT) AS taxa_hora_pior_ritmo,
+                       A.criterio_pior_ritmo
+                FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
+                WHERE F.cnpj = ?
+                  AND A.dt_dia BETWEEN ? AND ?
+                  AND A.taxa_hora_pior_ritmo IS NOT NULL
+                ORDER BY
+                    A.taxa_hora_pior_ritmo DESC,
+                    A.nu_autorizacoes_pior_ritmo DESC,
+                    A.janela_pior_ritmo_minutos ASC,
+                    A.dt_dia DESC
             """, (cnpj, data_inicio, data_fim))
             
             rajadas = cursor.fetchall()
+            logging.info(f"[CRM] CNPJ {cnpj}: {len(rajadas)} rajadas de concentração única encontradas para o Excel.")
             if rajadas:
                 ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⏱️ LANÇAMENTOS SEQUENCIAIS (MESMO CRM)", wb.add_format({'bold': True, 'font_color': COR_LARANJA, 'font_size': 11}))
                 row_evidencias += 1
@@ -887,32 +926,35 @@ def gerar_aba_prescritores(wb, cnpj, dados_prescritores, top20_prescritores, cur
                     row_evidencias += 1
                 row_evidencias += 1
 
-            # --- 3. EVIDÊNCIAS DE SURTOS GERAIS (CROSS-CRM) ---
+            # --- 3. EVIDÊNCIAS DE RAJADAS (MÚLTIPLOS CRMS) ---
             cursor.execute(f"""
-                SELECT dt_ini_concentracao, nu_crms_distintos, 
-                       CASE 
-                           WHEN nu_5min  >=  6 THEN nu_5min 
-                           WHEN nu_10min >=  8 THEN nu_10min 
-                           WHEN nu_15min >= 10 THEN nu_15min 
-                           WHEN nu_20min >= 11 THEN nu_20min 
-                           WHEN nu_30min >= 12 THEN nu_30min 
-                           WHEN nu_60min >= 15 THEN nu_60min 
-                       END as nu_prescricoes,
-                       nu_minutos_span, severidade
+                SELECT TOP 50
+                       A.dt_ini_concentracao,
+                       A.nu_crms_distintos,
+                       A.nu_autorizacoes_pior_ritmo,
+                       A.janela_pior_ritmo_minutos,
+                       CAST(A.taxa_hora_pior_ritmo AS FLOAT) AS taxa_hora_pior_ritmo,
+                       A.criterio_pior_ritmo
                 FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                WHERE F.cnpj = ? AND A.dt_dia BETWEEN ? AND ?
-                ORDER BY A.dt_dia DESC, A.dt_ini_concentracao DESC
+                WHERE F.cnpj = ?
+                  AND A.dt_dia BETWEEN ? AND ?
+                  AND A.taxa_hora_pior_ritmo IS NOT NULL
+                ORDER BY
+                    A.taxa_hora_pior_ritmo DESC,
+                    A.nu_autorizacoes_pior_ritmo DESC,
+                    A.janela_pior_ritmo_minutos ASC,
+                    A.dt_dia DESC
             """, (cnpj, data_inicio, data_fim))
             
             surtos = cursor.fetchall()
             if surtos:
-                ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⚡ CONCENTRAÇÃO DE CRMs DIVERSOS (SURTOS)", wb.add_format({'bold': True, 'font_color': '#D97706', 'font_size': 11}))
+                ws.merge_range(row_evidencias, 1, row_evidencias, 19, "⏱️ LANÇAMENTOS SEQUENCIAIS (MULTIPLOS CRMS)", wb.add_format({'bold': True, 'font_color': '#D97706', 'font_size': 11}))
                 row_evidencias += 1
                 for s in surtos:
                     dt_f = s[0].strftime('%d/%m/%Y') if hasattr(s[0], 'strftime') else str(s[0])
                     hr_f = s[0].strftime('%H:%M') if hasattr(s[0], 'strftime') else str(s[0])
-                    txt = f"Em {dt_f} às {hr_f}: {s[2]} prescrições de {s[1]} médicos em {s[3]} min (Severidade: {s[4]})."
+                    txt = f"Em {dt_f} às {hr_f}: {s[2]} prescrições de {s[1]} CRMs em uma janela de {s[3]} minutos (Ritmo: {s[4]:.1f}/hora)."
                     ws.merge_range(row_evidencias, 1, row_evidencias, 19, f"• {txt}", wb.add_format({'font_size': 9, 'font_color': '#555555'}))
                     row_evidencias += 1
         except Exception as e:

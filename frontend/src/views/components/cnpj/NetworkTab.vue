@@ -169,6 +169,7 @@ const layerFilters = ref({
   outrosSegmentos: true,
   sociosAtuais: true,
   sociosInativos: true,
+  exSociosAlvo: true,
   representantes: true,
   empresasInativas: true,
 });
@@ -1221,6 +1222,23 @@ const applyVisibilityFilters = () => {
             edge.data("type") !== "representante" &&
             (edge.source().data("type") === "PF" ||
               edge.target().data("type") === "PF"),
+        )
+        .hide();
+    }
+    if (!layerFilters.value.exSociosAlvo) {
+      cy.nodes('[type="PF"]')
+        .filter((node) =>
+          node.connectedEdges().filter((edge) => {
+            const isDirectTargetLink =
+              edge.source().data("type") === "PJ_ALVO" ||
+              edge.target().data("type") === "PJ_ALVO";
+
+            return (
+              isDirectTargetLink &&
+              edge.data("is_ativo") === false &&
+              edge.data("type") !== "representante"
+            );
+          }).length > 0,
         )
         .hide();
     }
@@ -2306,7 +2324,14 @@ const typeLabels = {
                       :class="{ muted: !layerFilters.sociosInativos }"
                     >
                       <input v-model="layerFilters.sociosInativos" type="checkbox" />
-                      <span>Sócios Inativos</span>
+                      <span>Vínculos Inativos</span>
+                    </label>
+                    <label
+                      class="filter-option"
+                      :class="{ muted: !layerFilters.exSociosAlvo }"
+                    >
+                      <input v-model="layerFilters.exSociosAlvo" type="checkbox" />
+                      <span>Ex-sócios da Empresa</span>
                     </label>
                     <label
                       class="filter-option"

@@ -13,8 +13,7 @@ import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
-import Dialog from 'primevue/dialog';
-import Textarea from 'primevue/textarea';
+import ObservationDialog from "./ObservationDialog.vue";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -179,14 +178,8 @@ const filterNetwork = () => {
 };
 
 const showObsDialog = ref(false);
-const tempObs = ref('');
 const openObsDialog = () => {
-  tempObs.value = farmaciaLists.getObservacao(props.cnpj);
   showObsDialog.value = true;
-};
-const saveObs = () => {
-  farmaciaLists.setObservacao(props.cnpj, tempObs.value);
-  showObsDialog.value = false;
 };
 
 const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
@@ -539,36 +532,11 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
       estabelecimento...
     </div>
 
-    <!-- Dialog de Observação -->
-    <Dialog
+    <ObservationDialog
       v-model:visible="showObsDialog"
-      modal
-      header="Observação da Farmácia"
-      :style="{ width: '450px' }"
-      class="obs-dialog-custom"
-    >
-      <div class="p-fluid">
-        <div class="field mb-4">
-          <label for="obs" class="block font-semibold mb-2" style="font-size: 0.9rem; color: var(--text-color)">
-            Sua anotação para {{ tituloDisplay }}:
-          </label>
-          <Textarea
-            id="obs"
-            v-model="tempObs"
-            rows="5"
-            autoResize
-            placeholder="Digite aqui os motivos do interesse ou observações importantes..."
-            class="custom-textarea"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer-actions">
-          <button class="footer-btn footer-btn--cancel" @click="showObsDialog = false">Cancelar</button>
-          <button class="footer-btn footer-btn--save" @click="saveObs">Salvar Observação</button>
-        </div>
-      </template>
-    </Dialog>
+      :cnpj="cnpj"
+      :entity-name="tituloDisplay"
+    />
   </div>
 </template>
 
@@ -735,56 +703,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   background: color-mix(in srgb, var(--btn-obs-active-color) 12%, transparent);
   opacity: 1;
   box-shadow: 0 0 10px color-mix(in srgb, var(--btn-obs-active-color) 20%, transparent);
-}
-
-/* Dialog Styles */
-.dialog-footer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding-top: 1rem;
-}
-
-.footer-btn {
-  padding: 0.5rem 1.25rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-}
-
-.footer-btn--cancel {
-  background: transparent;
-  color: var(--text-muted);
-}
-.footer-btn--cancel:hover {
-  background: rgba(0,0,0,0.05);
-}
-
-.footer-btn--save {
-  background: var(--primary-color);
-  color: white;
-}
-.footer-btn--save:hover {
-  background: color-mix(in srgb, var(--primary-color) 90%, black);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 20%, transparent);
-}
-
-.custom-textarea {
-  background: var(--bg-secondary);
-  border: 1px solid var(--establishment-header-border);
-  border-radius: 8px;
-  color: var(--text-color);
-  padding: 0.75rem;
-  font-family: inherit;
-  font-size: 0.9rem;
-}
-.custom-textarea:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
 .risk-chip {

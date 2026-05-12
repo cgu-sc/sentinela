@@ -1,3 +1,5 @@
+import { computeRadialNetworkLayout } from "./networkLayoutEngine";
+
 export const DENSE_GRAPH_NODE_THRESHOLD = 28;
 export const MAX_DENSE_LAYOUT_SCALE = 2.8;
 
@@ -182,83 +184,24 @@ export function createNetworkLayouts({
     const visibleNodes = cy.nodes(":visible");
     if (visibleNodes.empty()) return;
 
-    const root = visibleNodes
-      .filter((node) => node.data("type") === "PJ_ALVO")
-      .first();
-    if (!root.length) return;
-
-    const center = { x: width / 2, y: height * 0.54 };
-    root.position(center);
-
-    const rootId = root.id();
-    const directPartners = sortGraphNodes(
-      root
-        .connectedEdges(":visible")
-        .connectedNodes(":visible")
-        .filter((node) => node.id() !== rootId)
-        .toArray(),
-    );
-
-    const partnerIds = new Set(directPartners.map((node) => node.id()));
-    const partnerAngle = new Map();
-    const densityScale = getDenseLayoutScale(visibleNodes.length);
-    const innerDensityScale = Math.max(1, Math.sqrt(densityScale));
-    const innerRadiusX =
-      Math.max(230, Math.min(width * 0.24, 380)) * innerDensityScale;
-    const innerRadiusY =
-      Math.max(120, Math.min(height * 0.24, 190)) * innerDensityScale;
-
-    directPartners.forEach((node, index) => {
-      const angle =
-        -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(directPartners.length, 1);
-      partnerAngle.set(node.id(), angle);
-      node.position(positionOnEllipse(center, innerRadiusX, innerRadiusY, angle));
+    const positions = computeRadialNetworkLayout({
+      nodes: visibleNodes.map((node) => ({
+        id: node.id(),
+        type: node.data("type"),
+        label: node.data("label"),
+        fullLabel: node.data("fullLabel"),
+      })),
+      edges: cy.edges(":visible").map((edge) => ({
+        source: edge.source().id(),
+        target: edge.target().id(),
+      })),
+      width,
+      height,
     });
 
-    const outerNodes = sortGraphNodes(
-      visibleNodes
-        .filter((node) => node.id() !== rootId && !partnerIds.has(node.id()))
-        .toArray(),
-    );
-
-    const outerRadiusX =
-      Math.max(420, Math.min(width * 0.43, 760)) * densityScale;
-    const outerRadiusY =
-      Math.max(200, Math.min(height * 0.36, 310)) * densityScale;
-    const groupedByAngle = new Map();
-
-    outerNodes.forEach((node, fallbackIndex) => {
-      const connectedAngles = node
-        .connectedEdges(":visible")
-        .connectedNodes(":visible")
-        .filter((other) => partnerIds.has(other.id()))
-        .map((other) => partnerAngle.get(other.id()))
-        .filter((angle) => Number.isFinite(angle));
-      const baseAngle = connectedAngles.length
-        ? circularMeanAngle(connectedAngles)
-        : -Math.PI / 2 +
-          (Math.PI * 2 * fallbackIndex) / Math.max(outerNodes.length, 1);
-      const key = String(Math.round(baseAngle * 100) / 100);
-      if (!groupedByAngle.has(key)) groupedByAngle.set(key, []);
-      groupedByAngle.get(key).push({ node, baseAngle });
-    });
-
-    groupedByAngle.forEach((group) => {
-      const spread = Math.min(0.7, Math.max(0.22, group.length * 0.14));
-      group.forEach(({ node, baseAngle }, index) => {
-        const offset =
-          group.length === 1
-            ? 0
-            : -spread / 2 + (spread * index) / (group.length - 1);
-        node.position(
-          positionOnEllipse(
-            center,
-            outerRadiusX,
-            outerRadiusY,
-            baseAngle + offset,
-          ),
-        );
-      });
+    positions.forEach((position, nodeId) => {
+      const node = cy.getElementById(nodeId);
+      if (node.length) node.position(position);
     });
   };
 

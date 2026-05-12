@@ -19,6 +19,7 @@ const watchlistLoading = ref(false);
 const watchlistError = ref(null);
 const showObsDialog = ref(false);
 const obsTarget = ref(null);
+const copiedCnpj = ref(null);
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -34,6 +35,14 @@ const formatDate = (iso) => {
   });
 };
 
+const formatPeriodMonth = (date) => {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return "—";
+
+  const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  return `${months[value.getMonth()]}/${value.getFullYear()}`;
+};
+
 const monitoredCnpjs = computed(() =>
   farmaciaLists.interesse.map((item) => item.cnpj).filter(Boolean),
 );
@@ -44,6 +53,12 @@ const periodKey = computed(() =>
     ? filterStore.periodo.map((date) => date?.getTime?.() ?? String(date ?? "")).join("|")
     : "",
 );
+const periodoAnaliseLabel = computed(() => {
+  const [inicio, fim] = Array.isArray(filterStore.periodo) ? filterStore.periodo : [];
+  if (!inicio || !fim) return "Período não definido";
+
+  return `${formatPeriodMonth(inicio)} - ${formatPeriodMonth(fim)}`;
+});
 
 async function fetchWatchlistAnalytics() {
   if (!monitoredCnpjs.value.length) {
@@ -118,6 +133,14 @@ function abrirEstabelecimento(cnpj) {
   router.push(`/estabelecimentos/${cnpj}`);
 }
 
+async function copyCnpj(cnpj) {
+  await navigator.clipboard.writeText(cnpj);
+  copiedCnpj.value = cnpj;
+  window.setTimeout(() => {
+    if (copiedCnpj.value === cnpj) copiedCnpj.value = null;
+  }, 1400);
+}
+
 function editarObservacao(item) {
   obsTarget.value = item;
   showObsDialog.value = true;
@@ -153,9 +176,15 @@ function formatScore(v) {
           <i class="pi pi-table" />
           <span>Estabelecimentos monitorados</span>
         </div>
-        <span v-if="watchlistLoading" class="card-count">Atualizando indicadores...</span>
-        <span v-else-if="watchlistError" class="card-count card-error">{{ watchlistError }}</span>
-        <span v-else-if="totalBadge > 0" class="card-count">{{ totalBadge }} registros</span>
+        <div class="card-header-right">
+          <span class="period-chip" v-tooltip.top="'Período de análise atual'">
+            <i class="pi pi-calendar" />
+            <span>Período: {{ periodoAnaliseLabel }}</span>
+          </span>
+          <span v-if="watchlistLoading" class="card-count">Atualizando indicadores...</span>
+          <span v-else-if="watchlistError" class="card-count card-error">{{ watchlistError }}</span>
+          <span v-else-if="totalBadge > 0" class="card-count">{{ totalBadge }} registros</span>
+        </div>
       </div>
 
       <div class="lists-content">
@@ -169,14 +198,13 @@ function formatScore(v) {
         <thead>
           <tr>
             <th>#</th>
-            <th>CNPJ</th>
-            <th>Razão Social</th>
+            <th>Estabelecimento</th>
             <th>Observação</th>
-            <th>Município / UF</th>
-            <th class="col-right">% N. Comp.</th>
-            <th class="col-right">Score de Risco</th>
-            <th class="col-right">Total Movimentado</th>
+            <th>Localização</th>
+            <th class="col-right">Risco</th>
+            <th class="col-right">% Não Comp.</th>
             <th class="col-right">Valor s/ Comp.</th>
+            <th class="col-right">Total Mov.</th>
             <th>Adicionado em</th>
             <th class="col-actions">Ações</th>
           </tr>
@@ -192,8 +220,24 @@ function formatScore(v) {
             @keydown.space.prevent="abrirEstabelecimento(item.cnpj)"
           >
             <td class="col-num">{{ i + 1 }}</td>
-            <td class="col-cnpj">{{ formatCnpj(item.cnpj) }}</td>
-            <td class="col-razao">{{ item.razaoSocial }}</td>
+            <td class="col-establishment">
+              <div class="establishment-block">
+                <span class="establishment-name" v-tooltip.top="item.razaoSocial">
+                  {{ item.razaoSocial }}
+                </span>
+                <span class="cnpj-row">
+                  <span class="cnpj-text">{{ formatCnpj(item.cnpj) }}</span>
+                  <button
+                    class="copy-btn"
+                    @click.stop="copyCnpj(item.cnpj)"
+                    v-tooltip.top="copiedCnpj === item.cnpj ? 'CNPJ copiado' : 'Copiar CNPJ'"
+                    aria-label="Copiar CNPJ"
+                  >
+                    <i :class="copiedCnpj === item.cnpj ? 'pi pi-check' : 'pi pi-copy'" />
+                  </button>
+                </span>
+              </div>
+            </td>
             <td class="col-obs">
               <div class="obs-cell">
                 <div v-if="item.observacao" class="obs-content" v-tooltip.top="item.observacao">
@@ -212,9 +256,22 @@ function formatScore(v) {
               </div>
             </td>
             <td class="col-loc">
-              <span v-if="item.municipio !== '—'">{{ item.municipio }}</span>
-              <span v-if="item.uf !== '—'" class="col-uf">/{{ item.uf }}</span>
-              <span v-if="item.municipio === '—'">—</span>
+              <div class="loc-block">
+                <span v-if="item.municipio !== '—'" class="municipio-text" v-tooltip.top="item.municipio">
+                  {{ item.municipio }}
+                </span>
+                <span v-else class="col-vazio">—</span>
+                <span v-if="item.uf !== '—'" class="uf-tag">{{ item.uf }}</span>
+              </div>
+            </td>
+            <td class="col-right col-score">
+              <span v-if="item.scoreRisco != null"
+                class="score-badge"
+                :style="{ color: RISCO_COLOR[item.classificacao] || 'var(--text-muted)' }">
+                <span class="score-value">{{ formatScore(item.scoreRisco) }}</span>
+                <span v-if="item.classificacao" class="score-class">{{ item.classificacao }}</span>
+              </span>
+              <span v-else class="col-vazio">—</span>
             </td>
             <td class="col-right col-perc">
               <span v-if="item.percValSemComp != null"
@@ -223,20 +280,11 @@ function formatScore(v) {
               </span>
               <span v-else class="col-vazio">—</span>
             </td>
-            <td class="col-right col-score">
-              <span v-if="item.scoreRisco != null"
-                class="score-badge"
-                :style="{ color: RISCO_COLOR[item.classificacao] || 'var(--text-muted)' }">
-                {{ formatScore(item.scoreRisco) }}
-                <span v-if="item.classificacao" class="score-class">{{ item.classificacao }}</span>
-              </span>
-              <span v-else class="col-vazio">—</span>
-            </td>
-            <td class="col-right col-money">
-              {{ item.totalMov != null ? formatBRL(item.totalMov) : '—' }}
-            </td>
             <td class="col-right col-money col-sem-comp">
               {{ item.valSemComp != null ? formatBRL(item.valSemComp) : '—' }}
+            </td>
+            <td class="col-right col-money col-total-mov">
+              {{ item.totalMov != null ? formatBRL(item.totalMov) : '—' }}
             </td>
             <td class="col-date">{{ formatDate(item.adicionadoEm) }}</td>
             <td class="col-actions">
@@ -352,6 +400,8 @@ function formatScore(v) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   padding: 0.85rem 1.25rem;
   border-bottom: 1px solid var(--card-border);
   background: rgba(255, 255, 255, 0.02);
@@ -373,6 +423,33 @@ function formatScore(v) {
   font-size: 1rem;
 }
 
+.card-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.period-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.24rem 0.58rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.period-chip i {
+  font-size: 0.72rem;
+}
+
 .card-count {
   font-size: 0.7rem;
   font-weight: 500;
@@ -389,7 +466,9 @@ function formatScore(v) {
 
 .lists-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
+  table-layout: fixed;
   background: transparent;
 }
 
@@ -408,6 +487,17 @@ function formatScore(v) {
 }
 
 .lists-table th.col-right { text-align: right; }
+
+.lists-table th:nth-child(1) { width: 42px; }
+.lists-table th:nth-child(2) { width: 20%; }
+.lists-table th:nth-child(3) { width: 18%; }
+.lists-table th:nth-child(4) { width: 11%; }
+.lists-table th:nth-child(5) { width: 8%; }
+.lists-table th:nth-child(6) { width: 8%; }
+.lists-table th:nth-child(7) { width: 11%; }
+.lists-table th:nth-child(8) { width: 10%; }
+.lists-table th:nth-child(9) { width: 8%; }
+.lists-table th:nth-child(10) { width: 76px; }
 
 .lists-table td {
   padding: 0.7rem 0.9rem;
@@ -433,9 +523,78 @@ function formatScore(v) {
 }
 
 .col-num   { width: 36px; opacity: 0.4; font-weight: 400; }
-.col-cnpj  { font-size: 0.75rem; white-space: nowrap; opacity: 0.7; }
-.col-razao { font-weight: 400; max-width: 220px; }
-.col-obs   { max-width: 250px; }
+.col-establishment,
+.col-obs,
+.col-loc {
+  min-width: 0;
+}
+
+.establishment-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.establishment-name {
+  display: block;
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cnpj-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.cnpj-text {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.copy-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.clickable-row:hover .copy-btn,
+.copy-btn:focus-visible {
+  opacity: 1;
+}
+
+.copy-btn:hover,
+.copy-btn:focus-visible {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  outline: none;
+}
+
+.copy-btn i {
+  font-size: 0.68rem;
+}
+
 .obs-cell {
   display: flex;
   align-items: center;
@@ -488,14 +647,42 @@ function formatScore(v) {
   font-size: 0.76rem;
 }
 
-.col-date  { opacity: 0.55; font-size: 0.76rem; white-space: nowrap; }
+.col-date  { opacity: 0.46; font-size: 0.72rem; white-space: nowrap; }
 .col-right { text-align: right; }
 .col-vazio { opacity: 0.3; }
 .col-money { font-size: 0.78rem; white-space: nowrap; opacity: 0.75; }
 .col-sem-comp { color: var(--risk-critical); opacity: 0.65; }
+.col-total-mov { opacity: 0.45; font-size: 0.74rem; }
 
-.col-loc { font-size: 0.78rem; white-space: nowrap; opacity: 0.65; }
-.col-uf  { opacity: 0.55; margin-left: 1px; }
+.loc-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.municipio-text {
+  display: block;
+  max-width: 100%;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.75;
+}
+
+.uf-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.34rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
 
 /* Badge % Não Comprovação */
 .perc-badge {
@@ -512,10 +699,16 @@ function formatScore(v) {
 /* Score de Risco */
 .score-badge {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 0.18rem;
   font-size: 0.78rem;
   font-weight: 400;
+}
+.score-value {
+  font-weight: 600;
+  line-height: 1;
 }
 .score-class {
   font-size: 0.65rem;

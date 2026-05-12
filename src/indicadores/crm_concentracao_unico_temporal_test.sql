@@ -28,7 +28,6 @@
 -- A metadata representa a UF/fonte atual; alertas e controle sao preservados
 -- para permitir processamento acumulado e retomada por UF/CNPJ.
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_metadata;
 GO
 
 DECLARE @DataInicio  DATE     = '2015-07-01';
@@ -46,7 +45,7 @@ DECLARE @nu_pendentes       INT;
 DECLARE @nu_ja_processados  INT;
 DECLARE @nu_total           INT;
 DECLARE @pipeline_nome      VARCHAR(80) = 'crm_concentracao_unico';
-DECLARE @pipeline_versao    VARCHAR(40) = 'v2_2026_05_07';
+DECLARE @pipeline_versao    VARCHAR(40) = 'v3_2026_05_12';
 DECLARE @nu_registros_fonte_uf BIGINT;
 DECLARE @uf_farmacia CHAR(2);
 DECLARE @uf_farmacia_alvo CHAR(2) = NULL;
@@ -60,6 +59,7 @@ DECLARE @qtd_cnpjs_lote INT;
 DECLARE @dt_fim_lote DATETIME;
 DECLARE @dt_fim_etapa DATETIME;
 DECLARE @nu_registros_etapa BIGINT;
+DECLARE @alertas_criada BIT = 0;
 
 IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
@@ -257,16 +257,6 @@ BEGIN
         @ok = @fonte_atual_ok OUTPUT;
 END;
 
-DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
-
-CREATE TABLE #crm_cnpjs_fonte_atual (
-    id_cnpj INT      NOT NULL,
-    cnpj    CHAR(14) NOT NULL
-);
-
-CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
-    ON #crm_cnpjs_fonte_atual(id_cnpj);
-
 IF @fonte_atual_ok = 0
 BEGIN
     PRINT '>> Materializando movimentacao da UF ' + @uf_farmacia + '...';
@@ -292,6 +282,7 @@ BEGIN
 
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual;
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual_metadata;
+    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
     EXEC sp_executesql
         N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -428,27 +419,47 @@ BEGIN
         @inicio = @DataInicio,
         @fim = @DataFim;
 
-    SET @t_bloco = GETDATE();
+END
 
-    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj, cnpj)
-    SELECT
-        F.id AS id_cnpj,
-        CAST(F.cnpj AS CHAR(14)) AS cnpj
-    FROM temp_CGUSC.fp.dados_farmacia F
-    WHERE F.uf = @uf_farmacia
-      AND EXISTS (
-          SELECT 1
-          FROM #crm_movimentacao_uf_atual M
-          WHERE M.id_cnpj = F.id
-      );
+IF OBJECT_ID('tempdb..#crm_movimentacao_uf_atual') IS NULL
+BEGIN
+    RAISERROR('Tabela temporaria #crm_movimentacao_uf_atual nao encontrada apos materializacao/reuso da fonte UF.', 16, 1);
+    RETURN;
+END;
 
-    SET @nu_cnpjs_fonte = (
-        SELECT COUNT(*)
-        FROM #crm_cnpjs_fonte_atual
-    );
+SET @t_bloco = GETDATE();
 
-    SET @dt_fim_etapa = GETDATE();
+DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
+CREATE TABLE #crm_cnpjs_fonte_atual (
+    id_cnpj INT      NOT NULL,
+    cnpj    CHAR(14) NOT NULL
+);
+
+INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj, cnpj)
+SELECT
+    F.id AS id_cnpj,
+    CAST(F.cnpj AS CHAR(14)) AS cnpj
+FROM temp_CGUSC.fp.dados_farmacia F
+WHERE F.uf = @uf_farmacia
+  AND EXISTS (
+      SELECT 1
+      FROM #crm_movimentacao_uf_atual M
+      WHERE M.id_cnpj = F.id
+  );
+
+CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+    ON #crm_cnpjs_fonte_atual(id_cnpj);
+
+SET @nu_cnpjs_fonte = (
+    SELECT COUNT(*)
+    FROM #crm_cnpjs_fonte_atual
+);
+
+SET @dt_fim_etapa = GETDATE();
+
+IF @fonte_atual_ok = 0
+BEGIN
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_etapa_log
         (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa,
          dt_inicio_etapa, dt_fim_etapa, segundos_etapa, milissegundos_etapa,
@@ -501,26 +512,6 @@ BEGIN
     PRINT '   Fonte UF materializada em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 END
 
-IF NOT EXISTS (SELECT 1 FROM #crm_cnpjs_fonte_atual)
-BEGIN
-    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj, cnpj)
-    SELECT
-        F.id AS id_cnpj,
-        CAST(F.cnpj AS CHAR(14)) AS cnpj
-    FROM temp_CGUSC.fp.dados_farmacia F
-    WHERE F.uf = @uf_farmacia
-      AND EXISTS (
-          SELECT 1
-          FROM #crm_movimentacao_uf_atual M
-          WHERE M.id_cnpj = F.id
-      );
-
-    SET @nu_cnpjs_fonte = (
-        SELECT COUNT(*)
-        FROM #crm_cnpjs_fonte_atual
-    );
-END;
-
 SELECT @nu_registros_fonte_uf = nu_registros
 FROM #crm_movimentacao_uf_atual_metadata
 WHERE id_pipeline = 1
@@ -536,9 +527,8 @@ PRINT '   Período: ' + CAST(@DataInicio AS VARCHAR(10)) + ' → ' + CAST(@DataF
 PRINT '   Lote: ' + CAST(@lote_size AS VARCHAR) + ' CNPJs por iteração';
 
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_metadata;
 
-CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_metadata (
+CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_uf_metadata (
     id_pipeline       TINYINT      NOT NULL,
     pipeline_nome     VARCHAR(80)  NOT NULL,
     pipeline_versao   VARCHAR(40)  NOT NULL,
@@ -549,11 +539,11 @@ CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_metadata (
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
     observacao        VARCHAR(400) NULL,
-    CONSTRAINT PK_CrmConcentracaoUnicoMetadata PRIMARY KEY CLUSTERED (id_pipeline),
-    CONSTRAINT CK_CrmConcentracaoUnicoMetadata_Id CHECK (id_pipeline = 1)
+    CONSTRAINT PK_CrmConcentracaoUnicoUfMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+    CONSTRAINT CK_CrmConcentracaoUnicoUfMetadata_Id CHECK (id_pipeline = 1)
 );
 
-INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_metadata
+INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_uf_metadata
     (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
      nu_registros_fonte_uf, dt_criacao, dt_atualizacao, status, observacao)
 VALUES
@@ -585,14 +575,14 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
 PRINT '>> Passo 0: Inicializando tabelas persistentes...';
 SET @t1 = GETDATE();
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_controle') IS NULL
-    CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_controle (
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_lote_controle') IS NULL
+    CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_lote_controle (
         id_cnpj    INT         NOT NULL,
         dt_inicio  DATETIME    NOT NULL,
         dt_fim     DATETIME    NULL,
         nu_alertas INT         NULL,
         status     VARCHAR(12) NOT NULL,
-        CONSTRAINT PK_CrmConcentracaoUnicoControle PRIMARY KEY CLUSTERED (id_cnpj)
+        CONSTRAINT PK_ConcentracaoUnicoLoteControle PRIMARY KEY CLUSTERED (id_cnpj)
     );
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_lote_log') IS NULL
@@ -623,14 +613,18 @@ BEGIN
             (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, lote_num);
 END;
 
+SET @alertas_criada = 0;
+
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
 BEGIN
+    SET @alertas_criada = 1;
+
     CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_alertas (
         id_cnpj             INT             NOT NULL,
-        id_medico           VARCHAR(13)     NOT NULL,
+        id_medico           VARCHAR(12)     NOT NULL,
         dt_dia              DATE            NOT NULL,
-        dt_ini_concentracao SMALLDATETIME   NOT NULL,
-        dt_fim_concentracao SMALLDATETIME   NOT NULL,
+        dt_ini_concentracao DATETIME        NOT NULL,
+        dt_fim_concentracao DATETIME        NOT NULL,
         nu_minutos_span     TINYINT         NOT NULL,
         nu_5min             SMALLINT        NOT NULL,
         nu_10min            SMALLINT        NOT NULL,
@@ -639,11 +633,41 @@ BEGIN
         nu_25min            SMALLINT        NOT NULL,
         nu_30min            SMALLINT        NOT NULL,
         nu_60min            SMALLINT        NOT NULL,
-        severidade          VARCHAR(10)     NOT NULL
+        id_severidade       TINYINT         NOT NULL,
+        janela_pior_ritmo_minutos TINYINT   NOT NULL,
+        nu_autorizacoes_pior_ritmo SMALLINT NOT NULL,
+        taxa_hora_pior_ritmo DECIMAL(7,2)   NOT NULL,
+        criterio_pior_ritmo VARCHAR(30)     NOT NULL
     );
     CREATE CLUSTERED INDEX IDX_ConcentracaoUnicoAlertas
         ON temp_CGUSC.fp.crm_concentracao_unico_alertas(id_cnpj, id_medico, dt_dia);
 END
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NOT NULL
+   AND (
+       COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'id_medico') <> 12
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'severidade') IS NOT NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'id_severidade') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'janela_pior_ritmo_minutos') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'nu_autorizacoes_pior_ritmo') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'taxa_hora_pior_ritmo') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.crm_concentracao_unico_alertas', 'criterio_pior_ritmo') IS NULL
+   )
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_unico_alertas existe com schema antigo. Recrie a tabela e o controle de lotes para a versao atual.', 16, 1);
+    RETURN;
+END;
+
+IF @alertas_criada = 1
+   AND EXISTS (
+       SELECT 1
+       FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle
+       WHERE status = 'OK'
+   )
+BEGIN
+    RAISERROR('Tabela de alertas foi criada vazia, mas o controle de lotes ja possui CNPJs OK. Recrie tambem o controle de lotes para recalcular os alertas.', 16, 1);
+    RETURN;
+END;
 
 PRINT '   Passo 0 concluido em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 
@@ -656,11 +680,11 @@ SET @t1 = GETDATE();
 
 DELETE alerta
 FROM temp_CGUSC.fp.crm_concentracao_unico_alertas alerta
-INNER JOIN temp_CGUSC.fp.crm_concentracao_unico_controle ctrl
+INNER JOIN temp_CGUSC.fp.crm_concentracao_unico_lote_controle ctrl
     ON ctrl.id_cnpj = alerta.id_cnpj
 WHERE ctrl.status = 'PROCESSANDO';
 
-DELETE FROM temp_CGUSC.fp.crm_concentracao_unico_controle
+DELETE FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle
 WHERE status = 'PROCESSANDO';
 
 PRINT '   Limpeza concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
@@ -681,7 +705,7 @@ INTO #cnpjs_pendentes
 FROM #crm_cnpjs_fonte_atual C
 WHERE NOT EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_concentracao_unico_controle L
+    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle L
     WHERE L.id_cnpj = C.id_cnpj
       AND L.status = 'OK'
 );
@@ -689,7 +713,7 @@ WHERE NOT EXISTS (
 SET @nu_pendentes      = (SELECT COUNT(*) FROM #cnpjs_pendentes);
 SET @nu_ja_processados = (
     SELECT COUNT(*)
-    FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
     WHERE C.status = 'OK'
       AND EXISTS (
           SELECT 1
@@ -751,12 +775,12 @@ BEGIN
 
     -- ── Marcar lote como PROCESSANDO ─────────────────────────────────────
     SET @t_bloco = GETDATE();
-    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_controle (id_cnpj, dt_inicio, status)
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_lote_controle (id_cnpj, dt_inicio, status)
     SELECT id_cnpj, GETDATE(), 'PROCESSANDO'
     FROM #lote_atual L
     WHERE NOT EXISTS (
         SELECT 1
-        FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+        FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
         WHERE C.id_cnpj = L.id_cnpj
     );
 
@@ -765,7 +789,7 @@ BEGIN
         dt_inicio = GETDATE(),
         dt_fim = NULL,
         nu_alertas = NULL
-    FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
     INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
 
     PRINT '      3.0 Marcar PROCESSANDO: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -777,12 +801,23 @@ BEGIN
     SET @t_bloco = GETDATE();
     DROP TABLE IF EXISTS #base_lote;
 
+    IF EXISTS (
+        SELECT 1
+        FROM #crm_movimentacao_uf_atual A
+        INNER JOIN #lote_atual L ON L.id_cnpj = A.id_cnpj
+        WHERE LEN(A.crm) > 9
+    )
+    BEGIN
+        RAISERROR('CRM com mais de 9 caracteres encontrado. id_medico VARCHAR(12) exige CRM com ate 9 caracteres mais /UF.', 16, 1);
+        RETURN;
+    END;
+
     SELECT 
         L.id_cnpj,
         CAST(A.data_hora AS DATE) AS dt_dia,
         A.data_hora,
         A.num_autorizacao,
-        CAST(CAST(A.crm AS VARCHAR(10)) + '/' + A.crm_uf AS VARCHAR(13)) AS id_medico
+        CAST(A.crm + '/' + A.crm_uf AS VARCHAR(12)) AS id_medico
     INTO #base_lote
     FROM #crm_movimentacao_uf_atual A
     INNER JOIN #lote_atual L ON L.id_cnpj = A.id_cnpj
@@ -904,25 +939,33 @@ BEGIN
     SET @t_bloco = GETDATE();
     INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_alertas
         (id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-         nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade)
+         nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+         id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+         taxa_hora_pior_ritmo, criterio_pior_ritmo)
     SELECT id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-           nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min, severidade
+           nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+           id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+           taxa_hora_pior_ritmo, criterio_pior_ritmo
     FROM (
         SELECT
-            id_cnpj,
-            id_medico,
-            CAST(janela_inicio AS DATE)                                 AS dt_dia,
-            CAST(janela_inicio AS SMALLDATETIME)                        AS dt_ini_concentracao,
-            CAST(dt_fim_real AS SMALLDATETIME)                          AS dt_fim_concentracao,
-            CAST(DATEDIFF(MINUTE, janela_inicio, dt_fim_real) AS TINYINT) AS nu_minutos_span,
-            CAST(nu_5min AS SMALLINT)                                   AS nu_5min,
-            CAST(nu_10min AS SMALLINT)                                  AS nu_10min,
-            CAST(nu_15min AS SMALLINT)                                  AS nu_15min,
-            CAST(nu_20min AS SMALLINT)                                  AS nu_20min,
-            CAST(nu_25min AS SMALLINT)                                  AS nu_25min,
-            CAST(nu_30min AS SMALLINT)                                  AS nu_30min,
-            CAST(nu_60min AS SMALLINT)                                  AS nu_60min,
-            severidade
+            Base.id_cnpj,
+            Base.id_medico,
+            CAST(Base.janela_inicio AS DATE)                                  AS dt_dia,
+            CAST(Base.janela_inicio AS DATETIME)                              AS dt_ini_concentracao,
+            CAST(Base.dt_fim_real AS DATETIME)                                AS dt_fim_concentracao,
+            CAST(DATEDIFF(MINUTE, Base.janela_inicio, Base.dt_fim_real) AS TINYINT) AS nu_minutos_span,
+            CAST(Base.nu_5min AS SMALLINT)                                    AS nu_5min,
+            CAST(Base.nu_10min AS SMALLINT)                                   AS nu_10min,
+            CAST(Base.nu_15min AS SMALLINT)                                   AS nu_15min,
+            CAST(Base.nu_20min AS SMALLINT)                                   AS nu_20min,
+            CAST(Base.nu_25min AS SMALLINT)                                   AS nu_25min,
+            CAST(Base.nu_30min AS SMALLINT)                                   AS nu_30min,
+            CAST(Base.nu_60min AS SMALLINT)                                   AS nu_60min,
+            Base.id_severidade,
+            Ritmo.janela_pior_ritmo_minutos,
+            Ritmo.nu_autorizacoes_pior_ritmo,
+            Ritmo.taxa_hora_pior_ritmo,
+            Ritmo.criterio_pior_ritmo
         FROM (
             SELECT
                 *,
@@ -939,22 +982,47 @@ BEGIN
                     WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN fim_real_60min
                 END AS dt_fim_real,
                 CASE
-                    WHEN nu_5min  >=  7 THEN 'EXTREMO'
-                    WHEN nu_10min >= 10 THEN 'EXTREMO'
-                    WHEN nu_5min  >=  6 THEN 'CRÍTICO'
-                    WHEN nu_10min >=  8 THEN 'CRÍTICO'
-                    WHEN nu_15min >=  8 THEN 'GRAVE'
-                    WHEN nu_20min >=  9 THEN 'GRAVE'
-                    WHEN nu_30min >=  8 THEN 'ALTO'
-                    WHEN nu_60min >= 12 THEN 'ALTO'
-                    WHEN nu_25min >=  6 THEN 'ALTO'
-                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 'ALTO'
-                END AS severidade
+                    WHEN nu_5min  >=  7 THEN 4
+                    WHEN nu_10min >= 10 THEN 4
+                    WHEN nu_5min  >=  6 THEN 3
+                    WHEN nu_10min >=  8 THEN 3
+                    WHEN nu_15min >=  8 THEN 2
+                    WHEN nu_20min >=  9 THEN 2
+                    WHEN nu_30min >=  8 THEN 1
+                    WHEN nu_60min >= 12 THEN 1
+                    WHEN nu_25min >=  6 THEN 1
+                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 1
+                END AS id_severidade
             FROM #concentracao_dedup
             WHERE rn = 1
-        ) sub
+        ) Base
+        CROSS APPLY (
+            SELECT TOP 1
+                V.janela_pior_ritmo_minutos,
+                V.nu_autorizacoes_pior_ritmo,
+                CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
+                V.criterio_pior_ritmo
+            FROM (VALUES
+                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(4 AS TINYINT), CAST(1 AS TINYINT), CAST('7_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 7 THEN 1 ELSE 0 END),
+                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(4 AS TINYINT), CAST(2 AS TINYINT), CAST('10_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 10 THEN 1 ELSE 0 END),
+                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(3 AS TINYINT), CAST(3 AS TINYINT), CAST('6_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 6 THEN 1 ELSE 0 END),
+                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(3 AS TINYINT), CAST(4 AS TINYINT), CAST('8_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 8 THEN 1 ELSE 0 END),
+                (CAST(15 AS TINYINT), CAST(Base.nu_15min AS SMALLINT), CAST(2 AS TINYINT), CAST(5 AS TINYINT), CAST('8_EM_15MIN' AS VARCHAR(30)), CASE WHEN Base.nu_15min >= 8 THEN 1 ELSE 0 END),
+                (CAST(20 AS TINYINT), CAST(Base.nu_20min AS SMALLINT), CAST(2 AS TINYINT), CAST(6 AS TINYINT), CAST('9_EM_20MIN' AS VARCHAR(30)), CASE WHEN Base.nu_20min >= 9 THEN 1 ELSE 0 END),
+                (CAST(30 AS TINYINT), CAST(Base.nu_30min AS SMALLINT), CAST(1 AS TINYINT), CAST(7 AS TINYINT), CAST('8_EM_30MIN' AS VARCHAR(30)), CASE WHEN Base.nu_30min >= 8 THEN 1 ELSE 0 END),
+                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(8 AS TINYINT), CAST('12_EM_60MIN' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 12 THEN 1 ELSE 0 END),
+                (CAST(25 AS TINYINT), CAST(Base.nu_25min AS SMALLINT), CAST(1 AS TINYINT), CAST(9 AS TINYINT), CAST('6_EM_25MIN' AS VARCHAR(30)), CASE WHEN Base.nu_25min >= 6 THEN 1 ELSE 0 END),
+                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(10 AS TINYINT), CAST('TAXA_12_HORA' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 8 AND Base.nu_minutos_span_full <= Base.nu_60min * 5 THEN 1 ELSE 0 END)
+            ) V(janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
+            WHERE V.atingiu = 1
+            ORDER BY
+                V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) DESC,
+                V.id_severidade_criterio DESC,
+                V.prioridade_criterio ASC
+        ) Ritmo
+        WHERE Base.id_severidade IS NOT NULL
     ) sub
-    WHERE severidade IS NOT NULL;
+    WHERE id_severidade IS NOT NULL;
 
     SET @nu_alertas_lote  = @@ROWCOUNT;
     SET @nu_alertas_total += @nu_alertas_lote;
@@ -972,7 +1040,7 @@ BEGIN
             FROM temp_CGUSC.fp.crm_concentracao_unico_alertas a
             WHERE a.id_cnpj = ctrl.id_cnpj
         ), 0)
-    FROM temp_CGUSC.fp.crm_concentracao_unico_controle ctrl
+    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle ctrl
     WHERE ctrl.id_cnpj IN (SELECT id_cnpj FROM #lote_atual);
 
     PRINT '      3.E Atualizar controle: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -1012,11 +1080,11 @@ END
 -- RESULTADOS
 -- ============================================================================
 Resultados:
-UPDATE temp_CGUSC.fp.crm_concentracao_unico_metadata
+UPDATE temp_CGUSC.fp.crm_concentracao_unico_uf_metadata
 SET status = CASE
         WHEN EXISTS (
             SELECT 1
-            FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+            FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
             INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
             WHERE C.status <> 'OK'
         ) THEN 'INCOMPLETO'
@@ -1033,7 +1101,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
               etapa = CASE
                   WHEN EXISTS (
                       SELECT 1
-                      FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+                      FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
                       INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''CONCENTRACAO_UNICO_INCOMPLETA''
@@ -1042,7 +1110,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
               status_concentracao_unico = CASE
                   WHEN EXISTS (
                       SELECT 1
-                      FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
+                      FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
                       INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''INCOMPLETO''
@@ -1076,7 +1144,7 @@ PRINT '   UFs processadas: ' + CAST(@nu_ufs_processadas AS VARCHAR);
 PRINT '   TOTAL ALERTAS: ' + CAST(@nu_alertas_total_geral AS VARCHAR);
 PRINT '==========================================================';
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_metadata') IS NOT NULL
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_uf_metadata') IS NOT NULL
 BEGIN
     SELECT
         id_pipeline,
@@ -1089,7 +1157,7 @@ BEGIN
         dt_criacao,
         dt_atualizacao,
         observacao
-    FROM temp_CGUSC.fp.crm_concentracao_unico_metadata;
+    FROM temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
 END;
 
 EXEC sp_executesql
@@ -1115,18 +1183,24 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NOT NULL
 BEGIN
     -- Distribuição por severidade
     SELECT
-        severidade,
+        id_severidade,
+        CASE id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+        END AS severidade,
         COUNT(*)                        AS qtd_alertas,
         COUNT(DISTINCT id_cnpj)         AS qtd_cnpjs,
         COUNT(DISTINCT id_medico)   AS qtd_medicos,
         AVG(nu_minutos_span)            AS media_minutos_span,
         AVG(nu_60min)                   AS media_rx_60min,
+        AVG(taxa_hora_pior_ritmo)       AS media_taxa_hora_pior_ritmo,
         MIN(dt_ini_concentracao)        AS primeiro_alerta,
         MAX(dt_ini_concentracao)        AS ultimo_alerta
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas
-    GROUP BY severidade
-    ORDER BY
-        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END;
+    GROUP BY id_severidade
+    ORDER BY id_severidade DESC;
 
     -- Top 30 piores casos
     SELECT TOP 30
@@ -1143,9 +1217,20 @@ BEGIN
         nu_25min,
         nu_30min,
         nu_60min,
-        severidade
+        id_severidade,
+        CASE id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+        END AS severidade,
+        janela_pior_ritmo_minutos,
+        nu_autorizacoes_pior_ritmo,
+        taxa_hora_pior_ritmo,
+        criterio_pior_ritmo
     FROM temp_CGUSC.fp.crm_concentracao_unico_alertas
     ORDER BY
-        CASE severidade WHEN 'EXTREMO' THEN 1 WHEN 'CRÍTICO' THEN 2 WHEN 'GRAVE' THEN 3 ELSE 4 END ASC,
+        id_severidade DESC,
+        taxa_hora_pior_ritmo DESC,
         nu_60min DESC;
 END;

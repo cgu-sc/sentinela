@@ -60,5 +60,9 @@ export const API_ENDPOINTS = {
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,
   analyticsNotaTecnica: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/nota-tecnica`,
+  preferences: `${BASE_URL}/api/v1/preferences`,
+  preferencesFilters: `${BASE_URL}/api/v1/preferences/filters`,
+  preferencesWatchlist: `${BASE_URL}/api/v1/preferences/watchlist`,
+  preferencesUi: `${BASE_URL}/api/v1/preferences/ui`,
 };
 

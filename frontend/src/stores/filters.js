@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, watch } from 'vue';
+import axios from 'axios';
 import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
 import { useGeoStore } from './geo';
+import { API_ENDPOINTS } from '@/config/api';
 
 const STORAGE_KEY = 'sentinela_filters';
 
@@ -67,11 +69,82 @@ export const useFilterStore = defineStore('filters', () => {
     dataFim: null,
   });
 
+  const serializeFilters = () => ({
+    selectedUF: selectedUF.value,
+    selectedRegiaoSaude: selectedRegiaoSaude.value,
+    selectedMunicipio: selectedMunicipio.value,
+    selectedSituacao: selectedSituacao.value,
+    selectedMS: selectedMS.value,
+    selectedPorte: selectedPorte.value,
+    selectedGrandeRede: selectedGrandeRede.value,
+    selectedUnidadePf: selectedUnidadePf.value,
+    selectedCnpjRaiz: selectedCnpjRaiz.value,
+    percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
+    percentualNaoComprovacaoFilter: percentualNaoComprovacaoFilter.value,
+    valorMinSemComp: valorMinSemComp.value,
+    valorMinSemCompFilter: valorMinSemCompFilter.value,
+    periodo: periodo.value.map(d => d?.toISOString() ?? null),
+    sliderValue: sliderValue.value,
+    clusterSelection: clusterSelection.value,
+    statusSelection: statusSelection.value,
+    rfaSelection: rfaSelection.value,
+    searchTarget: searchTarget.value,
+  });
+
+  const applySavedFilters = (filters) => {
+    if (!filters || typeof filters !== 'object') return;
+
+    if ('selectedUF' in filters) selectedUF.value = filters.selectedUF;
+    if ('selectedRegiaoSaude' in filters) selectedRegiaoSaude.value = filters.selectedRegiaoSaude;
+    if ('selectedMunicipio' in filters) selectedMunicipio.value = filters.selectedMunicipio;
+    if ('selectedSituacao' in filters) selectedSituacao.value = filters.selectedSituacao;
+    if ('selectedMS' in filters) selectedMS.value = filters.selectedMS;
+    if ('selectedPorte' in filters) selectedPorte.value = filters.selectedPorte;
+    if ('selectedGrandeRede' in filters) selectedGrandeRede.value = filters.selectedGrandeRede;
+    if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
+    if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
+    if (Array.isArray(filters.percentualNaoComprovacaoRange)) percentualNaoComprovacaoRange.value = filters.percentualNaoComprovacaoRange;
+    if (Array.isArray(filters.percentualNaoComprovacaoFilter)) percentualNaoComprovacaoFilter.value = filters.percentualNaoComprovacaoFilter;
+    if (typeof filters.valorMinSemComp === 'number') valorMinSemComp.value = filters.valorMinSemComp;
+    if (typeof filters.valorMinSemCompFilter === 'number') valorMinSemCompFilter.value = filters.valorMinSemCompFilter;
+    if (Array.isArray(filters.periodo)) periodo.value = filters.periodo.map(d => d ? new Date(d) : null);
+    if (Array.isArray(filters.sliderValue)) sliderValue.value = filters.sliderValue;
+    if ('clusterSelection' in filters) clusterSelection.value = filters.clusterSelection;
+    if ('statusSelection' in filters) statusSelection.value = filters.statusSelection;
+    if ('rfaSelection' in filters) rfaSelection.value = filters.rfaSelection;
+    if ('searchTarget' in filters) searchTarget.value = filters.searchTarget;
+  };
+
+  const saveFiltersToBackend = async () => {
+    try {
+      await axios.put(API_ENDPOINTS.preferencesFilters, {
+        filters: serializeFilters(),
+      });
+    } catch (error) {
+      console.warn('[filters] Falha ao sincronizar filtros no backend:', error);
+    }
+  };
+
+  const saveUiToBackend = async () => {
+    try {
+      await axios.put(API_ENDPOINTS.preferencesUi, {
+        ui: {
+          sidebarCollapsed: sidebarCollapsed.value,
+          sidebarLocked: sidebarLocked.value,
+        },
+      });
+    } catch (error) {
+      console.warn('[filters] Falha ao sincronizar UI no backend:', error);
+    }
+  };
+
   watch(sidebarCollapsed, (val) => {
     localStorage.setItem('sentinela_sidebar_collapsed', String(val));
+    saveUiToBackend();
   });
   watch(sidebarLocked, (val) => {
     localStorage.setItem('sentinela_sidebar_locked', String(val));
+    saveUiToBackend();
   });
 
   // 4. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
@@ -137,27 +210,8 @@ export const useFilterStore = defineStore('filters', () => {
   const saveToStorage = () => {
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        selectedUF: selectedUF.value,
-        selectedRegiaoSaude: selectedRegiaoSaude.value,
-        selectedMunicipio: selectedMunicipio.value,
-        selectedSituacao: selectedSituacao.value,
-        selectedMS: selectedMS.value,
-        selectedPorte: selectedPorte.value,
-        selectedGrandeRede: selectedGrandeRede.value,
-        selectedUnidadePf: selectedUnidadePf.value,
-        selectedCnpjRaiz: selectedCnpjRaiz.value,
-        percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
-        percentualNaoComprovacaoFilter: percentualNaoComprovacaoFilter.value,
-        valorMinSemComp: valorMinSemComp.value,
-        valorMinSemCompFilter: valorMinSemCompFilter.value,
-        periodo: periodo.value.map(d => d?.toISOString() ?? null),
-        sliderValue: sliderValue.value,
-        clusterSelection: clusterSelection.value,
-        statusSelection: statusSelection.value,
-        rfaSelection: rfaSelection.value,
-        searchTarget: searchTarget.value,
-      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeFilters()));
+      saveFiltersToBackend();
     }, TIMING.FILTER_DEBOUNCE);
   };
 
@@ -200,6 +254,7 @@ export const useFilterStore = defineStore('filters', () => {
     animationPreload.dataInicio = null;
     animationPreload.dataFim = null;
     localStorage.removeItem(STORAGE_KEY);
+    saveFiltersToBackend();
   }
 
   function resetAnimationPreview() {
@@ -213,6 +268,37 @@ export const useFilterStore = defineStore('filters', () => {
     animationPreload.dataInicio = null;
     animationPreload.dataFim = null;
   }
+
+  async function loadPreferencesFromBackend() {
+    try {
+      const { data } = await axios.get(API_ENDPOINTS.preferences);
+      const backendFilters = data?.filters && Object.keys(data.filters).length > 0
+        ? data.filters
+        : null;
+
+      if (backendFilters) {
+        applySavedFilters(backendFilters);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeFilters()));
+      } else if (saved) {
+        await saveFiltersToBackend();
+      }
+
+      if (data?.ui && typeof data.ui === 'object') {
+        if (typeof data.ui.sidebarCollapsed === 'boolean') {
+          sidebarCollapsed.value = data.ui.sidebarCollapsed;
+        }
+        if (typeof data.ui.sidebarLocked === 'boolean') {
+          sidebarLocked.value = data.ui.sidebarLocked;
+        }
+      } else {
+        await saveUiToBackend();
+      }
+    } catch (error) {
+      console.warn('[filters] Usando filtros locais do navegador:', error);
+    }
+  }
+
+  loadPreferencesFromBackend();
 
   return {
     selectedUF,

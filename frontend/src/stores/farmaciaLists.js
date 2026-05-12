@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import axios from 'axios';
+import { API_ENDPOINTS } from '@/config/api';
 
 const STORAGE_KEY = 'sentinela_farmacia_lists';
 
@@ -19,9 +21,35 @@ function saveToStorage(interesse) {
   } catch {}
 }
 
+async function saveToBackend(interesse) {
+  try {
+    await axios.put(API_ENDPOINTS.preferencesWatchlist, {
+      interesse: interesse.value,
+    });
+  } catch (error) {
+    console.warn('[farmaciaLists] Falha ao sincronizar lista no backend:', error);
+  }
+}
+
 export const useFarmaciaListsStore = defineStore('farmaciaLists', () => {
   const stored = loadFromStorage();
   const interesse = ref(stored.interesse || []);
+
+  async function loadFromBackend() {
+    try {
+      const { data } = await axios.get(API_ENDPOINTS.preferences);
+      const backendList = Array.isArray(data?.watchlist) ? data.watchlist : [];
+
+      if (backendList.length > 0 || interesse.value.length === 0) {
+        interesse.value = backendList;
+        saveToStorage(interesse);
+      } else {
+        await saveToBackend(interesse);
+      }
+    } catch (error) {
+      console.warn('[farmaciaLists] Usando lista local do navegador:', error);
+    }
+  }
 
   const isInteresse = computed(() => (cnpj) =>
     interesse.value.some((e) => e.cnpj === cnpj),
@@ -39,6 +67,7 @@ export const useFarmaciaListsStore = defineStore('farmaciaLists', () => {
       });
     }
     saveToStorage(interesse);
+    saveToBackend(interesse);
   }
 
   function setObservacao(cnpj, text) {
@@ -47,6 +76,7 @@ export const useFarmaciaListsStore = defineStore('farmaciaLists', () => {
       item.observacao = text;
       item.atualizadoEm = new Date().toISOString();
       saveToStorage(interesse);
+      saveToBackend(interesse);
     }
   }
 
@@ -54,6 +84,8 @@ export const useFarmaciaListsStore = defineStore('farmaciaLists', () => {
     const item = interesse.value.find((e) => e.cnpj === cnpj);
     return item ? item.observacao : '';
   });
+
+  loadFromBackend();
 
   return {
     interesse,

@@ -174,7 +174,15 @@ function formatScore(v) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in listaEnriquecida" :key="item.cnpj">
+          <tr
+            v-for="(item, i) in listaEnriquecida"
+            :key="item.cnpj"
+            class="clickable-row"
+            tabindex="0"
+            @click="abrirEstabelecimento(item.cnpj)"
+            @keydown.enter="abrirEstabelecimento(item.cnpj)"
+            @keydown.space.prevent="abrirEstabelecimento(item.cnpj)"
+          >
             <td class="col-num">{{ i + 1 }}</td>
             <td class="col-cnpj">{{ formatCnpj(item.cnpj) }}</td>
             <td class="col-razao">{{ item.razaoSocial }}</td>
@@ -217,14 +225,14 @@ function formatScore(v) {
               <div class="action-btns">
                 <button
                   class="action-btn open"
-                  @click="abrirEstabelecimento(item.cnpj)"
+                  @click.stop="abrirEstabelecimento(item.cnpj)"
                   v-tooltip.top="'Abrir detalhamento'"
                 >
                   <i class="pi pi-arrow-up-right" />
                 </button>
                 <button
                   class="action-btn remove"
-                  @click="remover(item.cnpj)"
+                  @click.stop="remover(item.cnpj)"
                   v-tooltip.top="'Remover da lista'"
                 >
                   <i class="pi pi-trash" />
@@ -388,6 +396,16 @@ function formatScore(v) {
 .lists-table tbody tr:last-child td { border-bottom: none; }
 .lists-table tbody tr:hover {
   background: color-mix(in srgb, var(--primary-color) 4%, transparent);
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 70%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
 }
 
 .col-num   { width: 36px; opacity: 0.4; font-weight: 400; }

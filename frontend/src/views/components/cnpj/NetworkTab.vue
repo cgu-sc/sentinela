@@ -609,6 +609,7 @@ const mergeNetworkData = (newData, options = {}) => {
         ...n,
         label: truncateLabel(n.label, 20),
         fullLabel: n.label,
+        situacao_rf: n.situacao_rf,
         is_expanded_node: true,
         expansion_level: expansionLevel,
       },
@@ -1011,7 +1012,7 @@ function isInactiveCompanyStatus(value) {
 
 function isCompanyNodeInactive(node) {
   if (!node || node.type === "PF") return false;
-  return isInactiveCompanyStatus(node.situacao_rf || node.situacao);
+  return isInactiveCompanyStatus(node.situacao_rf);
 }
 
 function isTruthyFlag(value) {
@@ -1495,7 +1496,7 @@ async function buildGraph(data) {
         type: n.type,
         municipio: n.municipio,
         uf: n.uf,
-        situacao: n.situacao_rf,
+        situacao_rf: n.situacao_rf,
         nome_socio: n.nome_socio,
         razao_social: n.razao_social,
         nome_fantasia: n.nome_fantasia,
@@ -1646,7 +1647,6 @@ async function expandNode(nodeId) {
             cnae_secundario: n.cnae_secundario,
             municipio: n.municipio,
             uf: n.uf,
-            situacao: n.situacao_rf,
             situacao_rf: n.situacao_rf,
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
@@ -2649,9 +2649,9 @@ const typeLabels = {
                   >{{ selectedNode.municipio }} / {{ selectedNode.uf }}</span
                 >
               </div>
-              <div v-if="selectedNode.situacao" class="panel-field">
+              <div v-if="selectedNode.situacao_rf" class="panel-field">
                 <i class="pi pi-info-circle" />
-                <span>Situação RF: {{ selectedNode.situacao }}</span>
+                <span>Situação RF: {{ selectedNode.situacao_rf }}</span>
               </div>
             </div>
 

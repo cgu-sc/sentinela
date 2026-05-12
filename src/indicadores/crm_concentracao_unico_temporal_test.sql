@@ -28,6 +28,7 @@
 -- A metadata representa a UF/fonte atual; alertas e controle sao preservados
 -- para permitir processamento acumulado e retomada por UF/CNPJ.
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_metadata;
 GO
 
 DECLARE @DataInicio  DATE     = '2015-07-01';
@@ -256,6 +257,16 @@ BEGIN
         @ok = @fonte_atual_ok OUTPUT;
 END;
 
+DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
+
+CREATE TABLE #crm_cnpjs_fonte_atual (
+    id_cnpj INT      NOT NULL,
+    cnpj    CHAR(14) NOT NULL
+);
+
+CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+    ON #crm_cnpjs_fonte_atual(id_cnpj);
+
 IF @fonte_atual_ok = 0
 BEGIN
     PRINT '>> Materializando movimentacao da UF ' + @uf_farmacia + '...';
@@ -281,7 +292,6 @@ BEGIN
 
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual;
     DROP TABLE IF EXISTS #crm_movimentacao_uf_atual_metadata;
-    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
     EXEC sp_executesql
         N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -420,10 +430,10 @@ BEGIN
 
     SET @t_bloco = GETDATE();
 
+    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj, cnpj)
     SELECT
         F.id AS id_cnpj,
         CAST(F.cnpj AS CHAR(14)) AS cnpj
-    INTO #crm_cnpjs_fonte_atual
     FROM temp_CGUSC.fp.dados_farmacia F
     WHERE F.uf = @uf_farmacia
       AND EXISTS (
@@ -431,9 +441,6 @@ BEGIN
           FROM #crm_movimentacao_uf_atual M
           WHERE M.id_cnpj = F.id
       );
-
-    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
-        ON #crm_cnpjs_fonte_atual(id_cnpj);
 
     SET @nu_cnpjs_fonte = (
         SELECT COUNT(*)
@@ -494,12 +501,12 @@ BEGIN
     PRINT '   Fonte UF materializada em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 END
 
-IF OBJECT_ID('tempdb..#crm_cnpjs_fonte_atual') IS NULL
+IF NOT EXISTS (SELECT 1 FROM #crm_cnpjs_fonte_atual)
 BEGIN
+    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj, cnpj)
     SELECT
         F.id AS id_cnpj,
         CAST(F.cnpj AS CHAR(14)) AS cnpj
-    INTO #crm_cnpjs_fonte_atual
     FROM temp_CGUSC.fp.dados_farmacia F
     WHERE F.uf = @uf_farmacia
       AND EXISTS (
@@ -507,9 +514,6 @@ BEGIN
           FROM #crm_movimentacao_uf_atual M
           WHERE M.id_cnpj = F.id
       );
-
-    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
-        ON #crm_cnpjs_fonte_atual(id_cnpj);
 
     SET @nu_cnpjs_fonte = (
         SELECT COUNT(*)
@@ -532,8 +536,9 @@ PRINT '   Período: ' + CAST(@DataInicio AS VARCHAR(10)) + ' → ' + CAST(@DataF
 PRINT '   Lote: ' + CAST(@lote_size AS VARCHAR) + ' CNPJs por iteração';
 
 DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
+DROP TABLE IF EXISTS temp_CGUSC.fp.crm_concentracao_unico_metadata;
 
-CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_uf_metadata (
+CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_metadata (
     id_pipeline       TINYINT      NOT NULL,
     pipeline_nome     VARCHAR(80)  NOT NULL,
     pipeline_versao   VARCHAR(40)  NOT NULL,
@@ -544,11 +549,11 @@ CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_uf_metadata (
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
     observacao        VARCHAR(400) NULL,
-    CONSTRAINT PK_CrmConcentracaoUnicoUfMetadata PRIMARY KEY CLUSTERED (id_pipeline),
-    CONSTRAINT CK_CrmConcentracaoUnicoUfMetadata_Id CHECK (id_pipeline = 1)
+    CONSTRAINT PK_CrmConcentracaoUnicoMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+    CONSTRAINT CK_CrmConcentracaoUnicoMetadata_Id CHECK (id_pipeline = 1)
 );
 
-INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_uf_metadata
+INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_metadata
     (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
      nu_registros_fonte_uf, dt_criacao, dt_atualizacao, status, observacao)
 VALUES
@@ -580,14 +585,14 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
 PRINT '>> Passo 0: Inicializando tabelas persistentes...';
 SET @t1 = GETDATE();
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_lote_controle') IS NULL
-    CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_lote_controle (
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_controle') IS NULL
+    CREATE TABLE temp_CGUSC.fp.crm_concentracao_unico_controle (
         id_cnpj    INT         NOT NULL,
         dt_inicio  DATETIME    NOT NULL,
         dt_fim     DATETIME    NULL,
         nu_alertas INT         NULL,
         status     VARCHAR(12) NOT NULL,
-        CONSTRAINT PK_ConcentracaoUnicoLoteControle PRIMARY KEY CLUSTERED (id_cnpj)
+        CONSTRAINT PK_CrmConcentracaoUnicoControle PRIMARY KEY CLUSTERED (id_cnpj)
     );
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_lote_log') IS NULL
@@ -651,11 +656,11 @@ SET @t1 = GETDATE();
 
 DELETE alerta
 FROM temp_CGUSC.fp.crm_concentracao_unico_alertas alerta
-INNER JOIN temp_CGUSC.fp.crm_concentracao_unico_lote_controle ctrl
+INNER JOIN temp_CGUSC.fp.crm_concentracao_unico_controle ctrl
     ON ctrl.id_cnpj = alerta.id_cnpj
 WHERE ctrl.status = 'PROCESSANDO';
 
-DELETE FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle
+DELETE FROM temp_CGUSC.fp.crm_concentracao_unico_controle
 WHERE status = 'PROCESSANDO';
 
 PRINT '   Limpeza concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
@@ -676,7 +681,7 @@ INTO #cnpjs_pendentes
 FROM #crm_cnpjs_fonte_atual C
 WHERE NOT EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle L
+    FROM temp_CGUSC.fp.crm_concentracao_unico_controle L
     WHERE L.id_cnpj = C.id_cnpj
       AND L.status = 'OK'
 );
@@ -684,7 +689,7 @@ WHERE NOT EXISTS (
 SET @nu_pendentes      = (SELECT COUNT(*) FROM #cnpjs_pendentes);
 SET @nu_ja_processados = (
     SELECT COUNT(*)
-    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+    FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
     WHERE C.status = 'OK'
       AND EXISTS (
           SELECT 1
@@ -746,12 +751,12 @@ BEGIN
 
     -- ── Marcar lote como PROCESSANDO ─────────────────────────────────────
     SET @t_bloco = GETDATE();
-    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_lote_controle (id_cnpj, dt_inicio, status)
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_controle (id_cnpj, dt_inicio, status)
     SELECT id_cnpj, GETDATE(), 'PROCESSANDO'
     FROM #lote_atual L
     WHERE NOT EXISTS (
         SELECT 1
-        FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+        FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
         WHERE C.id_cnpj = L.id_cnpj
     );
 
@@ -760,7 +765,7 @@ BEGIN
         dt_inicio = GETDATE(),
         dt_fim = NULL,
         nu_alertas = NULL
-    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+    FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
     INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
 
     PRINT '      3.0 Marcar PROCESSANDO: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -967,7 +972,7 @@ BEGIN
             FROM temp_CGUSC.fp.crm_concentracao_unico_alertas a
             WHERE a.id_cnpj = ctrl.id_cnpj
         ), 0)
-    FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle ctrl
+    FROM temp_CGUSC.fp.crm_concentracao_unico_controle ctrl
     WHERE ctrl.id_cnpj IN (SELECT id_cnpj FROM #lote_atual);
 
     PRINT '      3.E Atualizar controle: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -1007,11 +1012,11 @@ END
 -- RESULTADOS
 -- ============================================================================
 Resultados:
-UPDATE temp_CGUSC.fp.crm_concentracao_unico_uf_metadata
+UPDATE temp_CGUSC.fp.crm_concentracao_unico_metadata
 SET status = CASE
         WHEN EXISTS (
             SELECT 1
-            FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+            FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
             INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
             WHERE C.status <> 'OK'
         ) THEN 'INCOMPLETO'
@@ -1028,7 +1033,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
               etapa = CASE
                   WHEN EXISTS (
                       SELECT 1
-                      FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+                      FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
                       INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''CONCENTRACAO_UNICO_INCOMPLETA''
@@ -1037,7 +1042,7 @@ IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NOT NULL
               status_concentracao_unico = CASE
                   WHEN EXISTS (
                       SELECT 1
-                      FROM temp_CGUSC.fp.crm_concentracao_unico_lote_controle C
+                      FROM temp_CGUSC.fp.crm_concentracao_unico_controle C
                       INNER JOIN #crm_cnpjs_fonte_atual F ON F.id_cnpj = C.id_cnpj
                       WHERE C.status <> ''OK''
                   ) THEN ''INCOMPLETO''
@@ -1071,7 +1076,7 @@ PRINT '   UFs processadas: ' + CAST(@nu_ufs_processadas AS VARCHAR);
 PRINT '   TOTAL ALERTAS: ' + CAST(@nu_alertas_total_geral AS VARCHAR);
 PRINT '==========================================================';
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_uf_metadata') IS NOT NULL
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_metadata') IS NOT NULL
 BEGIN
     SELECT
         id_pipeline,
@@ -1084,7 +1089,7 @@ BEGIN
         dt_criacao,
         dt_atualizacao,
         observacao
-    FROM temp_CGUSC.fp.crm_concentracao_unico_uf_metadata;
+    FROM temp_CGUSC.fp.crm_concentracao_unico_metadata;
 END;
 
 EXEC sp_executesql

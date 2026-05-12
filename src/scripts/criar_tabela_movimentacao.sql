@@ -24,7 +24,22 @@ FROM (
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
 ) M
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = M.cnpj
-WHERE F.uf = 'SC';
+WHERE F.uf = 'SC'
+  AND M.cnpj IN (
+      '03929808000146',
+      '05363613000107',
+      '05363613000298',
+      '05363613000379',
+      '27185347000102',
+      '30207376000132',
+      '10800567000104',
+      '17212938000178',
+      '50679903000119',
+      '39242516000188',
+      '11371183000178',
+      '32637306000140',
+      '11130518000166'
+  );
 
 -- Índice para garantir que o script de teste voe
 CREATE CLUSTERED INDEX IDX_TesteSC_Cnpj ON temp_CGUSC.fp.teste_mov_SC(cnpj, data_hora);

@@ -257,6 +257,15 @@ BEGIN
         @ok = @fonte_atual_ok OUTPUT;
 END;
 
+DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
+
+CREATE TABLE #crm_cnpjs_fonte_atual (
+    id_cnpj INT NOT NULL
+);
+
+CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
+    ON #crm_cnpjs_fonte_atual(id_cnpj);
+
 IF @fonte_atual_ok = 0
 BEGIN
     PRINT '>> Materializando movimentacao da UF ' + @uf_farmacia + '...';
@@ -282,7 +291,6 @@ BEGIN
 
     DROP TABLE IF EXISTS #crm_mov_fonte_atual;
     DROP TABLE IF EXISTS #crm_mov_fonte_atual_metadata;
-    DROP TABLE IF EXISTS #crm_cnpjs_fonte_atual;
 
     EXEC sp_executesql
         N'UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -454,9 +462,9 @@ BEGIN
 
     SET @t_bloco = GETDATE();
 
+    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj)
     SELECT
         F.id AS id_cnpj
-    INTO #crm_cnpjs_fonte_atual
     FROM temp_CGUSC.fp.dados_farmacia F
     WHERE F.uf = @uf_farmacia
       AND EXISTS (
@@ -465,9 +473,6 @@ BEGIN
           WHERE M.uf_farmacia = @uf_farmacia
             AND M.id_cnpj = F.id
       );
-
-    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
-        ON #crm_cnpjs_fonte_atual(id_cnpj);
 
     SET @nu_cnpjs_fonte = (
         SELECT COUNT(*)
@@ -528,11 +533,11 @@ BEGIN
     PRINT '   Fonte UF materializada em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 END
 
-IF OBJECT_ID('tempdb..#crm_cnpjs_fonte_atual') IS NULL
+IF NOT EXISTS (SELECT 1 FROM #crm_cnpjs_fonte_atual)
 BEGIN
+    INSERT INTO #crm_cnpjs_fonte_atual (id_cnpj)
     SELECT
         F.id AS id_cnpj
-    INTO #crm_cnpjs_fonte_atual
     FROM temp_CGUSC.fp.dados_farmacia F
     WHERE F.uf = @uf_farmacia
       AND EXISTS (
@@ -541,9 +546,6 @@ BEGIN
           WHERE M.uf_farmacia = @uf_farmacia
             AND M.id_cnpj = F.id
       );
-
-    CREATE UNIQUE CLUSTERED INDEX IDX_CrmCnpjsFonteAtual
-        ON #crm_cnpjs_fonte_atual(id_cnpj);
 
     SET @nu_cnpjs_fonte = (
         SELECT COUNT(*)

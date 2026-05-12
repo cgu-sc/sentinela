@@ -156,6 +156,50 @@ const getVisibleRows = (section) => {
 const showMoreRanking = ref(false);
 const searchRanking = ref('');
 
+const parseDateSortValue = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
+  const text = String(value).trim();
+  if (!text || text === '-' || text === '—') return null;
+
+  const brDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brDate) {
+    const [, day, month, year] = brDate;
+    return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+  }
+
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, year, month, day] = isoDate;
+    return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+  }
+
+  const parsed = Date.parse(text);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const formatPeriodDateLabel = (value) => {
+  if (value instanceof Date) {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}/${value.getFullYear()}`;
+  }
+  return String(value);
+};
+
+const pickPeriodBoundary = (current, value, direction) => {
+  const time = parseDateSortValue(value);
+  if (time === null) return current;
+  if (!current || (direction === 'min' ? time < current.time : time > current.time)) {
+    return { time, label: formatPeriodDateLabel(value) };
+  }
+  return current;
+};
+
 const rankingData = computed(() => {
   const groups = {};
   
@@ -198,18 +242,16 @@ const rankingData = computed(() => {
     }
     
     const irrRows = s.rows.filter(r => r.tipo_linha === 'venda_irregular');
-    if (irrRows.length) {
-      const start = irrRows[0].periodo_inicio_irregular;
-      const end   = irrRows[irrRows.length - 1].periodo_final;
-      if (!g.minStart || start < g.minStart) g.minStart = start;
-      if (!g.maxEnd || end > g.maxEnd) g.maxEnd = end;
-    }
+    irrRows.forEach((row) => {
+      g.minStart = pickPeriodBoundary(g.minStart, row.periodo_inicio_irregular, 'min');
+      g.maxEnd = pickPeriodBoundary(g.maxEnd, row.periodo_final, 'max');
+    });
   });
 
   return Object.values(groups)
     .map(g => ({
       ...g,
-      periodo: (g.minStart && g.maxEnd) ? `${g.minStart} a ${g.maxEnd}` : '—',
+      periodo: (g.minStart && g.maxEnd) ? `${g.minStart.label} a ${g.maxEnd.label}` : '—',
       gtinCount: g.gtins.size,
       ticket: g.qtd_total > 0 ? (g.valor_total / g.qtd_total) : 0,
       peso: (g.prejuizo / (summary.value?.valor_irregular || 1)) * 100

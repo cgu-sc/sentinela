@@ -28,7 +28,7 @@ DECLARE @t0         DATETIME = GETDATE();
 DECLARE @t1         DATETIME;
 DECLARE @pipeline_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
 DECLARE @pipeline_versao VARCHAR(40) = 'v2_2026_05_07';
-DECLARE @nu_registros_teste_mov_sc BIGINT;
+DECLARE @nu_registros BIGINT;
 
 IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
 BEGIN
@@ -60,7 +60,7 @@ BEGIN
     RETURN;
 END;
 
-SELECT @nu_registros_teste_mov_sc = ISNULL(SUM(P.rows), 0)
+SELECT @nu_registros = ISNULL(SUM(P.rows), 0)
 FROM (
     SELECT object_id, rows
     FROM db_FarmaciaPopular.sys.partitions
@@ -85,7 +85,7 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
     pipeline_versao   VARCHAR(40)  NOT NULL,
     dt_data_inicio    DATE         NOT NULL,
     dt_data_fim       DATE         NOT NULL,
-    nu_registros_teste_mov_sc BIGINT NOT NULL,
+    nu_registros      BIGINT NOT NULL,
     dt_criacao        DATETIME     NOT NULL,
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
 EXEC sp_executesql
     N'INSERT INTO temp_CGUSC.fp.crm_detalhado_pre_global_metadata
           (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
-           nu_registros_teste_mov_sc, dt_criacao, dt_atualizacao, status, observacao)
+           nu_registros, dt_criacao, dt_atualizacao, status, observacao)
       VALUES
           (1, @nome, @versao, @inicio, @fim,
            @nu_mov, GETDATE(), GETDATE(), ''PROCESSANDO'', ''Pre-global em processamento.'');',
@@ -106,7 +106,7 @@ EXEC sp_executesql
     @versao = @pipeline_versao,
     @inicio = @DataInicio,
     @fim = @DataFim,
-    @nu_mov = @nu_registros_teste_mov_sc;
+    @nu_mov = @nu_registros;
 
 BEGIN TRY
 
@@ -269,7 +269,7 @@ EXEC sp_executesql
           pipeline_versao,
           dt_data_inicio,
           dt_data_fim,
-          nu_registros_teste_mov_sc,
+          nu_registros,
           status,
           dt_criacao,
           dt_atualizacao,

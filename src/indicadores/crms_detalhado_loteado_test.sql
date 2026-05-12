@@ -119,8 +119,8 @@ END;
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_metadata') IS NOT NULL
 BEGIN
-    IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_metadata', 'nu_registros_teste_mov_sc') IS NULL
-        ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_metadata ADD nu_registros_teste_mov_sc BIGINT NULL;
+    IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_metadata', 'nu_registros') IS NULL
+        ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_metadata ADD nu_registros BIGINT NULL;
 END;
 GO
 
@@ -131,7 +131,7 @@ SET NOCOUNT ON;
 -- ============================================================================
 DECLARE @reset BIT = 0;
 DECLARE @pipeline_nome    VARCHAR(80) = 'crms_detalhado_loteado';
-DECLARE @pipeline_versao  VARCHAR(40) = 'v2_2026_05_07';
+DECLARE @pipeline_versao  VARCHAR(40) = 'v3_2026_05_12';
 DECLARE @pre_global_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
 DECLARE @DataInicio       DATE        = '2015-07-01';
 DECLARE @DataFim          DATE        = '2024-12-31';
@@ -148,7 +148,7 @@ DECLARE @existia_tabela_loteada BIT   = CASE WHEN
      OR OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NOT NULL
     THEN 1 ELSE 0 END;
-DECLARE @nu_registros_teste_mov_sc BIGINT;
+DECLARE @nu_registros BIGINT;
 DECLARE @nu_cnpjs_fonte INT;
 DECLARE @metadata_ok BIT;
 DECLARE @uf_farmacia CHAR(2);
@@ -280,7 +280,8 @@ BEGIN
     END;
 
     INSERT INTO temp_CGUSC.fp.crm_pipeline_uf_controle
-        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, status, etapa, dt_atualizacao, status_crm_detalhado_loteado)
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim,
+         status, etapa, dt_criacao, dt_atualizacao, status_crm_detalhado_loteado)
     SELECT DISTINCT
         CAST(F.uf AS CHAR(2)),
         @pipeline_versao,
@@ -288,6 +289,7 @@ BEGIN
         @DataFim,
         'PENDENTE',
         'AGUARDANDO_MATERIALIZACAO',
+        GETDATE(),
         GETDATE(),
         'PENDENTE'
     FROM temp_CGUSC.fp.dados_farmacia F
@@ -352,7 +354,7 @@ ProximaUF:
     SET @nu_dados_crm_lote = NULL;
     SET @nu_volume_alertas_lote = NULL;
     SET @nu_raiox_tx_lote = NULL;
-    SET @nu_registros_teste_mov_sc = NULL;
+    SET @nu_registros = NULL;
     SET @nu_cnpjs_fonte = NULL;
     SET @uf_farmacia = @uf_farmacia_alvo;
 
@@ -496,9 +498,10 @@ ProximaUF:
               SELECT 1
               FROM temp_CGUSC.fp.medicamentos_patologia PAT
               WHERE PAT.codigo_barra = M.codigo_barra
-          );
+        );
 
         SET @nu_registros_etapa = @@ROWCOUNT;
+        SET @nu_registros = @nu_registros_etapa;
         SET @dt_fim_etapa = GETDATE();
 
         UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
@@ -659,7 +662,7 @@ ProximaUF:
         SET dt_fim_etapa = @dt_fim_etapa,
             segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
             milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
-            nu_registros = @nu_registros_teste_mov_sc,
+            nu_registros = @nu_registros,
             observacao = 'Contagem de linhas capturada pelo @@ROWCOUNT do SELECT INTO.'
         WHERE id_etapa_log = @id_etapa_log;
 
@@ -693,7 +696,6 @@ ProximaUF:
           );
 
         SET @nu_registros_etapa = @@ROWCOUNT;
-        SET @nu_registros_teste_mov_sc = @nu_registros_etapa;
         SET @dt_fim_etapa = GETDATE();
 
         UPDATE temp_CGUSC.fp.crm_detalhado_lote_etapa_log
@@ -781,7 +783,7 @@ ProximaUF:
              nu_registros_fonte, nu_cnpjs_fonte, dt_criacao, status, observacao)
         VALUES
             (1, @pipeline_versao, @uf_farmacia, @DataInicio, @DataFim,
-             @nu_registros_teste_mov_sc, @nu_cnpjs_fonte, GETDATE(), 'OK',
+             @nu_registros, @nu_cnpjs_fonte, GETDATE(), 'OK',
              'Fonte materializada pelo crms_detalhado_loteado_test.sql.');
 
         UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
@@ -789,7 +791,7 @@ ProximaUF:
             status_crm_detalhado_loteado = 'MATERIALIZADA',
             etapa = 'FONTE_OK',
             dt_atualizacao = GETDATE(),
-            nu_registros_fonte = @nu_registros_teste_mov_sc,
+            nu_registros_fonte = @nu_registros,
             nu_cnpjs_fonte = @nu_cnpjs_fonte
         WHERE uf_farmacia = @uf_farmacia
           AND pipeline_versao = @pipeline_versao
@@ -823,7 +825,7 @@ BEGIN
     RETURN;
 END;
 
-SELECT @nu_registros_teste_mov_sc = nu_registros_fonte
+SELECT @nu_registros = nu_registros_fonte
 FROM #crm_mov_fonte_atual_metadata
 WHERE id_pipeline = 1
   AND pipeline_versao = @pipeline_versao
@@ -857,9 +859,9 @@ BEGIN
     RETURN;
 END;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pre_global_metadata', 'nu_registros_teste_mov_sc') IS NULL
+IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pre_global_metadata', 'nu_registros') IS NULL
 BEGIN
-    RAISERROR('Metadata pre-global existe, mas nao possui nu_registros_teste_mov_sc. Rode crms_detalhado_pre_global_test.sql atualizado antes do loteado.', 16, 1);
+    RAISERROR('Metadata pre-global existe, mas nao possui nu_registros. Rode crms_detalhado_pre_global_test.sql atualizado antes do loteado.', 16, 1);
     RETURN;
 END;
 
@@ -954,7 +956,7 @@ BEGIN
         pipeline_versao   VARCHAR(40)  NOT NULL,
         dt_data_inicio    DATE         NOT NULL,
         dt_data_fim       DATE         NOT NULL,
-        nu_registros_teste_mov_sc BIGINT NULL,
+        nu_registros      BIGINT NULL,
         dt_criacao        DATETIME     NOT NULL,
         dt_atualizacao    DATETIME     NULL,
         status            VARCHAR(20)  NOT NULL,
@@ -964,8 +966,8 @@ BEGIN
     );
 END;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_metadata', 'nu_registros_teste_mov_sc') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_metadata ADD nu_registros_teste_mov_sc BIGINT NULL;
+IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_metadata', 'nu_registros') IS NULL
+    ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_metadata ADD nu_registros BIGINT NULL;
 
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.crm_detalhado_lote_metadata WHERE id_pipeline = 1)
 BEGIN
@@ -1006,10 +1008,10 @@ END;
 
 EXEC sp_executesql
     N'UPDATE temp_CGUSC.fp.crm_detalhado_lote_metadata
-      SET nu_registros_teste_mov_sc = @nu_mov
+      SET nu_registros = @nu_mov
       WHERE id_pipeline = 1;',
     N'@nu_mov BIGINT',
-    @nu_mov = @nu_registros_teste_mov_sc;
+    @nu_mov = @nu_registros;
 
 IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_controle') IS NULL
 BEGIN
@@ -2181,7 +2183,7 @@ BEGIN
               pipeline_versao,
               dt_data_inicio,
               dt_data_fim,
-              nu_registros_teste_mov_sc,
+              nu_registros,
               status,
               dt_criacao,
               dt_atualizacao,

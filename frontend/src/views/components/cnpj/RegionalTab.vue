@@ -98,9 +98,12 @@ watch(
     if (municipio === '__RESET__') {
       filterMunicipioId.value = null;
     } else {
-      const match = regionalData.value?.municipios?.find(m => 
-        m.municipio?.toLowerCase() === municipio.toLowerCase()
-      );
+      const municipioId = typeof municipio === 'object' ? municipio.id_ibge7 : null;
+      const municipioNome = typeof municipio === 'object' ? municipio.municipio : municipio;
+      const match = regionalData.value?.municipios?.find(m => {
+        if (municipioId) return Number(m.id_ibge7) === Number(municipioId);
+        return m.municipio?.toLowerCase() === String(municipioNome).toLowerCase();
+      });
       if (match) filterMunicipioId.value = match.id_ibge7;
     }
     cnpjNav.consumePendingMunicipio();

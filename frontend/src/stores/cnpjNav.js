@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
+const TAB_INDEX_REGIONAL = 8;
+
 /**
  * Store de navegação do Detalhe do CNPJ.
  *
@@ -18,12 +20,12 @@ export const useCnpjNavStore = defineStore('cnpjNav', () => {
 
   /**
    * Navega para a aba de Região de Saúde e agenda a seleção de um município.
-   * @param {string|null} municipioNome - Nome do município ou null para ver todos.
-   * @param {number} tabIndex           - Índice da aba Regional (default 5).
+   * @param {string|number|object|null} municipio - ID IBGE7, nome do município ou null para ver todos.
+   * @param {number} tabIndex                    - Índice da aba Regional.
    */
-  function navigateToRegiao(municipioNome = null, tabIndex = 5) {
-    // Se for null, usamos um marcador interno para forçar a limpeza do filtro no destino
-    pendingMunicipio.value = municipioNome === null ? '__RESET__' : municipioNome;
+  function navigateToRegiao(municipio = null, tabIndex = TAB_INDEX_REGIONAL) {
+    // Se for null, usamos um marcador interno para forçar a limpeza do filtro no destino.
+    pendingMunicipio.value = municipio === null ? '__RESET__' : municipio;
     activeTabIndex.value = tabIndex;
   }
 

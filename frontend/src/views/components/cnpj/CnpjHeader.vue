@@ -505,7 +505,10 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           v-tooltip.top="'Ver ranking do município na Região de Saúde'"
           @click="
             cnpjNav.navigateToRegiao(
-              geoData?.no_municipio ?? cnpjData.municipio,
+              {
+                id_ibge7: geoData?.id_ibge7,
+                municipio: geoData?.no_municipio ?? cnpjData.municipio,
+              },
             )
           "
         >

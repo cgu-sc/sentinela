@@ -20,7 +20,7 @@ export function useFetchIndicadores() {
    */
   function getIndicadorParams() {
     const {
-      uf, regiaoSaude, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf,
+      uf, regiaoId, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf,
       percMin, percMax, valMin
     } = getApiParams();
 
@@ -28,10 +28,9 @@ export function useFetchIndicadores() {
     if (uf) params.uf = uf;
 
     // Descomentado para desafogar o servidor e retornar dados apenas da região
-    if (regiaoSaude)  params.regiao_saude = regiaoSaude;
+    if (regiaoId !== null && regiaoId !== undefined) params.regiao_id = regiaoId;
     // O município continua focado apenas localmente para que o usuário veja
     // todo o contexto da região no mapa e na tabela.
-    // if (municipio)    params.municipio = municipio;
     if (situacaoRf)   params.situacao_rf = situacaoRf;
     if (conexaoMs)    params.conexao_ms = conexaoMs;
     if (porteEmpresa) params.porte_empresa = porteEmpresa;

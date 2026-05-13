@@ -192,6 +192,14 @@ export const useGeoStore = defineStore('geo', () => {
     return found ? String(found.id_regiao_saude) : 'Todos';
   }
 
+  function getRegiaoNomeById(regiaoId) {
+    if (!regiaoId || regiaoId === 'Todos') return null;
+    const found = localidades.value.find(
+      l => String(l.id_regiao_saude) === String(regiaoId)
+    );
+    return found?.no_regiao_saude ?? null;
+  }
+
   return {
     localidades,
     isLoading,
@@ -204,6 +212,7 @@ export const useGeoStore = defineStore('geo', () => {
     getFilterValueByIbge7,
     getMunicipioNomeByIbge7,
     getRegiaoByIbge7,
+    getRegiaoNomeById,
     municipiosGeoJson,
     loadMunicipiosGeo,
     getMunicipiosGeoByUF,

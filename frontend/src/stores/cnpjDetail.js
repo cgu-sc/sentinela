@@ -465,17 +465,17 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Municípios da Região ──────────────────────────────────────────────────
-    async fetchMunicipiosRegiao(uf, regiao, inicio = null, fim = null) {
-      if (!uf || !regiao) return;
-      const key = `${uf}|${regiao}|${inicio ?? ''}|${fim ?? ''}`;
+    async fetchMunicipiosRegiao(uf, regiaoId, inicio = null, fim = null) {
+      if (!uf || !regiaoId) return;
+      const key = `${uf}|${regiaoId}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.municipiosRegiaoKey === key) return;
       this.municipiosRegiaoLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        params.uf           = uf;
-        params.regiao_saude = regiao;
+        params.uf        = uf;
+        params.regiao_id = regiaoId;
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.municipiosRegiao    = response.data.resultado_municipios || [];
         this.municipiosRegiaoKey = key;

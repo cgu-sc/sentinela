@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -149,6 +149,7 @@ def get_indicadores_analise(
     perc_max: float | None = None,
     val_min: float | None = None,
     regiao_id: int | None = None,
+    id_ibge7: int | None = None,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
@@ -206,19 +207,10 @@ def get_indicadores_analise(
         mask = pl.lit(True)
         if uf and uf != 'Todos':
             mask = mask & (pl.col("uf") == uf)
-        if regiao_id:
+        if regiao_id is not None:
             mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        elif regiao_saude and regiao_saude != 'Todos':
-            # Se recebeu nome, precisa converter pra ID via join ou manter mask se id_regiao_saude estivesse no df_geo
-            # Mas como o front agora manda ID, o fallback por nome será raro.
-            # Para manter compatibilidade, vamos buscar o ID da região pelo nome nas localidades
-            df_loc = get_localidades_df()
-            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
-            if not reg_row.is_empty():
-                target_id = str(reg_row.item(0, 0))
-                mask = mask & (pl.col("id_regiao_saude") == target_id)
-        if municipio and municipio != 'Todos':
-            mask = mask & (pl.col("no_municipio") == municipio)
+        if id_ibge7 is not None:
+            mask = mask & (pl.col("id_ibge7") == id_ibge7)
         if situacao_rf and situacao_rf != 'Todos':
             mask = mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
@@ -265,16 +257,6 @@ def get_indicadores_analise(
         if df_joined.is_empty():
             empty_kpis = IndicadorKpiSummarySchema()
             return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[], cnpjs=[])
-
-        # ── 4. Enriquece id_ibge7 via localidades ──
-        df_loc = get_localidades_df()
-        loc_slim = df_loc.select(["no_municipio", "sg_uf", "id_ibge7"]).unique(subset=["no_municipio", "sg_uf"])
-        df_joined = df_joined.join(
-            loc_slim,
-            left_on=["no_municipio", "uf"],
-            right_on=["no_municipio", "sg_uf"],
-            how="left"
-        )
 
         # ── 5. Calcula status via flags MAD (fonte de verdade: fp.matriz_risco_consolidada) ──
         # fl_*_crit e fl_*_aten são calculados no SQL via Modified Z-Score por região/UF.
@@ -365,31 +347,18 @@ def get_indicadores_analise(
         )
 
         # Identifica a Região de Saúde de referência (mesmo se filtro for municipal)
-        ref_regiao = regiao_saude
-        if (not ref_regiao or ref_regiao == 'Todos') and (municipio and municipio != 'Todos'):
-            # Busca o ID da região de saúde desse município no dataframe original
+        context_regiao_id = str(regiao_id) if regiao_id is not None else None
+        if context_regiao_id is None and id_ibge7 is not None:
             sample = df_joined.select("id_regiao_saude").unique().limit(1)
             if not sample.is_empty():
-                target_reg_id = sample.item(0, 0)
-                # Agora busca o NOME para exibição se necessário
-                df_loc = get_localidades_df()
-                name_row = df_loc.filter(pl.col("id_regiao_saude") == int(target_reg_id)).select("no_regiao_saude").unique()
-                if not name_row.is_empty():
-                    ref_regiao = name_row.item(0, 0)
+                context_regiao_id = str(sample.item(0, 0))
 
         # Cálculo de Mediana/MAD sobre o CONTEXTO (UF + opcionalmente Região de Saúde)
         context_mask = pl.lit(True)
         if uf and uf != 'Todos':
             context_mask = context_mask & (pl.col("uf") == uf)
-        if regiao_id:
-            context_mask = context_mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        elif ref_regiao and ref_regiao != 'Todos':
-            # Fallback por nome (legado)
-            df_loc = get_localidades_df()
-            reg_row = df_loc.filter(pl.col("no_regiao_saude") == ref_regiao).select("id_regiao_saude").unique()
-            if not reg_row.is_empty():
-                target_id = str(reg_row.item(0, 0))
-                context_mask = context_mask & (pl.col("id_regiao_saude") == target_id)
+        if context_regiao_id is not None:
+            context_mask = context_mask & (pl.col("id_regiao_saude") == context_regiao_id)
 
         # Buscamos a mediana e MAD do indicador para o contexto regional completo
         mediana_reg = None
@@ -437,4 +406,3 @@ def get_indicadores_analise(
         print(f"❌ ERRO EM get_indicadores_analise (indicador={indicador}): {e}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Erro interno ao processar análise de indicadores.")
-

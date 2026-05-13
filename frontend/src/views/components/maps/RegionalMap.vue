@@ -88,19 +88,8 @@ const munDataByIbge7 = computed(() => {
   return map;
 });
 
-const norm = (s) =>
-  (s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-
 const currentIbge7 = computed(() => {
-  const target = norm(props.geoData?.no_municipio);
-  const loc = regiaoLocalidades.value.find(
-    (l) => norm(l.no_municipio) === target,
-  );
-  return loc ? Number(loc.id_ibge7) : null;
+  return props.geoData?.id_ibge7 ? Number(props.geoData.id_ibge7) : null;
 });
 
 const mapData = computed(() => {

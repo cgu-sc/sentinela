@@ -646,7 +646,7 @@ export function usePdfExport() {
 
           // IDs dos municípios da região de saúde
           const regionIds = (geoStore.localidades ?? [])
-            .filter(l => l.no_regiao_saude === geoData.no_regiao_saude && l.sg_uf === geoData.sg_uf)
+            .filter(l => String(l.id_regiao_saude) === String(geoData.id_regiao_saude) && l.sg_uf === geoData.sg_uf)
             .map(l => l.id_ibge7);
 
           const mapCards = [

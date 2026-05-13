@@ -55,7 +55,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -70,15 +70,8 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
         df = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         mask = pl.col("periodo").is_between(inicio, fim)
         if uf:                                        mask = mask & (pl.col("uf") == uf)
-        if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        elif regiao_saude and regiao_saude != 'Todos': 
-            from data_cache import get_localidades_df
-            df_loc = get_localidades_df()
-            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
-            if not reg_row.is_empty():
-                target_id = str(reg_row.item(0, 0))
-                mask = mask & (pl.col("id_regiao_saude") == target_id)
-        if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
+        if regiao_id is not None:                     mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        if id_ibge7 is not None:                      mask = mask & (pl.col("id_ibge7") == id_ibge7)
         if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
             mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
@@ -213,6 +206,10 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
                 how="left",
             )
 
+        df_reg = df_reg.with_columns(
+            pl.col("id_ibge7").cast(pl.Int64, strict=False)
+        )
+
         # Agrega CNPJs únicos e valores financeiros por município
         mun_agg = (
             df_reg
@@ -235,7 +232,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
         # Enriquece com população do IBGE (localidades_df) para densidade
         # Usamos id_ibge7 como chave primária de join
         loc_pop = df_loc.select([
-            pl.col("id_ibge7"),
+            pl.col("id_ibge7").cast(pl.Int64, strict=False).alias("id_ibge7"),
             pl.col("nu_populacao"),
             pl.col("id_regiao_saude"),
         ]).unique(subset=["id_ibge7"])
@@ -282,6 +279,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
             .agg([
                 pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
+                pl.col("id_ibge7").first().alias("id_ibge7"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),
                 pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
@@ -330,6 +328,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
                 cnpj=r["cnpj"],
                 razao_social=str(r.get("razao_social") or "").title(),
                 municipio=str(r.get("municipio") or "").title(),
+                id_ibge7=int(r["id_ibge7"]) if r.get("id_ibge7") is not None else None,
                 uf=r.get("uf"),
                 score_risco=float(r["score_risco_final"]) if r.get("score_risco_final") is not None else None,
                 classificacao_risco=r.get("classificacao_risco"),
@@ -420,6 +419,7 @@ def get_regional_benchmarking_animation(
             .agg([
                 pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
+                pl.col("id_ibge7").first().alias("id_ibge7"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),
                 pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
@@ -485,6 +485,7 @@ def get_regional_benchmarking_animation(
                 cnpj=r["cnpj"],
                 razao_social=str(r.get("razao_social") or "").title(),
                 municipio=str(r.get("municipio") or "").title(),
+                id_ibge7=int(r["id_ibge7"]) if r.get("id_ibge7") is not None else None,
                 uf=r.get("uf"),
                 score_risco=float(r["score_risco_final"]) if r.get("score_risco_final") is not None else None,
                 classificacao_risco=r.get("classificacao_risco"),
@@ -541,6 +542,7 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
                     pl.col("cnpj").first().alias("cnpj"),
                     pl.col("uf").first().alias("uf"),
                     pl.col("no_municipio").first().alias("no_municipio"),
+                    pl.col("id_regiao_saude").first().alias("id_regiao_saude"),
                     pl.sum("total_vendas").alias("tv"),
                     pl.sum("total_sem_comprovacao").alias("tsc")
                 ])
@@ -548,19 +550,6 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
                     (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(pl.lit(1.0)) * 100).alias("pct_auditado")
                 ])
             )
-            
-            # Injeta id_regiao_saude via join com localidades para suportar o filtro de escopo
-            try:
-                df_loc = get_localidades_df().select(["no_municipio", "sg_uf", "id_regiao_saude"]).unique(subset=["no_municipio", "sg_uf"])
-                df_agg = df_agg.join(
-                    df_loc,
-                    left_on=["no_municipio", "uf"],
-                    right_on=["no_municipio", "sg_uf"],
-                    how="left"
-                )
-            except Exception as e:
-                print(f"⚠️ Erro ao cruzar regiões em percentis: {e}")
-            
             df = df_agg
         else:
             # Caso contrário, usa a matriz consolidada (mais rápido)
@@ -683,4 +672,3 @@ def get_cnpj_lookup() -> list[dict]:
     except Exception as e:
         print(f"⚠️ Erro ao buscar lookup de CNPJs: {e}")
         return []
-

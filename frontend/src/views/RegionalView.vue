@@ -13,6 +13,7 @@
  */
 import { ref, watch, computed } from 'vue';
 import { useFilterStore } from '@/stores/filters';
+import { useGeoStore } from '@/stores/geo';
 import { FILTER_ALL_VALUE } from '@/config/constants';
 import { API_ENDPOINTS } from '@/config/api';
 import RegionalMunicipalTable from './components/tables/RegionalMunicipalTable.vue';
@@ -20,6 +21,7 @@ import RegionalPharmacyTable from './components/tables/RegionalPharmacyTable.vue
 import ProgressBar from 'primevue/progressbar';
 
 const filterStore = useFilterStore();
+const geoStore = useGeoStore();
 
 // ── Estado ──────────────────────────────────────────────────────────────────
 const isLoading   = ref(false);
@@ -30,6 +32,12 @@ const regionalData = ref(null); // { nome_regiao, id_regiao, municipios, farmaci
 const regiaoSelecionada = computed(() =>
   filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE
     ? filterStore.selectedRegiaoSaude
+    : null
+);
+
+const regiaoSelecionadaNome = computed(() =>
+  regiaoSelecionada.value
+    ? (geoStore.getRegiaoNomeById(regiaoSelecionada.value) ?? regiaoSelecionada.value)
     : null
 );
 
@@ -80,7 +88,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
     <div v-else-if="isLoading" class="loading-state shadow-card">
       <p class="loading-label">
         <i class="pi pi-spin pi-sync" style="margin-right: 0.5rem"></i>
-        Carregando dados — <strong>{{ regiaoSelecionada }}</strong>
+        Carregando dados — <strong>{{ regiaoSelecionadaNome }}</strong>
       </p>
       <ProgressBar mode="indeterminate" style="height: 6px; border-radius: 3px;" />
     </div>
@@ -97,7 +105,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
         <i class="pi pi-exclamation-triangle"></i>
       </div>
       <h2>Nenhum dado encontrado</h2>
-      <p>A região <strong>{{ regiaoSelecionada }}</strong> não possui farmácias no cache atual.</p>
+      <p>A região <strong>{{ regiaoSelecionadaNome }}</strong> não possui farmácias no cache atual.</p>
     </div>
 
     <!-- ── Conteúdo principal ─────────────────────────────────────────────── -->

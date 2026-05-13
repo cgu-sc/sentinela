@@ -9,7 +9,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
+export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -18,8 +18,7 @@ export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, 
   if (valMin !== null && valMin > 0) params.val_min = valMin;
   if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
   if (regiaoId !== null && regiaoId !== undefined) params.regiao_id = regiaoId;
-  if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
-  if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
+  if (idIbge7 !== null && idIbge7 !== undefined) params.id_ibge7 = idIbge7;
   if (situacaoRf) params.situacao_rf = situacaoRf;
   if (conexaoMs) params.conexao_ms = conexaoMs;
   if (porteEmpresa) params.porte_empresa = porteEmpresa;
@@ -52,8 +51,8 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
-      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual);
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
+      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7);
       
       // Gera um hash simples (string JSON) dos parâmetros para comparar
       const currentParamsHash = JSON.stringify(params);
@@ -94,10 +93,10 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
       this.fatorRiscoLoading = true;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7);
         const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {

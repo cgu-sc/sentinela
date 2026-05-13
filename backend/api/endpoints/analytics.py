@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
@@ -76,6 +76,7 @@ def get_analytics_summary(
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
     situacao_rf: Optional[str] = Query(None),
     conexao_ms: Optional[str] = Query(None),
     porte_empresa: Optional[str] = Query(None),
@@ -89,7 +90,11 @@ def get_analytics_summary(
     volume_atipico_limite: Optional[float] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -105,6 +110,7 @@ def get_resultado_faixas_risco(
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
     situacao_rf: Optional[str] = Query(None),
     conexao_ms: Optional[str] = Query(None),
     porte_empresa: Optional[str] = Query(None),
@@ -117,7 +123,11 @@ def get_resultado_faixas_risco(
     volume_atipico_limite: Optional[float] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(
@@ -258,6 +268,7 @@ def get_indicadores_analise(
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
     situacao_rf: Optional[str] = Query(None),
     conexao_ms: Optional[str] = Query(None),
     porte_empresa: Optional[str] = Query(None),
@@ -273,10 +284,14 @@ def get_indicadores_analise(
     Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
     Filtros de período não se aplicam (snapshot) — mas limites de valor e percentual funcionam.
     """
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
     return AnalyticsService.get_indicadores_analise(
         indicador, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
-        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id
+        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7
     )
 
 

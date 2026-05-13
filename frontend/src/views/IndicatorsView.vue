@@ -116,6 +116,12 @@ const selectedMunicipioNome = computed(() => {
   return geoStore.getMunicipioNomeByIbge7(code);
 });
 
+const selectedRegiaoNome = computed(() => {
+  const code = filterStore.selectedRegiaoSaude;
+  if (!code || code === 'Todos') return null;
+  return geoStore.getRegiaoNomeById(code) ?? code;
+});
+
 function onIndicadorSelect(key) {
   fetchForIndicador(key);
 }
@@ -176,11 +182,11 @@ function onIndicadorSelect(key) {
         />
 
         <!-- Pílulas de Filtros Ativos -->
-        <div class="active-filters-row" v-if="selectedMunicipioNome || (filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos')">
+        <div class="active-filters-row" v-if="selectedMunicipioNome || selectedRegiaoNome">
           <!-- Filtro de Região de Saúde ativa -->
-          <div v-if="filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos'" class="municipio-filter-chip">
+          <div v-if="selectedRegiaoNome" class="municipio-filter-chip">
             <i class="pi pi-directions" />
-            <span>Região: <strong>{{ filterStore.selectedRegiaoSaude }}</strong></span>
+            <span>Região: <strong>{{ selectedRegiaoNome }}</strong></span>
             <button class="chip-clear" @click="clearRegiaoFilter" title="Limpar Região">
               <i class="pi pi-times" />
             </button>

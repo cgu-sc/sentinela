@@ -19,9 +19,9 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     const p = getApiParams();
     const args = [
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
+      p.uf, null, null, p.situacaoRf,
       p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual,
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7,
     ];
 
     analyticsStore.fetchDashboardSummary(...args);
@@ -46,9 +46,9 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     // Usamos a mesma função do store para garantir que o hash das chaves seja idêntico (ex: data_inicio vs inicio)
     const apiReadyParams = buildAnalyticsParams(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
+      p.uf, null, null, p.situacaoRf,
       p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7
     );
     const currentHash = JSON.stringify(apiReadyParams);
     return analyticsStore.lastParamsHash === currentHash;

@@ -34,7 +34,7 @@ const requestTimesTooltip = computed(() => {
 });
 
 const qtdMunicipiosRegiao = computed(() =>
-  geoStore.qtdMunicipiosPorRegiao(props.geoData?.no_regiao_saude),
+  geoStore.qtdMunicipiosPorRegiao(props.geoData?.id_regiao_saude),
 );
 
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();

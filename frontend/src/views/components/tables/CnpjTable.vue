@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
+import { useGeoStore } from '@/stores/geo';
 import { useRiskMetrics } from '@/composables/useRiskMetrics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useTableAggregation } from '@/composables/useTableAggregation';
@@ -19,6 +20,7 @@ import Tag from 'primevue/tag';
 const router = useRouter();
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
+const geoStore = useGeoStore();
 
 const goToDetail = (event) => {
   // Ignora cliques em badges para não conflitar com os filtros
@@ -79,7 +81,10 @@ function applyFilter(field, value) {
 // Helper para exibir a localização formatada adequadamente
 const filteredLocation = computed(() => {
   if (filterStore.selectedMunicipio && filterStore.selectedMunicipio !== 'Todos') {
-    return filterStore.selectedMunicipio.split('|')[0];
+    return geoStore.getMunicipioNomeByIbge7(filterStore.selectedMunicipio) ?? filterStore.selectedMunicipio;
+  }
+  if (filterStore.selectedRegiaoSaude && filterStore.selectedRegiaoSaude !== 'Todos') {
+    return geoStore.getRegiaoNomeById(filterStore.selectedRegiaoSaude) ?? filterStore.selectedRegiaoSaude;
   }
   if (filterStore.selectedUF && filterStore.selectedUF !== 'Todos') {
     return filterStore.selectedUF;

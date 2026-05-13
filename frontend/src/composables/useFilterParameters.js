@@ -1,8 +1,7 @@
 import { useFilterStore } from '../stores/filters';
 import { useFormatting } from './useFormatting';
-import { parseMunicipio, extractCnpjFilter } from './useParsing';
+import { extractCnpjFilter } from './useParsing';
 import { FILTER_ALL_VALUE, FILTER_DEFAULTS } from '@/config/constants';
-import { useGeoStore } from '@/stores/geo';
 
 /**
  * Converte os filtros do Pinia em parâmetros prontos para a API.
@@ -10,7 +9,6 @@ import { useGeoStore } from '@/stores/geo';
  */
 export function useFilterParameters() {
   const filterStore = useFilterStore();
-  const geoStore = useGeoStore();
   const { toLocalISO } = useFormatting();
 
   function getApiParams() {
@@ -31,14 +29,15 @@ export function useFilterParameters() {
 
     const uf = filterStore.selectedUF !== FILTER_ALL_VALUE ? filterStore.selectedUF : null;
     const rawRegiao = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
-    const regiaoId = (rawRegiao && !isNaN(rawRegiao)) ? Number(rawRegiao) : null;
-    const regiaoSaude = (rawRegiao && isNaN(rawRegiao)) ? rawRegiao : null;
+    const regiaoId = rawRegiao ? Number(rawRegiao) : null;
+    if (rawRegiao && Number.isNaN(regiaoId)) {
+      throw new Error('Filtro regional invalido: use id_regiao_saude.');
+    }
 
     const rawMunicipio = filterStore.selectedMunicipio !== FILTER_ALL_VALUE ? filterStore.selectedMunicipio : null;
-    let municipio = parseMunicipio(rawMunicipio);
-    if (rawMunicipio && !isNaN(rawMunicipio)) {
-      const loc = geoStore.localidades.find(l => Number(l.id_ibge7) === Number(rawMunicipio));
-      if (loc) municipio = loc.no_municipio;
+    const idIbge7 = rawMunicipio ? Number(rawMunicipio) : null;
+    if (rawMunicipio && Number.isNaN(idIbge7)) {
+      throw new Error('Filtro municipal invalido: use id_ibge7.');
     }
     const situacaoRf = filterStore.selectedSituacao !== FILTER_ALL_VALUE ? filterStore.selectedSituacao : null;
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
@@ -62,8 +61,7 @@ export function useFilterParameters() {
       valMin, 
       uf, 
       regiaoId, 
-      regiaoSaude, 
-      municipio, 
+      idIbge7,
       situacaoRf, 
       conexaoMs, 
       porteEmpresa, 

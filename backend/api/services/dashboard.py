@@ -15,7 +15,7 @@ from ..schemas.dashboard import (
 
 class DashboardService:
     @staticmethod
-    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None) -> DashboardResponse:
+    def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None, regiao_id=None, id_ibge7=None) -> DashboardResponse:
         """
         Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
         Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -69,8 +69,8 @@ class DashboardService:
             mov_mask = pl.col("periodo").is_between(inicio, fim)
             perfil_mask = pl.lit(True)
             if uf and uf != 'Todos':                      perfil_mask = perfil_mask & (pl.col("uf") == uf)
-            if regiao_saude and regiao_saude != 'Todos':  perfil_mask = perfil_mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if municipio and municipio != 'Todos':        perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+            if regiao_id is not None:                     perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == str(regiao_id))
+            if id_ibge7 is not None:                      perfil_mask = perfil_mask & (pl.col("id_ibge7") == id_ibge7)
             if situacao_rf and situacao_rf != 'Todos':    perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
             if conexao_ms and conexao_ms != 'Todos':
                 perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
@@ -168,7 +168,7 @@ class DashboardService:
             print(traceback.format_exc())
             return []
     @staticmethod
-    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None) -> FatorRiscoResponseSchema:
+    def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, unidade_pf=None, regiao_id=None, id_ibge7=None) -> FatorRiscoResponseSchema:
         """
         Calcula as faixas de risco (Buckets de 10%) via Polars in-memory.
         """
@@ -187,8 +187,8 @@ class DashboardService:
             mov_mask = pl.col("periodo").is_between(inicio, fim)
             perfil_mask = pl.lit(True)
             if uf:                                        perfil_mask = perfil_mask & (pl.col("uf") == uf)
-            if regiao_saude:                              perfil_mask = perfil_mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if municipio:                                 perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+            if regiao_id is not None:                     perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == str(regiao_id))
+            if id_ibge7 is not None:                      perfil_mask = perfil_mask & (pl.col("id_ibge7") == id_ibge7)
             if situacao_rf and situacao_rf != 'Todos':     perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
             if conexao_ms and conexao_ms != 'Todos':
                 perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))

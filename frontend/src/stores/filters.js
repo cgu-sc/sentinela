@@ -28,8 +28,18 @@ export const useFilterStore = defineStore('filters', () => {
 
   // 1. FILTROS GLOBAIS
   const selectedUF = ref(saved?.selectedUF ?? FILTER_DEFAULTS.UF);
-  const selectedRegiaoSaude = ref(saved?.selectedRegiaoSaude ?? FILTER_DEFAULTS.REGIAO);
-  const selectedMunicipio = ref(saved?.selectedMunicipio ?? FILTER_DEFAULTS.MUNICIPIO);
+  const savedRegiao = saved?.selectedRegiaoSaude;
+  const savedMunicipio = saved?.selectedMunicipio;
+  const selectedRegiaoSaude = ref(
+    savedRegiao && savedRegiao !== FILTER_ALL_VALUE && Number.isNaN(Number(savedRegiao))
+      ? FILTER_DEFAULTS.REGIAO
+      : (savedRegiao ?? FILTER_DEFAULTS.REGIAO)
+  );
+  const selectedMunicipio = ref(
+    savedMunicipio && savedMunicipio !== FILTER_ALL_VALUE && Number.isNaN(Number(savedMunicipio))
+      ? FILTER_DEFAULTS.MUNICIPIO
+      : (savedMunicipio ?? FILTER_DEFAULTS.MUNICIPIO)
+  );
   const selectedSituacao = ref(saved?.selectedSituacao ?? FILTER_DEFAULTS.SITUACAO);
   const selectedMS = ref(saved?.selectedMS ?? FILTER_DEFAULTS.MS);
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
@@ -105,8 +115,16 @@ export const useFilterStore = defineStore('filters', () => {
     if (!filters || typeof filters !== 'object') return;
 
     if ('selectedUF' in filters) selectedUF.value = filters.selectedUF;
-    if ('selectedRegiaoSaude' in filters) selectedRegiaoSaude.value = filters.selectedRegiaoSaude;
-    if ('selectedMunicipio' in filters) selectedMunicipio.value = filters.selectedMunicipio;
+    if ('selectedRegiaoSaude' in filters) {
+      selectedRegiaoSaude.value = filters.selectedRegiaoSaude && filters.selectedRegiaoSaude !== FILTER_ALL_VALUE && Number.isNaN(Number(filters.selectedRegiaoSaude))
+        ? FILTER_DEFAULTS.REGIAO
+        : filters.selectedRegiaoSaude;
+    }
+    if ('selectedMunicipio' in filters) {
+      selectedMunicipio.value = filters.selectedMunicipio && filters.selectedMunicipio !== FILTER_ALL_VALUE && Number.isNaN(Number(filters.selectedMunicipio))
+        ? FILTER_DEFAULTS.MUNICIPIO
+        : filters.selectedMunicipio;
+    }
     if ('selectedSituacao' in filters) selectedSituacao.value = filters.selectedSituacao;
     if ('selectedMS' in filters) selectedMS.value = filters.selectedMS;
     if ('selectedPorte' in filters) selectedPorte.value = filters.selectedPorte;

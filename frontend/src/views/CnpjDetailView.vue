@@ -81,17 +81,17 @@ const falecidosTabRef = ref(null);
 
 const qtdMunicipiosRegiao = computed(
   () =>
-    geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.no_regiao_saude) ?? null,
+    geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.id_regiao_saude) ?? null,
 );
 
 const handleExport = async () => {
   // Garante que temos os dados de risco de todos os municípios da região
   const geo = geoData.value;
-  if (geo?.sg_uf && geo?.no_regiao_saude) {
+  if (geo?.sg_uf && geo?.id_regiao_saude) {
     const p = getApiParams();
     await cnpjDetailStore.fetchMunicipiosRegiao(
       geo.sg_uf,
-      geo.no_regiao_saude,
+      geo.id_regiao_saude,
       p.inicio,
       p.fim,
     );
@@ -299,24 +299,8 @@ const geoData = computed(() => {
   const data = cnpjData.value;
   if (!data || !localidades.value?.length) return null;
 
-  // Primeiro tenta por id_ibge7, depois por município + UF
-  if (data.id_ibge7) {
-    const match = localidades.value.find((l) => l.id_ibge7 === data.id_ibge7);
-    if (match) return match;
-  }
-
-  // Fallback: busca por nome do município e UF
-  const municipio = data.municipio?.toUpperCase();
-  const uf = data.uf?.toUpperCase();
-  if (!municipio || !uf) return null;
-
-  return (
-    localidades.value.find(
-      (l) =>
-        l.no_municipio?.toUpperCase() === municipio &&
-        l.sg_uf?.toUpperCase() === uf,
-    ) ?? null
-  );
+  if (!data.id_ibge7) return null;
+  return localidades.value.find((l) => String(l.id_ibge7) === String(data.id_ibge7)) ?? null;
 });
 
 const formatCnpj = (v) => {

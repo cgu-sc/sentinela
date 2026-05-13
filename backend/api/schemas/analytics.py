@@ -116,6 +116,7 @@ class RegionalFarmaciaSchema(BaseModel):
     cnpj: str
     razao_social: Optional[str] = None
     municipio: Optional[str] = None
+    id_ibge7: Optional[int] = None
     uf: Optional[str] = None
     score_risco: Optional[float] = None
     classificacao_risco: Optional[str] = None

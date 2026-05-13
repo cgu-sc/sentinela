@@ -3,7 +3,6 @@ import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRegional } from '@/composables/useRegional';
 import { useCnpjNavStore } from '@/stores/cnpjNav';
-import { useGeoStore } from '@/stores/geo';
 import { useFilterStore } from '@/stores/filters';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import { useStableTabState } from '@/composables/useStableTabState';
@@ -19,7 +18,6 @@ const props = defineProps({
 });
 
 const cnpjNav = useCnpjNavStore();
-const geoStore = useGeoStore();
 const filterStore = useFilterStore();
 const { isAnimating } = storeToRefs(filterStore);
 const { getApiParams } = useFilterParameters();
@@ -31,16 +29,7 @@ const {
   isRefreshing,
 } = useStableTabState(regionalData, regionalLoading, regionalError);
 
-// ibge7 do município atual do CNPJ (para pré-selecionar no mapa)
-const norm = s => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-const currentIbge7 = computed(() => {
-  if (!props.geoData?.no_municipio || !props.geoData?.sg_uf) return null;
-  const target = norm(props.geoData.no_municipio);
-  const loc = geoStore.localidades.find(l =>
-    norm(l.no_municipio) === target && l.sg_uf === props.geoData.sg_uf
-  );
-  return loc ? Number(loc.id_ibge7) : null;
-});
+const currentIbge7 = computed(() => props.geoData?.id_ibge7 ? Number(props.geoData.id_ibge7) : null);
 
 const filterMunicipioId = ref(null);
 
@@ -57,12 +46,7 @@ const filteredFarmacias = computed(() => {
   const farmacias = cachedRegionalData.value?.farmacias ?? [];
   if (!filterMunicipioId.value) return farmacias;
 
-  const targetMun = cachedRegionalData.value?.municipios?.find(m => m.id_ibge7 === filterMunicipioId.value);
-  if (!targetMun) return farmacias;
-
-  return farmacias.filter(f =>
-    f.municipio?.toLowerCase() === targetMun.municipio?.toLowerCase()
-  );
+  return farmacias.filter(f => Number(f.id_ibge7) === Number(filterMunicipioId.value));
 });
 
 const loadData = () => {

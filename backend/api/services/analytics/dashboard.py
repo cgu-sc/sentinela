@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -55,7 +55,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -110,14 +110,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         mov_mask = pl.col("periodo").is_between(inicio, fim)
         perfil_mask = pl.lit(True)
         if uf and uf != 'Todos':                      perfil_mask = perfil_mask & (pl.col("uf") == uf)
-        if regiao_id:                                 perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        elif regiao_saude and regiao_saude != 'Todos':
-            df_loc = get_localidades_df()
-            reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
-            if not reg_row.is_empty():
-                target_id = str(reg_row.item(0, 0))
-                perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == target_id)
-        if municipio and municipio != 'Todos':        perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+        if regiao_id is not None:                     perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        if id_ibge7 is not None:                      perfil_mask = perfil_mask & (pl.col("id_ibge7") == id_ibge7)
         if situacao_rf and situacao_rf != 'Todos':    perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
             perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
@@ -223,6 +217,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             .agg([
                 pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
+                pl.col("id_ibge7").first().alias("id_ibge7"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),
                 pl.sum("total_vendas").alias("totalMov"),
@@ -243,23 +238,6 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             ])
             .sort("percValSemComp", descending=True, nulls_last=True)
         )
-        # Enrich with id_ibge7 from localidades (unique por município/UF para evitar duplicatas)
-        try:
-            loc_df = (
-                get_localidades_df()
-                .select(["no_municipio", "sg_uf", "id_ibge7"])
-                .group_by(["no_municipio", "sg_uf"])
-                .agg(pl.col("id_ibge7").first())
-            )
-            cnpj_df = cnpj_df.join(
-                loc_df,
-                left_on=["municipio", "uf"],
-                right_on=["no_municipio", "sg_uf"],
-                how="left"
-            )
-        except Exception:
-            cnpj_df = cnpj_df.with_columns(pl.lit(None).cast(pl.Int64).alias("id_ibge7"))
-
         # Enrich with rankings and counts from matriz_risco_consolidada
         try:
             risco_df = get_df_matriz_risco()
@@ -341,4 +319,3 @@ def get_rede_por_cnpj_raiz(cnpj_raiz: str) -> List[RedeEstabelecimentoSchema]:
         print(f"❌ ERRO AO BUSCAR REDE: {e}")
         print(traceback.format_exc())
         return []
-

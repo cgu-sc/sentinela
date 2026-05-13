@@ -56,8 +56,9 @@ const tableFooter = computed(() => {
 });
 
 const onRowSelect = (event) => {
-  const { municipio, uf } = event.data;
-  filterStore.selectedMunicipio = `${municipio}|${uf}`;
+  const { id_ibge7 } = event.data;
+  if (id_ibge7 == null) throw new Error("Municipio sem id_ibge7 no resultado analitico.");
+  filterStore.selectedMunicipio = String(id_ibge7);
 };
 
 let _lastHoveredRow = null;

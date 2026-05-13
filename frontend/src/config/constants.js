@@ -68,6 +68,7 @@ export const FILTER_DEFAULTS = {
     MS:               FILTER_ALL_VALUE,
     PORTE:            FILTER_ALL_VALUE,
     GRANDE_REDE:      FILTER_ALL_VALUE,
+    PAR_TEIA:         FILTER_ALL_VALUE,
     PERCENTUAL_RANGE: [0, 100],
     VALOR_MIN:        0,
     VALOR_MAX:        1000000,

@@ -11,6 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_cache_dir
+from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -55,7 +56,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -88,7 +89,7 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
         if razao_social:
             mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
 
-        period_df = df.filter(mask)
+        period_df = apply_par_teia_filter(df.filter(mask), par_teia)
         if volume_atipico:
             id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
             period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
@@ -151,6 +152,8 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
             periodo_formatado=f"{inicio} a {fim}" if data_inicio and data_fim else "Acumulado Histórico",
             buckets=buckets
         )
+    except HTTPException:
+        raise
     except Exception as e:
         return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
@@ -158,6 +161,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
     """
     Constrói o payload completo de Benchmarking Regional.
     """
+    nome_exibicao = uf or ""
     try:
         df_mov   = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         df_loc   = get_localidades_df()
@@ -165,7 +169,6 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
         df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
 
         # ── Resolução de Nome para Exibição ──────────────────────────────
-        nome_exibicao = uf or ""
         id_regiao: Optional[str] = str(regiao_id) if regiao_id is not None else None
 
         if regiao_id:
@@ -351,7 +354,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
         import traceback
         print(f"❌ ERRO AO CALCULAR DADOS REGIONAIS: {e}")
         print(traceback.format_exc())
-        return RegionalResponse(nome_regiao=nome_exibicao if 'nome_exibicao' in locals() else "", municipios=[], farmacias=[])
+        return RegionalResponse(nome_regiao=nome_exibicao, municipios=[], farmacias=[])
 
 def get_regional_benchmarking_animation(
     uf: Optional[str] = None,
@@ -363,12 +366,12 @@ def get_regional_benchmarking_animation(
     Retorna todos os trimestres do período em uma única chamada.
     Usado pela animação do scatter de posicionamento regional — evita N round-trips.
     """
+    nome_exibicao = uf or ""
     try:
         df_mov = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         df_loc = get_localidades_df()
         
         # Resolução de Nome para Exibição
-        nome_exibicao = uf or ""
         if regiao_id:
             loc_row = df_loc.filter(pl.col("id_regiao_saude").cast(pl.String) == str(regiao_id)).limit(1)
             if not loc_row.is_empty():
@@ -514,7 +517,7 @@ def get_regional_benchmarking_animation(
         import traceback
         print(f"❌ ERRO NA ANIMAÇÃO REGIONAL: {e}", flush=True)
         print(traceback.format_exc(), flush=True)
-        return RegionalAnimationResponse(nome_regiao=nome_exibicao if 'nome_exibicao' in locals() else "", quarters=[])
+        return RegionalAnimationResponse(nome_regiao=nome_exibicao, quarters=[])
 
 # Conjunto de diretórios de CNPJ já criados nesta sessão — evita syscalls redundantes.
 _known_cnpj_dirs: set[str] = set()

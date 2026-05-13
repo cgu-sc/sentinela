@@ -88,13 +88,14 @@ def get_analytics_summary(
     regiao_id: Optional[int] = Query(None),
     volume_atipico: bool = Query(False),
     volume_atipico_limite: Optional[float] = Query(None),
+    par_teia: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     if regiao_saude and regiao_saude != "Todos":
         raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -121,13 +122,14 @@ def get_resultado_faixas_risco(
     regiao_id: Optional[int] = Query(None),
     volume_atipico: bool = Query(False),
     volume_atipico_limite: Optional[float] = Query(None),
+    par_teia: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     if regiao_saude and regiao_saude != "Todos":
         raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(
@@ -279,7 +281,8 @@ def get_indicadores_analise(
     perc_min: Optional[float] = Query(None),
     perc_max: Optional[float] = Query(None),
     val_min: Optional[float] = Query(None),
-    regiao_id: Optional[int] = Query(None)
+    regiao_id: Optional[int] = Query(None),
+    par_teia: Optional[str] = Query(None)
 ):
     """
     Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
@@ -292,7 +295,7 @@ def get_indicadores_analise(
     return AnalyticsService.get_indicadores_analise(
         indicador, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
-        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7
+        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7, par_teia=par_teia
     )
 
 

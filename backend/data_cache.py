@@ -86,15 +86,11 @@ def _empty_par_teia_alvos_df() -> pl.DataFrame:
     return pl.DataFrame(schema={
         "cnpj": pl.Utf8,
         "has_par_alvo": pl.Boolean,
-        "has_par_n1": pl.Boolean,
         "has_par_n2": pl.Boolean,
-        "has_par_n3": pl.Boolean,
         "has_par_n4": pl.Boolean,
         "has_par_qualquer": pl.Boolean,
         "qtd_par_alvo": pl.Int32,
-        "qtd_empresas_par_n1": pl.Int32,
         "qtd_empresas_par_n2": pl.Int32,
-        "qtd_empresas_par_n3": pl.Int32,
         "qtd_empresas_par_n4": pl.Int32,
         "qtd_empresas_par_qualquer": pl.Int32,
     })
@@ -319,16 +315,6 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
             INNER JOIN #par_cnpjs p ON p.cnpj = a.cnpj
             GROUP BY a.cnpj
         ),
-        par_n1 AS (
-            SELECT
-                ds.cnpj,
-                COUNT(DISTINCT ds.cpf_cnpj_socio) AS qtd_empresas_par_n1
-            FROM temp_CGUSC.fp.dados_socios ds
-            INNER JOIN #par_cnpjs p ON p.cnpj = ds.cpf_cnpj_socio
-            WHERE ds.indicador_socio = 'PJ'
-              AND LEN(ds.cpf_cnpj_socio) = 14
-            GROUP BY ds.cnpj
-        ),
         par_n2 AS (
             SELECT
                 ds.cnpj,
@@ -337,20 +323,6 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
             INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
                 ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
             INNER JOIN #par_cnpjs p ON p.cnpj = t2.cnpj_empresa
-            GROUP BY ds.cnpj
-        ),
-        par_n3 AS (
-            SELECT
-                ds.cnpj,
-                COUNT(DISTINCT t3.cpf_cnpj_socio) AS qtd_empresas_par_n3
-            FROM temp_CGUSC.fp.dados_socios ds
-            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
-                ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
-            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
-                ON t3.cnpj_empresa = t2.cnpj_empresa
-            INNER JOIN #par_cnpjs p ON p.cnpj = t3.cpf_cnpj_socio
-            WHERE t3.indicador_socio = 'PJ'
-              AND LEN(t3.cpf_cnpj_socio) = 14
             GROUP BY ds.cnpj
         ),
         par_n4 AS (
@@ -377,29 +349,11 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
                 INNER JOIN #par_cnpjs p ON p.cnpj = a.cnpj
 
                 UNION ALL
-                SELECT ds.cnpj, ds.cpf_cnpj_socio AS cnpj_par
-                FROM temp_CGUSC.fp.dados_socios ds
-                INNER JOIN #par_cnpjs p ON p.cnpj = ds.cpf_cnpj_socio
-                WHERE ds.indicador_socio = 'PJ'
-                  AND LEN(ds.cpf_cnpj_socio) = 14
-
-                UNION ALL
                 SELECT ds.cnpj, t2.cnpj_empresa AS cnpj_par
                 FROM temp_CGUSC.fp.dados_socios ds
                 INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
                     ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
                 INNER JOIN #par_cnpjs p ON p.cnpj = t2.cnpj_empresa
-
-                UNION ALL
-                SELECT ds.cnpj, t3.cpf_cnpj_socio AS cnpj_par
-                FROM temp_CGUSC.fp.dados_socios ds
-                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
-                    ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
-                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
-                    ON t3.cnpj_empresa = t2.cnpj_empresa
-                INNER JOIN #par_cnpjs p ON p.cnpj = t3.cpf_cnpj_socio
-                WHERE t3.indicador_socio = 'PJ'
-                  AND LEN(t3.cpf_cnpj_socio) = 14
 
                 UNION ALL
                 SELECT ds.cnpj, t4.cnpj_empresa AS cnpj_par
@@ -417,22 +371,16 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
         SELECT
             a.cnpj,
             CASE WHEN ISNULL(pa.qtd_par_alvo, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_alvo,
-            CASE WHEN ISNULL(p1.qtd_empresas_par_n1, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n1,
             CASE WHEN ISNULL(p2.qtd_empresas_par_n2, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n2,
-            CASE WHEN ISNULL(p3.qtd_empresas_par_n3, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n3,
             CASE WHEN ISNULL(p4.qtd_empresas_par_n4, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n4,
             CASE WHEN ISNULL(pq.qtd_empresas_par_qualquer, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_qualquer,
             ISNULL(pa.qtd_par_alvo, 0) AS qtd_par_alvo,
-            ISNULL(p1.qtd_empresas_par_n1, 0) AS qtd_empresas_par_n1,
             ISNULL(p2.qtd_empresas_par_n2, 0) AS qtd_empresas_par_n2,
-            ISNULL(p3.qtd_empresas_par_n3, 0) AS qtd_empresas_par_n3,
             ISNULL(p4.qtd_empresas_par_n4, 0) AS qtd_empresas_par_n4,
             ISNULL(pq.qtd_empresas_par_qualquer, 0) AS qtd_empresas_par_qualquer
         FROM alvos a
         LEFT JOIN par_alvo pa ON pa.cnpj = a.cnpj
-        LEFT JOIN par_n1 p1 ON p1.cnpj = a.cnpj
         LEFT JOIN par_n2 p2 ON p2.cnpj = a.cnpj
-        LEFT JOIN par_n3 p3 ON p3.cnpj = a.cnpj
         LEFT JOIN par_n4 p4 ON p4.cnpj = a.cnpj
         LEFT JOIN par_qualquer pq ON pq.cnpj = a.cnpj
         ORDER BY a.cnpj
@@ -452,15 +400,11 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
         _df_par_teia_alvos = pl.from_pandas(pdf).with_columns([
             pl.col("cnpj").cast(pl.Utf8),
             pl.col("has_par_alvo").cast(pl.Boolean),
-            pl.col("has_par_n1").cast(pl.Boolean),
             pl.col("has_par_n2").cast(pl.Boolean),
-            pl.col("has_par_n3").cast(pl.Boolean),
             pl.col("has_par_n4").cast(pl.Boolean),
             pl.col("has_par_qualquer").cast(pl.Boolean),
             pl.col("qtd_par_alvo").cast(pl.Int32),
-            pl.col("qtd_empresas_par_n1").cast(pl.Int32),
             pl.col("qtd_empresas_par_n2").cast(pl.Int32),
-            pl.col("qtd_empresas_par_n3").cast(pl.Int32),
             pl.col("qtd_empresas_par_n4").cast(pl.Int32),
             pl.col("qtd_empresas_par_qualquer").cast(pl.Int32),
         ]).sort("cnpj")
@@ -1081,20 +1025,15 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             "par_teia_alvos": {
                 "cnpj",
                 "has_par_alvo",
-                "has_par_n1",
                 "has_par_n2",
-                "has_par_n3",
                 "has_par_n4",
                 "has_par_qualquer",
                 "qtd_par_alvo",
-                "qtd_empresas_par_n1",
                 "qtd_empresas_par_n2",
-                "qtd_empresas_par_n3",
                 "qtd_empresas_par_n4",
                 "qtd_empresas_par_qualquer",
             },
         }
-
         def _try_load(name, path):
             if not os.path.exists(path):
                 missing.append(name)

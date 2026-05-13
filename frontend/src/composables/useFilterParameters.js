@@ -43,6 +43,7 @@ export function useFilterParameters() {
     const conexaoMs = filterStore.selectedMS !== FILTER_ALL_VALUE ? filterStore.selectedMS : null;
     const porteEmpresa = filterStore.selectedPorte !== FILTER_ALL_VALUE ? filterStore.selectedPorte : null;
     const grandeRede   = filterStore.selectedGrandeRede !== FILTER_ALL_VALUE ? filterStore.selectedGrandeRede : null;
+    const parTeia = filterStore.selectedParTeia !== FILTER_ALL_VALUE ? filterStore.selectedParTeia : null;
     // Detecção automática: ≥8 dígitos numéricos → CNPJ; texto livre → razão social
     // Coerção defensiva: AutoComplete pode entregar objeto antes do onSelect handler
     const raw = filterStore.selectedCnpjRaiz;
@@ -70,7 +71,8 @@ export function useFilterParameters() {
       razaoSocial, 
       unidadePf,
       volumeAtipicoEnabled,
-      volumeAtipicoPercentual
+      volumeAtipicoPercentual,
+      parTeia
     };
   }
 

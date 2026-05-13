@@ -11,6 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from .par_teia import apply_par_teia_filter
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -104,6 +105,18 @@ _INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
     'crms_irregulares':              ('flag_crms_irregulares_atencao',           'flag_crms_irregulares_critico'),
 }
 
+def _optional_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
 def get_indicadores(cnpj: str) -> IndicadoresResponse:
     """Retorna os 18 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
     try:
@@ -114,18 +127,15 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
             return IndicadoresResponse(cnpj=cnpj, indicadores={})
         row = rows.row(0, named=True)
 
-        def _f(v):
-            return float(v) if v is not None else None
-
         indicadores = {
             key: IndicadorDataSchema(
-                valor=_f(row.get(c_val)),
-                med_reg=_f(row.get(c_mr)),
-                med_uf=_f(row.get(c_mu)),
-                med_br=_f(row.get(c_mb)),
-                risco_reg=_f(row.get(c_rr)),
-                risco_uf=_f(row.get(c_ru)),
-                risco_br=_f(row.get(c_rb)),
+                valor=_optional_float(row.get(c_val)),
+                med_reg=_optional_float(row.get(c_mr)),
+                med_uf=_optional_float(row.get(c_mu)),
+                med_br=_optional_float(row.get(c_mb)),
+                risco_reg=_optional_float(row.get(c_rr)),
+                risco_uf=_optional_float(row.get(c_ru)),
+                risco_br=_optional_float(row.get(c_rb)),
             )
             for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items()
         }
@@ -150,6 +160,7 @@ def get_indicadores_analise(
     val_min: float | None = None,
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
+    par_teia: str | None = None,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
@@ -228,7 +239,7 @@ def get_indicadores_analise(
             elif len(cnpj_raiz_clean) >= 8:
                 mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
 
-        df_geo = df_geo.filter(mask)
+        df_geo = apply_par_teia_filter(df_geo.filter(mask), par_teia)
 
         # ── 2A. Novos Filtros de Valor e Percentual (Snapshot) ──
         if perc_min is not None:
@@ -283,9 +294,6 @@ def get_indicadores_analise(
             df_sorted = df_joined
 
         # ── 7. Monta lista de CNPJs ──
-        def _f(v) -> float | None:
-            return float(v) if v is not None else None
-
         cnpjs_list: list[IndicadorCnpjRowSchema] = []
         for row in df_sorted.iter_rows(named=True):
             cnpjs_list.append(IndicadorCnpjRowSchema(
@@ -294,16 +302,16 @@ def get_indicadores_analise(
                 municipio=str(row["no_municipio"]).title() if row.get("no_municipio") else None,
                 uf=row.get("uf"),
                 id_ibge7=int(row["id_ibge7"]) if row.get("id_ibge7") is not None else None,
-                valor=_f(row.get(c_val)),
-                med_reg=_f(row.get(c_mr)),
-                risco_reg=_f(row.get(c_rr)) if rr_col else None,
+                valor=_optional_float(row.get(c_val)),
+                med_reg=_optional_float(row.get(c_mr)),
+                risco_reg=_optional_float(row.get(c_rr)) if rr_col else None,
                 status=row.get("status", "SEM DADOS"),
                 is_grande_rede=bool(row.get("is_grande_rede", False)),
                 situacao_rf=row.get("situacao_rf"),
                 is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
-                score_risco_final=_f(row.get(score_col)) if score_col in (risco_cols_available) else None,
-                val_sem_comp=_f(row.get("total_sem_comprovacao")),
-                perc_val_sem_comp=_f(row.get("perc_val_sem_comp")),
+                score_risco_final=_optional_float(row.get(score_col)) if score_col in (risco_cols_available) else None,
+                val_sem_comp=_optional_float(row.get("total_sem_comprovacao")),
+                perc_val_sem_comp=_optional_float(row.get("perc_val_sem_comp")),
             ))
 
         # ── 8. Agregação por município para o mapa ──
@@ -333,7 +341,7 @@ def get_indicadores_analise(
                 id_ibge7=int(row["id_ibge7"]) if row.get("id_ibge7") is not None else None,
                 total_cnpjs=int(row["total_cnpjs"] or 0),
                 total_critico=int(row["total_critico"] or 0),
-                pct_critico=float(row["pct_critico"] or 0.0),
+                pct_critico=_optional_float(row.get("pct_critico")) or 0.0,
             ))
 
         # ── 9. KPIs de resumo com Contexto Regional de Benchmarking ──
@@ -373,12 +381,12 @@ def get_indicadores_analise(
             s_riscos = df_context.select(c_rr).drop_nulls().to_series().sort()
             
             if not s_valores.is_empty():
-                mediana_reg = float(s_valores.median() or 0)
+                mediana_reg = _optional_float(s_valores.median()) or 0.0
             
             if not s_riscos.is_empty():
                 # Para o MAD/Z-Score, usamos os scores (ratios) onde a mediana teórica é 1.0
-                m_r = float(s_riscos.median() or 1.0)
-                mad_reg = float((s_riscos - m_r).abs().median() or 0.0001)
+                m_r = _optional_float(s_riscos.median()) or 1.0
+                mad_reg = _optional_float((s_riscos - m_r).abs().median()) or 0.0001
 
         kpis = IndicadorKpiSummarySchema(
             total_critico=counts.get("CRÍTICO", 0),

@@ -21,7 +21,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, null, null, p.situacaoRf,
       p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7,
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7, p.parTeia,
     ];
 
     analyticsStore.fetchDashboardSummary(...args);
@@ -37,7 +37,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     analyticsStore.fetchSentinelaUFNacional(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede, p.unidadePf,
-      p.volumeAtipicoEnabled, p.volumeAtipicoPercentual,
+      p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.parTeia,
     );
   };
 
@@ -48,7 +48,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, null, null, p.situacaoRf,
       p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7, p.parTeia
     );
     const currentHash = JSON.stringify(apiReadyParams);
     return analyticsStore.lastParamsHash === currentHash;
@@ -68,6 +68,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       filterStore.selectedMS,
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
+      filterStore.selectedParTeia,
       filterStore.selectedUnidadePf,
       filterStore.volumeAtipicoEnabled,
       filterStore.volumeAtipicoPercentualFilter,
@@ -91,6 +92,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       filterStore.selectedMS,
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
+      filterStore.selectedParTeia,
       filterStore.volumeAtipicoEnabled,
       filterStore.volumeAtipicoPercentualFilter,
     ],

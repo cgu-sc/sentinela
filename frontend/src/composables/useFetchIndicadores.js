@@ -20,7 +20,7 @@ export function useFetchIndicadores() {
    */
   function getIndicadorParams() {
     const {
-      uf, regiaoId, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf,
+      uf, regiaoId, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf, parTeia,
       percMin, percMax, valMin
     } = getApiParams();
 
@@ -38,6 +38,7 @@ export function useFetchIndicadores() {
     if (cnpjRaiz)     params.cnpj_raiz = cnpjRaiz;
     if (razaoSocial)  params.razao_social = razaoSocial;
     if (unidadePf)    params.unidade_pf = unidadePf;
+    if (parTeia)      params.par_teia = parTeia;
 
     // Novos: Filtros de Auditoria (Snapshot)
     if (percMin !== null) params.perc_min = percMin;
@@ -66,6 +67,7 @@ export function useFetchIndicadores() {
       filterStore.selectedMS,
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
+      filterStore.selectedParTeia,
       filterStore.selectedUnidadePf,
       filterStore.selectedCnpjRaiz,
       filterStore.percentualNaoComprovacaoFilter, // Reativo ao Slider de %

@@ -9,7 +9,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
+export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -26,6 +26,7 @@ export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, 
   if (cnpjRaiz) params.cnpj_raiz = cnpjRaiz;
   if (unidadePf) params.unidade_pf = unidadePf;
   if (razaoSocial) params.razao_social = razaoSocial;
+  if (parTeia) params.par_teia = parTeia;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {
@@ -51,8 +52,8 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
-      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7);
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
+      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia);
       
       // Gera um hash simples (string JSON) dos parâmetros para comparar
       const currentParamsHash = JSON.stringify(params);
@@ -83,9 +84,9 @@ export const useAnalyticsStore = defineStore('analytics', {
      * Chamado quando filtros de valor/percentual mudam com UF selecionada.
      * Nunca inclui filtros de UF/região/município para garantir dados nacionais.
      */
-    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, unidadePf = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
+    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, unidadePf = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, parTeia = null) {
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null, unidadePf, null, null, volumeAtipicoEnabled, volumeAtipicoPercentual);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null, unidadePf, null, null, volumeAtipicoEnabled, volumeAtipicoPercentual, null, parTeia);
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
       } catch (err) {
@@ -93,10 +94,10 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
       this.fatorRiscoLoading = true;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia);
         const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {

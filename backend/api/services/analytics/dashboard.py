@@ -11,6 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
+from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -55,7 +56,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -130,7 +131,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         if cnpjs:
             perfil_mask = perfil_mask & (pl.col("cnpj").is_in(cnpjs))
 
-        perfil_filtrado = perfil_df.filter(perfil_mask)
+        perfil_filtrado = apply_par_teia_filter(perfil_df.filter(perfil_mask), par_teia)
         period_df = (
             df.filter(mov_mask)
             .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
@@ -280,6 +281,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             resultado_cnpjs=resultado_cnpjs
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         print(f"❌ ERRO NO MOTOR POLARS (Analytics): {e}")

@@ -142,6 +142,7 @@ const situacaoOptions = FILTER_OPTIONS.situacao;
 const msOptions = FILTER_OPTIONS.ms;
 const porteOptions = FILTER_OPTIONS.porte;
 const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
+const parTeiaOptions = FILTER_OPTIONS.parTeia;
 const clusterOptions = FILTER_OPTIONS.cluster;
 const rfaOptions = FILTER_OPTIONS.rfa;
 
@@ -329,6 +330,7 @@ const isFilterActive = (field) => {
     selectedMS: FILTER_DEFAULTS.MS,
     selectedPorte: FILTER_DEFAULTS.PORTE,
     selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
+    selectedParTeia: FILTER_DEFAULTS.PAR_TEIA,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -368,6 +370,7 @@ const activeFilterCount = computed(() => {
     "selectedMS",
     "selectedPorte",
     "selectedGrandeRede",
+    "selectedParTeia",
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
     "valorMinSemComp",
@@ -399,6 +402,7 @@ const registryFilterCount = computed(() =>
     "selectedMS",
     "selectedPorte",
     "selectedGrandeRede",
+    "selectedParTeia",
   ]),
 );
 
@@ -750,6 +754,32 @@ onBeforeUnmount(() => {
             :class="{ 'filter-active': isFilterActive('selectedGrandeRede') }"
           />
         </div>
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Empresas com PAR
+          <button
+            v-if="isFilterActive('selectedParTeia')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedParTeia = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedParTeia"
+          :options="parTeiaOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
+        />
       </div>
 
       <div

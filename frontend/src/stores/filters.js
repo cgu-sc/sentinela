@@ -44,6 +44,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedMS = ref(saved?.selectedMS ?? FILTER_DEFAULTS.MS);
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
+  const selectedParTeia = ref(saved?.selectedParTeia ?? FILTER_DEFAULTS.PAR_TEIA);
   const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
   const hoveredMunicipioName = ref(null);
@@ -94,6 +95,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS: selectedMS.value,
     selectedPorte: selectedPorte.value,
     selectedGrandeRede: selectedGrandeRede.value,
+    selectedParTeia: selectedParTeia.value,
     selectedUnidadePf: selectedUnidadePf.value,
     selectedCnpjRaiz: selectedCnpjRaiz.value,
     percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
@@ -129,6 +131,7 @@ export const useFilterStore = defineStore('filters', () => {
     if ('selectedMS' in filters) selectedMS.value = filters.selectedMS;
     if ('selectedPorte' in filters) selectedPorte.value = filters.selectedPorte;
     if ('selectedGrandeRede' in filters) selectedGrandeRede.value = filters.selectedGrandeRede;
+    if ('selectedParTeia' in filters) selectedParTeia.value = filters.selectedParTeia;
     if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
     if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
     if (Array.isArray(filters.percentualNaoComprovacaoRange)) percentualNaoComprovacaoRange.value = filters.percentualNaoComprovacaoRange;
@@ -251,7 +254,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedCnpjRaiz,
+    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -267,6 +270,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS.value = FILTER_ALL_VALUE;
     selectedPorte.value = FILTER_ALL_VALUE;
     selectedGrandeRede.value = FILTER_ALL_VALUE;
+    selectedParTeia.value = FILTER_ALL_VALUE;
     selectedUnidadePf.value = FILTER_ALL_VALUE;
     selectedCnpjRaiz.value = '';
     percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
@@ -346,6 +350,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedMS,
     selectedPorte,
     selectedGrandeRede,
+    selectedParTeia,
     selectedUnidadePf,
     selectedCnpjRaiz,
     percentualNaoComprovacaoRange,

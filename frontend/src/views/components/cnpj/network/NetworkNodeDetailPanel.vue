@@ -135,6 +135,37 @@ const documentLabel = computed(() =>
           </div>
         </div>
 
+        <div
+          v-if="node.type !== 'PF' && node.is_par"
+          class="panel-field par-alert-field"
+        >
+          <i class="pi pi-shield" />
+          <span>PAR</span>
+          <span class="par-alert-badge">{{ node.qtd_processos_par || 1 }} registro(s)</span>
+        </div>
+
+        <div
+          v-if="node.type !== 'PF' && node.is_par"
+          class="par-evidence"
+        >
+          <div v-if="node.par_situacoes" class="par-evidence-row">
+            <span>Situação</span>
+            <strong>{{ node.par_situacoes }}</strong>
+          </div>
+          <div class="par-evidence-row">
+            <span>Primeira instauração</span>
+            <strong>{{ formatSocietyDate(node.par_primeira_instauracao) }}</strong>
+          </div>
+          <div class="par-evidence-row">
+            <span>Última instauração</span>
+            <strong>{{ formatSocietyDate(node.par_ultima_instauracao) }}</strong>
+          </div>
+          <div class="par-evidence-row">
+            <span>Última conclusão</span>
+            <strong>{{ formatSocietyDate(node.par_ultima_conclusao) }}</strong>
+          </div>
+        </div>
+
         <div v-if="node.municipio" class="panel-field mt-1">
           <i class="pi pi-map-marker" />
           <span>{{ node.municipio }} / {{ node.uf }}</span>
@@ -433,6 +464,7 @@ const documentLabel = computed(() =>
 
 .cadunico-badge,
 .cnae-alert-badge,
+.par-alert-badge,
 .deceased-badge {
   margin-left: auto;
   padding: 0.1rem 0.42rem;
@@ -476,6 +508,50 @@ const documentLabel = computed(() =>
 .cnae-evidence-row {
   display: grid;
   gap: 0.12rem;
+}
+
+.par-alert-field {
+  color: color-mix(in srgb, #dc2626 78%, var(--text-color));
+}
+
+.par-alert-field i {
+  color: #dc2626;
+}
+
+.par-alert-badge {
+  border: 1px solid color-mix(in srgb, #dc2626 44%, transparent);
+  background: color-mix(in srgb, #dc2626 14%, transparent);
+  color: color-mix(in srgb, #dc2626 86%, var(--text-color));
+}
+
+.par-evidence {
+  display: grid;
+  gap: 0.38rem;
+  margin-top: -0.1rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid color-mix(in srgb, #dc2626 22%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, #dc2626 7%, transparent);
+}
+
+.par-evidence-row {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.par-evidence-row span {
+  color: var(--text-muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.par-evidence-row strong {
+  color: var(--text-color);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .cnae-evidence-row span {

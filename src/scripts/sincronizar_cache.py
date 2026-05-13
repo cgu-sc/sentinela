@@ -25,6 +25,7 @@ from data_cache import (
     _sync_rede,
     _sync_matriz_risco,
     _sync_volume_atipico_semestral,
+    _sync_dados_par,
     _sync_medicamentos,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
@@ -338,6 +339,9 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
     """Gera todos os parquets mantidos em sentinela_cache/<cnpj>/."""
     from api.services.analytics import AnalyticsService
 
+    print("Atualizando indicadores PAR antes da teia por CNPJ...")
+    _sync_dados_par(engine)
+
     if not cnpjs:
         cnpjs = _buscar_cnpjs_matriz(engine)
 
@@ -415,6 +419,7 @@ def _sync_teia_expansao_completa(engine, progress_callback=None):
 
 MODULOS = [
     {"id": 12, "name": "Volume Atipico Semestral", "func": _sync_volume_atipico_semestral, "peso": "~medio"},
+    {"id": 14, "name": "Indicadores PAR",           "func": _sync_dados_par, "peso": "~rápido"},
     {"id": 1, "name": "Localidades (IBGE)",        "func": _sync_localidades,    "peso": "~rápido"},
     {"id": 2, "name": "Rede de Estabelecimentos",  "func": _sync_rede,           "peso": "~rápido"},
     {"id": 3, "name": "Matriz de Risco",           "func": _sync_matriz_risco,   "peso": "~médio"},

@@ -432,6 +432,12 @@ class NetworkNodeSchema(BaseModel):
     is_falecido: Optional[bool] = False
     is_cadunico: bool
     is_cnae_farmacia_ausente: bool
+    is_par: Optional[bool] = False
+    qtd_processos_par: Optional[int] = 0
+    par_situacoes: Optional[str] = None
+    par_primeira_instauracao: Optional[date] = None
+    par_ultima_instauracao: Optional[date] = None
+    par_ultima_conclusao: Optional[date] = None
 
 class NetworkEdgeSchema(BaseModel):
     id: str

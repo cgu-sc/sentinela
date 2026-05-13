@@ -32,9 +32,14 @@ export function isCadunicoPersonNode(node) {
   return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_cadunico);
 }
 
+export function isParCompanyNode(node) {
+  return node?.type !== "PF" && isTruthyFlag(node?.is_par);
+}
+
 export function getNodeClasses(node) {
   return [
     isCompanyNodeInactive(node) ? "inactive-company" : "",
+    isParCompanyNode(node) ? "par-company" : "",
     isCadunicoPersonNode(node) ? "cadunico-pf" : "",
     isDeceasedPersonNode(node) ? "deceased-pf" : "",
   ]

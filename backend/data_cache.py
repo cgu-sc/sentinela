@@ -42,6 +42,7 @@ _TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.pa
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel4.parquet")
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = os.path.join(_CACHE_DIR, "volume_atipico_semestral.parquet")
+_DADOS_PAR_PARQUET_PATH = os.path.join(_CACHE_DIR, "dados_par.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -62,10 +63,22 @@ _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
+_df_dados_par: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
 _cache_error_message: str = ""
+
+def _empty_dados_par_df() -> pl.DataFrame:
+    return pl.DataFrame(schema={
+        "cnpj": pl.Utf8,
+        "is_par": pl.Boolean,
+        "qtd_processos_par": pl.Int32,
+        "par_situacoes": pl.Utf8,
+        "par_primeira_instauracao": pl.Date,
+        "par_ultima_instauracao": pl.Date,
+        "par_ultima_conclusao": pl.Date,
+    })
 
 # --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
 
@@ -193,6 +206,78 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
         _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH,
         compression="zstd",
     )
+
+def _sync_dados_par(engine, progress_callback=None):
+    """Sincroniza uma visão agregada de PAR por CNPJ, sem persistir detalhes sensíveis."""
+    global _df_dados_par
+    print("Sincronizando indicadores de PAR por CNPJ...")
+    sql = """
+        WITH par_base AS (
+            SELECT DISTINCT
+                RIGHT(
+                    REPLICATE('0', 14) +
+                    REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CNPJ)), '.', ''), '/', ''), '-', ''), ' ', ''),
+                    14
+                ) AS cnpj,
+                IdProcedimento,
+                NULLIF(LTRIM(RTRIM(Situacao)), '') AS situacao,
+                CAST(Instauracao AS date) AS instauracao,
+                CAST(Conclusao AS date) AS conclusao
+            FROM [db_pagamentos_federais].[dbo].[Dados_PAR]
+            WHERE CNPJ IS NOT NULL
+              AND NULLIF(LTRIM(RTRIM(CNPJ)), '') IS NOT NULL
+        ),
+        par_situacoes AS (
+            SELECT
+                cnpj,
+                STRING_AGG(situacao, ' | ') AS par_situacoes
+            FROM (
+                SELECT DISTINCT cnpj, situacao
+                FROM par_base
+                WHERE situacao IS NOT NULL
+            ) s
+            GROUP BY cnpj
+        )
+        SELECT
+            b.cnpj,
+            CAST(1 AS bit) AS is_par,
+            COUNT(DISTINCT b.IdProcedimento) AS qtd_processos_par,
+            MAX(s.par_situacoes) AS par_situacoes,
+            MIN(b.instauracao) AS par_primeira_instauracao,
+            MAX(b.instauracao) AS par_ultima_instauracao,
+            MAX(b.conclusao) AS par_ultima_conclusao
+        FROM par_base b
+        LEFT JOIN par_situacoes s ON s.cnpj = b.cnpj
+        WHERE LEN(b.cnpj) = 14
+        GROUP BY b.cnpj
+    """
+
+    try:
+        pdf = pd.read_sql(sql, engine)
+        print(f"   -> CNPJs com PAR: {len(pdf):,}")
+        if progress_callback:
+            progress_callback(100)
+
+        if pdf.empty:
+            _df_dados_par = _empty_dados_par_df()
+        else:
+            _df_dados_par = pl.from_pandas(pdf).with_columns([
+                pl.col("cnpj").cast(pl.Utf8),
+                pl.col("is_par").cast(pl.Boolean),
+                pl.col("qtd_processos_par").cast(pl.Int32),
+                pl.col("par_situacoes").cast(pl.Utf8),
+                pl.col("par_primeira_instauracao").cast(pl.Date, strict=False),
+                pl.col("par_ultima_instauracao").cast(pl.Date, strict=False),
+                pl.col("par_ultima_conclusao").cast(pl.Date, strict=False),
+            ]).sort("cnpj")
+
+        _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
+    except Exception as e:
+        print(f"   -> PAR indisponivel; cache agregado vazio sera usado. Detalhe: {e}")
+        if progress_callback:
+            progress_callback(100)
+        _df_dados_par = _empty_dados_par_df()
+        _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
 
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
@@ -742,7 +827,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -796,6 +881,15 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "taxa_crescimento_pct",
                 "multiplicador_nao_comprovacao",
             },
+            "dados_par": {
+                "cnpj",
+                "is_par",
+                "qtd_processos_par",
+                "par_situacoes",
+                "par_primeira_instauracao",
+                "par_ultima_instauracao",
+                "par_ultima_conclusao",
+            },
         }
 
         def _try_load(name, path):
@@ -830,6 +924,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
+        dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
+        _df_dados_par = dados_par_loaded if dados_par_loaded is not None else _empty_dados_par_df()
 
         if missing:
             print(f"[AVISO]  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -855,6 +951,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
+        {"name": "Indicadores PAR",       "weight": 1,  "func": lambda cb: _sync_dados_par(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Perfil Estabelecimentos", "weight": 5, "func": lambda cb: _sync_perfil_estabelecimento(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
@@ -979,6 +1076,11 @@ def get_df_volume_atipico_semestral() -> pl.DataFrame:
         raise RuntimeError("Cache de Volume Atipico Semestral nao carregado. Execute uma sincronizacao.")
     return _df_volume_atipico_semestral
 
+def get_df_dados_par() -> pl.DataFrame:
+    if _df_dados_par is None:
+        return _empty_dados_par_df()
+    return _df_dados_par
+
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     modules = {
@@ -997,6 +1099,7 @@ def get_cache_status() -> dict:
         "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
+        "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
     }
     modules_status = {
         key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}

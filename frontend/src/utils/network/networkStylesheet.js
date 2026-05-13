@@ -134,6 +134,21 @@ export function buildNetworkStylesheet() {
   });
 
   styles.push({
+    selector: "node.par-company",
+    style: {
+      "border-width": 5,
+      "border-color": "#dc2626",
+      "border-style": "double",
+      "shadow-blur": 12,
+      "shadow-color": "rgba(220, 38, 38, 0.48)",
+      "shadow-opacity": 0.9,
+      "shadow-offset-x": 0,
+      "shadow-offset-y": 0,
+      "z-index": 13,
+    },
+  });
+
+  styles.push({
     selector: "edge[!is_ativo]",
     style: {
       "line-style": "dotted",

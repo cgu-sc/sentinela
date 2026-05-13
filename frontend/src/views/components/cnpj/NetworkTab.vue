@@ -95,6 +95,8 @@ const readAlertNodes = () => {
         is_falecido: node.data("is_falecido"),
         is_cadunico: node.data("is_cadunico"),
         is_cnae_farmacia_ausente: node.data("is_cnae_farmacia_ausente"),
+        is_par: node.data("is_par"),
+        qtd_processos_par: node.data("qtd_processos_par"),
       }));
   }
 
@@ -122,6 +124,8 @@ const networkAlertGroups = computed(() => {
       id: node.id,
       name: getCompanyAlertName(node),
       is_cnae_farmacia_ausente: isTruthyFlag(node.is_cnae_farmacia_ausente),
+      is_par: isTruthyFlag(node.is_par),
+      qtd_processos_par: node.qtd_processos_par || 0,
     }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
 
@@ -131,6 +135,12 @@ const networkAlertGroups = computed(() => {
       label: "CNAE ausente",
       icon: "legend-cnae-alert",
       items: companies.filter((node) => node.is_cnae_farmacia_ausente),
+    },
+    {
+      key: "par",
+      label: "PAR",
+      icon: "legend-par-alert",
+      items: companies.filter((node) => node.is_par),
     },
     {
       key: "falecidos",
@@ -1163,6 +1173,12 @@ async function buildGraph(data) {
         is_falecido: isTruthyFlag(n.is_falecido),
         is_cadunico: isTruthyFlag(n.is_cadunico),
         is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
+        is_par: isTruthyFlag(n.is_par),
+        qtd_processos_par: n.qtd_processos_par || 0,
+        par_situacoes: n.par_situacoes,
+        par_primeira_instauracao: n.par_primeira_instauracao,
+        par_ultima_instauracao: n.par_ultima_instauracao,
+        par_ultima_conclusao: n.par_ultima_conclusao,
       },
     })),
     ...data.edges.map((e) => ({
@@ -1307,6 +1323,12 @@ async function expandNode(nodeId) {
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
             is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
+            is_par: isTruthyFlag(n.is_par),
+            qtd_processos_par: n.qtd_processos_par || 0,
+            par_situacoes: n.par_situacoes,
+            par_primeira_instauracao: n.par_primeira_instauracao,
+            par_ultima_instauracao: n.par_ultima_instauracao,
+            par_ultima_conclusao: n.par_ultima_conclusao,
           },
           position: { ...cy.getElementById(nodeId).position() },
         });

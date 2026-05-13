@@ -15,7 +15,7 @@ from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
     get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, 
-    get_df_teia_fonte_nivel4, get_cache_dir
+    get_df_teia_fonte_nivel4, get_df_dados_par, get_cache_dir
 )
 
 from ...schemas.analytics import (
@@ -245,12 +245,15 @@ def sync_network(cnpj: str) -> None:
                 "id", "label", "type", "razao_social", "nome_socio",
                 "nome_fantasia", "classification_version", "is_falecido", "is_cadunico",
                 "is_cnae_farmacia_ausente", "id_cnae_principal", "cnae_principal",
-                "id_cnae_secundario", "cnae_secundario"
+                "id_cnae_secundario", "cnae_secundario", "is_par", "qtd_processos_par",
+                "par_situacoes", "par_primeira_instauracao", "par_ultima_instauracao",
+                "par_ultima_conclusao"
             }
+            par_node_columns = {"is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao", "par_ultima_instauracao", "par_ultima_conclusao"}
             edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente", *par_node_columns}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -260,6 +263,13 @@ def sync_network(cnpj: str) -> None:
                 raise ValueError("N3 edges cache com schema antigo")
             if not has_required_columns(N4_EDGES_PATH, edge_columns):
                 raise ValueError("N4 edges cache com schema antigo")
+
+            DADOS_PAR_PATH = os.path.join(get_cache_dir(), "dados_par.parquet")
+            if os.path.exists(DADOS_PAR_PATH):
+                par_mtime = os.path.getmtime(DADOS_PAR_PATH)
+                graph_mtime = min(os.path.getmtime(p) for p in [N2_NODES_PATH, N3_NODES_PATH, N4_NODES_PATH])
+                if par_mtime > graph_mtime:
+                    raise ValueError("teia anterior ao cache PAR")
 
             return
         except Exception:
@@ -303,6 +313,7 @@ def sync_network(cnpj: str) -> None:
                     "is_falecido": False,
                     "is_cadunico": False,
                     "is_cnae_farmacia_ausente": False,
+                    **get_par_fields(representative_id),
                 }
 
             edge_list.append({
@@ -330,6 +341,35 @@ def sync_network(cnpj: str) -> None:
                 "is_cnae_farmacia_ausente",
             ]).to_dicts()
         }
+        try:
+            df_par = get_df_dados_par()
+            par_info_by_cnpj = {
+                str(row["cnpj"]): row
+                for row in df_par.iter_rows(named=True)
+            } if not df_par.is_empty() else {}
+        except Exception as e:
+            print(f"   -> PAR indisponivel para enriquecimento da teia: {e}")
+            par_info_by_cnpj = {}
+
+        def get_par_fields(cnpj_value) -> dict:
+            row = par_info_by_cnpj.get(str(cnpj_value))
+            if not row:
+                return {
+                    "is_par": False,
+                    "qtd_processos_par": 0,
+                    "par_situacoes": None,
+                    "par_primeira_instauracao": None,
+                    "par_ultima_instauracao": None,
+                    "par_ultima_conclusao": None,
+                }
+            return {
+                "is_par": bool(row.get("is_par")),
+                "qtd_processos_par": int(row.get("qtd_processos_par") or 0),
+                "par_situacoes": row.get("par_situacoes"),
+                "par_primeira_instauracao": row.get("par_primeira_instauracao"),
+                "par_ultima_instauracao": row.get("par_ultima_instauracao"),
+                "par_ultima_conclusao": row.get("par_ultima_conclusao"),
+            }
         
         if raiz:
             r = raiz[0]
@@ -351,6 +391,7 @@ def sync_network(cnpj: str) -> None:
                 "is_falecido": False,
                 "is_cadunico": False,
                 "is_cnae_farmacia_ausente": bool(r["is_cnae_farmacia_ausente"]),
+                **get_par_fields(cnpj),
             }
         else:
             nodes[cnpj] = {
@@ -360,6 +401,7 @@ def sync_network(cnpj: str) -> None:
                 "cnae_secundario": None, "municipio": None, "uf": None,
                 "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
                 "is_falecido": False, "is_cadunico": False, "is_cnae_farmacia_ausente": False,
+                **get_par_fields(cnpj),
             }
 
         # ── 2. Nível 1: Sócios do CNPJ alvo ─────────────────────────────────
@@ -387,6 +429,7 @@ def sync_network(cnpj: str) -> None:
                     "is_falecido": bool(s.get("is_falecido", 0)),
                     "is_cadunico": bool(s["is_cadunico"]),
                     "is_cnae_farmacia_ausente": False,
+                    **get_par_fields(id_socio),
                 }
 
             edges.append({
@@ -439,6 +482,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": False,
                         "is_cadunico": False,
                         "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
+                        **get_par_fields(cnpj_ext),
                     }
 
                 edges.append({
@@ -492,6 +536,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": bool(row.get("is_falecido", 0)),
                         "is_cadunico": bool(row["is_cadunico"]),
                         "is_cnae_farmacia_ausente": False,
+                        **get_par_fields(id_socio),
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_pai}"
@@ -523,7 +568,9 @@ def sync_network(cnpj: str) -> None:
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
-            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
+            "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
+            "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         n2_node_schema = {
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
@@ -533,6 +580,9 @@ def sync_network(cnpj: str) -> None:
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
+            "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
+            "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,
+            "par_ultima_conclusao": pl.Date,
         }
 
         pl.DataFrame(project_rows(list(nodes.values()), n2_node_columns), schema=n2_node_schema).write_parquet(N2_NODES_PATH, compression="zstd")
@@ -552,12 +602,17 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
         n3_node_columns = [
             "id", "label", "type", "nome_socio", "municipio", "uf",
-            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
+            "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
+            "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
+            "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
+            "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,
+            "par_ultima_conclusao": pl.Date,
         }).unique(subset=["id"], keep="first").write_parquet(N3_NODES_PATH, compression="zstd")
         
         pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
@@ -604,6 +659,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": False,
                         "is_cadunico": False,
                         "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
+                        **get_par_fields(cnpj_ext),
                     }
                 
                 edge_id = f"{id_socio}->{cnpj_ext}"
@@ -630,7 +686,9 @@ def sync_network(cnpj: str) -> None:
             "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
-            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente"
+            "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
+            "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
+            "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
@@ -639,6 +697,9 @@ def sync_network(cnpj: str) -> None:
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
+            "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
+            "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,
+            "par_ultima_conclusao": pl.Date,
         }).unique(subset=["id"], keep="first").write_parquet(N4_NODES_PATH, compression="zstd")
         
         pl.DataFrame(n4_edges if n4_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N4_EDGES_PATH, compression="zstd")

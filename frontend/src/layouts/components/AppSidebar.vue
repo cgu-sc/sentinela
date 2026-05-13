@@ -145,6 +145,11 @@ const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
 const parTeiaOptions = FILTER_OPTIONS.parTeia;
 const clusterOptions = FILTER_OPTIONS.cluster;
 const rfaOptions = FILTER_OPTIONS.rfa;
+const parTeiaTooltip =
+  "Alvo com PAR: o próprio CNPJ filtrado possui PAR.\n" +
+  "Empresa N2 com PAR: empresa vinculada no nível 2 da teia possui PAR.\n" +
+  "Empresa N4 com PAR: empresa vinculada no nível 4 da teia possui PAR.\n" +
+  "Qualquer empresa da teia: considera Alvo, N2 ou N4.";
 
 const { formatBRL: formatCurrency } = useFormatting();
 
@@ -762,6 +767,10 @@ onBeforeUnmount(() => {
       >
         <label class="filter-label">
           Empresas com PAR
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
+          />
           <button
             v-if="isFilterActive('selectedParTeia')"
             class="filter-clear-btn"

@@ -11,7 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_dados_farmacia, get_cache_dir
-from .volume_atipico import get_volume_atipico_cnpjs_df
+from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -97,12 +97,12 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
 
         period_df = df.filter(mask)
         if volume_atipico:
-            cnpjs_volume_df = get_volume_atipico_cnpjs_df(inicio, fim, volume_atipico_limite)
-            period_df = period_df.join(cnpjs_volume_df, on="cnpj", how="semi")
+            id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
+            period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
 
         cnpj_agg = (
             period_df
-            .group_by("cnpj")
+            .group_by("id_cnpj")
             .agg([
                 pl.sum("total_vendas").alias("tv"),
                 pl.sum("total_sem_comprovacao").alias("tsc"),
@@ -206,15 +206,15 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
 
         # ── 1. Resumo por Município ─────────────────────────────────────────
         # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
-        df_farmacia = get_df_dados_farmacia().select(["cnpj", "id_ibge7"])
-        df_reg = df_reg.join(df_farmacia, on="cnpj", how="left")
+        df_farmacia = get_df_dados_farmacia().select(["id_cnpj", "id_ibge7"])
+        df_reg = df_reg.join(df_farmacia, on="id_cnpj", how="left")
 
         # Agrega CNPJs únicos e valores financeiros por município
         mun_agg = (
             df_reg
             .group_by(["no_municipio", "uf", "id_ibge7"])
             .agg([
-                pl.n_unique("cnpj").alias("qtd_farmacias"),
+                pl.n_unique("id_cnpj").alias("qtd_farmacias"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
             ])
@@ -274,8 +274,9 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
         # Agrega valores financeiros acumulados por CNPJ (histórico completo)
         cnpj_agg = (
             df_reg
-            .group_by("cnpj")
+            .group_by("id_cnpj")
             .agg([
+                pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),
@@ -411,8 +412,9 @@ def get_regional_benchmarking_animation(
         # ── Agrega por (trimestre, CNPJ) em uma única operação ──────────
         cnpj_q = (
             df_q
-            .group_by(["_quarter_idx", "cnpj"])
+            .group_by(["_quarter_idx", "id_cnpj"])
             .agg([
+                pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),
@@ -530,8 +532,9 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
             # Agrega por CNPJ primeiro
             df_agg = (
                 df_base.filter(mask)
-                .group_by("cnpj")
+                .group_by("id_cnpj")
                 .agg([
+                    pl.col("cnpj").first().alias("cnpj"),
                     pl.col("uf").first().alias("uf"),
                     pl.col("no_municipio").first().alias("no_municipio"),
                     pl.sum("total_vendas").alias("tv"),

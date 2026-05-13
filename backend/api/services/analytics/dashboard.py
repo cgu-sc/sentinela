@@ -11,7 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
-from .volume_atipico import get_volume_atipico_cnpjs_df
+from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -136,11 +136,11 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
 
         period_df = df.filter(mask)
         if volume_atipico:
-            cnpjs_volume_df = get_volume_atipico_cnpjs_df(inicio, fim, volume_atipico_limite)
-            period_df = period_df.join(cnpjs_volume_df, on="cnpj", how="semi")
+            id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
+            period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
 
         # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
-        cnpj_agg = period_df.group_by("cnpj").agg([
+        cnpj_agg = period_df.group_by("id_cnpj").agg([
             pl.sum("total_vendas").alias("tv"),
             pl.sum("total_sem_comprovacao").alias("tsc"),
             pl.sum("total_qnt_vendas").alias("tqv"),
@@ -159,16 +159,16 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         tsc = float(cnpj_ok["tsc"].sum() or 0)
         tqv = float(cnpj_ok["tqv"].sum() or 0)
         pct = (tsc / tv * 100) if tv else 0.0
-        qtd_mun = int(period_df.join(cnpj_ok.select("cnpj"), on="cnpj", how="inner").select(pl.n_unique("no_municipio")).item() or 0)
+        qtd_mun = int(period_df.join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner").select(pl.n_unique("no_municipio")).item() or 0)
         kpis = build_kpis(cnpj_ok.height, tv, tsc, pct, tqv, qtd_mun)
 
         # 5. Detalhamento por UF (Breakdown)
         uf_df = (
             period_df
-            .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
             .group_by("uf")
             .agg([
-                pl.n_unique("cnpj").alias("cnpjs"),
+                pl.n_unique("id_cnpj").alias("cnpjs"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
                 pl.sum("total_qnt_vendas").alias("totalQtde"),
@@ -188,15 +188,15 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
 
         # 6. Agregação por Município
         # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
-        df_farmacia = get_df_dados_farmacia().select(["cnpj", "id_ibge7"])
-        period_df = period_df.join(df_farmacia, on="cnpj", how="left")
+        df_farmacia = get_df_dados_farmacia().select(["id_cnpj", "id_ibge7"])
+        period_df = period_df.join(df_farmacia, on="id_cnpj", how="left")
 
         muni_df = (
             period_df
-            .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
             .group_by(["uf", "no_municipio", "id_ibge7"])
             .agg([
-                pl.n_unique("cnpj").alias("cnpjs"),
+                pl.n_unique("id_cnpj").alias("cnpjs"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
                 pl.sum("total_qnt_vendas").alias("totalQtde"),
@@ -217,9 +217,10 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         # 7. Detalhamento por CNPJ (Sempre calculado)
         cnpj_df = (
             period_df
-            .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
-            .group_by("cnpj")
+            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+            .group_by("id_cnpj")
             .agg([
+                pl.col("cnpj").first().alias("cnpj"),
                 pl.col("no_municipio").first().alias("municipio"),
                 pl.col("uf").first().alias("uf"),
                 pl.col("razao_social").first().alias("razao_social"),

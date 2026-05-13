@@ -47,8 +47,7 @@ from .regional import (
 )
 from .nota_tecnica import generate_nota_tecnica
 from .volume_atipico import (
-    get_volume_atipico_cnpjs_df,
-    get_volume_atipico_filtered_cnpjs,
+    get_volume_atipico_id_cnpjs_df,
     get_volume_atipico_period_metrics,
 )
 
@@ -91,6 +90,5 @@ class AnalyticsService:
     get_metric_percentiles_animation = staticmethod(get_metric_percentiles_animation)
     get_cnpj_lookup = staticmethod(get_cnpj_lookup)
     generate_nota_tecnica = staticmethod(generate_nota_tecnica)
-    get_volume_atipico_cnpjs_df = staticmethod(get_volume_atipico_cnpjs_df)
-    get_volume_atipico_filtered_cnpjs = staticmethod(get_volume_atipico_filtered_cnpjs)
+    get_volume_atipico_id_cnpjs_df = staticmethod(get_volume_atipico_id_cnpjs_df)
     get_volume_atipico_period_metrics = staticmethod(get_volume_atipico_period_metrics)

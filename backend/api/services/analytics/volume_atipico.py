@@ -10,8 +10,8 @@ DEFAULT_VOLUME_ATIPICO_LIMITE = 50.0
 MIN_VOLUME_ATIPICO_LIMITE = 40.0
 MAX_VOLUME_ATIPICO_LIMITE = 2000.0
 STATUS_SEMESTRE_COMPARAVEL = 1
-_VOLUME_ATIPICO_CNPJS_CACHE: dict[
-    tuple[int, int, Optional[int], Optional[int], float],
+_VOLUME_ATIPICO_ID_CNPJS_CACHE: dict[
+    tuple[int, Optional[int], Optional[int], float],
     pl.DataFrame,
 ] = {}
 
@@ -164,20 +164,19 @@ def get_volume_atipico_period_metrics(
     return metrics_df.join(_cnpj_lookup_df(), on="id_cnpj", how="inner")
 
 
-def get_volume_atipico_cnpjs_df(
+def get_volume_atipico_id_cnpjs_df(
     data_inicio: Optional[date],
     data_fim: Optional[date],
     limite_percentual: Optional[float] = None,
 ) -> pl.DataFrame:
-    """Retorna DataFrame de CNPJs com pelo menos um semestre acima do limite."""
+    """Retorna id_cnpj de estabelecimentos com ao menos um semestre acima do limite."""
     limite = normalize_volume_atipico_limite(limite_percentual)
     df = get_df_volume_atipico_semestral()
-    farmacias_df = get_df_dados_farmacia()
-    empty = pl.DataFrame({"cnpj": []}, schema={"cnpj": pl.String})
+    empty = pl.DataFrame({"id_cnpj": []}, schema={"id_cnpj": pl.Int32})
 
     inicio_key, fim_key = _period_to_semester_keys(data_inicio, data_fim)
-    cache_key = (id(df), id(farmacias_df), inicio_key, fim_key, limite)
-    cached = _VOLUME_ATIPICO_CNPJS_CACHE.get(cache_key)
+    cache_key = (id(df), inicio_key, fim_key, limite)
+    cached = _VOLUME_ATIPICO_ID_CNPJS_CACHE.get(cache_key)
     if cached is not None:
         return cached
 
@@ -188,26 +187,11 @@ def get_volume_atipico_cnpjs_df(
     result = (
         df_periodo
         .filter(pl.col("taxa_crescimento_pct") > limite)
-        .select("id_cnpj")
-        .unique()
-        .join(_cnpj_lookup_df(), on="id_cnpj", how="inner")
-        .select("cnpj")
+        .select(pl.col("id_cnpj").cast(pl.Int32))
         .unique()
     )
 
-    if len(_VOLUME_ATIPICO_CNPJS_CACHE) >= 64:
-        _VOLUME_ATIPICO_CNPJS_CACHE.clear()
-    _VOLUME_ATIPICO_CNPJS_CACHE[cache_key] = result
+    if len(_VOLUME_ATIPICO_ID_CNPJS_CACHE) >= 64:
+        _VOLUME_ATIPICO_ID_CNPJS_CACHE.clear()
+    _VOLUME_ATIPICO_ID_CNPJS_CACHE[cache_key] = result
     return result
-
-
-def get_volume_atipico_filtered_cnpjs(
-    data_inicio: Optional[date],
-    data_fim: Optional[date],
-    limite_percentual: Optional[float] = None,
-) -> list[str]:
-    """Retorna CNPJs com pelo menos um semestre acima do limite escolhido."""
-    cnpjs_df = get_volume_atipico_cnpjs_df(data_inicio, data_fim, limite_percentual)
-    if cnpjs_df.is_empty():
-        return []
-    return cnpjs_df.get_column("cnpj").to_list()

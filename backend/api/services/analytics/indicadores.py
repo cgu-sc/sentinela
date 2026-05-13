@@ -191,7 +191,8 @@ def get_indicadores_analise(
 
         # ── 1. Snapshot geográfico por CNPJ (última ocorrência de cada campo cadastral) ──
         df_mov = get_df()
-        df_geo = df_mov.group_by("cnpj").agg([
+        df_geo = df_mov.group_by("id_cnpj").agg([
+            pl.col("cnpj").last().alias("cnpj"),
             pl.col("uf").last().alias("uf"),
             pl.col("no_municipio").last().alias("no_municipio"),
             pl.col("id_regiao_saude").last().alias("id_regiao_saude"),
@@ -403,7 +404,8 @@ def get_indicadores_analise(
         mediana_reg = None
         mad_reg = None
         # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
-        df_context_geo = df_mov.group_by("cnpj").agg([
+        df_context_geo = df_mov.group_by("id_cnpj").agg([
+            pl.col("cnpj").last().alias("cnpj"),
             pl.col("uf").last().alias("uf"),
             pl.col("id_regiao_saude").last().alias("id_regiao_saude")
         ]).filter(context_mask)

@@ -536,10 +536,25 @@ def _sync_movimentacao(engine, progress_callback):
     global _df_movimentacao
     with engine.connect() as conn:
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj]")).scalar()
+        missing_id_cnpj = conn.execute(text("""
+            SELECT TOP 1 1
+            FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
+            LEFT JOIN [temp_CGUSC].[fp].[dados_farmacia] DF
+                ON DF.cnpj = M.cnpj
+            WHERE DF.id IS NULL
+        """)).scalar()
+
+    if missing_id_cnpj:
+        raise RuntimeError("movimentacao_mensal_cnpj possui CNPJs sem id correspondente em dados_farmacia.")
     
     # Query otimizada: busca geografia via JOIN para economizar espaço no SQL
     sql = """
-        SELECT M.cnpj, P.uf, IB.id_regiao_saude, P.municipio AS no_municipio, M.periodo,
+        SELECT DF.id AS id_cnpj,
+               M.cnpj,
+               P.uf,
+               IB.id_regiao_saude,
+               P.municipio AS no_municipio,
+               M.periodo,
                CAST(M.total_vendas AS FLOAT) AS total_vendas,
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
                M.total_qnt_vendas,
@@ -573,6 +588,7 @@ def _sync_movimentacao(engine, progress_callback):
 
     print("   -> Organizando e otimizando dados (Polars)...")
     _df_movimentacao = pl.concat(chunk_list).with_columns([
+        pl.col("id_cnpj").cast(pl.Int32),
         pl.col("periodo").cast(pl.Date),
         pl.col("uf").cast(pl.Categorical),
         pl.col("id_regiao_saude").cast(pl.String),
@@ -589,8 +605,7 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_qnt_sem_comprovacao").cast(pl.Int32),
         pl.col("total_vendas").cast(pl.Float64),
         pl.col("total_sem_comprovacao").cast(pl.Float64),
-    ]).sort(["cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
-    
+    ]).sort(["id_cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
     _df_movimentacao.write_parquet(_PARQUET_PATH, compression="zstd")
 
 def _sync_crm_benchmarks(engine, progress_callback=None):
@@ -690,6 +705,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _cache_status = "loading_parquet"
         missing = []
         required_columns = {
+            "movimentacao": {"id_cnpj"},
             "dados_farmacia": {
                 "id_cnpj",
                 "id_cnae_principal",

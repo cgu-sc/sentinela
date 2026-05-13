@@ -81,7 +81,7 @@ class DashboardService:
             period_df = df.filter(mask)
 
             # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
-            cnpj_agg = period_df.group_by("cnpj").agg([
+            cnpj_agg = period_df.group_by("id_cnpj").agg([
                 pl.sum("total_vendas").alias("tv"),
                 pl.sum("total_sem_comprovacao").alias("tsc"),
                 pl.sum("total_qnt_vendas").alias("tqv"),
@@ -106,10 +106,10 @@ class DashboardService:
             # Fazemos um inner join com os CNPJs que "passaram" no filtro para pegar o detalhamento geográfico correto
             uf_df = (
                 period_df
-                .join(cnpj_ok.select("cnpj"), on="cnpj", how="inner")
+                .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
                 .group_by("uf")
                 .agg([
-                    pl.n_unique("cnpj").alias("cnpjs"),
+                    pl.n_unique("id_cnpj").alias("cnpjs"),
                     pl.sum("total_vendas").alias("totalMov"),
                     pl.sum("total_sem_comprovacao").alias("valSemComp"),
                     pl.sum("total_qnt_vendas").alias("totalQtde"),
@@ -192,7 +192,7 @@ class DashboardService:
             # Agrega por CNPJ no período e calcula %
             cnpj_agg = (
                 df.filter(mask)
-                .group_by("cnpj")
+                .group_by("id_cnpj")
                 .agg([
                     pl.sum("total_vendas").alias("tv"),
                     pl.sum("total_sem_comprovacao").alias("tsc"),

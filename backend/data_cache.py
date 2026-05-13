@@ -40,6 +40,7 @@ _TEIA_FONTE_NIVEL2_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel2.pa
 _TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.parquet")
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel4.parquet")
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
+_VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = os.path.join(_CACHE_DIR, "volume_atipico_semestral.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -58,6 +59,7 @@ _df_teia_fonte_nivel2: pl.DataFrame | None = None
 _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
+_df_volume_atipico_semestral: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
@@ -138,12 +140,65 @@ def _sync_matriz_risco(engine, progress_callback=None):
     _df_matriz_risco = pl.concat(chunk_list).sort("cnpj")
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
 
+def _sync_volume_atipico_semestral(engine, progress_callback=None):
+    """Sincroniza a base semestral crua do filtro dinamico de volume atipico."""
+    global _df_volume_atipico_semestral
+    print("Sincronizando Volume Atipico Semestral...")
+    sql = """
+        SELECT
+            id_cnpj,
+            chave_semestre,
+            status_semestre,
+            qtd_meses_presentes,
+            qtd_meses_validos,
+            chave_semestre_anterior,
+            taxa_crescimento_pct,
+            multiplicador_nao_comprovacao
+        FROM [temp_CGUSC].[fp].[volume_atipico_semestral]
+    """
+
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[volume_atipico_semestral]")).scalar()
+
+    print(f"   -> Registros semestrais: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 20_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("chave_semestre").cast(pl.Int32),
+            pl.col("status_semestre").cast(pl.Int8),
+            pl.col("qtd_meses_presentes").cast(pl.Int8),
+            pl.col("qtd_meses_validos").cast(pl.Int8),
+            pl.col("chave_semestre_anterior").cast(pl.Int32, strict=False),
+            pl.col("taxa_crescimento_pct").cast(pl.Float32),
+            pl.col("multiplicador_nao_comprovacao").cast(pl.Int8),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        print(f"   -> Progresso Volume Atipico: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+
+    _df_volume_atipico_semestral = (
+        pl.concat(chunk_list).sort(["id_cnpj", "chave_semestre"])
+        if chunk_list else pl.DataFrame()
+    )
+    _df_volume_atipico_semestral.write_parquet(
+        _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH,
+        compression="zstd",
+    )
+
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
     global _df_dados_farmacia
     print("Sincronizando Dados Cadastrais das Farmácias...")
     sql = """
-        SELECT D.cnpj,
+        SELECT D.id as id_cnpj,
+               D.cnpj,
                D.indMatriz as is_matriz,
                D.razaoSocial as razao_social,
                D.nomeFantasia as nome_fantasia,
@@ -184,6 +239,7 @@ def _sync_dados_farmacia(engine, progress_callback=None):
 
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
             pl.col("id_cnae_principal").cast(pl.String),
             pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
             pl.col("is_cnae_farmacia_ausente").cast(pl.Int8),
@@ -626,7 +682,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -635,6 +691,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         missing = []
         required_columns = {
             "dados_farmacia": {
+                "id_cnpj",
                 "id_cnae_principal",
                 "cnae_principal",
                 "id_cnae_secundario",
@@ -645,6 +702,16 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             "teia_fonte_nivel2": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel3": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel4": {"is_cadunico", "is_falecido"},
+            "volume_atipico_semestral": {
+                "id_cnpj",
+                "chave_semestre",
+                "status_semestre",
+                "qtd_meses_presentes",
+                "qtd_meses_validos",
+                "chave_semestre_anterior",
+                "taxa_crescimento_pct",
+                "multiplicador_nao_comprovacao",
+            },
         }
 
         def _try_load(name, path):
@@ -677,6 +744,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel3 = _try_load("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
         _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
+        _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
 
         if missing:
             print(f"[AVISO]  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -701,12 +769,13 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
+        {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
         {"name": "Participações e Representantes", "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
         {"name": "Sócios Indiretos (Expansão)", "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
-        {"name": "Movimentação (Vendas)", "weight": 52, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Movimentação (Vendas)", "weight": 47, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -814,6 +883,11 @@ def get_medicamentos_df() -> pl.DataFrame:
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 
+def get_df_volume_atipico_semestral() -> pl.DataFrame:
+    if _df_volume_atipico_semestral is None:
+        raise RuntimeError("Cache de Volume Atipico Semestral nao carregado. Execute uma sincronizacao.")
+    return _df_volume_atipico_semestral
+
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     modules = {
@@ -830,6 +904,7 @@ def get_cache_status() -> dict:
         "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
         "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
+        "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
     }
     modules_status = {
         key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}

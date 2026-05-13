@@ -233,6 +233,7 @@ const chartOption = computed(() => {
 
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       backgroundColor: c.tooltip,
       borderColor: c.tooltipBorder,
@@ -446,6 +447,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       backgroundColor: c.tooltip,
       borderColor: c.tooltipBorder,

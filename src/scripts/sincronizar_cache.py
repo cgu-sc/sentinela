@@ -24,6 +24,7 @@ from data_cache import (
     _sync_localidades,
     _sync_rede,
     _sync_matriz_risco,
+    _sync_volume_atipico_semestral,
     _sync_medicamentos,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
@@ -412,6 +413,7 @@ def _sync_teia_expansao_completa(engine, progress_callback=None):
 # ── Módulos disponíveis ────────────────────────────────────────────────────────
 
 MODULOS = [
+    {"id": 12, "name": "Volume Atipico Semestral", "func": _sync_volume_atipico_semestral, "peso": "~medio"},
     {"id": 1, "name": "Localidades (IBGE)",        "func": _sync_localidades,    "peso": "~rápido"},
     {"id": 2, "name": "Rede de Estabelecimentos",  "func": _sync_rede,           "peso": "~rápido"},
     {"id": 3, "name": "Matriz de Risco",           "func": _sync_matriz_risco,   "peso": "~médio"},

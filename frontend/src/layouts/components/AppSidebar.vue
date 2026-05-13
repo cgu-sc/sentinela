@@ -1057,7 +1057,11 @@ onBeforeUnmount(() => {
         :class="{ 'filter-locked': allFiltersLocked || isIndicadoresRoute }"
       >
         <label class="filter-label">
-          Volume Atipico
+          Aumento Semestral Atípico
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="'Filtra estabelecimentos com crescimento percentual atípico no volume de movimentações em relação ao semestre anterior.'"
+          />
           <button
             v-if="isFilterActive('volumeAtipicoEnabled')"
             class="filter-clear-btn"
@@ -1449,6 +1453,23 @@ onBeforeUnmount(() => {
 
 .filter-section {
   margin-bottom: 0.25rem;
+  padding: 0.42rem 0.48rem;
+  border-radius: 7px;
+  border-left: 2px solid transparent;
+  background: color-mix(in srgb, var(--sidebar-text) 3%, transparent);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.filter-section:hover {
+  background: color-mix(in srgb, var(--sidebar-text) 5%, transparent);
+}
+
+.filter-section:has(.filter-active),
+.filter-section:has(.filter-active-box) {
+  border-left-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
 }
 
 .filter-locked {
@@ -1516,6 +1537,18 @@ onBeforeUnmount(() => {
 }
 .filter-clear-btn .pi {
   font-size: 0.75rem;
+}
+
+.filter-info-icon {
+  font-size: 0.68rem;
+  color: var(--sidebar-text);
+  opacity: 0.55;
+  cursor: help;
+}
+
+.filter-info-icon:hover {
+  opacity: 0.9;
+  color: var(--primary-color);
 }
 
 .grid-filters {

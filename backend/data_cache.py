@@ -601,8 +601,8 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("is_grande_rede").cast(pl.Boolean),
         pl.col("is_matriz").cast(pl.Boolean),
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
-        pl.col("total_qnt_vendas").cast(pl.Int32),
-        pl.col("total_qnt_sem_comprovacao").cast(pl.Int32),
+        pl.col("total_qnt_vendas").cast(pl.Int64),
+        pl.col("total_qnt_sem_comprovacao").cast(pl.Int64),
         pl.col("total_vendas").cast(pl.Float64),
         pl.col("total_sem_comprovacao").cast(pl.Float64),
     ]).sort(["id_cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet

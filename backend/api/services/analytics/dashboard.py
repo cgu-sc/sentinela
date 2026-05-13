@@ -143,8 +143,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         cnpj_agg = period_df.group_by("id_cnpj").agg([
             pl.sum("total_vendas").alias("tv"),
             pl.sum("total_sem_comprovacao").alias("tsc"),
-            pl.sum("total_qnt_vendas").alias("tqv"),
-            pl.sum("total_qnt_sem_comprovacao").alias("tqsc"),
+            pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("tqv"),
+            pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("tqsc"),
         ]).with_columns([
             (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(None) * 100).fill_null(0).alias("pct")
         ])
@@ -171,8 +171,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.n_unique("id_cnpj").alias("cnpjs"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                pl.sum("total_qnt_vendas").alias("totalQtde"),
-                pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("totalQtde"),
+                pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("qtdeSemComp"),
             ])
             .with_columns([
                 (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
@@ -199,8 +199,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.n_unique("id_cnpj").alias("cnpjs"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                pl.sum("total_qnt_vendas").alias("totalQtde"),
-                pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("totalQtde"),
+                pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("qtdeSemComp"),
             ])
             .with_columns([
                 (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
@@ -226,8 +226,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.col("razao_social").first().alias("razao_social"),
                 pl.sum("total_vendas").alias("totalMov"),
                 pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                pl.sum("total_qnt_vendas").alias("totalQtde"),
-                pl.sum("total_qnt_sem_comprovacao").alias("qtdeSemComp"),
+                pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("totalQtde"),
+                pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("qtdeSemComp"),
                 pl.col("is_grande_rede").first().alias("is_grande_rede"),
                 pl.col("qtd_estabelecimentos_rede").first().alias("qtd_estabelecimentos_rede"),
                 pl.col("situacao_rf").first().alias("situacao_rf"),

@@ -214,18 +214,14 @@ def _sync_dados_par(engine, progress_callback=None):
     sql = """
         WITH par_base AS (
             SELECT DISTINCT
-                RIGHT(
-                    REPLICATE('0', 14) +
-                    REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CNPJ)), '.', ''), '/', ''), '-', ''), ' ', ''),
-                    14
-                ) AS cnpj,
+                CNPJ AS cnpj,
                 IdProcedimento,
                 NULLIF(LTRIM(RTRIM(Situacao)), '') AS situacao,
                 CAST(Instauracao AS date) AS instauracao,
                 CAST(Conclusao AS date) AS conclusao
             FROM [db_pagamentos_federais].[dbo].[Dados_PAR]
             WHERE CNPJ IS NOT NULL
-              AND NULLIF(LTRIM(RTRIM(CNPJ)), '') IS NOT NULL
+              AND LEN(CNPJ) = 14
         ),
         par_situacoes AS (
             SELECT
@@ -248,7 +244,6 @@ def _sync_dados_par(engine, progress_callback=None):
             MAX(b.conclusao) AS par_ultima_conclusao
         FROM par_base b
         LEFT JOIN par_situacoes s ON s.cnpj = b.cnpj
-        WHERE LEN(b.cnpj) = 14
         GROUP BY b.cnpj
     """
 

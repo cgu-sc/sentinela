@@ -21,6 +21,10 @@ defineProps({
     <span class="legend-label">CadÚnico</span>
   </div>
   <div class="legend-item">
+    <span class="legend-par-alert"></span>
+    <span class="legend-label">PAR</span>
+  </div>
+  <div class="legend-item">
     <span class="legend-deceased-cross"></span>
     <span class="legend-label">Falecido</span>
   </div>
@@ -51,6 +55,26 @@ defineProps({
   border: 4px double #f59e0b;
   background: #0ea5e9;
   flex-shrink: 0;
+}
+
+.legend-par-alert {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, #dc2626 18%, transparent);
+  border: 2px double color-mix(in srgb, #dc2626 82%, transparent);
+  flex-shrink: 0;
+}
+
+.legend-par-alert::before {
+  content: "P";
+  color: #dc2626;
+  font-size: 0.56rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .legend-deceased-cross {

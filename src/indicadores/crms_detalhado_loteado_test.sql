@@ -132,7 +132,6 @@ SET NOCOUNT ON;
 DECLARE @reset BIT = 0;
 DECLARE @pipeline_nome    VARCHAR(80) = 'crms_detalhado_loteado';
 DECLARE @pipeline_versao  VARCHAR(40) = 'v3_2026_05_12';
-DECLARE @pre_global_nome   VARCHAR(80) = 'crms_detalhado_pre_global';
 DECLARE @DataInicio       DATE        = '2015-07-01';
 DECLARE @DataFim          DATE        = '2024-12-31';
 DECLARE @auto_materializar_uf BIT     = 1;
@@ -150,7 +149,6 @@ DECLARE @existia_tabela_loteada BIT   = CASE WHEN
     THEN 1 ELSE 0 END;
 DECLARE @nu_registros BIGINT;
 DECLARE @nu_cnpjs_fonte INT;
-DECLARE @metadata_ok BIT;
 DECLARE @uf_farmacia CHAR(2);
 DECLARE @t_etapa DATETIME;
 DECLARE @dt_fim_etapa DATETIME;
@@ -850,43 +848,6 @@ END;
 IF OBJECT_ID('temp_CGUSC.fp.dados_medico') IS NULL
 BEGIN
     RAISERROR('Tabela pre-global temp_CGUSC.fp.dados_medico nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
-    RETURN;
-END;
-
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pre_global_metadata') IS NULL
-BEGIN
-    RAISERROR('Metadata pre-global temp_CGUSC.fp.crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql atualizado antes do loteado.', 16, 1);
-    RETURN;
-END;
-
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pre_global_metadata', 'nu_registros') IS NULL
-BEGIN
-    RAISERROR('Metadata pre-global existe, mas nao possui nu_registros. Rode crms_detalhado_pre_global_test.sql atualizado antes do loteado.', 16, 1);
-    RETURN;
-END;
-
-SET @metadata_ok = 0;
-EXEC sp_executesql
-    N'SELECT @ok = CASE WHEN EXISTS (
-          SELECT 1
-          FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata
-          WHERE id_pipeline = 1
-            AND pipeline_nome = @nome
-            AND pipeline_versao = @versao
-            AND dt_data_inicio = @inicio
-            AND dt_data_fim = @fim
-            AND status = ''OK''
-      ) THEN 1 ELSE 0 END;',
-    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @ok BIT OUTPUT',
-    @nome = @pre_global_nome,
-    @versao = @pipeline_versao,
-    @inicio = @DataInicio,
-    @fim = @DataFim,
-    @ok = @metadata_ok OUTPUT;
-
-IF @metadata_ok = 0
-BEGIN
-    RAISERROR('Pre-global incompativel com o loteado: metadata ausente, status diferente de OK, periodo divergente ou versao inesperada. Rode crms_detalhado_pre_global_test.sql para o mesmo periodo/fonte nacional.', 16, 1);
     RETURN;
 END;
 

@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -69,8 +69,12 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
         EvolucaoFinanceiraResponse com lista de semestres dentro do período informado.
     """
     try:
+        perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
+        if perfil.is_empty():
+            return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
+        id_cnpj = perfil.item(0, 0)
         df = get_df()
-        cnpj_df = df.filter(pl.col("cnpj") == cnpj).select(["periodo", "total_vendas", "total_sem_comprovacao"])
+        cnpj_df = df.filter(pl.col("id_cnpj") == id_cnpj).select(["periodo", "total_vendas", "total_sem_comprovacao"])
 
         if data_inicio:
             cnpj_df = cnpj_df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))

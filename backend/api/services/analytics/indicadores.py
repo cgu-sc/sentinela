@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -191,20 +191,11 @@ def get_indicadores_analise(
 
         # ── 1. Snapshot geográfico por CNPJ (última ocorrência de cada campo cadastral) ──
         df_mov = get_df()
+        perfil_df = get_df_perfil_estabelecimento()
         df_geo = df_mov.group_by("id_cnpj").agg([
-            pl.col("cnpj").last().alias("cnpj"),
-            pl.col("uf").last().alias("uf"),
-            pl.col("no_municipio").last().alias("no_municipio"),
-            pl.col("id_regiao_saude").last().alias("id_regiao_saude"),
-            pl.col("razao_social").last().alias("razao_social"),
-            pl.col("is_grande_rede").last().alias("is_grande_rede"),
-            pl.col("situacao_rf").last().alias("situacao_rf"),
-            pl.col("is_conexao_ativa").last().alias("is_conexao_ativa"),
-            pl.col("porte_empresa").last().alias("porte_empresa"),
-            pl.col("unidade_pf").last().alias("unidade_pf"),
             pl.col("total_vendas").sum().alias("total_vendas"),
             pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
-        ]).with_columns([
+        ]).join(perfil_df, on="id_cnpj", how="inner").with_columns([
             pl.when(pl.col("total_vendas") > 0)
               .then((pl.col("total_sem_comprovacao") / pl.col("total_vendas") * 100).round(2))
               .otherwise(pl.lit(None))
@@ -404,11 +395,7 @@ def get_indicadores_analise(
         mediana_reg = None
         mad_reg = None
         # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
-        df_context_geo = df_mov.group_by("id_cnpj").agg([
-            pl.col("cnpj").last().alias("cnpj"),
-            pl.col("uf").last().alias("uf"),
-            pl.col("id_regiao_saude").last().alias("id_regiao_saude")
-        ]).filter(context_mask)
+        df_context_geo = perfil_df.select(["id_cnpj", "cnpj", "uf", "id_regiao_saude"]).filter(context_mask)
         
         df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, c_rr]), on="cnpj", how="inner")
         

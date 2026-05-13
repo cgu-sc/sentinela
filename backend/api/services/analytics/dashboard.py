@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -104,37 +104,43 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         fim = data_fim if data_fim else MAX_DATA
 
         df = get_df()
+        perfil_df = get_df_perfil_estabelecimento()
 
-        # 2. Pipeline Polars - Filtros de Período e Geografia (Pré-agregação por CNPJ)
-        mask = pl.col("periodo").is_between(inicio, fim)
-        if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
-        if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+        # 2. Filtros cadastrais/geograficos no perfil; periodo na tabela fato.
+        mov_mask = pl.col("periodo").is_between(inicio, fim)
+        perfil_mask = pl.lit(True)
+        if uf and uf != 'Todos':                      perfil_mask = perfil_mask & (pl.col("uf") == uf)
+        if regiao_id:                                 perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == str(regiao_id))
         elif regiao_saude and regiao_saude != 'Todos':
             df_loc = get_localidades_df()
             reg_row = df_loc.filter(pl.col("no_regiao_saude") == regiao_saude).select("id_regiao_saude").unique()
             if not reg_row.is_empty():
                 target_id = str(reg_row.item(0, 0))
-                mask = mask & (pl.col("id_regiao_saude") == target_id)
-        if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
-        if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
+                perfil_mask = perfil_mask & (pl.col("id_regiao_saude") == target_id)
+        if municipio and municipio != 'Todos':        perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+        if situacao_rf and situacao_rf != 'Todos':    perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
         if conexao_ms and conexao_ms != 'Todos':
-            mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
-        if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+            perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
+        if porte_empresa and porte_empresa != 'Todos': perfil_mask = perfil_mask & (pl.col("porte_empresa") == porte_empresa)
         if grande_rede and grande_rede != 'Todos':
-            mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+            perfil_mask = perfil_mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
         if unidade_pf and unidade_pf != 'Todos':
-            mask = mask & (pl.col("unidade_pf") == unidade_pf)
+            perfil_mask = perfil_mask & (pl.col("unidade_pf") == unidade_pf)
         if cnpj_raiz:
             if len(cnpj_raiz) == 14:
-                mask = mask & (pl.col("cnpj") == cnpj_raiz)
+                perfil_mask = perfil_mask & (pl.col("cnpj") == cnpj_raiz)
             else:
-                mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
+                perfil_mask = perfil_mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
         if razao_social:
-            mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
+            perfil_mask = perfil_mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
         if cnpjs:
-            mask = mask & (pl.col("cnpj").is_in(cnpjs))
+            perfil_mask = perfil_mask & (pl.col("cnpj").is_in(cnpjs))
 
-        period_df = df.filter(mask)
+        perfil_filtrado = perfil_df.filter(perfil_mask)
+        period_df = (
+            df.filter(mov_mask)
+            .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
+        )
         if volume_atipico:
             id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
             period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
@@ -159,13 +165,14 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         tsc = float(cnpj_ok["tsc"].sum() or 0)
         tqv = float(cnpj_ok["tqv"].sum() or 0)
         pct = (tsc / tv * 100) if tv else 0.0
-        qtd_mun = int(period_df.join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner").select(pl.n_unique("no_municipio")).item() or 0)
+        perfil_ok = perfil_filtrado.join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+        qtd_mun = int(perfil_ok.select(pl.n_unique("no_municipio")).item() or 0)
         kpis = build_kpis(cnpj_ok.height, tv, tsc, pct, tqv, qtd_mun)
 
         # 5. Detalhamento por UF (Breakdown)
+        period_enriched = period_df.join(perfil_ok, on="id_cnpj", how="inner")
         uf_df = (
-            period_df
-            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+            period_enriched
             .group_by("uf")
             .agg([
                 pl.n_unique("id_cnpj").alias("cnpjs"),
@@ -187,13 +194,8 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         ]
 
         # 6. Agregação por Município
-        # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
-        df_farmacia = get_df_dados_farmacia().select(["id_cnpj", "id_ibge7"])
-        period_df = period_df.join(df_farmacia, on="id_cnpj", how="left")
-
         muni_df = (
-            period_df
-            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+            period_enriched
             .group_by(["uf", "no_municipio", "id_ibge7"])
             .agg([
                 pl.n_unique("id_cnpj").alias("cnpjs"),
@@ -216,8 +218,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
 
         # 7. Detalhamento por CNPJ (Sempre calculado)
         cnpj_df = (
-            period_df
-            .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+            period_enriched
             .group_by("id_cnpj")
             .agg([
                 pl.col("cnpj").first().alias("cnpj"),
@@ -233,7 +234,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
                 pl.col("situacao_rf").first().alias("situacao_rf"),
                 pl.col("porte_empresa").first().alias("porte_empresa"),
                 pl.col("is_conexao_ativa").first().alias("is_conexao_ativa"),
-                (pl.col("is_matriz").eq("M").first().fill_null(False) if "is_matriz" in period_df.columns else pl.lit(False).alias("is_matriz")),
+                pl.col("is_matriz").first().fill_null(False).alias("is_matriz"),
             ])
             .with_columns([
                 (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),

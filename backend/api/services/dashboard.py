@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from data_cache import get_df
+from data_cache import get_df, get_df_perfil_estabelecimento
 from ..schemas.dashboard import (
     DashboardKPISchema,
     ResultadoSentinelaUFSchema,
@@ -63,22 +63,28 @@ class DashboardService:
             fim = data_fim if data_fim else MAX_DATA
 
             df = get_df()
+            perfil_df = get_df_perfil_estabelecimento()
 
-            # 2. Pipeline Polars - Filtros de Período e Geografia (Pré-agregação por CNPJ)
-            mask = pl.col("periodo").is_between(inicio, fim)
-            if uf and uf != 'Todos':                      mask = mask & (pl.col("uf") == uf)
-            if regiao_saude and regiao_saude != 'Todos':  mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if municipio and municipio != 'Todos':        mask = mask & (pl.col("no_municipio") == municipio)
-            if situacao_rf and situacao_rf != 'Todos':    mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            # 2. Filtros cadastrais/geograficos no perfil; periodo na tabela fato.
+            mov_mask = pl.col("periodo").is_between(inicio, fim)
+            perfil_mask = pl.lit(True)
+            if uf and uf != 'Todos':                      perfil_mask = perfil_mask & (pl.col("uf") == uf)
+            if regiao_saude and regiao_saude != 'Todos':  perfil_mask = perfil_mask & (pl.col("no_regiao_saude") == regiao_saude)
+            if municipio and municipio != 'Todos':        perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+            if situacao_rf and situacao_rf != 'Todos':    perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
             if conexao_ms and conexao_ms != 'Todos':
-                mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
-            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+                perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
+            if porte_empresa and porte_empresa != 'Todos': perfil_mask = perfil_mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':
-                mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+                perfil_mask = perfil_mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
             if unidade_pf and unidade_pf != 'Todos':
-                mask = mask & (pl.col("unidade_pf") == unidade_pf)
+                perfil_mask = perfil_mask & (pl.col("unidade_pf") == unidade_pf)
 
-            period_df = df.filter(mask)
+            perfil_filtrado = perfil_df.filter(perfil_mask)
+            period_df = (
+                df.filter(mov_mask)
+                .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
+            )
 
             # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
             cnpj_agg = period_df.group_by("id_cnpj").agg([
@@ -107,6 +113,7 @@ class DashboardService:
             uf_df = (
                 period_df
                 .join(cnpj_ok.select("id_cnpj"), on="id_cnpj", how="inner")
+                .join(perfil_filtrado.select(["id_cnpj", "uf"]), on="id_cnpj", how="inner")
                 .group_by("uf")
                 .agg([
                     pl.n_unique("id_cnpj").alias("cnpjs"),
@@ -174,24 +181,27 @@ class DashboardService:
             v_min = float(val_min) if val_min is not None and val_min > 0 else None
 
             df = get_df()
+            perfil_df = get_df_perfil_estabelecimento()
 
-            # Filtro de período + geo
-            mask = pl.col("periodo").is_between(inicio, fim)
-            if uf:                                        mask = mask & (pl.col("uf") == uf)
-            if regiao_saude:                              mask = mask & (pl.col("no_regiao_saude") == regiao_saude)
-            if municipio:                                 mask = mask & (pl.col("no_municipio") == municipio)
-            if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
+            # Filtro de periodo na fato e filtros cadastrais/geograficos no perfil.
+            mov_mask = pl.col("periodo").is_between(inicio, fim)
+            perfil_mask = pl.lit(True)
+            if uf:                                        perfil_mask = perfil_mask & (pl.col("uf") == uf)
+            if regiao_saude:                              perfil_mask = perfil_mask & (pl.col("no_regiao_saude") == regiao_saude)
+            if municipio:                                 perfil_mask = perfil_mask & (pl.col("no_municipio") == municipio)
+            if situacao_rf and situacao_rf != 'Todos':     perfil_mask = perfil_mask & (pl.col("situacao_rf") == situacao_rf)
             if conexao_ms and conexao_ms != 'Todos':
-                mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
-            if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
+                perfil_mask = perfil_mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
+            if porte_empresa and porte_empresa != 'Todos': perfil_mask = perfil_mask & (pl.col("porte_empresa") == porte_empresa)
             if grande_rede and grande_rede != 'Todos':
-                mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+                perfil_mask = perfil_mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
             if unidade_pf and unidade_pf != 'Todos':
-                mask = mask & (pl.col("unidade_pf") == unidade_pf)
+                perfil_mask = perfil_mask & (pl.col("unidade_pf") == unidade_pf)
+            perfil_filtrado = perfil_df.filter(perfil_mask)
 
             # Agrega por CNPJ no período e calcula %
             cnpj_agg = (
-                df.filter(mask)
+                df.filter(mov_mask).join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
                 .group_by("id_cnpj")
                 .agg([
                     pl.sum("total_vendas").alias("tv"),

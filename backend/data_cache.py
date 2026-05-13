@@ -35,6 +35,7 @@ _BENCH_CRM_UF_PATH     = os.path.join(_CACHE_DIR, "bench_crm_uf.parquet")
 _BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
 _BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
 _DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
+_PERFIL_ESTABELECIMENTO_PARQUET_PATH = os.path.join(_CACHE_DIR, "perfil_estabelecimento.parquet")
 _DADOS_SOCIOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "socios.parquet")
 _TEIA_FONTE_NIVEL2_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel2.parquet")
 _TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.parquet")
@@ -54,6 +55,7 @@ _df_bench_crm_uf: pl.DataFrame | None = None
 _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
+_df_perfil_estabelecimento: pl.DataFrame | None = None
 _df_dados_socios:   pl.DataFrame | None = None
 _df_teia_fonte_nivel2: pl.DataFrame | None = None
 _df_teia_fonte_nivel3: pl.DataFrame | None = None
@@ -254,6 +256,74 @@ def _sync_dados_farmacia(engine, progress_callback=None):
         (pl.col("is_matriz") == "M").alias("is_matriz"),
     ]).sort("cnpj")
     _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
+
+
+def _sync_perfil_estabelecimento(engine, progress_callback=None):
+    """Sincroniza a dimensao cadastral usada para filtrar/enriquecer a movimentacao."""
+    global _df_perfil_estabelecimento
+    print("Sincronizando Perfil dos Estabelecimentos...")
+    sql = """
+        SELECT
+            D.id AS id_cnpj,
+            D.cnpj,
+            P.uf,
+            IB.id_regiao_saude,
+            D.codibge AS id_ibge7,
+            P.municipio AS no_municipio,
+            P.razao_social,
+            P.situacao_rf,
+            P.is_conexao_ativa,
+            P.porte_empresa,
+            P.is_grande_rede,
+            P.qtd_estabelecimentos_rede,
+            P.is_matriz,
+            P.unidade_pf
+        FROM [temp_CGUSC].[fp].[dados_farmacia] D
+        LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P
+            ON P.cnpj = D.cnpj
+        LEFT JOIN [temp_CGUSC].[fp].[dados_ibge] IB
+            ON IB.id_ibge7 = D.codibge
+    """
+    with engine.connect() as conn:
+        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[dados_farmacia]")).scalar()
+
+    print(f"   -> Perfis de estabelecimentos: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 10_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("cnpj").cast(pl.String),
+            pl.col("uf").cast(pl.Categorical),
+            pl.col("id_regiao_saude").cast(pl.String),
+            pl.col("id_ibge7").cast(pl.Int64, strict=False),
+            pl.col("no_municipio").cast(pl.Categorical),
+            pl.col("razao_social").cast(pl.Categorical),
+            pl.col("situacao_rf").cast(pl.Categorical),
+            pl.col("porte_empresa").cast(pl.Categorical),
+            pl.col("unidade_pf").cast(pl.Categorical),
+            pl.col("is_conexao_ativa").cast(pl.Boolean),
+            pl.col("is_grande_rede").cast(pl.Boolean),
+            pl.col("is_matriz").cast(pl.Boolean),
+            pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        print(f"   -> Progresso Perfil Estabelecimentos: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+
+    _df_perfil_estabelecimento = (
+        pl.concat(chunk_list).unique(subset=["id_cnpj"]).sort("id_cnpj")
+        if chunk_list else pl.DataFrame()
+    )
+    _df_perfil_estabelecimento.write_parquet(
+        _PERFIL_ESTABELECIMENTO_PARQUET_PATH,
+        compression="zstd",
+    )
 
 
 def _sync_dados_socios(engine, progress_callback=None):
@@ -547,30 +617,16 @@ def _sync_movimentacao(engine, progress_callback):
     if missing_id_cnpj:
         raise RuntimeError("movimentacao_mensal_cnpj possui CNPJs sem id correspondente em dados_farmacia.")
     
-    # Query otimizada: busca geografia via JOIN para economizar espaço no SQL
+    # Tabela fato mensal enxuta. Perfil/geografia ficam em perfil_estabelecimento.parquet.
     sql = """
         SELECT DF.id AS id_cnpj,
-               M.cnpj,
-               P.uf,
-               IB.id_regiao_saude,
-               P.municipio AS no_municipio,
                M.periodo,
                CAST(M.total_vendas AS FLOAT) AS total_vendas,
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
                M.total_qnt_vendas,
-               M.total_qnt_sem_comprovacao,
-               P.razao_social,
-               P.situacao_rf,
-               P.is_conexao_ativa,
-               P.porte_empresa,
-               P.is_grande_rede,
-               P.qtd_estabelecimentos_rede,
-               P.is_matriz,
-               P.unidade_pf
+               M.total_qnt_sem_comprovacao
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
-        LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P ON P.cnpj = M.cnpj
-        LEFT JOIN [temp_CGUSC].[fp].[dados_farmacia] DF ON DF.cnpj = M.cnpj
-        LEFT JOIN [temp_CGUSC].[fp].[dados_ibge] IB ON IB.id_ibge7 = DF.codibge
+        INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] DF ON DF.cnpj = M.cnpj
     """
     
     chunk_list = []
@@ -590,17 +646,6 @@ def _sync_movimentacao(engine, progress_callback):
     _df_movimentacao = pl.concat(chunk_list).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("periodo").cast(pl.Date),
-        pl.col("uf").cast(pl.Categorical),
-        pl.col("id_regiao_saude").cast(pl.String),
-        pl.col("no_municipio").cast(pl.Categorical),
-        pl.col("razao_social").cast(pl.Categorical),  # Mudado para Categorical para compressão
-        pl.col("situacao_rf").cast(pl.Categorical),
-        pl.col("porte_empresa").cast(pl.Categorical),
-        pl.col("unidade_pf").cast(pl.Categorical),
-        pl.col("is_conexao_ativa").cast(pl.Boolean),
-        pl.col("is_grande_rede").cast(pl.Boolean),
-        pl.col("is_matriz").cast(pl.Boolean),
-        pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
         pl.col("total_qnt_vendas").cast(pl.Int64),
         pl.col("total_qnt_sem_comprovacao").cast(pl.Int64),
         pl.col("total_vendas").cast(pl.Float64),
@@ -697,7 +742,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -705,7 +750,30 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _cache_status = "loading_parquet"
         missing = []
         required_columns = {
-            "movimentacao": {"id_cnpj"},
+            "movimentacao": {
+                "id_cnpj",
+                "periodo",
+                "total_vendas",
+                "total_sem_comprovacao",
+                "total_qnt_vendas",
+                "total_qnt_sem_comprovacao",
+            },
+            "perfil_estabelecimento": {
+                "id_cnpj",
+                "cnpj",
+                "uf",
+                "id_regiao_saude",
+                "id_ibge7",
+                "no_municipio",
+                "razao_social",
+                "situacao_rf",
+                "is_conexao_ativa",
+                "porte_empresa",
+                "is_grande_rede",
+                "qtd_estabelecimentos_rede",
+                "is_matriz",
+                "unidade_pf",
+            },
             "dados_farmacia": {
                 "id_cnpj",
                 "id_cnae_principal",
@@ -754,6 +822,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_regiao= _try_load("bench_crm_regiao", _BENCH_CRM_REGIAO_PATH)
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
+        _df_perfil_estabelecimento = _try_load("perfil_estabelecimento", _PERFIL_ESTABELECIMENTO_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
         _df_teia_fonte_nivel2 = _try_load("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
 
@@ -787,11 +856,12 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
+        {"name": "Perfil Estabelecimentos", "weight": 5, "func": lambda cb: _sync_perfil_estabelecimento(engine, cb)},
         {"name": "Dados dos Sócios",      "weight": 5,  "func": lambda cb: _sync_dados_socios(engine, cb)},
         {"name": "Participações e Representantes", "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
         {"name": "Sócios Indiretos (Expansão)", "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
-        {"name": "Movimentação (Vendas)", "weight": 47, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "Movimentação (Vendas)", "weight": 42, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -866,6 +936,11 @@ def get_df_dados_farmacia() -> pl.DataFrame:
         raise RuntimeError("Cache de Dados das Farmácias não carregado. Execute uma sincronização.")
     return _df_dados_farmacia
 
+def get_df_perfil_estabelecimento() -> pl.DataFrame:
+    if _df_perfil_estabelecimento is None:
+        raise RuntimeError("Cache de Perfil dos Estabelecimentos nao carregado. Execute uma sincronizacao.")
+    return _df_perfil_estabelecimento
+
 def get_df_dados_socios() -> pl.DataFrame:
     if _df_dados_socios is None:
         raise RuntimeError("Cache de Dados dos Sócios não carregado. Execute uma sincronização.")
@@ -915,6 +990,7 @@ def get_cache_status() -> dict:
         "bench_crm_regiao":{"label": "Benchmark CRM (Região)", "path": _BENCH_CRM_REGIAO_PATH,    "loaded": _df_bench_crm_regiao is not None},
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
+        "perfil_estabelecimento": {"label": "Perfil Estabelecimentos", "path": _PERFIL_ESTABELECIMENTO_PARQUET_PATH, "loaded": _df_perfil_estabelecimento is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
         "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
         "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},

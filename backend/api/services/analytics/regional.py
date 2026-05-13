@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_cache_dir
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -67,7 +67,7 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
         p_max = perc_max if perc_max is not None else 100.0
         v_min = float(val_min) if val_min is not None and val_min > 0 else None
 
-        df = get_df()
+        df = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         mask = pl.col("periodo").is_between(inicio, fim)
         if uf:                                        mask = mask & (pl.col("uf") == uf)
         if regiao_id:                                 mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
@@ -166,7 +166,7 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
     Constrói o payload completo de Benchmarking Regional.
     """
     try:
-        df_mov   = get_df()
+        df_mov   = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         df_loc   = get_localidades_df()
         df_risco = get_df_matriz_risco()
         df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
@@ -206,8 +206,12 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
 
         # ── 1. Resumo por Município ─────────────────────────────────────────
         # Join com cadastro de farmácias para obter id_ibge7 via CNPJ (mais robusto que por nome)
-        df_farmacia = get_df_dados_farmacia().select(["id_cnpj", "id_ibge7"])
-        df_reg = df_reg.join(df_farmacia, on="id_cnpj", how="left")
+        if "id_ibge7" not in df_reg.columns:
+            df_reg = df_reg.join(
+                get_df_perfil_estabelecimento().select(["id_cnpj", "id_ibge7"]),
+                on="id_cnpj",
+                how="left",
+            )
 
         # Agrega CNPJs únicos e valores financeiros por município
         mun_agg = (
@@ -361,7 +365,7 @@ def get_regional_benchmarking_animation(
     Usado pela animação do scatter de posicionamento regional — evita N round-trips.
     """
     try:
-        df_mov = get_df()
+        df_mov = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         df_loc = get_localidades_df()
         
         # Resolução de Nome para Exibição
@@ -521,7 +525,7 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
     try:
         # Se houver data e for percentual, calculamos do zero para ser dinâmico
         if (data_inicio or data_fim) and metric == "percentual_sem_comprovacao":
-            df_base = get_df()
+            df_base = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
             MIN_DATA = date(2015, 7, 1)
             MAX_DATA = date(2024, 12, 31)
             inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA

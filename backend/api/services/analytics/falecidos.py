@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -219,7 +219,10 @@ def get_falecidos_data(
         # 4. Cálculo do % de faturamento (usando o faturamento total cacheado)
         pct_faturamento = 0.0
         try:
-            mov_df = get_df().filter(pl.col("cnpj") == cnpj)
+            perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
+            if perfil.is_empty():
+                raise RuntimeError(f"CNPJ {cnpj} sem id_cnpj no perfil_estabelecimento.")
+            mov_df = get_df().filter(pl.col("id_cnpj") == perfil.item(0, 0))
             total_faturamento = float(mov_df["total_vendas"].sum() or 1.0)
             pct_faturamento = valor_total / total_faturamento if total_faturamento > 0 else 0.0
         except: pass

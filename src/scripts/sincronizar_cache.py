@@ -26,6 +26,7 @@ from data_cache import (
     _sync_matriz_risco,
     _sync_volume_atipico_semestral,
     _sync_dados_par,
+    _sync_par_teia_alvos,
     _sync_medicamentos,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
@@ -431,6 +432,7 @@ MODULOS = [
     {"id": 9, "name": "Cadastro de Medicamentos",  "func": _sync_medicamentos,   "peso": "~rápido"},
     {"id": 10, "name": "Dados dos Sócios",         "func": _sync_dados_socios,   "peso": "~médio"},
     {"id": 11, "name": "Teia (Expansão Grau 2, 3 e 4)", "func": _sync_teia_expansao_completa, "peso": "~pesado"},
+    {"id": 15, "name": "PAR na Teia dos Alvos",    "func": _sync_par_teia_alvos, "peso": "~rápido"},
     {"id": 6, "name": "Todos por CNPJ (parquets)", "func": _sync_cnpj_parquets,  "peso": "~muito pesado"},
 ]
 

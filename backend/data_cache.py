@@ -43,6 +43,7 @@ _TEIA_FONTE_NIVEL4_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel4.pa
 _MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = os.path.join(_CACHE_DIR, "volume_atipico_semestral.parquet")
 _DADOS_PAR_PARQUET_PATH = os.path.join(_CACHE_DIR, "dados_par.parquet")
+_PAR_TEIA_ALVOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "par_teia_alvos.parquet")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -64,6 +65,7 @@ _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
 _df_dados_par: pl.DataFrame | None = None
+_df_par_teia_alvos: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
@@ -78,6 +80,23 @@ def _empty_dados_par_df() -> pl.DataFrame:
         "par_primeira_instauracao": pl.Date,
         "par_ultima_instauracao": pl.Date,
         "par_ultima_conclusao": pl.Date,
+    })
+
+def _empty_par_teia_alvos_df() -> pl.DataFrame:
+    return pl.DataFrame(schema={
+        "cnpj": pl.Utf8,
+        "has_par_alvo": pl.Boolean,
+        "has_par_n1": pl.Boolean,
+        "has_par_n2": pl.Boolean,
+        "has_par_n3": pl.Boolean,
+        "has_par_n4": pl.Boolean,
+        "has_par_qualquer": pl.Boolean,
+        "qtd_par_alvo": pl.Int32,
+        "qtd_empresas_par_n1": pl.Int32,
+        "qtd_empresas_par_n2": pl.Int32,
+        "qtd_empresas_par_n3": pl.Int32,
+        "qtd_empresas_par_n4": pl.Int32,
+        "qtd_empresas_par_qualquer": pl.Int32,
     })
 
 # --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
@@ -247,32 +266,206 @@ def _sync_dados_par(engine, progress_callback=None):
         GROUP BY b.cnpj
     """
 
-    try:
-        pdf = pd.read_sql(sql, engine)
-        print(f"   -> CNPJs com PAR: {len(pdf):,}")
-        if progress_callback:
-            progress_callback(100)
+    pdf = pd.read_sql(sql, engine)
+    print(f"   -> CNPJs com PAR: {len(pdf):,}")
+    if progress_callback:
+        progress_callback(100)
 
-        if pdf.empty:
-            _df_dados_par = _empty_dados_par_df()
-        else:
-            _df_dados_par = pl.from_pandas(pdf).with_columns([
-                pl.col("cnpj").cast(pl.Utf8),
-                pl.col("is_par").cast(pl.Boolean),
-                pl.col("qtd_processos_par").cast(pl.Int32),
-                pl.col("par_situacoes").cast(pl.Utf8),
-                pl.col("par_primeira_instauracao").cast(pl.Date, strict=False),
-                pl.col("par_ultima_instauracao").cast(pl.Date, strict=False),
-                pl.col("par_ultima_conclusao").cast(pl.Date, strict=False),
-            ]).sort("cnpj")
-
-        _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
-    except Exception as e:
-        print(f"   -> PAR indisponivel; cache agregado vazio sera usado. Detalhe: {e}")
-        if progress_callback:
-            progress_callback(100)
+    if pdf.empty:
         _df_dados_par = _empty_dados_par_df()
-        _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
+    else:
+        _df_dados_par = pl.from_pandas(pdf).with_columns([
+            pl.col("cnpj").cast(pl.Utf8),
+            pl.col("is_par").cast(pl.Boolean),
+            pl.col("qtd_processos_par").cast(pl.Int32),
+            pl.col("par_situacoes").cast(pl.Utf8),
+            pl.col("par_primeira_instauracao").cast(pl.Date, strict=False),
+            pl.col("par_ultima_instauracao").cast(pl.Date, strict=False),
+            pl.col("par_ultima_conclusao").cast(pl.Date, strict=False),
+        ]).sort("cnpj")
+
+    _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
+
+def _sync_par_teia_alvos(engine, progress_callback=None):
+    """Sincroniza flags agregadas de PAR na teia por CNPJ alvo."""
+    global _df_par_teia_alvos
+    print("Sincronizando indicadores de PAR na teia por CNPJ alvo...")
+
+    temp_sql = """
+        DROP TABLE IF EXISTS #par_cnpjs;
+
+        CREATE TABLE #par_cnpjs (
+            cnpj VARCHAR(14) COLLATE SQL_Latin1_General_CP1_CI_AI NOT NULL PRIMARY KEY
+        );
+
+        INSERT INTO #par_cnpjs (cnpj)
+        SELECT DISTINCT
+            CNPJ COLLATE SQL_Latin1_General_CP1_CI_AI
+        FROM db_pagamentos_federais.dbo.Dados_PAR
+        WHERE CNPJ IS NOT NULL
+          AND LEN(CNPJ) = 14;
+    """
+
+    sql = """
+        WITH alvos AS (
+            SELECT DISTINCT cnpj
+            FROM temp_CGUSC.fp.lista_cnpjs
+        ),
+        par_alvo AS (
+            SELECT
+                a.cnpj,
+                COUNT(DISTINCT a.cnpj) AS qtd_par_alvo
+            FROM alvos a
+            INNER JOIN #par_cnpjs p ON p.cnpj = a.cnpj
+            GROUP BY a.cnpj
+        ),
+        par_n1 AS (
+            SELECT
+                ds.cnpj,
+                COUNT(DISTINCT ds.cpf_cnpj_socio) AS qtd_empresas_par_n1
+            FROM temp_CGUSC.fp.dados_socios ds
+            INNER JOIN #par_cnpjs p ON p.cnpj = ds.cpf_cnpj_socio
+            WHERE ds.indicador_socio = 'PJ'
+              AND LEN(ds.cpf_cnpj_socio) = 14
+            GROUP BY ds.cnpj
+        ),
+        par_n2 AS (
+            SELECT
+                ds.cnpj,
+                COUNT(DISTINCT t2.cnpj_empresa) AS qtd_empresas_par_n2
+            FROM temp_CGUSC.fp.dados_socios ds
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+            INNER JOIN #par_cnpjs p ON p.cnpj = t2.cnpj_empresa
+            GROUP BY ds.cnpj
+        ),
+        par_n3 AS (
+            SELECT
+                ds.cnpj,
+                COUNT(DISTINCT t3.cpf_cnpj_socio) AS qtd_empresas_par_n3
+            FROM temp_CGUSC.fp.dados_socios ds
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
+                ON t3.cnpj_empresa = t2.cnpj_empresa
+            INNER JOIN #par_cnpjs p ON p.cnpj = t3.cpf_cnpj_socio
+            WHERE t3.indicador_socio = 'PJ'
+              AND LEN(t3.cpf_cnpj_socio) = 14
+            GROUP BY ds.cnpj
+        ),
+        par_n4 AS (
+            SELECT
+                ds.cnpj,
+                COUNT(DISTINCT t4.cnpj_empresa) AS qtd_empresas_par_n4
+            FROM temp_CGUSC.fp.dados_socios ds
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
+                ON t3.cnpj_empresa = t2.cnpj_empresa
+            INNER JOIN temp_CGUSC.fp.teia_fonte_nivel4 t4
+                ON t4.cpf_cnpj_socio = t3.cpf_cnpj_socio
+            INNER JOIN #par_cnpjs p ON p.cnpj = t4.cnpj_empresa
+            GROUP BY ds.cnpj
+        ),
+        par_qualquer AS (
+            SELECT
+                q.cnpj,
+                COUNT(DISTINCT q.cnpj_par) AS qtd_empresas_par_qualquer
+            FROM (
+                SELECT a.cnpj, a.cnpj AS cnpj_par
+                FROM alvos a
+                INNER JOIN #par_cnpjs p ON p.cnpj = a.cnpj
+
+                UNION ALL
+                SELECT ds.cnpj, ds.cpf_cnpj_socio AS cnpj_par
+                FROM temp_CGUSC.fp.dados_socios ds
+                INNER JOIN #par_cnpjs p ON p.cnpj = ds.cpf_cnpj_socio
+                WHERE ds.indicador_socio = 'PJ'
+                  AND LEN(ds.cpf_cnpj_socio) = 14
+
+                UNION ALL
+                SELECT ds.cnpj, t2.cnpj_empresa AS cnpj_par
+                FROM temp_CGUSC.fp.dados_socios ds
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                    ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+                INNER JOIN #par_cnpjs p ON p.cnpj = t2.cnpj_empresa
+
+                UNION ALL
+                SELECT ds.cnpj, t3.cpf_cnpj_socio AS cnpj_par
+                FROM temp_CGUSC.fp.dados_socios ds
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                    ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
+                    ON t3.cnpj_empresa = t2.cnpj_empresa
+                INNER JOIN #par_cnpjs p ON p.cnpj = t3.cpf_cnpj_socio
+                WHERE t3.indicador_socio = 'PJ'
+                  AND LEN(t3.cpf_cnpj_socio) = 14
+
+                UNION ALL
+                SELECT ds.cnpj, t4.cnpj_empresa AS cnpj_par
+                FROM temp_CGUSC.fp.dados_socios ds
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
+                    ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
+                    ON t3.cnpj_empresa = t2.cnpj_empresa
+                INNER JOIN temp_CGUSC.fp.teia_fonte_nivel4 t4
+                    ON t4.cpf_cnpj_socio = t3.cpf_cnpj_socio
+                INNER JOIN #par_cnpjs p ON p.cnpj = t4.cnpj_empresa
+            ) q
+            GROUP BY q.cnpj
+        )
+        SELECT
+            a.cnpj,
+            CASE WHEN ISNULL(pa.qtd_par_alvo, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_alvo,
+            CASE WHEN ISNULL(p1.qtd_empresas_par_n1, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n1,
+            CASE WHEN ISNULL(p2.qtd_empresas_par_n2, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n2,
+            CASE WHEN ISNULL(p3.qtd_empresas_par_n3, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n3,
+            CASE WHEN ISNULL(p4.qtd_empresas_par_n4, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_n4,
+            CASE WHEN ISNULL(pq.qtd_empresas_par_qualquer, 0) > 0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_par_qualquer,
+            ISNULL(pa.qtd_par_alvo, 0) AS qtd_par_alvo,
+            ISNULL(p1.qtd_empresas_par_n1, 0) AS qtd_empresas_par_n1,
+            ISNULL(p2.qtd_empresas_par_n2, 0) AS qtd_empresas_par_n2,
+            ISNULL(p3.qtd_empresas_par_n3, 0) AS qtd_empresas_par_n3,
+            ISNULL(p4.qtd_empresas_par_n4, 0) AS qtd_empresas_par_n4,
+            ISNULL(pq.qtd_empresas_par_qualquer, 0) AS qtd_empresas_par_qualquer
+        FROM alvos a
+        LEFT JOIN par_alvo pa ON pa.cnpj = a.cnpj
+        LEFT JOIN par_n1 p1 ON p1.cnpj = a.cnpj
+        LEFT JOIN par_n2 p2 ON p2.cnpj = a.cnpj
+        LEFT JOIN par_n3 p3 ON p3.cnpj = a.cnpj
+        LEFT JOIN par_n4 p4 ON p4.cnpj = a.cnpj
+        LEFT JOIN par_qualquer pq ON pq.cnpj = a.cnpj
+        ORDER BY a.cnpj
+    """
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql(temp_sql)
+        pdf = pd.read_sql(sql, conn)
+
+    print(f"   -> CNPJs alvo indexados para PAR na teia: {len(pdf):,}")
+    if progress_callback:
+        progress_callback(100)
+
+    if pdf.empty:
+        _df_par_teia_alvos = _empty_par_teia_alvos_df()
+    else:
+        _df_par_teia_alvos = pl.from_pandas(pdf).with_columns([
+            pl.col("cnpj").cast(pl.Utf8),
+            pl.col("has_par_alvo").cast(pl.Boolean),
+            pl.col("has_par_n1").cast(pl.Boolean),
+            pl.col("has_par_n2").cast(pl.Boolean),
+            pl.col("has_par_n3").cast(pl.Boolean),
+            pl.col("has_par_n4").cast(pl.Boolean),
+            pl.col("has_par_qualquer").cast(pl.Boolean),
+            pl.col("qtd_par_alvo").cast(pl.Int32),
+            pl.col("qtd_empresas_par_n1").cast(pl.Int32),
+            pl.col("qtd_empresas_par_n2").cast(pl.Int32),
+            pl.col("qtd_empresas_par_n3").cast(pl.Int32),
+            pl.col("qtd_empresas_par_n4").cast(pl.Int32),
+            pl.col("qtd_empresas_par_qualquer").cast(pl.Int32),
+        ]).sort("cnpj")
+
+    _df_par_teia_alvos.write_parquet(_PAR_TEIA_ALVOS_PARQUET_PATH, compression="zstd")
 
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
@@ -822,7 +1015,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -885,6 +1078,21 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "par_ultima_instauracao",
                 "par_ultima_conclusao",
             },
+            "par_teia_alvos": {
+                "cnpj",
+                "has_par_alvo",
+                "has_par_n1",
+                "has_par_n2",
+                "has_par_n3",
+                "has_par_n4",
+                "has_par_qualquer",
+                "qtd_par_alvo",
+                "qtd_empresas_par_n1",
+                "qtd_empresas_par_n2",
+                "qtd_empresas_par_n3",
+                "qtd_empresas_par_n4",
+                "qtd_empresas_par_qualquer",
+            },
         }
 
         def _try_load(name, path):
@@ -920,7 +1128,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
-        _df_dados_par = dados_par_loaded if dados_par_loaded is not None else _empty_dados_par_df()
+        _df_dados_par = dados_par_loaded
+        par_teia_alvos_loaded = _try_load("par_teia_alvos", _PAR_TEIA_ALVOS_PARQUET_PATH)
+        _df_par_teia_alvos = par_teia_alvos_loaded
 
         if missing:
             print(f"[AVISO]  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -953,6 +1163,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Participações e Representantes", "weight": 5, "func": lambda cb: _sync_teia_fonte_nivel2(engine, cb)},
         {"name": "Sócios Indiretos (Expansão)", "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
+        {"name": "PAR na Teia dos Alvos",   "weight": 1,  "func": lambda cb: _sync_par_teia_alvos(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 42, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
@@ -1073,8 +1284,13 @@ def get_df_volume_atipico_semestral() -> pl.DataFrame:
 
 def get_df_dados_par() -> pl.DataFrame:
     if _df_dados_par is None:
-        return _empty_dados_par_df()
+        raise RuntimeError("Cache de Indicadores PAR nao carregado. Execute uma sincronizacao.")
     return _df_dados_par
+
+def get_df_par_teia_alvos() -> pl.DataFrame:
+    if _df_par_teia_alvos is None:
+        raise RuntimeError("Cache de PAR na Teia dos Alvos nao carregado. Execute uma sincronizacao.")
+    return _df_par_teia_alvos
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
@@ -1095,6 +1311,7 @@ def get_cache_status() -> dict:
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
+        "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},
     }
     modules_status = {
         key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}

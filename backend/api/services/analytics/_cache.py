@@ -341,15 +341,11 @@ def sync_network(cnpj: str) -> None:
                 "is_cnae_farmacia_ausente",
             ]).to_dicts()
         }
-        try:
-            df_par = get_df_dados_par()
-            par_info_by_cnpj = {
-                str(row["cnpj"]): row
-                for row in df_par.iter_rows(named=True)
-            } if not df_par.is_empty() else {}
-        except Exception as e:
-            print(f"   -> PAR indisponivel para enriquecimento da teia: {e}")
-            par_info_by_cnpj = {}
+        df_par = get_df_dados_par()
+        par_info_by_cnpj = {
+            str(row["cnpj"]): row
+            for row in df_par.iter_rows(named=True)
+        } if not df_par.is_empty() else {}
 
         def get_par_fields(cnpj_value) -> dict:
             row = par_info_by_cnpj.get(str(cnpj_value))

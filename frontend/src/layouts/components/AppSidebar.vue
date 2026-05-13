@@ -208,13 +208,16 @@ const isEstabelecimentoRoute = computed(() =>
   route.path.startsWith("/estabelecimentos/"),
 );
 const isWatchlistRoute = computed(() => route.path.startsWith("/listas"));
+const isDetailLimitedRoute = computed(
+  () => isEstabelecimentoRoute.value,
+);
 const isPeriodOnlyRoute = computed(
-  () => isEstabelecimentoRoute.value || isWatchlistRoute.value,
+  () => isWatchlistRoute.value,
 );
 
 // Bloqueia todos os filtros exceto o Período (usado pelo template em cada seção)
 const allFiltersLocked = computed(
-  () => filtersLocked.value || isPeriodOnlyRoute.value,
+  () => filtersLocked.value || isPeriodOnlyRoute.value || isDetailLimitedRoute.value,
 );
 
 watch(
@@ -350,6 +353,9 @@ const isIndicadoresRoute = computed(() =>
 );
 const periodFilterLocked = computed(
   () => (filtersLocked.value && !isPeriodOnlyRoute.value) || isIndicadoresRoute.value,
+);
+const volumeAtipicoFilterLocked = computed(
+  () => filtersLocked.value || isPeriodOnlyRoute.value || isIndicadoresRoute.value,
 );
 
 const activeFilterCount = computed(() => {
@@ -518,7 +524,10 @@ onBeforeUnmount(() => {
       <!-- BANNER DE FILTROS BLOQUEADOS -->
       <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
-        <span v-if="isPeriodOnlyRoute"
+        <span v-if="isDetailLimitedRoute">
+          Período e Aumento Semestral Atípico estão disponíveis nesta tela
+        </span>
+        <span v-else-if="isPeriodOnlyRoute"
           >Apenas o Período de Análise está disponível nesta tela</span
         >
         <span v-else>Filtros indisponíveis nesta tela</span>
@@ -1054,7 +1063,7 @@ onBeforeUnmount(() => {
 
       <div
         class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked || isIndicadoresRoute }"
+        :class="{ 'filter-locked': volumeAtipicoFilterLocked }"
       >
         <label class="filter-label">
           Aumento Semestral Atípico

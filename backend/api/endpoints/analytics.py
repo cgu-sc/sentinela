@@ -134,9 +134,10 @@ def get_evolucao_financeira(
     cnpj: str,
     data_inicio: Optional[date] = Query(None),
     data_fim: Optional[date] = Query(None),
+    volume_atipico_limite: Optional[float] = Query(None),
 ):
     """Retorna a série semestral de valores financeiros para um CNPJ, com recorte temporal opcional."""
-    return AnalyticsService.get_evolucao_financeira(cnpj, data_inicio, data_fim)
+    return AnalyticsService.get_evolucao_financeira(cnpj, data_inicio, data_fim, volume_atipico_limite)
 
 @router.get("/cnpj/{cnpj}/evolucao-mensal-gtin", response_model=EvolucaoMensalGtinResponse)
 def get_evolucao_mensal_gtin(

@@ -10,7 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_df_volume_atipico_semestral
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -55,8 +55,9 @@ from ...schemas.analytics import (
 )
 
 from ._cache import _get_cnpj_cache_dir
+from .volume_atipico import normalize_volume_atipico_limite
 
-def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoFinanceiraResponse:
+def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_atipico_limite=None) -> EvolucaoFinanceiraResponse:
     """
     Retorna a série semestral de valores (total, regular, irregular) para um CNPJ.
 
@@ -69,6 +70,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
         EvolucaoFinanceiraResponse com lista de semestres dentro do período informado.
     """
     try:
+        limite_volume_atipico = normalize_volume_atipico_limite(volume_atipico_limite)
         perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
         if perfil.is_empty():
             return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
@@ -117,6 +119,27 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
             ])
         )
 
+        volume_atipico_by_semestre = {}
+        try:
+            volume_df = (
+                get_df_volume_atipico_semestral()
+                .filter(pl.col("id_cnpj") == id_cnpj)
+                .select([
+                    "chave_semestre",
+                    "status_semestre",
+                    "qtd_meses_presentes",
+                    "qtd_meses_validos",
+                    "chave_semestre_anterior",
+                    "taxa_crescimento_pct",
+                ])
+            )
+            volume_atipico_by_semestre = {
+                int(row["chave_semestre"]): row
+                for row in volume_df.iter_rows(named=True)
+            }
+        except Exception as volume_error:
+            print(f"[EVOLUCAO] volume_atipico_semestral indisponivel para {cnpj}: {volume_error}")
+
         # Preparar o detalhamento mensal para a "sanfona" do frontend
         meses_df = (
             cnpj_df
@@ -143,8 +166,16 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
                 meses_by_semestre[k] = []
             meses_by_semestre[k].append(m)
 
-        semestres = [
-            EvolucaoSemestreSchema(
+        def _volume_info_for(row):
+            chave_semestre = int(row["ano"]) * 100 + int(row["sem_num"])
+            info = volume_atipico_by_semestre.get(chave_semestre, {})
+            taxa = info.get("taxa_crescimento_pct")
+            return chave_semestre, info, float(taxa) if taxa is not None else None
+
+        semestres = []
+        for r in agg.iter_rows(named=True):
+            chave_semestre, volume_info, taxa_crescimento = _volume_info_for(r)
+            semestres.append(EvolucaoSemestreSchema(
                 semestre=r["semestre"],
                 total=round(r["total"], 2),
                 regular=round(r["regular"], 2),
@@ -152,6 +183,14 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
                 pct_irregular=r["pct_irregular"],
                 mes_inicio=r["dt_inicio"].strftime("%Y-%m") if r.get("dt_inicio") else None,
                 mes_fim=r["dt_fim"].strftime("%Y-%m") if r.get("dt_fim") else None,
+                chave_semestre=chave_semestre,
+                volume_atipico=(taxa_crescimento or 0) > limite_volume_atipico,
+                taxa_crescimento_pct=round(taxa_crescimento, 2) if taxa_crescimento is not None else None,
+                chave_semestre_anterior=int(volume_info["chave_semestre_anterior"]) if volume_info.get("chave_semestre_anterior") is not None else None,
+                status_semestre=int(volume_info["status_semestre"]) if volume_info.get("status_semestre") is not None else None,
+                qtd_meses_presentes=int(volume_info["qtd_meses_presentes"]) if volume_info.get("qtd_meses_presentes") is not None else None,
+                qtd_meses_validos=int(volume_info["qtd_meses_validos"]) if volume_info.get("qtd_meses_validos") is not None else None,
+                limite_volume_atipico_pct=limite_volume_atipico,
                 meses=[
                     {
                         "mes": m["mes"],
@@ -162,9 +201,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None) -> Evolu
                     }
                     for m in meses_by_semestre.get((r["ano"], r["sem_num"]), [])
                 ]
-            )
-            for r in agg.iter_rows(named=True)
-        ]
+            ))
         return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=semestres)
 
     except Exception as e:

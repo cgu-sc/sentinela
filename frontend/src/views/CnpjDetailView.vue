@@ -239,9 +239,9 @@ watch(
 
     if (newCnpj) {
       // Eager load: dispara todos os fetches ao carregar a página
-      const { inicio, fim } = getApiParams();
+      const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
       cnpjDetailStore.fetchDadosCadastro(newCnpj);
-      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj, inicio, fim);
+      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj, inicio, fim, volumeAtipicoPercentual);
       cnpjDetailStore.fetchEvolucaoMensalGtin(newCnpj, inicio, fim);
       cnpjDetailStore.fetchMovimentacao(newCnpj);
       cnpjDetailStore.fetchIndicadores(newCnpj);
@@ -262,13 +262,17 @@ watch(
 
 // Re-fetch quando o período de análise muda
 watch(
-  () => filterStore.periodo,
+  () => [
+    filterStore.periodo,
+    filterStore.volumeAtipicoEnabled,
+    filterStore.volumeAtipicoPercentualFilter,
+  ],
   () => {
     if (!cnpj.value) return;
     if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
     if (filterStore.isAnimating) return;
-    const { inicio, fim } = getApiParams();
-    cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim);
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+    cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim, volumeAtipicoPercentual);
     cnpjDetailStore.fetchEvolucaoMensalGtin(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchFalecidos(cnpj.value, inicio, fim);
     cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);

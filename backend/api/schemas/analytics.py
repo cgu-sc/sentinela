@@ -179,6 +179,14 @@ class EvolucaoSemestreSchema(BaseModel):
     pct_irregular: float
     mes_inicio: Optional[str] = None  # "YYYY-MM" — mês mais antigo no grupo (pode ser parcial)
     mes_fim: Optional[str] = None     # "YYYY-MM" — mês mais recente no grupo
+    chave_semestre: Optional[int] = None
+    volume_atipico: bool = False
+    taxa_crescimento_pct: Optional[float] = None
+    chave_semestre_anterior: Optional[int] = None
+    status_semestre: Optional[int] = None
+    qtd_meses_presentes: Optional[int] = None
+    qtd_meses_validos: Optional[int] = None
+    limite_volume_atipico_pct: Optional[float] = None
     meses: List[EvolucaoMesSchema] = []
 
 class EvolucaoFinanceiraResponse(BaseModel):

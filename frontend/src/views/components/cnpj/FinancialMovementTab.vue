@@ -11,7 +11,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent, MarkAreaComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
 import DataTable from 'primevue/datatable';
@@ -23,7 +23,7 @@ import Dialog from 'primevue/dialog';
 import GtinDetalhamentoMensalSidebar from './GtinDetalhamentoMensalSidebar.vue';
 import TabPlaceholder from './TabPlaceholder.vue';
 
-use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
+use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent, MarkAreaComponent, CanvasRenderer]);
 
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
@@ -136,6 +136,22 @@ function formatSemestreLabel(semStr) {
   return semStr;
 }
 
+function formatSemestreKey(chave) {
+  if (!chave) return '';
+  const key = String(chave);
+  const year = key.slice(0, 4);
+  const sem = key.slice(4);
+  return `${Number(sem)}º Semestre de ${year}`;
+}
+
+function formatGrowthPct(value) {
+  if (value == null) return '';
+  return `+${Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
 const insightSidebarVisible = ref(false);
 const insightSelectedPeriod = ref(null);
 
@@ -185,6 +201,7 @@ const chartOption = computed(() => {
   const c         = C.value;
   const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const labels    = semestres.map(s => s.semestre);
+  const semestresAtipicos = semestres.filter(s => s.volume_atipico && s.taxa_crescimento_pct != null);
   const regular   = semestres.map(s => ({
     value: s.regular,
     itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 },
@@ -228,6 +245,25 @@ const chartOption = computed(() => {
         const idx = params[0]?.dataIndex ?? 0;
         const s   = semestres[idx];
         if (!s) return '';
+        const volumeAtipicoSection = s.volume_atipico ? `
+          <div style="margin-top:10px;border-top:1px solid ${c.tooltipBorder};padding-top:8px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="width:10px;height:10px;border-radius:999px;background:#f59e0b;display:inline-block;"></span>
+              <span style="font-size:10px;opacity:.75;letter-spacing:.04em;text-transform:uppercase;font-weight:700;">Aumento semestral atípico</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Crescimento</span>
+              <strong style="color:#f59e0b;">${formatGrowthPct(s.taxa_crescimento_pct)}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Comparado a</span>
+              <strong>${formatSemestreKey(s.chave_semestre_anterior) || 'semestre anterior válido'}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;">
+              <span style="opacity:.68;">Meses válidos</span>
+              <strong>${s.qtd_meses_validos ?? '—'}/${s.qtd_meses_presentes ?? 6}</strong>
+            </div>
+          </div>` : '';
         return `
           <div style="color: ${c.tooltipText}">
             <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${formatSemestreLabel(s.semestre)}</div>
@@ -243,6 +279,7 @@ const chartOption = computed(() => {
               </div>
               <div style="font-weight:700;font-size:13px;color:${c.red};margin-bottom:2px;">${formatCurrencyFull(s.irregular)} <span style="opacity:.7">(${s.pct_irregular.toFixed(1)}%)</span></div>
               <div style="border-top:1px solid ${c.tooltipBorder};padding-top:6px;margin-top:2px;font-weight:700;font-size:13px;">Total: ${formatCurrencyFull(s.total)}</div>
+              ${volumeAtipicoSection}
             </div>
           </div>`;
       },
@@ -299,6 +336,39 @@ const chartOption = computed(() => {
           },
         },
         emphasis: { disabled: false },
+        markPoint: {
+          symbol: 'triangle',
+          symbolSize: 13,
+          symbolOffset: [0, -6],
+          label: {
+            show: true,
+            position: 'top',
+            distance: 6,
+            color: '#f59e0b',
+            fontSize: 12,
+            fontWeight: 800,
+            formatter: (p) => p.data.growthLabel,
+          },
+          itemStyle: {
+            color: '#f59e0b',
+            borderColor: '#fff7ed',
+            borderWidth: 1,
+          },
+          data: semestresAtipicos.map(s => ({
+            name: 'Aumento semestral atípico',
+            coord: [s.semestre, s.total],
+            value: s.taxa_crescimento_pct,
+            growthLabel: formatGrowthPct(s.taxa_crescimento_pct),
+          })),
+        },
+        markArea: {
+          silent: true,
+          itemStyle: { color: 'rgba(245, 158, 11, 0.08)' },
+          data: semestresAtipicos.map(s => ([
+            { xAxis: s.semestre },
+            { xAxis: s.semestre },
+          ])),
+        },
       },
     ],
   };

@@ -184,8 +184,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Movimentação Financeira ───────────────────────────────────────────────
-    async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+    async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null, volumeAtipicoPercentual = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}|vol:${volumeAtipicoPercentual ?? ''}`;
       if (this.evolucaoKey === key) return;
 
       this.evolucaoLoading = true;
@@ -194,6 +194,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
+        if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {
+          params.volume_atipico_limite = volumeAtipicoPercentual;
+        }
 
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });

@@ -374,6 +374,41 @@ const activeFilterCount = computed(() => {
   return fields.filter((f) => isFilterActive(f)).length;
 });
 
+const countActiveFilters = (fields) =>
+  fields.filter((field) => isFilterActive(field)).length;
+
+const scopeFilterCount = computed(() =>
+  countActiveFilters([
+    "selectedUF",
+    "selectedRegiaoSaude",
+    "selectedMunicipio",
+    "selectedUnidadePf",
+    "selectedCnpjRaiz",
+  ]),
+);
+
+const registryFilterCount = computed(() =>
+  countActiveFilters([
+    "selectedSituacao",
+    "selectedMS",
+    "selectedPorte",
+    "selectedGrandeRede",
+  ]),
+);
+
+const analyticFilterCount = computed(() =>
+  countActiveFilters([
+    "sliderValue",
+    "percentualNaoComprovacaoRange",
+    "valorMinSemComp",
+    "volumeAtipicoEnabled",
+  ]),
+);
+
+const pageFilterCount = computed(() =>
+  countActiveFilters(["searchTarget", "clusterSelection", "rfaSelection"]),
+);
+
 // ── Período de análise (slider) ──────────────────────────────────────────────
 const displayYears = computed(() => ANALYSIS_YEARS.filter((y) => y >= 2020));
 
@@ -489,6 +524,11 @@ onBeforeUnmount(() => {
         <span v-else>Filtros indisponíveis nesta tela</span>
       </div>
 
+      <div class="sidebar-section-heading">
+        <span><i class="pi pi-map-marker"></i> Escopo</span>
+        <small v-if="scopeFilterCount">{{ scopeFilterCount }}</small>
+      </div>
+
       <!-- FILTROS GLOBAIS -->
       <div
         class="filter-section"
@@ -579,6 +619,42 @@ onBeforeUnmount(() => {
           class="w-full filter-input"
           :class="{ 'filter-active': isFilterActive('selectedMunicipio') }"
         />
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Jurisdição PF
+          <button
+            v-if="isFilterActive('selectedUnidadePf')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedUnidadePf"
+          :options="unidadePfOptions"
+          placeholder="Delegacia / Unidade PF"
+          filter
+          reset-filter-on-hide
+          auto-option-focus
+          filter-match-mode="contains"
+          @show="onDropdownShow"
+          :virtualScrollerOptions="{ itemSize: 32 }"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"
+        />
+      </div>
+
+      <div class="sidebar-section-heading">
+        <span><i class="pi pi-id-card"></i> Cadastro</span>
+        <small v-if="registryFilterCount">{{ registryFilterCount }}</small>
       </div>
 
       <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
@@ -720,6 +796,11 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </AutoComplete>
+      </div>
+
+      <div class="sidebar-section-heading">
+        <span><i class="pi pi-chart-line"></i> Parâmetros</span>
+        <small v-if="analyticFilterCount">{{ analyticFilterCount }}</small>
       </div>
 
       <div
@@ -935,7 +1016,6 @@ onBeforeUnmount(() => {
 
       <div
         class="filter-section"
-        style="margin-top: 1.8rem"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
@@ -970,37 +1050,6 @@ onBeforeUnmount(() => {
             @slideend="applyValorMinSemComp"
           />
         </div>
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Jurisdição PF
-          <button
-            v-if="isFilterActive('selectedUnidadePf')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedUnidadePf = FILTER_ALL_VALUE"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <Dropdown
-          v-model="filterStore.selectedUnidadePf"
-          :options="unidadePfOptions"
-          placeholder="Delegacia / Unidade PF"
-          filter
-          reset-filter-on-hide
-          auto-option-focus
-          filter-match-mode="contains"
-          @show="onDropdownShow"
-          :virtualScrollerOptions="{ itemSize: 32 }"
-          class="w-full filter-input"
-          panelClass="sidebar-panel"
-          :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"
-        />
       </div>
 
       <div
@@ -1078,18 +1127,16 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <hr class="sidebar-divider my-4" />
+      <div class="sidebar-section-heading">
+        <span><i class="pi pi-filter"></i> Específicos</span>
+        <small v-if="pageFilterCount">{{ pageFilterCount }}</small>
+      </div>
 
       <!-- FILTROS CONTEXTUAIS -->
       <div
         class="dynamic-filters-box"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
-        <div class="filter-header">
-          <i class="pi pi-filter"></i>
-          <span>Filtros da Página</span>
-        </div>
-
         <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
           <div class="filter-section mini">
             <label class="filter-label sm">
@@ -1318,7 +1365,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   overflow-y: auto;
   overflow-x: hidden;
   --scrollbar-track: var(--sidebar-bg);
@@ -1353,8 +1400,55 @@ onBeforeUnmount(() => {
   margin: 0.5rem 0;
 }
 
+.sidebar-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.45rem;
+  padding: 0.35rem 0.1rem 0.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
+  color: color-mix(in srgb, var(--sidebar-text) 74%, transparent);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-section-heading:first-of-type {
+  border-top: 0;
+}
+
+.sidebar-section-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.sidebar-section-heading i {
+  color: var(--primary-color);
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.sidebar-section-heading small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 16%, var(--sidebar-bg));
+  color: var(--primary-color);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .filter-section {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
 }
 
 .filter-locked {
@@ -1817,36 +1911,15 @@ onBeforeUnmount(() => {
 
 /* FILTROS CONTEXTUAIS */
 .dynamic-filters-box {
-  margin-top: 1rem;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.filter-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.5rem 0.5rem;
-  border-bottom: 1px solid var(--sidebar-border);
-  margin-bottom: 1rem;
-}
-
-.filter-header i {
-  color: var(--primary-color);
-  font-size: 0.9rem;
-}
-.filter-header span {
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--sidebar-text);
-  letter-spacing: 0.5px;
+  gap: 0.35rem;
 }
 
 .filter-section.mini {
-  margin-bottom: 1rem;
-  padding: 0 0.5rem;
+  margin-bottom: 0.45rem;
+  padding: 0;
 }
 
 .filter-label.sm {

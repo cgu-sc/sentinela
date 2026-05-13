@@ -21,6 +21,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
       p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual,
     ];
 
     analyticsStore.fetchDashboardSummary(...args);
@@ -36,6 +37,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     analyticsStore.fetchSentinelaUFNacional(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede, p.unidadePf,
+      p.volumeAtipicoEnabled, p.volumeAtipicoPercentual,
     );
   };
 
@@ -45,7 +47,8 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     const apiReadyParams = buildAnalyticsParams(
       p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
       p.uf, p.regiaoSaude, p.municipio, p.situacaoRf,
-      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial
+      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
+      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual
     );
     const currentHash = JSON.stringify(apiReadyParams);
     return analyticsStore.lastParamsHash === currentHash;
@@ -66,6 +69,8 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
       filterStore.selectedUnidadePf,
+      filterStore.volumeAtipicoEnabled,
+      filterStore.volumeAtipicoPercentualFilter,
     ],
     () => { 
       const skip = isFirstRun && isFresh();
@@ -86,6 +91,8 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
       filterStore.selectedMS,
       filterStore.selectedPorte,
       filterStore.selectedGrandeRede,
+      filterStore.volumeAtipicoEnabled,
+      filterStore.volumeAtipicoPercentualFilter,
     ],
     () => {
       const skip = isFirstRun && isFresh();

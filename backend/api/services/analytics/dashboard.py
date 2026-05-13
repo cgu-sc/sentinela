@@ -11,6 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from .volume_atipico import get_volume_atipico_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -54,7 +55,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -134,6 +135,9 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             mask = mask & (pl.col("cnpj").is_in(cnpjs))
 
         period_df = df.filter(mask)
+        if volume_atipico:
+            cnpjs_volume_df = get_volume_atipico_cnpjs_df(inicio, fim, volume_atipico_limite)
+            period_df = period_df.join(cnpjs_volume_df, on="cnpj", how="semi")
 
         # 3. Agregação Granular (CNPJ) para aplicação de filtros de Risco (% e Valor)
         cnpj_agg = period_df.group_by("cnpj").agg([

@@ -85,9 +85,11 @@ def get_analytics_summary(
     razao_social: Optional[str] = Query(None),
     cnpjs: Optional[List[str]] = Query(None),
     regiao_id: Optional[int] = Query(None),
+    volume_atipico: bool = Query(False),
+    volume_atipico_limite: Optional[float] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):
@@ -111,9 +113,11 @@ def get_resultado_faixas_risco(
     unidade_pf: Optional[str] = Query(None),
     razao_social: Optional[str] = Query(None),
     regiao_id: Optional[int] = Query(None),
+    volume_atipico: bool = Query(False),
+    volume_atipico_limite: Optional[float] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(

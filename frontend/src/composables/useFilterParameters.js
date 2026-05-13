@@ -1,7 +1,7 @@
 import { useFilterStore } from '../stores/filters';
 import { useFormatting } from './useFormatting';
 import { parseMunicipio, extractCnpjFilter } from './useParsing';
-import { FILTER_ALL_VALUE } from '@/config/constants';
+import { FILTER_ALL_VALUE, FILTER_DEFAULTS } from '@/config/constants';
 import { useGeoStore } from '@/stores/geo';
 
 /**
@@ -21,6 +21,13 @@ export function useFilterParameters() {
     const percMin = filterStore.percentualNaoComprovacaoFilter[0] !== 0 ? filterStore.percentualNaoComprovacaoFilter[0] : null;
     const percMax = filterStore.percentualNaoComprovacaoFilter[1] !== 100 ? filterStore.percentualNaoComprovacaoFilter[1] : null;
     const valMin = filterStore.valorMinSemCompFilter > 0 ? filterStore.valorMinSemCompFilter : null;
+    const volumeAtipicoEnabled = Boolean(filterStore.volumeAtipicoEnabled);
+    const volumeAtipicoPercentual = volumeAtipicoEnabled
+      ? Math.max(
+          FILTER_DEFAULTS.VOLUME_ATIPICO_MIN,
+          Math.min(FILTER_DEFAULTS.VOLUME_ATIPICO_MAX, Number(filterStore.volumeAtipicoPercentualFilter) || FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL)
+        )
+      : null;
 
     const uf = filterStore.selectedUF !== FILTER_ALL_VALUE ? filterStore.selectedUF : null;
     const rawRegiao = filterStore.selectedRegiaoSaude !== FILTER_ALL_VALUE ? filterStore.selectedRegiaoSaude : null;
@@ -63,7 +70,9 @@ export function useFilterParameters() {
       grandeRede, 
       cnpjRaiz, 
       razaoSocial, 
-      unidadePf 
+      unidadePf,
+      volumeAtipicoEnabled,
+      volumeAtipicoPercentual
     };
   }
 

@@ -9,7 +9,7 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null) {
+export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -17,6 +17,7 @@ export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, 
   if (percMax !== null && percMax !== 100) params.perc_max = percMax;
   if (valMin !== null && valMin > 0) params.val_min = valMin;
   if (uf && uf !== FILTER_ALL_VALUE) params.uf = uf;
+  if (regiaoId !== null && regiaoId !== undefined) params.regiao_id = regiaoId;
   if (regiaoSaude && regiaoSaude !== FILTER_ALL_VALUE) params.regiao_saude = regiaoSaude;
   if (municipio && municipio !== FILTER_ALL_VALUE) params.municipio = municipio;
   if (situacaoRf) params.situacao_rf = situacaoRf;
@@ -26,6 +27,12 @@ export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, 
   if (cnpjRaiz) params.cnpj_raiz = cnpjRaiz;
   if (unidadePf) params.unidade_pf = unidadePf;
   if (razaoSocial) params.razao_social = razaoSocial;
+  if (volumeAtipicoEnabled) {
+    params.volume_atipico = true;
+    if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {
+      params.volume_atipico_limite = volumeAtipicoPercentual;
+    }
+  }
   return params;
 }
 
@@ -45,8 +52,8 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null) {
-      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
+    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
+      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual);
       
       // Gera um hash simples (string JSON) dos parâmetros para comparar
       const currentParamsHash = JSON.stringify(params);
@@ -77,9 +84,9 @@ export const useAnalyticsStore = defineStore('analytics', {
      * Chamado quando filtros de valor/percentual mudam com UF selecionada.
      * Nunca inclui filtros de UF/região/município para garantir dados nacionais.
      */
-    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, unidadePf = null) {
+    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, unidadePf = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null, unidadePf);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null, unidadePf, null, null, volumeAtipicoEnabled, volumeAtipicoPercentual);
         const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
         this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
       } catch (err) {
@@ -87,10 +94,10 @@ export const useAnalyticsStore = defineStore('analytics', {
       }
     },
 
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null) {
+    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, regiaoSaude = null, municipio = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null) {
       this.fatorRiscoLoading = true;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial);
+        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual);
         const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
         this.fatorRisco = response.data.buckets;
       } catch (err) {

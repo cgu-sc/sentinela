@@ -11,6 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_dados_farmacia, get_cache_dir
+from .volume_atipico import get_volume_atipico_cnpjs_df
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -54,7 +55,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -94,8 +95,13 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
         if razao_social:
             mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
 
+        period_df = df.filter(mask)
+        if volume_atipico:
+            cnpjs_volume_df = get_volume_atipico_cnpjs_df(inicio, fim, volume_atipico_limite)
+            period_df = period_df.join(cnpjs_volume_df, on="cnpj", how="semi")
+
         cnpj_agg = (
-            df.filter(mask)
+            period_df
             .group_by("cnpj")
             .agg([
                 pl.sum("total_vendas").alias("tv"),

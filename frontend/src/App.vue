@@ -88,12 +88,16 @@ const initializeApp = async () => {
     }
 
     statusMessage.value = "Sincronizando Dashboard...";
-    const { inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf } = getApiParams();
+    const {
+      inicio, fim, percMin, percMax, valMin, uf, regiaoId, regiaoSaude, municipio,
+      situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf,
+      volumeAtipicoEnabled, volumeAtipicoPercentual,
+    } = getApiParams();
 
     const fetchList = [
       resultadoStore.fetchResultados(),
-      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf),
-      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf),
+      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, null, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual),
+      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, regiaoSaude, municipio, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, null, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
@@ -106,7 +110,7 @@ const initializeApp = async () => {
     // para garantir que o mapa do Brasil sempre seja exibido corretamente.
     if (uf || regiaoSaude || municipio || unidadePf) {
       fetchList.push(
-        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede, unidadePf)
+        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede, unidadePf, volumeAtipicoEnabled, volumeAtipicoPercentual)
       );
     }
 

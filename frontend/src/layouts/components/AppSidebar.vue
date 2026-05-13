@@ -263,6 +263,49 @@ const applyValorMinSemComp = () => {
   filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
 
+const volumeAtipicoQuickSelect = [40, 50, 100, 200, 500, 1000, 2000];
+
+const clampVolumeAtipico = (value) => {
+  const numeric = Number(value) || FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
+  return Math.max(
+    FILTER_DEFAULTS.VOLUME_ATIPICO_MIN,
+    Math.min(FILTER_DEFAULTS.VOLUME_ATIPICO_MAX, numeric),
+  );
+};
+
+const applyVolumeAtipico = () => {
+  filterStore.volumeAtipicoEnabled = true;
+  const clamped = clampVolumeAtipico(
+    filterStore.volumeAtipicoPercentual,
+  );
+  filterStore.volumeAtipicoPercentual = clamped;
+  filterStore.volumeAtipicoPercentualFilter = clamped;
+};
+
+const setVolumeAtipico = (value) => {
+  filterStore.volumeAtipicoEnabled = true;
+  const clamped = clampVolumeAtipico(value);
+  filterStore.volumeAtipicoPercentual = clamped;
+  filterStore.volumeAtipicoPercentualFilter = clamped;
+};
+
+const stepVolumeAtipico = (delta) => {
+  filterStore.volumeAtipicoEnabled = true;
+  const clamped = clampVolumeAtipico(
+    filterStore.volumeAtipicoPercentual + delta,
+  );
+  filterStore.volumeAtipicoPercentual = clamped;
+  filterStore.volumeAtipicoPercentualFilter = clamped;
+};
+
+const clearVolumeAtipico = () => {
+  filterStore.volumeAtipicoEnabled = FILTER_DEFAULTS.VOLUME_ATIPICO_ENABLED;
+  filterStore.volumeAtipicoPercentual =
+    FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
+  filterStore.volumeAtipicoPercentualFilter =
+    FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
+};
+
 // Força foco no campo de busca do Dropdown ao abrir
 const onDropdownShow = () => {
   setTimeout(() => {
@@ -286,12 +329,17 @@ const isFilterActive = (field) => {
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
+    volumeAtipicoEnabled: FILTER_DEFAULTS.VOLUME_ATIPICO_ENABLED,
+    volumeAtipicoPercentual: FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL,
     clusterSelection: FILTER_DEFAULTS.CLUSTER,
     rfaSelection: FILTER_DEFAULTS.RFA,
     searchTarget: FILTER_DEFAULTS.SEARCH,
     sliderValue: FILTER_DEFAULTS.SLIDER_INDEX_RANGE,
   };
   const defaultValue = mapStoreToConstants[field];
+  if (field === "volumeAtipicoPercentual") {
+    return filterStore.volumeAtipicoEnabled && value !== defaultValue;
+  }
   if (Array.isArray(value))
     return JSON.stringify(value) !== JSON.stringify(defaultValue);
   return value !== defaultValue;
@@ -317,6 +365,7 @@ const activeFilterCount = computed(() => {
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
     "valorMinSemComp",
+    "volumeAtipicoEnabled",
     "sliderValue",
     "clusterSelection",
     "rfaSelection",
@@ -952,6 +1001,81 @@ onBeforeUnmount(() => {
           panelClass="sidebar-panel"
           :class="{ 'filter-active': isFilterActive('selectedUnidadePf') }"
         />
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked || isIndicadoresRoute }"
+      >
+        <label class="filter-label">
+          Volume Atipico
+          <button
+            v-if="isFilterActive('volumeAtipicoEnabled')"
+            class="filter-clear-btn"
+            @click="clearVolumeAtipico"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div
+          class="slider-container"
+          :class="{ 'filter-active-box': isFilterActive('volumeAtipicoEnabled') }"
+        >
+          <div
+            class="perc-chips"
+            style="grid-template-columns: repeat(4, 1fr); margin-bottom: 0.5rem"
+          >
+            <button
+              v-for="value in volumeAtipicoQuickSelect"
+              :key="value"
+              class="perc-chip"
+              :class="{
+                'perc-chip-active':
+                  filterStore.volumeAtipicoEnabled &&
+                  filterStore.volumeAtipicoPercentual === value,
+              }"
+              @click="setVolumeAtipico(value)"
+            >
+              {{ value }}%
+            </button>
+          </div>
+          <div class="period-steppers">
+            <div class="period-stepper-group">
+              <button
+                class="period-step-btn"
+                :disabled="
+                  filterStore.volumeAtipicoPercentual <=
+                  FILTER_DEFAULTS.VOLUME_ATIPICO_MIN
+                "
+                @click="stepVolumeAtipico(-10)"
+              >
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">
+                {{ filterStore.volumeAtipicoPercentual }}%
+              </span>
+              <button
+                class="period-step-btn"
+                :disabled="
+                  filterStore.volumeAtipicoPercentual >=
+                  FILTER_DEFAULTS.VOLUME_ATIPICO_MAX
+                "
+                @click="stepVolumeAtipico(10)"
+              >
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
+          </div>
+          <Slider
+            v-model="filterStore.volumeAtipicoPercentual"
+            :min="FILTER_DEFAULTS.VOLUME_ATIPICO_MIN"
+            :max="FILTER_DEFAULTS.VOLUME_ATIPICO_MAX"
+            :step="10"
+            class="w-full"
+            @slideend="applyVolumeAtipico"
+          />
+        </div>
       </div>
 
       <hr class="sidebar-divider my-4" />

@@ -461,7 +461,7 @@ function onLazyLoad(event) {
   background: transparent !important;
   border: 0 !important;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -477,7 +477,7 @@ function onLazyLoad(event) {
 
 .risk-value.status-success,
 .risk-status.status-success {
-  color: var(--risk-low);
+  color: var(--text-color) !important;
 }
 
 .risk-value.status-secondary,
@@ -495,7 +495,7 @@ function onLazyLoad(event) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.62rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
   letter-spacing: 0.03em;
 }
@@ -601,7 +601,7 @@ function onLazyLoad(event) {
 /* DESTAQUE DE ALTO VALOR (Sincronizado com CnpjTable) */
 .high-value-audit {
   color: var(--risk-high);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.75rem; /* Ajustado para caber na tabela densa de indicadores */
   display: inline-flex;
   align-items: center;

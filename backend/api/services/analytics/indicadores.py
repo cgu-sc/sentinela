@@ -125,10 +125,16 @@ def _apply_estabelecimento_search(df: pl.DataFrame, estabelecimento: str | None)
     return apply_token_search(df, estabelecimento, ("cnpj", "razao_social", "nome_fantasia"))
 
 
-_INDICADOR_JOINED_CACHE_TTL_SECONDS = 300
-_INDICADOR_JOINED_CACHE_MAX_ENTRIES = 64
-_INDICADOR_JOINED_CACHE_LOCK = RLock()
-_INDICADOR_JOINED_CACHE: dict[tuple[object, ...], tuple[float, tuple[
+_INDICADOR_CACHE_TTL_SECONDS = 300
+_INDICADOR_CACHE_MAX_ENTRIES = 64
+_INDICADOR_CACHE_LOCK = RLock()
+
+_INDICADOR_SCOPE_BASE_CACHE: dict[
+    tuple[object, ...],
+    tuple[float, tuple[pl.DataFrame, pl.DataFrame]],
+] = {}
+
+_INDICADOR_DATASET_CACHE: dict[tuple[object, ...], tuple[float, tuple[
     pl.DataFrame,
     pl.DataFrame,
     pl.DataFrame,
@@ -167,7 +173,7 @@ def _normalize_cache_cnpj(value: object) -> str | None:
     return normalized.replace(".", "").replace("/", "").replace("-", "")
 
 
-_INDICADOR_JOINED_CACHE_KEY_FIELDS = (
+_INDICADOR_SCOPE_FILTER_FIELDS = (
     ("uf", _normalize_cache_text),
     ("regiao_id", _normalize_cache_int),
     ("id_ibge7", _normalize_cache_int),
@@ -185,7 +191,20 @@ _INDICADOR_JOINED_CACHE_KEY_FIELDS = (
 )
 
 
-def _make_indicador_joined_cache_key(
+def _make_indicador_scope_base_cache_key(
+    *,
+    filters: dict[str, object],
+) -> tuple[object, ...]:
+    return (
+        get_cache_generation(),
+        *(
+            normalizer(filters.get(field_name))
+            for field_name, normalizer in _INDICADOR_SCOPE_FILTER_FIELDS
+        ),
+    )
+
+
+def _make_indicador_dataset_cache_key(
     *,
     indicador: str,
     filters: dict[str, object],
@@ -195,30 +214,30 @@ def _make_indicador_joined_cache_key(
         indicador,
         *(
             normalizer(filters.get(field_name))
-            for field_name, normalizer in _INDICADOR_JOINED_CACHE_KEY_FIELDS
+            for field_name, normalizer in _INDICADOR_SCOPE_FILTER_FIELDS
         ),
     )
 
 
-def _prune_indicador_joined_cache(now: float, generation: int) -> None:
+def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]], now: float, generation: int) -> None:
     expired_keys = [
         key
-        for key, (created_at, _result) in _INDICADOR_JOINED_CACHE.items()
-        if key[0] != generation or now - created_at > _INDICADOR_JOINED_CACHE_TTL_SECONDS
+        for key, (created_at, _result) in cache.items()
+        if key[0] != generation or now - created_at > _INDICADOR_CACHE_TTL_SECONDS
     ]
     for key in expired_keys:
-        del _INDICADOR_JOINED_CACHE[key]
+        del cache[key]
 
-    if len(_INDICADOR_JOINED_CACHE) <= _INDICADOR_JOINED_CACHE_MAX_ENTRIES:
+    if len(cache) <= _INDICADOR_CACHE_MAX_ENTRIES:
         return
 
     keys_by_age = sorted(
-        _INDICADOR_JOINED_CACHE,
-        key=lambda key: _INDICADOR_JOINED_CACHE[key][0],
+        cache,
+        key=lambda key: cache[key][0],
     )
-    overflow = len(_INDICADOR_JOINED_CACHE) - _INDICADOR_JOINED_CACHE_MAX_ENTRIES
+    overflow = len(cache) - _INDICADOR_CACHE_MAX_ENTRIES
     for key in keys_by_age[:overflow]:
-        del _INDICADOR_JOINED_CACHE[key]
+        del cache[key]
 
 
 def get_indicadores(cnpj: str) -> IndicadoresResponse:
@@ -248,8 +267,7 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
         print(f"[ ANALYTICS ] {cnpj} ● INDICADORES ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
         return IndicadoresResponse(cnpj=cnpj, indicadores={})
 
-def _build_indicador_joined(
-    indicador: str,
+def _build_indicador_scope_base(
     uf: str | None = None,
     situacao_rf: str | None = None,
     conexao_ms: str | None = None,
@@ -264,19 +282,10 @@ def _build_indicador_joined(
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
     par_teia: str | None = None,
-) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
-    if indicador not in INDICATOR_MAPPING:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Indicador '{indicador}' invÃ¡lido. Valores aceitos: {sorted(INDICATOR_MAPPING.keys())}"
-        )
-
-    c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
-    c_aten, c_crit = _INDICATOR_FLAGS[indicador]
-
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     df_mov = get_df()
     perfil_df = get_df_perfil_estabelecimento()
-    df_geo = df_mov.group_by("id_cnpj").agg([
+    scope_base = df_mov.group_by("id_cnpj").agg([
         pl.col("total_vendas").sum().alias("total_vendas"),
         pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
     ]).join(perfil_df, on="id_cnpj", how="inner").with_columns([
@@ -310,31 +319,48 @@ def _build_indicador_joined(
         elif len(cnpj_raiz_clean) >= 8:
             mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
 
-    df_geo = _apply_estabelecimento_search(df_geo.filter(mask), estabelecimento)
-    df_geo = apply_par_teia_filter(df_geo, par_teia)
+    scope_base = _apply_estabelecimento_search(scope_base.filter(mask), estabelecimento)
+    scope_base = apply_par_teia_filter(scope_base, par_teia)
     if perc_min is not None:
-        df_geo = df_geo.filter(pl.col("perc_val_sem_comp") >= perc_min)
+        scope_base = scope_base.filter(pl.col("perc_val_sem_comp") >= perc_min)
     if perc_max is not None:
-        df_geo = df_geo.filter(pl.col("perc_val_sem_comp") <= perc_max)
+        scope_base = scope_base.filter(pl.col("perc_val_sem_comp") <= perc_max)
     if val_min is not None:
-        df_geo = df_geo.filter(pl.col("total_sem_comprovacao") >= val_min)
+        scope_base = scope_base.filter(pl.col("total_sem_comprovacao") >= val_min)
 
-    if df_geo.is_empty():
-        return df_geo, perfil_df, pl.DataFrame(), c_val, c_mr, None, "score_risco_final"
+    return scope_base, perfil_df
+
+
+def _build_indicador_dataset(
+    indicador: str,
+    scope_base: pl.DataFrame,
+    perfil_df: pl.DataFrame,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
+    if indicador not in INDICATOR_MAPPING:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Indicador '{indicador}' inválido. Valores aceitos: {sorted(INDICATOR_MAPPING.keys())}"
+        )
+
+    c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
+    c_aten, c_crit = _INDICATOR_FLAGS[indicador]
+    score_col = "score_risco_final"
+
+    if scope_base.is_empty():
+        return scope_base, perfil_df, pl.DataFrame(), c_val, c_mr, None, score_col
 
     df_risco = get_df_matriz_risco()
     df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-    score_col = "score_risco_final"
     risco_cols = ["cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
     risco_cols_available = [c for c in risco_cols if c in df_risco.columns]
-    df_joined = df_geo.join(df_risco.select(risco_cols_available), on="cnpj", how="inner")
-    if df_joined.is_empty():
-        return df_joined, perfil_df, df_risco, c_val, c_mr, None, score_col
+    indicador_dataset = scope_base.join(df_risco.select(risco_cols_available), on="cnpj", how="inner")
+    if indicador_dataset.is_empty():
+        return indicador_dataset, perfil_df, df_risco, c_val, c_mr, None, score_col
 
-    rr_col = c_rr if c_rr in df_joined.columns else None
-    has_flags = c_crit in df_joined.columns and c_aten in df_joined.columns
+    rr_col = c_rr if c_rr in indicador_dataset.columns else None
+    has_flags = c_crit in indicador_dataset.columns and c_aten in indicador_dataset.columns
     if has_flags:
-        df_joined = df_joined.with_columns([
+        indicador_dataset = indicador_dataset.with_columns([
             pl.when(pl.col(c_val).is_null())
               .then(pl.lit("SEM DADOS"))
               .when(pl.col(c_crit).cast(pl.Int32) == 1)
@@ -345,12 +371,12 @@ def _build_indicador_joined(
               .alias("status")
         ])
     else:
-        df_joined = df_joined.with_columns(pl.lit("SEM DADOS").alias("status"))
+        indicador_dataset = indicador_dataset.with_columns(pl.lit("SEM DADOS").alias("status"))
 
-    return df_joined, perfil_df, df_risco, c_val, c_mr, rr_col, score_col
+    return indicador_dataset, perfil_df, df_risco, c_val, c_mr, rr_col, score_col
 
 
-def _build_indicador_joined_cached(
+def _build_indicador_dataset_cached(
     indicador: str,
     uf: str | None = None,
     situacao_rf: str | None = None,
@@ -370,30 +396,41 @@ def _build_indicador_joined_cached(
     raw_values = locals()
     filters = {
         field_name: raw_values[field_name]
-        for field_name, _normalizer in _INDICADOR_JOINED_CACHE_KEY_FIELDS
+        for field_name, _normalizer in _INDICADOR_SCOPE_FILTER_FIELDS
     }
-    cache_key = _make_indicador_joined_cache_key(
+    scope_cache_key = _make_indicador_scope_base_cache_key(filters=filters)
+    dataset_cache_key = _make_indicador_dataset_cache_key(
         indicador=indicador,
         filters=filters,
     )
-    generation = cache_key[0]
+    generation = dataset_cache_key[0]
     now = time.monotonic()
 
-    with _INDICADOR_JOINED_CACHE_LOCK:
-        _prune_indicador_joined_cache(now, generation)
-        cached = _INDICADOR_JOINED_CACHE.get(cache_key)
-        if cached is not None:
-            return cached[1]
+    with _INDICADOR_CACHE_LOCK:
+        _prune_indicador_cache(_INDICADOR_SCOPE_BASE_CACHE, now, generation)
+        _prune_indicador_cache(_INDICADOR_DATASET_CACHE, now, generation)
 
-    result = _build_indicador_joined(
-        indicador,
-        **filters,
-    )
+        cached_dataset = _INDICADOR_DATASET_CACHE.get(dataset_cache_key)
+        if cached_dataset is not None:
+            return cached_dataset[1]
 
-    with _INDICADOR_JOINED_CACHE_LOCK:
+        cached_scope = _INDICADOR_SCOPE_BASE_CACHE.get(scope_cache_key)
+
+    if cached_scope is not None:
+        scope_base, perfil_df = cached_scope[1]
+    else:
+        scope_base, perfil_df = _build_indicador_scope_base(**filters)
+        with _INDICADOR_CACHE_LOCK:
+            now = time.monotonic()
+            _prune_indicador_cache(_INDICADOR_SCOPE_BASE_CACHE, now, generation)
+            _INDICADOR_SCOPE_BASE_CACHE[scope_cache_key] = (now, (scope_base, perfil_df))
+
+    result = _build_indicador_dataset(indicador, scope_base, perfil_df)
+
+    with _INDICADOR_CACHE_LOCK:
         now = time.monotonic()
-        _prune_indicador_joined_cache(now, generation)
-        _INDICADOR_JOINED_CACHE[cache_key] = (now, result)
+        _prune_indicador_cache(_INDICADOR_DATASET_CACHE, now, generation)
+        _INDICADOR_DATASET_CACHE[dataset_cache_key] = (now, result)
 
     return result
 
@@ -507,7 +544,7 @@ def get_indicadores_analise(
         )
 
     try:
-        df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_joined_cached(
+        df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_dataset_cached(
             indicador,
             uf=uf,
             situacao_rf=situacao_rf,
@@ -656,7 +693,7 @@ def get_indicadores_analise_cnpjs(
     sort_order: str | int | None = "desc",
 ) -> IndicadorCnpjPageResponse:
     try:
-        df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_joined_cached(
+        df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_dataset_cached(
             indicador,
             uf=uf,
             situacao_rf=situacao_rf,

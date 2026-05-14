@@ -11,9 +11,6 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_cache_dir
-from .par_teia import apply_par_teia_filter
-from .volume_atipico import get_volume_atipico_id_cnpjs_df
-from ...utils.text_search import apply_token_search
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -22,8 +19,6 @@ from ...schemas.analytics import (
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,
-    FatorRiscoResponseSchema,
-    FatorRiscoBucketSchema,
     EvolucaoSemestreSchema,
     EvolucaoFinanceiraResponse,
     IndicadorDataSchema,
@@ -57,108 +52,6 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, estabelecimento: Optional[str] = None) -> FatorRiscoResponseSchema:
-    """
-    Calcula as faixas de risco (Buckets de 10%) via Polars.
-    """
-    try:
-        MIN_DATA = date(2015, 7, 1)
-        inicio = max(data_inicio, MIN_DATA) if data_inicio else MIN_DATA
-        fim = data_fim if data_fim else date(2199, 12, 31)
-        p_min = perc_min if perc_min is not None else 0.0
-        p_max = perc_max if perc_max is not None else 100.0
-        v_min = float(val_min) if val_min is not None and val_min > 0 else None
-
-        df = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
-        mask = pl.col("periodo").is_between(inicio, fim)
-        if uf:                                        mask = mask & (pl.col("uf") == uf)
-        if regiao_id is not None:                     mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        if id_ibge7 is not None:                      mask = mask & (pl.col("id_ibge7") == id_ibge7)
-        if situacao_rf and situacao_rf != 'Todos':     mask = mask & (pl.col("situacao_rf") == situacao_rf)
-        if conexao_ms and conexao_ms != 'Todos':
-            mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
-        if porte_empresa and porte_empresa != 'Todos': mask = mask & (pl.col("porte_empresa") == porte_empresa)
-        if grande_rede and grande_rede != 'Todos':
-            mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
-        if unidade_pf and unidade_pf != 'Todos':
-            mask = mask & (pl.col("unidade_pf") == unidade_pf)
-        if cnpj_raiz:
-            if len(cnpj_raiz) == 14:
-                mask = mask & (pl.col("cnpj") == cnpj_raiz)
-            else:
-                mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
-        period_df = apply_token_search(
-            df.filter(mask),
-            estabelecimento or razao_social,
-            ("cnpj", "razao_social", "nome_fantasia"),
-        )
-        period_df = apply_par_teia_filter(period_df, par_teia)
-        if volume_atipico:
-            id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
-            period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
-
-        cnpj_agg = (
-            period_df
-            .group_by("id_cnpj")
-            .agg([
-                pl.sum("total_vendas").alias("tv"),
-                pl.sum("total_sem_comprovacao").alias("tsc"),
-            ])
-            .with_columns([
-                (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(None) * 100).fill_null(0).alias("pct")
-            ])
-            .filter((pl.col("pct") >= p_min) & (pl.col("pct") <= p_max))
-        )
-
-        if v_min is not None:
-            cnpj_agg = cnpj_agg.filter(pl.col("tsc") >= v_min)
-
-        faixa_expr = (
-            pl.when(pl.col("pct") <= 10).then(pl.lit("00% - 10%"))
-            .when(pl.col("pct") <= 20).then(pl.lit("10% - 20%"))
-            .when(pl.col("pct") <= 30).then(pl.lit("20% - 30%"))
-            .when(pl.col("pct") <= 40).then(pl.lit("30% - 40%"))
-            .when(pl.col("pct") <= 50).then(pl.lit("40% - 50%"))
-            .when(pl.col("pct") <= 60).then(pl.lit("50% - 60%"))
-            .when(pl.col("pct") <= 70).then(pl.lit("60% - 70%"))
-            .when(pl.col("pct") <= 80).then(pl.lit("70% - 80%"))
-            .when(pl.col("pct") <= 90).then(pl.lit("80% - 90%"))
-            .otherwise(pl.lit("90% - 100%"))
-        )
-        ordem_expr = (
-            pl.when(pl.col("pct") <= 10).then(1).when(pl.col("pct") <= 20).then(2)
-            .when(pl.col("pct") <= 30).then(3).when(pl.col("pct") <= 40).then(4)
-            .when(pl.col("pct") <= 50).then(5).when(pl.col("pct") <= 60).then(6)
-            .when(pl.col("pct") <= 70).then(7).when(pl.col("pct") <= 80).then(8)
-            .when(pl.col("pct") <= 90).then(9).otherwise(10)
-        )
-
-        buckets_df = (
-            cnpj_agg
-            .with_columns([faixa_expr.alias("faixa"), ordem_expr.alias("ordem")])
-            .group_by(["faixa", "ordem"])
-            .agg([pl.len().alias("qtd"), pl.sum("tsc").alias("valor_raw")])
-            .sort("ordem")
-        )
-
-        buckets = [
-            FatorRiscoBucketSchema(
-                faixa=r["faixa"],
-                qtd=r["qtd"],
-                valor=f"R$ {r['valor_raw']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
-                valor_raw=r["valor_raw"]
-            )
-            for r in buckets_df.iter_rows(named=True)
-        ]
-
-        return FatorRiscoResponseSchema(
-            periodo_formatado=f"{inicio} a {fim}" if data_inicio and data_fim else "Acumulado Histórico",
-            buckets=buckets
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        return FatorRiscoResponseSchema(periodo_formatado="Erro ao calcular", buckets=[])
 
 def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[date] = None, data_fim: Optional[date] = None, regiao_id: Optional[int] = None) -> RegionalResponse:
     """

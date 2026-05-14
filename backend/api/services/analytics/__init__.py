@@ -18,6 +18,7 @@ from .dashboard import (
 )
 from .falecidos import get_falecidos_data, get_timeline_cpf
 from .farmacia import get_cnpj_access_status, get_dados_farmacia, get_movimentacao_data
+from .fator_risco import get_fator_risco_data
 from .socios import get_socios_farmacia
 from .network import (
     get_teia_grafo_nivel2, 
@@ -40,7 +41,6 @@ from .indicadores import (
 )
 from .regional import (
     get_cnpj_lookup,
-    get_fator_risco_data,
     get_metric_percentiles,
     get_metric_percentiles_animation,
     get_regional_benchmarking,

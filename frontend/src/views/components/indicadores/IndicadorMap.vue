@@ -12,6 +12,7 @@ import { computed, watch, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useGeoStore } from '@/stores/geo';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
+import { useFormatting } from '@/composables/useFormatting';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -27,6 +28,8 @@ const props = defineProps({
   /** UF ativa (do filterStore). 'Todos' ou null = modo nacional (UF-level). */
   activeUf: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
+  kpis: { type: Object, default: null },
+  formato: { type: String, default: 'dec' },
   /** Label do indicador para o título */
   indicadorLabel: { type: String, default: 'Indicador' },
   /** ibge7 do município selecionado (controlado pelo pai) */
@@ -40,6 +43,62 @@ const emit = defineEmits(['select-municipio', 'select-uf']);
 const geoStore = useGeoStore();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
+const { formatCurrencyFull } = useFormatting();
+
+function formatIndicadorValue(value) {
+  if (value == null) return '—';
+  if (props.formato === 'pct') return `${value.toFixed(2)}%`;
+  if (props.formato === 'pct3') return `${value.toFixed(3)}%`;
+  if (props.formato === 'val') return formatCurrencyFull(value);
+  return value.toFixed(2);
+}
+
+function formatShare(value, total) {
+  if (!total) return null;
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
+const summaryItems = computed(() => {
+  if (!props.kpis) return [];
+  const k = props.kpis;
+  const total = (k.total_critico ?? 0)
+    + (k.total_atencao ?? 0)
+    + (k.total_normal ?? 0)
+    + (k.total_sem_dados ?? 0);
+
+  return [
+    {
+      label: 'Crítico',
+      value: k.total_critico ?? 0,
+      sub: formatShare(k.total_critico ?? 0, total),
+      tone: 'critical',
+    },
+    {
+      label: 'Atenção',
+      value: k.total_atencao ?? 0,
+      sub: formatShare(k.total_atencao ?? 0, total),
+      tone: 'warning',
+    },
+    {
+      label: 'Normal',
+      value: k.total_normal ?? 0,
+      sub: formatShare(k.total_normal ?? 0, total),
+      tone: 'normal',
+    },
+    {
+      label: 'Mediana',
+      value: formatIndicadorValue(k.mediana_reg),
+      sub: null,
+      tone: 'benchmark',
+    },
+    {
+      label: 'Acima limiar',
+      value: k.pct_acima_limiar != null ? `${k.pct_acima_limiar.toFixed(1)}%` : '—',
+      sub: null,
+      tone: 'warning',
+    },
+  ];
+});
 
 // ── Escala de cores (reutiliza MAP_VISUAL_SCALE do projeto) ───────────────────
 const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
@@ -424,6 +483,21 @@ function onMapClick(params) {
         @click="onMapClick"
       />
 
+      <div v-if="summaryItems.length" class="map-summary-panel">
+        <div
+          v-for="item in summaryItems"
+          :key="item.label"
+          class="summary-row"
+          :class="`summary-row--${item.tone}`"
+        >
+          <span class="summary-label">{{ item.label }}</span>
+          <span class="summary-value">
+            {{ item.value }}
+            <small v-if="item.sub">{{ item.sub }}</small>
+          </span>
+        </div>
+      </div>
+
       <!-- Controles de Zoom -->
       <div class="map-controls">
         <button class="zoom-btn" @click="handleZoom(0.5)" title="Aumentar Zoom">
@@ -499,6 +573,83 @@ function onMapClick(params) {
 .map-wrapper {
   height: 45vh;
   position: relative;
+}
+
+.map-summary-panel {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 5;
+  width: 220px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--card-border) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(145%);
+  -webkit-backdrop-filter: blur(12px) saturate(145%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+.summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.34rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 70%, transparent);
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-label {
+  min-width: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+  opacity: 0.68;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1;
+  color: var(--text-color);
+}
+
+.summary-value small {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.summary-row--critical .summary-value {
+  color: var(--risk-indicator-critical);
+}
+
+.summary-row--warning .summary-value {
+  color: var(--risk-indicator-warning);
+}
+
+.summary-row--normal .summary-value {
+  color: var(--risk-indicator-normal);
+}
+
+.summary-row--benchmark .summary-value {
+  color: var(--primary-color);
 }
 
 .echart {

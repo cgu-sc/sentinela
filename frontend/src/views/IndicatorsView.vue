@@ -4,13 +4,14 @@ import { storeToRefs } from 'pinia';
 import { useFilterStore } from '@/stores/filters';
 import { useIndicadoresStore } from '@/stores/indicadores';
 import { useGeoStore } from '@/stores/geo';
+import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import { useFetchIndicadores } from '@/composables/useFetchIndicadores';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 import IndicatorSelector from './components/indicadores/IndicatorSelector.vue';
-import IndicadorKpiCards from './components/indicadores/IndicadorKpiCards.vue';
 import IndicadorMap from './components/indicadores/IndicadorMap.vue';
 import IndicadorCnpjTable from './components/indicadores/IndicadorCnpjTable.vue';
+import KpiSection from './components/KpiSection.vue';
 
 const filterStore = useFilterStore();
 const indicadoresStore = useIndicadoresStore();
@@ -20,6 +21,7 @@ const {
   cnpjsSortField, cnpjsSortOrder, isLoading, isTableLoading, error
 } = storeToRefs(indicadoresStore);
 const { fetchForIndicador, fetchCnpjsForIndicador } = useFetchIndicadores();
+useFetchAnalytics({ includeFatorRisco: false, includeNationalContext: false });
 
 // Metadados do indicador ativo (label, formato, metodologia)
 const activeIndicadorMeta = computed(() => {
@@ -149,7 +151,10 @@ function onCnpjTableLazy(event) {
 </script>
 
 <template>
-  <div class="indicadores-layout">
+  <div class="indicadores-page">
+    <KpiSection />
+
+    <div class="indicadores-layout">
 
     <!-- Painel principal de análise -->
     <div class="analysis-panel">
@@ -180,19 +185,13 @@ function onCnpjTableLazy(event) {
       <!-- Conteúdo (carregado ou carregando) -->
       <template v-else>
 
-        <!-- KPI Cards -->
-        <IndicadorKpiCards
-          :kpis="displayedKpis"
-          :formato="activeIndicadorMeta?.formato ?? 'dec'"
-          :is-loading="isLoading"
-        />
-
-
         <!-- Mapa -->
         <IndicadorMap
           :map-data="municipios"
           :active-uf="activeUf"
           :is-loading="isLoading"
+          :kpis="displayedKpis"
+          :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
           :selected-ibge7="selectedMunicipioIbge7"
           :selected-regiao="filterStore.selectedRegiaoSaude"
@@ -226,10 +225,18 @@ function onCnpjTableLazy(event) {
     <!-- Painel lateral de seleção de indicadores (direita) -->
     <IndicatorSelector :active-indicador-meta="activeIndicadorMeta" @select="onIndicadorSelect" />
 
+    </div>
   </div>
 </template>
 
 <style scoped>
+.indicadores-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
 .indicadores-layout {
   display: flex;
   align-items: flex-start;

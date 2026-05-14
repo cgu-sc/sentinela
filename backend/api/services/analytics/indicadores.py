@@ -1,6 +1,8 @@
 from typing import List, Optional
 from datetime import date
 import calendar
+import time
+from threading import RLock
 import polars as pl
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -10,7 +12,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
 from .par_teia import apply_par_teia_filter
 from ...utils.text_search import apply_token_search
 from ...schemas.analytics import (
@@ -121,6 +123,103 @@ def _optional_float(value: object) -> float | None:
 
 def _apply_estabelecimento_search(df: pl.DataFrame, estabelecimento: str | None) -> pl.DataFrame:
     return apply_token_search(df, estabelecimento, ("cnpj", "razao_social", "nome_fantasia"))
+
+
+_INDICADOR_JOINED_CACHE_TTL_SECONDS = 300
+_INDICADOR_JOINED_CACHE_MAX_ENTRIES = 64
+_INDICADOR_JOINED_CACHE_LOCK = RLock()
+_INDICADOR_JOINED_CACHE: dict[tuple[object, ...], tuple[float, tuple[
+    pl.DataFrame,
+    pl.DataFrame,
+    pl.DataFrame,
+    str,
+    str,
+    str | None,
+    str,
+]]] = {}
+
+
+def _normalize_cache_text(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized or normalized == "Todos":
+        return None
+    return normalized
+
+
+def _normalize_cache_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _normalize_cache_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _normalize_cache_cnpj(value: object) -> str | None:
+    normalized = _normalize_cache_text(value)
+    if normalized is None:
+        return None
+    return normalized.replace(".", "").replace("/", "").replace("-", "")
+
+
+_INDICADOR_JOINED_CACHE_KEY_FIELDS = (
+    ("uf", _normalize_cache_text),
+    ("regiao_id", _normalize_cache_int),
+    ("id_ibge7", _normalize_cache_int),
+    ("situacao_rf", _normalize_cache_text),
+    ("conexao_ms", _normalize_cache_text),
+    ("porte_empresa", _normalize_cache_text),
+    ("grande_rede", _normalize_cache_text),
+    ("cnpj_raiz", _normalize_cache_cnpj),
+    ("estabelecimento", _normalize_cache_text),
+    ("unidade_pf", _normalize_cache_text),
+    ("par_teia", _normalize_cache_text),
+    ("perc_min", _normalize_cache_float),
+    ("perc_max", _normalize_cache_float),
+    ("val_min", _normalize_cache_float),
+)
+
+
+def _make_indicador_joined_cache_key(
+    *,
+    indicador: str,
+    filters: dict[str, object],
+) -> tuple[object, ...]:
+    return (
+        get_cache_generation(),
+        indicador,
+        *(
+            normalizer(filters.get(field_name))
+            for field_name, normalizer in _INDICADOR_JOINED_CACHE_KEY_FIELDS
+        ),
+    )
+
+
+def _prune_indicador_joined_cache(now: float, generation: int) -> None:
+    expired_keys = [
+        key
+        for key, (created_at, _result) in _INDICADOR_JOINED_CACHE.items()
+        if key[0] != generation or now - created_at > _INDICADOR_JOINED_CACHE_TTL_SECONDS
+    ]
+    for key in expired_keys:
+        del _INDICADOR_JOINED_CACHE[key]
+
+    if len(_INDICADOR_JOINED_CACHE) <= _INDICADOR_JOINED_CACHE_MAX_ENTRIES:
+        return
+
+    keys_by_age = sorted(
+        _INDICADOR_JOINED_CACHE,
+        key=lambda key: _INDICADOR_JOINED_CACHE[key][0],
+    )
+    overflow = len(_INDICADOR_JOINED_CACHE) - _INDICADOR_JOINED_CACHE_MAX_ENTRIES
+    for key in keys_by_age[:overflow]:
+        del _INDICADOR_JOINED_CACHE[key]
+
 
 def get_indicadores(cnpj: str) -> IndicadoresResponse:
     """Retorna os 18 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
@@ -251,6 +350,54 @@ def _build_indicador_joined(
     return df_joined, perfil_df, df_risco, c_val, c_mr, rr_col, score_col
 
 
+def _build_indicador_joined_cached(
+    indicador: str,
+    uf: str | None = None,
+    situacao_rf: str | None = None,
+    conexao_ms: str | None = None,
+    porte_empresa: str | None = None,
+    grande_rede: str | None = None,
+    cnpj_raiz: str | None = None,
+    estabelecimento: str | None = None,
+    unidade_pf: str | None = None,
+    perc_min: float | None = None,
+    perc_max: float | None = None,
+    val_min: float | None = None,
+    regiao_id: int | None = None,
+    id_ibge7: int | None = None,
+    par_teia: str | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
+    raw_values = locals()
+    filters = {
+        field_name: raw_values[field_name]
+        for field_name, _normalizer in _INDICADOR_JOINED_CACHE_KEY_FIELDS
+    }
+    cache_key = _make_indicador_joined_cache_key(
+        indicador=indicador,
+        filters=filters,
+    )
+    generation = cache_key[0]
+    now = time.monotonic()
+
+    with _INDICADOR_JOINED_CACHE_LOCK:
+        _prune_indicador_joined_cache(now, generation)
+        cached = _INDICADOR_JOINED_CACHE.get(cache_key)
+        if cached is not None:
+            return cached[1]
+
+    result = _build_indicador_joined(
+        indicador,
+        **filters,
+    )
+
+    with _INDICADOR_JOINED_CACHE_LOCK:
+        now = time.monotonic()
+        _prune_indicador_joined_cache(now, generation)
+        _INDICADOR_JOINED_CACHE[cache_key] = (now, result)
+
+    return result
+
+
 def _build_indicador_cnpj_rows(
     df: pl.DataFrame,
     c_val: str,
@@ -360,7 +507,7 @@ def get_indicadores_analise(
         )
 
     try:
-        df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_joined(
+        df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_joined_cached(
             indicador,
             uf=uf,
             situacao_rf=situacao_rf,
@@ -509,7 +656,7 @@ def get_indicadores_analise_cnpjs(
     sort_order: str | int | None = "desc",
 ) -> IndicadorCnpjPageResponse:
     try:
-        df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_joined(
+        df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_joined_cached(
             indicador,
             uf=uf,
             situacao_rf=situacao_rf,

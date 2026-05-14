@@ -70,6 +70,7 @@ _df_par_teia_alvos: pl.DataFrame | None = None
 _cache_progress: int = 0
 _cache_status: str = "idle"
 _cache_error_message: str = ""
+_cache_generation: int = 0
 
 def _empty_dados_par_df() -> pl.DataFrame:
     return pl.DataFrame(schema={
@@ -959,7 +960,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1079,6 +1080,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         else:
             _cache_progress = 100
             _cache_status = "ready"
+            _cache_generation += 1
             print(f"[OK] Caches carregados via Parquet.")
         return
 
@@ -1126,6 +1128,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _cache_status = "ready"
         print(f"[OK] Sincronização concluída em {time.perf_counter() - t0:.1f}s")
 
+        _cache_generation += 1
+
     except Exception as e:
         _cache_status = "error"
         _cache_progress = 0
@@ -1137,6 +1141,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
 def refresh_cache(engine) -> None:
     """Força re-leitura do SQL e regera os Parquets."""
     load_cache(engine, force_refresh=True)
+
+def get_cache_generation() -> int:
+    """Retorna a geracao dos dados globais carregados em memoria."""
+    return _cache_generation
 
 def get_df() -> pl.DataFrame:
     if _df_movimentacao is None: 

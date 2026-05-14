@@ -152,7 +152,8 @@ function onCnpjTableLazy(event) {
 
 <template>
   <div class="indicadores-page">
-    <KpiSection />
+    <div class="indicadores-main">
+      <KpiSection />
 
     <div class="indicadores-layout">
 
@@ -223,17 +224,26 @@ function onCnpjTableLazy(event) {
 
     <!-- Painel lateral de seleção de indicadores (direita) -->
     <IndicatorSelector :active-indicador-meta="activeIndicadorMeta" @select="onIndicadorSelect" />
-
+    </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .indicadores-page {
+  --indicator-selector-width: 260px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   width: 100%;
+}
+
+.indicadores-main {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .indicadores-layout {

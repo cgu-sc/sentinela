@@ -70,22 +70,20 @@ function selectIndicador(key) {
 
 <style scoped>
 .indicator-selector {
-  width: 260px;
+  width: var(--indicator-selector-width, 260px);
   flex-shrink: 0;
   position: sticky;
-  top: calc(56px + 1rem);
-  max-height: calc(100vh - 56px - 2rem);
+  top: 0;
+  min-height: calc(100dvh - 56px - 1.25rem);
   display: flex;
   flex-direction: column;
   gap: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  border-radius: 8px;
+  overflow: visible;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  align-self: flex-start;
+  align-self: start;
 }
 
 .selector-header {

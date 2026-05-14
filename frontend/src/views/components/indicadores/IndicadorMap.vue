@@ -12,7 +12,6 @@ import { computed, watch, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useGeoStore } from '@/stores/geo';
 import { useChartTheme } from '@/config/chartTheme';
 import { useThemeStore } from '@/stores/theme';
-import { useFormatting } from '@/composables/useFormatting';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 import { use, registerMap } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -43,15 +42,6 @@ const emit = defineEmits(['select-municipio', 'select-uf']);
 const geoStore = useGeoStore();
 const { chartTheme } = useChartTheme();
 const themeStore = useThemeStore();
-const { formatCurrencyFull } = useFormatting();
-
-function formatIndicadorValue(value) {
-  if (value == null) return '—';
-  if (props.formato === 'pct') return `${value.toFixed(2)}%`;
-  if (props.formato === 'pct3') return `${value.toFixed(3)}%`;
-  if (props.formato === 'val') return formatCurrencyFull(value);
-  return value.toFixed(2);
-}
 
 function formatShare(value, total) {
   if (!total) return null;
@@ -78,12 +68,6 @@ const summaryItems = computed(() => {
       value: k.total_atencao ?? 0,
       sub: formatShare(k.total_atencao ?? 0, total),
       tone: 'warning',
-    },
-    {
-      label: 'Mediana',
-      value: formatIndicadorValue(k.mediana_reg),
-      sub: null,
-      tone: 'benchmark',
     },
   ];
 });
@@ -634,10 +618,6 @@ function onMapClick(params) {
 
 .summary-row--normal .summary-value {
   color: var(--risk-indicator-normal);
-}
-
-.summary-row--benchmark .summary-value {
-  color: var(--primary-color);
 }
 
 .echart {

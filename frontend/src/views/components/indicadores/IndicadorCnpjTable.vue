@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
@@ -25,6 +25,7 @@ const props = defineProps({
   rows: { type: Number, default: 20 },
   sortField: { type: String, default: 'risco_reg' },
   sortOrder: { type: Number, default: -1 },
+  tableKpis: { type: Object, default: null },
   selectedRegiaoNome: { type: String, default: null },
   selectedMunicipioNome: { type: String, default: null },
 });
@@ -88,6 +89,18 @@ function applyFilter(field, value) {
 function onLazyLoad(event) {
   emit('lazy-load', event);
 }
+
+const tableFooter = computed(() => {
+  const totalSemComprovacao = Number(props.tableKpis?.total_sem_comprovacao ?? 0);
+  const totalMov = Number(props.tableKpis?.total_mov ?? 0);
+  const percSemComprovacao = props.tableKpis?.perc_sem_comprovacao;
+
+  return {
+    totalSemComprovacao: formatCurrencyFull(totalSemComprovacao),
+    totalMov: formatCurrencyFull(totalMov),
+    percSemComprovacao: percSemComprovacao != null ? `${Number(percSemComprovacao).toFixed(2)}%` : '—',
+  };
+});
 </script>
 
 <template>
@@ -161,6 +174,9 @@ function onLazyLoad(event) {
               />
             </span>
           </div>
+        </template>
+        <template #footer>
+          <span class="table-total-label">TOTAL</span>
         </template>
       </Column>
 
@@ -246,6 +262,12 @@ function onLazyLoad(event) {
             <span v-if="data.perc_val_sem_comp != null" class="noncomp-percent">
               {{ data.perc_val_sem_comp.toFixed(1) }}%
             </span>
+          </div>
+        </template>
+        <template #footer>
+          <div class="noncomp-cell table-total-cell">
+            <span class="noncomp-value">{{ tableFooter.totalSemComprovacao }}</span>
+            <span class="noncomp-percent">{{ tableFooter.percSemComprovacao }}</span>
           </div>
         </template>
       </Column>
@@ -647,6 +669,23 @@ function onLazyLoad(event) {
   opacity: 0.72;
 }
 
+.table-total-label {
+  color: var(--text-color-85);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.table-total-cell .noncomp-value {
+  color: var(--text-color-85);
+  font-weight: 800;
+}
+
+.table-total-cell .noncomp-percent {
+  font-weight: 800;
+  opacity: 0.9;
+}
+
 .network-count-muted {
   display: block;
   max-width: 100%;
@@ -782,6 +821,13 @@ function onLazyLoad(event) {
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+:deep(.ind-cnpj-table .p-datatable-tfoot > tr > td) {
+  color: var(--text-color-85);
+  background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
+  border-top: 1px solid var(--card-border);
+  font-size: 0.72rem;
 }
 
 :deep(.p-datatable-thead) {

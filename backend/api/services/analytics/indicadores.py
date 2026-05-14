@@ -505,6 +505,13 @@ def _build_status_kpis(df: pl.DataFrame) -> IndicadorKpiSummarySchema:
         return IndicadorKpiSummarySchema()
     status_counts = df["status"].value_counts().to_dicts()
     counts = {r["status"]: r["count"] for r in status_counts}
+    total_mov = _optional_float(df.select(pl.col("total_vendas").sum()).item()) or 0.0
+    total_sem_comprovacao = _optional_float(df.select(pl.col("total_sem_comprovacao").sum()).item()) or 0.0
+    perc_sem_comprovacao = (
+        round((total_sem_comprovacao / total_mov) * 100, 2)
+        if total_mov > 0
+        else None
+    )
     total_com_dados = counts.get("CRÍTICO", 0) + counts.get("ATENÇÃO", 0) + counts.get("NORMAL", 0)
     pct_acima_limiar = (
         (counts.get("CRÍTICO", 0) + counts.get("ATENÇÃO", 0)) / total_com_dados * 100
@@ -515,6 +522,9 @@ def _build_status_kpis(df: pl.DataFrame) -> IndicadorKpiSummarySchema:
         total_atencao=counts.get("ATENÇÃO", 0),
         total_normal=counts.get("NORMAL", 0),
         total_sem_dados=counts.get("SEM DADOS", 0),
+        total_mov=total_mov,
+        total_sem_comprovacao=total_sem_comprovacao,
+        perc_sem_comprovacao=perc_sem_comprovacao,
         pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
     )
 

@@ -526,6 +526,9 @@ class IndicadorKpiSummarySchema(BaseModel):
     total_atencao: int = 0
     total_normal: int = 0
     total_sem_dados: int = 0
+    total_mov: float = 0.0
+    total_sem_comprovacao: float = 0.0
+    perc_sem_comprovacao: Optional[float] = None
     mediana_reg: Optional[float] = None
     mad_reg: Optional[float] = None
     pct_acima_limiar: Optional[float] = None

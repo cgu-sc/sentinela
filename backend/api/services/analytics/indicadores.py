@@ -46,6 +46,7 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
+    IndicadorCnpjPageResponse,
     CrmDailyProfileResponse,
     CrmHourlyProfileResponse,
     MesMensalGtinItem,
@@ -143,6 +144,160 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
     except Exception:
         print(f"[ ANALYTICS ] {cnpj} ● INDICADORES ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
         return IndicadoresResponse(cnpj=cnpj, indicadores={})
+
+def _build_indicador_joined(
+    indicador: str,
+    uf: str | None = None,
+    situacao_rf: str | None = None,
+    conexao_ms: str | None = None,
+    porte_empresa: str | None = None,
+    grande_rede: str | None = None,
+    cnpj_raiz: str | None = None,
+    unidade_pf: str | None = None,
+    perc_min: float | None = None,
+    perc_max: float | None = None,
+    val_min: float | None = None,
+    regiao_id: int | None = None,
+    id_ibge7: int | None = None,
+    par_teia: str | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
+    if indicador not in INDICATOR_MAPPING:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Indicador '{indicador}' invÃ¡lido. Valores aceitos: {sorted(INDICATOR_MAPPING.keys())}"
+        )
+
+    c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
+    c_aten, c_crit = _INDICATOR_FLAGS[indicador]
+
+    df_mov = get_df()
+    perfil_df = get_df_perfil_estabelecimento()
+    df_geo = df_mov.group_by("id_cnpj").agg([
+        pl.col("total_vendas").sum().alias("total_vendas"),
+        pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
+    ]).join(perfil_df, on="id_cnpj", how="inner").with_columns([
+        pl.when(pl.col("total_vendas") > 0)
+          .then((pl.col("total_sem_comprovacao") / pl.col("total_vendas") * 100).round(2))
+          .otherwise(pl.lit(None))
+          .alias("perc_val_sem_comp")
+    ])
+
+    mask = pl.lit(True)
+    if uf and uf != 'Todos':
+        mask = mask & (pl.col("uf") == uf)
+    if regiao_id is not None:
+        mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
+    if id_ibge7 is not None:
+        mask = mask & (pl.col("id_ibge7") == id_ibge7)
+    if situacao_rf and situacao_rf != 'Todos':
+        mask = mask & (pl.col("situacao_rf") == situacao_rf)
+    if conexao_ms and conexao_ms != 'Todos':
+        mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
+    if porte_empresa and porte_empresa != 'Todos':
+        mask = mask & (pl.col("porte_empresa") == porte_empresa)
+    if grande_rede and grande_rede != 'Todos':
+        mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
+    if unidade_pf and unidade_pf != 'Todos':
+        mask = mask & (pl.col("unidade_pf") == unidade_pf)
+    if cnpj_raiz:
+        cnpj_raiz_clean = cnpj_raiz.replace(".", "").replace("/", "").replace("-", "")
+        if len(cnpj_raiz_clean) == 14:
+            mask = mask & (pl.col("cnpj") == cnpj_raiz_clean)
+        elif len(cnpj_raiz_clean) >= 8:
+            mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
+
+    df_geo = apply_par_teia_filter(df_geo.filter(mask), par_teia)
+    if perc_min is not None:
+        df_geo = df_geo.filter(pl.col("perc_val_sem_comp") >= perc_min)
+    if perc_max is not None:
+        df_geo = df_geo.filter(pl.col("perc_val_sem_comp") <= perc_max)
+    if val_min is not None:
+        df_geo = df_geo.filter(pl.col("total_sem_comprovacao") >= val_min)
+
+    if df_geo.is_empty():
+        return df_geo, perfil_df, pl.DataFrame(), c_val, c_mr, None, "score_risco_final"
+
+    df_risco = get_df_matriz_risco()
+    df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
+    score_col = "score_risco_final"
+    risco_cols = ["cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
+    risco_cols_available = [c for c in risco_cols if c in df_risco.columns]
+    df_joined = df_geo.join(df_risco.select(risco_cols_available), on="cnpj", how="inner")
+    if df_joined.is_empty():
+        return df_joined, perfil_df, df_risco, c_val, c_mr, None, score_col
+
+    rr_col = c_rr if c_rr in df_joined.columns else None
+    has_flags = c_crit in df_joined.columns and c_aten in df_joined.columns
+    if has_flags:
+        df_joined = df_joined.with_columns([
+            pl.when(pl.col(c_val).is_null())
+              .then(pl.lit("SEM DADOS"))
+              .when(pl.col(c_crit).cast(pl.Int32) == 1)
+              .then(pl.lit("CRÍTICO"))
+              .when(pl.col(c_aten).cast(pl.Int32) == 1)
+              .then(pl.lit("ATENÇÃO"))
+              .otherwise(pl.lit("NORMAL"))
+              .alias("status")
+        ])
+    else:
+        df_joined = df_joined.with_columns(pl.lit("SEM DADOS").alias("status"))
+
+    return df_joined, perfil_df, df_risco, c_val, c_mr, rr_col, score_col
+
+
+def _build_indicador_cnpj_rows(
+    df: pl.DataFrame,
+    c_val: str,
+    c_mr: str,
+    rr_col: str | None,
+    score_col: str,
+) -> list[IndicadorCnpjRowSchema]:
+    rows: list[IndicadorCnpjRowSchema] = []
+    for row in df.iter_rows(named=True):
+        rows.append(IndicadorCnpjRowSchema(
+            cnpj=str(row["cnpj"]),
+            razao_social=row.get("razao_social"),
+            municipio=str(row["no_municipio"]).title() if row.get("no_municipio") else None,
+            uf=row.get("uf"),
+            id_ibge7=int(row["id_ibge7"]) if row.get("id_ibge7") is not None else None,
+            valor=_optional_float(row.get(c_val)),
+            med_reg=_optional_float(row.get(c_mr)),
+            risco_reg=_optional_float(row.get(rr_col)) if rr_col else None,
+            status=row.get("status", "SEM DADOS"),
+            is_grande_rede=bool(row.get("is_grande_rede", False)),
+            situacao_rf=row.get("situacao_rf"),
+            is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
+            score_risco_final=_optional_float(row.get(score_col)) if score_col in df.columns else None,
+            val_sem_comp=_optional_float(row.get("total_sem_comprovacao")),
+            perc_val_sem_comp=_optional_float(row.get("perc_val_sem_comp")),
+        ))
+    return rows
+
+
+def _build_status_kpis(df: pl.DataFrame) -> IndicadorKpiSummarySchema:
+    if df.is_empty():
+        return IndicadorKpiSummarySchema()
+    status_counts = df["status"].value_counts().to_dicts()
+    counts = {r["status"]: r["count"] for r in status_counts}
+    total_com_dados = counts.get("CRÍTICO", 0) + counts.get("ATENÇÃO", 0) + counts.get("NORMAL", 0)
+    pct_acima_limiar = (
+        (counts.get("CRÍTICO", 0) + counts.get("ATENÇÃO", 0)) / total_com_dados * 100
+        if total_com_dados > 0 else None
+    )
+    return IndicadorKpiSummarySchema(
+        total_critico=counts.get("CRÍTICO", 0),
+        total_atencao=counts.get("ATENÇÃO", 0),
+        total_normal=counts.get("NORMAL", 0),
+        total_sem_dados=counts.get("SEM DADOS", 0),
+        pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
+    )
+
+
+def _normalizar_sort_order(sort_order: str | int | None) -> tuple[str, bool]:
+    raw = str(sort_order or "desc").lower()
+    descending = raw in {"desc", "descending", "-1"}
+    return ("desc" if descending else "asc"), descending
+
 
 def get_indicadores_analise(
     indicador: str,
@@ -292,6 +447,7 @@ def get_indicadores_analise(
             df_sorted = df_joined.sort(rr_col, descending=True, nulls_last=True)
         else:
             df_sorted = df_joined
+        df_sorted = df_sorted.head(0)
 
         # ── 7. Monta lista de CNPJs ──
         cnpjs_list: list[IndicadorCnpjRowSchema] = []
@@ -404,7 +560,7 @@ def get_indicadores_analise(
             indicador=indicador,
             kpis=kpis,
             municipios=municipios_list,
-            cnpjs=cnpjs_list,
+            cnpjs=[],
         )
 
     except HTTPException:
@@ -414,3 +570,105 @@ def get_indicadores_analise(
         print(f"❌ ERRO EM get_indicadores_analise (indicador={indicador}): {e}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Erro interno ao processar análise de indicadores.")
+
+def get_indicadores_analise_cnpjs(
+    indicador: str,
+    uf: str | None = None,
+    regiao_saude: str | None = None,
+    municipio: str | None = None,
+    situacao_rf: str | None = None,
+    conexao_ms: str | None = None,
+    porte_empresa: str | None = None,
+    grande_rede: str | None = None,
+    cnpj_raiz: str | None = None,
+    unidade_pf: str | None = None,
+    perc_min: float | None = None,
+    perc_max: float | None = None,
+    val_min: float | None = None,
+    regiao_id: int | None = None,
+    id_ibge7: int | None = None,
+    par_teia: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    sort_field: str = "risco_reg",
+    sort_order: str | int | None = "desc",
+) -> IndicadorCnpjPageResponse:
+    try:
+        df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_joined(
+            indicador,
+            uf=uf,
+            situacao_rf=situacao_rf,
+            conexao_ms=conexao_ms,
+            porte_empresa=porte_empresa,
+            grande_rede=grande_rede,
+            cnpj_raiz=cnpj_raiz,
+            unidade_pf=unidade_pf,
+            perc_min=perc_min,
+            perc_max=perc_max,
+            val_min=val_min,
+            regiao_id=regiao_id,
+            id_ibge7=id_ibge7,
+            par_teia=par_teia,
+        )
+
+        normalized_order, descending = _normalizar_sort_order(sort_order)
+        page = max(1, int(page or 1))
+        page_size = min(200, max(1, int(page_size or 20)))
+
+        if df_joined.is_empty():
+            return IndicadorCnpjPageResponse(
+                indicador=indicador,
+                items=[],
+                kpis=IndicadorKpiSummarySchema(),
+                total=0,
+                page=page,
+                page_size=page_size,
+                sort_field=sort_field,
+                sort_order=normalized_order,
+            )
+
+        sort_columns = {
+            "cnpj": "cnpj",
+            "razao_social": "razao_social",
+            "municipio": "no_municipio",
+            "uf": "uf",
+            "valor": c_val,
+            "med_reg": c_mr,
+            "risco_reg": rr_col,
+            "status": "status",
+            "is_conexao_ativa": "is_conexao_ativa",
+            "situacao_rf": "situacao_rf",
+            "score_risco_final": score_col,
+            "val_sem_comp": "total_sem_comprovacao",
+            "perc_val_sem_comp": "perc_val_sem_comp",
+        }
+        sort_col = sort_columns.get(sort_field) or rr_col or "cnpj"
+        if sort_col not in df_joined.columns:
+            raise HTTPException(status_code=400, detail=f"Campo de ordenacao invalido: {sort_field}")
+
+        total = df_joined.height
+        offset = (page - 1) * page_size
+        df_page = (
+            df_joined
+            .sort(sort_col, descending=descending, nulls_last=True)
+            .slice(offset, page_size)
+        )
+
+        return IndicadorCnpjPageResponse(
+            indicador=indicador,
+            items=_build_indicador_cnpj_rows(df_page, c_val, c_mr, rr_col, score_col),
+            kpis=_build_status_kpis(df_joined),
+            total=total,
+            page=page,
+            page_size=page_size,
+            sort_field=sort_field,
+            sort_order=normalized_order,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERRO EM get_indicadores_analise_cnpjs (indicador={indicador}): {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Erro interno ao paginar CNPJs do indicador.")

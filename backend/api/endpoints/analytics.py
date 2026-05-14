@@ -8,6 +8,7 @@ from ..schemas.analytics import (
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, CnpjAccessStatusSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
+    IndicadorCnpjPageResponse,
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
@@ -296,6 +297,43 @@ def get_indicadores_analise(
         indicador, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
         perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7, par_teia=par_teia
+    )
+
+
+@router.get("/indicadores-analise/cnpjs", response_model=IndicadorCnpjPageResponse)
+def get_indicadores_analise_cnpjs(
+    indicador: str = Query(..., description="Chave do indicador (ex: 'percentual_nao_comprovacao', 'teto')"),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
+    regiao_id: Optional[int] = Query(None),
+    par_teia: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    sort_field: str = Query("risco_reg"),
+    sort_order: str = Query("desc"),
+):
+    """Retorna uma pagina server-side da tabela de CNPJs de /indicadores."""
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
+    return AnalyticsService.get_indicadores_analise_cnpjs(
+        indicador, uf, regiao_saude, municipio,
+        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf,
+        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id,
+        id_ibge7=id_ibge7, par_teia=par_teia, page=page, page_size=page_size,
+        sort_field=sort_field, sort_order=sort_order
     )
 
 

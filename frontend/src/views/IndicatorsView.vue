@@ -15,8 +15,11 @@ import IndicadorCnpjTable from './components/indicadores/IndicadorCnpjTable.vue'
 const filterStore = useFilterStore();
 const indicadoresStore = useIndicadoresStore();
 const geoStore = useGeoStore();
-const { selectedIndicador, kpis, municipios, cnpjs, isLoading, error } = storeToRefs(indicadoresStore);
-const { fetchForIndicador } = useFetchIndicadores();
+const {
+  selectedIndicador, kpis, cnpjKpis, municipios, cnpjs, cnpjsTotal, cnpjsPage, cnpjsRows,
+  cnpjsSortField, cnpjsSortOrder, isLoading, isTableLoading, error
+} = storeToRefs(indicadoresStore);
+const { fetchForIndicador, fetchCnpjsForIndicador } = useFetchIndicadores();
 
 // Metadados do indicador ativo (label, formato, metodologia)
 const activeIndicadorMeta = computed(() => {
@@ -67,6 +70,10 @@ function onSelectUf(uf) {
 // Filtramos localmente para que os KPIs e a Tabela reflitam apenas a seleção atual.
 const displayedKpis = computed(() => {
   if (!kpis.value) return null;
+  if (selectedMunicipioIbge7.value && cnpjKpis.value) {
+    return { ...kpis.value, ...cnpjKpis.value };
+  }
+  return kpis.value;
   
   const regiao = filterStore.selectedRegiaoSaude;
   const ibge7 = selectedMunicipioIbge7.value;
@@ -124,6 +131,18 @@ const selectedRegiaoNome = computed(() => {
 
 function onIndicadorSelect(key) {
   fetchForIndicador(key);
+}
+
+function onCnpjTableLazy(event) {
+  if (!selectedIndicador.value) return;
+  const rows = event.rows ?? cnpjsRows.value;
+  const first = event.first ?? 0;
+  fetchCnpjsForIndicador(selectedIndicador.value, {
+    page: Math.floor(first / rows) + 1,
+    pageSize: rows,
+    sortField: event.sortField ?? cnpjsSortField.value,
+    sortOrder: event.sortOrder ?? cnpjsSortOrder.value,
+  });
 }
 
 // O fetch automático inicial agora é tratado pelo watch(immediate: true) no useFetchIndicadores.js
@@ -208,8 +227,14 @@ function onIndicadorSelect(key) {
           :formato="activeIndicadorMeta?.formato ?? 'dec'"
           :indicador-key="selectedIndicador"
           :indicador-label="activeIndicadorMeta?.label ?? ''"
-          :is-loading="isLoading"
+          :is-loading="isTableLoading"
+          :total-records="cnpjsTotal"
+          :first="(cnpjsPage - 1) * cnpjsRows"
+          :rows="cnpjsRows"
+          :sort-field="cnpjsSortField"
+          :sort-order="cnpjsSortOrder"
           :limiar-critico="kpis?.limiar_critico"
+          @lazy-load="onCnpjTableLazy"
         />
 
       </template>

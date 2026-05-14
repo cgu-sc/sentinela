@@ -48,6 +48,13 @@ export function useFetchIndicadores() {
     return params;
   }
 
+  function getIndicadorTabelaParams() {
+    const params = getIndicadorParams();
+    const { idIbge7 } = getApiParams();
+    if (idIbge7 !== null && idIbge7 !== undefined) params.id_ibge7 = idIbge7;
+    return params;
+  }
+
   /**
    * Dispara o fetch para o indicador informado com os filtros atuais.
    *
@@ -55,6 +62,11 @@ export function useFetchIndicadores() {
    */
   function fetchForIndicador(indicadorKey) {
     indicadoresStore.fetchIndicadorAnalise(indicadorKey, getIndicadorParams());
+    indicadoresStore.fetchIndicadorCnpjs(indicadorKey, getIndicadorTabelaParams(), { page: 1 });
+  }
+
+  function fetchCnpjsForIndicador(indicadorKey, tableState = {}) {
+    indicadoresStore.fetchIndicadorCnpjs(indicadorKey, getIndicadorTabelaParams(), tableState);
   }
 
   // Re-dispara automaticamente quando filtros mudam.
@@ -63,6 +75,7 @@ export function useFetchIndicadores() {
     () => [
       filterStore.selectedUF,
       filterStore.selectedRegiaoSaude,
+      filterStore.selectedMunicipio,
       filterStore.selectedSituacao,
       filterStore.selectedMS,
       filterStore.selectedPorte,
@@ -81,5 +94,5 @@ export function useFetchIndicadores() {
     { immediate: true, deep: true }
   );
 
-  return { fetchForIndicador };
+  return { fetchForIndicador, fetchCnpjsForIndicador };
 }

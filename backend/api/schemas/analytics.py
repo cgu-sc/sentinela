@@ -556,6 +556,18 @@ class IndicadorAnaliseResponse(BaseModel):
     cnpjs: List[IndicadorCnpjRowSchema]
 
 
+class IndicadorCnpjPageResponse(BaseModel):
+    """Paginacao server-side da tabela de CNPJs da vista /indicadores."""
+    indicador: str
+    items: List[IndicadorCnpjRowSchema]
+    kpis: Optional[IndicadorKpiSummarySchema] = None
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    sort_field: str = "risco_reg"
+    sort_order: str = "desc"
+
+
 # ── Drill-down da Análise Horária (Raio-X de Transações) ─────────────────────────
 
 class CrmHourlyTransactionSchema(BaseModel):

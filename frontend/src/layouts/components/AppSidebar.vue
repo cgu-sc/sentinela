@@ -1412,14 +1412,17 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
 }
 
+
 .sidebar-content {
   flex: 1;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-color: color-mix(in srgb, var(--sidebar-bg) 70%, var(--sidebar-text)) var(--sidebar-bg) !important;
+  scrollbar-width: thin !important;
   --scrollbar-track: var(--sidebar-bg);
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
@@ -1428,16 +1431,20 @@ onBeforeUnmount(() => {
 .sidebar-content::-webkit-scrollbar {
   width: 4px;
 }
+.sidebar-content:hover {
+  scrollbar-color: color-mix(in srgb, var(--sidebar-bg) 58%, var(--sidebar-text)) var(--sidebar-bg) !important;
+}
 .sidebar-content::-webkit-scrollbar-track {
   background: var(--sidebar-bg);
 }
 .sidebar-content::-webkit-scrollbar-thumb {
-  background: var(--sidebar-border);
+  background: color-mix(in srgb, var(--sidebar-bg) 70%, var(--sidebar-text)) !important;
   border-radius: 4px;
 }
 .sidebar-content::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: color-mix(in srgb, var(--sidebar-bg) 58%, var(--sidebar-text)) !important;
 }
+
 
 .sidebar-footer {
   padding: 1rem;

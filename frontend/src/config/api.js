@@ -55,7 +55,8 @@ export const API_ENDPOINTS = {
     return `${BASE_URL}/api/v1/analytics/metric-percentiles-animation?${params.toString()}`;
   },
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
-   analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
+  analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
+  analyticsIndicadoresAnaliseCnpjs: `${BASE_URL}/api/v1/analytics/indicadores-analise/cnpjs`,
   analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,

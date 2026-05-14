@@ -36,6 +36,7 @@ from .indicadores import (
     _INDICATOR_FLAGS,
     get_indicadores,
     get_indicadores_analise,
+    get_indicadores_analise_cnpjs,
 )
 from .regional import (
     get_cnpj_lookup,
@@ -65,6 +66,7 @@ class AnalyticsService:
     get_gtin_ranking_periodo = staticmethod(get_gtin_ranking_periodo)
     get_indicadores = staticmethod(get_indicadores)
     get_indicadores_analise = staticmethod(get_indicadores_analise)
+    get_indicadores_analise_cnpjs = staticmethod(get_indicadores_analise_cnpjs)
     get_falecidos_data = staticmethod(get_falecidos_data)
     get_timeline_cpf = staticmethod(get_timeline_cpf)
     get_fator_risco_data = staticmethod(get_fator_risco_data)

@@ -21,7 +21,14 @@ const props = defineProps({
   indicadorLabel: { type: String, default: 'Indicador' },
   /** Valor de referência para o status CRÍTICO */
   limiarCritico: { type: Number, default: null },
+  totalRecords: { type: Number, default: 0 },
+  first: { type: Number, default: 0 },
+  rows: { type: Number, default: 20 },
+  sortField: { type: String, default: 'risco_reg' },
+  sortOrder: { type: Number, default: -1 },
 });
+
+const emit = defineEmits(['lazy-load']);
 
 const router = useRouter();
 const filterStore = useFilterStore();
@@ -68,6 +75,9 @@ function applyFilter(field, value) {
 }
 
 const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTICO').length);
+function onLazyLoad(event) {
+  emit('lazy-load', event);
+}
 </script>
 
 <template>
@@ -79,8 +89,8 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       <div class="header-text-box">
         <h3>Farmácias por Indicador</h3>
         <span class="subtitle">
-          {{ indicadorLabel }} — {{ cnpjs.length }} estabelecimentos
-          <Tag v-if="totalCritico > 0" icon="pi pi-exclamation-triangle" :value="`${totalCritico} CRÍTICOS`" class="status-danger p-ml-2" />
+          {{ indicadorLabel }} — {{ totalRecords }} estabelecimentos
+          <Tag v-if="totalCritico > 0" icon="pi pi-exclamation-triangle" :value="`${totalCritico} CRÍTICOS NA PÁGINA`" class="status-danger p-ml-2" />
         </span>
       </div>
     </div>
@@ -91,10 +101,15 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
       stripedRows
       removableSort
       paginator
-      :rows="20"
-      sortField="risco_reg"
-      :sortOrder="-1"
+      lazy
+      :first="first"
+      :rows="rows"
+      :totalRecords="totalRecords"
+      :sortField="sortField"
+      :sortOrder="sortOrder"
       class="enterprise-table ind-cnpj-table clickable-rows"
+      @page="onLazyLoad"
+      @sort="onLazyLoad"
       @row-click="goToDetail"
     >
       <!-- Razão Social + CNPJ -->
@@ -236,8 +251,11 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
 }
 
 .ind-table-card.is-refreshing {
-  opacity: 0.5;
   pointer-events: none;
+}
+
+.ind-table-card.is-refreshing :deep(.p-datatable-tbody) {
+  opacity: 0.58;
 }
 
 .section-header {
@@ -375,6 +393,10 @@ const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTI
 
 :deep(.ind-cnpj-table.p-datatable .p-datatable-tbody > tr) {
   font-size: 0.75rem;
+}
+
+:deep(.ind-cnpj-table.p-datatable .p-datatable-tbody) {
+  transition: opacity 0.18s ease;
 }
 
 :deep(.ind-cnpj-table .p-datatable-table) {

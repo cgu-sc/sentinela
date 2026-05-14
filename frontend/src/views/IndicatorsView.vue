@@ -296,7 +296,7 @@ function onCnpjTableLazy(event) {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -322,7 +322,7 @@ function onCnpjTableLazy(event) {
   border: 1px solid var(--card-border);
   border-radius: 99px;
   font-size: 0.7rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.75;
 }
 
@@ -386,7 +386,7 @@ function onCnpjTableLazy(event) {
 .notice-content em {
   font-style: normal;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 @keyframes fadeInDown {

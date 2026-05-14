@@ -105,7 +105,7 @@ function selectIndicador(key) {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -149,7 +149,7 @@ function selectIndicador(key) {
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease, color 0.15s ease;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
   min-width: 0;
 }

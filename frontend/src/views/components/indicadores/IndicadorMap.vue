@@ -527,7 +527,7 @@ function onMapClick(params) {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
   white-space: nowrap;
   overflow: hidden;
@@ -583,7 +583,7 @@ function onMapClick(params) {
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.68;
   white-space: nowrap;
   overflow: hidden;
@@ -598,7 +598,7 @@ function onMapClick(params) {
   font-size: 0.95rem;
   font-weight: 750;
   line-height: 1;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .summary-value small {
@@ -651,7 +651,7 @@ function onMapClick(params) {
   border-radius: 8px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  color: var(--text-color);
+  color: var(--text-color-85);
   display: flex;
   align-items: center;
   justify-content: center;

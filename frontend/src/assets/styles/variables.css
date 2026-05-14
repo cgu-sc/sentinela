@@ -8,6 +8,7 @@
   --sidebar-collapsed: 80px;
   --bg-color: #ffffff;
   --text-color: #1e293b;
+  --text-color-85: color-mix(in srgb, var(--text-color) 85%, transparent);
   --text-secondary: #475569;
   --text-muted: #64748b;
   --card-bg: #f8fafc;
@@ -59,6 +60,7 @@
 :root.dark-mode {
   --bg-color: #0d1117;
   --text-color: #e0e5ee;
+  --text-color-85: color-mix(in srgb, var(--text-color) 85%, transparent);
   --text-secondary: #b1bbcc;
   --text-muted: #9aa4ae;
   --card-bg: #161b22;

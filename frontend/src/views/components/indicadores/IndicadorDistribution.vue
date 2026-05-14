@@ -377,7 +377,7 @@ const chartOption = computed(() => {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .dist-subtitle {

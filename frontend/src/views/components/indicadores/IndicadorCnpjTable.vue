@@ -382,7 +382,7 @@ function onLazyLoad(event) {
   border: 1px solid color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 35%, transparent);
   border-radius: 999px;
   font-size: 0.74rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .scope-filter-chip span {
@@ -599,7 +599,7 @@ function onLazyLoad(event) {
 
 .risk-value.status-success,
 .risk-status.status-success {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 .risk-value.status-secondary,

@@ -531,6 +531,7 @@ class IndicadorCnpjRowSchema(BaseModel):
     risco_reg: Optional[float] = None
     status: str = "SEM DADOS"          # "CRÍTICO" | "ATENÇÃO" | "NORMAL" | "SEM DADOS"
     is_grande_rede: Optional[bool] = False
+    qtd_estabelecimentos_rede: int
     situacao_rf: Optional[str] = None
     is_conexao_ativa: Optional[bool] = False
     score_risco_final: Optional[float] = None

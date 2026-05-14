@@ -1,8 +1,10 @@
 <script setup>
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
+import { extractCnpjRaiz } from '@/composables/useParsing';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
@@ -33,6 +35,7 @@ const router = useRouter();
 const filterStore = useFilterStore();
 const { formatCurrencyFull } = useFormatting();
 const { situacaoRfClass, conexaoMsClass } = useStatusClass();
+const copiedKey = ref(null);
 
 function formatValue(valor) {
   if (valor == null) return '—';
@@ -57,8 +60,13 @@ function goToDetail(event) {
   router.push({ name: 'EstablishmentDetail', params: { cnpj: event.data.cnpj } });
 }
 
-async function copyCnpj(cnpj) {
-  await navigator.clipboard.writeText(cnpj);
+function copyAndSignal(text, key) {
+  if (!text) return;
+  navigator.clipboard.writeText(text);
+  copiedKey.value = key;
+  setTimeout(() => {
+    if (copiedKey.value === key) copiedKey.value = null;
+  }, 2000);
 }
 
 function normalizeToOption(options, raw) {
@@ -66,6 +74,10 @@ function normalizeToOption(options, raw) {
 }
 
 function applyFilter(field, value) {
+  if (field === 'grandeRede') {
+    const valStr = typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : value;
+    filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, valStr);
+  }
   if (field === 'situacaoRF') filterStore.selectedSituacao = normalizeToOption(FILTER_OPTIONS.situacao, value);
   if (field === 'conexaoMS') {
     const valStr = typeof value === 'boolean' ? (value ? 'Ativa' : 'Inativa') : value;
@@ -127,7 +139,13 @@ function onLazyLoad(event) {
       @row-click="goToDetail"
     >
       <!-- Razão Social + CNPJ -->
-      <Column field="razao_social" header="Razão Social" sortable style="width:15%">
+      <Column
+        field="razao_social"
+        header="Razão Social"
+        sortable
+        headerClass="col-name"
+        bodyClass="col-name"
+      >
         <template #body="{ data }">
           <div class="razao-block">
             <span
@@ -136,18 +154,24 @@ function onLazyLoad(event) {
             >{{ data.razao_social ?? '—' }}</span>
             <span class="cnpj-row">
               <span class="cnpj-text">{{ data.cnpj }}</span>
-              <button
-                class="copy-btn"
+              <i
+                :class="['pi', copiedKey === data.cnpj + '-cnpj' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']"
                 v-tooltip.top="'Copiar CNPJ'"
-                @click.stop="copyCnpj(data.cnpj)"
-              ><i class="pi pi-copy" /></button>
+                @click.stop="copyAndSignal(data.cnpj, data.cnpj + '-cnpj')"
+              />
             </span>
           </div>
         </template>
       </Column>
 
       <!-- UF + Município -->
-      <Column field="municipio" header="Localização" sortable style="width:12%">
+      <Column
+        field="municipio"
+        header="Localização"
+        sortable
+        headerClass="col-location"
+        bodyClass="col-location"
+      >
         <template #body="{ data }">
           <div class="loc-block">
             <span
@@ -159,21 +183,29 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
-      <!-- Valor do indicador -->
-      <Column field="valor" header="Valor" sortable style="width:8%; text-align:right">
+      <!-- Valor do indicador + Mediana regional -->
+      <Column
+        field="valor"
+        header="Indicador"
+        sortable
+        headerClass="col-indicator"
+        bodyClass="col-indicator"
+      >
         <template #body="{ data }">
-          <span class="val-cell">{{ formatValue(data.valor) }}</span>
+          <div class="indicator-cell" :class="{ muted: data.valor == null }">
+            <span class="indicator-value">{{ formatValue(data.valor) }}</span>
+            <span class="indicator-median">região {{ formatValue(data.med_reg) }}</span>
+          </div>
         </template>
       </Column>
 
-      <!-- Mediana regional -->
-      <Column field="med_reg" header="Mediana Reg." sortable style="width:10%; text-align:right">
-        <template #body="{ data }">
-          <span class="val-cell muted">{{ formatValue(data.med_reg) }}</span>
-        </template>
-      </Column>
-
-      <Column field="risco_reg" header="Risco" sortable style="width:10%; text-align:center">
+      <Column
+        field="risco_reg"
+        header="Risco"
+        sortable
+        headerClass="col-risk"
+        bodyClass="col-risk"
+      >
         <template #body="{ data }">
           <div class="risk-cell" :class="{ muted: data.risco_reg == null }">
             <span
@@ -196,7 +228,13 @@ function onLazyLoad(event) {
       </Column>
 
       <!-- Não Comprovação -->
-      <Column field="val_sem_comp" header="Não Comprovação" sortable style="width:13%; text-align:right">
+      <Column
+        field="val_sem_comp"
+        header="Não Comprovação"
+        sortable
+        headerClass="col-noncomp"
+        bodyClass="col-noncomp"
+      >
         <template #body="{ data }">
           <div class="noncomp-cell" :class="{ muted: data.val_sem_comp == null }">
             <span
@@ -212,8 +250,41 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
+      <!-- Rede -->
+      <Column
+        field="is_grande_rede"
+        header="Rede"
+        headerClass="col-network"
+        bodyClass="col-network"
+      >
+        <template #body="{ data }">
+          <div class="network-cell">
+            <Tag
+              :value="data.is_grande_rede ? 'Grande' : 'Indep.'"
+              :class="[data.is_grande_rede ? 'status-info' : 'status-secondary', 'clickable-badge']"
+              v-tooltip.top="'Filtrar por Grande Rede: ' + (data.is_grande_rede ? 'Sim' : 'Não')"
+              @click.stop="applyFilter('grandeRede', data.is_grande_rede)"
+            />
+            <Tag
+              v-if="data.qtd_estabelecimentos_rede > 1"
+              :value="String(data.qtd_estabelecimentos_rede) + ' estab.'"
+              class="status-info clickable-badge network-count"
+              v-tooltip.top="'Ver todos os estabelecimentos desta rede'"
+              @click.stop="filterStore.selectedCnpjRaiz = extractCnpjRaiz(data.cnpj)"
+            />
+            <span v-else-if="data.qtd_estabelecimentos_rede === 1" class="network-count-muted">1 estab.</span>
+            <span v-else class="network-count-muted">—</span>
+          </div>
+        </template>
+      </Column>
+
       <!-- Conexão MS -->
-      <Column field="is_conexao_ativa" header="Conex. MS" style="width:8%; text-align:center">
+      <Column
+        field="is_conexao_ativa"
+        header="Conex. MS"
+        headerClass="col-badge-filter"
+        bodyClass="col-badge-filter"
+      >
         <template #body="{ data }">
           <Tag
             :value="data.is_conexao_ativa ? 'Ativa' : 'Inativa'"
@@ -225,7 +296,12 @@ function onLazyLoad(event) {
       </Column>
 
       <!-- Situação RF -->
-      <Column field="situacao_rf" header="Sit. RF" style="width:8%; text-align:center">
+      <Column
+        field="situacao_rf"
+        header="Sit. RF"
+        headerClass="col-badge-filter"
+        bodyClass="col-badge-filter"
+      >
         <template #body="{ data }">
           <Tag
             v-if="data.situacao_rf"
@@ -381,7 +457,7 @@ function onLazyLoad(event) {
 .cnpj-row {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.5rem;
 }
 
 .cnpj-text {
@@ -392,25 +468,29 @@ function onLazyLoad(event) {
 
 .copy-btn {
   display: inline-flex;
-  align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
-  padding: 0.1rem 0.2rem;
+  width: 1.4rem;
+  flex-shrink: 0;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.65rem;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  font-size: 0.85rem;
+  opacity: 0.4;
+  transition: all 0.2s;
 }
 
-:deep(tr:hover) .copy-btn {
-  opacity: 1;
+.copy-btn.text-success {
+  color: var(--status-success) !important;
+  opacity: 1 !important;
 }
 
 .copy-btn:hover {
+  opacity: 1 !important;
   color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.copy-btn:active {
+  transform: scale(0.9);
 }
 
 .loc-block {
@@ -444,6 +524,35 @@ function onLazyLoad(event) {
 .val-cell {
   display: block;
   text-align: right;
+}
+
+.indicator-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.indicator-value {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicator-median {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.72;
 }
 
 .risk-cell {
@@ -525,6 +634,27 @@ function onLazyLoad(event) {
   opacity: 0.72;
 }
 
+.network-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.network-count-muted {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
 .muted {
   opacity: 0.45;
 }
@@ -550,6 +680,82 @@ function onLazyLoad(event) {
 
 :deep(.ind-cnpj-table .p-datatable-tbody > tr > td) {
   overflow: hidden;
+}
+
+:deep(.ind-cnpj-table .col-name) {
+  width: 22%;
+}
+
+:deep(.ind-cnpj-table .col-location) {
+  width: 12%;
+}
+
+:deep(.ind-cnpj-table .col-indicator) {
+  width: 13%;
+  text-align: right;
+}
+
+:deep(.ind-cnpj-table .col-risk) {
+  width: 8%;
+  text-align: center;
+}
+
+:deep(.ind-cnpj-table .col-noncomp) {
+  width: 21%;
+  text-align: right;
+}
+
+:deep(.ind-cnpj-table .col-network) {
+  width: 8%;
+  text-align: center;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+:deep(.ind-cnpj-table .col-badge-filter) {
+  width: 8%;
+  text-align: center;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+:deep(.ind-cnpj-table .col-indicator .p-column-header-content),
+:deep(.ind-cnpj-table .col-noncomp .p-column-header-content) {
+  justify-content: flex-end;
+}
+
+:deep(.ind-cnpj-table .col-risk .p-column-header-content),
+:deep(.ind-cnpj-table .col-network .p-column-header-content),
+:deep(.ind-cnpj-table .col-badge-filter .p-column-header-content) {
+  justify-content: center;
+}
+
+:deep(.ind-cnpj-table .col-badge-filter .p-sortable-column-icon) {
+  display: none;
+}
+
+:deep(.ind-cnpj-table .col-badge-filter .p-tag) {
+  max-width: 100%;
+  padding-left: 0.38rem;
+  padding-right: 0.38rem;
+}
+
+:deep(.ind-cnpj-table .col-badge-filter .p-tag-value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.ind-cnpj-table .col-network .p-tag) {
+  max-width: 100%;
+  padding-left: 0.38rem;
+  padding-right: 0.38rem;
+}
+
+:deep(.ind-cnpj-table .col-network .p-tag-value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th) {

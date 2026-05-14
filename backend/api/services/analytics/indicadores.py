@@ -455,6 +455,7 @@ def _build_indicador_cnpj_rows(
             risco_reg=_optional_float(row.get(rr_col)) if rr_col else None,
             status=row.get("status", "SEM DADOS"),
             is_grande_rede=bool(row.get("is_grande_rede", False)),
+            qtd_estabelecimentos_rede=int(row["qtd_estabelecimentos_rede"]),
             situacao_rf=row.get("situacao_rf"),
             is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
             score_risco_final=_optional_float(row.get(score_col)) if score_col in df.columns else None,

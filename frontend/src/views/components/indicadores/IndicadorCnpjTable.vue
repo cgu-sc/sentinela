@@ -700,11 +700,11 @@ function onLazyLoad(event) {
 }
 
 :deep(.ind-cnpj-table .col-location) {
-  width: 11%;
+  width: 14%;
 }
 
 :deep(.ind-cnpj-table .col-indicator) {
-  width: 13%;
+  width: 10%;
   text-align: right;
 }
 
@@ -714,26 +714,26 @@ function onLazyLoad(event) {
 }
 
 :deep(.ind-cnpj-table .col-noncomp) {
-  width: 18%;
+  width: 14%;
   text-align: right;
 }
 
 :deep(.ind-cnpj-table .col-network-flag) {
-  width: 8%;
+  width: 9%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
 :deep(.ind-cnpj-table .col-network-count) {
-  width: 7%;
+  width: 8%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
 :deep(.ind-cnpj-table .col-badge-filter) {
-  width: 7%;
+  width: 8%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;

@@ -259,6 +259,7 @@ function onCnpjTableLazy(event) {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding-bottom: 1rem;
 }
 
 /* ── Estado vazio ── */

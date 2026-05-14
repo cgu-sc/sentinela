@@ -211,7 +211,6 @@ function onCnpjTableLazy(event) {
           :rows="cnpjsRows"
           :sort-field="cnpjsSortField"
           :sort-order="cnpjsSortOrder"
-          :limiar-critico="kpis?.limiar_critico"
           :selected-regiao-nome="selectedRegiaoNome"
           :selected-municipio-nome="selectedMunicipioNome"
           @lazy-load="onCnpjTableLazy"

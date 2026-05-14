@@ -1,5 +1,4 @@
 <script setup>
-import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
@@ -19,8 +18,6 @@ const props = defineProps({
   indicadorKey: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
   indicadorLabel: { type: String, default: 'Indicador' },
-  /** Valor de referência para o status CRÍTICO */
-  limiarCritico: { type: Number, default: null },
   totalRecords: { type: Number, default: 0 },
   first: { type: Number, default: 0 },
   rows: { type: Number, default: 20 },
@@ -76,7 +73,6 @@ function applyFilter(field, value) {
   }
 }
 
-const totalCritico = computed(() => props.cnpjs.filter(c => c.status === 'CRÍTICO').length);
 function onLazyLoad(event) {
   emit('lazy-load', event);
 }
@@ -92,7 +88,6 @@ function onLazyLoad(event) {
         <h3>Farmácias por Indicador</h3>
         <span class="subtitle">
           {{ indicadorLabel }} — {{ totalRecords }} estabelecimentos
-          <Tag v-if="totalCritico > 0" icon="pi pi-exclamation-triangle" :value="`${totalCritico} CRÍTICOS NA PÁGINA`" class="status-danger p-ml-2" />
         </span>
       </div>
       <div v-if="selectedRegiaoNome || selectedMunicipioNome" class="header-filter-chips">
@@ -185,16 +180,6 @@ function onLazyLoad(event) {
             :value="data.risco_reg.toFixed(1) + 'x'"
             :class="statusClass(data.status)"
           />
-          <span v-else class="muted">—</span>
-        </template>
-      </Column>
-
-      <!-- Limiar CRÍTICO -->
-      <Column header="Limiar Crítico" style="width:9%; text-align:center">
-        <template #body>
-          <span v-if="limiarCritico" class="val-cell-ref">
-            {{ limiarCritico.toFixed(2) }}x
-          </span>
           <span v-else class="muted">—</span>
         </template>
       </Column>

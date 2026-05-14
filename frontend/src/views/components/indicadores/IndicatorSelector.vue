@@ -153,6 +153,7 @@ function selectIndicador(key) {
   transition: background 0.15s ease, color 0.15s ease;
   color: var(--text-color);
   opacity: 0.8;
+  min-width: 0;
 }
 
 .ind-btn:hover {
@@ -174,8 +175,13 @@ function selectIndicador(key) {
 
 .ind-btn-label {
   font-size: 0.78rem;
-  line-height: 1.4;
+  font-weight: 500;
+  line-height: 1.2;
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ind-critico-badge {

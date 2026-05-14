@@ -80,22 +80,10 @@ const summaryItems = computed(() => {
       tone: 'warning',
     },
     {
-      label: 'Normal',
-      value: k.total_normal ?? 0,
-      sub: formatShare(k.total_normal ?? 0, total),
-      tone: 'normal',
-    },
-    {
       label: 'Mediana',
       value: formatIndicadorValue(k.mediana_reg),
       sub: null,
       tone: 'benchmark',
-    },
-    {
-      label: 'Acima limiar',
-      value: k.pct_acima_limiar != null ? `${k.pct_acima_limiar.toFixed(1)}%` : '—',
-      sub: null,
-      tone: 'warning',
     },
   ];
 });

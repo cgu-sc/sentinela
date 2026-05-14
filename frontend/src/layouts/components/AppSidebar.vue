@@ -272,6 +272,22 @@ const applyValorMinSemComp = () => {
   filterStore.valorMinSemCompFilter = filterStore.valorMinSemComp;
 };
 
+const valorMinQuickSelect = [100000, 300000, 500000];
+
+const formatValorChip = (v) =>
+  v >= 1000000 ? `R$${v / 1000000}M` : `R$${v / 1000}k`;
+
+const setValorMin = (v) => {
+  filterStore.valorMinSemComp = v;
+  applyValorMinSemComp();
+};
+
+const stepValorMin = (delta) => {
+  const next = Math.max(0, Math.min(FILTER_DEFAULTS.VALOR_MAX, filterStore.valorMinSemComp + delta));
+  filterStore.valorMinSemComp = next;
+  applyValorMinSemComp();
+};
+
 const volumeAtipicoQuickSelect = [40, 50, 100, 200, 500, 1000, 2000];
 
 const clampVolumeAtipico = (value) => {
@@ -1073,8 +1089,35 @@ onBeforeUnmount(() => {
           class="slider-container"
           :class="{ 'filter-active-box': isFilterActive('valorMinSemComp') }"
         >
-          <div class="slider-values">
-            <span>{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
+          <div class="perc-chips" style="grid-template-columns: repeat(3, 1fr)">
+            <button
+              v-for="v in valorMinQuickSelect"
+              :key="v"
+              class="perc-chip"
+              :class="{ 'perc-chip-active': filterStore.valorMinSemComp === v }"
+              @click="setValorMin(v)"
+            >
+              {{ formatValorChip(v) }}
+            </button>
+          </div>
+          <div class="period-steppers">
+            <div class="period-stepper-group">
+              <button
+                class="period-step-btn"
+                :disabled="filterStore.valorMinSemComp <= 0"
+                @click="stepValorMin(-10000)"
+              >
+                <i class="pi pi-chevron-left" />
+              </button>
+              <span class="period-step-label">{{ formatCurrency(filterStore.valorMinSemComp) }}</span>
+              <button
+                class="period-step-btn"
+                :disabled="filterStore.valorMinSemComp >= FILTER_DEFAULTS.VALOR_MAX"
+                @click="stepValorMin(10000)"
+              >
+                <i class="pi pi-chevron-right" />
+              </button>
+            </div>
           </div>
           <Slider
             v-model="filterStore.valorMinSemComp"

@@ -438,7 +438,7 @@ function onLazyLoad(event) {
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .subtitle {
@@ -599,7 +599,7 @@ function onLazyLoad(event) {
 
 .risk-value.status-success,
 .risk-status.status-success {
-  color: var(--text-color-85) !important;
+  color: var(--text-muted) !important;
 }
 
 .risk-value.status-secondary,
@@ -688,6 +688,15 @@ function onLazyLoad(event) {
 
 :deep(.ind-cnpj-table .col-name) {
   width: 21%;
+}
+
+:deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),
+:deep(.ind-cnpj-table .p-datatable-tbody > tr > td:first-child) {
+  padding-left: 1.25rem;
+}
+
+:deep(.ind-cnpj-table .p-datatable-tbody > tr > td) {
+  color: var(--text-color-85) !important;
 }
 
 :deep(.ind-cnpj-table .col-location) {

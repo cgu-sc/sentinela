@@ -8,7 +8,7 @@
   --sidebar-collapsed: 80px;
   --bg-color: #ffffff;
   --text-color: #1e293b;
-  --text-color-85: color-mix(in srgb, var(--text-color) 85%, transparent);
+  --text-color-85: #1e293b;
   --text-secondary: #475569;
   --text-muted: #64748b;
   --card-bg: #f8fafc;

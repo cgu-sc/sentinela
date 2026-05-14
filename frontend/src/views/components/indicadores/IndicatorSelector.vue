@@ -14,8 +14,7 @@ const emit = defineEmits(['select']);
 const indicadoresStore = useIndicadoresStore();
 const { selectedIndicador, kpis, isLoading } = storeToRefs(indicadoresStore);
 
-// Badge de contagem CRÍTICO para o indicador ativo
-const criticoCount = computed(() => kpis.value?.total_critico ?? 0);
+
 
 function selectIndicador(key) {
   emit('select', key);
@@ -46,10 +45,7 @@ function selectIndicador(key) {
           :title="ind.metodologia"
         >
           <span class="ind-btn-label">{{ ind.label }}</span>
-          <span
-            v-if="selectedIndicador === ind.key && criticoCount > 0 && !isLoading"
-            class="ind-critico-badge"
-          >{{ criticoCount }}</span>
+
           <i
             v-if="isLoading && selectedIndicador === ind.key"
             class="pi pi-spin pi-spinner ind-loading-icon"
@@ -182,20 +178,7 @@ function selectIndicador(key) {
   text-overflow: ellipsis;
 }
 
-.ind-critico-badge {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.4rem;
-  height: 1.4rem;
-  padding: 0 0.3rem;
-  background: var(--risk-indicator-critical);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 600;
-  border-radius: 99px;
-}
+
 
 .ind-loading-icon {
   flex-shrink: 0;

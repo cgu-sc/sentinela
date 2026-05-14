@@ -288,7 +288,7 @@ const stepValorMin = (delta) => {
   applyValorMinSemComp();
 };
 
-const volumeAtipicoQuickSelect = [40, 50, 100, 200, 500, 1000, 2000];
+const volumeAtipicoQuickSelect = [50, 500, 1000, 1500];
 
 const clampVolumeAtipico = (value) => {
   const numeric = Number(value) || FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;

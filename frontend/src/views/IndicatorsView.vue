@@ -232,7 +232,7 @@ function onCnpjTableLazy(event) {
 
 <style scoped>
 .indicadores-page {
-  --indicator-selector-width: 260px;
+  --indicator-selector-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 1rem;

@@ -103,7 +103,7 @@ onMounted(() => {});
 }
 
 .page-content {
-  padding: 1.25rem 1.4rem 1.5rem;
+  padding: 1.25rem 0.8rem 1.5rem 1.4rem;
   flex: 1;
   background: transparent !important;
 }

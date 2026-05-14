@@ -34,7 +34,8 @@ const geoStore = useGeoStore();
 const tabs = computed(() => {
   if (activeModule.value === 'consolidado') {
     return [
-      { label: 'Nacional',             path: '/' },
+      { label: 'Home',                 path: '/' },
+      { label: 'Nacional',             path: '/nacional' },
       { label: 'Municípios',           path: '/municipios' },
       { label: 'Estabelecimentos',     path: '/estabelecimentos' },
       { label: 'Indicadores',          path: '/indicadores' },
@@ -61,7 +62,7 @@ onMounted(() => {
 watch(activeModule, (newVal) => {
   if (
     newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:municipios|empresa|estabelecimentos|$)/)
+    !route.path.match(/^\/(?:nacional|municipios|empresa|estabelecimentos|indicadores|regional|listas|$)/)
   ) {
     router.push('/');
   } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {

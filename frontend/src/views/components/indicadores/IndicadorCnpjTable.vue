@@ -93,14 +93,14 @@ function onLazyLoad(event) {
 const tableFooter = computed(() => {
   const totalSemComprovacao = Number(props.tableKpis?.total_sem_comprovacao ?? 0);
   const totalMov = Number(props.tableKpis?.total_mov ?? 0);
-  const percSemComprovacao = props.tableKpis?.perc_sem_comprovacao;
 
   return {
     totalSemComprovacao: formatCurrencyFull(totalSemComprovacao),
     totalMov: formatCurrencyFull(totalMov),
-    percSemComprovacao: percSemComprovacao != null ? `${Number(percSemComprovacao).toFixed(2)}%` : '—',
   };
 });
+
+const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'Indicador');
 </script>
 
 <template>
@@ -202,11 +202,15 @@ const tableFooter = computed(() => {
       <!-- Valor do indicador + Mediana regional -->
       <Column
         field="valor"
-        header="Indicador"
         sortable
         headerClass="col-indicator"
         bodyClass="col-indicator"
       >
+        <template #header>
+          <span class="indicator-column-title" v-tooltip.top="indicatorColumnHeader">
+            {{ indicatorColumnHeader }}
+          </span>
+        </template>
         <template #body="{ data }">
           <div class="indicator-cell" :class="{ muted: data.valor == null }">
             <span class="indicator-value">{{ formatValue(data.valor) }}</span>
@@ -243,6 +247,24 @@ const tableFooter = computed(() => {
         </template>
       </Column>
 
+      <!-- Valor Movimentado -->
+      <Column
+        field="valor_movimentado"
+        header="Valor Movimentado"
+        sortable
+        headerClass="col-movement"
+        bodyClass="col-movement"
+      >
+        <template #body="{ data }">
+          <span class="movement-value">
+            {{ data.valor_movimentado != null ? formatCurrencyFull(data.valor_movimentado) : '—' }}
+          </span>
+        </template>
+        <template #footer>
+          <span class="movement-value table-total-movement">{{ tableFooter.totalMov }}</span>
+        </template>
+      </Column>
+
       <!-- Não Comprovação -->
       <Column
         field="val_sem_comp"
@@ -260,14 +282,13 @@ const tableFooter = computed(() => {
               {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
             </span>
             <span v-if="data.perc_val_sem_comp != null" class="noncomp-percent">
-              {{ data.perc_val_sem_comp.toFixed(1) }}%
+              {{ data.perc_val_sem_comp.toFixed(2) }}%
             </span>
           </div>
         </template>
         <template #footer>
           <div class="noncomp-cell table-total-cell">
             <span class="noncomp-value">{{ tableFooter.totalSemComprovacao }}</span>
-            <span class="noncomp-percent">{{ tableFooter.percSemComprovacao }}</span>
           </div>
         </template>
       </Column>
@@ -496,7 +517,7 @@ const tableFooter = computed(() => {
 }
 
 .cnpj-text {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }
@@ -552,7 +573,7 @@ const tableFooter = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
   color: var(--primary-color);
   border-radius: 4px;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
@@ -583,7 +604,7 @@ const tableFooter = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 500;
   line-height: 1;
   color: var(--text-muted);
@@ -629,6 +650,17 @@ const tableFooter = computed(() => {
   color: var(--text-muted);
 }
 
+.movement-value {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-color-85);
+  font-size: 0.75rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .risk-status {
   display: block;
   max-width: 100%;
@@ -662,7 +694,7 @@ const tableFooter = computed(() => {
 }
 
 .noncomp-percent {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 1;
   color: var(--text-muted);
@@ -684,6 +716,10 @@ const tableFooter = computed(() => {
 .table-total-cell .noncomp-percent {
   font-weight: 800;
   opacity: 0.9;
+}
+
+.table-total-movement {
+  font-weight: 800;
 }
 
 .network-count-muted {
@@ -726,7 +762,7 @@ const tableFooter = computed(() => {
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 21%;
+  width: 19%;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),
@@ -739,48 +775,70 @@ const tableFooter = computed(() => {
 }
 
 :deep(.ind-cnpj-table .col-location) {
-  width: 14%;
+  width: 12%;
 }
 
 :deep(.ind-cnpj-table .col-indicator) {
-  width: 10%;
+  width: 11%;
   text-align: right;
 }
 
 :deep(.ind-cnpj-table .col-risk) {
-  width: 8%;
+  width: 7%;
   text-align: center;
 }
 
+:deep(.ind-cnpj-table .col-movement) {
+  width: 11%;
+  text-align: right;
+}
+
 :deep(.ind-cnpj-table .col-noncomp) {
-  width: 14%;
+  width: 12%;
   text-align: right;
 }
 
 :deep(.ind-cnpj-table .col-network-flag) {
-  width: 9%;
+  width: 7%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
 :deep(.ind-cnpj-table .col-network-count) {
-  width: 8%;
+  width: 7%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
 :deep(.ind-cnpj-table .col-badge-filter) {
-  width: 8%;
+  width: 7%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
 :deep(.ind-cnpj-table .col-indicator .p-column-header-content),
+:deep(.ind-cnpj-table .col-movement .p-column-header-content),
 :deep(.ind-cnpj-table .col-noncomp .p-column-header-content) {
   justify-content: flex-end;
+}
+
+:deep(.ind-cnpj-table .col-indicator .p-column-title) {
+  min-width: 0;
+}
+
+.indicator-column-title {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 :deep(.ind-cnpj-table .col-risk .p-column-header-content),

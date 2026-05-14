@@ -494,6 +494,7 @@ def _build_indicador_cnpj_rows(
             situacao_rf=row.get("situacao_rf"),
             is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
             score_risco_final=_optional_float(row.get(score_col)) if score_col in df.columns else None,
+            valor_movimentado=_optional_float(row.get("total_vendas")),
             val_sem_comp=_optional_float(row.get("total_sem_comprovacao")),
             perc_val_sem_comp=_optional_float(row.get("perc_val_sem_comp")),
         ))
@@ -801,6 +802,7 @@ def get_indicadores_analise_cnpjs(
             "is_conexao_ativa": "is_conexao_ativa",
             "situacao_rf": "situacao_rf",
             "score_risco_final": score_col,
+            "valor_movimentado": "total_vendas",
             "val_sem_comp": "total_sem_comprovacao",
             "perc_val_sem_comp": "perc_val_sem_comp",
         }

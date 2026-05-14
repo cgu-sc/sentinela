@@ -72,6 +72,9 @@ function selectIndicador(key) {
 .indicator-selector {
   width: 260px;
   flex-shrink: 0;
+  position: sticky;
+  top: calc(56px + 1rem);
+  max-height: calc(100vh - 56px - 2rem);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -79,6 +82,8 @@ function selectIndicador(key) {
   border: 1px solid var(--card-border);
   border-radius: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   align-self: flex-start;
 }

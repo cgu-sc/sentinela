@@ -226,19 +226,29 @@ WITH SemestreComAnterior AS (
     SELECT
         S.cnpj,
         S.chave_semestre,
-        LAG(S.chave_semestre)  OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS chave_semestre_anterior,
-        LAG(S.valor_semestre)  OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS valor_semestre_anterior
+        S.valor_semestre,
+        S.qtd_meses_presentes,
+        -- Identifica a ordem cronológica dos semestres que tiveram alguma venda
+        ROW_NUMBER() OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) as rank_vendas,
+        -- Busca dados do semestre anterior que teve venda
+        LAG(S.chave_semestre)      OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS chave_semestre_anterior,
+        LAG(S.valor_semestre)      OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS valor_semestre_anterior,
+        LAG(S.qtd_meses_presentes) OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS qtd_meses_anterior
     FROM #vol_base_semestres S
-    WHERE S.is_semestre_valido = 1
+    WHERE S.valor_semestre > 0
 )
 SELECT
     CAST(F.id AS INT) AS id_cnpj,
     S.chave_semestre,
     CAST(
         CASE
-            WHEN S.is_semestre_valido = 0 THEN S.status_inicial
-            WHEN V.chave_semestre_anterior IS NULL OR V.valor_semestre_anterior <= 0 THEN 2
-            ELSE 1
+            -- Regra: 1º semestre de vida é sempre Início (status 2)
+            WHEN V.rank_vendas = 1 THEN 2
+            -- Regra: 2º semestre só compara se o 1º teve fôlego (>= 4 meses)
+            WHEN V.rank_vendas = 2 AND V.qtd_meses_anterior < 4 THEN 2
+            -- Regra: Do 3º em diante, ou 2º com base sólida, é Comparável (status 1)
+            WHEN V.chave_semestre_anterior IS NOT NULL AND V.valor_semestre_anterior > 0 THEN 1
+            ELSE 2
         END
     AS TINYINT) AS status_semestre,
     S.qtd_meses_presentes,
@@ -246,8 +256,8 @@ SELECT
     V.chave_semestre_anterior,
     CAST(
         CASE
-            WHEN S.is_semestre_valido = 1
-             AND V.valor_semestre_anterior > 0
+            WHEN V.rank_vendas = 2 AND V.qtd_meses_anterior < 4 THEN NULL
+            WHEN V.valor_semestre_anterior > 0
                 THEN ((S.valor_semestre - V.valor_semestre_anterior) / CAST(V.valor_semestre_anterior AS DECIMAL(18,2))) * 100.0
             ELSE NULL
         END

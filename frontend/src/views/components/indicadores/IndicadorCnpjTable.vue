@@ -173,14 +173,25 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
-      <Column field="risco_reg" header="Risco Reg." sortable style="width:9%; text-align:center">
+      <Column field="risco_reg" header="Risco" sortable style="width:10%; text-align:center">
         <template #body="{ data }">
-          <Tag
-            v-if="data.risco_reg != null"
-            :value="data.risco_reg.toFixed(1) + 'x'"
-            :class="statusClass(data.status)"
-          />
-          <span v-else class="muted">—</span>
+          <div class="risk-cell" :class="{ muted: data.risco_reg == null }">
+            <span
+              v-if="data.risco_reg != null"
+              class="risk-value"
+              :class="statusClass(data.status)"
+            >
+              {{ data.risco_reg.toFixed(1) }}x
+            </span>
+            <span v-else>—</span>
+            <span
+              v-if="data.status"
+              class="risk-status"
+              :class="statusClass(data.status)"
+            >
+              {{ data.status }}
+            </span>
+          </div>
         </template>
       </Column>
 
@@ -201,15 +212,8 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
-      <!-- Status -->
-      <Column field="status" header="Status" sortable style="width:9%; text-align:center">
-        <template #body="{ data }">
-          <Tag :value="data.status" :class="statusClass(data.status)" />
-        </template>
-      </Column>
-
       <!-- Conexão MS -->
-      <Column field="is_conexao_ativa" header="Conex. MS" sortable style="width:8%; text-align:center">
+      <Column field="is_conexao_ativa" header="Conex. MS" style="width:8%; text-align:center">
         <template #body="{ data }">
           <Tag
             :value="data.is_conexao_ativa ? 'Ativa' : 'Inativa'"
@@ -221,7 +225,7 @@ function onLazyLoad(event) {
       </Column>
 
       <!-- Situação RF -->
-      <Column field="situacao_rf" header="Sit. RF" sortable style="width:8%; text-align:center">
+      <Column field="situacao_rf" header="Sit. RF" style="width:8%; text-align:center">
         <template #body="{ data }">
           <Tag
             v-if="data.situacao_rf"
@@ -440,6 +444,60 @@ function onLazyLoad(event) {
 .val-cell {
   display: block;
   text-align: right;
+}
+
+.risk-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.risk-value {
+  display: block;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.risk-value.status-danger,
+.risk-status.status-danger {
+  color: var(--risk-high);
+}
+
+.risk-value.status-warn,
+.risk-status.status-warn {
+  color: var(--risk-medium);
+}
+
+.risk-value.status-success,
+.risk-status.status-success {
+  color: var(--risk-low);
+}
+
+.risk-value.status-secondary,
+.risk-status.status-secondary {
+  color: var(--text-muted);
+}
+
+.risk-status {
+  display: block;
+  max-width: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
 }
 
 .noncomp-cell {

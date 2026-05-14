@@ -184,27 +184,20 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
-      <!-- % Não Comprovação -->
-      <Column field="perc_val_sem_comp" header="% Não Comp." sortable style="width:9%; text-align:right">
+      <!-- Não Comprovação -->
+      <Column field="val_sem_comp" header="Não Comprovação" sortable style="width:13%; text-align:right">
         <template #body="{ data }">
-          <span class="val-cell" :class="{ muted: data.perc_val_sem_comp == null }">
-            {{ data.perc_val_sem_comp != null ? data.perc_val_sem_comp.toFixed(1) + '%' : '—' }}
-          </span>
-        </template>
-      </Column>
-
-      <!-- Valor Não Comprovação -->
-      <Column field="val_sem_comp" header="Vlr. Não Comp." sortable style="width:10%; text-align:right">
-        <template #body="{ data }">
-          <span
-            class="val-cell"
-            :class="{
-              'muted': data.val_sem_comp == null,
-              'high-value-audit': data.val_sem_comp >= AUDIT_THRESHOLDS.HIGH_VALUE
-            }"
-          >
-            {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
-          </span>
+          <div class="noncomp-cell" :class="{ muted: data.val_sem_comp == null }">
+            <span
+              class="noncomp-value"
+              :class="{ 'high-value-audit': data.val_sem_comp >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+            >
+              {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
+            </span>
+            <span v-if="data.perc_val_sem_comp != null" class="noncomp-percent">
+              {{ data.perc_val_sem_comp.toFixed(1) }}%
+            </span>
+          </div>
         </template>
       </Column>
 
@@ -447,6 +440,31 @@ function onLazyLoad(event) {
 .val-cell {
   display: block;
   text-align: right;
+}
+
+.noncomp-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.noncomp-value {
+  display: block;
+  max-width: 100%;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.noncomp-percent {
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.72;
 }
 
 .muted {

@@ -250,31 +250,44 @@ function onLazyLoad(event) {
         </template>
       </Column>
 
-      <!-- Rede -->
+      <!-- Grande Rede -->
       <Column
         field="is_grande_rede"
-        header="Rede"
-        headerClass="col-network"
-        bodyClass="col-network"
+        header="Grande Rede"
+        headerClass="col-network-flag"
+        bodyClass="col-network-flag"
       >
         <template #body="{ data }">
-          <div class="network-cell">
-            <Tag
-              :value="data.is_grande_rede ? 'Grande' : 'Indep.'"
-              :class="[data.is_grande_rede ? 'status-info' : 'status-secondary', 'clickable-badge']"
-              v-tooltip.top="'Filtrar por Grande Rede: ' + (data.is_grande_rede ? 'Sim' : 'Não')"
-              @click.stop="applyFilter('grandeRede', data.is_grande_rede)"
-            />
-            <Tag
-              v-if="data.qtd_estabelecimentos_rede > 1"
-              :value="String(data.qtd_estabelecimentos_rede) + ' estab.'"
-              class="status-info clickable-badge network-count"
-              v-tooltip.top="'Ver todos os estabelecimentos desta rede'"
-              @click.stop="filterStore.selectedCnpjRaiz = extractCnpjRaiz(data.cnpj)"
-            />
-            <span v-else-if="data.qtd_estabelecimentos_rede === 1" class="network-count-muted">1 estab.</span>
-            <span v-else class="network-count-muted">—</span>
-          </div>
+          <Tag
+            :value="data.is_grande_rede ? 'Sim' : 'Não'"
+            :class="[data.is_grande_rede ? 'status-info' : 'status-secondary', 'clickable-badge']"
+            v-tooltip.top="'Filtrar por Grande Rede: ' + (data.is_grande_rede ? 'Sim' : 'Não')"
+            @click.stop="applyFilter('grandeRede', data.is_grande_rede)"
+          />
+        </template>
+      </Column>
+
+      <!-- Estabelecimentos da Rede -->
+      <Column
+        field="qtd_estabelecimentos_rede"
+        header="Estab. Rede"
+        headerClass="col-network-count"
+        bodyClass="col-network-count"
+      >
+        <template #body="{ data }">
+          <Tag
+            v-if="data.qtd_estabelecimentos_rede > 1"
+            :value="String(data.qtd_estabelecimentos_rede)"
+            class="status-info clickable-badge"
+            v-tooltip.top="'Ver todos os estabelecimentos desta rede'"
+            @click.stop="filterStore.selectedCnpjRaiz = extractCnpjRaiz(data.cnpj)"
+          />
+          <Tag
+            v-else-if="data.qtd_estabelecimentos_rede === 1"
+            value="1"
+            class="status-secondary"
+          />
+          <span v-else class="network-count-muted">—</span>
         </template>
       </Column>
 
@@ -634,15 +647,6 @@ function onLazyLoad(event) {
   opacity: 0.72;
 }
 
-.network-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.18rem;
-  min-width: 0;
-}
-
 .network-count-muted {
   display: block;
   max-width: 100%;
@@ -683,11 +687,11 @@ function onLazyLoad(event) {
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 22%;
+  width: 21%;
 }
 
 :deep(.ind-cnpj-table .col-location) {
-  width: 12%;
+  width: 11%;
 }
 
 :deep(.ind-cnpj-table .col-indicator) {
@@ -701,19 +705,26 @@ function onLazyLoad(event) {
 }
 
 :deep(.ind-cnpj-table .col-noncomp) {
-  width: 21%;
+  width: 18%;
   text-align: right;
 }
 
-:deep(.ind-cnpj-table .col-network) {
+:deep(.ind-cnpj-table .col-network-flag) {
   width: 8%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
 
+:deep(.ind-cnpj-table .col-network-count) {
+  width: 7%;
+  text-align: center;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
 :deep(.ind-cnpj-table .col-badge-filter) {
-  width: 8%;
+  width: 7%;
   text-align: center;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
@@ -725,7 +736,8 @@ function onLazyLoad(event) {
 }
 
 :deep(.ind-cnpj-table .col-risk .p-column-header-content),
-:deep(.ind-cnpj-table .col-network .p-column-header-content),
+:deep(.ind-cnpj-table .col-network-flag .p-column-header-content),
+:deep(.ind-cnpj-table .col-network-count .p-column-header-content),
 :deep(.ind-cnpj-table .col-badge-filter .p-column-header-content) {
   justify-content: center;
 }
@@ -746,13 +758,13 @@ function onLazyLoad(event) {
   white-space: nowrap;
 }
 
-:deep(.ind-cnpj-table .col-network .p-tag) {
+:deep(.ind-cnpj-table .col-network-flag .p-tag) {
   max-width: 100%;
   padding-left: 0.38rem;
   padding-right: 0.38rem;
 }
 
-:deep(.ind-cnpj-table .col-network .p-tag-value) {
+:deep(.ind-cnpj-table .col-network-flag .p-tag-value) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -771,7 +783,7 @@ function onLazyLoad(event) {
 
 :deep(.p-datatable-wrapper) {
   border-radius: 0 0 12px 12px;
-  min-height: calc(10 * 2.625rem);
+  min-height: calc(20 * 2.625rem);
 }
 
 :deep(.p-tag) {

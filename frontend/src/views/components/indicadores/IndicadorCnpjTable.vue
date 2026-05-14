@@ -26,9 +26,11 @@ const props = defineProps({
   rows: { type: Number, default: 20 },
   sortField: { type: String, default: 'risco_reg' },
   sortOrder: { type: Number, default: -1 },
+  selectedRegiaoNome: { type: String, default: null },
+  selectedMunicipioNome: { type: String, default: null },
 });
 
-const emit = defineEmits(['lazy-load']);
+const emit = defineEmits(['lazy-load', 'clear-regiao-filter', 'clear-municipio-filter']);
 
 const router = useRouter();
 const filterStore = useFilterStore();
@@ -92,6 +94,23 @@ function onLazyLoad(event) {
           {{ indicadorLabel }} — {{ totalRecords }} estabelecimentos
           <Tag v-if="totalCritico > 0" icon="pi pi-exclamation-triangle" :value="`${totalCritico} CRÍTICOS NA PÁGINA`" class="status-danger p-ml-2" />
         </span>
+      </div>
+      <div v-if="selectedRegiaoNome || selectedMunicipioNome" class="header-filter-chips">
+        <div v-if="selectedRegiaoNome" class="scope-filter-chip">
+          <i class="pi pi-directions" />
+          <span>Região: <strong>{{ selectedRegiaoNome }}</strong></span>
+          <button class="chip-clear" @click="$emit('clear-regiao-filter')" title="Limpar Região">
+            <i class="pi pi-times" />
+          </button>
+        </div>
+
+        <div v-if="selectedMunicipioNome" class="scope-filter-chip">
+          <i class="pi pi-map-marker" />
+          <span>Município: <strong>{{ selectedMunicipioNome }}</strong></span>
+          <button class="chip-clear" @click="$emit('clear-municipio-filter')" title="Limpar Município">
+            <i class="pi pi-times" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -264,6 +283,70 @@ function onLazyLoad(event) {
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--tabs-border);
+}
+
+.header-text-box {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-filter-chips {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.scope-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 18rem;
+  min-height: 1.8rem;
+  padding: 0.35rem 0.7rem;
+  background: color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 35%, transparent);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  color: var(--text-color);
+}
+
+.scope-filter-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-filter-chip i.pi-directions,
+.scope-filter-chip i.pi-map-marker {
+  color: var(--risk-indicator-critical, #ef4444);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chip-clear:hover {
+  opacity: 1;
+  color: var(--risk-indicator-critical, #ef4444);
 }
 
 .header-icon-box {

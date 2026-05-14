@@ -200,27 +200,6 @@ function onCnpjTableLazy(event) {
           @select-uf="onSelectUf"
         />
 
-        <!-- Pílulas de Filtros Ativos -->
-        <div class="active-filters-row" v-if="selectedMunicipioNome || selectedRegiaoNome">
-          <!-- Filtro de Região de Saúde ativa -->
-          <div v-if="selectedRegiaoNome" class="municipio-filter-chip">
-            <i class="pi pi-directions" />
-            <span>Região: <strong>{{ selectedRegiaoNome }}</strong></span>
-            <button class="chip-clear" @click="clearRegiaoFilter" title="Limpar Região">
-              <i class="pi pi-times" />
-            </button>
-          </div>
-
-          <!-- Filtro de município ativo -->
-          <div v-if="selectedMunicipioNome" class="municipio-filter-chip">
-            <i class="pi pi-map-marker" />
-            <span>Município: <strong>{{ selectedMunicipioNome }}</strong></span>
-            <button class="chip-clear" @click="clearMunicipioFilter" title="Limpar Município">
-              <i class="pi pi-times" />
-            </button>
-          </div>
-        </div>
-
         <!-- Tabela ranqueada de CNPJs -->
         <IndicadorCnpjTable
           :cnpjs="displayedCnpjs"
@@ -234,7 +213,11 @@ function onCnpjTableLazy(event) {
           :sort-field="cnpjsSortField"
           :sort-order="cnpjsSortOrder"
           :limiar-critico="kpis?.limiar_critico"
+          :selected-regiao-nome="selectedRegiaoNome"
+          :selected-municipio-nome="selectedMunicipioNome"
           @lazy-load="onCnpjTableLazy"
+          @clear-regiao-filter="clearRegiaoFilter"
+          @clear-municipio-filter="clearMunicipioFilter"
         />
 
       </template>
@@ -344,52 +327,6 @@ function onCnpjTableLazy(event) {
   font-size: 2rem;
   color: var(--risk-indicator-critical);
   opacity: 0.7;
-}
-
-
-/* ── Pílulas de Filtros Ativos ── */
-.active-filters-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.municipio-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.85rem;
-  background: color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 10%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--risk-indicator-critical, #ef4444) 40%, transparent);
-  border-radius: 99px;
-  font-size: 0.78rem;
-  color: var(--text-color);
-  align-self: flex-start;
-}
-
-.municipio-filter-chip i.pi-map-marker,
-.municipio-filter-chip i.pi-directions {
-  color: var(--risk-indicator-critical, #ef4444);
-  font-size: 0.75rem;
-}
-
-.chip-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.1rem;
-  color: var(--text-muted);
-  font-size: 0.65rem;
-  margin-left: 0.15rem;
-  opacity: 0.7;
-  transition: opacity 0.15s ease;
-}
-
-.chip-clear:hover {
-  opacity: 1;
 }
 
 /* ── Aviso de Snapshot ── */

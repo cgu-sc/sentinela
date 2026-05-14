@@ -549,11 +549,10 @@ class IndicadorMunicipioRowSchema(BaseModel):
 
 
 class IndicadorAnaliseResponse(BaseModel):
-    """Payload completo da análise cruzada de um indicador."""
+    """Payload de resumo da análise cruzada de um indicador."""
     indicador: str
     kpis: IndicadorKpiSummarySchema
     municipios: List[IndicadorMunicipioRowSchema]
-    cnpjs: List[IndicadorCnpjRowSchema]
 
 
 class IndicadorCnpjPageResponse(BaseModel):

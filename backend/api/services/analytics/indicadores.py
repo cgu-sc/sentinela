@@ -319,7 +319,7 @@ def get_indicadores_analise(
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
-    e tabela de CNPJs ranqueados por risco, filtrados pelo escopo geográfico.
+    filtrados pelo escopo geográfico.
 
     Operação 100% em memória (Polars) sobre df_matriz_risco + df_movimentacao.
     Não usa filtros de período — a matriz_risco é um snapshot consolidado.
@@ -341,7 +341,7 @@ def get_indicadores_analise(
         val_min: Valor bruto mínimo sem comprovação (R$)
 
     Returns:
-        IndicadorAnaliseResponse com kpis, municipios e cnpjs.
+        IndicadorAnaliseResponse com kpis e municipios.
 
     Raises:
         HTTPException 400 se a chave do indicador for inválida.
@@ -406,7 +406,7 @@ def get_indicadores_analise(
 
         if df_geo.is_empty():
             empty_kpis = IndicadorKpiSummarySchema()
-            return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[], cnpjs=[])
+            return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[])
 
         # ── 3. Join com matriz de risco (inner: apenas CNPJs com score calculado) ──
         df_risco = get_df_matriz_risco()
@@ -422,7 +422,7 @@ def get_indicadores_analise(
 
         if df_joined.is_empty():
             empty_kpis = IndicadorKpiSummarySchema()
-            return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[], cnpjs=[])
+            return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[])
 
         # ── 5. Calcula status via flags MAD (fonte de verdade: fp.matriz_risco_consolidada) ──
         # fl_*_crit e fl_*_aten são calculados no SQL via Modified Z-Score por região/UF.
@@ -442,35 +442,7 @@ def get_indicadores_analise(
         else:
             df_joined = df_joined.with_columns(pl.lit("SEM DADOS").alias("status"))
 
-        # ── 6. Ordena por risco_reg descendente ──
-        if rr_col and rr_col in df_joined.columns:
-            df_sorted = df_joined.sort(rr_col, descending=True, nulls_last=True)
-        else:
-            df_sorted = df_joined
-        df_sorted = df_sorted.head(0)
-
-        # ── 7. Monta lista de CNPJs ──
-        cnpjs_list: list[IndicadorCnpjRowSchema] = []
-        for row in df_sorted.iter_rows(named=True):
-            cnpjs_list.append(IndicadorCnpjRowSchema(
-                cnpj=str(row["cnpj"]),
-                razao_social=row.get("razao_social"),
-                municipio=str(row["no_municipio"]).title() if row.get("no_municipio") else None,
-                uf=row.get("uf"),
-                id_ibge7=int(row["id_ibge7"]) if row.get("id_ibge7") is not None else None,
-                valor=_optional_float(row.get(c_val)),
-                med_reg=_optional_float(row.get(c_mr)),
-                risco_reg=_optional_float(row.get(c_rr)) if rr_col else None,
-                status=row.get("status", "SEM DADOS"),
-                is_grande_rede=bool(row.get("is_grande_rede", False)),
-                situacao_rf=row.get("situacao_rf"),
-                is_conexao_ativa=bool(row.get("is_conexao_ativa", False)),
-                score_risco_final=_optional_float(row.get(score_col)) if score_col in (risco_cols_available) else None,
-                val_sem_comp=_optional_float(row.get("total_sem_comprovacao")),
-                perc_val_sem_comp=_optional_float(row.get("perc_val_sem_comp")),
-            ))
-
-        # ── 8. Agregação por município para o mapa ──
+        # ── 6. Agregação por município para o mapa ──
         mun_agg = (
             df_joined
             .group_by(["no_municipio", "uf", "id_ibge7"])
@@ -500,7 +472,7 @@ def get_indicadores_analise(
                 pct_critico=_optional_float(row.get("pct_critico")) or 0.0,
             ))
 
-        # ── 9. KPIs de resumo com Contexto Regional de Benchmarking ──
+        # ── 7. KPIs de resumo com Contexto Regional de Benchmarking ──
         status_counts = df_joined["status"].value_counts().to_dicts()
         counts = {r["status"]: r["count"] for r in status_counts}
 
@@ -560,7 +532,6 @@ def get_indicadores_analise(
             indicador=indicador,
             kpis=kpis,
             municipios=municipios_list,
-            cnpjs=[],
         )
 
     except HTTPException:

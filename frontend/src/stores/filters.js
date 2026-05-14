@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
-import { ref, reactive, watch } from 'vue';
+import { computed, ref, reactive, watch } from 'vue';
 import axios from 'axios';
 import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
 import { useGeoStore } from './geo';
 import { API_ENDPOINTS } from '@/config/api';
+import { extractCnpjFilter } from '@/composables/useParsing';
 
 const STORAGE_KEY = 'sentinela_filters';
 
@@ -20,6 +21,24 @@ function loadFromStorage() {
   } catch {
     return null;
   }
+}
+
+function toLocalISO(date) {
+  if (!date || !(date instanceof Date)) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
+function withoutEmptyValues(params) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== null && value !== undefined && value !== '')
+  );
 }
 
 export const useFilterStore = defineStore('filters', () => {
@@ -63,6 +82,164 @@ export const useFilterStore = defineStore('filters', () => {
   );
   const periodo = ref(saved?.periodo ?? FILTER_DEFAULTS.DATE_RANGE);
   const sliderValue = ref(saved?.sliderValue ?? FILTER_DEFAULTS.SLIDER_INDEX_RANGE);
+
+  const isPeriodoValido = computed(() => {
+    const p = periodo.value;
+    return Boolean(p && Array.isArray(p) && p.length === 2 && p[0] && p[1]);
+  });
+
+  const apiParams = computed(() => {
+    const p = periodo.value;
+    const inicio = p?.[0] ? toLocalISO(p[0]) : null;
+    const fim = p?.[1] ? toLocalISO(p[1]) : null;
+
+    const percMin = percentualNaoComprovacaoFilter.value[0] !== 0
+      ? percentualNaoComprovacaoFilter.value[0]
+      : null;
+    const percMax = percentualNaoComprovacaoFilter.value[1] !== 100
+      ? percentualNaoComprovacaoFilter.value[1]
+      : null;
+    const valMin = valorMinSemCompFilter.value > 0 ? valorMinSemCompFilter.value : null;
+    const volumeAtipicoActive = Boolean(volumeAtipicoEnabled.value);
+    const volumeAtipicoPercentual = volumeAtipicoActive
+      ? Math.max(
+          FILTER_DEFAULTS.VOLUME_ATIPICO_MIN,
+          Math.min(
+            FILTER_DEFAULTS.VOLUME_ATIPICO_MAX,
+            Number(volumeAtipicoPercentualFilter.value) || FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL
+          )
+        )
+      : null;
+
+    const uf = selectedUF.value !== FILTER_ALL_VALUE ? selectedUF.value : null;
+    const rawRegiao = selectedRegiaoSaude.value !== FILTER_ALL_VALUE ? selectedRegiaoSaude.value : null;
+    const regiaoId = rawRegiao ? Number(rawRegiao) : null;
+    if (rawRegiao && Number.isNaN(regiaoId)) {
+      throw new Error('Filtro regional invalido: use id_regiao_saude.');
+    }
+
+    const rawMunicipio = selectedMunicipio.value !== FILTER_ALL_VALUE ? selectedMunicipio.value : null;
+    const idIbge7 = rawMunicipio ? Number(rawMunicipio) : null;
+    if (rawMunicipio && Number.isNaN(idIbge7)) {
+      throw new Error('Filtro municipal invalido: use id_ibge7.');
+    }
+
+    const raw = selectedCnpjRaiz.value;
+    const rawSearchValue = typeof raw === 'string' ? raw : (raw?.cnpj ?? raw?.label ?? '');
+    const rawSearch = String(rawSearchValue ?? '');
+    const trimmedSearch = rawSearch.trim();
+    const numericOnly = rawSearch.replace(/\D/g, '');
+    const cnpjRaiz = numericOnly.length >= 8 ? extractCnpjFilter(rawSearch) : null;
+    const razaoSocial = numericOnly.length < 8 && trimmedSearch.length >= 2 ? trimmedSearch : null;
+
+    return {
+      inicio,
+      fim,
+      percMin,
+      percMax,
+      valMin,
+      uf,
+      regiaoId,
+      idIbge7,
+      situacaoRf: selectedSituacao.value !== FILTER_ALL_VALUE ? selectedSituacao.value : null,
+      conexaoMs: selectedMS.value !== FILTER_ALL_VALUE ? selectedMS.value : null,
+      porteEmpresa: selectedPorte.value !== FILTER_ALL_VALUE ? selectedPorte.value : null,
+      grandeRede: selectedGrandeRede.value !== FILTER_ALL_VALUE ? selectedGrandeRede.value : null,
+      cnpjRaiz,
+      razaoSocial,
+      estabelecimento: razaoSocial,
+      unidadePf: selectedUnidadePf.value !== FILTER_ALL_VALUE ? selectedUnidadePf.value : null,
+      volumeAtipicoEnabled: volumeAtipicoActive,
+      volumeAtipicoPercentual,
+      parTeia: selectedParTeia.value !== FILTER_ALL_VALUE ? selectedParTeia.value : null,
+    };
+  });
+
+  const apiParamsKey = computed(() => stableStringify(apiParams.value));
+
+  const nationalContextApiParamsKey = computed(() => {
+    const {
+      inicio,
+      fim,
+      percMin,
+      percMax,
+      valMin,
+      situacaoRf,
+      conexaoMs,
+      porteEmpresa,
+      grandeRede,
+      unidadePf,
+      parTeia,
+      volumeAtipicoEnabled,
+      volumeAtipicoPercentual,
+    } = apiParams.value;
+
+    return stableStringify({
+      inicio,
+      fim,
+      percMin,
+      percMax,
+      valMin,
+      situacaoRf,
+      conexaoMs,
+      porteEmpresa,
+      grandeRede,
+      unidadePf,
+      parTeia,
+      volumeAtipicoEnabled,
+      volumeAtipicoPercentual,
+    });
+  });
+
+  const estabelecimentoFilterKey = computed(() => {
+    const { cnpjRaiz, razaoSocial, estabelecimento } = apiParams.value;
+    return stableStringify({ cnpjRaiz, razaoSocial, estabelecimento });
+  });
+
+  const indicadoresApiParams = computed(() => {
+    const {
+      uf,
+      regiaoId,
+      situacaoRf,
+      conexaoMs,
+      porteEmpresa,
+      grandeRede,
+      cnpjRaiz,
+      estabelecimento,
+      unidadePf,
+      parTeia,
+      percMin,
+      percMax,
+      valMin,
+    } = apiParams.value;
+
+    return withoutEmptyValues({
+      uf,
+      regiao_id: regiaoId,
+      situacao_rf: situacaoRf,
+      conexao_ms: conexaoMs,
+      porte_empresa: porteEmpresa,
+      grande_rede: grandeRede,
+      cnpj_raiz: cnpjRaiz,
+      estabelecimento,
+      unidade_pf: unidadePf,
+      par_teia: parTeia,
+      perc_min: percMin,
+      perc_max: percMax,
+      val_min: valMin,
+    });
+  });
+
+  const indicadoresTabelaApiParams = computed(() => {
+    const params = { ...indicadoresApiParams.value };
+    if (apiParams.value.idIbge7 !== null && apiParams.value.idIbge7 !== undefined) {
+      params.id_ibge7 = apiParams.value.idIbge7;
+    }
+    return params;
+  });
+
+  const indicadoresApiParamsKey = computed(() => stableStringify(indicadoresApiParams.value));
+  const indicadoresTabelaApiParamsKey = computed(() => stableStringify(indicadoresTabelaApiParams.value));
 
   // 3. CONTROLE DE CONTEXTO
   const filtersLocked = ref(false);
@@ -362,6 +539,15 @@ export const useFilterStore = defineStore('filters', () => {
     volumeAtipicoPercentualFilter,
     periodo,
     sliderValue,
+    isPeriodoValido,
+    apiParams,
+    apiParamsKey,
+    nationalContextApiParamsKey,
+    estabelecimentoFilterKey,
+    indicadoresApiParams,
+    indicadoresTabelaApiParams,
+    indicadoresApiParamsKey,
+    indicadoresTabelaApiParamsKey,
     clusterSelection,
     statusSelection,
     rfaSelection,

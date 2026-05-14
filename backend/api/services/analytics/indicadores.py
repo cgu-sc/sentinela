@@ -360,95 +360,30 @@ def get_indicadores_analise(
         )
 
     try:
-        c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
-        c_aten, c_crit = _INDICATOR_FLAGS[indicador]
-
-        # ── 1. Snapshot geográfico por CNPJ (última ocorrência de cada campo cadastral) ──
-        df_mov = get_df()
-        perfil_df = get_df_perfil_estabelecimento()
-        df_geo = df_mov.group_by("id_cnpj").agg([
-            pl.col("total_vendas").sum().alias("total_vendas"),
-            pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
-        ]).join(perfil_df, on="id_cnpj", how="inner").with_columns([
-            pl.when(pl.col("total_vendas") > 0)
-              .then((pl.col("total_sem_comprovacao") / pl.col("total_vendas") * 100).round(2))
-              .otherwise(pl.lit(None))
-              .alias("perc_val_sem_comp")
-        ])
-
-        # ── 2. Filtros geográficos e cadastrais ──
-        mask = pl.lit(True)
-        if uf and uf != 'Todos':
-            mask = mask & (pl.col("uf") == uf)
-        if regiao_id is not None:
-            mask = mask & (pl.col("id_regiao_saude") == str(regiao_id))
-        if id_ibge7 is not None:
-            mask = mask & (pl.col("id_ibge7") == id_ibge7)
-        if situacao_rf and situacao_rf != 'Todos':
-            mask = mask & (pl.col("situacao_rf") == situacao_rf)
-        if conexao_ms and conexao_ms != 'Todos':
-            mask = mask & (pl.col("is_conexao_ativa") == (conexao_ms == 'Ativa'))
-        if porte_empresa and porte_empresa != 'Todos':
-            mask = mask & (pl.col("porte_empresa") == porte_empresa)
-        if grande_rede and grande_rede != 'Todos':
-            mask = mask & (pl.col("is_grande_rede") == (grande_rede == 'Sim'))
-        if unidade_pf and unidade_pf != 'Todos':
-            mask = mask & (pl.col("unidade_pf") == unidade_pf)
-        if cnpj_raiz:
-            cnpj_raiz_clean = cnpj_raiz.replace(".", "").replace("/", "").replace("-", "")
-            if len(cnpj_raiz_clean) == 14:
-                mask = mask & (pl.col("cnpj") == cnpj_raiz_clean)
-            elif len(cnpj_raiz_clean) >= 8:
-                mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
-
-        df_geo = _apply_estabelecimento_search(df_geo.filter(mask), estabelecimento)
-        df_geo = apply_par_teia_filter(df_geo, par_teia)
-
-        # ── 2A. Novos Filtros de Valor e Percentual (Snapshot) ──
-        if perc_min is not None:
-            df_geo = df_geo.filter(pl.col("perc_val_sem_comp") >= perc_min)
-        if perc_max is not None:
-            df_geo = df_geo.filter(pl.col("perc_val_sem_comp") <= perc_max)
-        if val_min is not None:
-            df_geo = df_geo.filter(pl.col("total_sem_comprovacao") >= val_min)
-
-        if df_geo.is_empty():
-            empty_kpis = IndicadorKpiSummarySchema()
-            return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[])
-
-        # ── 3. Join com matriz de risco (inner: apenas CNPJs com score calculado) ──
-        df_risco = get_df_matriz_risco()
-        df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-
-        # Seleciona apenas as colunas necessárias da matriz
-        score_col = "score_risco_final"
-        risco_cols = ["cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
-        risco_cols_available = [c for c in risco_cols if c in df_risco.columns]
-
-        df_risco_slim = df_risco.select(risco_cols_available)
-        df_joined = df_geo.join(df_risco_slim, on="cnpj", how="inner")
+        df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_joined(
+            indicador,
+            uf=uf,
+            situacao_rf=situacao_rf,
+            conexao_ms=conexao_ms,
+            porte_empresa=porte_empresa,
+            grande_rede=grande_rede,
+            cnpj_raiz=cnpj_raiz,
+            estabelecimento=estabelecimento,
+            unidade_pf=unidade_pf,
+            perc_min=perc_min,
+            perc_max=perc_max,
+            val_min=val_min,
+            regiao_id=regiao_id,
+            id_ibge7=id_ibge7,
+            par_teia=par_teia,
+        )
 
         if df_joined.is_empty():
             empty_kpis = IndicadorKpiSummarySchema()
             return IndicadorAnaliseResponse(indicador=indicador, kpis=empty_kpis, municipios=[])
 
-        # ── 5. Calcula status via flags MAD (fonte de verdade: fp.matriz_risco_consolidada) ──
-        # fl_*_crit e fl_*_aten são calculados no SQL via Modified Z-Score por região/UF.
-        rr_col = c_rr if c_rr in df_joined.columns else None
-        has_flags = c_crit in df_joined.columns and c_aten in df_joined.columns
-        if has_flags:
-            df_joined = df_joined.with_columns([
-                pl.when(pl.col(c_val).is_null())
-                  .then(pl.lit("SEM DADOS"))
-                  .when(pl.col(c_crit).cast(pl.Int32) == 1)
-                  .then(pl.lit("CRÍTICO"))
-                  .when(pl.col(c_aten).cast(pl.Int32) == 1)
-                  .then(pl.lit("ATENÇÃO"))
-                  .otherwise(pl.lit("NORMAL"))
-                  .alias("status")
-            ])
-        else:
-            df_joined = df_joined.with_columns(pl.lit("SEM DADOS").alias("status"))
+        if rr_col is None:
+            raise RuntimeError(f"Coluna de risco regional obrigatoria ausente para indicador '{indicador}'.")
 
         # ── 6. Agregação por município para o mapa ──
         mun_agg = (
@@ -510,11 +445,11 @@ def get_indicadores_analise(
         # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
         df_context_geo = perfil_df.select(["id_cnpj", "cnpj", "uf", "id_regiao_saude"]).filter(context_mask)
         
-        df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, c_rr]), on="cnpj", how="inner")
+        df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, rr_col]), on="cnpj", how="inner")
         
         if not df_context.is_empty():
             s_valores = df_context.select(c_val).drop_nulls().to_series().sort()
-            s_riscos = df_context.select(c_rr).drop_nulls().to_series().sort()
+            s_riscos = df_context.select(rr_col).drop_nulls().to_series().sort()
             
             if not s_valores.is_empty():
                 mediana_reg = _optional_float(s_valores.median()) or 0.0

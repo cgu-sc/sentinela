@@ -359,10 +359,10 @@ const isIndicadoresRoute = computed(() =>
   route.path.startsWith("/indicadores"),
 );
 const periodFilterLocked = computed(
-  () => (filtersLocked.value && !isPeriodOnlyRoute.value) || isIndicadoresRoute.value,
+  () => filtersLocked.value && !isPeriodOnlyRoute.value,
 );
 const volumeAtipicoFilterLocked = computed(
-  () => filtersLocked.value || isPeriodOnlyRoute.value || isIndicadoresRoute.value,
+  () => filtersLocked.value || isPeriodOnlyRoute.value,
 );
 
 const activeFilterCount = computed(() => {
@@ -960,26 +960,13 @@ onBeforeUnmount(() => {
         <label class="filter-label" style="pointer-events: auto">
           Período de Análise
           <button
-            v-if="isFilterActive('sliderValue') && !isIndicadoresRoute"
+            v-if="isFilterActive('sliderValue')"
             class="filter-clear-btn"
             @click="clearPeriodFilter"
             v-tooltip.right="'Limpar filtro'"
           >
             <i class="pi pi-eraser" />
           </button>
-          <i
-            v-if="isIndicadoresRoute"
-            class="pi pi-info-circle"
-            style="
-              font-size: 0.75rem;
-              margin-left: auto;
-              color: var(--primary-color);
-              cursor: help;
-            "
-            v-tooltip.right="
-              'Indicadores utilizam snapshots consolidados da Matriz de Risco. O filtro de período não se aplica a esta tela.'
-            "
-          />
         </label>
         <div
           class="slider-container"

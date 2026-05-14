@@ -271,41 +271,8 @@ def get_crm_raio_x(
 @router.get("/indicadores-analise", response_model=IndicadorAnaliseResponse)
 def get_indicadores_analise(
     indicador: str = Query(..., description="Chave do indicador (ex: 'auditado', 'teto', 'vendas_rapidas')"),
-    uf: Optional[str] = Query(None),
-    regiao_saude: Optional[str] = Query(None),
-    municipio: Optional[str] = Query(None),
-    id_ibge7: Optional[int] = Query(None),
-    situacao_rf: Optional[str] = Query(None),
-    conexao_ms: Optional[str] = Query(None),
-    porte_empresa: Optional[str] = Query(None),
-    grande_rede: Optional[str] = Query(None),
-    cnpj_raiz: Optional[str] = Query(None),
-    estabelecimento: Optional[str] = Query(None),
-    unidade_pf: Optional[str] = Query(None),
-    perc_min: Optional[float] = Query(None),
-    perc_max: Optional[float] = Query(None),
-    val_min: Optional[float] = Query(None),
-    regiao_id: Optional[int] = Query(None),
-    par_teia: Optional[str] = Query(None)
-):
-    """
-    Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
-    Filtros de período não se aplicam (snapshot) — mas limites de valor e percentual funcionam.
-    """
-    if regiao_saude and regiao_saude != "Todos":
-        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
-    if municipio and municipio != "Todos":
-        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
-    return AnalyticsService.get_indicadores_analise(
-        indicador, uf, regiao_saude, municipio,
-        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, estabelecimento, unidade_pf,
-        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7, par_teia=par_teia
-    )
-
-
-@router.get("/indicadores-analise/cnpjs", response_model=IndicadorCnpjPageResponse)
-def get_indicadores_analise_cnpjs(
-    indicador: str = Query(..., description="Chave do indicador (ex: 'percentual_nao_comprovacao', 'teto')"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
     uf: Optional[str] = Query(None),
     regiao_saude: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
@@ -322,6 +289,48 @@ def get_indicadores_analise_cnpjs(
     val_min: Optional[float] = Query(None),
     regiao_id: Optional[int] = Query(None),
     par_teia: Optional[str] = Query(None),
+    volume_atipico: bool = Query(False),
+    volume_atipico_limite: Optional[float] = Query(None)
+):
+    """
+    Análise cruzada de um indicador: retorna KPIs, mapa municipal e CNPJs ranqueados.
+    Aplica filtros cadastrais/geográficos, período, aumento semestral atípico e limites de valor/percentual.
+    """
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
+    return AnalyticsService.get_indicadores_analise(
+        indicador, data_inicio, data_fim, uf, regiao_saude, municipio,
+        situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, estabelecimento, unidade_pf,
+        perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7, par_teia=par_teia,
+        volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite
+    )
+
+
+@router.get("/indicadores-analise/cnpjs", response_model=IndicadorCnpjPageResponse)
+def get_indicadores_analise_cnpjs(
+    indicador: str = Query(..., description="Chave do indicador (ex: 'percentual_nao_comprovacao', 'teto')"),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
+    estabelecimento: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
+    regiao_id: Optional[int] = Query(None),
+    par_teia: Optional[str] = Query(None),
+    volume_atipico: bool = Query(False),
+    volume_atipico_limite: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     sort_field: str = Query("risco_reg"),
@@ -333,11 +342,12 @@ def get_indicadores_analise_cnpjs(
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
     return AnalyticsService.get_indicadores_analise_cnpjs(
-        indicador, uf, regiao_saude, municipio,
+        indicador, data_inicio, data_fim, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, estabelecimento, unidade_pf,
         perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id,
         id_ibge7=id_ibge7, par_teia=par_teia, page=page, page_size=page_size,
-        sort_field=sort_field, sort_order=sort_order
+        sort_field=sort_field, sort_order=sort_order,
+        volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite
     )
 
 

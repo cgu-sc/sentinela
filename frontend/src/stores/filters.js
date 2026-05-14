@@ -208,12 +208,18 @@ export const useFilterStore = defineStore('filters', () => {
       estabelecimento,
       unidadePf,
       parTeia,
+      inicio,
+      fim,
       percMin,
       percMax,
       valMin,
+      volumeAtipicoEnabled,
+      volumeAtipicoPercentual,
     } = apiParams.value;
 
     return withoutEmptyValues({
+      data_inicio: inicio,
+      data_fim: fim,
       uf,
       regiao_id: regiaoId,
       situacao_rf: situacaoRf,
@@ -227,6 +233,8 @@ export const useFilterStore = defineStore('filters', () => {
       perc_min: percMin,
       perc_max: percMax,
       val_min: valMin,
+      volume_atipico: volumeAtipicoEnabled,
+      volume_atipico_limite: volumeAtipicoPercentual,
     });
   });
 

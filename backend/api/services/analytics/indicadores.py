@@ -14,6 +14,7 @@ import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
 from .par_teia import apply_par_teia_filter
+from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...utils.text_search import apply_token_search
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -166,6 +167,18 @@ def _normalize_cache_float(value: object) -> float | None:
     return float(value)
 
 
+def _normalize_cache_bool(value: object) -> bool:
+    return bool(value)
+
+
+def _normalize_cache_date(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
 def _normalize_cache_cnpj(value: object) -> str | None:
     normalized = _normalize_cache_text(value)
     if normalized is None:
@@ -174,6 +187,8 @@ def _normalize_cache_cnpj(value: object) -> str | None:
 
 
 _INDICADOR_SCOPE_FILTER_FIELDS = (
+    ("data_inicio", _normalize_cache_date),
+    ("data_fim", _normalize_cache_date),
     ("uf", _normalize_cache_text),
     ("regiao_id", _normalize_cache_int),
     ("id_ibge7", _normalize_cache_int),
@@ -188,6 +203,8 @@ _INDICADOR_SCOPE_FILTER_FIELDS = (
     ("perc_min", _normalize_cache_float),
     ("perc_max", _normalize_cache_float),
     ("val_min", _normalize_cache_float),
+    ("volume_atipico", _normalize_cache_bool),
+    ("volume_atipico_limite", _normalize_cache_float),
 )
 
 
@@ -268,6 +285,8 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
         return IndicadoresResponse(cnpj=cnpj, indicadores={})
 
 def _build_indicador_scope_base(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
     uf: str | None = None,
     situacao_rf: str | None = None,
     conexao_ms: str | None = None,
@@ -282,10 +301,22 @@ def _build_indicador_scope_base(
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
     par_teia: str | None = None,
+    volume_atipico: bool = False,
+    volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
+    min_data = date(2015, 7, 1)
+    max_data = date(2199, 12, 31)
+    inicio = max(data_inicio, min_data) if data_inicio else min_data
+    fim = data_fim if data_fim else max_data
+
     df_mov = get_df()
     perfil_df = get_df_perfil_estabelecimento()
-    scope_base = df_mov.group_by("id_cnpj").agg([
+    period_df = df_mov.filter(pl.col("periodo").is_between(inicio, fim))
+    if volume_atipico:
+        id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
+        period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
+
+    scope_base = period_df.group_by("id_cnpj").agg([
         pl.col("total_vendas").sum().alias("total_vendas"),
         pl.col("total_sem_comprovacao").sum().alias("total_sem_comprovacao"),
     ]).join(perfil_df, on="id_cnpj", how="inner").with_columns([
@@ -378,6 +409,8 @@ def _build_indicador_dataset(
 
 def _build_indicador_dataset_cached(
     indicador: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
     uf: str | None = None,
     situacao_rf: str | None = None,
     conexao_ms: str | None = None,
@@ -392,6 +425,8 @@ def _build_indicador_dataset_cached(
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
     par_teia: str | None = None,
+    volume_atipico: bool = False,
+    volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
     raw_values = locals()
     filters = {
@@ -492,6 +527,8 @@ def _normalizar_sort_order(sort_order: str | int | None) -> tuple[str, bool]:
 
 def get_indicadores_analise(
     indicador: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
     uf: str | None = None,
     regiao_saude: str | None = None,
     municipio: str | None = None,
@@ -508,14 +545,16 @@ def get_indicadores_analise(
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
     par_teia: str | None = None,
+    volume_atipico: bool = False,
+    volume_atipico_limite: float | None = None,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
     filtrados pelo escopo geográfico.
 
     Operação 100% em memória (Polars) sobre df_matriz_risco + df_movimentacao.
-    Não usa filtros de período — a matriz_risco é um snapshot consolidado.
-    Mas aceita filtros de percentual e valor mínimo acumulado.
+    O período e o aumento semestral atípico filtram o universo de CNPJs da movimentação;
+    a métrica do indicador vem da matriz_risco consolidada.
 
     Args:
         indicador: Chave do indicador (ex: 'auditado', 'teto'). Deve existir em INDICATOR_MAPPING.
@@ -547,6 +586,8 @@ def get_indicadores_analise(
     try:
         df_joined, perfil_df, df_risco, c_val, _c_mr, rr_col, _score_col = _build_indicador_dataset_cached(
             indicador,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
             uf=uf,
             situacao_rf=situacao_rf,
             conexao_ms=conexao_ms,
@@ -561,6 +602,8 @@ def get_indicadores_analise(
             regiao_id=regiao_id,
             id_ibge7=id_ibge7,
             par_teia=par_teia,
+            volume_atipico=volume_atipico,
+            volume_atipico_limite=volume_atipico_limite,
         )
 
         if df_joined.is_empty():
@@ -672,6 +715,8 @@ def get_indicadores_analise(
 
 def get_indicadores_analise_cnpjs(
     indicador: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
     uf: str | None = None,
     regiao_saude: str | None = None,
     municipio: str | None = None,
@@ -688,6 +733,8 @@ def get_indicadores_analise_cnpjs(
     regiao_id: int | None = None,
     id_ibge7: int | None = None,
     par_teia: str | None = None,
+    volume_atipico: bool = False,
+    volume_atipico_limite: float | None = None,
     page: int = 1,
     page_size: int = 20,
     sort_field: str = "risco_reg",
@@ -696,6 +743,8 @@ def get_indicadores_analise_cnpjs(
     try:
         df_joined, _perfil_df, _df_risco, c_val, c_mr, rr_col, score_col = _build_indicador_dataset_cached(
             indicador,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
             uf=uf,
             situacao_rf=situacao_rf,
             conexao_ms=conexao_ms,
@@ -710,6 +759,8 @@ def get_indicadores_analise_cnpjs(
             regiao_id=regiao_id,
             id_ibge7=id_ibge7,
             par_teia=par_teia,
+            volume_atipico=volume_atipico,
+            volume_atipico_limite=volume_atipico_limite,
         )
 
         normalized_order, descending = _normalizar_sort_order(sort_order)

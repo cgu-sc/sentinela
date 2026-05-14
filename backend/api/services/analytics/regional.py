@@ -13,6 +13,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_cache_dir
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
+from ...utils.text_search import apply_token_search
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -56,7 +57,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None) -> FatorRiscoResponseSchema:
+def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, estabelecimento: Optional[str] = None) -> FatorRiscoResponseSchema:
     """
     Calcula as faixas de risco (Buckets de 10%) via Polars.
     """
@@ -86,10 +87,12 @@ def get_fator_risco_data(db: Session, data_inicio=None, data_fim=None, perc_min=
                 mask = mask & (pl.col("cnpj") == cnpj_raiz)
             else:
                 mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz)
-        if razao_social:
-            mask = mask & (pl.col("razao_social").str.to_lowercase().str.contains(razao_social.lower()))
-
-        period_df = apply_par_teia_filter(df.filter(mask), par_teia)
+        period_df = apply_token_search(
+            df.filter(mask),
+            estabelecimento or razao_social,
+            ("cnpj", "razao_social", "nome_fantasia"),
+        )
+        period_df = apply_par_teia_filter(period_df, par_teia)
         if volume_atipico:
             id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
             period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")

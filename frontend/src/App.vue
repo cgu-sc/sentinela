@@ -88,16 +88,13 @@ const initializeApp = async () => {
     }
 
     statusMessage.value = "Sincronizando Dashboard...";
-    const {
-      inicio, fim, percMin, percMax, valMin, uf, regiaoId, idIbge7,
-      situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf,
-      volumeAtipicoEnabled, volumeAtipicoPercentual, parTeia,
-    } = getApiParams();
+    const filters = getApiParams();
+    const { uf, regiaoId, idIbge7, unidadePf } = filters;
 
     const fetchList = [
       resultadoStore.fetchResultados(),
-      analyticsStore.fetchDashboardSummary(inicio, fim, percMin, percMax, valMin, uf, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, null, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia),
-      analyticsStore.fetchFatorRisco(inicio, fim, percMin, percMax, valMin, uf, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, null, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia),
+      analyticsStore.fetchDashboardSummary(filters),
+      analyticsStore.fetchFatorRisco(filters),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchEstabelecimentos(),
@@ -110,7 +107,7 @@ const initializeApp = async () => {
     // para garantir que o mapa do Brasil sempre seja exibido corretamente.
     if (uf || regiaoId || idIbge7 || unidadePf) {
       fetchList.push(
-        analyticsStore.fetchSentinelaUFNacional(inicio, fim, percMin, percMax, valMin, situacaoRf, conexaoMs, porteEmpresa, grandeRede, unidadePf, volumeAtipicoEnabled, volumeAtipicoPercentual, parTeia)
+        analyticsStore.fetchSentinelaUFNacional(filters)
       );
     }
 

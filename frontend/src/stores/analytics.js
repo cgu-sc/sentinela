@@ -5,11 +5,41 @@ import { KPI_CONFIGS, DEFAULT_KPI_STYLE } from '@/config/uiConfig';
 import { FILTER_ALL_VALUE, KPI_LABEL_MAP, KPI_PRIORITY_ORDER } from '@/config/constants';
 import { RISK_COLORS } from '@/config/colors';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
+
+let dashboardAbortController = null;
+let fatorRiscoAbortController = null;
+let nacionalAbortController = null;
+let dashboardRequestSeq = 0;
+let fatorRiscoRequestSeq = 0;
+let nacionalRequestSeq = 0;
+
 /**
  * Constrói o objeto de parâmetros para as APIs de analytics.
  * Extrai lógica duplicada que existia em fetchDashboardSummary e fetchFatorRisco.
  */
-export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
+export function buildAnalyticsParams(filters = {}) {
+  const {
+    inicio = null,
+    fim = null,
+    percMin = null,
+    percMax = null,
+    valMin = null,
+    uf = null,
+    regiaoId = null,
+    idIbge7 = null,
+    situacaoRf = null,
+    conexaoMs = null,
+    porteEmpresa = null,
+    grandeRede = null,
+    cnpjRaiz = null,
+    unidadePf = null,
+    razaoSocial = null,
+    estabelecimento = null,
+    parTeia = null,
+    volumeAtipicoEnabled = false,
+    volumeAtipicoPercentual = null,
+  } = filters || {};
+
   const params = {};
   if (inicio) params.data_inicio = inicio;
   if (fim) params.data_fim = fim;
@@ -26,6 +56,7 @@ export function buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, 
   if (cnpjRaiz) params.cnpj_raiz = cnpjRaiz;
   if (unidadePf) params.unidade_pf = unidadePf;
   if (razaoSocial) params.razao_social = razaoSocial;
+  if (estabelecimento) params.estabelecimento = estabelecimento;
   if (parTeia) params.par_teia = parTeia;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
@@ -52,19 +83,28 @@ export const useAnalyticsStore = defineStore('analytics', {
   }),
 
   actions: {
-    async fetchDashboardSummary(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
-      const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia);
+    async fetchDashboardSummary(filters = {}) {
+      const params = buildAnalyticsParams(filters);
       
       // Gera um hash simples (string JSON) dos parâmetros para comparar
       const currentParamsHash = JSON.stringify(params);
-      
+      const requestId = ++dashboardRequestSeq;
+      if (dashboardAbortController) {
+        dashboardAbortController.abort();
+      }
+      dashboardAbortController = new AbortController();
+
       this.isLoading = true;
       this.error = null;
       try {
-        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, {
+          params,
+          signal: dashboardAbortController.signal,
+        });
+        if (requestId !== dashboardRequestSeq) return;
         this.kpis = response.data.kpis;
         this.resultadoSentinelaUF = response.data.resultado_sentinela_uf;
-        if (!uf || uf === FILTER_ALL_VALUE) {
+        if (!filters.uf || filters.uf === FILTER_ALL_VALUE) {
           this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
         }
         this.resultadoMunicipios = response.data.resultado_municipios || [];
@@ -72,10 +112,13 @@ export const useAnalyticsStore = defineStore('analytics', {
         this.lastSync = new Date();
         this.lastParamsHash = currentParamsHash;
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.error('Erro ao buscar resumo do dashboard:', err);
         this.error = 'Não foi possível carregar as métricas estratégicas.';
       } finally {
-        this.isLoading = false;
+        if (requestId === dashboardRequestSeq) {
+          this.isLoading = false;
+        }
       }
     },
 
@@ -84,27 +127,59 @@ export const useAnalyticsStore = defineStore('analytics', {
      * Chamado quando filtros de valor/percentual mudam com UF selecionada.
      * Nunca inclui filtros de UF/região/município para garantir dados nacionais.
      */
-    async fetchSentinelaUFNacional(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, unidadePf = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, parTeia = null) {
+    async fetchSentinelaUFNacional(filters = {}) {
+      const requestId = ++nacionalRequestSeq;
+      if (nacionalAbortController) {
+        nacionalAbortController.abort();
+      }
+      nacionalAbortController = new AbortController();
+
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, null, null, null, situacaoRf, conexaoMs, porteEmpresa, grandeRede, null, unidadePf, null, null, volumeAtipicoEnabled, volumeAtipicoPercentual, null, parTeia);
-        const response = await axios.get(API_ENDPOINTS.analyticsResumo, { params });
+        const params = buildAnalyticsParams({
+          ...filters,
+          uf: null,
+          regiaoId: null,
+          idIbge7: null,
+          cnpjRaiz: null,
+          razaoSocial: null,
+          estabelecimento: null,
+        });
+        const response = await axios.get(API_ENDPOINTS.analyticsResumo, {
+          params,
+          signal: nacionalAbortController.signal,
+        });
+        if (requestId !== nacionalRequestSeq) return;
         this.resultadoSentinelaUFNacional = response.data.resultado_sentinela_uf;
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.error('Erro ao buscar dados nacionais por UF:', err);
       }
     },
 
-    async fetchFatorRisco(inicio = null, fim = null, percMin = null, percMax = null, valMin = null, uf = null, _ignoredRegionLabel = null, _ignoredMunicipioLabel = null, situacaoRf = null, conexaoMs = null, porteEmpresa = null, grandeRede = null, cnpjRaiz = null, unidadePf = null, razaoSocial = null, regiaoId = null, volumeAtipicoEnabled = false, volumeAtipicoPercentual = null, idIbge7 = null, parTeia = null) {
+    async fetchFatorRisco(filters = {}) {
+      const requestId = ++fatorRiscoRequestSeq;
+      if (fatorRiscoAbortController) {
+        fatorRiscoAbortController.abort();
+      }
+      fatorRiscoAbortController = new AbortController();
+
       this.fatorRiscoLoading = true;
       try {
-        const params = buildAnalyticsParams(inicio, fim, percMin, percMax, valMin, uf, _ignoredRegionLabel, _ignoredMunicipioLabel, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, unidadePf, razaoSocial, regiaoId, volumeAtipicoEnabled, volumeAtipicoPercentual, idIbge7, parTeia);
-        const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, { params });
+        const params = buildAnalyticsParams(filters);
+        const response = await axios.get(API_ENDPOINTS.analyticsFatorRisco, {
+          params,
+          signal: fatorRiscoAbortController.signal,
+        });
+        if (requestId !== fatorRiscoRequestSeq) return;
         this.fatorRisco = response.data.buckets;
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.error('Erro ao buscar fator de risco:', err);
         this.error = 'Não foi possível carregar o gráfico de fator de risco.';
       } finally {
-        this.fatorRiscoLoading = false;
+        if (requestId === fatorRiscoRequestSeq) {
+          this.fatorRiscoLoading = false;
+        }
       }
     },
 

@@ -5,10 +5,12 @@
  * @param {Object} options
  * @param {boolean} options.includeFatorRisco - Incluir busca do gráfico Fator Risco (default: false)
  */
-import { watch } from 'vue';
+import { onScopeDispose, watch } from 'vue';
 import { useFilterStore } from '@/stores/filters';
 import { useAnalyticsStore, buildAnalyticsParams } from '@/stores/analytics';
 import { useFilterParameters } from '@/composables/useFilterParameters';
+
+const ESTABELECIMENTO_FETCH_DEBOUNCE_MS = 450;
 
 export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true } = {}) {
   const filterStore    = useFilterStore();
@@ -16,16 +18,9 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
   const { getApiParams, isPeriodoValido } = useFilterParameters();
 
   const fetchAll = () => {
-    const p = getApiParams();
-    const args = [
-      p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.uf, null, null, p.situacaoRf,
-      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7, p.parTeia,
-    ];
-
-    analyticsStore.fetchDashboardSummary(...args);
-    if (includeFatorRisco) analyticsStore.fetchFatorRisco(...args);
+    const filters = getApiParams();
+    analyticsStore.fetchDashboardSummary(filters);
+    if (includeFatorRisco) analyticsStore.fetchFatorRisco(filters);
   };
 
   // Filtros que afetam os dados nacionais do mapa do Brasil (sem UF/região/município)
@@ -33,28 +28,18 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     // Só buscamos os dados nacionais (mapa) separadamente se houver um filtro de UF/Região/Mun ativo
     // e se o componente solicitar explicitamente esse contexto (ex: telas que mantêm o mapa do Brasil visível).
     if (!includeNationalContext || !isPeriodoValido() || !filterStore.selectedUF || filterStore.selectedUF === 'Todos') return;
-    const p = getApiParams();
-    analyticsStore.fetchSentinelaUFNacional(
-      p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.situacaoRf, p.conexaoMs, p.porteEmpresa, p.grandeRede, p.unidadePf,
-      p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.parTeia,
-    );
+    analyticsStore.fetchSentinelaUFNacional(getApiParams());
   };
 
   const isFresh = () => {
-    const p = getApiParams();
     // Usamos a mesma função do store para garantir que o hash das chaves seja idêntico (ex: data_inicio vs inicio)
-    const apiReadyParams = buildAnalyticsParams(
-      p.inicio, p.fim, p.percMin, p.percMax, p.valMin,
-      p.uf, null, null, p.situacaoRf,
-      p.conexaoMs, p.porteEmpresa, p.grandeRede, p.cnpjRaiz, p.unidadePf, p.razaoSocial,
-      p.regiaoId, p.volumeAtipicoEnabled, p.volumeAtipicoPercentual, p.idIbge7, p.parTeia
-    );
+    const apiReadyParams = buildAnalyticsParams(getApiParams());
     const currentHash = JSON.stringify(apiReadyParams);
     return analyticsStore.lastParamsHash === currentHash;
   };
   
   let isFirstRun = true;
+  let estabelecimentoFetchTimer = null;
 
   watch(
     () => [
@@ -109,8 +94,17 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
   // Watch separado para cnpjRaiz — string primitiva, não precisa de deep
   watch(
     () => filterStore.selectedCnpjRaiz,
-    () => { if (isPeriodoValido()) fetchAll(); }
+    () => {
+      clearTimeout(estabelecimentoFetchTimer);
+      estabelecimentoFetchTimer = setTimeout(() => {
+        if (isPeriodoValido()) fetchAll();
+      }, ESTABELECIMENTO_FETCH_DEBOUNCE_MS);
+    }
   );
+
+  onScopeDispose(() => {
+    clearTimeout(estabelecimentoFetchTimer);
+  });
 
   return { fetchAll };
 }

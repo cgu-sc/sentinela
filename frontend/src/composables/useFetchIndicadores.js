@@ -1,7 +1,9 @@
-import { watch } from 'vue';
+import { onScopeDispose, watch } from 'vue';
 import { useFilterStore } from '@/stores/filters';
 import { useIndicadoresStore } from '@/stores/indicadores';
 import { useFilterParameters } from './useFilterParameters';
+
+const ESTABELECIMENTO_FETCH_DEBOUNCE_MS = 450;
 
 /**
  * Orquestra o fetch da análise de indicadores reagindo aos filtros da sidebar.
@@ -13,6 +15,7 @@ export function useFetchIndicadores() {
   const filterStore = useFilterStore();
   const indicadoresStore = useIndicadoresStore();
   const { getApiParams } = useFilterParameters();
+  let estabelecimentoFetchTimer = null;
 
   /**
    * Extrai os parâmetros aceitos pelo endpoint /indicadores-analise.
@@ -20,7 +23,7 @@ export function useFetchIndicadores() {
    */
   function getIndicadorParams() {
     const {
-      uf, regiaoId, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, razaoSocial, unidadePf, parTeia,
+      uf, regiaoId, situacaoRf, conexaoMs, porteEmpresa, grandeRede, cnpjRaiz, estabelecimento, unidadePf, parTeia,
       percMin, percMax, valMin
     } = getApiParams();
 
@@ -36,7 +39,7 @@ export function useFetchIndicadores() {
     if (porteEmpresa) params.porte_empresa = porteEmpresa;
     if (grandeRede)   params.grande_rede = grandeRede;
     if (cnpjRaiz)     params.cnpj_raiz = cnpjRaiz;
-    if (razaoSocial)  params.razao_social = razaoSocial;
+    if (estabelecimento) params.estabelecimento = estabelecimento;
     if (unidadePf)    params.unidade_pf = unidadePf;
     if (parTeia)      params.par_teia = parTeia;
 
@@ -86,13 +89,26 @@ export function useFetchIndicadores() {
       filterStore.percentualNaoComprovacaoFilter, // Reativo ao Slider de %
       filterStore.valorMinSemCompFilter,          // Reativo ao Slider de Valor
     ],
-    () => {
-      if (indicadoresStore.selectedIndicador) {
-        fetchForIndicador(indicadoresStore.selectedIndicador);
+    (nextValues, previousValues) => {
+      const run = () => {
+        if (indicadoresStore.selectedIndicador) {
+          fetchForIndicador(indicadoresStore.selectedIndicador);
+        }
+      };
+
+      clearTimeout(estabelecimentoFetchTimer);
+      if (previousValues && nextValues[9] !== previousValues[9]) {
+        estabelecimentoFetchTimer = setTimeout(run, ESTABELECIMENTO_FETCH_DEBOUNCE_MS);
+      } else {
+        run();
       }
     },
     { immediate: true, deep: true }
   );
+
+  onScopeDispose(() => {
+    clearTimeout(estabelecimentoFetchTimer);
+  });
 
   return { fetchForIndicador, fetchCnpjsForIndicador };
 }

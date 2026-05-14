@@ -12,6 +12,7 @@ import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from .par_teia import apply_par_teia_filter
+from ...utils.text_search import apply_token_search
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -118,6 +119,9 @@ def _optional_float(value: object) -> float | None:
             return None
     return None
 
+def _apply_estabelecimento_search(df: pl.DataFrame, estabelecimento: str | None) -> pl.DataFrame:
+    return apply_token_search(df, estabelecimento, ("cnpj", "razao_social", "nome_fantasia"))
+
 def get_indicadores(cnpj: str) -> IndicadoresResponse:
     """Retorna os 18 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
     try:
@@ -153,6 +157,7 @@ def _build_indicador_joined(
     porte_empresa: str | None = None,
     grande_rede: str | None = None,
     cnpj_raiz: str | None = None,
+    estabelecimento: str | None = None,
     unidade_pf: str | None = None,
     perc_min: float | None = None,
     perc_max: float | None = None,
@@ -206,7 +211,8 @@ def _build_indicador_joined(
         elif len(cnpj_raiz_clean) >= 8:
             mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
 
-    df_geo = apply_par_teia_filter(df_geo.filter(mask), par_teia)
+    df_geo = _apply_estabelecimento_search(df_geo.filter(mask), estabelecimento)
+    df_geo = apply_par_teia_filter(df_geo, par_teia)
     if perc_min is not None:
         df_geo = df_geo.filter(pl.col("perc_val_sem_comp") >= perc_min)
     if perc_max is not None:
@@ -309,6 +315,7 @@ def get_indicadores_analise(
     porte_empresa: str | None = None,
     grande_rede: str | None = None,
     cnpj_raiz: str | None = None,
+    estabelecimento: str | None = None,
     unidade_pf: str | None = None,
     perc_min: float | None = None,
     perc_max: float | None = None,
@@ -394,7 +401,8 @@ def get_indicadores_analise(
             elif len(cnpj_raiz_clean) >= 8:
                 mask = mask & (pl.col("cnpj").str.slice(0, 8) == cnpj_raiz_clean[:8])
 
-        df_geo = apply_par_teia_filter(df_geo.filter(mask), par_teia)
+        df_geo = _apply_estabelecimento_search(df_geo.filter(mask), estabelecimento)
+        df_geo = apply_par_teia_filter(df_geo, par_teia)
 
         # ── 2A. Novos Filtros de Valor e Percentual (Snapshot) ──
         if perc_min is not None:
@@ -552,6 +560,7 @@ def get_indicadores_analise_cnpjs(
     porte_empresa: str | None = None,
     grande_rede: str | None = None,
     cnpj_raiz: str | None = None,
+    estabelecimento: str | None = None,
     unidade_pf: str | None = None,
     perc_min: float | None = None,
     perc_max: float | None = None,
@@ -573,6 +582,7 @@ def get_indicadores_analise_cnpjs(
             porte_empresa=porte_empresa,
             grande_rede=grande_rede,
             cnpj_raiz=cnpj_raiz,
+            estabelecimento=estabelecimento,
             unidade_pf=unidade_pf,
             perc_min=perc_min,
             perc_max=perc_max,

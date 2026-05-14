@@ -51,6 +51,7 @@ export function useFilterParameters() {
     const numericOnly = rawSearch.replace(/\D/g, '');
     const cnpjRaiz   = numericOnly.length >= 8 ? extractCnpjFilter(rawSearch) : null;
     const razaoSocial = numericOnly.length < 8 && rawSearch.trim().length >= 2 ? rawSearch.trim() : null;
+    const estabelecimento = razaoSocial;
 
     const unidadePf    = filterStore.selectedUnidadePf !== FILTER_ALL_VALUE ? filterStore.selectedUnidadePf : null;
 
@@ -69,6 +70,7 @@ export function useFilterParameters() {
       grandeRede, 
       cnpjRaiz, 
       razaoSocial, 
+      estabelecimento,
       unidadePf,
       volumeAtipicoEnabled,
       volumeAtipicoPercentual,

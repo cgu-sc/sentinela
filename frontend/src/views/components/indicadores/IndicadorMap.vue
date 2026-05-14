@@ -543,7 +543,7 @@ function onMapClick(params) {
 }
 
 .map-wrapper {
-  height: 45vh;
+  height: 40vh;
   position: relative;
 }
 
@@ -626,7 +626,7 @@ function onMapClick(params) {
 }
 
 .map-loading {
-  height: 45vh;
+  height: 40vh;
   display: flex;
   align-items: center;
   justify-content: center;

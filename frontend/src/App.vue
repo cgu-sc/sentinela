@@ -213,6 +213,186 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.app-boot-overlay {
+  --boot-accent: #d97706;
+  --boot-bg: #0d1117;
+  --boot-card-bg: #161b22;
+  --boot-text: #f8fafc;
+  --boot-muted: #94a3b8;
+
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100vw;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(22, 27, 34, 0.95) 0%, rgba(13, 17, 23, 0.98) 58%, var(--boot-bg) 100%);
+  color: var(--boot-text);
+}
+
+.boot-brand-anchor {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: max-content;
+  transform: translateX(-50%);
+  color: var(--boot-text);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.boot-dynamic-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 180px;
+  color: var(--boot-text);
+}
+
+.boot-logo {
+  width: 80px;
+  height: auto;
+  filter: drop-shadow(0 0 15px rgba(217, 119, 6, 0.32));
+  animation: logo-pulse 2s ease-in-out infinite;
+}
+
+.boot-brand-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.boot-brand-text {
+  margin: 0;
+  color: var(--boot-text);
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 6px;
+  line-height: 1;
+  background: linear-gradient(to right, #ffffff, #94a3b8);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.boot-brand-sub {
+  color: var(--boot-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.spinner-orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+}
+
+.core {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--boot-accent);
+  box-shadow: 0 0 20px rgba(217, 119, 6, 0.8);
+}
+
+.electron {
+  position: absolute;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 50%;
+}
+
+.one {
+  width: 60px;
+  height: 60px;
+  animation: orbit 2s linear infinite;
+}
+
+.one::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--boot-accent);
+}
+
+.two {
+  width: 40px;
+  height: 40px;
+  animation: orbit 1.5s linear reverse infinite;
+}
+
+.two::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--boot-accent) 70%, white);
+}
+
+.status-message {
+  margin: 0;
+  color: var(--boot-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.progress-bar-mini {
+  width: 200px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.progress-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--boot-accent);
+  transform-origin: left;
+  animation: loading-bar 2s ease-in-out infinite;
+}
+
+@keyframes logo-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-bar {
+  0% { transform: scaleX(0); }
+  50% { transform: scaleX(1); }
+  100% { transform: scaleX(0); transform-origin: right; }
+}
+
 .error-state-container {
   display: flex;
   flex-direction: column;

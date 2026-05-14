@@ -9,9 +9,13 @@ import { RISK_THRESHOLDS } from '@/config/riskConfig';
 let dashboardAbortController = null;
 let fatorRiscoAbortController = null;
 let nacionalAbortController = null;
+let producaoSemestralAbortController = null;
+let cacheStatusAbortController = null;
 let dashboardRequestSeq = 0;
 let fatorRiscoRequestSeq = 0;
 let nacionalRequestSeq = 0;
+let producaoSemestralRequestSeq = 0;
+let cacheStatusRequestSeq = 0;
 
 /**
  * Constrói o objeto de parâmetros para as APIs de analytics.
@@ -75,8 +79,11 @@ export const useAnalyticsStore = defineStore('analytics', {
     resultadoMunicipios: [],
     resultadoCnpjs: [],
     fatorRisco: [],
+    producaoSemestral: [],
+    cacheStatus: null,
     isLoading: false,
     fatorRiscoLoading: false,
+    producaoSemestralLoading: false,
     error: null,
     lastSync: null,
     lastParamsHash: null
@@ -119,6 +126,26 @@ export const useAnalyticsStore = defineStore('analytics', {
         if (requestId === dashboardRequestSeq) {
           this.isLoading = false;
         }
+      }
+    },
+
+    async fetchCacheStatus() {
+      const requestId = ++cacheStatusRequestSeq;
+      if (cacheStatusAbortController) {
+        cacheStatusAbortController.abort();
+      }
+      cacheStatusAbortController = new AbortController();
+
+      try {
+        const response = await axios.get(API_ENDPOINTS.cacheStatus, {
+          signal: cacheStatusAbortController.signal,
+        });
+        if (requestId !== cacheStatusRequestSeq) return;
+        this.cacheStatus = response.data;
+      } catch (err) {
+        if (axios.isCancel(err)) return;
+        console.error('Erro ao buscar status do cache:', err);
+        this.cacheStatus = null;
       }
     },
 
@@ -179,6 +206,33 @@ export const useAnalyticsStore = defineStore('analytics', {
       } finally {
         if (requestId === fatorRiscoRequestSeq) {
           this.fatorRiscoLoading = false;
+        }
+      }
+    },
+
+    async fetchProducaoSemestral(filters = {}) {
+      const requestId = ++producaoSemestralRequestSeq;
+      if (producaoSemestralAbortController) {
+        producaoSemestralAbortController.abort();
+      }
+      producaoSemestralAbortController = new AbortController();
+
+      this.producaoSemestralLoading = true;
+      try {
+        const params = buildAnalyticsParams(filters);
+        const response = await axios.get(API_ENDPOINTS.analyticsProducaoSemestral, {
+          params,
+          signal: producaoSemestralAbortController.signal,
+        });
+        if (requestId !== producaoSemestralRequestSeq) return;
+        this.producaoSemestral = response.data?.pontos || [];
+      } catch (err) {
+        if (axios.isCancel(err)) return;
+        console.error('Erro ao buscar producao semestral:', err);
+        this.producaoSemestral = [];
+      } finally {
+        if (requestId === producaoSemestralRequestSeq) {
+          this.producaoSemestralLoading = false;
         }
       }
     },

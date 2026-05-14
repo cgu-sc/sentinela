@@ -250,6 +250,7 @@ const onClick = (params) => {
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   min-height: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -276,7 +277,7 @@ const onClick = (params) => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
 }
 

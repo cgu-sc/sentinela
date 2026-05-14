@@ -72,6 +72,13 @@ _cache_status: str = "idle"
 _cache_error_message: str = ""
 _cache_generation: int = 0
 
+def _get_cache_module_status(loaded: bool, exists: bool) -> str:
+    if loaded:
+        return "loaded"
+    if exists:
+        return "error"
+    return "missing"
+
 def _empty_dados_par_df() -> pl.DataFrame:
     return pl.DataFrame(schema={
         "cnpj": pl.Utf8,
@@ -1260,15 +1267,29 @@ def get_cache_status() -> dict:
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
         "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},
     }
-    modules_status = {
-        key: {"label": v["label"], "exists": os.path.exists(v["path"]), "loaded": v["loaded"]}
-        for key, v in modules.items()
-    }
+    modules_status = {}
+    for key, v in modules.items():
+        exists = os.path.exists(v["path"])
+        loaded = v["loaded"]
+        modules_status[key] = {
+            "label": v["label"],
+            "exists": exists,
+            "loaded": loaded,
+            "status": _get_cache_module_status(loaded, exists),
+        }
+
+    total_modules = len(modules_status)
+    loaded_modules = sum(1 for v in modules_status.values() if v["loaded"])
+    unavailable_modules = total_modules - loaded_modules
     is_ready = all(v["loaded"] for v in modules_status.values())
     return {
         "progress": _cache_progress,
         "status": _cache_status,
         "is_ready": is_ready,
+        "loaded_modules": loaded_modules,
+        "total_modules": total_modules,
+        "unavailable_modules": unavailable_modules,
+        "modules_summary_label": f"{loaded_modules}/{total_modules} módulos carregados",
         "error_message": _cache_error_message if _cache_status == "error" else "",
         "modules": modules_status,
     }

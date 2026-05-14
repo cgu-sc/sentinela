@@ -6,6 +6,7 @@ from database import get_db, engine
 from ..schemas.analytics import (
     AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
+    ProducaoSemestralResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, CnpjAccessStatusSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     IndicadorCnpjPageResponse,
@@ -98,6 +99,62 @@ def get_analytics_summary(
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
     return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia, estabelecimento=estabelecimento)
+
+
+@router.get("/producao-semestral", response_model=ProducaoSemestralResponse)
+def get_producao_semestral(
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    perc_min: Optional[float] = Query(None),
+    perc_max: Optional[float] = Query(None),
+    val_min: Optional[float] = Query(None),
+    uf: Optional[str] = Query(None),
+    regiao_saude: Optional[str] = Query(None),
+    municipio: Optional[str] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
+    situacao_rf: Optional[str] = Query(None),
+    conexao_ms: Optional[str] = Query(None),
+    porte_empresa: Optional[str] = Query(None),
+    grande_rede: Optional[str] = Query(None),
+    cnpj_raiz: Optional[str] = Query(None),
+    unidade_pf: Optional[str] = Query(None),
+    razao_social: Optional[str] = Query(None),
+    estabelecimento: Optional[str] = Query(None),
+    cnpjs: Optional[List[str]] = Query(None),
+    regiao_id: Optional[int] = Query(None),
+    volume_atipico: bool = Query(False),
+    volume_atipico_limite: Optional[float] = Query(None),
+    par_teia: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Retorna valor de producao semestral e acumulado para o dashboard Home."""
+    if regiao_saude and regiao_saude != "Todos":
+        raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
+    if municipio and municipio != "Todos":
+        raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
+    return AnalyticsService.get_producao_semestral_data(
+        db,
+        data_inicio,
+        data_fim,
+        perc_min,
+        perc_max,
+        val_min,
+        uf,
+        situacao_rf,
+        conexao_ms,
+        porte_empresa,
+        grande_rede,
+        cnpj_raiz,
+        unidade_pf,
+        razao_social,
+        cnpjs,
+        regiao_id=regiao_id,
+        id_ibge7=id_ibge7,
+        volume_atipico=volume_atipico,
+        volume_atipico_limite=volume_atipico_limite,
+        par_teia=par_teia,
+        estabelecimento=estabelecimento,
+    )
 
 @router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
 def get_resultados_detalhados(db: Session = Depends(get_db)):

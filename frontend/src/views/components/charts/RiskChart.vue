@@ -204,6 +204,8 @@ const chartOption = computed(() => {
 .chart-section {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -227,7 +229,7 @@ const chartOption = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
 }
 
@@ -247,8 +249,8 @@ const chartOption = computed(() => {
 }
 
 .chart-wrapper {
-  height: 40vh;
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
 }
 
 .echart {

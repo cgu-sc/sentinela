@@ -3,6 +3,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8002';
 export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
+  analyticsProducaoSemestral: `${BASE_URL}/api/v1/analytics/producao-semestral`,
   analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
   analyticsRegionalBenchmarking: (uf, regiaoId = null, inicio = null, fim = null) => {
     const params = new URLSearchParams();

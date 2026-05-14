@@ -3,6 +3,7 @@
  *
  * @param {Object} options
  * @param {boolean} options.includeFatorRisco - Incluir busca do grafico Fator Risco (default: false)
+ * @param {boolean} options.includeProducaoSemestral - Incluir serie semestral de producao (default: false)
  */
 import { onScopeDispose, watch } from 'vue';
 import { useFilterStore } from '@/stores/filters';
@@ -10,7 +11,7 @@ import { useAnalyticsStore, buildAnalyticsParams } from '@/stores/analytics';
 
 const ESTABELECIMENTO_FETCH_DEBOUNCE_MS = 450;
 
-export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true } = {}) {
+export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true, includeProducaoSemestral = false } = {}) {
   const filterStore = useFilterStore();
   const analyticsStore = useAnalyticsStore();
 
@@ -21,6 +22,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     const filters = getApiParams();
     analyticsStore.fetchDashboardSummary(filters);
     if (includeFatorRisco) analyticsStore.fetchFatorRisco(filters);
+    if (includeProducaoSemestral) analyticsStore.fetchProducaoSemestral(filters);
   };
 
   const fetchNacionalIfNeeded = () => {
@@ -51,8 +53,18 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     () => {
       const run = () => {
         const skip = dashboardFirstRun && isFresh();
-        if (isPeriodoValido() && !skip) {
-          fetchAll();
+        if (isPeriodoValido()) {
+          if (!skip) {
+            fetchAll();
+          } else {
+            const filters = getApiParams();
+            if (includeFatorRisco && !analyticsStore.fatorRisco.length) {
+              analyticsStore.fetchFatorRisco(filters);
+            }
+            if (includeProducaoSemestral && !analyticsStore.producaoSemestral.length) {
+              analyticsStore.fetchProducaoSemestral(filters);
+            }
+          }
         }
         dashboardFirstRun = false;
       };

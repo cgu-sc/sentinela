@@ -230,10 +230,11 @@ watch(
   () => route.path,
   (path) => {
     const locked = isLockedRoute(path);
+    const isHome = path === "/";
     const isEstab = path.startsWith("/estabelecimentos/");
     filterStore.filtersLocked = locked;
     if (!filterStore.sidebarLocked) {
-      filterStore.sidebarCollapsed = locked || isEstab;
+      filterStore.sidebarCollapsed = locked || isHome || isEstab;
     }
   },
   { immediate: true },

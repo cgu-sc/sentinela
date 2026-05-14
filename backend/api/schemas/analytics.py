@@ -98,6 +98,20 @@ class AnalyticsResponse(BaseModel):
     resultado_cnpjs: Optional[List[ResultadoSentinelaCnpjSchema]] = None
 
 
+class ProducaoSemestralPointSchema(BaseModel):
+    semestre: str
+    chave_semestre: int
+    valor_producao: float = 0.0
+    valor_regular: float = 0.0
+    valor_sem_comprovacao: float = 0.0
+    pct_sem_comprovacao: float = 0.0
+    cnpjs: int = 0
+
+
+class ProducaoSemestralResponse(BaseModel):
+    pontos: List[ProducaoSemestralPointSchema]
+
+
 class RegionalMunicipioSchema(BaseModel):
     """Resumo de um município dentro da Região de Saúde selecionada."""
     uf: Optional[str] = "ND"

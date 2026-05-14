@@ -13,6 +13,7 @@ from .crm import (
 )
 from .dashboard import (
     get_dashboard_data,
+    get_producao_semestral_data,
     get_rede_por_cnpj_raiz,
     get_resultado_sentinela,
 )
@@ -59,6 +60,7 @@ class AnalyticsService:
     _known_cnpj_dirs = _known_cnpj_dirs
     _get_cnpj_cache_dir = staticmethod(_get_cnpj_cache_dir)
     get_dashboard_data = staticmethod(get_dashboard_data)
+    get_producao_semestral_data = staticmethod(get_producao_semestral_data)
     get_resultado_sentinela = staticmethod(get_resultado_sentinela)
     get_rede_por_cnpj_raiz = staticmethod(get_rede_por_cnpj_raiz)
     get_evolucao_financeira = staticmethod(get_evolucao_financeira)

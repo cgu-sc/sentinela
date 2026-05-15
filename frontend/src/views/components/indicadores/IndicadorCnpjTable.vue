@@ -47,6 +47,31 @@ function formatValue(valor) {
   return valor.toFixed(2);
 }
 
+function formatCurrencyCompact(valor) {
+  if (valor == null) return '—';
+
+  const numericValue = Number(valor);
+  if (!Number.isFinite(numericValue)) return '—';
+
+  const absValue = Math.abs(numericValue);
+  const compactRules = [
+    { limit: 1_000_000_000, divisor: 1_000_000_000, suffix: 'bi' },
+    { limit: 1_000_000, divisor: 1_000_000, suffix: 'mi' },
+    { limit: 1_000, divisor: 1_000, suffix: 'k' },
+  ];
+  const rule = compactRules.find(item => absValue >= item.limit);
+
+  if (!rule) return formatCurrencyFull(numericValue);
+
+  const scaledValue = numericValue / rule.divisor;
+  const formattedValue = scaledValue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Math.abs(scaledValue) < 10 ? 1 : 0,
+  });
+
+  return `R$ ${formattedValue}${rule.suffix}`;
+}
+
 function statusClass(status) {
   switch (status) {
     case 'CRÍTICO': return 'status-danger';
@@ -95,8 +120,10 @@ const tableFooter = computed(() => {
   const totalMov = Number(props.tableKpis?.total_mov ?? 0);
 
   return {
-    totalSemComprovacao: formatCurrencyFull(totalSemComprovacao),
-    totalMov: formatCurrencyFull(totalMov),
+    totalSemComprovacao: formatCurrencyCompact(totalSemComprovacao),
+    totalSemComprovacaoFull: formatCurrencyFull(totalSemComprovacao),
+    totalMov: formatCurrencyCompact(totalMov),
+    totalMovFull: formatCurrencyFull(totalMov),
   };
 });
 
@@ -256,12 +283,18 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
         bodyClass="col-movement"
       >
         <template #body="{ data }">
-          <span class="movement-value">
-            {{ data.valor_movimentado != null ? formatCurrencyFull(data.valor_movimentado) : '—' }}
+          <span
+            class="movement-value"
+            v-tooltip.top="data.valor_movimentado != null ? formatCurrencyFull(data.valor_movimentado) : null"
+          >
+            {{ formatCurrencyCompact(data.valor_movimentado) }}
           </span>
         </template>
         <template #footer>
-          <span class="movement-value table-total-movement">{{ tableFooter.totalMov }}</span>
+          <span
+            class="movement-value table-total-movement"
+            v-tooltip.top="tableFooter.totalMovFull"
+          >{{ tableFooter.totalMov }}</span>
         </template>
       </Column>
 
@@ -278,8 +311,9 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
             <span
               class="noncomp-value"
               :class="{ 'high-value-audit': data.val_sem_comp >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+              v-tooltip.top="data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : null"
             >
-              {{ data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : '—' }}
+              {{ formatCurrencyCompact(data.val_sem_comp) }}
             </span>
             <span v-if="data.perc_val_sem_comp != null" class="noncomp-percent">
               {{ data.perc_val_sem_comp.toFixed(2) }}%
@@ -288,7 +322,10 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
         </template>
         <template #footer>
           <div class="noncomp-cell table-total-cell">
-            <span class="noncomp-value">{{ tableFooter.totalSemComprovacao }}</span>
+            <span
+              class="noncomp-value"
+              v-tooltip.top="tableFooter.totalSemComprovacaoFull"
+            >{{ tableFooter.totalSemComprovacao }}</span>
           </div>
         </template>
       </Column>

@@ -898,7 +898,7 @@ onBeforeUnmount(() => {
         >
           <div class="perc-chips">
             <button
-              v-for="v in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]"
+              v-for="v in [10, 20, 40, 60, 80]"
               :key="v"
               class="perc-chip"
               :class="{

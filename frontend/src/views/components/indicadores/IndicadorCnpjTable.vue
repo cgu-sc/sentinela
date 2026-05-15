@@ -801,7 +801,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 19%;
+  width: 22%;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),
@@ -828,12 +828,12 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-movement) {
-  width: 11%;
+  width: 10%;
   text-align: right;
 }
 
 :deep(.ind-cnpj-table .col-noncomp) {
-  width: 12%;
+  width: 10%;
   text-align: right;
 }
 

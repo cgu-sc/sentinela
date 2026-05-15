@@ -53,15 +53,21 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_crms_em_surto') IS NULL
-BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_crms_em_surto nao encontrada. Rode o loteado primeiro.', 16, 1);
-    RETURN;
-END;
-
 IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
 BEGIN
     RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_unico_alertas nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_multiplo_alertas nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.crm_raiox_tx nao encontrada. Rode o loteado primeiro.', 16, 1);
     RETURN;
 END;
 
@@ -214,7 +220,19 @@ VALUES
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
-;WITH base AS (
+;WITH multiplo_temporal AS (
+    SELECT DISTINCT
+        F.cnpj AS nu_cnpj,
+        R.id_medico,
+        YEAR(MU.dt_dia) * 100 + MONTH(MU.dt_dia) AS competencia
+    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas MU
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F
+        ON F.id = MU.id_cnpj
+    INNER JOIN temp_CGUSC.fp.crm_raiox_tx R
+        ON  R.id_cnpj = MU.id_cnpj
+        AND R.data_hora BETWEEN MU.dt_ini_concentracao AND MU.dt_fim_concentracao
+),
+base AS (
     SELECT DISTINCT
         F.cnpj AS nu_cnpj,
         U.id_medico,
@@ -232,8 +250,8 @@ SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
     SELECT DISTINCT R1.cnpj AS nu_cnpj, R1.id_medico, R1.competencia
     FROM temp_CGUSC.fp.alertas_crm_registro R1
     UNION
-    SELECT S1.nu_cnpj, S1.id_medico, S1.competencia
-    FROM temp_CGUSC.fp.crm_crms_em_surto S1
+    SELECT MT.nu_cnpj, MT.id_medico, MT.competencia
+    FROM multiplo_temporal MT
 ),
 conc_agg AS (
     SELECT
@@ -262,7 +280,7 @@ registro AS (
 ),
 surto AS (
     SELECT DISTINCT nu_cnpj, id_medico, competencia
-    FROM temp_CGUSC.fp.crm_crms_em_surto
+    FROM multiplo_temporal
 )
 SELECT
     B.nu_cnpj,

@@ -139,7 +139,6 @@ DECLARE @reset_fonte_uf       BIT     = 0;
 DECLARE @uf_farmacia_alvo     CHAR(2) = NULL; -- Ex.: 'MG'. NULL pega pendente/interrompida.
 DECLARE @existia_tabela_loteada BIT   = CASE WHEN
         OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_controle') IS NOT NULL
-     OR OBJECT_ID('temp_CGUSC.fp.crm_crms_em_surto') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.crm_perfil_diario') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.crm_perfil_horario') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.mediana_autorizacoes_horaria') IS NOT NULL
@@ -315,7 +314,6 @@ BEGIN
 
         DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_lote_metadata;
         DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_lote_controle;
-        DROP TABLE IF EXISTS temp_CGUSC.fp.crm_crms_em_surto;
         DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_diario;
         DROP TABLE IF EXISTS temp_CGUSC.fp.crm_perfil_horario;
         DROP TABLE IF EXISTS temp_CGUSC.fp.mediana_autorizacoes_horaria;
@@ -1038,15 +1036,6 @@ IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_log', 'mensagem_erro') IS NULL
 IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_lote_log', 'etapa') IS NULL
     ALTER TABLE temp_CGUSC.fp.crm_detalhado_lote_log ADD etapa VARCHAR(80) NULL;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_crms_em_surto') IS NULL
-BEGIN
-    CREATE TABLE temp_CGUSC.fp.crm_crms_em_surto (
-        nu_cnpj     CHAR(14)     NOT NULL,
-        id_medico   VARCHAR(13)  NOT NULL,
-        competencia INT          NOT NULL
-    );
-END;
-
 IF OBJECT_ID('temp_CGUSC.fp.crm_perfil_diario') IS NULL
 BEGIN
     CREATE TABLE temp_CGUSC.fp.crm_perfil_diario (
@@ -1109,12 +1098,18 @@ BEGIN
         id_cnpj          INT           NOT NULL,
         dt_janela        DATE          NOT NULL,
         hr_janela        TINYINT       NOT NULL,
-        data_hora        SMALLDATETIME NOT NULL,
+        data_hora        DATETIME      NOT NULL,
         num_autorizacao  VARCHAR(50)   NOT NULL,
         id_medico        VARCHAR(13)   NOT NULL,
         id_gtin          INT           NOT NULL,
         valor_pago       DECIMAL(9,2)  NULL
     );
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NOT NULL
+   AND TYPE_NAME(COLUMNPROPERTY(OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx'), 'data_hora', 'SystemTypeId')) <> 'datetime'
+BEGIN
+    ALTER TABLE temp_CGUSC.fp.crm_raiox_tx ALTER COLUMN data_hora DATETIME NOT NULL;
 END;
 
 IF OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NULL
@@ -1131,9 +1126,6 @@ BEGIN
         dt_prescricao_final_medico      DATE          NOT NULL
     );
 END;
-
-IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID('temp_CGUSC.fp.crm_crms_em_surto') AND name = 'IDX_CrmSurto_Key')
-    CREATE CLUSTERED INDEX IDX_CrmSurto_Key ON temp_CGUSC.fp.crm_crms_em_surto(nu_cnpj, id_medico, competencia);
 
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID('temp_CGUSC.fp.crm_perfil_diario') AND name = 'IDX_DailyProfile')
     CREATE CLUSTERED INDEX IDX_DailyProfile ON temp_CGUSC.fp.crm_perfil_diario(id_cnpj, dt_janela);
@@ -1181,11 +1173,6 @@ WHERE uf_farmacia = @uf_farmacia
   AND dt_data_fim = @DataFim;
 
 SET @t1 = GETDATE();
-
-DELETE T
-FROM temp_CGUSC.fp.crm_crms_em_surto T
-INNER JOIN temp_CGUSC.fp.crm_detalhado_lote_controle C ON C.cnpj = T.nu_cnpj
-WHERE C.status = 'PROCESSANDO';
 
 DELETE T
 FROM temp_CGUSC.fp.crm_perfil_diario T
@@ -1360,7 +1347,6 @@ BEGIN
     INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
 
     -- Garante idempotencia do lote atual.
-    DELETE T FROM temp_CGUSC.fp.crm_crms_em_surto T INNER JOIN #lote_atual L ON L.cnpj = T.nu_cnpj;
     DELETE T FROM temp_CGUSC.fp.crm_perfil_diario T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.crm_perfil_horario T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.mediana_autorizacoes_horaria T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
@@ -1624,10 +1610,6 @@ BEGIN
         AND A.hr_janela = M.hr_janela
     WHERE A.is_anomalo_hora = 1;
 
-    INSERT INTO temp_CGUSC.fp.crm_crms_em_surto (nu_cnpj, id_medico, competencia)
-    SELECT nu_cnpj, id_medico, competencia
-    FROM #crms_em_surto_raw;
-
     DROP TABLE IF EXISTS #totais_diarios;
     SELECT
         cnpj,
@@ -1803,7 +1785,7 @@ BEGIN
         D.id_cnpj,
         CAST(M.data_hora AS DATE),
         CAST(DATEPART(HOUR, M.data_hora) AS TINYINT),
-        CAST(M.data_hora AS SMALLDATETIME),
+        CAST(M.data_hora AS DATETIME),
         M.num_autorizacao,
         CAST(CAST(M.crm AS VARCHAR(10)) + '/' + M.crm_uf AS VARCHAR(13)),
         PAT.id,
@@ -2232,13 +2214,11 @@ IF OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.crm_perfil_horario') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.volume_horario_anomalo_alertas') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NOT NULL
-   AND OBJECT_ID('temp_CGUSC.fp.crm_crms_em_surto') IS NOT NULL
 BEGIN
     SELECT
         (SELECT COUNT(*) FROM temp_CGUSC.fp.dados_crm_detalhado) AS qtd_dados_crm_detalhado,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_perfil_diario) AS qtd_perfil_diario,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_perfil_horario) AS qtd_perfil_horario,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.volume_horario_anomalo_alertas) AS qtd_volume_alertas,
-        (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_raiox_tx) AS qtd_raiox_tx,
-        (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_crms_em_surto) AS qtd_crms_em_surto;
+        (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_raiox_tx) AS qtd_raiox_tx;
 END;

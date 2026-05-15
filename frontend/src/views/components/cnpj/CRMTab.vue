@@ -36,6 +36,7 @@ const activeKpiFilter = ref(null);
 const summary = computed(() => cachedPrescritoresData.value?.summary || {});
 const crmsInteresse = computed(() => cachedPrescritoresData.value?.crms_interesse || []);
 const cnpjAlerts = computed(() => cachedPrescritoresData.value?.cnpj_alerts || []);
+const cnpjAlertsMultiplo = computed(() => cnpjAlerts.value.filter(a => a.tipo === 'MULTIPLO'));
 
 // ── KPIs (mantidos aqui para defineExpose) ────────────────────────────────
 const concentracaoTop1 = computed(() => summary.value.pct_concentracao_top1 || 0);
@@ -61,8 +62,8 @@ const valorFraudeCrm          = computed(() => (summary.value.vl_crm_invalido ||
 
 const qtdCrmExclusivo         = computed(() => crmsInteresse.value.filter(m => m.flag_crm_exclusivo > 0).length);
 const qtdLancamentosAgrupados = computed(() => crmsInteresse.value.filter(m => m.alerta_concentracao_unico_crm).length);
-const totalSurtosCnpj         = computed(() => cnpjAlerts.value.length);
-const diasComSurtosCnpj       = computed(() => new Set(cnpjAlerts.value.map(a => a.dt)).size);
+const totalSurtosCnpj         = computed(() => cnpjAlertsMultiplo.value.length);
+const diasComSurtosCnpj       = computed(() => new Set(cnpjAlertsMultiplo.value.map(a => a.dt)).size);
 const qtdAcima400km           = computed(() => crmsInteresse.value.filter(m => m.alerta5_geografico).length);
 
 // Objeto passado como prop para CRMKpiGrid
@@ -97,7 +98,7 @@ const kpiFilters = {
   exclusivo:   (m) => m.flag_crm_exclusivo > 0,
   fraude_crm:  (m) => m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia:   (m) => !!m.alerta5_geografico,
-  surtos_cnpj: (m) => m.alerta_concentracao_multiplos_crms > 0,
+  surtos_cnpj: (m) => m.alertas_crm_multiplos?.length > 0,
 };
 
 const kpiFilterLabels = {

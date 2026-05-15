@@ -623,6 +623,7 @@ class CrmUnicoAlertaSchema(BaseModel):
     ritmo_qtd: int
     ritmo_minutos: int
     severidade: Optional[str] = None
+    criterio_pior_ritmo: Optional[str] = None
     dt_ini_hora: Optional[str] = None
     dt_fim_hora: Optional[str] = None
 
@@ -639,6 +640,7 @@ class CrmMultiploAlertaSchema(BaseModel):
     ritmo_qtd: int = 0
     ritmo_minutos: int = 0
     severidade: Optional[str] = None
+    criterio_pior_ritmo: Optional[str] = None
     dt_ini_hora: Optional[str] = None
     dt_fim_hora: Optional[str] = None
 

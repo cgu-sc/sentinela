@@ -102,6 +102,7 @@ def _classify_company_node(row: dict) -> str:
     return "PJ_DEMAIS_EMPRESAS"
 
 _known_cnpj_dirs: set[str] = set()
+_CRM_RAIOX_TX_CACHE_VERSION = 2
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
     """Retorna (e garante a existência de) sentinela_cache/{cnpj}/.
@@ -129,8 +130,15 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
     # Se o cache já existe e parece saudável, não faz nada
     if os.path.exists(TX_PARQUET_PATH):
         try:
-            header = pl.scan_parquet(TX_PARQUET_PATH).limit(0).collect()
-            if "codigo_barra" in header.columns:
+            header = pl.read_parquet(TX_PARQUET_PATH, n_rows=1)
+            has_current_version = (
+                "_crm_raiox_tx_cache_version" in header.columns
+                and (
+                    header.height == 0
+                    or int(header["_crm_raiox_tx_cache_version"].max() or 0) >= _CRM_RAIOX_TX_CACHE_VERSION
+                )
+            )
+            if "codigo_barra" in header.columns and has_current_version:
                 return
         except Exception: pass
 
@@ -157,8 +165,13 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
                 pl.col("num_autorizacao").cast(pl.Utf8),
                 pl.col("id_medico").cast(pl.Utf8),
                 pl.col("codigo_barra").cast(pl.Utf8),
-                pl.col("data_hora").cast(pl.Utf8)
+                pl.col("data_hora").cast(pl.Utf8),
+                pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version")
             ])
+        else:
+            df_tx = df_tx.with_columns(
+                pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version")
+            )
         
         df_tx.write_parquet(TX_PARQUET_PATH, compression="zstd")
         print(f"✅ Cache Raio-X salvo para {cnpj}")

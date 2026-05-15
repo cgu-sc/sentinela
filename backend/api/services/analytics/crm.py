@@ -57,6 +57,9 @@ from ...schemas.analytics import (
 
 from ._cache import _get_cnpj_cache_dir, sync_crm_raiox_tx, sync_mediana_autorizacoes_horaria
 
+_CRM_SEVERITY_CACHE_VERSION = 2
+_CRM_ALERTS_CACHE_VERSION = 2
+
 def get_crm_data(
     cnpj: str,
     data_inicio: str | None = None,
@@ -526,47 +529,71 @@ def get_crm_data(
                 # Garantimos que dt_janela seja String para o Join posterior (df_ca usa Utf8)
                 df_tx = df_tx.with_columns(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10))
 
-                # Agregamos volume por CRM e Hora de Surto
-                df_surto_agg = (
-                    df_tx.group_by(["dt_janela", "hr_janela", "id_medico"])
-                    .agg([
-                        pl.n_unique("num_autorizacao").alias("nu_prescricoes_crm"),
-                        pl.sum("valor_pago").alias("vl_prescricoes_crm")
-                    ])
-                )
-                
-                # Cruzamos com os alertas do CNPJ para trazer o contexto (descrição/total)
-                if not df_ca.is_empty():
-                    # Garantimos que dt_alerta também seja String no mesmo formato
-                    df_ca_clean = df_ca.with_columns(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10))
-                    
-                    df_surto_full = df_surto_agg.join(
-                        df_ca_clean.select(["dt_alerta", "hr_janela", "nu_prescricoes", "nu_crms", "multiplicador", "mediana_hora"]),
-                        left_on=["dt_janela", "hr_janela"],
-                        right_on=["dt_alerta", "hr_janela"],
-                        how="inner"
-                    )
-                    
-                    for r in df_surto_full.iter_rows(named=True):
-                        mid = r['id_medico']
-                        vol = int(r.get("nu_prescricoes", 0))
-                        hr  = int(r.get("hr_janela", 0))
-                        mult = r.get("multiplicador", 0)
-                        med = r.get("mediana_hora", 0)
-                        
-                        # Frase técnica padronizada (Backend-only)
-                        desc = f"{vol} prescrições às {hr:02d}h ({mult}x a mediana da farmácia: {med}/h)"
-                        
+                df_cm_period = df_cm
+                if comp_ini:
+                    df_cm_period = df_cm_period.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+                if comp_fim:
+                    df_cm_period = df_cm_period.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+
+                def _as_datetime(value):
+                    if value is None:
+                        return None
+                    if hasattr(value, "to_pydatetime"):
+                        return value.to_pydatetime()
+                    if hasattr(value, "strftime"):
+                        return value
+                    text_value = str(value)
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+                        try:
+                            from datetime import datetime as _datetime
+                            return _datetime.strptime(text_value[:26], fmt)
+                        except ValueError:
+                            continue
+                    return None
+
+                tx_by_date: dict[str, list[dict]] = {}
+                for tx in df_tx.iter_rows(named=True):
+                    tx_by_date.setdefault(str(tx["dt_janela"])[:10], []).append(tx)
+
+                for alerta in df_cm_period.iter_rows(named=True):
+                    dt_alerta = str(alerta["dt_alerta"])[:10]
+                    dt_ini = _as_datetime(alerta.get("dt_ini_concentracao"))
+                    dt_fim = _as_datetime(alerta.get("dt_fim_concentracao"))
+                    if dt_ini is None or dt_fim is None:
+                        continue
+
+                    por_medico: dict[str, set] = {}
+                    for tx in tx_by_date.get(dt_alerta, []):
+                        tx_dt = _as_datetime(tx.get("data_hora"))
+                        if tx_dt is None or tx_dt < dt_ini or tx_dt > dt_fim:
+                            continue
+                        mid = str(tx.get("id_medico") or "")
+                        if not mid:
+                            continue
+                        por_medico.setdefault(mid, set()).add(str(tx.get("num_autorizacao") or ""))
+
+                    hr = int(alerta.get("hr_janela") or dt_ini.hour)
+                    total = int(alerta.get("nu_prescricoes") or 0)
+                    crms_total = int(alerta.get("nu_crms") or alerta.get("nu_crms_distintos") or 0)
+                    severidade = alerta.get("severidade") or "ALERTA"
+                    inicio = dt_ini.strftime("%H:%M")
+                    fim = dt_fim.strftime("%H:%M")
+                    desc = f"{total} autorizacoes entre {inicio} e {fim}, envolvendo {crms_total} CRMs ({severidade})"
+
+                    for mid, autorizacoes in por_medico.items():
                         alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
-                            "dt": str(r["dt_janela"]),
+                            "dt": dt_alerta,
                             "hr": hr,
-                            "nu_presc_crm": int(r["nu_prescricoes_crm"]),
-                            "nu_presc_total": vol,
-                            "nu_crms_total": int(r["nu_crms"]),
-                            "multiplicador": mult,
-                            "mediana_hora": med,
+                            "nu_presc_crm": len(autorizacoes),
+                            "nu_presc_total": total,
+                            "nu_crms_total": crms_total,
+                            "multiplicador": 0,
+                            "mediana_hora": 0,
+                            "severidade": severidade,
+                            "criterio_pior_ritmo": alerta.get("criterio_pior_ritmo"),
                             "descricao": desc
                         })
+
         except Exception:
             # print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
             pass
@@ -574,6 +601,7 @@ def get_crm_data(
     # Atribuição final aos médicos
     for m in crms_interesse_list:
         m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
+        m["alerta_concentracao_multiplos_crms"] = 1 if m["alertas_crm_multiplos"] else 0
 
 
     return PrescritoresResponse(
@@ -626,7 +654,18 @@ def _build_crm_rhythm_map(
         return scores
 
     for row in df_alertas.iter_rows(named=True):
-        score, count, minutes = _best_crm_rhythm_from_row(row, windows)
+        try:
+            count = int(row.get("nu_prescricoes") or 0)
+            minutes = int(row.get("nu_minutos_span") or 0)
+        except (TypeError, ValueError):
+            count = 0
+            minutes = 0
+
+        if count > 0 and minutes > 0:
+            score = round((count * 60.0) / minutes, 2)
+        else:
+            score, count, minutes = _best_crm_rhythm_from_row(row, windows)
+
         if score <= 0:
             continue
 
@@ -697,13 +736,19 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         "dt_ini_hora",
         "dt_fim_hora",
         "severidade",
+        "criterio_pior_ritmo",
+        "_crm_alerts_cache_version",
         *rhythm_columns,
     }
 
     if os.path.exists(alertas_path):
         try:
             cached_df = pl.read_parquet(alertas_path)
-            if required_columns.issubset(set(cached_df.columns)):
+            has_current_version = (
+                "_crm_alerts_cache_version" in cached_df.columns
+                and (cached_df.height == 0 or int(cached_df["_crm_alerts_cache_version"].max() or 0) >= _CRM_ALERTS_CACHE_VERSION)
+            )
+            if required_columns.issubset(set(cached_df.columns)) and has_current_version:
                 return cached_df
         except Exception:
             pass
@@ -719,6 +764,8 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         "dt_ini_hora": pl.Datetime,
         "dt_fim_hora": pl.Datetime,
         "severidade": pl.Utf8,
+        "criterio_pior_ritmo": pl.Utf8,
+        "_crm_alerts_cache_version": pl.Int32,
         **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_UNICO_RHYTHM_WINDOWS},
     }
 
@@ -734,41 +781,19 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
                         A.dt_dia AS dt_alerta,
                         DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
-                        CASE
-                          WHEN A.nu_5min  >=  7 THEN A.nu_5min
-                          WHEN A.nu_10min >= 10 THEN A.nu_10min
-                          WHEN A.nu_5min  >=  6 THEN A.nu_5min
-                          WHEN A.nu_10min >=  8 THEN A.nu_10min
-                          WHEN A.nu_15min >=  8 THEN A.nu_15min
-                          WHEN A.nu_20min >=  9 THEN A.nu_20min
-                          WHEN A.nu_30min >=  8 THEN A.nu_30min
-                          WHEN A.nu_60min >= 12 THEN A.nu_60min
-                          WHEN A.nu_25min >=  6 THEN A.nu_25min
-                          WHEN A.nu_60min >=  8 AND A.nu_minutos_span <= A.nu_60min * 5 THEN A.nu_60min
-                        END AS nu_prescricoes_dia,
-                        A.nu_minutos_span AS nu_minutos_dia,
-                        CASE WHEN A.nu_minutos_span = 0 THEN 0
-                             ELSE CAST((CASE
-                                 WHEN A.nu_5min  >=  7 THEN A.nu_5min
-                                 WHEN A.nu_10min >= 10 THEN A.nu_10min
-                                 WHEN A.nu_5min  >=  6 THEN A.nu_5min
-                                 WHEN A.nu_10min >=  8 THEN A.nu_10min
-                                 WHEN A.nu_15min >=  8 THEN A.nu_15min
-                                 WHEN A.nu_20min >=  9 THEN A.nu_20min
-                                 WHEN A.nu_30min >=  8 THEN A.nu_30min
-                                 WHEN A.nu_60min >= 12 THEN A.nu_60min
-                                 WHEN A.nu_25min >=  6 THEN A.nu_25min
-                                 WHEN A.nu_60min >=  8 AND A.nu_minutos_span <= A.nu_60min * 5 THEN A.nu_60min
-                             END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora,
+                        A.nu_autorizacoes_pior_ritmo AS nu_prescricoes_dia,
+                        A.janela_pior_ritmo_minutos AS nu_minutos_dia,
+                        A.taxa_hora_pior_ritmo AS taxa_hora,
                         A.dt_ini_concentracao AS dt_ini_hora,
                         A.dt_fim_concentracao AS dt_fim_hora,
                         CASE A.id_severidade
-                            WHEN 4 THEN 'CRÍTICO'
-                            WHEN 3 THEN 'ALTO'
-                            WHEN 2 THEN 'MÉDIO'
-                            WHEN 1 THEN 'BAIXO'
-                            ELSE 'BAIXO'
+                            WHEN 4 THEN 'EXTREMO'
+                            WHEN 3 THEN 'CRITICO'
+                            WHEN 2 THEN 'GRAVE'
+                            WHEN 1 THEN 'ALTO'
+                            ELSE 'ALERTA'
                         END AS severidade,
+                        A.criterio_pior_ritmo,
                         A.nu_5min,
                         A.nu_10min,
                         A.nu_15min,
@@ -786,6 +811,7 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             )
 
         df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema=schema)
+        df_alertas = df_alertas.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
         df_alertas.write_parquet(alertas_path, compression="zstd")
         return df_alertas
     except Exception as e:
@@ -989,6 +1015,12 @@ def get_crm_perfil_horario(
     if os.path.exists(EVENTS_PARQUET_PATH):
         try:
             df_events = pl.read_parquet(EVENTS_PARQUET_PATH)
+            if (
+                "_crm_severity_cache_version" not in df_events.columns
+                or int(df_events["_crm_severity_cache_version"].max() or 0) < _CRM_SEVERITY_CACHE_VERSION
+            ):
+                df_events = None
+                raise ValueError("Parquet crm_horario_eventos com severidade legada; regenerando cache.")
         except Exception as e:
             print(f"[ CACHE ] {cnpj} ● EVENTOS HORÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
             pass
@@ -1007,11 +1039,11 @@ def get_crm_perfil_horario(
                             A.dt_ini_concentracao,
                             A.dt_fim_concentracao,
                             CASE A.id_severidade
-                                WHEN 4 THEN 'CRÍTICO'
-                                WHEN 3 THEN 'ALTO'
-                                WHEN 2 THEN 'MÉDIO'
-                                WHEN 1 THEN 'BAIXO'
-                                ELSE 'BAIXO'
+                                WHEN 4 THEN 'EXTREMO'
+                                WHEN 3 THEN 'CRITICO'
+                                WHEN 2 THEN 'GRAVE'
+                                WHEN 1 THEN 'ALTO'
+                                ELSE 'ALERTA'
                             END AS severidade
                         FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
@@ -1027,11 +1059,11 @@ def get_crm_perfil_horario(
                             A.dt_ini_concentracao,
                             A.dt_fim_concentracao,
                             CASE A.id_severidade
-                                WHEN 4 THEN 'CRÍTICO'
-                                WHEN 3 THEN 'ALTO'
-                                WHEN 2 THEN 'MÉDIO'
-                                WHEN 1 THEN 'BAIXO'
-                                ELSE 'BAIXO'
+                                WHEN 4 THEN 'EXTREMO'
+                                WHEN 3 THEN 'CRITICO'
+                                WHEN 2 THEN 'GRAVE'
+                                WHEN 1 THEN 'ALTO'
+                                ELSE 'ALERTA'
                             END AS severidade
                         FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
@@ -1046,7 +1078,7 @@ def get_crm_perfil_horario(
                             V.nu_crms as nu_crms_distintos,
                             DATEADD(HOUR, V.hr_janela, CAST(V.dt_alerta AS DATETIME)) as dt_ini_concentracao,
                             DATEADD(HOUR, V.hr_janela + 1, CAST(V.dt_alerta AS DATETIME)) as dt_fim_concentracao,
-                            'CRÍTICO' as severidade
+                            'CRITICO' as severidade
                         FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj
                         WHERE F.cnpj = :cnpj
@@ -1062,6 +1094,7 @@ def get_crm_perfil_horario(
                         pl.col("dt_fim_concentracao").dt.strftime("%H:%M").alias("hora_fim"),
                         (pl.col("dt_ini_concentracao").dt.hour() * 60 + pl.col("dt_ini_concentracao").dt.minute()).alias("minuto_inicio"),
                         (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
+                        pl.lit(_CRM_SEVERITY_CACHE_VERSION).alias("_crm_severity_cache_version"),
                     ])
                 df_events.write_parquet(EVENTS_PARQUET_PATH, compression="zstd")
         except Exception:
@@ -1219,13 +1252,19 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
         "nu_minutos_span",
         "nu_crms_distintos",
         "severidade",
+        "criterio_pior_ritmo",
+        "_crm_alerts_cache_version",
         *rhythm_columns,
     }
 
     if os.path.exists(alertas_path):
         try:
             cached_df = pl.read_parquet(alertas_path)
-            if required_columns.issubset(set(cached_df.columns)):
+            has_current_version = (
+                "_crm_alerts_cache_version" in cached_df.columns
+                and (cached_df.height == 0 or int(cached_df["_crm_alerts_cache_version"].max() or 0) >= _CRM_ALERTS_CACHE_VERSION)
+            )
+            if required_columns.issubset(set(cached_df.columns)) and has_current_version:
                 return cached_df
         except Exception:
             pass
@@ -1245,29 +1284,19 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
                         A.dt_ini_concentracao,
                         A.dt_fim_concentracao,
-                        CASE
-                          WHEN A.nu_5min  >=  8 THEN A.nu_5min
-                          WHEN A.nu_10min >= 11 THEN A.nu_10min
-                          WHEN A.nu_5min  >=  6 THEN A.nu_5min
-                          WHEN A.nu_10min >=  8 THEN A.nu_10min
-                          WHEN A.nu_15min >= 10 THEN A.nu_15min
-                          WHEN A.nu_20min >= 11 THEN A.nu_20min
-                          WHEN A.nu_25min >= 12 THEN A.nu_25min
-                          WHEN A.nu_30min >= 12 THEN A.nu_30min
-                          WHEN A.nu_60min >= 18 THEN A.nu_60min
-                          WHEN A.nu_60min >= 15 AND A.nu_minutos_span <= A.nu_60min * 3 THEN A.nu_60min
-                        END AS nu_prescricoes,
+                        A.nu_autorizacoes_pior_ritmo AS nu_prescricoes,
                         A.nu_crms_distintos AS nu_crms,
                         A.nu_60min,
-                        A.nu_minutos_span,
+                        A.janela_pior_ritmo_minutos AS nu_minutos_span,
                         A.nu_crms_distintos,
                         CASE A.id_severidade
-                            WHEN 4 THEN 'CRÍTICO'
-                            WHEN 3 THEN 'ALTO'
-                            WHEN 2 THEN 'MÉDIO'
-                            WHEN 1 THEN 'BAIXO'
-                            ELSE 'BAIXO'
+                            WHEN 4 THEN 'EXTREMO'
+                            WHEN 3 THEN 'CRITICO'
+                            WHEN 2 THEN 'GRAVE'
+                            WHEN 1 THEN 'ALTO'
+                            ELSE 'ALERTA'
                         END AS severidade,
+                        A.criterio_pior_ritmo,
                         A.nu_5min,
                         A.nu_10min,
                         A.nu_15min,
@@ -1296,8 +1325,11 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             "nu_minutos_span": pl.Int32,
             "nu_crms_distintos": pl.Int32,
             "severidade": pl.Utf8,
+            "criterio_pior_ritmo": pl.Utf8,
+            "_crm_alerts_cache_version": pl.Int32,
             **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS if minutes != 60},
         })
+        df_alertas = df_alertas.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
         df_alertas.write_parquet(alertas_path, compression="zstd")
         return df_alertas
     except Exception as e:
@@ -1309,8 +1341,7 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     parquet_path = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
 
-    if not os.path.exists(parquet_path):
-        sync_crm_raiox_tx(cnpj)
+    sync_crm_raiox_tx(cnpj)
 
     read_time_ms = None
     transactions: list[dict] = []
@@ -1371,6 +1402,7 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                     "ritmo_qtd": ritmo_qtd,
                     "ritmo_minutos": ritmo_minutos,
                     "severidade": r.get("severidade"),
+                    "criterio_pior_ritmo": r.get("criterio_pior_ritmo"),
                     "dt_ini_hora": _format_alert_time(r.get("dt_ini_hora")),
                     "dt_fim_hora": _format_alert_time(r.get("dt_fim_hora")),
                 })
@@ -1405,6 +1437,7 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                     "ritmo_qtd": ritmo_qtd,
                     "ritmo_minutos": ritmo_minutos,
                     "severidade": r.get("severidade"),
+                    "criterio_pior_ritmo": r.get("criterio_pior_ritmo"),
                     "dt_ini_hora": _format_alert_time(r.get("dt_ini_concentracao")),
                     "dt_fim_hora": _format_alert_time(r.get("dt_fim_concentracao")),
                 })

@@ -887,65 +887,18 @@ BEGIN
 
     PRINT '      3.B Self-join concentracao_raw: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
-    -- ── Deduplicação: 1 evento por (cnpj, médico, hora) ──────────────────
-    -- PARTITION BY inclui id_medico: dois médicos diferentes no mesmo CNPJ/hora
-    -- geram eventos independentes (não se cancelam).
+    -- Deduplicacao: 1 evento por bloco continuo/sobreposto de concentracao.
+    -- Janelas sliding do mesmo medico que se sobrepoem viram um unico alerta,
+    -- mantendo a melhor severidade/ritmo dentro do bloco.
     SET @t_bloco = GETDATE();
+    DROP TABLE IF EXISTS #concentracao_candidatos;
     DROP TABLE IF EXISTS #concentracao_dedup;
 
-    SELECT
-        id_cnpj,
-        id_medico,
-        janela_inicio,
-        nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
-        fim_real_5min, fim_real_10min, fim_real_15min, fim_real_20min, 
-        fim_real_25min, fim_real_30min, fim_real_60min,
-        nu_minutos_span_full,
-        ROW_NUMBER() OVER (
-            PARTITION BY
-                id_cnpj,
-                id_medico,
-                CAST(janela_inicio AS DATE),
-                DATEDIFF(MINUTE, 0, janela_inicio) / 60
-            ORDER BY
-                CASE
-                    WHEN nu_5min  >=  7 THEN 1
-                    WHEN nu_10min >= 10 THEN 1
-                    WHEN nu_5min  >=  6 THEN 2
-                    WHEN nu_10min >=  8 THEN 2
-                    WHEN nu_15min >=  8 THEN 3
-                    WHEN nu_20min >=  9 THEN 3
-                    WHEN nu_30min >=  8 THEN 4
-                    WHEN nu_60min >= 12 THEN 4
-                    WHEN nu_25min >=  6 THEN 4
-                    WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 4
-                    ELSE 99
-                END ASC,
-                nu_60min DESC,
-                nu_30min DESC,
-                nu_25min DESC,
-                nu_20min DESC,
-                nu_15min DESC,
-                nu_10min DESC,
-                nu_5min DESC,
-                janela_inicio ASC
-        ) AS rn
-    INTO #concentracao_dedup
-    FROM #concentracao_raw;
-
-    PRINT '      3.C Deduplicacao: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
-
-    -- ── INSERT incremental nos alertas ────────────────────────────────────
-    SET @t_bloco = GETDATE();
-    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_alertas
-        (id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
-         nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
-         id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
-         taxa_hora_pior_ritmo, criterio_pior_ritmo)
     SELECT id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
            nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
            id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
            taxa_hora_pior_ritmo, criterio_pior_ritmo
+    INTO #concentracao_candidatos
     FROM (
         SELECT
             Base.id_cnpj,
@@ -993,8 +946,7 @@ BEGIN
                     WHEN nu_25min >=  6 THEN 1
                     WHEN nu_60min >=  8 AND nu_minutos_span_full <= nu_60min * 5 THEN 1
                 END AS id_severidade
-            FROM #concentracao_dedup
-            WHERE rn = 1
+            FROM #concentracao_raw
         ) Base
         CROSS APPLY (
             SELECT TOP 1
@@ -1023,6 +975,88 @@ BEGIN
         WHERE Base.id_severidade IS NOT NULL
     ) sub
     WHERE id_severidade IS NOT NULL;
+
+    ;WITH ordenado AS (
+        SELECT
+            C.*,
+            MAX(C.dt_fim_concentracao) OVER (
+                PARTITION BY C.id_cnpj, C.id_medico, C.dt_dia
+                ORDER BY C.dt_ini_concentracao, C.dt_fim_concentracao
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ) AS max_fim_anterior
+        FROM #concentracao_candidatos C
+    ),
+    marcado AS (
+        SELECT
+            *,
+            CASE
+                WHEN max_fim_anterior IS NULL THEN 1
+                WHEN dt_ini_concentracao > max_fim_anterior THEN 1
+                ELSE 0
+            END AS novo_bloco
+        FROM ordenado
+    ),
+    agrupado AS (
+        SELECT
+            *,
+            SUM(novo_bloco) OVER (
+                PARTITION BY id_cnpj, id_medico, dt_dia
+                ORDER BY dt_ini_concentracao, dt_fim_concentracao
+                ROWS UNBOUNDED PRECEDING
+            ) AS grupo_sobreposicao
+        FROM marcado
+    ),
+    ranked AS (
+        SELECT
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY id_cnpj, id_medico, dt_dia, grupo_sobreposicao
+                ORDER BY
+                    id_severidade DESC,
+                    taxa_hora_pior_ritmo DESC,
+                    nu_autorizacoes_pior_ritmo DESC,
+                    nu_60min DESC,
+                    nu_30min DESC,
+                    nu_25min DESC,
+                    nu_20min DESC,
+                    nu_15min DESC,
+                    nu_10min DESC,
+                    nu_5min DESC,
+                    dt_ini_concentracao ASC
+            ) AS rn_bloco
+        FROM agrupado
+    )
+    SELECT
+        id_cnpj,
+        id_medico,
+        dt_dia,
+        dt_ini_concentracao,
+        dt_fim_concentracao,
+        nu_minutos_span,
+        nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+        id_severidade,
+        janela_pior_ritmo_minutos,
+        nu_autorizacoes_pior_ritmo,
+        taxa_hora_pior_ritmo,
+        criterio_pior_ritmo
+    INTO #concentracao_dedup
+    FROM ranked
+    WHERE rn_bloco = 1;
+
+    PRINT '      3.C Deduplicacao: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
+
+    -- ── INSERT incremental nos alertas ────────────────────────────────────
+    SET @t_bloco = GETDATE();
+    INSERT INTO temp_CGUSC.fp.crm_concentracao_unico_alertas
+        (id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
+         nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+         id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+         taxa_hora_pior_ritmo, criterio_pior_ritmo)
+    SELECT id_cnpj, id_medico, dt_dia, dt_ini_concentracao, dt_fim_concentracao, nu_minutos_span,
+           nu_5min, nu_10min, nu_15min, nu_20min, nu_25min, nu_30min, nu_60min,
+           id_severidade, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo,
+           taxa_hora_pior_ritmo, criterio_pior_ritmo
+    FROM #concentracao_dedup;
 
     SET @nu_alertas_lote  = @@ROWCOUNT;
     SET @nu_alertas_total += @nu_alertas_lote;

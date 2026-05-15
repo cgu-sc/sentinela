@@ -762,7 +762,13 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                              END) * 60.0 / A.nu_minutos_span AS DECIMAL(10,2)) END AS taxa_hora,
                         A.dt_ini_concentracao AS dt_ini_hora,
                         A.dt_fim_concentracao AS dt_fim_hora,
-                        A.severidade,
+                        CASE A.id_severidade
+                            WHEN 4 THEN 'CRÍTICO'
+                            WHEN 3 THEN 'ALTO'
+                            WHEN 2 THEN 'MÉDIO'
+                            WHEN 1 THEN 'BAIXO'
+                            ELSE 'BAIXO'
+                        END AS severidade,
                         A.nu_5min,
                         A.nu_10min,
                         A.nu_15min,
@@ -1000,7 +1006,13 @@ def get_crm_perfil_horario(
                             NULL as nu_crms_distintos,
                             A.dt_ini_concentracao,
                             A.dt_fim_concentracao,
-                            A.severidade
+                            CASE A.id_severidade
+                                WHEN 4 THEN 'CRÍTICO'
+                                WHEN 3 THEN 'ALTO'
+                                WHEN 2 THEN 'MÉDIO'
+                                WHEN 1 THEN 'BAIXO'
+                                ELSE 'BAIXO'
+                            END AS severidade
                         FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                         WHERE F.cnpj = :cnpj
@@ -1014,7 +1026,13 @@ def get_crm_perfil_horario(
                             A.nu_crms_distintos,
                             A.dt_ini_concentracao,
                             A.dt_fim_concentracao,
-                            A.severidade
+                            CASE A.id_severidade
+                                WHEN 4 THEN 'CRÍTICO'
+                                WHEN 3 THEN 'ALTO'
+                                WHEN 2 THEN 'MÉDIO'
+                                WHEN 1 THEN 'BAIXO'
+                                ELSE 'BAIXO'
+                            END AS severidade
                         FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                         WHERE F.cnpj = :cnpj
@@ -1243,7 +1261,13 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         A.nu_60min,
                         A.nu_minutos_span,
                         A.nu_crms_distintos,
-                        A.severidade,
+                        CASE A.id_severidade
+                            WHEN 4 THEN 'CRÍTICO'
+                            WHEN 3 THEN 'ALTO'
+                            WHEN 2 THEN 'MÉDIO'
+                            WHEN 1 THEN 'BAIXO'
+                            ELSE 'BAIXO'
+                        END AS severidade,
                         A.nu_5min,
                         A.nu_10min,
                         A.nu_15min,

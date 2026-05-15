@@ -35,7 +35,7 @@ const emit = defineEmits(['lazy-load', 'clear-regiao-filter', 'clear-municipio-f
 const router = useRouter();
 const filterStore = useFilterStore();
 const { formatCurrencyFull } = useFormatting();
-const { situacaoRfClass, conexaoMsClass } = useStatusClass();
+const { conexaoMsClass } = useStatusClass();
 const copiedKey = ref(null);
 
 function formatValue(valor) {
@@ -104,7 +104,6 @@ function applyFilter(field, value) {
     const valStr = typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : value;
     filterStore.selectedGrandeRede = normalizeToOption(FILTER_OPTIONS.grandeRede, valStr);
   }
-  if (field === 'situacaoRF') filterStore.selectedSituacao = normalizeToOption(FILTER_OPTIONS.situacao, value);
   if (field === 'conexaoMS') {
     const valStr = typeof value === 'boolean' ? (value ? 'Ativa' : 'Inativa') : value;
     filterStore.selectedMS = normalizeToOption(FILTER_OPTIONS.ms, valStr);
@@ -388,24 +387,6 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
         </template>
       </Column>
 
-      <!-- Situação RF -->
-      <Column
-        field="situacao_rf"
-        header="Situação RF"
-        headerClass="col-badge-filter"
-        bodyClass="col-badge-filter"
-      >
-        <template #body="{ data }">
-          <Tag
-            v-if="data.situacao_rf"
-            :value="data.situacao_rf"
-            :class="[situacaoRfClass(data.situacao_rf), 'clickable-badge']"
-            v-tooltip.top="'Filtrar por Situação RF: ' + data.situacao_rf"
-            @click.stop="applyFilter('situacaoRF', data.situacao_rf)"
-          />
-          <span v-else class="muted">—</span>
-        </template>
-      </Column>
     </DataTable>
   </div>
 </template>
@@ -801,7 +782,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 22%;
+  width: 29%;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),

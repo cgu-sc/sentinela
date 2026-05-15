@@ -27,16 +27,20 @@ GO
 -- status_semestre:
 --   1 = comparavel
 --   2 = sem_comparacao_anterior
---   3 = meses_insuficientes
---   4 = valor_mensal_insuficiente
---   5 = meses_insuficientes_e_valor_insuficiente
+--   3 = sem_movimentacao
+--   4 = inicio_parcial_insuficiente
+--
+-- Regra de comparacao:
+--   - O primeiro semestre com venda so vira base se tiver 4+ meses com venda.
+--   - Se o primeiro semestre tiver 1 a 3 meses, ele nao compara e nao vira base.
+--   - Apos existir uma base inicial, qualquer semestre com movimentacao compara
+--     contra a base anterior aceita.
 -- ============================================================================
 
 SET NOCOUNT ON;
 
-DECLARE @DataInicio     DATE          = '2015-07-01';
-DECLARE @DataFim        DATE          = '2024-12-31';
-DECLARE @ValorMinMensal DECIMAL(18,2) = 500.00;
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim    DATE = '2024-12-31';
 
 PRINT '>> GERANDO temp_CGUSC.fp.volume_atipico_semestral...';
 
@@ -74,7 +78,7 @@ FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
-  AND A.data_hora <= @DataFim
+  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
 GROUP BY CAST(A.cnpj AS VARCHAR(14)), YEAR(A.data_hora), MONTH(A.data_hora);
 
 CREATE CLUSTERED INDEX IDX_vol_base_vendas_mensais_cnpj
@@ -127,17 +131,16 @@ CREATE UNIQUE CLUSTERED INDEX IDX_calendario_semestres_chave
 ON #calendario_semestres(chave_semestre);
 
 -- ============================================================================
--- PASSO 2: SEMESTRES VALIDOS
--- Um semestre valido tem os 6 meses presentes e todos acima do valor minimo.
--- Semestres invalidos tambem sao mantidos para explicacao visual no frontend.
+-- PASSO 2: SEMESTRES COM MOVIMENTACAO
+-- A regra nao exige valor minimo mensal. qtd_meses_validos e mantido por
+-- compatibilidade com a aplicacao e equivale a meses com venda no semestre.
 -- ============================================================================
 WITH VendasSemestrais AS (
     SELECT
         cnpj,
         ano,
         CASE WHEN mes BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS semestre,
-        valor_mes,
-        CASE WHEN valor_mes > @ValorMinMensal THEN 1 ELSE 0 END AS mes_valido
+        valor_mes
     FROM #vol_base_vendas_mensais
 ),
 AgregadoSemestre AS (
@@ -146,8 +149,7 @@ AgregadoSemestre AS (
         ano,
         semestre,
         SUM(valor_mes)  AS valor_semestre,
-        COUNT(*)        AS qtd_meses_presentes,
-        SUM(mes_valido) AS qtd_meses_validos
+        COUNT(*)        AS qtd_meses_presentes
     FROM VendasSemestrais
     GROUP BY cnpj, ano, semestre
 )
@@ -158,18 +160,8 @@ SELECT
     C.chave_semestre,
     C.ordem_semestre,
     CAST(ISNULL(A.qtd_meses_presentes, 0) AS TINYINT) AS qtd_meses_presentes,
-    CAST(ISNULL(A.qtd_meses_validos, 0) AS TINYINT) AS qtd_meses_validos,
-    CAST(ISNULL(A.valor_semestre, 0) AS DECIMAL(18,2)) AS valor_semestre,
-    CAST(
-        CASE
-            WHEN ISNULL(A.qtd_meses_presentes, 0) < 6
-             AND ISNULL(A.qtd_meses_validos, 0) < ISNULL(A.qtd_meses_presentes, 0) THEN 5
-            WHEN ISNULL(A.qtd_meses_presentes, 0) < 6 THEN 3
-            WHEN ISNULL(A.qtd_meses_validos, 0) < 6 THEN 4
-            ELSE 0
-        END
-    AS TINYINT) AS status_inicial,
-    CAST(CASE WHEN ISNULL(A.qtd_meses_presentes, 0) = 6 AND ISNULL(A.qtd_meses_validos, 0) = 6 THEN 1 ELSE 0 END AS BIT) AS is_semestre_valido
+    CAST(ISNULL(A.qtd_meses_presentes, 0) AS TINYINT) AS qtd_meses_validos,
+    CAST(ISNULL(A.valor_semestre, 0) AS DECIMAL(18,2)) AS valor_semestre
 INTO #vol_base_semestres
 FROM #vol_cnpjs_universo U
 CROSS JOIN #calendario_semestres C
@@ -200,6 +192,8 @@ INTO #NaoComprovacaoSemestral
 FROM temp_CGUSC.fp.movimentacao_mensal_gtin MOV
 INNER JOIN temp_CGUSC.fp.processamento PRO
     ON PRO.id = MOV.id_processamento
+WHERE MOV.periodo >= @DataInicio
+  AND MOV.periodo < DATEADD(DAY, 1, @DataFim)
 GROUP BY
     CAST(PRO.cnpj AS VARCHAR(14)),
     YEAR(MOV.periodo),
@@ -216,49 +210,51 @@ IF EXISTS (
     WHERE F.id IS NULL
 )
 BEGIN
-    THROW 51000, 'dados_farmacia sem id_cnpj obrigatorio para CNPJ com semestre valido.', 1;
+    THROW 51000, 'dados_farmacia sem id_cnpj obrigatorio para CNPJ com movimentacao.', 1;
 END;
 
 -- ============================================================================
 -- PASSO 4: MATERIALIZACAO SEMESTRAL
 -- ============================================================================
-WITH SemestreComAnterior AS (
+WITH SemestresComVenda AS (
     SELECT
         S.cnpj,
         S.chave_semestre,
+        S.ordem_semestre,
         S.valor_semestre,
         S.qtd_meses_presentes,
-        -- Identifica a ordem cronológica dos semestres que tiveram alguma venda
-        ROW_NUMBER() OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) as rank_vendas,
-        -- Busca dados do semestre anterior que teve venda
-        LAG(S.chave_semestre)      OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS chave_semestre_anterior,
-        LAG(S.valor_semestre)      OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS valor_semestre_anterior,
-        LAG(S.qtd_meses_presentes) OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS qtd_meses_anterior
+        ROW_NUMBER() OVER (PARTITION BY S.cnpj ORDER BY S.ordem_semestre) AS rank_vendas
     FROM #vol_base_semestres S
     WHERE S.valor_semestre > 0
+),
+SemestresBase AS (
+    SELECT
+        V.cnpj,
+        V.chave_semestre,
+        V.valor_semestre,
+        LAG(V.chave_semestre) OVER (PARTITION BY V.cnpj ORDER BY V.ordem_semestre) AS chave_semestre_anterior,
+        LAG(V.valor_semestre) OVER (PARTITION BY V.cnpj ORDER BY V.ordem_semestre) AS valor_semestre_anterior
+    FROM SemestresComVenda V
+    WHERE NOT (V.rank_vendas = 1 AND V.qtd_meses_presentes < 4)
 )
 SELECT
     CAST(F.id AS INT) AS id_cnpj,
     S.chave_semestre,
     CAST(
         CASE
-            -- Regra: 1º semestre de vida é sempre Início (status 2)
-            WHEN V.rank_vendas = 1 THEN 2
-            -- Regra: 2º semestre só compara se o 1º teve fôlego (>= 4 meses)
-            WHEN V.rank_vendas = 2 AND V.qtd_meses_anterior < 4 THEN 2
-            -- Regra: Do 3º em diante, ou 2º com base sólida, é Comparável (status 1)
-            WHEN V.chave_semestre_anterior IS NOT NULL AND V.valor_semestre_anterior > 0 THEN 1
+            WHEN S.valor_semestre <= 0 THEN 3
+            WHEN V.rank_vendas = 1 AND S.qtd_meses_presentes < 4 THEN 4
+            WHEN B.chave_semestre_anterior IS NOT NULL AND B.valor_semestre_anterior > 0 THEN 1
             ELSE 2
         END
     AS TINYINT) AS status_semestre,
     S.qtd_meses_presentes,
     S.qtd_meses_validos,
-    V.chave_semestre_anterior,
+    B.chave_semestre_anterior,
     CAST(
         CASE
-            WHEN V.rank_vendas = 2 AND V.qtd_meses_anterior < 4 THEN NULL
-            WHEN V.valor_semestre_anterior > 0
-                THEN ((S.valor_semestre - V.valor_semestre_anterior) / CAST(V.valor_semestre_anterior AS DECIMAL(18,2))) * 100.0
+            WHEN B.valor_semestre_anterior > 0
+                THEN ((S.valor_semestre - B.valor_semestre_anterior) / CAST(B.valor_semestre_anterior AS DECIMAL(18,2))) * 100.0
             ELSE NULL
         END
     AS DECIMAL(9,2)) AS taxa_crescimento_pct,
@@ -274,9 +270,12 @@ INTO temp_CGUSC.fp.volume_atipico_semestral
 FROM #vol_base_semestres S
 INNER JOIN temp_CGUSC.fp.dados_farmacia F
     ON F.cnpj = S.cnpj
-LEFT JOIN SemestreComAnterior V
+LEFT JOIN SemestresComVenda V
     ON V.cnpj = S.cnpj
    AND V.chave_semestre = S.chave_semestre
+LEFT JOIN SemestresBase B
+    ON B.cnpj = S.cnpj
+   AND B.chave_semestre = S.chave_semestre
 LEFT JOIN #NaoComprovacaoSemestral NC
     ON NC.cnpj = S.cnpj
    AND NC.ano = S.ano
@@ -310,7 +309,7 @@ SELECT
     MIN(chave_semestre) AS menor_chave_semestre,
     MAX(chave_semestre) AS maior_chave_semestre,
     SUM(CASE WHEN status_semestre = 1 THEN 1 ELSE 0 END) AS linhas_comparaveis,
-    SUM(CASE WHEN status_semestre IN (3, 4, 5) THEN 1 ELSE 0 END) AS linhas_invalidas
+    SUM(CASE WHEN status_semestre IN (3, 4) THEN 1 ELSE 0 END) AS linhas_nao_comparaveis
 FROM temp_CGUSC.fp.volume_atipico_semestral;
 
 SELECT

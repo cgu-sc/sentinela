@@ -544,7 +544,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   text-overflow: ellipsis;
   display: block;
   max-width: 100%;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 
 .cnpj-row {
@@ -554,7 +554,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 .cnpj-text {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }
@@ -595,7 +595,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 .municipio-text {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -610,7 +610,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
   color: var(--primary-color);
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
@@ -633,6 +633,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.88rem;
 }
 
 .indicator-median {
@@ -641,7 +642,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 500;
   line-height: 1;
   color: var(--text-muted);
@@ -662,7 +663,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   padding: 0 !important;
   background: transparent !important;
   border: 0 !important;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.1;
 }
@@ -692,7 +693,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   max-width: 100%;
   overflow: hidden;
   color: var(--text-color-85);
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -707,7 +708,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.62rem;
+  font-size: 0.78rem;
   font-weight: 500;
   line-height: 1;
   letter-spacing: 0.03em;
@@ -728,10 +729,11 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.88rem;
 }
 
 .noncomp-percent {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   line-height: 1;
   color: var(--text-muted);

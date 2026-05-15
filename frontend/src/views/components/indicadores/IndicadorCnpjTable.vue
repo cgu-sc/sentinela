@@ -374,7 +374,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       <!-- Conexão MS -->
       <Column
         field="is_conexao_ativa"
-        header="Conex. MS"
+        header="Conexão MS"
         headerClass="col-badge-filter"
         bodyClass="col-badge-filter"
       >
@@ -391,7 +391,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       <!-- Situação RF -->
       <Column
         field="situacao_rf"
-        header="Sit. RF"
+        header="Situação RF"
         headerClass="col-badge-filter"
         bodyClass="col-badge-filter"
       >

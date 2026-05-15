@@ -1538,8 +1538,8 @@ onBeforeUnmount(() => {
 }
 
 .filter-section {
-  margin-bottom: 0.25rem;
-  padding: 0.42rem 0.48rem;
+  margin-bottom: 0.15rem;
+  padding: 0.35rem 0.48rem;
   border-radius: 7px;
   border-left: 2px solid transparent;
   background: color-mix(in srgb, var(--sidebar-text) 3%, transparent);

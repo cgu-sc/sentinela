@@ -433,6 +433,7 @@ class NetworkNodeSchema(BaseModel):
     id: str
     label: str
     type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA_POPULAR' | 'PJ_OUTRAS_FARMACIAS' | 'PJ_DEMAIS_EMPRESAS'
+    network_level: Optional[str] = None
     razao_social: Optional[str] = None
     nome_socio: Optional[str] = None
     nome_fantasia: Optional[str] = None
@@ -459,14 +460,26 @@ class NetworkEdgeSchema(BaseModel):
     target: str               # ID do nó de destino
     label: Optional[str] = None # Ex: '10.00%'
     type: str = "socio"       # 'socio' | 'representante'
+    network_level: Optional[str] = None
     is_ativo: bool = True
     data_entrada_sociedade: Optional[date] = None
     data_exclusao_sociedade: Optional[date] = None
+
+class NetworkLevelSummarySchema(BaseModel):
+    label: str
+    entities: int = 0
+    links: int = 0
+
+class NetworkSummarySchema(BaseModel):
+    total_entities: int = 0
+    total_links: int = 0
+    levels: Dict[str, NetworkLevelSummarySchema] = Field(default_factory=dict)
 
 class NetworkResponse(BaseModel):
     cnpj: str
     nodes: List[NetworkNodeSchema]
     edges: List[NetworkEdgeSchema]
+    summary: Optional[NetworkSummarySchema] = None
     query_time_ms: Optional[float] = None
 
 

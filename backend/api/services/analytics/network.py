@@ -2,8 +2,16 @@ import os
 import time
 from typing import Optional
 import polars as pl
-from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkResponse
+from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkResponse, NetworkSummarySchema, NetworkLevelSummarySchema
 from ._cache import _get_cnpj_cache_dir, sync_network
+
+NETWORK_LEVEL_LABELS = {
+    "root": "CNPJ analisado",
+    "n1": "Sócios diretos",
+    "n2": "Empresas dos sócios diretos",
+    "n3": "Sócios das empresas N2",
+    "n4": "Empresas dos sócios N3",
+}
 
 
 def _is_pf_node(node_type: Optional[str]) -> bool:
@@ -18,6 +26,7 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
         id=row["id"],
         label=row["label"] or "",
         type=node_type,
+        network_level=row.get("network_level"),
         razao_social=None if is_pf else row.get("razao_social"),
         nome_socio=row.get("nome_socio") if is_pf else None,
         nome_fantasia=row.get("nome_fantasia"),
@@ -47,9 +56,64 @@ def _build_network_edge(row: dict) -> NetworkEdgeSchema:
         target=row["target"],
         label=row["label"] or None,
         type=row.get("type") or "socio",
+        network_level=row.get("network_level"),
         is_ativo=row.get("is_ativo") if row.get("is_ativo") is not None else True,
         data_entrada_sociedade=row.get("data_entrada_sociedade"),
         data_exclusao_sociedade=row.get("data_exclusao_sociedade"),
+    )
+
+
+def _read_parquet_or_empty(path: str) -> pl.DataFrame:
+    if not os.path.exists(path):
+        return pl.DataFrame()
+    try:
+        return pl.read_parquet(path)
+    except Exception:
+        return pl.DataFrame()
+
+
+def _level_count(df: pl.DataFrame, level: str) -> int:
+    if df.is_empty() or "network_level" not in df.columns:
+        return 0
+    return df.filter(pl.col("network_level") == level).height
+
+
+def _build_network_summary(cnpj: str) -> NetworkSummarySchema:
+    cnpj_dir = _get_cnpj_cache_dir(cnpj)
+    node_frames = [
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")),
+    ]
+    edge_frames = [
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")),
+    ]
+
+    levels = {
+        level: NetworkLevelSummarySchema(
+            label=label,
+            entities=sum(_level_count(df, level) for df in node_frames),
+            links=sum(_level_count(df, level) for df in edge_frames),
+        )
+        for level, label in NETWORK_LEVEL_LABELS.items()
+    }
+
+    node_ids = set()
+    for df in node_frames:
+        if not df.is_empty() and "id" in df.columns:
+            node_ids.update(str(v) for v in df["id"].drop_nulls().to_list())
+
+    edge_ids = set()
+    for df in edge_frames:
+        if not df.is_empty() and "id" in df.columns:
+            edge_ids.update(str(v) for v in df["id"].drop_nulls().to_list())
+
+    return NetworkSummarySchema(
+        total_entities=len(node_ids),
+        total_links=len(edge_ids),
+        levels=levels,
     )
 
 
@@ -90,6 +154,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
         cnpj=cnpj,
         nodes=nodes,
         edges=edges,
+        summary=_build_network_summary(cnpj),
         query_time_ms=round((time.perf_counter() - t0) * 1000, 1),
     )
 
@@ -136,6 +201,7 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
             cnpj=cnpj_alvo, 
             nodes=nodes, 
             edges=edges,
+            summary=_build_network_summary(cnpj_alvo),
             query_time_ms=round((time.perf_counter() - t0) * 1000, 1)
         )
 
@@ -185,6 +251,7 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
             cnpj=cnpj_alvo, 
             nodes=nodes, 
             edges=edges,
+            summary=_build_network_summary(cnpj_alvo),
             query_time_ms=round((time.perf_counter() - t0) * 1000, 1)
         )
 
@@ -210,7 +277,7 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
         
         edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges, summary=_build_network_summary(cnpj_alvo))
     except Exception as e:
         print(f"[ NETWORK ] ERRO BATCH N3 EM {cnpj_alvo}: {e}")
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
@@ -233,7 +300,7 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
         
         edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges)
+        return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges, summary=_build_network_summary(cnpj_alvo))
     except Exception as e:
         print(f"[ NETWORK ] ERRO BATCH N4 EM {cnpj_alvo}: {e}")
         return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])

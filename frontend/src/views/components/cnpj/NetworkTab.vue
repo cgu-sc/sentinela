@@ -1775,7 +1775,11 @@ const typeLabels = NETWORK_TYPE_LABELS;
             </div>
           </div>
 
-          <NetworkStatsOverlay :total-nodes="totalNodes" :total-edges="totalEdges" />
+          <NetworkStatsOverlay
+            :total-nodes="totalNodes"
+            :total-edges="totalEdges"
+            :summary="networkData?.summary"
+          />
 
           <NetworkAlertsOverlay
             v-if="hasNetworkAlerts"

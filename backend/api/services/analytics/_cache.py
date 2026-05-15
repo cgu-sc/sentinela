@@ -242,7 +242,7 @@ def sync_network(cnpj: str) -> None:
                 return columns.issubset(set(pl.scan_parquet(path).limit(0).collect().columns))
 
             n2_n4_node_columns = {
-                "id", "label", "type", "razao_social", "nome_socio",
+                "id", "label", "type", "network_level", "razao_social", "nome_socio",
                 "nome_fantasia", "classification_version", "is_falecido", "is_cadunico",
                 "is_cnae_farmacia_ausente", "id_cnae_principal", "cnae_principal",
                 "id_cnae_secundario", "cnae_secundario", "is_par", "qtd_processos_par",
@@ -250,10 +250,10 @@ def sync_network(cnpj: str) -> None:
                 "par_ultima_conclusao"
             }
             par_node_columns = {"is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao", "par_ultima_instauracao", "par_ultima_conclusao"}
-            edge_columns = {"id", "source", "target", "type", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
+            edge_columns = {"id", "source", "target", "type", "network_level", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "nome_socio", "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente", *par_node_columns}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "network_level", "nome_socio", "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente", *par_node_columns}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -287,7 +287,7 @@ def sync_network(cnpj: str) -> None:
             return value is not None and str(value).strip() not in {"", "00000000000"}
 
 
-        def add_representative_link(row: dict, node_dict: dict, edge_list: list[dict], active: bool = True) -> None:
+        def add_representative_link(row: dict, node_dict: dict, edge_list: list[dict], active: bool = True, network_level: str = "n1") -> None:
             represented_id = row["cpf_cnpj_socio"]
             representative_id = row["cpf_representante"]
             if not has_value(represented_id) or not has_value(representative_id):
@@ -301,6 +301,7 @@ def sync_network(cnpj: str) -> None:
                     "id": representative_id,
                     "label": representative_name,
                     "type": "PF",
+                    "network_level": network_level,
                     "nome_socio": representative_name,
                     "nome_fantasia": None,
                     "id_cnae_principal": None,
@@ -322,6 +323,7 @@ def sync_network(cnpj: str) -> None:
                 "target": represented_id,
                 "label": "representante",
                 "type": "representante",
+                "network_level": network_level,
                 "is_ativo": active,
                 "data_entrada_sociedade": row.get("data_entrada_sociedade"),
                 "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
@@ -373,6 +375,7 @@ def sync_network(cnpj: str) -> None:
                 "id": cnpj,
                 "label": r.get("nome_fantasia") or r.get("razao_social") or f"CNPJ {cnpj}",
                 "type": "PJ_ALVO",
+                "network_level": "root",
                 "razao_social": r.get("razao_social"),
                 "nome_fantasia": r.get("nome_fantasia"),
                 "nome_socio": None,
@@ -391,7 +394,7 @@ def sync_network(cnpj: str) -> None:
             }
         else:
             nodes[cnpj] = {
-                "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", 
+                "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", "network_level": "root",
                 "razao_social": None, "nome_fantasia": None, "nome_socio": None,
                 "id_cnae_principal": None, "cnae_principal": None, "id_cnae_secundario": None,
                 "cnae_secundario": None, "municipio": None, "uf": None,
@@ -414,6 +417,7 @@ def sync_network(cnpj: str) -> None:
                     "id": id_socio,
                     "label": s["nome_socio"],
                     "type": s["indicador_socio"] or "PF",
+                    "network_level": "n1",
                     "nome_socio": s["nome_socio"],
                     "id_cnae_principal": None,
                     "cnae_principal": None,
@@ -434,6 +438,7 @@ def sync_network(cnpj: str) -> None:
                 "target": cnpj,
                 "label": f"{float(s['percentual_qualificacao'] or 0):.1f}%",
                 "type": "socio",
+                "network_level": "n1",
                 "is_ativo": s.get("data_exclusao_sociedade") is None,
                 "data_entrada_sociedade": s.get("data_entrada_sociedade"),
                 "data_exclusao_sociedade": s.get("data_exclusao_sociedade"),
@@ -442,7 +447,8 @@ def sync_network(cnpj: str) -> None:
                 s,
                 nodes,
                 edges,
-                active=s.get("data_exclusao_sociedade") is None
+                active=s.get("data_exclusao_sociedade") is None,
+                network_level="n1"
             )
 
         df_ext = get_df_teia_fonte_nivel2()
@@ -464,6 +470,7 @@ def sync_network(cnpj: str) -> None:
                         "id": cnpj_ext,
                         "label": p.get("nome_fantasia") or p["razao_social"] or cnpj_ext,
                         "type": tipo,
+                        "network_level": "n2",
                         "razao_social": p["razao_social"],
                         "nome_fantasia": p.get("nome_fantasia"),
                         "nome_socio": None,
@@ -487,6 +494,7 @@ def sync_network(cnpj: str) -> None:
                     "target": cnpj_ext,
                     "label": "sócio",
                     "type": "socio",
+                    "network_level": "n2",
                     "is_ativo": p.get("data_exclusao_sociedade") is None,
                     "data_entrada_sociedade": p.get("data_entrada_sociedade"),
                     "data_exclusao_sociedade": p.get("data_exclusao_sociedade"),
@@ -495,7 +503,8 @@ def sync_network(cnpj: str) -> None:
                     p,
                     nodes,
                     edges,
-                    active=p.get("data_exclusao_sociedade") is None
+                    active=p.get("data_exclusao_sociedade") is None,
+                    network_level="n2"
                 )
 
         # ── 4. Nível 3: Expansão (Sócios das empresas irmãs) ─────────────────
@@ -520,6 +529,7 @@ def sync_network(cnpj: str) -> None:
                         "id": id_socio,
                         "label": row["nome_socio"],
                         "type": row["indicador_socio"] or "PF",
+                        "network_level": "n3",
                         "nome_socio": row["nome_socio"],
                         "nome_fantasia": None,
                         "id_cnae_principal": None,
@@ -545,6 +555,7 @@ def sync_network(cnpj: str) -> None:
                         "target": cnpj_pai,
                         "label": "sócio",
                         "type": "socio",
+                        "network_level": "n3",
                         "is_ativo": row.get("data_exclusao_sociedade") is None,
                         "data_entrada_sociedade": row.get("data_entrada_sociedade"),
                         "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
@@ -553,7 +564,8 @@ def sync_network(cnpj: str) -> None:
                     row,
                     exp_nodes_dict,
                     exp_edges,
-                    active=row.get("data_exclusao_sociedade") is None
+                    active=row.get("data_exclusao_sociedade") is None,
+                    network_level="n3"
                 )
 
         # ── Salva Parquets Principais ────────────────────────────────────────
@@ -561,7 +573,7 @@ def sync_network(cnpj: str) -> None:
             return [{column: row.get(column) for column in columns} for row in rows]
 
         n2_node_columns = [
-            "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
+            "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
             "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
@@ -569,7 +581,7 @@ def sync_network(cnpj: str) -> None:
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         n2_node_schema = {
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8,
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
             "id_cnae_principal": pl.Int32, "cnae_principal": pl.Utf8,
             "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
@@ -588,6 +600,7 @@ def sync_network(cnpj: str) -> None:
             "target": pl.Utf8,
             "label": pl.Utf8,
             "type": pl.Utf8,
+            "network_level": pl.Utf8,
             "is_ativo": pl.Boolean,
             "data_entrada_sociedade": pl.Date,
             "data_exclusao_sociedade": pl.Date,
@@ -597,13 +610,13 @@ def sync_network(cnpj: str) -> None:
 
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
         n3_node_columns = [
-            "id", "label", "type", "nome_socio", "municipio", "uf",
+            "id", "label", "type", "network_level", "nome_socio", "municipio", "uf",
             "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
             "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         pl.DataFrame(project_rows(list(exp_nodes_dict.values()), n3_node_columns) if exp_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "nome_socio": pl.Utf8,
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8, "nome_socio": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
             "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
@@ -641,6 +654,7 @@ def sync_network(cnpj: str) -> None:
                         "id": cnpj_ext,
                         "label": row.get("nome_fantasia") or row["razao_social"] or cnpj_ext,
                         "type": tipo,
+                        "network_level": "n4",
                         "razao_social": row["razao_social"],
                         "nome_fantasia": row.get("nome_fantasia"),
                         "nome_socio": None,
@@ -666,6 +680,7 @@ def sync_network(cnpj: str) -> None:
                         "target": cnpj_ext,
                         "label": "sócio",
                         "type": "socio",
+                        "network_level": "n4",
                         "is_ativo": row.get("data_exclusao_sociedade") is None,
                         "data_entrada_sociedade": row.get("data_entrada_sociedade"),
                         "data_exclusao_sociedade": row.get("data_exclusao_sociedade"),
@@ -674,12 +689,13 @@ def sync_network(cnpj: str) -> None:
                     row,
                     n4_nodes_dict,
                     n4_edges,
-                    active=row.get("data_exclusao_sociedade") is None
+                    active=row.get("data_exclusao_sociedade") is None,
+                    network_level="n4"
                 )
 
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
-            "id", "label", "type", "razao_social", "nome_socio", "nome_fantasia",
+            "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
             "is_falecido", "is_cadunico", "is_cnae_farmacia_ausente",
@@ -687,7 +703,7 @@ def sync_network(cnpj: str) -> None:
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
-            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "razao_social": pl.Utf8,
+            "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8, "razao_social": pl.Utf8,
             "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
             "cnae_principal": pl.Utf8, "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,

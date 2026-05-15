@@ -13,6 +13,7 @@ import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
+import { MONTH_LABELS } from "@/config/constants";
 import ObservationDialog from "./ObservationDialog.vue";
 
 const cnpjNav = useCnpjNavStore();
@@ -95,6 +96,20 @@ const displayTotalMov       = computed(() => displaySummary.value?.totalMov ?? 0
 const displayPercValSemComp = computed(() => displaySummary.value?.percValSemComp ?? 0);
 
 const risco = computed(() => displayPercValSemComp.value);
+
+const formatPeriodMonth = (date) => {
+  const normalized = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(normalized.getTime())) return null;
+  return `${MONTH_LABELS[normalized.getMonth()].toLowerCase()}/${normalized.getFullYear()}`;
+};
+
+const analysisPeriodLabel = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  const startLabel = formatPeriodMonth(start);
+  const endLabel = formatPeriodMonth(end);
+  if (!startLabel || !endLabel) return "Período não definido";
+  return `${startLabel} - ${endLabel}`;
+});
 
 // Classificação de badges — delegada ao composable useStatusClass
 const conexaoMsClassComp = computed(() =>
@@ -364,6 +379,15 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <i :class="hasObservacao ? 'pi pi-comment' : 'pi pi-pencil'" />
           </button>
         </div>
+        <div
+          class="analysis-period-badge"
+          :class="{ 'analysis-period-badge--loading': periodLoading && !filterStore.isAnimating }"
+          v-tooltip.bottom="'Período de análise aplicado aos indicadores financeiros'"
+        >
+          <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
+          <span class="analysis-period-label">Período analisado</span>
+          <strong>{{ analysisPeriodLabel }}</strong>
+        </div>
         <div class="header-kpis-new">
           <!-- Bloco Unificado de Risco -->
           <div
@@ -579,6 +603,45 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   justify-content: space-between;
   gap: 0.75rem;
   flex-shrink: 0;
+}
+
+.analysis-period-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.32rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--card-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--establishment-header-bg));
+  color: var(--establishment-header-text);
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.analysis-period-badge i {
+  color: var(--primary-color);
+  font-size: 0.78rem;
+}
+
+.analysis-period-label {
+  color: var(--text-muted);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analysis-period-badge strong {
+  color: var(--establishment-header-text);
+  font-weight: 750;
+}
+
+.analysis-period-badge--loading {
+  opacity: 0.82;
+  filter: saturate(0.8);
 }
 
 .list-actions {

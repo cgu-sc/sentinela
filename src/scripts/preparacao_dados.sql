@@ -49,19 +49,116 @@ INCLUDE (cnpj);
 
 
 -- Verifica se a tabela temporária existe e a remove, se necessário
-IF OBJECT_ID('temp_CGUSC.dbo.farmaciasInicioVendas', 'U') IS NOT NULL
-    DROP TABLE temp_CGUSC.dbo.farmaciasInicioVendas;
+IF OBJECT_ID('temp_CGUSC.fp.farmacia_inicio_venda', 'U') IS NOT NULL
+    DROP TABLE temp_CGUSC.fp.farmacia_inicio_venda;
 
 -- Cria uma tabela temporária com o CNPJ e a data inicial de vendas
 SELECT 
     A.cnpj,
     MIN(A.data_hora) AS datavendainicial
-INTO temp_CGUSC.dbo.farmaciasInicioVendas
+INTO temp_CGUSC.fp.farmacia_inicio_venda
 FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.lista_cnpjs B 
     ON B.cnpj = A.cnpj
 WHERE A.data_hora BETWEEN '2015-07-01' AND '2024-12-10'
 GROUP BY A.cnpj;
+
+
+-- definir os estoques iniciais com critério da soma das duas últimas aquisições anteriores a primeira venda na base de --producao
+
+
+
+DROP TABLE IF EXISTS TEMP_CGUSC.fp.farmacia_inicio_venda_gtin
+select a.cnpj, a.codigo_barra, min(data_hora) as data_inicio_venda
+into TEMP_CGUSC.fp.farmacia_inicio_venda_gtin
+from FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
+inner join temp_CGUSC.fp.medicamentos_patologia B on B.codigo_barra = A.codigo_barra
+inner join temp_CGUSC.fp.lista_cnpjs C on C.cnpj = A.cnpj
+WHERE 
+a.data_hora >= '2015-07-01' and a.data_hora <= '2024-12-10'
+group by A.cnpj,A.codigo_barra
+
+
+CREATE NONCLUSTERED INDEX indiceCodigoBarra ON TEMP_CGUSC.fp.farmacia_inicio_venda_gtin(codigo_barra)
+CREATE NONCLUSTERED INDEX indicecnpj ON TEMP_CGUSC.fp.farmacia_inicio_venda_gtin(cnpj)
+CREATE NONCLUSTERED INDEX indiceDataHora ON TEMP_CGUSC.fp.farmacia_inicio_venda_gtin(data_inicio_venda)
+
+
+
+drop table if exists #datas_estoques_inicio_contagem
+select A.cnpj as cnpj_estabelecimento,A.codigo_barra,
+DATEADD(m,-6,data_inicio_venda) as 'data_estoque_inicial',
+DATEADD(d,-1,data_inicio_venda) as 'data_estoque_final'
+into #datas_estoques_inicio_contagem
+from temp_CGUSC.fp.farmacia_inicio_venda_gtin A 
+
+
+drop table if exists #notas_estoque_inicialFP
+select A.destinatarioNFE as cnpj_estabelecimento,codigoBarra as codigo_barra, A.numeroNFE, A.dataEmissaoNFE, A.quantidade
+into #notas_estoque_inicialFP
+from db_farmaciapopular_nf.dbo.aquisicoesFazenda_2015_2025 A
+inner join #datas_estoques_inicio_contagem B on B.cnpj_estabelecimento = A.destinatarioNFE and B.codigo_barra = A.codigoBarra
+where A.dataEmissaoNFE>=B.data_estoque_inicial and A.dataEmissaoNFE<=B.data_estoque_final and A.tipooperacao = 1
+
+
+CREATE NONCLUSTERED INDEX index1 ON #notas_estoque_inicialFP(cnpj_estabelecimento)
+CREATE NONCLUSTERED INDEX index2 ON #notas_estoque_inicialFP(codigo_barra)
+CREATE NONCLUSTERED INDEX index3 ON #notas_estoque_inicialFP(dataEmissaoNFE)
+
+
+drop table if exists #notas_estoque_inicialFP_temp2
+select cnpj_estabelecimento,codigo_barra,numeroNFE,dataEmissaoNFE, quantidade,
+    ROW_NUMBER() OVER (
+        PARTITION BY codigo_barra,cnpj_estabelecimento
+        ORDER BY dataEmissaoNFE desc
+    ) row_num
+into #notas_estoque_inicialFP_temp2
+from #notas_estoque_inicialFP
+
+
+CREATE NONCLUSTERED INDEX index1 ON #notas_estoque_inicialFP_temp2(cnpj_estabelecimento)
+CREATE NONCLUSTERED INDEX index2 ON #notas_estoque_inicialFP_temp2(codigo_barra)
+CREATE NONCLUSTERED INDEX index3 ON #notas_estoque_inicialFP_temp2(dataEmissaoNFE)
+
+
+
+drop table if exists temp_CGUSC.fp.estoque_inicial
+select cnpj_estabelecimento,a.codigo_barra,sum(quantidade) as estoque_inicial, b.data_inicio_venda as 'data_estoque_inicial' 
+into temp_CGUSC.fp.estoque_inicial
+from #notas_estoque_inicialFP_temp2 A
+inner join temp_CGUSC.fp.farmacia_inicio_venda_gtin B on B.cnpj = A.cnpj_estabelecimento and B.codigo_barra = A.codigo_barra
+where row_num < 3 
+group by a.cnpj_estabelecimento,a.codigo_barra,b.data_inicio_venda
+order by a.codigo_barra asc
+
+CREATE NONCLUSTERED INDEX index1 ON temp_CGUSC.dbo.estoque_inicialFP(cnpj_estabelecimento)
+CREATE NONCLUSTERED INDEX index2 ON temp_CGUSC.dbo.estoque_inicialFP(codigo_barra)
+
+
+-- Salvar as notas de fiscais de aquisição consideradas na Estimativa do Estoque Inicial
+
+drop table if exists temp_CGUSC.fp.estoque_inicial_notas
+select A.cnpj_estabelecimento,A.quantidade as qnt, A.codigo_barra, A.dataEmissaoNFE, A.numeroNFE, b.estoque_inicial
+into temp_CGUSC.fp.estoque_inicial_notas
+from #notas_estoque_inicialFP_temp2 A
+inner join temp_CGUSC.fp.estoque_inicial b on b.cnpj_estabelecimento = A.cnpj_estabelecimento and b.codigo_barra = A.codigo_barra
+where row_num < 3 
+
+CREATE NONCLUSTERED INDEX index1 ON temp_CGUSC.fp.estoque_inicial_notas(cnpj_estabelecimento)
+CREATE NONCLUSTERED INDEX index2 ON temp_CGUSC.fp.estoque_inicial_notas(codigo_barra)
+   
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -220,6 +317,53 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 	-- Índices para performance de consulta por GTIN e Auditoria
 	CREATE INDEX ix_movMensalGtin_proc ON temp_cgusc.fp.movimentacao_mensal_gtin(id_processamento);
 	CREATE INDEX ix_movMensalGtin_periodo ON temp_cgusc.fp.movimentacao_mensal_gtin(periodo);
+
+
+
+
+
+
+
+
+
+   
+      
+
+   
+   
+
+
+
+   
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	--------------------------------------------------------------

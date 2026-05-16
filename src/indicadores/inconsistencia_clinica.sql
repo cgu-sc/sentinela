@@ -94,7 +94,7 @@ PRINT CONCAT('  Farmacias calculadas: ', @@ROWCOUNT);
 
 
 -- ============================================================================
--- PASSO 2: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+-- PASSO 2: METRICAS POR MUNICIPIO (MEDIANA)
 -- ============================================================================
 PRINT 'PASSO 2: Calculando metricas por municipio...';
 
@@ -108,17 +108,9 @@ SELECT DISTINCT
         OVER (PARTITION BY F.uf, F.municipio)
     AS DECIMAL(18,4)) AS mediana_municipio,
     CAST(
-        AVG(ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio,
-    CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
         OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,2)) AS mediana_valor_municipio,
-    CAST(
-        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,2)) AS media_valor_municipio
+    AS DECIMAL(18,2)) AS mediana_valor_municipio
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_mun
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -127,7 +119,7 @@ CREATE CLUSTERED INDEX IDX_IndDemoMun_mun ON temp_CGUSC.fp.indicador_inconsisten
 
 
 -- ============================================================================
--- PASSO 3: METRICAS POR ESTADO (MEDIA E MEDIANA)
+-- PASSO 3: METRICAS POR ESTADO (MEDIANA)
 -- ============================================================================
 PRINT 'PASSO 3: Calculando metricas por estado...';
 
@@ -140,17 +132,9 @@ SELECT DISTINCT
         OVER (PARTITION BY F.uf)
     AS DECIMAL(18,4)) AS mediana_estado,
     CAST(
-        AVG(ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado,
-    CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
         OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,2)) AS mediana_valor_estado,
-    CAST(
-        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,2)) AS media_valor_estado
+    AS DECIMAL(18,2)) AS mediana_valor_estado
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_uf
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -159,7 +143,7 @@ CREATE CLUSTERED INDEX IDX_IndDemoUF_uf ON temp_CGUSC.fp.indicador_inconsistenci
 
 
 -- ============================================================================
--- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
 -- ============================================================================
 PRINT 'PASSO 3B: Calculando metricas por regiao de saude...';
 
@@ -172,17 +156,9 @@ SELECT DISTINCT
         OVER (PARTITION BY F.id_regiao_saude)
     AS DECIMAL(18,4)) AS mediana_regiao,
     CAST(
-        AVG(ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao,
-    CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
         OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,2)) AS mediana_valor_regiao,
-    CAST(
-        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,2)) AS media_valor_regiao
+    AS DECIMAL(18,2)) AS mediana_valor_regiao
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj
@@ -192,7 +168,7 @@ CREATE CLUSTERED INDEX IDX_IndDemoReg ON temp_CGUSC.fp.indicador_inconsistencia_
 
 
 -- ============================================================================
--- PASSO 4: METRICA NACIONAL (MEDIA E MEDIANA)
+-- PASSO 4: METRICA NACIONAL (MEDIANA)
 -- ============================================================================
 PRINT 'PASSO 4: Calculando metricas nacionais...';
 
@@ -204,14 +180,8 @@ SELECT DISTINCT
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_inconsistencia, 0)) OVER ()
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
-        AVG(ISNULL(percentual_inconsistencia, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais,
-    CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(valor_vendas_suspeitas, 0)) OVER ()
-    AS DECIMAL(18,2)) AS mediana_valor_pais,
-    CAST(
-        AVG(ISNULL(valor_vendas_suspeitas, 0)) OVER ()
-    AS DECIMAL(18,2)) AS media_valor_pais
+    AS DECIMAL(18,2)) AS mediana_valor_pais
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_br
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -261,43 +231,27 @@ SELECT
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0)                                    AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0)                                    AS municipio_media,
     ISNULL(MUN.mediana_valor_municipio, 0)                              AS municipio_valor_mediana,
-    ISNULL(MUN.media_valor_municipio,   0)                              AS municipio_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
     CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(MUN.mediana_valor_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_mun_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(MUN.media_valor_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0)                                        AS estado_mediana,
-    ISNULL(UF.media_estado,   0)                                        AS estado_media,
     ISNULL(UF.mediana_valor_estado, 0)                                  AS estado_valor_mediana,
-    ISNULL(UF.media_valor_estado,   0)                                  AS estado_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
     CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(UF.mediana_valor_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_uf_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(UF.media_valor_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_uf_media,
 
     -- Benchmarks Regionais (Regiao de Saude)
     ISNULL(REG.mediana_regiao, 0)                                       AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0)                                       AS regiao_saude_media,
     ISNULL(REG.mediana_valor_regiao, 0)                                 AS regiao_saude_valor_mediana,
-    ISNULL(REG.media_valor_regiao,   0)                                 AS regiao_saude_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
     CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(REG.mediana_valor_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_reg_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(REG.media_valor_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais                                                     AS pais_mediana,
-    BR.media_pais                                                       AS pais_media,
     BR.mediana_valor_pais                                               AS pais_valor_mediana,
-    BR.media_valor_pais                                                 AS pais_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.mediana_valor_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.media_valor_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_media
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.mediana_valor_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_mediana
 
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado
 FROM temp_CGUSC.fp.dados_farmacia F

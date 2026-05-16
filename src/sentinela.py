@@ -115,7 +115,12 @@ try:
     for row in cursor.fetchall():
         dados_farmacias[row[0]] = dict(zip(cols, row))
 
-    cursor.execute('select codigo_barra,principio_ativo from temp_CGUSC.[fp].medicamentos_patologia')
+    cursor.execute('''
+        select med.codigo_barra, med.principio_ativo, chave.id as id_gtin
+        from temp_CGUSC.[fp].medicamentos_patologia med
+        inner join temp_CGUSC.[fp].medicamentos_patologia_chave chave
+            on chave.codigo_barra = cast(med.codigo_barra as varchar(14))
+    ''')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
         dados_medicamentos[normalizar_codigo_barra(row[0])] = dict(zip(cols, row))
@@ -1007,13 +1012,16 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             if id_proc_atual:
                 for cod, periodos in tabela_codigo_barra_datas_vendas.items():
+                    id_gtin = dados_medicamentos.get(cod, {}).get('id_gtin')
+                    if id_gtin is None:
+                        raise ValueError(f"GTIN {cod} sem id em medicamentos_patologia_chave.")
                     for per, vals in periodos.items():
                         if vals['qnt_caixas_vendidas_mes'] > 0:
                             cursor.execute('''
                                             insert into [temp_CGUSC].[fp].movimentacao_mensal_gtin 
-                                            (id_processamento, codigo_barra, periodo, qnt_caixas_vendidas, qnt_caixas_sem_comprovacao, num_autorizacoes, [valor_vendas], [valor_sem_comprovacao])
+                                            (id_processamento, id_gtin, periodo, qnt_caixas_vendidas, qnt_caixas_sem_comprovacao, num_autorizacoes, [valor_vendas], [valor_sem_comprovacao])
                                             values (?,?,?,?,?,?,?,?)
-                                        ''', id_proc_atual, cod, per + '-01', vals['qnt_caixas_vendidas_mes'],
+                                        ''', id_proc_atual, id_gtin, per + '-01', vals['qnt_caixas_vendidas_mes'],
                                            vals['qnt_caixas_sem_comprovacao_mes'], vals['num_autorizacoes_mes'],
                                            vals['valor_vendas_mes'], vals['valor_sem_comprovacao_mes'])
                 conn.commit()

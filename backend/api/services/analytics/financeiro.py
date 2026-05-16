@@ -251,13 +251,14 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
                 t0 = time.perf_counter()
                 pdf = pd.read_sql(
                     text("""
-                        SELECT m.codigo_barra, m.periodo,
+                        SELECT gtin.codigo_barra, m.periodo,
                                m.qnt_caixas_vendidas, m.qnt_caixas_sem_comprovacao,
                                m.num_autorizacoes,
                                CAST(m.valor_vendas AS FLOAT)         AS valor_vendas,
                                CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
                         FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
                         INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
+                        INNER JOIN [temp_CGUSC].[fp].[medicamentos_patologia_chave] gtin ON gtin.id = m.id_gtin
                         WHERE p.cnpj = :cnpj AND p.situacao = 1
                     """),
                     conn,

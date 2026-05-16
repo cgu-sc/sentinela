@@ -16,6 +16,30 @@ GROUP BY A.cnpj;
 CREATE CLUSTERED INDEX IX_lista_cnpjs_cnpj 
 ON temp_CGUSC.fp.lista_cnpjs (cnpj);
 
+-- Chave estavel de GTIN: preserva o mesmo id para cada codigo_barra mesmo apos
+-- recriar temp_CGUSC.fp.medicamentos_patologia.
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia_chave') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.medicamentos_patologia_chave (
+        id           INT IDENTITY(1,1) NOT NULL,
+        codigo_barra VARCHAR(14)       NOT NULL,
+        dt_criacao   DATETIME          NOT NULL
+            CONSTRAINT DF_MedicamentosPatologiaChave_DtCriacao DEFAULT GETDATE(),
+        CONSTRAINT PK_MedicamentosPatologiaChave PRIMARY KEY CLUSTERED (id),
+        CONSTRAINT UQ_MedicamentosPatologiaChave_CodigoBarra UNIQUE (codigo_barra)
+    );
+END;
+
+INSERT INTO temp_CGUSC.fp.medicamentos_patologia_chave (codigo_barra)
+SELECT DISTINCT CAST(M.codigo_barra AS VARCHAR(14)) AS codigo_barra
+FROM temp_CGUSC.fp.medicamentos_patologia AS M
+WHERE M.codigo_barra IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM temp_CGUSC.fp.medicamentos_patologia_chave AS K
+      WHERE K.codigo_barra = CAST(M.codigo_barra AS VARCHAR(14))
+  );
+
 
 
 
@@ -285,19 +309,21 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 	CREATE TABLE temp_cgusc.fp.movimentacao_mensal_gtin(
 	[id] INT Identity(1,1) Primary Key,
 	[id_processamento] INT NULL,
-	[codigo_barra] [VARCHAR](14) NOT NULL,
+	[id_gtin] INT NOT NULL,
 	[periodo] [date] NULL,
 	[qnt_caixas_vendidas] [smallint] NULL,
 	[qnt_caixas_sem_comprovacao] [smallint] NULL,
 	[num_autorizacoes] [smallint] NULL,
 	[valor_vendas] [DECIMAL](9, 2) NULL,
 	[valor_sem_comprovacao] [DECIMAL](9, 2) NULL,
-	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id)
+	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id),
+	constraint fk_movMensalGtin_id_gtin foreign key (id_gtin) references temp_cgusc.[fp].[medicamentos_patologia_chave](id)
 	);
 
 	-- Índices para performance de consulta por GTIN e Auditoria
 	CREATE INDEX ix_movMensalGtin_proc ON temp_cgusc.fp.movimentacao_mensal_gtin(id_processamento);
 	CREATE INDEX ix_movMensalGtin_periodo ON temp_cgusc.fp.movimentacao_mensal_gtin(periodo);
+	CREATE INDEX ix_movMensalGtin_gtin ON temp_cgusc.fp.movimentacao_mensal_gtin(id_gtin);
 
 
 

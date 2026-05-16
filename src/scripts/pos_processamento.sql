@@ -15,7 +15,8 @@ CREATE TABLE fp.movimentacao_mensal_cnpj (
     total_vendas DECIMAL(9, 2),
     total_sem_comprovacao DECIMAL(9, 2),
     total_qnt_caixas_vendidas INT,                    -- Voltando para INT (SMALLINT estourou com 55k)
-    total_qnt_caixas_sem_comprovacao INT            -- Voltando para INT
+    total_qnt_caixas_sem_comprovacao INT,           -- Voltando para INT
+    total_num_autorizacoes INT
 );
 GO
 
@@ -23,7 +24,8 @@ GO
 INSERT INTO fp.movimentacao_mensal_cnpj (
     cnpj, periodo,
     total_vendas, total_sem_comprovacao,
-    total_qnt_caixas_vendidas, total_qnt_caixas_sem_comprovacao
+    total_qnt_caixas_vendidas, total_qnt_caixas_sem_comprovacao,
+    total_num_autorizacoes
 )
 SELECT
     p.cnpj,
@@ -31,7 +33,8 @@ SELECT
     CAST(SUM(m.valor_vendas) AS DECIMAL(9,2)),
     CAST(SUM(m.valor_sem_comprovacao) AS DECIMAL(9,2)),
     SUM(m.qnt_caixas_vendidas),
-    SUM(m.qnt_caixas_sem_comprovacao)
+    SUM(m.qnt_caixas_sem_comprovacao),
+    SUM(m.num_autorizacoes)
 FROM fp.movimentacao_mensal_gtin m
 INNER JOIN fp.processamento p ON p.id = m.id_processamento
 GROUP BY p.cnpj, m.periodo;
@@ -52,7 +55,8 @@ ON fp.movimentacao_mensal_cnpj (
     total_vendas,
     total_sem_comprovacao,
     total_qnt_caixas_vendidas,
-    total_qnt_caixas_sem_comprovacao
+    total_qnt_caixas_sem_comprovacao,
+    total_num_autorizacoes
 );
 GO
 

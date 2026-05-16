@@ -147,7 +147,7 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
         with _engine.connect() as conn:
             pdf_tx = pd.read_sql(
                 text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
-                     "FROM temp_CGUSC.fp.crm_raiox_tx P "
+                     "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
                      "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
                      "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
                      "WHERE F.cnpj = :cnpj "
@@ -184,7 +184,7 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
 def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
     """Sincroniza o cache parquet de medianas horárias de autorizações para um CNPJ.
 
-    Lê temp_CGUSC.fp.mediana_autorizacoes_horaria e grava
+    Lê temp_CGUSC.fp.app_mediana_autorizacoes_horaria e grava
     sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.parquet.
     Usado pelo get_crm_perfil_horario para preencher a mediana de referência
     em horas sem atividade no dia selecionado.
@@ -210,7 +210,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
         with _engine.connect() as conn:
             pdf = pd.read_sql(
                 text("SELECT M.ano, M.trimestre, M.hr_janela, M.mediana_hora "
-                     "FROM temp_CGUSC.fp.mediana_autorizacoes_horaria M "
+                     "FROM temp_CGUSC.fp.app_mediana_autorizacoes_horaria M "
                      "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
                      "WHERE F.cnpj = :cnpj "
                      "ORDER BY M.ano, M.trimestre, M.hr_janela"),

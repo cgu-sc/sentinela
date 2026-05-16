@@ -31,6 +31,8 @@ import Chip from "primevue/chip";
 import ProgressSpinner from "primevue/progressspinner";
 import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
+import { getApiErrorMessage } from "@/utils/apiErrors";
+import { downloadBlobFromResponse } from "@/utils/download";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
@@ -125,28 +127,20 @@ const handleGenerateNote = async () => {
 
     // Baixa o arquivo como blob para não sair da página
     const response = await fetch(url);
-    if (!response.ok) throw new Error("Erro ao gerar nota técnica");
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, "Erro ao gerar nota técnica"),
+      );
+    }
 
-    const blob = await response.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-
-    // Cria um link temporário para o download
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.setAttribute("download", `Nota_Tecnica_${cnpj.value}.docx`);
-    document.body.appendChild(link);
-    link.click();
-
-    // Cleanup
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
+    await downloadBlobFromResponse(response, `Nota_Tecnica_${cnpj.value}.docx`);
   } catch (error) {
     console.error("Erro ao gerar Nota Técnica:", error);
     toast.add({
       severity: "error",
       summary: "Erro ao gerar Nota Técnica",
-      detail: "Não foi possível gerar o arquivo. Tente novamente em instantes.",
-      life: 5000,
+      detail: error?.message || "Não foi possível gerar o arquivo.",
+      life: 8000,
     });
   } finally {
     isGeneratingNote.value = false;

@@ -5,18 +5,18 @@
 -- crms_detalhado_test.sql.
 --
 -- Saidas persistentes:
---   0. temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+--   0. temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
 --      Metadados de versao, periodo e status consumidos pelo script loteado.
 --
---   1. temp_CGUSC.fp.dados_medico
+--   1. temp_CGUSC.fp.build_dados_medico
 --      Mapa CFM normalizado por id_medico.
 --
---   2. temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos
+--   2. temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
 --      Totais nacionais por (id_medico, competencia), equivalentes ao antigo
 --      #prescricoes_todos_estabelecimentos.
 --
 -- Observacao:
---   alertas_crm_geografico e benchmarks dependem de dados_crm_detalhado
+--   build_alertas_crm_geografico e benchmarks dependem de build_dados_crm_detalhado
 --   completo, entao ficam para o script pos-global.
 -- ============================================================================
 
@@ -77,9 +77,9 @@ PRINT '>> [PRE-GLOBAL CRM] Iniciando pre-processamento global...';
 PRINT '   Fonte: BRASIL';
 PRINT '   Periodo: ' + CAST(@DataInicio AS VARCHAR(10)) + ' -> ' + CAST(@DataFim AS VARCHAR(10));
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_pre_global_metadata;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata;
 
-CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
+CREATE TABLE temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata (
     id_pipeline       TINYINT      NOT NULL,
     pipeline_nome     VARCHAR(80)  NOT NULL,
     pipeline_versao   VARCHAR(40)  NOT NULL,
@@ -90,12 +90,12 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pre_global_metadata (
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
     observacao        VARCHAR(400) NULL,
-    CONSTRAINT PK_CrmDetalhadoPreGlobalMetadata PRIMARY KEY CLUSTERED (id_pipeline),
-    CONSTRAINT CK_CrmDetalhadoPreGlobalMetadata_Id CHECK (id_pipeline = 1)
+    CONSTRAINT PK_BuildCrmDetalhadoPreGlobalMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+    CONSTRAINT CK_BuildCrmDetalhadoPreGlobalMetadata_Id CHECK (id_pipeline = 1)
 );
 
 EXEC sp_executesql
-    N'INSERT INTO temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+    N'INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
           (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
            nu_registros, dt_criacao, dt_atualizacao, status, observacao)
       VALUES
@@ -110,9 +110,9 @@ EXEC sp_executesql
 
 BEGIN TRY
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_pipeline_uf_controle') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.crm_pipeline_uf_controle (
+    CREATE TABLE temp_CGUSC.fp.build_crm_pipeline_uf_controle (
         uf_farmacia          CHAR(2)       NOT NULL,
         pipeline_versao      VARCHAR(40)   NOT NULL,
         dt_data_inicio       DATE          NOT NULL,
@@ -126,11 +126,11 @@ BEGIN
         nu_cnpjs_fonte       INT           NULL,
         mensagem_erro        NVARCHAR(4000) NULL,
         dt_erro              DATETIME      NULL,
-        CONSTRAINT PK_CrmPipelineUfControle PRIMARY KEY CLUSTERED (uf_farmacia)
+        CONSTRAINT PK_BuildCrmPipelineUfControle PRIMARY KEY CLUSTERED (uf_farmacia)
     );
 END;
 
-UPDATE temp_CGUSC.fp.crm_pipeline_uf_controle
+UPDATE temp_CGUSC.fp.build_crm_pipeline_uf_controle
 SET pipeline_versao = @pipeline_versao,
     dt_data_inicio = @DataInicio,
     dt_data_fim = @DataFim,
@@ -147,7 +147,7 @@ WHERE pipeline_versao <> @pipeline_versao
    OR dt_data_inicio <> @DataInicio
    OR dt_data_fim <> @DataFim;
 
-INSERT INTO temp_CGUSC.fp.crm_pipeline_uf_controle
+INSERT INTO temp_CGUSC.fp.build_crm_pipeline_uf_controle
     (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, status, etapa, dt_atualizacao)
 SELECT DISTINCT
     CAST(F.uf AS CHAR(2)),
@@ -162,17 +162,17 @@ WHERE F.uf IS NOT NULL
   AND LEN(LTRIM(RTRIM(F.uf))) = 2
   AND NOT EXISTS (
       SELECT 1
-      FROM temp_CGUSC.fp.crm_pipeline_uf_controle C
+      FROM temp_CGUSC.fp.build_crm_pipeline_uf_controle C
       WHERE C.uf_farmacia = CAST(F.uf AS CHAR(2))
   );
 
 -- ============================================================================
 -- PASSO 1: MAPA DE MEDICOS PARA ID INT
 -- ============================================================================
-PRINT '>> Passo 1: Criando temp_CGUSC.fp.dados_medico...';
+PRINT '>> Passo 1: Criando temp_CGUSC.fp.build_dados_medico...';
 SET @t1 = GETDATE();
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.dados_medico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_dados_medico;
 
 SELECT
     CAST(ROW_NUMBER() OVER (ORDER BY TRY_CAST(NU_CRM AS INT), SG_UF) AS INT) AS id,
@@ -181,18 +181,18 @@ SELECT
     SG_UF                                                AS sg_uf,
     NM_MEDICO                                            AS no_medico,
     TRY_CONVERT(DATE, DT_INSCRICAO, 103)                 AS dt_inscricao
-INTO temp_CGUSC.fp.dados_medico
+INTO temp_CGUSC.fp.build_dados_medico
 FROM temp_CFM.dbo.medicos_jul_2025_mod
 WHERE NU_CRM IS NOT NULL
   AND TRY_CAST(NU_CRM AS BIGINT) > 0;
 
 CREATE CLUSTERED INDEX IDX_Join_Medico
-    ON temp_CGUSC.fp.dados_medico(id_medico);
+    ON temp_CGUSC.fp.build_dados_medico(id_medico);
 
 CREATE NONCLUSTERED INDEX IDX_ID_Medico
-    ON temp_CGUSC.fp.dados_medico(id);
+    ON temp_CGUSC.fp.build_dados_medico(id);
 
-PRINT '   temp_CGUSC.fp.dados_medico concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
+PRINT '   temp_CGUSC.fp.build_dados_medico concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 
 
 -- ============================================================================
@@ -203,10 +203,10 @@ PRINT '   temp_CGUSC.fp.dados_medico concluida em: ' + CONVERT(VARCHAR(20), GETD
 --   2. soma esses totais para (medico, competencia);
 --   3. conta quantos estabelecimentos tiveram registro do medico no mes.
 -- ============================================================================
-PRINT '>> Passo 2: Criando temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos...';
+PRINT '>> Passo 2: Criando temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos...';
 SET @t1 = GETDATE();
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos;
 
 ;WITH base_crm_cnpj AS (
     SELECT
@@ -240,16 +240,16 @@ SELECT
     competencia,
     CAST(SUM(nu_prescricoes_medico) AS SMALLINT)     AS nu_prescricoes_medico_em_todos_estabelecimentos,
     CAST(COUNT(DISTINCT nu_cnpj) AS SMALLINT)        AS nu_estabelecimentos_com_registro_mesmo_crm
-INTO temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos
+INTO temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
 FROM base_crm_cnpj
 GROUP BY id_medico, competencia;
 
 CREATE CLUSTERED INDEX IDX_CrmPrescTodos_Key
-    ON temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos(id_medico, competencia);
+    ON temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos(id_medico, competencia);
 
-PRINT '   temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
+PRINT '   temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos concluida em: ' + CONVERT(VARCHAR(20), GETDATE() - @t1, 114);
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
 SET status = 'OK',
     dt_atualizacao = GETDATE(),
     observacao = 'Pre-global finalizado com sucesso.'
@@ -274,7 +274,7 @@ EXEC sp_executesql
           dt_criacao,
           dt_atualizacao,
           observacao
-      FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata;';
+      FROM temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata;';
 
 SELECT
     uf_farmacia,
@@ -286,12 +286,12 @@ SELECT
     nu_registros_fonte,
     nu_cnpjs_fonte,
     dt_atualizacao
-FROM temp_CGUSC.fp.crm_pipeline_uf_controle
+FROM temp_CGUSC.fp.build_crm_pipeline_uf_controle
 ORDER BY uf_farmacia;
 
 SELECT
     COUNT(*) AS qtd_medicos_cfm
-FROM temp_CGUSC.fp.dados_medico;
+FROM temp_CGUSC.fp.build_dados_medico;
 
 SELECT
     COUNT(*) AS qtd_medico_competencia,
@@ -299,14 +299,14 @@ SELECT
     MIN(competencia) AS primeira_competencia,
     MAX(competencia) AS ultima_competencia,
     SUM(nu_prescricoes_medico_em_todos_estabelecimentos) AS total_prescricoes
-FROM temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos;
+FROM temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos;
 
 SELECT TOP 30
     id_medico,
     competencia,
     nu_prescricoes_medico_em_todos_estabelecimentos,
     nu_estabelecimentos_com_registro_mesmo_crm
-FROM temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos
+FROM temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
 ORDER BY nu_prescricoes_medico_em_todos_estabelecimentos DESC;
 
 END TRY
@@ -321,9 +321,9 @@ BEGIN CATCH
         ' | ', ERROR_MESSAGE()
     );
 
-    IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pre_global_metadata') IS NOT NULL
+    IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata') IS NOT NULL
     BEGIN
-        UPDATE temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+        UPDATE temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
         SET status = 'ERRO',
             dt_atualizacao = GETDATE(),
             observacao = LEFT(@mensagem_erro, 400)

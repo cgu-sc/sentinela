@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -60,6 +60,50 @@ from ._cache import _get_cnpj_cache_dir, sync_crm_raiox_tx, sync_mediana_autoriz
 _CRM_SEVERITY_CACHE_VERSION = 2
 _CRM_ALERTS_CACHE_VERSION = 2
 
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    """Converte valores de linhas Polars/Pandas para float com estreitamento de tipo."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return float(text.replace(",", "."))
+        except ValueError:
+            return default
+    return default
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    """Converte valores de linhas Polars/Pandas para int com estreitamento de tipo."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (float, Decimal)):
+        return int(value)
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(float(text.replace(",", ".")))
+        except ValueError:
+            return default
+    return default
+
 def get_crm_data(
     cnpj: str,
     data_inicio: str | None = None,
@@ -110,7 +154,7 @@ def get_crm_data(
                          "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
                          "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
                          "E.nu_estabelecimentos"
-                         " FROM temp_CGUSC.fp.crm_export E"
+                         " FROM temp_CGUSC.fp.app_crm_export E"
                          " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
                          " WHERE F.cnpj = :cnpj"),
                     conn,
@@ -154,7 +198,7 @@ def get_crm_data(
                                     read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     # â”€â”€ 3. Agrega por id_medico (colapsa competÃªncias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    total_valor = float(df["vl_total_prescricoes"].sum() or 0)
+    total_valor = _to_float(df["vl_total_prescricoes"].sum())
 
     # CÃ¡lculo de dias no perÃ­odo para o ritmo diÃ¡rio real
     from datetime import datetime
@@ -242,16 +286,16 @@ def get_crm_data(
 
     # â”€â”€ 4. Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     top1       = df_med.row(0, named=True)
-    top5_valor = float(df_med.head(5)["vl_total_prescricoes"].sum() or 0)
+    top5_valor = _to_float(df_med.head(5)["vl_total_prescricoes"].sum())
 
-    qtd_robos         = int(df_med["flag_robo"].sum() or 0)
-    qtd_robos_ocultos = int(df_med["flag_robo_oculto"].sum() or 0)
-    qtd_invalido      = int(df_med["flag_crm_invalido"].sum() or 0)
-    qtd_antes_reg     = int(df_med["flag_prescricao_antes_registro"].sum() or 0)
-    qtd_conc_temp     = int(df["flag_concentracao_mesmo_crm"].sum() or 0)
+    qtd_robos         = _to_int(df_med["flag_robo"].sum())
+    qtd_robos_ocultos = _to_int(df_med["flag_robo_oculto"].sum())
+    qtd_invalido      = _to_int(df_med["flag_crm_invalido"].sum())
+    qtd_antes_reg     = _to_int(df_med["flag_prescricao_antes_registro"].sum())
+    qtd_conc_temp     = _to_int(df["flag_concentracao_mesmo_crm"].sum())
 
-    vl_invalido  = float(df_med.filter(pl.col("flag_crm_invalido") == 1)["vl_total_prescricoes"].sum() or 0)
-    vl_antes_reg = float(df_med.filter(pl.col("flag_prescricao_antes_registro") == 1)["vl_total_prescricoes"].sum() or 0)
+    vl_invalido  = _to_float(df_med.filter(pl.col("flag_crm_invalido") == 1)["vl_total_prescricoes"].sum())
+    vl_antes_reg = _to_float(df_med.filter(pl.col("flag_prescricao_antes_registro") == 1)["vl_total_prescricoes"].sum())
 
     pct_top1      = round(top1["vl_total_prescricoes"] / total_valor * 100, 2) if total_valor else 0.0
     pct_top5      = round(top5_valor / total_valor * 100, 2)                  if total_valor else 0.0
@@ -269,14 +313,14 @@ def get_crm_data(
         df_br = get_df_bench_crm_br()
         if comp_ini: df_br = df_br.filter(pl.col("competencia") >= comp_ini)
         if comp_fim: df_br = df_br.filter(pl.col("competencia") <= comp_fim)
-        bench_top5_br = float(df_br["mediana_concentracao_top5_br"].mean() or 0)
+        bench_top5_br = _to_float(df_br["mediana_concentracao_top5_br"].mean())
 
         if id_regiao:
             df_reg = get_df_bench_crm_regiao()
             df_reg = df_reg.filter(pl.col("id_regiao_saude") == id_regiao)
             if comp_ini: df_reg = df_reg.filter(pl.col("competencia") >= comp_ini)
             if comp_fim: df_reg = df_reg.filter(pl.col("competencia") <= comp_fim)
-            bench_top5_reg = float(df_reg["mediana_concentracao_top5_reg"].mean() or 0)
+            bench_top5_reg = _to_float(df_reg["mediana_concentracao_top5_reg"].mean())
     except Exception:
         pass
 
@@ -307,7 +351,7 @@ def get_crm_data(
         "pct_valor_crm_invalido":         pct_invalido,
         "pct_valor_crm_antes_registro":   pct_antes_reg,
         "qtd_prescritores_conc_temporal": qtd_conc_temp,
-        "qtd_prescritores_surto":         int(df_med["alerta_concentracao_multiplos_crms"].sum() or 0),
+        "qtd_prescritores_surto":         _to_int(df_med["alerta_concentracao_multiplos_crms"].sum()),
         "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
         "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
         "razaoSocial":                    razao_social,
@@ -336,7 +380,7 @@ def get_crm_data(
                 "dt":             str(row["dt_alerta"]),
                 "nu_prescricoes": row["nu_prescricoes_dia"],
                 "nu_minutos":     row["nu_minutos_dia"],
-                "taxa_hora":      float(row["taxa_hora"] or 0),
+                "taxa_hora":      _to_float(row.get("taxa_hora")),
             })
 
     for m in crms_interesse_list:
@@ -356,7 +400,7 @@ def get_crm_data(
             from database import engine as _engine
             with _engine.connect() as conn:
                 pdf_geo = pd.read_sql(
-                    text("SELECT * FROM temp_CGUSC.fp.alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
+                    text("SELECT * FROM temp_CGUSC.fp.app_alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
                     conn, params={"cnpj": cnpj}
                 )
             df_geo = pl.from_pandas(pdf_geo) if not pdf_geo.empty else pl.DataFrame(schema={
@@ -392,7 +436,7 @@ def get_crm_data(
                 "dt_ini_b":       str(row["dt_ini_b"]),
                 "dt_fim_b":       str(row["dt_fim_b"]),
                 "nu_presc_b":     row["nu_prescricoes_b"],
-                "distancia_km":   float(row["distancia_km"] or 0),
+                "distancia_km":   _to_float(row.get("distancia_km")),
             })
 
     for m in crms_interesse_list:
@@ -426,7 +470,7 @@ def get_crm_data(
                 pdf_ca = pd.read_sql(
                     text("SELECT V.id_cnpj, V.competencia, V.dt_alerta, V.hr_janela,"
                          " V.nu_prescricoes, V.nu_crms, V.mediana_hora, V.multiplicador"
-                         " FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V"
+                         " FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V"
                          " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj"
                          " WHERE F.cnpj = :cnpj"),
                     conn, params={"cnpj": cnpj}
@@ -453,11 +497,11 @@ def get_crm_data(
             cnpj_alerts_list.append({
                 "tipo": "VOLUME",
                 "dt": str(r["dt_alerta"]),
-                "hr": int(r["hr_janela"]),
-                "nu_prescricoes": int(r["nu_prescricoes"]),
-                "nu_crms": int(r["nu_crms"]),
-                "multiplicador": float(r.get("multiplicador", 0)),
-                "mediana_hora":  float(r.get("mediana_hora", 0))
+                "hr": _to_int(r.get("hr_janela")),
+                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
+                "nu_crms": _to_int(r.get("nu_crms")),
+                "multiplicador": _to_float(r.get("multiplicador")),
+                "mediana_hora":  _to_float(r.get("mediana_hora"))
             })
 
     # 8.2 - Alertas de Múltiplos CRMs (df_cm)
@@ -469,9 +513,9 @@ def get_crm_data(
             cnpj_alerts_list.append({
                 "tipo": "MULTIPLO",
                 "dt": str(r["dt_alerta"]),
-                "hr": int(r["hr_janela"]),
-                "nu_prescricoes": int(r["nu_prescricoes"]),
-                "nu_crms": int(r["nu_crms"]),
+                "hr": _to_int(r.get("hr_janela")),
+                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
+                "nu_crms": _to_int(r.get("nu_crms")),
                 "multiplicador": 0.0,
                 "mediana_hora": 0.0
             })
@@ -494,9 +538,9 @@ def get_crm_data(
             cnpj_alerts_list.append({
                 "tipo": "UNICO",
                 "dt": str(r["dt_alerta"]),
-                "hr": int(r["hr_janela"]),
-                "nu_prescricoes": int(r["nu_prescricoes"]),
-                "nu_crms": int(r["nu_crms"]),
+                "hr": _to_int(r.get("hr_janela")),
+                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
+                "nu_crms": _to_int(r.get("nu_crms")),
                 "multiplicador": 0.0,
                 "mediana_hora": 0.0
             })
@@ -572,9 +616,9 @@ def get_crm_data(
                             continue
                         por_medico.setdefault(mid, set()).add(str(tx.get("num_autorizacao") or ""))
 
-                    hr = int(alerta.get("hr_janela") or dt_ini.hour)
-                    total = int(alerta.get("nu_prescricoes") or 0)
-                    crms_total = int(alerta.get("nu_crms") or alerta.get("nu_crms_distintos") or 0)
+                    hr = _to_int(alerta.get("hr_janela"), dt_ini.hour)
+                    total = _to_int(alerta.get("nu_prescricoes"))
+                    crms_total = _to_int(alerta.get("nu_crms") or alerta.get("nu_crms_distintos"))
                     severidade = alerta.get("severidade") or "ALERTA"
                     inicio = dt_ini.strftime("%H:%M")
                     fim = dt_fim.strftime("%H:%M")
@@ -630,7 +674,7 @@ def _best_crm_rhythm_from_row(row: dict, windows: tuple[int, ...]) -> tuple[floa
         if raw_count is None:
             continue
         try:
-            count = int(raw_count or 0)
+            count = _to_int(raw_count)
         except (TypeError, ValueError):
             continue
 
@@ -648,15 +692,15 @@ def _build_crm_rhythm_map(
     windows: tuple[int, ...],
     id_col: str | None = None,
     crms_col: str | None = None,
-) -> dict[str, dict]:
-    scores: dict[str, dict] = {}
+) -> dict[str, dict[str, Any]]:
+    scores: dict[str, dict[str, Any]] = {}
     if df_alertas.is_empty():
         return scores
 
     for row in df_alertas.iter_rows(named=True):
         try:
-            count = int(row.get("nu_prescricoes") or 0)
-            minutes = int(row.get("nu_minutos_span") or 0)
+            count = _to_int(row.get("nu_prescricoes"))
+            minutes = _to_int(row.get("nu_minutos_span"))
         except (TypeError, ValueError):
             count = 0
             minutes = 0
@@ -677,27 +721,27 @@ def _build_crm_rhythm_map(
         if current and score <= current["score"]:
             continue
 
-        item = {"score": score, "qtd": count, "minutos": minutes}
+        item: dict[str, Any] = {"score": score, "qtd": count, "minutos": minutes}
         if id_col:
             item["id_medico"] = str(row.get(id_col) or "")
         if crms_col:
             try:
-                item["nu_crms"] = int(row.get(crms_col) or 0)
+                item["nu_crms"] = _to_int(row.get(crms_col))
             except (TypeError, ValueError):
                 item["nu_crms"] = None
         scores[day] = item
 
     return scores
 
-def _build_crm_unico_concentration_map(df_alertas: pl.DataFrame) -> dict[str, dict]:
-    scores: dict[str, dict] = {}
+def _build_crm_unico_concentration_map(df_alertas: pl.DataFrame) -> dict[str, dict[str, Any]]:
+    scores: dict[str, dict[str, Any]] = {}
     if df_alertas.is_empty():
         return scores
 
     for row in df_alertas.iter_rows(named=True):
         try:
-            count = int(row.get("nu_prescricoes_dia") or 0)
-            minutes = int(row.get("nu_minutos_dia") or 0)
+            count = _to_int(row.get("nu_prescricoes_dia"))
+            minutes = _to_int(row.get("nu_minutos_dia"))
         except (TypeError, ValueError):
             continue
 
@@ -746,7 +790,7 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             cached_df = pl.read_parquet(alertas_path)
             has_current_version = (
                 "_crm_alerts_cache_version" in cached_df.columns
-                and (cached_df.height == 0 or int(cached_df["_crm_alerts_cache_version"].max() or 0) >= _CRM_ALERTS_CACHE_VERSION)
+                and (cached_df.height == 0 or _to_int(cached_df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION)
             )
             if required_columns.issubset(set(cached_df.columns)) and has_current_version:
                 return cached_df
@@ -801,7 +845,7 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         A.nu_25min,
                         A.nu_30min,
                         A.nu_60min
-                    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                    FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
                     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                     WHERE F.cnpj = :cnpj
                     ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao
@@ -830,7 +874,7 @@ def get_crm_perfil_diario(
       - is_anomalo_unico:                  concentração temporal de médico individual
       - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
 
-    Fonte: temp_CGUSC.fp.crm_perfil_diario
+    Fonte: temp_CGUSC.fp.app_crm_perfil_diario
     Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
     """
     import pandas as pd
@@ -863,7 +907,7 @@ def get_crm_perfil_diario(
             with _engine.connect() as conn:
                 _t0 = _time.perf_counter()
                 pdf = pd.read_sql(
-                    text("SELECT P.* FROM temp_CGUSC.fp.crm_perfil_diario P"
+                    text("SELECT P.* FROM temp_CGUSC.fp.app_crm_perfil_diario P"
                          " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
                          " WHERE F.cnpj = :cnpj ORDER BY P.dt_janela"),
                     conn,
@@ -912,13 +956,13 @@ def get_crm_perfil_diario(
     days = [
         {
             "dt_janela":             str(r["dt_janela"])[:10],
-            "competencia":           int(r["competencia"]),
-            "nu_prescricoes_dia":    int(r["nu_prescricoes_dia"]),
-            "nu_crms_distintos":     int(r["nu_crms_distintos"]),
-            "mediana_diaria":        float(r["mediana_diaria"]),
-            "is_dia_com_volume_horario_anomalo": int(r["is_dia_com_volume_horario_anomalo"]),
-            "is_anomalo_unico":      int(r["is_anomalo_unico"]),
-            "is_crm_multiplo":       int(r.get("is_crm_multiplo", 0)),
+            "competencia":           _to_int(r.get("competencia")),
+            "nu_prescricoes_dia":    _to_int(r.get("nu_prescricoes_dia")),
+            "nu_crms_distintos":     _to_int(r.get("nu_crms_distintos")),
+            "mediana_diaria":        _to_float(r.get("mediana_diaria")),
+            "is_dia_com_volume_horario_anomalo": _to_int(r.get("is_dia_com_volume_horario_anomalo")),
+            "is_anomalo_unico":      _to_int(r.get("is_anomalo_unico")),
+            "is_crm_multiplo":       _to_int(r.get("is_crm_multiplo")),
             "score_crm_unico_hora":   unico_scores.get(str(r["dt_janela"])[:10], {}).get("score"),
             "score_crm_unico_qtd":    unico_scores.get(str(r["dt_janela"])[:10], {}).get("qtd"),
             "score_crm_unico_minutos": unico_scores.get(str(r["dt_janela"])[:10], {}).get("minutos"),
@@ -941,7 +985,7 @@ def get_crm_perfil_horario(
     """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
 
     Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
-    por ponto horário, lidos de temp_CGUSC.fp.crm_perfil_horario.
+    por ponto horário, lidos de temp_CGUSC.fp.app_crm_perfil_horario.
     Cache: sentinela_cache/<cnpj>/crm_horario.parquet
     """
     import pandas as pd
@@ -978,7 +1022,7 @@ def get_crm_perfil_horario(
                 pdf = pd.read_sql(
                     text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
                          "P.is_hora_com_alerta, P.is_volume_horario_anomalo, P.is_crm_unico, P.is_crm_multiplo "
-                         "FROM temp_CGUSC.fp.crm_perfil_horario P "
+                         "FROM temp_CGUSC.fp.app_crm_perfil_horario P "
                          "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
                          "WHERE F.cnpj = :cnpj "
                          "ORDER BY P.dt_janela, P.hr_janela"),
@@ -1017,7 +1061,7 @@ def get_crm_perfil_horario(
             df_events = pl.read_parquet(EVENTS_PARQUET_PATH)
             if (
                 "_crm_severity_cache_version" not in df_events.columns
-                or int(df_events["_crm_severity_cache_version"].max() or 0) < _CRM_SEVERITY_CACHE_VERSION
+                or _to_int(df_events["_crm_severity_cache_version"].max()) < _CRM_SEVERITY_CACHE_VERSION
             ):
                 df_events = None
                 raise ValueError("Parquet crm_horario_eventos com severidade legada; regenerando cache.")
@@ -1045,7 +1089,7 @@ def get_crm_perfil_horario(
                                 WHEN 1 THEN 'ALTO'
                                 ELSE 'ALERTA'
                             END AS severidade
-                        FROM temp_CGUSC.fp.crm_concentracao_unico_alertas A
+                        FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                         WHERE F.cnpj = :cnpj
                         
@@ -1065,7 +1109,7 @@ def get_crm_perfil_horario(
                                 WHEN 1 THEN 'ALTO'
                                 ELSE 'ALERTA'
                             END AS severidade
-                        FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
+                        FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                         WHERE F.cnpj = :cnpj
                         
@@ -1079,7 +1123,7 @@ def get_crm_perfil_horario(
                             DATEADD(HOUR, V.hr_janela, CAST(V.dt_alerta AS DATETIME)) as dt_ini_concentracao,
                             DATEADD(HOUR, V.hr_janela + 1, CAST(V.dt_alerta AS DATETIME)) as dt_fim_concentracao,
                             'CRITICO' as severidade
-                        FROM temp_CGUSC.fp.volume_horario_anomalo_alertas V
+                        FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V
                         INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj
                         WHERE F.cnpj = :cnpj
                     """),
@@ -1121,7 +1165,7 @@ def get_crm_perfil_horario(
         try:
             df_med = pl.read_parquet(MEDIANA_PATH)
             for r in df_med.iter_rows(named=True):
-                mediana_lookup[(int(r["ano"]), int(r["trimestre"]), int(r["hr_janela"]))] = float(r["mediana_hora"])
+                mediana_lookup[(_to_int(r.get("ano")), _to_int(r.get("trimestre")), _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora"))
         except Exception:
             pass
 
@@ -1130,12 +1174,12 @@ def get_crm_perfil_horario(
     dates_flags: dict = {}
     for r in df.iter_rows(named=True):
         dt = str(r["dt_janela"])[:10]
-        activity[(dt, int(r["hr_janela"]))] = r
+        activity[(dt, _to_int(r.get("hr_janela")))] = r
         if dt not in dates_flags:
             dates_flags[dt] = {
-                "is_volume_horario_anomalo": int(r.get("is_volume_horario_anomalo", 0)),
-                "is_crm_unico":              int(r.get("is_crm_unico", 0)),
-                "is_crm_multiplo":           int(r.get("is_crm_multiplo", 0)),
+                "is_volume_horario_anomalo": _to_int(r.get("is_volume_horario_anomalo")),
+                "is_crm_unico":              _to_int(r.get("is_crm_unico")),
+                "is_crm_multiplo":           _to_int(r.get("is_crm_multiplo")),
             }
 
     # Expande para 24 horas por dia anÃ´malo com mediana real para todas as horas
@@ -1152,15 +1196,15 @@ def get_crm_perfil_horario(
             mediana = mediana_lookup.get((ano, trimestre, h), 0.0)
             
             # Pega as flags da HORA especÃ­fica (row), nÃ£o do dia (flags)
-            is_vol = int(row.get("is_volume_horario_anomalo", 0)) if row else 0
-            is_uni = int(row.get("is_crm_unico", 0)) if row else 0
-            is_mul = int(row.get("is_crm_multiplo", 0)) if row else 0
+            is_vol = _to_int(row.get("is_volume_horario_anomalo")) if row else 0
+            is_uni = _to_int(row.get("is_crm_unico")) if row else 0
+            is_mul = _to_int(row.get("is_crm_multiplo")) if row else 0
             
             points.append({
                 "dt_janela":          dt,
                 "hr_janela":          h,
-                "nu_prescricoes":     int(row["nu_prescricoes"])     if row else 0,
-                "nu_crms_diferentes": int(row["nu_crms_diferentes"]) if row else 0,
+                "nu_prescricoes":     _to_int(row.get("nu_prescricoes"))     if row else 0,
+                "nu_crms_diferentes": _to_int(row.get("nu_crms_diferentes")) if row else 0,
                 "mediana_hora":       mediana,
                 "is_hora_com_alerta": 1 if (is_vol or is_uni or is_mul) else 0,
                 "is_volume_horario_anomalo": is_vol,
@@ -1177,8 +1221,8 @@ def get_crm_perfil_horario(
                 "tipo":             r["tipo"],
                 "hora_inicio":      r["hora_inicio"],
                 "hora_fim":         r["hora_fim"],
-                "minuto_inicio":    int(r["minuto_inicio"]),
-                "minuto_fim":       int(r["minuto_fim"]),
+                "minuto_inicio":    _to_int(r.get("minuto_inicio")),
+                "minuto_fim":       _to_int(r.get("minuto_fim")),
                 "severidade":       r["severidade"],
                 "id_medico":        r["id_medico"],
                 "nu_crms_distintos": r["nu_crms_distintos"]
@@ -1231,6 +1275,9 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     if end_hour is None:
         end_hour = start_hour
 
+    if start_hour is None or end_hour is None:
+        return False
+
     if end_hour < start_hour:
         return target_hour >= start_hour or target_hour <= end_hour
     return start_hour <= target_hour <= end_hour
@@ -1262,7 +1309,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
             cached_df = pl.read_parquet(alertas_path)
             has_current_version = (
                 "_crm_alerts_cache_version" in cached_df.columns
-                and (cached_df.height == 0 or int(cached_df["_crm_alerts_cache_version"].max() or 0) >= _CRM_ALERTS_CACHE_VERSION)
+                and (cached_df.height == 0 or _to_int(cached_df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION)
             )
             if required_columns.issubset(set(cached_df.columns)) and has_current_version:
                 return cached_df
@@ -1303,7 +1350,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
                         A.nu_20min,
                         A.nu_25min,
                         A.nu_30min
-                    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas A
+                    FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
                     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                     WHERE F.cnpj = :cnpj
                 """),
@@ -1389,15 +1436,15 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                     )
                 )
             for r in day_unico.iter_rows(named=True):
-                ritmo_qtd = int(r["nu_prescricoes_dia"] or 0)
-                ritmo_minutos = int(r["nu_minutos_dia"] or 0)
+                ritmo_qtd = _to_int(r.get("nu_prescricoes_dia"))
+                ritmo_minutos = _to_int(r.get("nu_minutos_dia"))
                 ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
                 alertas_unico.append({
                     "id_medico": str(r["id_medico"]),
-                    "hr_janela": int(r["hr_janela"]),
-                    "nu_prescricoes_dia": int(r["nu_prescricoes_dia"]),
-                    "nu_minutos_dia": int(r["nu_minutos_dia"]),
-                    "taxa_hora": float(r["taxa_hora"]),
+                    "hr_janela": _to_int(r.get("hr_janela")),
+                    "nu_prescricoes_dia": _to_int(r.get("nu_prescricoes_dia")),
+                    "nu_minutos_dia": _to_int(r.get("nu_minutos_dia")),
+                    "taxa_hora": _to_float(r.get("taxa_hora")),
                     "ritmo_hora": ritmo_hora,
                     "ritmo_qtd": ritmo_qtd,
                     "ritmo_minutos": ritmo_minutos,
@@ -1425,14 +1472,14 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
 
             alertas_multi = []
             for r in day_multi.iter_rows(named=True):
-                ritmo_qtd = int(r["nu_prescricoes"] or 0)
-                ritmo_minutos = int(r["nu_minutos_span"] or 0)
+                ritmo_qtd = _to_int(r.get("nu_prescricoes"))
+                ritmo_minutos = _to_int(r.get("nu_minutos_span"))
                 ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
                 alertas_multi.append({
                     "dt_janela": str(r["dt_dia"])[:10],
                     "hr_janela": _extract_alert_hour(r.get("dt_ini_concentracao")),
                     "nu_prescricoes": ritmo_qtd,
-                    "nu_crms": int(r["nu_crms_distintos"] or 0),
+                    "nu_crms": _to_int(r.get("nu_crms_distintos")),
                     "ritmo_hora": ritmo_hora,
                     "ritmo_qtd": ritmo_qtd,
                     "ritmo_minutos": ritmo_minutos,

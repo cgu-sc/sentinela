@@ -9,6 +9,8 @@ import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { usePdfExport } from "@/composables/usePdfExport";
 import { API_ENDPOINTS } from "@/config/api";
+import { getApiErrorMessage } from "@/utils/apiErrors";
+import { downloadBlobFromResponse } from "@/utils/download";
 import ObservationDialog from "@/views/components/cnpj/ObservationDialog.vue";
 import { useToast } from "primevue/usetoast";
 
@@ -198,24 +200,20 @@ async function gerarNotaTecnica(item) {
   generatingNoteCnpj.value = item.cnpj;
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error("Erro ao gerar nota técnica");
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, "Erro ao gerar nota técnica"),
+      );
+    }
 
-    const blob = await response.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.setAttribute("download", `Nota_Tecnica_${item.cnpj}.docx`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
+    await downloadBlobFromResponse(response, `Nota_Tecnica_${item.cnpj}.docx`);
   } catch (error) {
     console.error("Erro ao gerar Nota Técnica:", error);
     toast.add({
       severity: "error",
       summary: "Erro ao gerar Nota Técnica",
-      detail: "Não foi possível gerar o arquivo. Tente novamente em instantes.",
-      life: 5000,
+      detail: error?.message || "Não foi possível gerar o arquivo.",
+      life: 8000,
     });
   } finally {
     generatingNoteCnpj.value = null;

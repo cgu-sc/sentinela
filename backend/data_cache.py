@@ -883,9 +883,9 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
     print("Sincronizando Benchmarks CRM (Nacional, Estadual e Regional)...")
     
     tab_map = {
-        "BR":     {"table": "temp_CGUSC.fp.indicador_crm_bench_br",     "path": _BENCH_CRM_BR_PATH},
-        "UF":     {"table": "temp_CGUSC.fp.indicador_crm_bench_uf",     "path": _BENCH_CRM_UF_PATH},
-        "REGIAO": {"table": "temp_CGUSC.fp.indicador_crm_bench_regiao", "path": _BENCH_CRM_REGIAO_PATH},
+        "BR":     {"table": "temp_CGUSC.fp.app_indicador_crm_bench_br",     "path": _BENCH_CRM_BR_PATH},
+        "UF":     {"table": "temp_CGUSC.fp.app_indicador_crm_bench_uf",     "path": _BENCH_CRM_UF_PATH},
+        "REGIAO": {"table": "temp_CGUSC.fp.app_indicador_crm_bench_regiao", "path": _BENCH_CRM_REGIAO_PATH},
     }
 
     total = len(tab_map)

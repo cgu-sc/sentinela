@@ -459,7 +459,12 @@ def get_nota_tecnica(
     db: Session = Depends(get_db)
 ):
     """Gera e retorna o download da Nota Técnica Preliminar (.docx)."""
-    file_stream = AnalyticsService.generate_nota_tecnica(db, cnpj, data_inicio, data_fim)
+    try:
+        file_stream = AnalyticsService.generate_nota_tecnica(db, cnpj, data_inicio, data_fim)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro inesperado ao gerar Nota Tecnica: {exc}") from exc
     
     filename = f"Nota_Tecnica_{cnpj}_{date.today().isoformat()}.docx"
     # Encode filename for header

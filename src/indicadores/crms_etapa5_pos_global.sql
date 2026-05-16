@@ -8,24 +8,24 @@
 --   - gera benchmarks e matriz HHI.
 --
 -- Pre-requisitos:
---   1. temp_CGUSC.fp.crm_detalhado_pre_global_metadata com status OK
---   2. temp_CGUSC.fp.crm_detalhado_lote_metadata com status OK
---   3. temp_CGUSC.fp.crm_pipeline_uf_controle com UFs OK no loteado
---   4. temp_CGUSC.fp.dados_medico
---   5. temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos
---   6. temp_CGUSC.fp.dados_crm_detalhado
---   7. temp_CGUSC.fp.crm_concentracao_multiplo_alertas
---   8. temp_CGUSC.fp.crm_raiox_tx
+--   1. temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata com status OK
+--   2. temp_CGUSC.fp.build_crm_detalhado_lote_metadata com status OK
+--   3. temp_CGUSC.fp.build_crm_pipeline_uf_controle com UFs OK no loteado
+--   4. temp_CGUSC.fp.build_dados_medico
+--   5. temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
+--   6. temp_CGUSC.fp.build_dados_crm_detalhado
+--   7. temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas
+--   8. temp_CGUSC.fp.build_crm_raiox_tx
 --
 -- Saidas persistentes:
---   - temp_CGUSC.fp.alertas_crm_geografico
---   - temp_CGUSC.fp.alertas_crm_registro
---   - temp_CGUSC.fp.alertas_crm
---   - temp_CGUSC.fp.crm_export
---   - temp_CGUSC.fp.indicador_crm_bench_uf
---   - temp_CGUSC.fp.indicador_crm_bench_regiao
---   - temp_CGUSC.fp.indicador_crm_bench_br
---   - temp_CGUSC.fp.indicador_crm_hhi
+--   - temp_CGUSC.fp.build_alertas_crm_geografico
+--   - temp_CGUSC.fp.build_alertas_crm_registro
+--   - temp_CGUSC.fp.build_alertas_crm
+--   - temp_CGUSC.fp.build_crm_export
+--   - temp_CGUSC.fp.build_indicador_crm_bench_uf
+--   - temp_CGUSC.fp.build_indicador_crm_bench_regiao
+--   - temp_CGUSC.fp.build_indicador_crm_bench_br
+--   - temp_CGUSC.fp.build_indicador_crm_hhi
 -- ============================================================================
 
 -- Batch separado: valida o estado do pipeline antes de remover qualquer saida
@@ -67,16 +67,16 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pre_global_metadata') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata') IS NULL
 BEGIN
-    RAISERROR('Metadata pre-global temp_CGUSC.fp.crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
+    RAISERROR('Metadata pre-global temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
     RETURN;
 END;
 
 SET @PrecheckOk = 0;
 SELECT @PrecheckOk = CASE WHEN EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+    FROM temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
     WHERE id_pipeline = 1
       AND pipeline_nome = 'crms_detalhado_pre_global'
       AND pipeline_versao = @PrecheckVersao
@@ -91,16 +91,16 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_metadata') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_lote_metadata') IS NULL
 BEGIN
-    RAISERROR('Metadata loteada temp_CGUSC.fp.crm_detalhado_lote_metadata nao encontrada. Rode crms_detalhado_loteado_test.sql primeiro.', 16, 1);
+    RAISERROR('Metadata loteada temp_CGUSC.fp.build_crm_detalhado_lote_metadata nao encontrada. Rode crms_detalhado_loteado_test.sql primeiro.', 16, 1);
     RETURN;
 END;
 
 SET @PrecheckOk = 0;
 SELECT @PrecheckOk = CASE WHEN EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_detalhado_lote_metadata
+    FROM temp_CGUSC.fp.build_crm_detalhado_lote_metadata
     WHERE id_pipeline = 1
       AND pipeline_nome = 'crms_detalhado_loteado'
       AND pipeline_versao = @PrecheckVersao
@@ -115,15 +115,15 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_pipeline_uf_controle') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_pipeline_uf_controle nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_pipeline_uf_controle nao encontrada.', 16, 1);
     RETURN;
 END;
 
 IF EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_pipeline_uf_controle
+    FROM temp_CGUSC.fp.build_crm_pipeline_uf_controle
     WHERE pipeline_versao = @PrecheckVersao
       AND dt_data_inicio = @PrecheckDataInicio
       AND dt_data_fim = @PrecheckDataFim
@@ -134,36 +134,67 @@ IF EXISTS (
       )
 )
 BEGIN
-    RAISERROR('Ainda ha UF sem concentracoes e/ou loteado OK no crm_pipeline_uf_controle para esta versao/periodo.', 16, 1);
+    RAISERROR('Ainda ha UF sem concentracoes e/ou loteado OK no build_crm_pipeline_uf_controle para esta versao/periodo.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_controle') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_lote_controle') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_detalhado_lote_controle nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_detalhado_lote_controle nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.crm_detalhado_lote_controle WHERE status <> 'OK')
+IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle WHERE status <> 'OK')
 BEGIN
-    RAISERROR('Ainda ha CNPJ sem status OK em temp_CGUSC.fp.crm_detalhado_lote_controle.', 16, 1);
+    RAISERROR('Ainda ha CNPJ sem status OK em temp_CGUSC.fp.build_crm_detalhado_lote_controle.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.dados_medico') IS NULL
-    OR OBJECT_ID('temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos') IS NULL
-    OR OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NULL
-    OR OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
-    OR OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
-    OR OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_dados_medico') IS NULL
+    OR OBJECT_ID('temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos') IS NULL
+    OR OBJECT_ID('temp_CGUSC.fp.build_dados_crm_detalhado') IS NULL
+    OR OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_unico_alertas') IS NULL
+    OR OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas') IS NULL
+    OR OBJECT_ID('temp_CGUSC.fp.build_crm_raiox_tx') IS NULL
 BEGIN
     RAISERROR('Uma ou mais tabelas de entrada do pos-global nao existem. Rode pre-global, concentracoes e loteado antes.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log') IS NULL
+PRINT '>> Garantindo indices auxiliares para o pos-global...';
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_crm_raiox_tx')
+      AND name = 'IDX_BuildRaioX_Cnpj_DataHora'
+)
+    CREATE NONCLUSTERED INDEX IDX_BuildRaioX_Cnpj_DataHora
+        ON temp_CGUSC.fp.build_crm_raiox_tx(id_cnpj, data_hora)
+        INCLUDE (id_medico);
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas')
+      AND name = 'IDX_BuildMultiploAlertas_Janela'
+)
+    CREATE NONCLUSTERED INDEX IDX_BuildMultiploAlertas_Janela
+        ON temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas(id_cnpj, dt_ini_concentracao, dt_fim_concentracao)
+        INCLUDE (dt_dia);
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_dados_crm_detalhado')
+      AND name = 'IDX_BuildDadosCrmDetalhado_MedComp'
+)
+    CREATE NONCLUSTERED INDEX IDX_BuildDadosCrmDetalhado_MedComp
+        ON temp_CGUSC.fp.build_dados_crm_detalhado(id_medico, competencia, nu_cnpj);
+
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log (
+    CREATE TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log (
         id_etapa_log        BIGINT IDENTITY(1,1) NOT NULL,
         pipeline_versao     VARCHAR(40)  NOT NULL,
         dt_data_inicio      DATE         NOT NULL,
@@ -177,47 +208,47 @@ BEGIN
         status              VARCHAR(20)  NOT NULL,
         observacao          VARCHAR(400) NULL,
         mensagem_erro       NVARCHAR(4000) NULL,
-        CONSTRAINT PK_CrmDetalhadoPosGlobalEtapaLog PRIMARY KEY CLUSTERED (id_etapa_log)
+        CONSTRAINT PK_BuildCrmDetalhadoPosGlobalEtapaLog PRIMARY KEY CLUSTERED (id_etapa_log)
     );
 
     CREATE INDEX IDX_CrmDetalhadoPosGlobalEtapaLog_Periodo
-        ON temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+        ON temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
             (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa);
 END;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'dt_fim_etapa') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD dt_fim_etapa DATETIME NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'dt_fim_etapa') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD dt_fim_etapa DATETIME NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'segundos_etapa') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD segundos_etapa INT NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'segundos_etapa') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD segundos_etapa INT NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'milissegundos_etapa') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD milissegundos_etapa INT NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'milissegundos_etapa') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD milissegundos_etapa INT NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'nu_registros') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD nu_registros BIGINT NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'nu_registros') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD nu_registros BIGINT NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'status') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD status VARCHAR(20) NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'status') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD status VARCHAR(20) NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'observacao') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD observacao VARCHAR(400) NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'observacao') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD observacao VARCHAR(400) NULL;
 
-IF COL_LENGTH('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log', 'mensagem_erro') IS NULL
-    ALTER TABLE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log ADD mensagem_erro NVARCHAR(4000) NULL;
+IF COL_LENGTH('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log', 'mensagem_erro') IS NULL
+    ALTER TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log ADD mensagem_erro NVARCHAR(4000) NULL;
 
 -- Batch separado: remove saidas pos-globais antigas antes da compilacao da
 -- batch principal. Isso evita Msg 207 quando uma tabela antiga existe com
 -- schema diferente, mas sera recriada abaixo.
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_pos_global_metadata;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_geografico;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_registro;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_br;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_hhi;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_geografico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_registro;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_export;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_hhi;
 GO
 
 SET NOCOUNT ON;
@@ -271,9 +302,9 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pre_global_metadata') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata') IS NULL
 BEGIN
-    RAISERROR('Metadata pre-global temp_CGUSC.fp.crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
+    RAISERROR('Metadata pre-global temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
     RETURN;
 END;
 
@@ -281,7 +312,7 @@ SET @metadata_ok = 0;
 EXEC sp_executesql
     N'SELECT @ok = CASE WHEN EXISTS (
           SELECT 1
-          FROM temp_CGUSC.fp.crm_detalhado_pre_global_metadata
+          FROM temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
           WHERE id_pipeline = 1
             AND pipeline_nome = @nome
             AND pipeline_versao = @versao
@@ -302,9 +333,9 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_metadata') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_lote_metadata') IS NULL
 BEGIN
-    RAISERROR('Metadata loteada temp_CGUSC.fp.crm_detalhado_lote_metadata nao encontrada. Rode crms_detalhado_loteado_test.sql primeiro.', 16, 1);
+    RAISERROR('Metadata loteada temp_CGUSC.fp.build_crm_detalhado_lote_metadata nao encontrada. Rode crms_detalhado_loteado_test.sql primeiro.', 16, 1);
     RETURN;
 END;
 
@@ -312,7 +343,7 @@ SET @metadata_ok = 0;
 EXEC sp_executesql
     N'SELECT @ok = CASE WHEN EXISTS (
           SELECT 1
-          FROM temp_CGUSC.fp.crm_detalhado_lote_metadata
+          FROM temp_CGUSC.fp.build_crm_detalhado_lote_metadata
           WHERE id_pipeline = 1
             AND pipeline_nome = @nome
             AND pipeline_versao = @versao
@@ -333,15 +364,15 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_pipeline_uf_controle') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_pipeline_uf_controle') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_pipeline_uf_controle nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_pipeline_uf_controle nao encontrada.', 16, 1);
     RETURN;
 END;
 
 IF EXISTS (
     SELECT 1
-    FROM temp_CGUSC.fp.crm_pipeline_uf_controle
+    FROM temp_CGUSC.fp.build_crm_pipeline_uf_controle
     WHERE pipeline_versao = @pipeline_versao
       AND dt_data_inicio = @DataInicio
       AND dt_data_fim = @DataFim
@@ -352,69 +383,69 @@ IF EXISTS (
       )
 )
 BEGIN
-    RAISERROR('Ainda ha UF sem concentracoes e/ou loteado OK no crm_pipeline_uf_controle para esta versao/periodo.', 16, 1);
+    RAISERROR('Ainda ha UF sem concentracoes e/ou loteado OK no build_crm_pipeline_uf_controle para esta versao/periodo.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_lote_controle') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_lote_controle') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_detalhado_lote_controle nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_detalhado_lote_controle nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.crm_detalhado_lote_controle WHERE status <> 'OK')
+IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle WHERE status <> 'OK')
 BEGIN
-    RAISERROR('Ainda ha CNPJ sem status OK em temp_CGUSC.fp.crm_detalhado_lote_controle.', 16, 1);
+    RAISERROR('Ainda ha CNPJ sem status OK em temp_CGUSC.fp.build_crm_detalhado_lote_controle.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.dados_medico') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_dados_medico') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.dados_medico nao encontrada. Rode o pre-global primeiro.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_dados_medico nao encontrada. Rode o pre-global primeiro.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos nao encontrada. Rode o pre-global primeiro.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos nao encontrada. Rode o pre-global primeiro.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.dados_crm_detalhado') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_dados_crm_detalhado') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.dados_crm_detalhado nao encontrada. Rode o loteado primeiro.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_dados_crm_detalhado nao encontrada. Rode o loteado primeiro.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_unico_alertas') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_unico_alertas') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_unico_alertas nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_concentracao_unico_alertas nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_concentracao_multiplo_alertas') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_concentracao_multiplo_alertas nao encontrada.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF OBJECT_ID('temp_CGUSC.fp.crm_raiox_tx') IS NULL
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_raiox_tx') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.crm_raiox_tx nao encontrada. Rode o loteado primeiro.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_raiox_tx nao encontrada. Rode o loteado primeiro.', 16, 1);
     RETURN;
 END;
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_detalhado_pos_global_metadata;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_geografico;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm_registro;
-DROP TABLE IF EXISTS temp_CGUSC.fp.alertas_crm;
-DROP TABLE IF EXISTS temp_CGUSC.fp.crm_export;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_bench_br;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crm_hhi;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_geografico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_registro;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_export;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_bench_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_indicador_crm_hhi;
 
-CREATE TABLE temp_CGUSC.fp.crm_detalhado_pos_global_metadata (
+CREATE TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata (
     id_pipeline       TINYINT      NOT NULL,
     pipeline_nome     VARCHAR(80)  NOT NULL,
     pipeline_versao   VARCHAR(40)  NOT NULL,
@@ -430,18 +461,18 @@ CREATE TABLE temp_CGUSC.fp.crm_detalhado_pos_global_metadata (
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
     observacao        VARCHAR(400) NULL,
-    CONSTRAINT PK_CrmDetalhadoPosGlobalMetadata PRIMARY KEY CLUSTERED (id_pipeline),
-    CONSTRAINT CK_CrmDetalhadoPosGlobalMetadata_Id CHECK (id_pipeline = 1)
+    CONSTRAINT PK_BuildCrmDetalhadoPosGlobalMetadata PRIMARY KEY CLUSTERED (id_pipeline),
+    CONSTRAINT CK_BuildCrmDetalhadoPosGlobalMetadata_Id CHECK (id_pipeline = 1)
 );
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_metadata
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata
     (id_pipeline, pipeline_nome, pipeline_versao, dt_data_inicio, dt_data_fim,
      dt_criacao, dt_atualizacao, status, observacao)
 VALUES
     (1, @pipeline_nome, @pipeline_versao, @DataInicio, @DataFim,
      GETDATE(), GETDATE(), 'PROCESSANDO', 'Pos-global em processamento.');
 
-DELETE FROM temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+DELETE FROM temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 WHERE pipeline_versao = @pipeline_versao
   AND dt_data_inicio = @DataInicio
   AND dt_data_fim = @DataFim;
@@ -451,15 +482,15 @@ BEGIN TRY
 -- ============================================================================
 -- PASSO 1: Motor geografico
 -- ============================================================================
-PRINT '>> Passo 1: Criando temp_CGUSC.fp.alertas_crm_geografico...';
+PRINT '>> Passo 1: Criando temp_CGUSC.fp.build_alertas_crm_geografico...';
 SET @etapa = '1_ALERTAS_CRM_GEOGRAFICO';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando alertas_crm_geografico.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_alertas_crm_geografico.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -477,7 +508,7 @@ SELECT
     F.municipio AS no_municipio,
     F.uf AS sg_uf
 INTO #base_com_geo
-FROM temp_CGUSC.fp.dados_crm_detalhado D
+FROM temp_CGUSC.fp.build_dados_crm_detalhado D
 LEFT JOIN temp_CGUSC.fp.dados_farmacia F
     ON F.cnpj = D.nu_cnpj
 LEFT JOIN temp_CGUSC.sus.tb_ibge G
@@ -553,7 +584,7 @@ SELECT
     P.nu_prescricoes_b,
     CAST(P.distancia_km AS DECIMAL(10,2)) AS distancia_km,
     T.total_pares
-INTO temp_CGUSC.fp.alertas_crm_geografico
+INTO temp_CGUSC.fp.build_alertas_crm_geografico
 FROM ParesPriorizados P
 INNER JOIN TotaisPorMedico T
     ON  T.id_medico = P.id_medico
@@ -561,35 +592,41 @@ INNER JOIN TotaisPorMedico T
 WHERE P.rn = 1;
 
 CREATE CLUSTERED INDEX IDX_GeoAlerta
-    ON temp_CGUSC.fp.alertas_crm_geografico(id_medico, competencia);
+    ON temp_CGUSC.fp.build_alertas_crm_geografico(id_medico, competencia);
+
+CREATE NONCLUSTERED INDEX IDX_BuildGeoAlerta_CnpjA
+    ON temp_CGUSC.fp.build_alertas_crm_geografico(cnpj_a, id_medico, competencia);
+
+CREATE NONCLUSTERED INDEX IDX_BuildGeoAlerta_CnpjB
+    ON temp_CGUSC.fp.build_alertas_crm_geografico(cnpj_b, id_medico, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.alertas_crm_geografico;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_geografico;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'alertas_crm_geografico criada.'
+    observacao = 'build_alertas_crm_geografico criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   alertas_crm_geografico concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_alertas_crm_geografico concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
 -- PASSO 2: Motor de registro CFM
 -- ============================================================================
-PRINT '>> Passo 2: Criando temp_CGUSC.fp.alertas_crm_registro...';
+PRINT '>> Passo 2: Criando temp_CGUSC.fp.build_alertas_crm_registro...';
 SET @etapa = '2_ALERTAS_CRM_REGISTRO';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando alertas_crm_registro.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_alertas_crm_registro.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -602,14 +639,14 @@ SELECT
     CAST('INEXISTENTE' AS VARCHAR(20)) AS tipo_anomalia,
     SUM(A.nu_prescricoes_medico) AS nu_prescricoes,
     SUM(A.vl_autorizacoes_medico) AS vl_prescricoes
-INTO temp_CGUSC.fp.alertas_crm_registro
-FROM temp_CGUSC.fp.dados_crm_detalhado A
-LEFT JOIN temp_CGUSC.fp.dados_medico M
+INTO temp_CGUSC.fp.build_alertas_crm_registro
+FROM temp_CGUSC.fp.build_dados_crm_detalhado A
+LEFT JOIN temp_CGUSC.fp.build_dados_medico M
     ON M.id_medico = A.id_medico
 WHERE M.id_medico IS NULL
 GROUP BY A.nu_cnpj, A.id_medico, A.competencia;
 
-INSERT INTO temp_CGUSC.fp.alertas_crm_registro
+INSERT INTO temp_CGUSC.fp.build_alertas_crm_registro
     (cnpj, id_medico, competencia,
      dt_primeira_presc, dt_registro_crm, tipo_anomalia,
      nu_prescricoes, vl_prescricoes)
@@ -622,107 +659,167 @@ SELECT
     'IRREGULAR' AS tipo_anomalia,
     SUM(A.nu_prescricoes_medico) AS nu_prescricoes,
     SUM(A.vl_autorizacoes_medico) AS vl_prescricoes
-FROM temp_CGUSC.fp.dados_crm_detalhado A
-INNER JOIN temp_CGUSC.fp.dados_medico M
+FROM temp_CGUSC.fp.build_dados_crm_detalhado A
+INNER JOIN temp_CGUSC.fp.build_dados_medico M
     ON M.id_medico = A.id_medico
 WHERE M.dt_inscricao > A.dt_prescricao_inicial_medico
 GROUP BY A.nu_cnpj, A.id_medico, A.competencia, M.dt_inscricao;
 
 CREATE CLUSTERED INDEX IDX_Registro
-    ON temp_CGUSC.fp.alertas_crm_registro(cnpj, id_medico, competencia);
+    ON temp_CGUSC.fp.build_alertas_crm_registro(cnpj, id_medico, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.alertas_crm_registro;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_registro;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'alertas_crm_registro criada.'
+    observacao = 'build_alertas_crm_registro criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   alertas_crm_registro concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_alertas_crm_registro concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
 -- PASSO 3: Consolidador de flags
 -- ============================================================================
-PRINT '>> Passo 3: Criando temp_CGUSC.fp.alertas_crm...';
+PRINT '>> Passo 3: Criando temp_CGUSC.fp.build_alertas_crm...';
 SET @etapa = '3_ALERTAS_CRM';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando alertas_crm.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_alertas_crm.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
-;WITH multiplo_temporal AS (
-    SELECT DISTINCT
-        F.cnpj AS nu_cnpj,
-        R.id_medico,
-        YEAR(MU.dt_dia) * 100 + MONTH(MU.dt_dia) AS competencia
-    FROM temp_CGUSC.fp.crm_concentracao_multiplo_alertas MU
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F
-        ON F.id = MU.id_cnpj
-    INNER JOIN temp_CGUSC.fp.crm_raiox_tx R
-        ON  R.id_cnpj = MU.id_cnpj
-        AND R.data_hora BETWEEN MU.dt_ini_concentracao AND MU.dt_fim_concentracao
-),
-base AS (
-    SELECT DISTINCT
-        F.cnpj AS nu_cnpj,
-        U.id_medico,
-        YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
-    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F
-        ON F.id = U.id_cnpj
-    UNION
-    SELECT G1.cnpj_a AS nu_cnpj, G1.id_medico, G1.competencia
-    FROM temp_CGUSC.fp.alertas_crm_geografico G1
-    UNION
-    SELECT G2.cnpj_b AS nu_cnpj, G2.id_medico, G2.competencia
-    FROM temp_CGUSC.fp.alertas_crm_geografico G2
-    UNION
-    SELECT DISTINCT R1.cnpj AS nu_cnpj, R1.id_medico, R1.competencia
-    FROM temp_CGUSC.fp.alertas_crm_registro R1
-    UNION
-    SELECT MT.nu_cnpj, MT.id_medico, MT.competencia
-    FROM multiplo_temporal MT
-),
-conc_agg AS (
-    SELECT
-        F.cnpj AS nu_cnpj,
-        U.id_medico,
-        YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia,
-        COUNT(*) AS qtd_dias
-    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas U
-    INNER JOIN temp_CGUSC.fp.dados_farmacia F
-        ON F.id = U.id_cnpj
-    GROUP BY F.cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia)
-),
-geo_cnpj AS (
-    SELECT DISTINCT T.nu_cnpj, T.id_medico, T.competencia
-    FROM (
-        SELECT G3.cnpj_a AS nu_cnpj, G3.id_medico, G3.competencia
-        FROM temp_CGUSC.fp.alertas_crm_geografico G3
-        UNION ALL
-        SELECT G4.cnpj_b AS nu_cnpj, G4.id_medico, G4.competencia
-        FROM temp_CGUSC.fp.alertas_crm_geografico G4
-    ) T
-),
-registro AS (
-    SELECT DISTINCT R2.cnpj AS nu_cnpj, R2.id_medico, R2.competencia
-    FROM temp_CGUSC.fp.alertas_crm_registro R2
-),
-surto AS (
-    SELECT DISTINCT nu_cnpj, id_medico, competencia
-    FROM multiplo_temporal
-)
+DROP TABLE IF EXISTS #multiplo_temporal;
+DROP TABLE IF EXISTS #multiplo_janelas;
+DROP TABLE IF EXISTS #multiplo_limites;
+DROP TABLE IF EXISTS #raiox_multiplo;
+DROP TABLE IF EXISTS #base_alertas;
+DROP TABLE IF EXISTS #conc_agg;
+DROP TABLE IF EXISTS #geo_cnpj;
+DROP TABLE IF EXISTS #registro;
+
+PRINT '   3.A Materializando janelas de CRM multiplo...';
+SELECT
+    MU.id_cnpj,
+    YEAR(MU.dt_dia) * 100 + MONTH(MU.dt_dia) AS competencia,
+    MU.dt_ini_concentracao,
+    MU.dt_fim_concentracao
+INTO #multiplo_janelas
+FROM temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas MU;
+
+CREATE CLUSTERED INDEX IDX_MultiploJanelas_Key
+    ON #multiplo_janelas(id_cnpj, dt_ini_concentracao, dt_fim_concentracao);
+
+PRINT '   3.B Calculando limites por CNPJ...';
+SELECT
+    id_cnpj,
+    MIN(dt_ini_concentracao) AS dt_ini_min,
+    MAX(dt_fim_concentracao) AS dt_fim_max
+INTO #multiplo_limites
+FROM #multiplo_janelas
+GROUP BY id_cnpj;
+
+CREATE CLUSTERED INDEX IDX_MultiploLimites_Key
+    ON #multiplo_limites(id_cnpj);
+
+PRINT '   3.C Filtrando transacoes Raio-X multiplo...';
+SELECT
+    R.id_cnpj,
+    R.id_medico,
+    R.data_hora
+INTO #raiox_multiplo
+FROM temp_CGUSC.fp.build_crm_raiox_tx R
+INNER JOIN #multiplo_limites L
+    ON  L.id_cnpj = R.id_cnpj
+    AND R.data_hora BETWEEN L.dt_ini_min AND L.dt_fim_max;
+
+CREATE CLUSTERED INDEX IDX_RaioXMultiplo_Key
+    ON #raiox_multiplo(id_cnpj, data_hora, id_medico);
+
+PRINT '   3.D Cruzando janelas multiplo com transacoes...';
+SELECT
+    F.cnpj AS nu_cnpj,
+    R.id_medico,
+    J.competencia
+INTO #multiplo_temporal
+FROM #multiplo_janelas J
+INNER JOIN #raiox_multiplo R
+    ON  R.id_cnpj = J.id_cnpj
+    AND R.data_hora BETWEEN J.dt_ini_concentracao AND J.dt_fim_concentracao
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.id = J.id_cnpj
+GROUP BY F.cnpj, R.id_medico, J.competencia
+OPTION (RECOMPILE);
+
+CREATE CLUSTERED INDEX IDX_MultiploTemporal_Key
+    ON #multiplo_temporal(nu_cnpj, id_medico, competencia);
+
+PRINT '   3.E Consolidando concentracao unico...';
+SELECT
+    F.cnpj AS nu_cnpj,
+    U.id_medico,
+    YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia,
+    COUNT(*) AS qtd_dias
+INTO #conc_agg
+FROM temp_CGUSC.fp.build_crm_concentracao_unico_alertas U
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.id = U.id_cnpj
+GROUP BY F.cnpj, U.id_medico, YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia);
+
+CREATE CLUSTERED INDEX IDX_ConcAgg_Key
+    ON #conc_agg(nu_cnpj, id_medico, competencia);
+
+PRINT '   3.F Consolidando geografico...';
+SELECT DISTINCT T.nu_cnpj, T.id_medico, T.competencia
+INTO #geo_cnpj
+FROM (
+    SELECT G3.cnpj_a AS nu_cnpj, G3.id_medico, G3.competencia
+    FROM temp_CGUSC.fp.build_alertas_crm_geografico G3
+    UNION ALL
+    SELECT G4.cnpj_b AS nu_cnpj, G4.id_medico, G4.competencia
+    FROM temp_CGUSC.fp.build_alertas_crm_geografico G4
+) T;
+
+CREATE CLUSTERED INDEX IDX_GeoCnpj_Key
+    ON #geo_cnpj(nu_cnpj, id_medico, competencia);
+
+PRINT '   3.G Consolidando registro...';
+SELECT DISTINCT R2.cnpj AS nu_cnpj, R2.id_medico, R2.competencia
+INTO #registro
+FROM temp_CGUSC.fp.build_alertas_crm_registro R2;
+
+CREATE CLUSTERED INDEX IDX_RegistroTemp_Key
+    ON #registro(nu_cnpj, id_medico, competencia);
+
+PRINT '   3.H Montando base final de alertas...';
+SELECT DISTINCT
+    F.cnpj AS nu_cnpj,
+    U.id_medico,
+    YEAR(U.dt_dia) * 100 + MONTH(U.dt_dia) AS competencia
+INTO #base_alertas
+FROM temp_CGUSC.fp.build_crm_concentracao_unico_alertas U
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.id = U.id_cnpj
+UNION
+SELECT nu_cnpj, id_medico, competencia FROM #geo_cnpj
+UNION
+SELECT nu_cnpj, id_medico, competencia FROM #registro
+UNION
+SELECT nu_cnpj, id_medico, competencia FROM #multiplo_temporal;
+
+CREATE CLUSTERED INDEX IDX_BaseAlertas_Key
+    ON #base_alertas(nu_cnpj, id_medico, competencia);
+
+PRINT '   3.I Criando build_alertas_crm...';
 SELECT
     B.nu_cnpj,
     B.id_medico,
@@ -732,55 +829,56 @@ SELECT
     CAST(CASE WHEN RE.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_registro,
     CAST(CASE WHEN SR.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS alerta_concentracao_multiplos_crms,
     ISNULL(CA.qtd_dias, 0) AS qtd_dias_concentracao
-INTO temp_CGUSC.fp.alertas_crm
-FROM base B
-LEFT JOIN conc_agg CA
+INTO temp_CGUSC.fp.build_alertas_crm
+FROM #base_alertas B
+LEFT JOIN #conc_agg CA
     ON  CA.nu_cnpj = B.nu_cnpj
     AND CA.id_medico = B.id_medico
     AND CA.competencia = B.competencia
-LEFT JOIN surto SR
+LEFT JOIN #multiplo_temporal SR
     ON  SR.nu_cnpj = B.nu_cnpj
     AND SR.id_medico = B.id_medico
     AND SR.competencia = B.competencia
-LEFT JOIN geo_cnpj GC
+LEFT JOIN #geo_cnpj GC
     ON  GC.nu_cnpj = B.nu_cnpj
     AND GC.id_medico = B.id_medico
     AND GC.competencia = B.competencia
-LEFT JOIN registro RE
+LEFT JOIN #registro RE
     ON  RE.nu_cnpj = B.nu_cnpj
     AND RE.id_medico = B.id_medico
-    AND RE.competencia = B.competencia;
+    AND RE.competencia = B.competencia
+OPTION (RECOMPILE);
 
 CREATE CLUSTERED INDEX IDX_Alertas_Key
-    ON temp_CGUSC.fp.alertas_crm(nu_cnpj, id_medico, competencia);
+    ON temp_CGUSC.fp.build_alertas_crm(nu_cnpj, id_medico, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.alertas_crm;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'alertas_crm criada.'
+    observacao = 'build_alertas_crm criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   alertas_crm concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_alertas_crm concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
 -- PASSO 4: Tabela final de exportacao
 -- ============================================================================
-PRINT '>> Passo 4: Criando temp_CGUSC.fp.crm_export...';
+PRINT '>> Passo 4: Criando temp_CGUSC.fp.build_crm_export...';
 SET @etapa = '4_CRM_EXPORT';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando crm_export.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_crm_export.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -801,17 +899,17 @@ SELECT
     CAST(CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_crm_invalido,
     CAST(CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_prescricao_antes_registro,
     ISNULL(AL.alerta_concentracao_multiplos_crms, CAST(0 AS BIT)) AS alerta_concentracao_multiplos_crms
-INTO temp_CGUSC.fp.crm_export
-FROM temp_CGUSC.fp.dados_crm_detalhado A
-LEFT JOIN temp_CGUSC.fp.dados_medico M
+INTO temp_CGUSC.fp.build_crm_export
+FROM temp_CGUSC.fp.build_dados_crm_detalhado A
+LEFT JOIN temp_CGUSC.fp.build_dados_medico M
     ON M.id_medico = A.id_medico
 LEFT JOIN temp_CGUSC.fp.dados_farmacia FAR
     ON FAR.cnpj = A.nu_cnpj
-LEFT JOIN temp_CGUSC.fp.alertas_crm AL
+LEFT JOIN temp_CGUSC.fp.build_alertas_crm AL
     ON  AL.nu_cnpj = A.nu_cnpj
     AND AL.id_medico = A.id_medico
     AND AL.competencia = A.competencia
-LEFT JOIN temp_CGUSC.fp.crm_prescricoes_todos_estabelecimentos P
+LEFT JOIN temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos P
     ON  P.id_medico = A.id_medico
     AND P.competencia = A.competencia
 LEFT JOIN (
@@ -819,44 +917,44 @@ LEFT JOIN (
         F.cnpj AS nu_cnpj,
         C.id_medico,
         YEAR(C.dt_dia) * 100 + MONTH(C.dt_dia) AS competencia
-    FROM temp_CGUSC.fp.crm_concentracao_unico_alertas C
+    FROM temp_CGUSC.fp.build_crm_concentracao_unico_alertas C
     INNER JOIN temp_CGUSC.fp.dados_farmacia F
         ON F.id = C.id_cnpj
 ) CONC
     ON  CONC.nu_cnpj = A.nu_cnpj
     AND CONC.id_medico = A.id_medico
     AND CONC.competencia = A.competencia
-LEFT JOIN temp_CGUSC.fp.alertas_crm_geografico G
+LEFT JOIN temp_CGUSC.fp.build_alertas_crm_geografico G
     ON  G.id_medico = A.id_medico
     AND G.competencia = A.competencia
     AND (G.cnpj_a = A.nu_cnpj OR G.cnpj_b = A.nu_cnpj)
-LEFT JOIN temp_CGUSC.fp.alertas_crm_registro REG_INV
+LEFT JOIN temp_CGUSC.fp.build_alertas_crm_registro REG_INV
     ON  REG_INV.cnpj = A.nu_cnpj
     AND REG_INV.id_medico = A.id_medico
     AND REG_INV.competencia = A.competencia
     AND REG_INV.tipo_anomalia = 'INEXISTENTE'
-LEFT JOIN temp_CGUSC.fp.alertas_crm_registro REG_IRR
+LEFT JOIN temp_CGUSC.fp.build_alertas_crm_registro REG_IRR
     ON  REG_IRR.cnpj = A.nu_cnpj
     AND REG_IRR.id_medico = A.id_medico
     AND REG_IRR.competencia = A.competencia
     AND REG_IRR.tipo_anomalia = 'IRREGULAR';
 
 CREATE CLUSTERED INDEX IDX_CrmExport_Key
-    ON temp_CGUSC.fp.crm_export(id_cnpj, id_medico, competencia);
+    ON temp_CGUSC.fp.build_crm_export(id_cnpj, id_medico, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.crm_export;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_crm_export;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'crm_export criada.'
+    observacao = 'build_crm_export criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   crm_export concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_crm_export concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
@@ -867,7 +965,7 @@ SET @etapa = '5_INDICADOR_CRM_BASE';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
     (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando base temporaria #indicador_crm.');
@@ -884,7 +982,7 @@ Totais AS (
         SUM(nu_prescricoes_medico) AS total_prescricoes,
         SUM(vl_autorizacoes_medico) AS total_valor,
         COUNT(DISTINCT id_medico) AS total_prescritores
-    FROM temp_CGUSC.fp.dados_crm_detalhado
+    FROM temp_CGUSC.fp.build_dados_crm_detalhado
     GROUP BY nu_cnpj, competencia
 ),
 Top5 AS (
@@ -904,7 +1002,7 @@ Top5 AS (
                 PARTITION BY nu_cnpj, competencia
                 ORDER BY vl_autorizacoes_medico DESC
             ) AS rk
-        FROM temp_CGUSC.fp.dados_crm_detalhado
+        FROM temp_CGUSC.fp.build_dados_crm_detalhado
     ) R
     WHERE rk <= 5
     GROUP BY cnpj, competencia
@@ -915,13 +1013,13 @@ Anomalias AS (
         A.competencia,
         COUNT(CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 END) AS qtd_crm_invalido,
         COUNT(CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 END) AS qtd_antes_registro
-    FROM temp_CGUSC.fp.dados_crm_detalhado A
-    LEFT JOIN temp_CGUSC.fp.alertas_crm_registro REG_INV
+    FROM temp_CGUSC.fp.build_dados_crm_detalhado A
+    LEFT JOIN temp_CGUSC.fp.build_alertas_crm_registro REG_INV
         ON  REG_INV.cnpj = A.nu_cnpj
         AND REG_INV.id_medico = A.id_medico
         AND REG_INV.competencia = A.competencia
         AND REG_INV.tipo_anomalia = 'INEXISTENTE'
-    LEFT JOIN temp_CGUSC.fp.alertas_crm_registro REG_IRR
+    LEFT JOIN temp_CGUSC.fp.build_alertas_crm_registro REG_IRR
         ON  REG_IRR.cnpj = A.nu_cnpj
         AND REG_IRR.id_medico = A.id_medico
         AND REG_IRR.competencia = A.competencia
@@ -936,7 +1034,7 @@ HHI AS (
             CAST(E.vl_autorizacoes_medico AS DECIMAL(18,4)) /
             NULLIF(CAST(T.total_valor AS DECIMAL(18,4)), 0) * 100.0
         , 2)) AS indice_hhi
-    FROM temp_CGUSC.fp.dados_crm_detalhado E
+    FROM temp_CGUSC.fp.build_dados_crm_detalhado E
     INNER JOIN Totais T
         ON T.cnpj = E.nu_cnpj
        AND T.competencia = E.competencia
@@ -947,7 +1045,7 @@ Turistas AS (
         nu_cnpj AS cnpj,
         competencia,
         COUNT(DISTINCT id_medico) AS qtd_turistas
-    FROM temp_CGUSC.fp.alertas_crm
+    FROM temp_CGUSC.fp.build_alertas_crm
     WHERE flag_geografico = 1
     GROUP BY nu_cnpj, competencia
 )
@@ -985,7 +1083,7 @@ CREATE CLUSTERED INDEX IDX_IndCrm
 SET @dt_fim_etapa = GETDATE();
 SELECT @nu_registros_etapa = COUNT(*) FROM #indicador_crm;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
@@ -1000,15 +1098,15 @@ PRINT '   #indicador_crm concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - 
 -- ============================================================================
 -- PASSO 6: Benchmarks UF, regiao de saude e Brasil
 -- ============================================================================
-PRINT '>> Passo 6.A: Criando temp_CGUSC.fp.indicador_crm_bench_uf...';
+PRINT '>> Passo 6.A: Criando temp_CGUSC.fp.build_indicador_crm_bench_uf...';
 SET @etapa = '6.A_BENCH_UF';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando indicador_crm_bench_uf.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_indicador_crm_bench_uf.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -1036,35 +1134,35 @@ SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
         ON F.cnpj = I.cnpj
 )
 SELECT *
-INTO temp_CGUSC.fp.indicador_crm_bench_uf
+INTO temp_CGUSC.fp.build_indicador_crm_bench_uf
 FROM CTE;
 
 CREATE CLUSTERED INDEX IDX_BenchUF
-    ON temp_CGUSC.fp.indicador_crm_bench_uf(uf, competencia);
+    ON temp_CGUSC.fp.build_indicador_crm_bench_uf(uf, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_uf;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_uf;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'indicador_crm_bench_uf criada.'
+    observacao = 'build_indicador_crm_bench_uf criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   indicador_crm_bench_uf concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_indicador_crm_bench_uf concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
-PRINT '>> Passo 6.B: Criando temp_CGUSC.fp.indicador_crm_bench_regiao...';
+PRINT '>> Passo 6.B: Criando temp_CGUSC.fp.build_indicador_crm_bench_regiao...';
 SET @etapa = '6.B_BENCH_REGIAO';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando indicador_crm_bench_regiao.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_indicador_crm_bench_regiao.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -1094,35 +1192,35 @@ SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
       AND I.competencia IS NOT NULL
 )
 SELECT *
-INTO temp_CGUSC.fp.indicador_crm_bench_regiao
+INTO temp_CGUSC.fp.build_indicador_crm_bench_regiao
 FROM CTE;
 
 CREATE CLUSTERED INDEX IDX_BenchReg
-    ON temp_CGUSC.fp.indicador_crm_bench_regiao(id_regiao_saude, competencia);
+    ON temp_CGUSC.fp.build_indicador_crm_bench_regiao(id_regiao_saude, competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_regiao;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_regiao;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'indicador_crm_bench_regiao criada.'
+    observacao = 'build_indicador_crm_bench_regiao criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   indicador_crm_bench_regiao concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_indicador_crm_bench_regiao concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
-PRINT '>> Passo 6.C: Criando temp_CGUSC.fp.indicador_crm_bench_br...';
+PRINT '>> Passo 6.C: Criando temp_CGUSC.fp.build_indicador_crm_bench_br...';
 SET @etapa = '6.C_BENCH_BR';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando indicador_crm_bench_br.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_indicador_crm_bench_br.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -1147,39 +1245,39 @@ SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
     FROM #indicador_crm I
 )
 SELECT *
-INTO temp_CGUSC.fp.indicador_crm_bench_br
+INTO temp_CGUSC.fp.build_indicador_crm_bench_br
 FROM CTE;
 
 CREATE CLUSTERED INDEX IDX_BenchBR
-    ON temp_CGUSC.fp.indicador_crm_bench_br(competencia);
+    ON temp_CGUSC.fp.build_indicador_crm_bench_br(competencia);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_br;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_br;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'indicador_crm_bench_br criada.'
+    observacao = 'build_indicador_crm_bench_br criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
-PRINT '   indicador_crm_bench_br concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_indicador_crm_bench_br concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
 -- PASSO 7: Matriz HHI
 -- ============================================================================
-PRINT '>> Passo 7: Criando temp_CGUSC.fp.indicador_crm_hhi...';
+PRINT '>> Passo 7: Criando temp_CGUSC.fp.build_indicador_crm_hhi...';
 SET @etapa = '7_INDICADOR_CRM_HHI';
 SET @t1 = GETDATE();
 SET @id_etapa_log = NULL;
 
-INSERT INTO temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
     (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
 VALUES
-    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando indicador_crm_hhi.');
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1, 'PROCESSANDO', 'Criando build_indicador_crm_hhi.');
 
 SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
@@ -1198,19 +1296,19 @@ Bench AS (
     SELECT
         uf,
         AVG(mediana_hhi_uf) AS mediana_hhi_uf
-    FROM temp_CGUSC.fp.indicador_crm_bench_uf
+    FROM temp_CGUSC.fp.build_indicador_crm_bench_uf
     GROUP BY uf
 ),
 BenchReg AS (
     SELECT
         id_regiao_saude,
         AVG(mediana_hhi_reg) AS mediana_hhi_reg
-    FROM temp_CGUSC.fp.indicador_crm_bench_regiao
+    FROM temp_CGUSC.fp.build_indicador_crm_bench_regiao
     GROUP BY id_regiao_saude
 ),
 BenchBR AS (
     SELECT AVG(mediana_hhi_br) AS mediana_hhi_br
-    FROM temp_CGUSC.fp.indicador_crm_bench_br
+    FROM temp_CGUSC.fp.build_indicador_crm_bench_br
 )
 SELECT
     H.cnpj,
@@ -1233,7 +1331,7 @@ SELECT
         THEN (H.indice_hhi + 0.01) / (BR2.mediana_hhi_reg + 0.01)
         ELSE 0
     END AS DECIMAL(18,4)) AS risco_relativo_reg_mediana
-INTO temp_CGUSC.fp.indicador_crm_hhi
+INTO temp_CGUSC.fp.build_indicador_crm_hhi
 FROM HHI_por_cnpj H
 LEFT JOIN Bench BU
     ON BU.uf = H.uf
@@ -1242,35 +1340,35 @@ LEFT JOIN BenchReg BR2
 CROSS JOIN BenchBR BR;
 
 CREATE CLUSTERED INDEX IDX_CrmHHI
-    ON temp_CGUSC.fp.indicador_crm_hhi(cnpj);
+    ON temp_CGUSC.fp.build_indicador_crm_hhi(cnpj);
 
 SET @dt_fim_etapa = GETDATE();
-SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.indicador_crm_hhi;
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_hhi;
 
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 SET dt_fim_etapa = @dt_fim_etapa,
     segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
     milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
     nu_registros = @nu_registros_etapa,
     status = 'OK',
-    observacao = 'indicador_crm_hhi criada.'
+    observacao = 'build_indicador_crm_hhi criada.'
 WHERE id_etapa_log = @id_etapa_log;
 
 SET @id_etapa_log = NULL;
 
-PRINT '   indicador_crm_hhi concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+PRINT '   build_indicador_crm_hhi concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================
 -- FINALIZACAO E RESULTADOS
 -- ============================================================================
-UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_metadata
-SET nu_alertas_crm = (SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm),
-    nu_crm_export = (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_export),
-    nu_bench_uf = (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_uf),
-    nu_bench_regiao = (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_regiao),
-    nu_bench_br = (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_br),
-    nu_hhi = (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_hhi),
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata
+SET nu_alertas_crm = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm),
+    nu_crm_export = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_export),
+    nu_bench_uf = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_uf),
+    nu_bench_regiao = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_regiao),
+    nu_bench_br = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_br),
+    nu_hhi = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_hhi),
     status = 'OK',
     dt_atualizacao = GETDATE(),
     observacao = 'Pos-global finalizado com sucesso.'
@@ -1296,7 +1394,7 @@ SELECT
     dt_criacao,
     dt_atualizacao,
     observacao
-FROM temp_CGUSC.fp.crm_detalhado_pos_global_metadata;
+FROM temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata;
 
 SELECT TOP 30
     etapa,
@@ -1308,21 +1406,21 @@ SELECT TOP 30
     status,
     observacao,
     mensagem_erro
-FROM temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+FROM temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 WHERE pipeline_versao = @pipeline_versao
   AND dt_data_inicio = @DataInicio
   AND dt_data_fim = @DataFim
 ORDER BY id_etapa_log DESC;
 
 SELECT
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm_geografico) AS qtd_alertas_crm_geografico,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm_registro) AS qtd_alertas_crm_registro,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.alertas_crm) AS qtd_alertas_crm,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.crm_export) AS qtd_crm_export,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_uf) AS qtd_bench_uf,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_regiao) AS qtd_bench_regiao,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_bench_br) AS qtd_bench_br,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.indicador_crm_hhi) AS qtd_hhi;
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_geografico) AS qtd_alertas_crm_geografico,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_registro) AS qtd_alertas_crm_registro,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm) AS qtd_alertas_crm,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_export) AS qtd_crm_export,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_uf) AS qtd_bench_uf,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_regiao) AS qtd_bench_regiao,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_bench_br) AS qtd_bench_br,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_indicador_crm_hhi) AS qtd_hhi;
 
 SELECT TOP 30
     id_medico,
@@ -1335,7 +1433,7 @@ SELECT TOP 30
     flag_crm_invalido,
     flag_prescricao_antes_registro,
     alerta_concentracao_multiplos_crms
-FROM temp_CGUSC.fp.crm_export
+FROM temp_CGUSC.fp.build_crm_export
 ORDER BY nu_prescricoes_mes DESC;
 
 END TRY
@@ -1350,9 +1448,9 @@ BEGIN CATCH
         ' | ', ERROR_MESSAGE()
     );
 
-    IF OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pos_global_metadata') IS NOT NULL
+    IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata') IS NOT NULL
     BEGIN
-        UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_metadata
+        UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_metadata
         SET status = 'ERRO',
             dt_atualizacao = GETDATE(),
             observacao = LEFT(@mensagem_erro, 400)
@@ -1360,11 +1458,11 @@ BEGIN CATCH
     END;
 
     IF @id_etapa_log IS NOT NULL
-       AND OBJECT_ID('temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log') IS NOT NULL
+       AND OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log') IS NOT NULL
     BEGIN
         SET @dt_fim_etapa = GETDATE();
 
-        UPDATE temp_CGUSC.fp.crm_detalhado_pos_global_etapa_log
+        UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
         SET dt_fim_etapa = @dt_fim_etapa,
             segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
             milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),

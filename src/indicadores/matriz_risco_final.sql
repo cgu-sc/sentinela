@@ -137,8 +137,13 @@ IndicadoresPresenca AS (
         I01.risco_relativo_mun_mediana AS risco_falecidos_mun, I01.risco_relativo_uf_mediana AS risco_falecidos_uf, I01.risco_relativo_br_mediana AS risco_falecidos_br, I01.risco_relativo_reg_mediana AS risco_falecidos_reg,
 
         I02.percentual_inconsistencia AS pct_clinico,
+        I02.valor_vendas_monitoradas AS val_clinico_monitorado,
+        I02.valor_vendas_suspeitas AS val_clinico,
+        I02.percentual_valor_inconsistencia AS pct_valor_clinico,
         I02.municipio_mediana AS med_clinico_mun, I02.estado_mediana AS med_clinico_uf, I02.pais_mediana AS med_clinico_br, I02.regiao_saude_mediana AS med_clinico_reg,
+        I02.municipio_valor_mediana AS med_valor_clinico_mun, I02.estado_valor_mediana AS med_valor_clinico_uf, I02.pais_valor_mediana AS med_valor_clinico_br, I02.regiao_saude_valor_mediana AS med_valor_clinico_reg,
         I02.risco_relativo_mun_mediana AS risco_clinico_mun, I02.risco_relativo_uf_mediana AS risco_clinico_uf, I02.risco_relativo_br_mediana AS risco_clinico_br, I02.risco_relativo_reg_mediana AS risco_clinico_reg,
+        I02.risco_relativo_valor_mun_mediana AS risco_valor_clinico_mun, I02.risco_relativo_valor_uf_mediana AS risco_valor_clinico_uf, I02.risco_relativo_valor_br_mediana AS risco_valor_clinico_br, I02.risco_relativo_valor_reg_mediana AS risco_valor_clinico_reg,
 
         I03.percentual_teto AS pct_teto,
         I03.municipio_mediana AS med_teto_mun, I03.estado_mediana AS med_teto_uf, I03.pais_mediana AS med_teto_br, I03.regiao_saude_mediana AS med_teto_reg,

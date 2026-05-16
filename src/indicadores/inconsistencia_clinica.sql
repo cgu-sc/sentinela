@@ -28,12 +28,20 @@ WITH CalculoDemografico AS (
         A.cnpj,
         A.num_autorizacao,
         MIN(A.data_hora) AS data_hora_venda,
+        SUM(A.valor_pago) AS valor_total_autorizacao,
+        SUM(CASE
+            WHEN C.Patologia = 'OSTEOPOROSE'         AND B.idSexo = 'M'                                                                     THEN A.valor_pago
+            WHEN C.Patologia = 'DIABETES'             AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN A.valor_pago
+            WHEN C.Patologia = 'DOENCA DE PARKINSON'  AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50                  THEN A.valor_pago
+            WHEN C.Patologia = 'HIPERTENSAO'          AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN A.valor_pago
+            ELSE 0
+        END) AS valor_itens_suspeitos,
         -- Flag de venda suspeita: basta 1 item inconsistente para marcar a autorizacao
         MAX(CASE
-            WHEN C.Patologia = 'Osteoporose'        AND B.idSexo = 'M'                                                                     THEN 1
-            WHEN C.Patologia = 'Diabetes'            AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN 1
-            WHEN C.Patologia = 'Doenca De Parkinson' AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50                  THEN 1
-            WHEN C.Patologia = 'Hipertensao'         AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN 1
+            WHEN C.Patologia = 'OSTEOPOROSE'         AND B.idSexo = 'M'                                                                     THEN 1
+            WHEN C.Patologia = 'DIABETES'             AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN 1
+            WHEN C.Patologia = 'DOENCA DE PARKINSON'  AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50                  THEN 1
+            WHEN C.Patologia = 'HIPERTENSAO'          AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20                  THEN 1
             ELSE 0
         END) AS flag_venda_suspeita
     FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
@@ -50,7 +58,9 @@ AgregadoPorFarmacia AS (
     SELECT
         cnpj,
         COUNT(*)                 AS total_vendas_monitoradas,
-        SUM(flag_venda_suspeita) AS qtd_vendas_suspeitas
+        SUM(flag_venda_suspeita) AS qtd_vendas_suspeitas,
+        SUM(valor_total_autorizacao) AS valor_vendas_monitoradas,
+        SUM(CASE WHEN flag_venda_suspeita = 1 THEN valor_itens_suspeitos ELSE 0 END) AS valor_vendas_suspeitas
     FROM CalculoDemografico
     GROUP BY cnpj
 )
@@ -58,13 +68,22 @@ SELECT
     cnpj,
     total_vendas_monitoradas,
     qtd_vendas_suspeitas,
+    CAST(ISNULL(valor_vendas_monitoradas, 0) AS DECIMAL(18,2)) AS valor_vendas_monitoradas,
+    CAST(ISNULL(valor_vendas_suspeitas, 0) AS DECIMAL(18,2)) AS valor_vendas_suspeitas,
     CAST(
         CASE
             WHEN total_vendas_monitoradas > 0
                 THEN (CAST(qtd_vendas_suspeitas AS DECIMAL(18,2)) / CAST(total_vendas_monitoradas AS DECIMAL(18,2))) * 100.0
             ELSE 0
         END
-    AS DECIMAL(18,4)) AS percentual_inconsistencia
+    AS DECIMAL(18,4)) AS percentual_inconsistencia,
+    CAST(
+        CASE
+            WHEN ISNULL(valor_vendas_monitoradas, 0) > 0
+                THEN (CAST(valor_vendas_suspeitas AS DECIMAL(18,2)) / CAST(valor_vendas_monitoradas AS DECIMAL(18,2))) * 100.0
+            ELSE 0
+        END
+    AS DECIMAL(18,4)) AS percentual_valor_inconsistencia
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica
 FROM AgregadoPorFarmacia
 WHERE total_vendas_monitoradas > 0;
@@ -91,7 +110,15 @@ SELECT DISTINCT
     CAST(
         AVG(ISNULL(I.percentual_inconsistencia, 0))
         OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
+    AS DECIMAL(18,4)) AS media_municipio,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
+    AS DECIMAL(18,2)) AS mediana_valor_municipio,
+    CAST(
+        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.uf, F.municipio)
+    AS DECIMAL(18,2)) AS media_valor_municipio
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_mun
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -115,7 +142,15 @@ SELECT DISTINCT
     CAST(
         AVG(ISNULL(I.percentual_inconsistencia, 0))
         OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
+    AS DECIMAL(18,4)) AS media_estado,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.uf)
+    AS DECIMAL(18,2)) AS mediana_valor_estado,
+    CAST(
+        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.uf)
+    AS DECIMAL(18,2)) AS media_valor_estado
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_uf
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -139,7 +174,15 @@ SELECT DISTINCT
     CAST(
         AVG(ISNULL(I.percentual_inconsistencia, 0))
         OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
+    AS DECIMAL(18,4)) AS media_regiao,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,2)) AS mediana_valor_regiao,
+    CAST(
+        AVG(ISNULL(I.valor_vendas_suspeitas, 0))
+        OVER (PARTITION BY F.id_regiao_saude)
+    AS DECIMAL(18,2)) AS media_valor_regiao
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj
@@ -162,7 +205,13 @@ SELECT DISTINCT
     AS DECIMAL(18,4)) AS mediana_pais,
     CAST(
         AVG(ISNULL(percentual_inconsistencia, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
+    AS DECIMAL(18,4)) AS media_pais,
+    CAST(
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(valor_vendas_suspeitas, 0)) OVER ()
+    AS DECIMAL(18,2)) AS mediana_valor_pais,
+    CAST(
+        AVG(ISNULL(valor_vendas_suspeitas, 0)) OVER ()
+    AS DECIMAL(18,2)) AS media_valor_pais
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_br
 FROM temp_CGUSC.fp.dados_farmacia F
 LEFT JOIN temp_CGUSC.fp.indicador_inconsistencia_clinica I ON I.cnpj = F.cnpj;
@@ -188,7 +237,10 @@ SELECT
     -- Indicadores base
     ISNULL(I.total_vendas_monitoradas, 0) AS total_vendas_monitoradas,
     ISNULL(I.qtd_vendas_suspeitas, 0) AS qtd_vendas_suspeitas,
+    ISNULL(I.valor_vendas_monitoradas, 0) AS valor_vendas_monitoradas,
+    ISNULL(I.valor_vendas_suspeitas, 0) AS valor_vendas_suspeitas,
     ISNULL(I.percentual_inconsistencia, 0) AS percentual_inconsistencia,
+    ISNULL(I.percentual_valor_inconsistencia, 0) AS percentual_valor_inconsistencia,
 
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (
@@ -210,26 +262,42 @@ SELECT
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0)                                    AS municipio_mediana,
     ISNULL(MUN.media_municipio,   0)                                    AS municipio_media,
+    ISNULL(MUN.mediana_valor_municipio, 0)                              AS municipio_valor_mediana,
+    ISNULL(MUN.media_valor_municipio,   0)                              AS municipio_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(MUN.mediana_valor_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_mun_mediana,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(MUN.media_valor_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0)                                        AS estado_mediana,
     ISNULL(UF.media_estado,   0)                                        AS estado_media,
+    ISNULL(UF.mediana_valor_estado, 0)                                  AS estado_valor_mediana,
+    ISNULL(UF.media_valor_estado,   0)                                  AS estado_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(UF.mediana_valor_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_uf_mediana,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(UF.media_valor_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_uf_media,
 
     -- Benchmarks Regionais (Regiao de Saude)
     ISNULL(REG.mediana_regiao, 0)                                       AS regiao_saude_mediana,
     ISNULL(REG.media_regiao,   0)                                       AS regiao_saude_media,
+    ISNULL(REG.mediana_valor_regiao, 0)                                 AS regiao_saude_valor_mediana,
+    ISNULL(REG.media_valor_regiao,   0)                                 AS regiao_saude_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(REG.mediana_valor_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_reg_mediana,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(REG.media_valor_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais                                                     AS pais_mediana,
     BR.media_pais                                                       AS pais_media,
+    BR.mediana_valor_pais                                               AS pais_valor_mediana,
+    BR.media_valor_pais                                                 AS pais_valor_media,
     CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.mediana_valor_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_mediana,
+    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.media_valor_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_media
 
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado
 FROM temp_CGUSC.fp.dados_farmacia F

@@ -136,7 +136,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
     from data_cache import get_cache_dir
     
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    CACHE_PATH = os.path.join(cnpj_dir, "memoria_calculo.parquet")
+    CACHE_PATH = os.path.join(cnpj_dir, "memoria_calculo_v2.parquet")
 
     empty_summary = MovimentacaoSummarySchema()
 
@@ -187,6 +187,137 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
             save_time_ms=save_time_ms,
         )
 
+    def _parse_memory_date(value):
+        if not value:
+            return None
+        if hasattr(value, "strftime"):
+            return value
+        try:
+            from datetime import datetime as _dt
+            text_value = str(value)
+            if "T" in text_value:
+                return _dt.fromisoformat(text_value).date()
+            return _dt.strptime(text_value[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    def _fmt_memory_date(value) -> str:
+        parsed = _parse_memory_date(value)
+        return parsed.strftime("%d/%m/%Y") if parsed else "-"
+
+    def _as_decimal(value) -> Decimal:
+        return Decimal(str(value or 0))
+
+    def _as_int(value) -> int:
+        return int(_as_decimal(value))
+
+    def _formatar_notas_estoque_inicial(estoque_inicial: dict) -> str:
+        quantidade = _as_int(estoque_inicial.get("quantidade"))
+        data_ref = _fmt_memory_date(estoque_inicial.get("data_referencia"))
+        partes = [f"Estoque Inicial Estimado: {quantidade} - {data_ref}"]
+        for nota in estoque_inicial.get("notas") or []:
+            numero = nota.get("numero_nfe") or ""
+            data = _fmt_memory_date(nota.get("data"))
+            qtd = _as_int(nota.get("quantidade"))
+            partes.append(f"NF Estoque Inicial: {numero} - {data} | Qtde: {qtd}")
+        return "; ".join(partes)
+
+    def _formatar_referencia_v2(referencia: dict, estoque_inicial: dict) -> str:
+        tipo = referencia.get("tipo")
+        if tipo == "estoque_inicial":
+            return _formatar_notas_estoque_inicial(estoque_inicial)
+
+        numero = referencia.get("numero_nfe") or ""
+        data = _fmt_memory_date(referencia.get("data"))
+        qtd = _as_int(referencia.get("quantidade"))
+        if tipo == "saida_estoque":
+            return f"NF Transferencia: {numero} - {data} | Qtde: {qtd}"
+        return f"NF Aquisicao: {numero} - {data} | Qtde: {qtd}"
+
+    def _legacy_rows_from_memoria_v2(memoria_v2: dict) -> list[dict]:
+        rows: list[dict] = []
+        for gtin_info in memoria_v2.get("gtins") or []:
+            gtin = str(gtin_info.get("gtin") or "").strip()
+            if not gtin:
+                continue
+
+            estoque_inicial = gtin_info.get("estoque_inicial") or {}
+            estoque_qtd = _as_decimal(estoque_inicial.get("quantidade"))
+            data_estoque = _parse_memory_date(estoque_inicial.get("data_referencia"))
+
+            rows.append({
+                "tipo": "h",
+                "codigo_barra": gtin,
+                "estoque_inicial": estoque_qtd,
+                "vendas_periodo": 0,
+                "vendas_sem_comprovacao": 0,
+                "qnt_aquis_dev": 0,
+                "data_aquis_dev_estoq": None,
+                "numero_nfe": None,
+            })
+            rows.append({
+                "tipo": "e",
+                "codigo_barra": gtin,
+                "estoque_inicial": estoque_qtd,
+                "data_estoque_inicial": data_estoque,
+                "data_aquis_dev_estoq": data_estoque,
+                "qnt_aquis_dev": 0,
+                "numero_nfe": None,
+                "notas_estoque_inicial": estoque_inicial.get("notas") or [],
+            })
+
+            for evento in gtin_info.get("eventos") or []:
+                tipo_evento = evento.get("tipo")
+                if tipo_evento == "estoque_inicial":
+                    continue
+                if tipo_evento in ("aquisicao", "saida_estoque"):
+                    rows.append({
+                        "tipo": "c" if tipo_evento == "aquisicao" else "d",
+                        "codigo_barra": gtin,
+                        "estoque_inicial": _as_decimal(evento.get("estoque_inicial")),
+                        "estoque_final": _as_decimal(evento.get("estoque_final")),
+                        "data_aquis_dev_estoq": _parse_memory_date(evento.get("data")),
+                        "qnt_aquis_dev": _as_decimal(evento.get("quantidade")),
+                        "numero_nfe": evento.get("numero_nfe"),
+                    })
+                elif tipo_evento == "venda":
+                    referencias = evento.get("notas_referencia") or [{"tipo": "estoque_inicial"}]
+                    notas = "; ".join(
+                        _formatar_referencia_v2(ref, estoque_inicial)
+                        for ref in referencias
+                    )
+                    rows.append({
+                        "tipo": "v",
+                        "codigo_barra": gtin,
+                        "periodo_inicial": _parse_memory_date(evento.get("periodo_inicial")),
+                        "periodo_final": _parse_memory_date(evento.get("periodo_final")),
+                        "periodo_inicial_nao_comprovacao": _parse_memory_date(evento.get("periodo_inicio_irregular")),
+                        "estoque_inicial": _as_decimal(evento.get("estoque_inicial")),
+                        "estoque_final": _as_decimal(evento.get("estoque_final")),
+                        "vendas_periodo": _as_decimal(evento.get("vendas")),
+                        "vendas_sem_comprovacao": _as_decimal(evento.get("vendas_sem_comprovacao")),
+                        "valor_movimentado": _as_decimal(evento.get("valor")),
+                        "valor_sem_comprovacao": _as_decimal(evento.get("valor_sem_comprovacao")),
+                        "data_aquis_dev_estoq": None,
+                        "qnt_aquis_dev": 0,
+                        "numero_nfe": None,
+                        "notas": notas,
+                    })
+
+            resumo = gtin_info.get("summary") or {}
+            rows.append({
+                "tipo": "s",
+                "codigo_barra": gtin,
+                "vendas_periodo": _as_decimal(resumo.get("vendas")),
+                "vendas_sem_comprovacao": _as_decimal(resumo.get("vendas_sem_comprovacao")),
+                "valor_movimentado": _as_decimal(resumo.get("valor")),
+                "valor_sem_comprovacao": _as_decimal(resumo.get("valor_sem_comprovacao")),
+                "qnt_aquis_dev": 0,
+                "data_aquis_dev_estoq": None,
+                "numero_nfe": None,
+            })
+        return rows
+
     import time as _time
 
     # ── 1. Tenta carregar do cache Parquet ─────────────────────────────
@@ -205,13 +336,17 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
 
     # ── 2. Busca e processa a memória de cálculo do SQL Server ─────────
     _query_ms = None
+    dados_v2 = None
     try:
         from sqlalchemy.exc import InterfaceError as SQLAInterfaceError
         with engine.connect() as conn:
             # 2a. Busca dados comprimidos
             _tq0 = _time.perf_counter()
             result = conn.execute(text("""
-                SELECT TOP 1 dados_comprimidos, id_processamento
+                SELECT TOP 1
+                    dados_comprimidos_v2,
+                    schema_version,
+                    id_processamento
                 FROM temp_CGUSC.fp.memoria_calculo_consolidada
                 WHERE cnpj = :cnpj
                 ORDER BY id_processamento DESC
@@ -222,18 +357,28 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
                 print(f"⚠️ Nenhum dado no banco para CNPJ {cnpj}")
                 return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
 
-            dados_comprimidos = result[0]
+            dados_comprimidos_v2 = result[0]
 
             # 2b. Busca nomes dos princípios ativos (GTIN → Nome)
             med_rows = conn.execute(text("""
                 SELECT codigo_barra, principio_ativo
                 FROM temp_CGUSC.fp.medicamentos_patologia
             """)).fetchall()
-            medicamentos_map = {float(r[0]): r[1] for r in med_rows if r[0]}
+            medicamentos_map = {}
+            for r in med_rows:
+                if not r[0]:
+                    continue
+                codigo = str(r[0]).strip()
+                medicamentos_map[codigo] = r[1]
+                try:
+                    medicamentos_map[float(codigo)] = r[1]
+                except (TypeError, ValueError):
+                    pass
 
         # 2c. Descompacta e desserializa
-        json_str = zlib.decompress(dados_comprimidos).decode("utf-8")
-        dados = json.loads(json_str)
+        json_str_v2 = zlib.decompress(dados_comprimidos_v2).decode("utf-8")
+        dados_v2 = json.loads(json_str_v2)
+        dados = _legacy_rows_from_memoria_v2(dados_v2)
 
         # 2d. Converte dates e Decimals
         for item in dados:
@@ -272,6 +417,9 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
         if j["tipo"] in ("s", "h"):
             contador = 0
         if j["tipo"] == "v":
+            if j.get("notas"):
+                contador = 0
+                continue
             lista_nfs = []
             for idx in range(1, contador + 1):
                 item_ant = results[i - idx]

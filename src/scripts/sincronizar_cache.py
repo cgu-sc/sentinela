@@ -39,7 +39,7 @@ from data_cache import (
 )
 
 _CNPJ_PARQUETS = [
-    "memoria_calculo.parquet",
+    "memoria_calculo_v2.parquet",
     "movimentacao_mensal_gtin.parquet",
     "falecidos.parquet",
     "dados_crms.parquet",
@@ -64,7 +64,7 @@ _CNPJ_PARQUETS = [
 def _schema_cnpj_parquet(pl):
     """Schemas usados para criar parquets vazios quando nao ha dados no SQL."""
     return {
-        "memoria_calculo.parquet": {
+        "memoria_calculo_v2.parquet": {
             "tipo_linha": pl.Utf8,
             "gtin": pl.Utf8,
             "medicamento": pl.Utf8,

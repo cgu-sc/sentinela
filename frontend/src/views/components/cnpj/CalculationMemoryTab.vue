@@ -88,6 +88,19 @@ const copyToClipboard = (text) => {
   navigator.clipboard.writeText(text);
 };
 
+const splitNotas = (notas) => String(notas || '')
+  .split(';')
+  .map(nota => nota.trim())
+  .filter(Boolean);
+
+const notasPreview = (notas) => {
+  const partes = splitNotas(notas);
+  if (!partes.length) return '—';
+  return partes.length === 1 ? partes[0] : `${partes[0]} (+${partes.length - 1})`;
+};
+
+const notasTooltip = (notas) => splitNotas(notas).join('\n') || '—';
+
 // ── Expansão local de linhas (Exibir mais) ───────────────────────────────────
 const _rowsExpanded = ref(new Set());
 const isRowsExpanded = (gtin) => _rowsExpanded.value.has(gtin);
@@ -520,7 +533,7 @@ const pctIrregular = (section) => {
                 <span class="r-sep">/</span>
                 <span :class="(row.valor_irregular ?? 0) > 0 ? 'cell-irreg-cur' : ''">{{ fmt(row.valor_irregular) }}</span>
               </div>
-              <div class="gcol gcol-nf" v-tooltip.top="row.notas"><span class="nf-text">{{ row.notas || '—' }}</span></div>
+              <div class="gcol gcol-nf" v-tooltip.top="notasTooltip(row.notas)"><span class="nf-text">{{ notasPreview(row.notas) }}</span></div>
             </div>
 
             <div v-if="section.subtotal" class="gtin-subtotal">

@@ -13,7 +13,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from PIL import Image, ImageDraw, ImageFont
 
-from data_cache import get_df_matriz_risco, get_localidades_df, get_medicamentos_df
+from data_cache import get_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_localidades_df, get_medicamentos_df
 from ._cache import _get_cnpj_cache_dir
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
@@ -86,17 +86,51 @@ def _tbl_no_borders(tbl):
     tblPr.append(tblBorders)
 
 
+def _row_cant_split(row):
+    """Evita que uma linha da tabela seja quebrada entre paginas pelo Word."""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn('w:cantSplit')) is None:
+        cant_split = OxmlElement('w:cantSplit')
+        trPr.append(cant_split)
+
+
+def _keep_small_table_together(title_para, table, trailing_paragraphs=None):
+    """Mantem titulo e tabela curta juntos quando houver espaco na pagina."""
+    title_para.paragraph_format.keep_with_next = True
+    title_para.paragraph_format.keep_together = True
+
+    table_paragraphs = []
+    for row in table.rows:
+        _row_cant_split(row)
+        for cell in row.cells:
+            table_paragraphs.extend(cell.paragraphs)
+
+    for para in table_paragraphs:
+        para.paragraph_format.keep_together = True
+        para.paragraph_format.keep_with_next = True
+
+    trailing_paragraphs = trailing_paragraphs or []
+    for para in trailing_paragraphs:
+        para.paragraph_format.keep_together = True
+        para.paragraph_format.keep_with_next = True
+
+    if trailing_paragraphs:
+        trailing_paragraphs[-1].paragraph_format.keep_with_next = False
+    elif table_paragraphs:
+        table_paragraphs[-1].paragraph_format.keep_with_next = False
+
+
 def _risk_color(classificacao: str | None, score: float) -> tuple[str, str]:
     """Retorna (hex_6chars, label) baseado na classificação de risco do sistema."""
     c = (classificacao or '').upper()
     if 'CRÍTICO' in c or 'CRITICO' in c or 'ALTO' in c:
-        return 'EF4444', 'CRÍTICO'
+        return '334155', 'CRÍTICO'
     if 'MÉDIO' in c or 'MEDIO' in c or 'ATENÇÃO' in c or 'ATENCAO' in c:
         return 'F97316', 'ATENÇÃO'
     if 'BAIXO' in c or 'NORMAL' in c:
         return '10B981', 'NORMAL'
     if score > 20:
-        return 'EF4444', 'CRÍTICO'
+        return '334155', 'CRÍTICO'
     if score > 10:
         return 'F97316', 'ATENÇÃO'
     return '10B981', 'NORMAL'
@@ -131,6 +165,51 @@ def _format_cpf_cnpj(v: str | None) -> str:
 def _format_decimal_pt(value: float, decimals: int = 2) -> str:
     """Formata numero decimal no padrao brasileiro."""
     return f"{value:,.{decimals}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _format_month_year_pt(month_key: str) -> str:
+    """Formata uma chave mensal YYYY-MM como MM/YYYY."""
+    parts = str(month_key or "").split("-")
+    if len(parts) != 2:
+        return str(month_key or "—")
+    year, month = parts
+    if len(year) != 4 or len(month) != 2:
+        return str(month_key or "—")
+    return f"{month}/{year}"
+
+
+def _format_month_year_long_pt(month_key: str) -> str:
+    """Formata uma chave mensal YYYY-MM como mes por extenso e ano."""
+    month_names = {
+        "01": "janeiro",
+        "02": "fevereiro",
+        "03": "março",
+        "04": "abril",
+        "05": "maio",
+        "06": "junho",
+        "07": "julho",
+        "08": "agosto",
+        "09": "setembro",
+        "10": "outubro",
+        "11": "novembro",
+        "12": "dezembro",
+    }
+    parts = str(month_key or "").split("-")
+    if len(parts) != 2:
+        return str(month_key or "—")
+    year, month = parts
+    month_name = month_names.get(month)
+    if len(year) != 4 or month_name is None:
+        return str(month_key or "—")
+    return f"{month_name} de {year}"
+
+
+def _format_semestre_pt(semestre: str) -> str:
+    """Formata labels como 1S/2021 para 1º Semestre/2021."""
+    label = str(semestre or "").strip()
+    if len(label) >= 7 and label[0] in {"1", "2"} and label[1].upper() == "S" and label[2] == "/":
+        return f"{label[0]}º Semestre/{label[3:]}"
+    return label
 
 
 def _format_list_pt(items: list[str]) -> str:
@@ -365,7 +444,7 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
                 top_only=True,
             )
 
-        label = row["semestre"]
+        label = row.get("semestre_fmt") or row["semestre"]
         _draw_rotated_text(
             img,
             label,
@@ -408,7 +487,7 @@ def _resolve_regional_context(cadastro: dict) -> dict[str, Any]:
         raise RuntimeError("id_ibge7 e obrigatorio para resolver a Regiao de Saude da Nota Tecnica.")
 
     df_loc = get_localidades_df()
-    required_cols = {"id_ibge7", "id_regiao_saude", "sg_uf", "no_regiao_saude"}
+    required_cols = {"id_ibge7", "id_regiao_saude", "sg_uf"}
     missing_cols = required_cols - set(df_loc.columns)
     if missing_cols:
         raise RuntimeError(
@@ -422,11 +501,10 @@ def _resolve_regional_context(cadastro: dict) -> dict[str, Any]:
     row = rows.row(0, named=True)
     id_regiao_saude = row.get("id_regiao_saude")
     uf = row.get("sg_uf")
-    nome_regiao = row.get("no_regiao_saude")
     if id_regiao_saude in (None, "", "None") or not uf:
         raise RuntimeError(f"Localidade {id_ibge7} sem id_regiao_saude/UF obrigatorios para Nota Tecnica.")
-    if nome_regiao in (None, "", "None"):
-        raise RuntimeError(f"Localidade {id_ibge7} sem no_regiao_saude obrigatorio para texto da Nota Tecnica.")
+
+    nome_regiao = row.get("no_regiao_saude") or f"ID {id_regiao_saude}"
 
     return {
         "id_regiao_saude": int(id_regiao_saude),
@@ -473,12 +551,78 @@ def _build_regional_comparison_context(
     if not municipios:
         raise RuntimeError("Municipios regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
 
+    uf_comp = _build_scope_percentual_comparison(cnpj_data, data_inicio, data_fim, uf=regional_context["uf"])
+    br_comp = _build_scope_percentual_comparison(cnpj_data, data_inicio, data_fim)
+
     return {
         **regional_context,
         "multiplicador": float(percentual_cnpj) / mediana_regional,
         "mediana_regional": mediana_regional,
         "qtd_farmacias": len(regional.farmacias),
         "municipios": municipios,
+        "multiplicador_uf": uf_comp["multiplicador"],
+        "mediana_uf": uf_comp["mediana"],
+        "multiplicador_brasil": br_comp["multiplicador"],
+        "mediana_brasil": br_comp["mediana"],
+    }
+
+
+def _build_scope_percentual_comparison(
+    cnpj_data: dict,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    *,
+    uf: Optional[str] = None,
+) -> dict[str, float]:
+    """Calcula mediana de percentual sem comprovacao para UF ou Brasil no periodo."""
+    percentual_cnpj = cnpj_data.get("percValSemComp")
+    if percentual_cnpj is None:
+        raise RuntimeError("percValSemComp e obrigatorio para comparacao geografica da Nota Tecnica.")
+
+    df = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
+    min_data = date(2015, 7, 1)
+    max_data = date(2024, 12, 31)
+    inicio = (data_inicio if data_inicio and data_inicio >= min_data else min_data) if data_inicio else min_data
+    fim = data_fim if data_fim else max_data
+
+    mask = pl.col("periodo").is_between(inicio, fim)
+    if uf:
+        mask = mask & (pl.col("uf") == uf)
+
+    scoped = df.filter(mask)
+    if scoped.is_empty():
+        label = f"UF {uf}" if uf else "Brasil"
+        raise RuntimeError(f"Sem movimentacao para calcular mediana de {label} da Nota Tecnica.")
+
+    cnpj_agg = (
+        scoped
+        .group_by("id_cnpj")
+        .agg([
+            pl.sum("total_vendas").alias("totalMov"),
+            pl.sum("total_sem_comprovacao").alias("valSemComp"),
+        ])
+        .with_columns(
+            (
+                pl.col("valSemComp") /
+                pl.when(pl.col("totalMov") > 0)
+                .then(pl.col("totalMov"))
+                .otherwise(None) * 100
+            ).alias("percValSemComp")
+        )
+        .filter(pl.col("percValSemComp").is_not_null())
+    )
+    if cnpj_agg.is_empty():
+        label = f"UF {uf}" if uf else "Brasil"
+        raise RuntimeError(f"Percentuais ausentes para calcular mediana de {label} da Nota Tecnica.")
+
+    mediana = float(cnpj_agg.get_column("percValSemComp").median() or 0.0)
+    if mediana <= 0:
+        label = f"UF {uf}" if uf else "Brasil"
+        raise RuntimeError(f"Mediana de {label} deve ser maior que zero para calcular o multiplicador da Nota Tecnica.")
+
+    return {
+        "mediana": mediana,
+        "multiplicador": float(percentual_cnpj) / mediana,
     }
 
 
@@ -625,6 +769,37 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
     raise TypeError(f"Objeto semestral inesperado para Nota Tecnica: {type(model)!r}.")
 
 
+def _build_ultimo_mes_sav_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Identifica o ultimo mes com vendas no SAV dentro do periodo analisado."""
+    evolucao = get_evolucao_financeira(cnpj, data_inicio, data_fim)
+    semestres_raw = getattr(evolucao, "semestres", None)
+    if semestres_raw is None:
+        raise RuntimeError("Resposta de evolucao financeira sem campo semestres para Nota Tecnica.")
+
+    meses: list[dict[str, Any]] = []
+    for sem in semestres_raw:
+        sem_item = _model_to_dict(sem)
+        for mes in sem_item.get("meses") or []:
+            mes_item = _model_to_dict(mes)
+            if mes_item.get("mes"):
+                meses.append(mes_item)
+
+    if not meses:
+        raise RuntimeError("Evolucao financeira mensal obrigatoria vazia para Nota Tecnica.")
+
+    ultimo_mes = max(meses, key=lambda item: str(item.get("mes") or ""))
+    total = float(ultimo_mes.get("total") or 0.0)
+    return {
+        "mes": str(ultimo_mes["mes"]),
+        "mes_formatado": _format_month_year_pt(str(ultimo_mes["mes"])),
+        "total": round(total, 2),
+    }
+
+
 def _build_evolucao_financeira_context(
     cnpj: str,
     data_inicio: Optional[date],
@@ -649,12 +824,22 @@ def _build_evolucao_financeira_context(
         irregular = float(item["irregular"] or 0.0)
         regular = float(item["regular"] or 0.0)
         pct_irregular = float(item["pct_irregular"] or 0.0)
+        semestre = str(item["semestre"])
+        taxa_crescimento_raw = item.get("taxa_crescimento_pct")
+        limite_volume_atipico_raw = item.get("limite_volume_atipico_pct")
         rows.append({
-            "semestre": str(item["semestre"]),
+            "semestre": semestre,
+            "semestre_fmt": _format_semestre_pt(semestre),
+            "mes_inicio": item.get("mes_inicio"),
+            "mes_fim": item.get("mes_fim"),
             "total": round(total, 2),
             "regular": round(regular, 2),
             "irregular": round(irregular, 2),
             "pct_irregular": round(pct_irregular, 2),
+            "volume_atipico": bool(item.get("volume_atipico")),
+            "taxa_crescimento_pct": round(float(taxa_crescimento_raw), 2) if taxa_crescimento_raw is not None else None,
+            "chave_semestre_anterior": item.get("chave_semestre_anterior"),
+            "limite_volume_atipico_pct": float(limite_volume_atipico_raw) if limite_volume_atipico_raw is not None else None,
         })
 
     if not rows:
@@ -665,25 +850,29 @@ def _build_evolucao_financeira_context(
     regular_geral = round(sum(row["regular"] for row in rows), 2)
     pct_irregular_geral = (irregular_geral / total_geral * 100) if total_geral > 0 else 0.0
 
-    crescimento_relevante: list[dict[str, Any]] = []
-    previous: dict[str, Any] | None = None
-    for row in rows:
-        if previous and previous["total"] > 0:
-            crescimento_pct = ((row["total"] - previous["total"]) / previous["total"]) * 100
-            row["crescimento_pct"] = round(crescimento_pct, 2)
-            row["semestre_anterior"] = previous["semestre"]
-            if crescimento_pct > growth_threshold_pct:
-                crescimento_relevante.append(row)
-        else:
-            row["crescimento_pct"] = None
-            row["semestre_anterior"] = None
-        previous = row
+    semestres_atipicos = [row for row in rows if row["volume_atipico"]]
+    limites_volume_atipico = [
+        row["limite_volume_atipico_pct"]
+        for row in rows
+        if row["limite_volume_atipico_pct"] is not None
+    ]
+    limite_volume_atipico = limites_volume_atipico[0] if limites_volume_atipico else growth_threshold_pct
 
     semestres_irregulares = [
         row for row in rows
         if row["irregular"] > 0
     ]
     top_irregulares = sorted(semestres_irregulares, key=lambda row: row["irregular"], reverse=True)[:3]
+    primeiro_mes = rows[0].get("mes_inicio")
+    ultimo_mes = rows[-1].get("mes_fim")
+    periodo_meses = (
+        f'{_format_month_year_long_pt(primeiro_mes)} a {_format_month_year_long_pt(ultimo_mes)}'
+        if primeiro_mes and ultimo_mes
+        else (
+            rows[0]["semestre_fmt"] if rows[0]["semestre"] == rows[-1]["semestre"]
+            else f'{rows[0]["semestre_fmt"]} a {rows[-1]["semestre_fmt"]}'
+        )
+    )
 
     return {
         "rows": rows,
@@ -693,12 +882,16 @@ def _build_evolucao_financeira_context(
         "pct_irregular": pct_irregular_geral,
         "primeiro_semestre": rows[0]["semestre"],
         "ultimo_semestre": rows[-1]["semestre"],
+        "primeiro_semestre_fmt": rows[0]["semestre_fmt"],
+        "ultimo_semestre_fmt": rows[-1]["semestre_fmt"],
         "periodo_semestres": (
-            rows[0]["semestre"] if rows[0]["semestre"] == rows[-1]["semestre"]
-            else f'{rows[0]["semestre"]} a {rows[-1]["semestre"]}'
+            rows[0]["semestre_fmt"] if rows[0]["semestre"] == rows[-1]["semestre"]
+            else f'{rows[0]["semestre_fmt"]} a {rows[-1]["semestre_fmt"]}'
         ),
-        "growth_threshold_pct": growth_threshold_pct,
-        "crescimento_relevante": crescimento_relevante,
+        "periodo_meses": periodo_meses,
+        "growth_threshold_pct": limite_volume_atipico,
+        "crescimento_relevante": semestres_atipicos,
+        "semestres_atipicos": semestres_atipicos,
         "top_irregulares": top_irregulares,
     }
 
@@ -744,6 +937,8 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
             for p in cell.paragraphs:
                 p.paragraph_format.space_before = Pt(2)
                 p.paragraph_format.space_after = Pt(2)
+
+    _keep_small_table_together(p_title, table)
 
     p_foot = doc.add_paragraph()
     _run(p_foot, f'Fonte: Sistema Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
@@ -793,7 +988,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     total_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(total_cells[2].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
     total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    _run(total_cells[3].paragraphs[0], _format_decimal_pt(gtin_comp["total_valor"], 2), color='0F172A', size=8, bold=True)
+    _run(total_cells[3].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=8, bold=True)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -844,12 +1039,12 @@ def _add_quadro_evolucao_financeira(
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[0].paragraphs[0], item["semestre"], color='0F172A', size=8)
+        _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=8)
         for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):
             cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
             _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color='0F172A', size=8)
         cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        pct_color = 'EF4444' if item["pct_irregular"] >= 50 else '0F172A'
+        pct_color = '334155' if item["pct_irregular"] >= 50 else '0F172A'
         _run(
             cells[4].paragraphs[0],
             f'{_format_decimal_pt(item["pct_irregular"], 2)}%',
@@ -883,7 +1078,7 @@ def _add_quadro_evolucao_financeira(
     _run(
         p_obs,
         'Obs. De acordo com o SIAFI, esta empresa possui a conta bancária: xxxxx-x, agência: xxxx, banco: xxx. Informação pendente de integração/fonte.',
-        color='EF4444',
+        color='334155',
         size=8,
         bold=True,
     )
@@ -972,18 +1167,17 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
     _add_toc_entry(doc, '  4.1', 'Sobre o Programa Farmácia Popular do Brasil', page='5')
     _add_toc_entry(doc, '  4.2', 'Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', page='5')
 
-    _add_toc_entry(doc, '5.', 'ANÁLISE', page='6')
+    _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
-    _add_toc_entry(doc, '  5.2', 'Informações obtidas no Portal de Gestão do Farmácia Popular', page='6')
-    _add_toc_entry(doc, '  5.3', 'Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', page='6')
-    _add_toc_entry(doc, '  5.4', f'Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
+    _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='6')
+    _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
     for key, num, title in _SECAO5_MAP:
         if key in criticos:
             full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
             _add_toc_entry(doc, f'  {num}', full_title, page='6')
 
-    _add_toc_entry(doc, '6.', 'CONCLUSÃO E ENCAMINHAMENTO', page='7')
+    _add_toc_entry(doc, '7.', 'CONCLUSÃO E ENCAMINHAMENTO', page='7')
     doc.add_page_break()
 
 
@@ -1050,8 +1244,11 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     
     p_nota = doc.add_paragraph()
     p_nota.paragraph_format.space_before = Pt(6)
-    _run(p_nota, f"* A relação do valor de vendas sobre o capital social é de {relacao_pct:,.2f}%".replace(',', 'X').replace('.', ',').replace('X', '.'), color='475569', size=8)
-    _run(p_nota, f", ou seja, ela recebeu, no período analisado ({periodo_txt}), apenas por meio das vendas subsidiadas pelo Programa Farmácia Popular, ", color='475569', size=8)
+    relacao_txt = f"{relacao_pct:,.2f}%".replace(',', 'X').replace('.', ',').replace('X', '.')
+    total_mov_txt = f"R$ {total_mov:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    _run(p_nota, f"* A relação do valor de vendas no âmbito do PFPB sobre o capital social é de {relacao_txt}, ou seja, ela recebeu ", color='475569', size=8)
+    _run(p_nota, total_mov_txt, color='0F172A', size=8, bold=True)
+    _run(p_nota, f" do Programa, no período de {periodo_txt}, o que corresponde ", color='475569', size=8)
     _run(p_nota, f"{vezes:,.1f} vezes".replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=8, bold=True)
     _run(p_nota, " o valor do seu capital social.", color='475569', size=8)
 
@@ -1089,13 +1286,13 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     run_sup8.font.superscript = True
     run_sup8.font.size = Pt(7)
     _run(p_rais, f' do Ministério do Trabalho e Emprego, a Farmácia {data.get("razao_social") or ""} possuía ', color='0F172A', size=10)
-    _run(p_rais, 'yy', color='EF4444', size=10, bold=True)
+    _run(p_rais, 'yy', color='334155', size=10, bold=True)
     _run(p_rais, ' funcionários registrados em ', color='0F172A', size=10)
-    _run(p_rais, 'XXXX', color='EF4444', size=10, bold=True)
+    _run(p_rais, 'XXXX', color='334155', size=10, bold=True)
     _run(p_rais, '. Contudo, apenas ', color='0F172A', size=10)
-    _run(p_rais, 'x', color='EF4444', size=10, bold=True)
+    _run(p_rais, 'x', color='334155', size=10, bold=True)
     _run(p_rais, ' funcionário(s) consta(m) nos anos de ', color='0F172A', size=10)
-    _run(p_rais, '20XX, 20YY e 20ZZ', color='EF4444', size=10, bold=True)
+    _run(p_rais, '20XX, 20YY e 20ZZ', color='334155', size=10, bold=True)
     _run(p_rais, ', período em que, conforme será visto mais adiante, a transferência de recursos aumentou de forma relevante.', color='0F172A', size=10)
 
     p_esocial = doc.add_paragraph()
@@ -1109,13 +1306,13 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     run_sup10.font.superscript = True
     run_sup10.font.size = Pt(7)
     _run(p_esocial, ' (atualizado até ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, 'XXXXX', color='334155', size=10, bold=True)
     _run(p_esocial, ') foi identificado que, no período de ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXX a YYYY', color='EF4444', size=10, bold=True)
+    _run(p_esocial, 'XXXX a YYYY', color='334155', size=10, bold=True)
     _run(p_esocial, ', a única empregada registrada era ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, 'XXXX', color='334155', size=10, bold=True)
     _run(p_esocial, ', que havia sido admitida em ', color='0F172A', size=10)
-    _run(p_esocial, 'XXX', color='EF4444', size=10, bold=True)
+    _run(p_esocial, 'XXX', color='334155', size=10, bold=True)
     _run(p_esocial, '.', color='0F172A', size=10)
 
 
@@ -1165,6 +1362,7 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _run(p_foot, f'* Correspondente ao período {periodo_txt}.\n', color='64748B', size=8)
     _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=8)
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 # ── Geração do documento ─────────────────────────────────────────────────────
@@ -1380,7 +1578,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     run_periodo.bold = True
     p_intro.add_run(', ausência significativa de estoque compatível com as vendas (distribuições) realizadas de medicamentos para a população (denominada pela CGU como “vendas sem comprovação”), o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio de registro fictício de dispensações de medicamentos.')
     
-    snippets = [f'[Subitem 5.4] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}', '[Subitem 5.4.1] crescimento excessivo de dispensação do medicamento para tratamento da doença de Parkinson']
+    snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}', '[Subitem 5.4.1] crescimento excessivo de dispensação do medicamento para tratamento da doença de Parkinson']
     mapping_intro = {
         'falecidos': '[Subitem 5.5] vendas de medicamentos para pessoas falecidas',
         'incompatibilidade_patologica': '[Subitem 5.6] vendas de medicamento com incompatibilidade patológica',
@@ -1410,7 +1608,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Subitem 5.4.1] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
-    if 'falecidos' in criticos: fontes.append('[Subitem 5.5] Sistema de Informações sobre Mortalidade (SIM), SIRC e SISOB')
+    if 'falecidos' in criticos: fontes.append('[Subitem 5.5] SIRC e SISOB')
     if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Subitem 5.19] [Subitem 5.20] [Subitem 5.21] e Cadastros de médicos do Conselho Regional de Medicina (CRM)')
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
 
@@ -1483,15 +1681,25 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     doc.add_heading('4.2. Sobre metodologia desenvolvida pela CGU para apuração de possíveis "vendas sem comprovação"', level=2)
     doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a imensa capilaridade de mais de 30 mil estabelecimentos credenciados.')
-    doc.add_paragraph('Para enfrentar essa realidade, a CGU elaborou o Relatório de Apuração nº 823121 (ANEXO I desta NT), fundamentado no desenvolvimento do Sistema Sentinela, uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
+    p_sent = doc.add_paragraph('Para enfrentar essa realidade, a CGU elaborou o ')
+    p_sent.add_run('Relatório de Apuração nº 823121').bold = True
+    p_sent.add_run(' (ANEXO I desta NT), fundamentado no desenvolvimento do ')
+    p_sent.add_run('Sistema Sentinela').bold = True
+    p_sent.add_run(', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
     p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”')
     run_sup7 = p_cgu.add_run('7')
     run_sup7.font.superscript = True
     p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
     doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir desta informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, de não existência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia em que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base da Receita Federal do Brasil de Notas Fiscais Eletrônicas (NF-e), utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e suas compras posteriores com as vendas realizadas no âmbito do Programa.')
-    doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de cut-off, estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do programa PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo "virtual" favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia, que fazem parte do rol do PFPB, somente foram vendidos para clientes que fizeram uso do Programa, ou seja, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
-    doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 05/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código GTIN/EAN. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.')
+    p_cutoff = doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
+    p_cutoff.add_run('cut-off').italic = True
+    p_cutoff.add_run(', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do programa PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo "virtual" favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia, que fazem parte do rol do PFPB, somente foram vendidos para clientes que fizeram uso do Programa, ou seja, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
+
+    p_gtin = doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 05/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ')
+    p_gtin.add_run('GTIN/EAN').bold = True
+    p_gtin.add_run('. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.')
     doc.add_paragraph('Além do levantamento de valores de “Vendas sem Comprovação” para todos as empresas que operam no PFPB, o Sistema Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram com a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
+    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas para ela extraídos do Sistema Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
 
     # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
     sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1499,38 +1707,49 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_5_intro.top_margin = Inches(0.5); sec_5_intro.bottom_margin = Inches(0.5)
     sec_5_intro.left_margin = Inches(0.7); sec_5_intro.right_margin = Inches(0.7)
 
-    # 5. ANÁLISE
-    doc.add_heading('5. ANÁLISE', level=1)
-    doc.add_paragraph(f'A presente Nota Técnica traz informações cadastrais e o resultado das análises dos alertas extraídos do Sistema Sentinela para a Farmácia {razao_social}, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
+    # 5. SOBRE A FARMACIA
+    doc.add_heading(f'5. SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', level=1)
+    ultimo_mes_sav = _build_ultimo_mes_sav_context(cnpj, data_inicio, data_fim)
+    situacao_pfpb = "ATIVA" if cnpj_data.get("is_conexao_ativa") else "INATIVA"
+    p_sav_5 = doc.add_paragraph(
+        f'Informações extraídas do SAV, relativas ao período de {periodo_txt}, apontam que a Farmácia {razao_social} '
+        'se encontra “'
+    )
+    _run(p_sav_5, situacao_pfpb, bold=True)
+    _run(p_sav_5, '” no Programa Farmácia Popular do Brasil, tendo realizado vendas totais de ')
+    _run(p_sav_5, f'R$ {_format_decimal_pt(ultimo_mes_sav["total"], 2)}', underline=True)
+    _run(p_sav_5, ' em ')
+    _run(p_sav_5, ultimo_mes_sav["mes_formatado"], underline=True)
+    _run(p_sav_5, ', último mês com movimentação disponível para a Farmácia na base de dados.')
 
-    # ── Seção 5.1 e 5.2 (Rodapé notas 8, 9, 10, 11) ────────────────────────
+    # ── Seção de informações cadastrais (Rodapé notas 8, 9, 10) ──────────────
     sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_51.footer.is_linked_to_previous = False
     f_51 = sec_51.footer.paragraphs[0]
     f_51.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _run(f_51, '(8) Relação Anual de Informações Sociais, atualização em ', color='64748B', size=8)
-    _run(f_51, 'XXX de XXX', color='EF4444', size=8, bold=True)
+    _run(f_51, 'XXX de XXX', color='334155', size=8, bold=True)
     _run(f_51, '. Consulta realizada em ', color='64748B', size=8)
-    _run(f_51, 'xx.xx.xxxx', color='EF4444', size=8, bold=True)
+    _run(f_51, 'xx.xx.xxxx', color='334155', size=8, bold=True)
     _run(f_51, '.\n', color='64748B', size=8)
     _run(f_51, '(9) Art. 5º da Lei nº 13.021, de 08.08.2014.\n', color='64748B', size=8)
     _run(f_51, '(10) eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas do governo federal.\n', color='64748B', size=8)
-    _run(f_51, '(11) Disponível em: https://farmaciapopular-gestao.saude.gov.br/farmaciapopular-gestao/pages/login.jsf. Consulta realizada em xx.xx.xxxx.\n', color='64748B', size=8)
-    _run(f_51, '(12) Destaca-se que o bloqueio de uma Farmácia para operar no PFPB pode ocorrer baseado, por exemplo, nos seguintes motivos: monitoramento, documentação pendente, não renovação do Registro e Termo de Autorização e descredenciamento por irregularidade.\n', color='64748B', size=8)
-    _run(f_51, '(13) Documentos registrados no Processo NUP 25000.153459/2014-40, conforme disposto no “Módulo Gestão 4.9.2” do Portal de Gestão do Farmácia Popular.\n', color='64748B', size=8)
-    _run(f_51, '(14) Ofício XXXX (SEI YYYYYYY) citado no “Módulo Gestão 4.9.2” do Portal de Gestão do Farmácia Popular.', color='64748B', size=8)
     sec_51.top_margin = Inches(0.5); sec_51.bottom_margin = Inches(0.5)
     sec_51.left_margin = Inches(0.7); sec_51.right_margin = Inches(0.7)
 
-    doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)    
     # Mapeamento do porte conforme padrões RFB/Filtros
     porte_raw = getattr(cnpj_data_obj, 'porte_empresa', 'ND') if cnpj_data_obj else "ND"
     porte_txt = "empresa"
-    if "microempresa" in porte_raw.lower(): 
+    porte_lower = porte_raw.lower()
+    if "microempresa" in porte_lower:
         porte_txt = "microempresa"
-    elif "pequeno porte" in porte_raw.lower(): 
+    elif "pequeno porte" in porte_lower:
         porte_txt = "empresa de pequeno porte"
-    elif "demais" in porte_raw.lower(): 
+    elif "médio" in porte_lower or "medio" in porte_lower:
+        porte_txt = "empresa de médio porte"
+    elif "grande" in porte_lower:
+        porte_txt = "empresa de grande porte"
+    elif "demais" in porte_lower:
         porte_txt = "empresa de médio/grande porte"
     
     situacao = getattr(cnpj_data_obj, 'situacao_rf', 'ATIVA') if cnpj_data_obj else "ATIVA"
@@ -1575,61 +1794,30 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
 
-    doc.add_heading('5.2 Informações obtidas no Portal de Gestão do Farmácia Popular', level=2)
-    
-    # Texto condicional e instrutivo para o auditor
-    p_gestao_intro = doc.add_paragraph()
-    _run(p_gestao_intro, '(ATENÇÃO: Este item 5.2 só deve ser mantido se o estabelecimento estiver inativo junto ao PFPB. Caso contrário, remova esta seção.)', color='EF4444', size=8, italic=True)
-    
-    doc.add_paragraph()
-    p_gestao_corpo = doc.add_paragraph()
-    _run(p_gestao_corpo, f'Identificou-se, por meio de consulta ao Portal de Gestão do Farmácia Popular (Módulo Gestão', color='0F172A', size=10)
-    run_sup11 = p_gestao_corpo.add_run('11')
-    run_sup11.font.superscript = True
-    run_sup11.font.size = Pt(7)
-    _run(p_gestao_corpo, f'), que a Farmácia {razao_social} foi colocada na situação de ', color='0F172A', size=10)
-    _run(p_gestao_corpo, '“inativa”', color='EF4444', size=10, bold=True)
-    run_sup12 = p_gestao_corpo.add_run('12')
-    run_sup12.font.superscript = True
-    run_sup12.font.size = Pt(7)
-    _run(p_gestao_corpo, ', em ', color='0F172A', size=10)
-    _run(p_gestao_corpo, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
-    _run(p_gestao_corpo, ', por ações de controle e monitoramento especificadas na ', color='0F172A', size=10)
-    _run(p_gestao_corpo, 'Nota Técnica nº 786/2024 – CGPFP/DAF/SECTICS/MS e no Ofício nº 3435/2024/CGPFP/DAF/SECTICS/MS', color='EF4444', size=10, bold=True)
-    run_sup13 = p_gestao_corpo.add_run('13')
-    run_sup13.font.superscript = True
-    run_sup13.font.size = Pt(7)
-    _run(p_gestao_corpo, ', encaminhado à empresa pela Coordenação Geral do Programa Farmácia Popular do Brasil, do Ministério da Saúde. ', color='0F172A', size=10)
-    _run(p_gestao_corpo, '(ATENÇÃO: cabe ao auditor checar se não existem documentos mais recentes). ', color='F97316', size=9, bold=True, italic=True)
-    _run(p_gestao_corpo, 'Em que pese não ter sido identificados os respectivos documentos anexados informando as causas, bem como as respostas, tal situação reforça a hipótese de funcionamento inadequado ou existência de irregularidades cometidos pelo estabelecimento.', color='0F172A', size=10)
-
-    doc.add_paragraph()
-    p_reitera = doc.add_paragraph()
-    _run(p_reitera, f'A Farmácia {razao_social} também foi notificada (reiteração) pela Coordenação Geral do Programa Farmácia Popular do Brasil, em ', color='0F172A', size=10)
-    _run(p_reitera, 'xx.xx.xxxx', color='EF4444', size=10, bold=True)
-    _run(p_reitera, ', em decorrência deste monitoramento, mas a resposta e o ofício de solicitação de informações', color='0F172A', size=10)
-    run_sup14 = p_reitera.add_run('14')
-    run_sup14.font.superscript = True
-    run_sup14.font.size = Pt(7)
-    _run(p_reitera, ' não foram anexados ao sistema, até a última consulta. ', color='0F172A', size=10)
-    _run(p_reitera, '(ATENÇÃO: Somente para casos de reiteração, cabendo ao auditor tal checagem).', color='F97316', size=9, bold=True, italic=True)
-
     # ── 10. Seção 5.3+ (Zera os rodapés para o restante do documento) ────────
     sec_53 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_53.footer.is_linked_to_previous = False
     for p in sec_53.footer.paragraphs:
         p.text = ''  # Limpa o rodapé para não herdar as notas 8-11
+    f_53 = sec_53.footer.paragraphs[0]
+    f_53.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    _run(f_53, '(11) A região de saúde utilizada para os comparativos do Sistema Sentinela segue a mesma estabelecida pelo Sistema Único de Saúde (ver https://www.gov.br/saude/pt-br/se/dgip/regionalizacao), que, em resumo, a considera como um espaço geográfico contínuo, formado pelo agrupamento de municípios limítrofes, que compartilham características culturais, econômicas e sociais semelhantes.', color='64748B', size=8)
     sec_53.top_margin = Inches(0.5); sec_53.bottom_margin = Inches(0.5)
     sec_53.left_margin = Inches(0.7); sec_53.right_margin = Inches(0.7)
 
-    doc.add_heading('5.3 Indícios de estoque incompatível com as vendas subsidiadas pelo Programa Farmácia Popular do Brasil', level=2)
+    doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}.', level=1)
     p_53 = doc.add_paragraph()
-    _run(p_53, f'Em relação à Farmácia {razao_social} (CNPJ {cnpj_fmt}), verificou-se, conforme quadro a seguir, diferença relevante entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
+    _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO II desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
     
     if data_inicio and data_fim:
-        _run(p_53, f'no período de {periodo_txt}:', color='0F172A', size=10)
+        _run(p_53, 'no período de ', color='0F172A', size=10)
+        _run(p_53, periodo_txt, color='0F172A', size=10, bold=True)
+        _run(p_53, '. ', color='0F172A', size=10)
     else:
-        _run(p_53, f'no período avaliado ({periodo_txt}):', color='0F172A', size=10)
+        _run(p_53, 'no período avaliado (', color='0F172A', size=10)
+        _run(p_53, periodo_txt, color='0F172A', size=10, bold=True)
+        _run(p_53, '). ', color='0F172A', size=10)
+    _run(p_53, 'O quadro, a seguir, consolida os valores apurados para todas as dispensações de medicamentos realizadas pelo estabelecimento:', color='0F172A', size=10)
         
     _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt)
     
@@ -1639,30 +1827,44 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     perc_fmt = f"{cnpj_data.get('percValSemComp', 0):.2f}%".replace('.', ',')
     val_fmt = f"{cnpj_data.get('valSemComp', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     
-    _run(p_conclusao_53, perc_fmt, color='EF4444', size=10, bold=True)
+    _run(p_conclusao_53, perc_fmt, color='334155', size=10, bold=True)
     _run(p_conclusao_53, ', que corresponde a um potencial desvio de recursos públicos no montante estimado de ', color='0F172A', size=10)
-    _run(p_conclusao_53, f'R$ {val_fmt}', color='EF4444', size=10, bold=True)
+    _run(p_conclusao_53, f'R$ {val_fmt}', color='334155', size=10, bold=True)
     _run(p_conclusao_53, '.', color='0F172A', size=10)
 
     regional_comp = _build_regional_comparison_context(cnpj_data, cadastro, data_inicio, data_fim)
     multiplicador_fmt = _format_decimal_pt(regional_comp["multiplicador"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(regional_comp["multiplicador_uf"], 2)
+    multiplicador_brasil_fmt = _format_decimal_pt(regional_comp["multiplicador_brasil"], 2)
     qtd_farmacias = regional_comp["qtd_farmacias"]
     farmacia_txt = "farmácia" if qtd_farmacias == 1 else "farmácias"
-    opera_txt = "opera" if qtd_farmacias == 1 else "operam"
+    que_opera_txt = "que opera" if qtd_farmacias == 1 else "que operam"
     municipios_txt = _format_list_pt(regional_comp["municipios"])
 
     p_regional_53 = doc.add_paragraph()
-    _run(p_regional_53, 'Esse percentual corresponde a ', color='0F172A', size=10)
-    _run(p_regional_53, f'{multiplicador_fmt} vezes', color='EF4444', size=10, bold=True)
-    _run(p_regional_53, f' a mediana regional dos percentuais de “vendas sem comprovação” observada entre as farmácias da Região de Saúde “{regional_comp["nome_regiao"]}”. No período analisado, essa região reunia ', color='0F172A', size=10)
+    _run(p_regional_53, 'Tal percentual é ', color='0F172A', size=10)
+    _run(p_regional_53, f'{multiplicador_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p_regional_53, ' a mediana dos percentuais de “vendas sem comprovação” das farmácias da sua região', color='0F172A', size=10)
+    run_sup11 = p_regional_53.add_run('11')
+    run_sup11.font.superscript = True
+    run_sup11.font.size = Pt(7)
+    run_sup11.font.color.rgb = _rgb('0F172A')
+    _run(p_regional_53, ', que contempla ', color='0F172A', size=10)
     _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='0F172A', size=10, bold=True)
-    _run(p_regional_53, f' {opera_txt} no PFPB, distribuídas nos seguintes municípios: {municipios_txt}.', color='0F172A', size=10)
+    _run(p_regional_53, f' {que_opera_txt} no PFPB, localizadas nos seguintes municípios do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
+
+    p_geo_ampliado = doc.add_paragraph()
+    _run(p_geo_ampliado, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p_geo_ampliado, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p_geo_ampliado, f' a mediana dos percentuais de “vendas sem comprovação” das farmácias localizadas em seu Estado ({regional_comp["uf"]}) e ', color='0F172A', size=10)
+    _run(p_geo_ampliado, f'{multiplicador_brasil_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p_geo_ampliado, ' a das farmácias de todo o Brasil.', color='0F172A', size=10)
 
     _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     p_gtin_intro = doc.add_paragraph()
-    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoques amparados em notas fiscais de suas aquisições, constantes do levantamento consolidado apresentado no Quadro 02, relacionam-se os seguintes GTINs com vendas sem comprovação no período analisado:', color='0F172A', size=10)
+    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoques amparados em notas fiscais de suas aquisições, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=10)
 
     _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
 
@@ -1672,47 +1874,49 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_gtin_conclusao, f'Conforme o Quadro 04, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='0F172A', size=10, bold=True)
     _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=10)
-    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='334155', size=10, bold=True)
     _run(p_gtin_conclusao, '. Observa-se, contudo, concentração relevante em ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'{gtin_comp["representativos_count"]} {representativos_txt}', color='0F172A', size=10, bold=True)
     _run(p_gtin_conclusao, ', que respondem por ', color='0F172A', size=10)
-    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["representativos_valor"], 2)}', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["representativos_valor"], 2)}', color='334155', size=10, bold=True)
     _run(p_gtin_conclusao, ', equivalentes a ', color='0F172A', size=10)
-    _run(p_gtin_conclusao, f'{_format_decimal_pt(gtin_comp["representativos_pct"], 1)}%', color='EF4444', size=10, bold=True)
+    _run(p_gtin_conclusao, f'{_format_decimal_pt(gtin_comp["representativos_pct"], 1)}%', color='334155', size=10, bold=True)
     _run(p_gtin_conclusao, f' do total listado, considerando o menor conjunto de GTINs necessário para atingir ao menos {_format_decimal_pt(gtin_comp["concentration_target_pct"], 0)}% do valor sem comprovação.', color='0F172A', size=10)
     
-    doc.add_heading(f'5.4 Evolução atípica das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
+    doc.add_heading(f'6.1 Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
 
     evolucao_comp = _build_evolucao_financeira_context(cnpj, data_inicio, data_fim)
 
-    p_54_contexto = doc.add_paragraph()
-    _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e demasiados que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
+    semestres_atipicos = evolucao_comp["semestres_atipicos"]
+    if semestres_atipicos:
+        p_54_contexto = doc.add_paragraph()
+        _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e demasiados que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
 
-    p_54_analise = doc.add_paragraph()
-    _run(p_54_analise, f'A Farmácia {razao_social} recebeu recursos provenientes do Ministério da Saúde, referentes ao PFPB, no período de ', color='0F172A', size=10)
-    _run(p_54_analise, evolucao_comp["periodo_semestres"], color='0F172A', size=10, bold=True)
-    _run(p_54_analise, '. ', color='0F172A', size=10)
+        p_54_analise = doc.add_paragraph()
+        _run(p_54_analise, f'A Farmácia {razao_social} recebeu recursos provenientes do Ministério da Saúde, referentes ao PFPB, no período de ', color='0F172A', size=10)
+        _run(p_54_analise, evolucao_comp["periodo_meses"], color='0F172A', size=10)
+        _run(p_54_analise, '. ', color='0F172A', size=10)
+        crescimento_labels = _format_list_pt([
+            (
+                f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 1)}%)'
+                if row.get("taxa_crescimento_pct") is not None
+                else row["semestre_fmt"]
+            )
+            for row in semestres_atipicos
+        ])
+        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências no ', color='0F172A', size=10)
+        _run(p_54_analise, crescimento_labels, color='334155', size=10, bold=True)
+        _run(p_54_analise, ', sempre em comparação ao semestre imediatamente anterior. ', color='0F172A', size=10)
 
-    crescimento_relevante = evolucao_comp["crescimento_relevante"]
-    if crescimento_relevante:
-        crescimento_labels = _format_list_pt([row["semestre"] for row in crescimento_relevante])
-        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências em ', color='0F172A', size=10)
-        _run(p_54_analise, crescimento_labels, color='EF4444', size=10, bold=True)
-        _run(p_54_analise, f', quando comparadas aos semestres imediatamente anteriores, considerando-se como relevante crescimento superior a {_format_decimal_pt(evolucao_comp["growth_threshold_pct"], 0)}%. ', color='0F172A', size=10)
-    else:
-        _run(p_54_analise, f'No recorte analisado, não foram identificados saltos semestrais superiores a {_format_decimal_pt(evolucao_comp["growth_threshold_pct"], 0)}%, mas a série financeira evidencia a distribuição temporal dos recursos e das possíveis vendas sem comprovação. ', color='0F172A', size=10)
-
-    top_irregulares = evolucao_comp["top_irregulares"]
-    if top_irregulares:
-        top_labels = _format_list_pt([row["semestre"] for row in top_irregulares])
-        top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
-        _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” em ', color='0F172A', size=10)
-        _run(p_54_analise, top_labels, color='EF4444', size=10, bold=True)
-        _run(p_54_analise, ', que somam ', color='0F172A', size=10)
-        _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='EF4444', size=10, bold=True)
-        _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
-    else:
-        _run(p_54_analise, 'Não há valores de “vendas sem comprovação” registrados na série semestral do período analisado, conforme quadro e figura a seguir.', color='0F172A', size=10)
+        top_irregulares = evolucao_comp["top_irregulares"]
+        if top_irregulares:
+            top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares])
+            top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
+            _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” no ', color='0F172A', size=10)
+            _run(p_54_analise, top_labels, color='334155', size=10)
+            _run(p_54_analise, ', que somam ', color='0F172A', size=10)
+            _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='334155', size=10, bold=True)
+            _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
 
     _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
@@ -1723,8 +1927,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
 
-    # 6. CONCLUSÃO
-    doc.add_heading('6. CONCLUSÃO E ENCAMINHAMENTO', level=1)
+    # 7. CONCLUSÃO
+    doc.add_heading('7. CONCLUSÃO E ENCAMINHAMENTO', level=1)
     if risco_label in ('CRÍTICO', 'ATENÇÃO'):
         doc.add_paragraph('Considerando o elevado score de risco e os indícios de irregularidades detectados nas seções anteriores, sugere-se a priorização deste estabelecimento para auditoria in loco ou solicitação formal de documentos para comprovação das vendas realizadas.')
     else:

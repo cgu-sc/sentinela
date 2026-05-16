@@ -8,7 +8,7 @@ from typing import Any, Optional
 from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
-from docx.enum.section import WD_SECTION
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
 from docx.opc.packuri import PackURI
 from docx.opc.part import XmlPart
@@ -96,6 +96,15 @@ def _row_cant_split(row):
     if trPr.find(qn('w:cantSplit')) is None:
         cant_split = OxmlElement('w:cantSplit')
         trPr.append(cant_split)
+
+
+def _repeat_table_header(row):
+    """Marca uma linha de tabela para repetir como cabecalho nas paginas seguintes."""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn('w:tblHeader')) is None:
+        tbl_header = OxmlElement('w:tblHeader')
+        tbl_header.set(qn('w:val'), 'true')
+        trPr.append(tbl_header)
 
 
 def _keep_small_table_together(title_para, table, trailing_paragraphs=None):
@@ -274,6 +283,24 @@ def _format_cpf_cnpj(v: str | None) -> str:
 def _format_decimal_pt(value: float, decimals: int = 2) -> str:
     """Formata numero decimal no padrao brasileiro."""
     return f"{value:,.{decimals}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _format_date_pt(value: Any) -> str:
+    """Formata datas no padrao brasileiro, preservando vazio como travessao."""
+    if not value:
+        return "—"
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y")
+    text = str(value)
+    if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
+        return f"{text[8:10]}/{text[5:7]}/{text[:4]}"
+    return text
+
+
+def _title_case_pt(value: Any) -> str:
+    """Aplica capitalizacao simples para nomes vindos em caixa alta."""
+    text = str(value or "").strip()
+    return text.title() if text else "Não identificado"
 
 
 def _format_month_year_pt(month_key: str) -> str:
@@ -812,7 +839,7 @@ def _build_gtin_sem_comprovacao_context(
     """Agrega todos os GTINs com valor sem comprovacao no periodo e calcula concentracao."""
     get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
 
-    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), "movimentacao_mensal_gtin.parquet")
+    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), "movimentacao_mensal_gtin_v2.parquet")
     if not os.path.exists(parquet_path):
         raise RuntimeError(f"Parquet mensal por GTIN obrigatorio nao encontrado para Nota Tecnica: {parquet_path}.")
 
@@ -820,7 +847,7 @@ def _build_gtin_sem_comprovacao_context(
     required_cols = {
         "codigo_barra",
         "periodo",
-        "qnt_vendas_sem_comprovacao",
+        "qnt_caixas_sem_comprovacao",
         "valor_sem_comprovacao",
     }
     missing_cols = required_cols - set(df.columns)
@@ -832,7 +859,7 @@ def _build_gtin_sem_comprovacao_context(
     df = df.with_columns([
         pl.col("codigo_barra").cast(pl.String),
         pl.col("periodo").cast(pl.Date),
-        pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64, strict=False).fill_null(0),
+        pl.col("qnt_caixas_sem_comprovacao").cast(pl.Int64, strict=False).fill_null(0),
         pl.col("valor_sem_comprovacao").cast(pl.Float64, strict=False).fill_null(0.0),
     ])
     if data_inicio:
@@ -846,7 +873,7 @@ def _build_gtin_sem_comprovacao_context(
     agg = (
         df.group_by("codigo_barra")
         .agg([
-            pl.sum("qnt_vendas_sem_comprovacao").alias("qtd_sem_comprovacao"),
+            pl.sum("qnt_caixas_sem_comprovacao").alias("qtd_sem_comprovacao"),
             pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
         ])
         .filter(pl.col("valor_sem_comprovacao") > 0)
@@ -1456,6 +1483,7 @@ def _build_falecidos_context(
         "cpfs_distintos": cpfs_distintos,
         "valor_total": valor_total,
         "periodo_desc": periodo_desc,
+        "transacoes": transacoes,
     }
 
 
@@ -1489,6 +1517,1092 @@ def _add_falecidos_criticidade_text(doc, num: str, razao_social: str, falecidos_
     _run(p1, ' beneficiários. Estas vendas representaram um valor total de ', color='0F172A', size=10)
     _run(p1, f'R$ {_format_decimal_pt(valor_total, 2)}', color='334155', size=10, bold=True)
     _run(p1, ', no referido período.', color='0F172A', size=10)
+
+    p2 = doc.add_paragraph()
+    _run(
+        p2,
+        f'O ANEXO III desta Nota Técnica traz o detalhamento de todas as vendas realizadas pela Farmácia {razao_social}, '
+        f'{periodo_desc}, na data do óbito da pessoa e/ou posteriormente a essa data.',
+        color='0F172A',
+        size=10,
+    )
+
+
+def _build_incompatibilidade_patologica_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto da incompatibilidade patologica."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para incompatibilidade patologica {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no periodo de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no periodo analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_clinico"),
+        "mediana_regiao": as_float("med_clinico_reg"),
+        "mediana_uf": as_float("med_clinico_uf"),
+        "mediana_brasil": as_float("med_clinico_br"),
+        "multiplicador_regiao": as_float("risco_clinico_reg"),
+        "multiplicador_uf": as_float("risco_clinico_uf"),
+        "multiplicador_brasil": as_float("risco_clinico_br"),
+    }
+
+
+def _add_incompatibilidade_patologica_text(doc, num: str, razao_social: str, clinico_comp: dict[str, Any]):
+    """Adiciona texto analitico de incompatibilidade patologica usando a matriz atual."""
+    periodo_desc = clinico_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(clinico_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(clinico_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(f'{num} Vendas de medicamento com incompatibilidade patológica', level=2)
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O comportamento esperado, no âmbito do PFPB, é que alguns medicamentos destinados a doenças específicas sejam distribuídos guardando correlação com o perfil demográfico do beneficiário, como idade ou sexo. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Neste rol, o Sistema Sentinela realiza levantamento detalhado de medicamentos para doença de Parkinson (incomum em pessoas com menos de 50 anos), osteoporose (incomum em homens biológicos), diabetes (incomum em pessoas abaixo de 20 anos) e hipertensão (incomum em pessoas abaixo de 20 anos).',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se, {periodo_desc}, percentual atípico de vendas desses medicamentos, correspondente a ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas monitoradas pelo indicador. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior à mediana dos percentuais de vendas com essa mesma criticidade realizadas pelas farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias localizadas em seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_teto_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de vendas no teto maximo."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para teto maximo {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_teto"),
+        "mediana_regiao": as_float("med_teto_reg"),
+        "mediana_uf": as_float("med_teto_uf"),
+        "mediana_brasil": as_float("med_teto_br"),
+        "multiplicador_regiao": as_float("risco_teto_reg"),
+        "multiplicador_uf": as_float("risco_teto_uf"),
+        "multiplicador_brasil": as_float("risco_teto_br"),
+    }
+
+
+def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any]):
+    """Adiciona texto analitico de vendas no teto maximo usando a matriz atual."""
+    periodo_desc = teto_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(teto_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(teto_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(teto_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(teto_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas no “teto máximo” para clientes da Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O Programa Farmácia Popular do Brasil estabelece limites máximos de quantitativo de retirada mensal pelo cidadão de medicamentos, de acordo com cada um de seus princípios ativos. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Retiradas de medicamentos por um CPF no limite máximo mensal são consideradas, para fins de monitoramento, uma “venda no teto”. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'A expectativa da análise é que o percentual levantado para vendas de medicamento “no teto” pelo estabelecimento acompanhe o padrão das demais farmácias localizadas na mesma região. Percentual muito acima da mediana da região sugere a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas no “teto máximo”. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com esta configuração das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias localizadas no seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_polimedicamento_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de quatro ou mais itens por cupom."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para polimedicamento {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_polimedicamento"),
+        "mediana_regiao": as_float("med_polimedicamento_reg"),
+        "mediana_uf": as_float("med_polimedicamento_uf"),
+        "mediana_brasil": as_float("med_polimedicamento_br"),
+        "multiplicador_regiao": as_float("risco_polimedicamento_reg"),
+        "multiplicador_uf": as_float("risco_polimedicamento_uf"),
+        "multiplicador_brasil": as_float("risco_polimedicamento_br"),
+    }
+
+
+def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_comp: dict[str, Any]):
+    """Adiciona texto analitico de cupons com quatro ou mais medicamentos usando a matriz atual."""
+    periodo_desc = polimedicamento_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(polimedicamento_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O comportamento esperado, no âmbito do PFPB, é que a grande maioria das vendas contenha apenas um ou dois itens de medicamentos. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'A ocorrência de cupons de vendas com quatro ou mais medicamentos foge do padrão epidemiológico esperado. Nesse sentido, cupons de vendas com essa composição e emitidos por uma farmácia num padrão muito acima dos demais estabelecimentos da sua região sugerem a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a cupons de venda contendo quatro ou mais medicamentos. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com este mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias localizadas no seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_ticket_medio_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de ticket medio."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para ticket medio {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "valor": as_float("val_ticket_medio"),
+        "mediana_regiao": as_float("med_ticket_reg"),
+        "mediana_uf": as_float("med_ticket_uf"),
+        "mediana_brasil": as_float("med_ticket_br"),
+        "multiplicador_regiao": as_float("risco_ticket_reg"),
+        "multiplicador_uf": as_float("risco_ticket_uf"),
+        "multiplicador_brasil": as_float("risco_ticket_br"),
+    }
+
+
+def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[str, Any]):
+    """Adiciona texto analitico de ticket medio usando a matriz atual."""
+    periodo_desc = ticket_comp["periodo_desc"]
+    valor_fmt = _format_decimal_pt(ticket_comp["valor"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(ticket_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(ticket_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(ticket_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Valor do “ticket médio”, dos medicamentos vendidos pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O comportamento esperado, no âmbito do PFPB, é de que o valor financeiro médio (“ticket médio”) das dispensações de medicamentos de uma farmácia para seus clientes acompanhe o padrão dos estabelecimentos de sua região, num determinado período. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'A premissa é de baixa elasticidade-preço no mercado de medicamentos na região atendida pela farmácia credenciada. Nesse sentido, valores de ticket médio muito acima do padrão dos demais estabelecimentos sugerem a ocorrência de priorização de itens mais caros ou de uma maximização indevida nas vendas.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que o valor de ticket médio por ela registrado, {periodo_desc}, foi de ', color='0F172A', size=10)
+    _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior à mediana dos valores das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_receita_paciente_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de faturamento medio mensal por cliente."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para receita por paciente {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "valor": as_float("val_receita_paciente"),
+        "mediana_regiao": as_float("med_receita_paciente_reg"),
+        "mediana_uf": as_float("med_receita_paciente_uf"),
+        "mediana_brasil": as_float("med_receita_paciente_br"),
+        "multiplicador_regiao": as_float("risco_receita_paciente_reg"),
+        "multiplicador_uf": as_float("risco_receita_paciente_uf"),
+        "multiplicador_brasil": as_float("risco_receita_paciente_br"),
+    }
+
+
+def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: dict[str, Any]):
+    """Adiciona texto analitico de faturamento medio mensal por cliente usando a matriz atual."""
+    periodo_desc = receita_comp["periodo_desc"]
+    valor_fmt = _format_decimal_pt(receita_comp["valor"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(receita_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(receita_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(receita_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Faturamento médio mensal por cliente, obtido pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O comportamento esperado, no âmbito do PFPB, é que o gasto médio mensal por cliente (CPF) em um estabelecimento farmacêutico num determinado período acompanhe o padrão das demais farmácias localizadas em sua mesma região. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Nesse sentido, receita média mensal por paciente obtida por uma farmácia que esteja muito acima do padrão dos demais estabelecimentos sugere a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que o valor médio mensal por cliente, {periodo_desc}, foi de ', color='0F172A', size=10)
+    _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao valor mediano das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_per_capita_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de faturamento mensal per capita."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para per capita {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "valor": as_float("val_per_capita"),
+        "mediana_regiao": as_float("med_per_capita_reg"),
+        "mediana_uf": as_float("med_per_capita_uf"),
+        "mediana_brasil": as_float("med_per_capita_br"),
+        "multiplicador_regiao": as_float("risco_per_capita_reg"),
+        "multiplicador_uf": as_float("risco_per_capita_uf"),
+        "multiplicador_brasil": as_float("risco_per_capita_br"),
+    }
+
+
+def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict[str, Any]):
+    """Adiciona texto analitico de faturamento mensal per capita usando a matriz atual."""
+    periodo_desc = per_capita_comp["periodo_desc"]
+    valor_fmt = _format_decimal_pt(per_capita_comp["valor"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(per_capita_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(per_capita_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(per_capita_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Faturamento mensal per capita, obtido pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'O comportamento esperado para o faturamento mensal de uma farmácia, advindo do PFPB, é que ele guarde uma proporção razoável com a população do município onde está localizada. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Quando o estabelecimento apresenta valores de vendas per capita mensal muito desproporcionais às farmácias da sua região, tal comportamento sugere forte probabilidade de que ele esteja captando e utilizando CPFs de pessoas residentes em outras regiões.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que seu faturamento mensal per capita, {periodo_desc}, foi de ', color='0F172A', size=10)
+    _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao valor mediano das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_alto_custo_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de medicamentos de alto custo."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para alto custo {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_alto_custo"),
+        "mediana_regiao": as_float("med_alto_custo_reg"),
+        "mediana_uf": as_float("med_alto_custo_uf"),
+        "mediana_brasil": as_float("med_alto_custo_br"),
+        "multiplicador_regiao": as_float("risco_alto_custo_reg"),
+        "multiplicador_uf": as_float("risco_alto_custo_uf"),
+        "multiplicador_brasil": as_float("risco_alto_custo_br"),
+    }
+
+
+def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict[str, Any]):
+    """Adiciona texto analitico de medicamentos de alto custo usando a matriz atual."""
+    periodo_desc = alto_custo_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(alto_custo_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas de medicamentos de alto custo realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'Os preços dos medicamentos, no âmbito do PFPB, variam em virtude dos seus princípios ativos. O comportamento esperado é que as vendas de uma farmácia apresentem um mix equilibrado de produtos, e não uma concentração atípica apenas em itens de alto valor financeiro. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Nesse sentido, a expectativa é que o percentual de venda pela farmácia de medicamentos de alto custo, correspondentes aos 10% mais caros da tabela do PFPB, acompanhe o padrão dos demais estabelecimentos localizados na mesma região.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a medicamentos de alto custo. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com este mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_vendas_rapidas_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de vendas em menos de 60 segundos."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para vendas rapidas {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_vendas_rapidas"),
+        "mediana_regiao": as_float("med_vendas_rapidas_reg"),
+        "mediana_uf": as_float("med_vendas_rapidas_uf"),
+        "mediana_brasil": as_float("med_vendas_rapidas_br"),
+        "multiplicador_regiao": as_float("risco_vendas_rapidas_reg"),
+        "multiplicador_uf": as_float("risco_vendas_rapidas_uf"),
+        "multiplicador_brasil": as_float("risco_vendas_rapidas_br"),
+    }
+
+
+def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_comp: dict[str, Any]):
+    """Adiciona texto analitico de vendas em menos de 60 segundos usando a matriz atual."""
+    periodo_desc = vendas_rapidas_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(vendas_rapidas_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(f'{num} Vendas de medicamentos em tempo inferior a 60 segundos', level=2)
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'No âmbito do PFPB, o comportamento esperado é que a dispensação de medicamento para o cidadão, no balcão da farmácia, seja realizada em alguns minutos, tendo em vista o tempo envolvido num atendimento humano padrão, que envolve etapas logísticas como conferência de documentação, busca do produto e assinatura',
+        color='0F172A',
+        size=10,
+    )
+    _footnote_ref(
+        doc,
+        p1,
+        16,
+        'O art. 25 do Anexo LXXVIII da Portaria de Consolidação nº 5, de 28.09.2017, dispõe da seguinte maneira: “o paciente, obrigatoriamente, deve assinar o cupom vinculado, sendo que uma via deve ser mantida pelo estabelecimento e a outra entregue ao paciente.”',
+    )
+    _run(p1, '. ', color='0F172A', size=10)
+    _run(
+        p1,
+        'Nesse sentido, dispensações de medicamentos sucessivas em intervalo de tempo inferior a 60 segundos e acima do padrão dos demais estabelecimentos localizados na mesma região sugerem a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em tempo inferior a 60 segundos. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_recorrencia_sistemica_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de recorrencia sistemica de 30 dias."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para recorrencia sistemica {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_recorrencia_sistemica"),
+        "mediana_regiao": as_float("med_recorrencia_sistemica_reg"),
+        "mediana_uf": as_float("med_recorrencia_sistemica_uf"),
+        "mediana_brasil": as_float("med_recorrencia_sistemica_br"),
+        "multiplicador_regiao": as_float("risco_recorrencia_sistemica_reg"),
+        "multiplicador_uf": as_float("risco_recorrencia_sistemica_uf"),
+        "multiplicador_brasil": as_float("risco_recorrencia_sistemica_br"),
+    }
+
+
+def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrencia_comp: dict[str, Any]):
+    """Adiciona texto analitico de recorrencia sistemica de 30 dias usando a matriz atual."""
+    periodo_desc = recorrencia_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(recorrencia_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'No âmbito do PFPB, os medicamentos têm limite exato de 30 dias para serem retirados pelos clientes. Uma tentativa de uma nova retirada de um medicamento, dentro desse prazo, ocasiona um bloqueio administrativo da sua dispensação. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'A expectativa para as retiradas de medicamentos é de que siga um comportamento de consumo real, no qual as datas de retirada costumam variar alguns dias ao longo dos meses, e não de serem realizadas sistematicamente com precisão absoluta de 30 em 30 dias. Nesse sentido, a identificação de vendas de medicamentos realizadas precisamente no prazo de 30 dias e com percentual acima do padrão dos demais estabelecimentos localizados na mesma região sugere indício de agendamento automatizado para vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas com prazos precisos de 30 dias. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_dias_pico_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de vendas em dias de pico."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para dias de pico {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_pico"),
+        "mediana_regiao": as_float("med_pico_reg"),
+        "mediana_uf": as_float("med_pico_uf"),
+        "mediana_brasil": as_float("med_pico_br"),
+        "multiplicador_regiao": as_float("risco_pico_reg"),
+        "multiplicador_uf": as_float("risco_pico_uf"),
+        "multiplicador_brasil": as_float("risco_pico_br"),
+    }
+
+
+def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[str, Any]):
+    """Adiciona texto analitico de vendas em dias de pico usando a matriz atual."""
+    periodo_desc = dias_pico_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(dias_pico_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas de medicamentos em dias de pico realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'No âmbito do PFPB, o comportamento esperado para as farmácias é de que suas vendas sejam distribuídas de forma homogênea ao longo do mês. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'A identificação de registros baixos de venda na maior parte do tempo e altos volumes em dias específicos sugere a ocorrência de “lançamentos em lote”. Nesse sentido, a identificação de vendas em dias de pico realizadas por uma farmácia acima do padrão dos demais estabelecimentos localizados na mesma região sugere a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em dias de pico. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
+    """Agrupa transacoes de falecidos por CPF, seguindo o modelo da aba Mortality."""
+    grupos: dict[str, dict[str, Any]] = {}
+    for t in transacoes:
+        cpf = str(getattr(t, "cpf", "") or "").zfill(11)
+        if cpf not in grupos:
+            grupos[cpf] = {
+                "cpf": cpf,
+                "nome": _title_case_pt(getattr(t, "nome_falecido", None)),
+                "municipio": _title_case_pt(getattr(t, "municipio_falecido", None)) if getattr(t, "municipio_falecido", None) else "—",
+                "uf": getattr(t, "uf_falecido", None) or "—",
+                "dt_obito": getattr(t, "dt_obito", None),
+                "outros_cnpj": getattr(t, "outros_estabelecimentos", None),
+                "transacoes": [],
+                "total_valor": 0.0,
+                "max_dias": 0,
+            }
+
+        grupo = grupos[cpf]
+        valor = float(getattr(t, "valor_total_autorizacao", 0.0) or 0.0)
+        dias = int(getattr(t, "dias_apos_obito", 0) or 0)
+        grupo["transacoes"].append(t)
+        grupo["total_valor"] += valor
+        grupo["max_dias"] = max(grupo["max_dias"], dias)
+
+    def sort_key(item: dict[str, Any]):
+        primeira_data = min(
+            (getattr(t, "data_autorizacao", None) for t in item["transacoes"] if getattr(t, "data_autorizacao", None)),
+            default=date.max,
+        )
+        return (item["cpf"], primeira_data)
+
+    grupos_lista = sorted(grupos.values(), key=sort_key)
+    for grupo in grupos_lista:
+        grupo["transacoes"].sort(key=lambda t: (getattr(t, "data_autorizacao", None) or date.max, getattr(t, "num_autorizacao", "") or ""))
+    return grupos_lista
+
+
+def _set_cell_width(cell, width):
+    cell.width = width
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_w = tc_pr.find(qn('w:tcW'))
+    if tc_w is None:
+        tc_w = OxmlElement('w:tcW')
+        tc_pr.append(tc_w)
+    tc_w.set(qn('w:w'), str(int(width.twips)))
+    tc_w.set(qn('w:type'), 'dxa')
+
+
+def _set_table_fixed_widths(table, widths):
+    """Fixa a grade da tabela para o Word nao redistribuir as colunas."""
+    tbl = table._tbl
+    tbl_pr = tbl.tblPr
+
+    tbl_layout = tbl_pr.find(qn('w:tblLayout'))
+    if tbl_layout is None:
+        tbl_layout = OxmlElement('w:tblLayout')
+        tbl_pr.append(tbl_layout)
+    tbl_layout.set(qn('w:type'), 'fixed')
+
+    tbl_w = tbl_pr.find(qn('w:tblW'))
+    if tbl_w is None:
+        tbl_w = OxmlElement('w:tblW')
+        tbl_pr.append(tbl_w)
+    tbl_w.set(qn('w:w'), str(sum(int(width.twips) for width in widths)))
+    tbl_w.set(qn('w:type'), 'dxa')
+
+    existing_grid = tbl.find(qn('w:tblGrid'))
+    if existing_grid is not None:
+        tbl.remove(existing_grid)
+    tbl_grid = OxmlElement('w:tblGrid')
+    for width in widths:
+        grid_col = OxmlElement('w:gridCol')
+        grid_col.set(qn('w:w'), str(int(width.twips)))
+        tbl_grid.append(grid_col)
+    tbl.insert(1, tbl_grid)
+
+    for idx, width in enumerate(widths):
+        table.columns[idx].width = width
+
+
+def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):
+    p = cell.paragraphs[0]
+    p.text = ''
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    if align is not None:
+        p.alignment = align
+    _run(p, text, color=color, size=size, bold=bold)
+
+
+def _write_person_cell(cell, nome: str, cpf: str):
+    p = cell.paragraphs[0]
+    p.text = ''
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _run(p, nome, color='0F172A', size=8.2, bold=True)
+    p.add_run('\n')
+    _run(p, _format_cpf_cnpj(cpf), color='64748B', size=7.0)
+
+
+def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_comp: dict[str, Any]):
+    """Adiciona o Anexo III com detalhamento das vendas para pessoas falecidas."""
+    transacoes = falecidos_comp.get("transacoes") or []
+    if not transacoes:
+        return
+
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    section.footer.is_linked_to_previous = False
+    section.footer.paragraphs[0].text = ''
+    section.top_margin = Inches(0.45)
+    section.bottom_margin = Inches(0.45)
+    section.left_margin = Inches(0.45)
+    section.right_margin = Inches(0.45)
+    section.orientation = WD_ORIENT.PORTRAIT
+    if section.page_width > section.page_height:
+        section.page_width, section.page_height = section.page_height, section.page_width
+
+    grupos = _build_falecidos_grupos(transacoes)
+    total_autorizacoes = int(falecidos_comp.get("total_autorizacoes") or len(transacoes))
+    cpfs_distintos = int(falecidos_comp.get("cpfs_distintos") or len(grupos))
+    valor_total = float(falecidos_comp.get("valor_total") or 0.0)
+
+    doc.add_heading('ANEXO III - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
+    p_intro = doc.add_paragraph()
+    _run(
+        p_intro,
+        f'Detalhamento de transações agrupadas por CPF relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), '
+        f'{falecidos_comp.get("periodo_desc") or "no período analisado"}.',
+        color='0F172A',
+        size=9,
+    )
+
+    headers = [
+        'Pessoa falecida',
+        'Município/UF',
+        'Dt. óbito',
+        'Data da venda',
+        'Valor (R$)',
+        'Dias após óbito',
+    ]
+    widths = [
+        Inches(2.95), Inches(1.48), Inches(1.0), Inches(1.12), Inches(0.6), Inches(0.45),
+    ]
+
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.style = 'Table Grid'
+    table.autofit = False
+    _set_table_fixed_widths(table, widths)
+
+    hdr = table.rows[0]
+    _repeat_table_header(hdr)
+    _row_cant_split(hdr)
+    for idx, label in enumerate(headers):
+        cell = hdr.cells[idx]
+        _set_cell_width(cell, widths[idx])
+        _cell_bg(cell, 'E2E8F0')
+        _write_cell(cell, label, size=7.3, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    for grupo in grupos:
+        for t in grupo["transacoes"]:
+            row = table.add_row()
+            _row_cant_split(row)
+            values = [
+                None,
+                f'{grupo["municipio"]}/{grupo["uf"]}',
+                _format_date_pt(getattr(t, "dt_obito", None)),
+                _format_date_pt(getattr(t, "data_autorizacao", None)),
+                _format_decimal_pt(float(getattr(t, "valor_total_autorizacao", 0.0) or 0.0), 2),
+                f'{int(getattr(t, "dias_apos_obito", 0) or 0)} d',
+            ]
+            for idx, value in enumerate(values):
+                cell = row.cells[idx]
+                _set_cell_width(cell, widths[idx])
+                if idx == 0:
+                    _write_person_cell(cell, _title_case_pt(getattr(t, "nome_falecido", None)), getattr(t, "cpf", None))
+                    continue
+                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in {4, 5} else WD_ALIGN_PARAGRAPH.LEFT
+                if idx in {2, 3}:
+                    align = WD_ALIGN_PARAGRAPH.CENTER
+                _write_cell(cell, value, size=7.4, color='0F172A', align=align)
+
+        subtotal_row = table.add_row()
+        _row_cant_split(subtotal_row)
+        label_cell = subtotal_row.cells[0].merge(subtotal_row.cells[3])
+        _cell_bg(label_cell, 'F8FAFC')
+        _write_cell(
+            label_cell,
+            f'Subtotal - {len(grupo["transacoes"])} autorização(ões)',
+            size=7.4,
+            bold=True,
+            color='475569',
+            align=WD_ALIGN_PARAGRAPH.RIGHT,
+        )
+        value_cell = subtotal_row.cells[4]
+        _cell_bg(value_cell, 'F8FAFC')
+        _write_cell(value_cell, _format_decimal_pt(grupo["total_valor"], 2), size=7.4, bold=True, color='475569', align=WD_ALIGN_PARAGRAPH.RIGHT)
+        _cell_bg(subtotal_row.cells[5], 'F8FAFC')
+        _write_cell(subtotal_row.cells[5], '', size=7.4)
+
+    total_row = table.add_row()
+    _row_cant_split(total_row)
+    total_label = total_row.cells[0].merge(total_row.cells[3])
+    _cell_bg(total_label, 'E2E8F0')
+    _write_cell(
+        total_label,
+        f'TOTAL GERAL - {cpfs_distintos} CPF(s) distintos - {total_autorizacoes} autorização(ões)',
+        size=7.6,
+        bold=True,
+        color='0F172A',
+        align=WD_ALIGN_PARAGRAPH.RIGHT,
+    )
+    total_value = total_row.cells[4]
+    _cell_bg(total_value, 'E2E8F0')
+    _write_cell(total_value, _format_decimal_pt(valor_total, 2), size=7.6, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.RIGHT)
+    _cell_bg(total_row.cells[5], 'E2E8F0')
+    _write_cell(total_row.cells[5], '', size=7.6)
 
 
 def _configure_section(section, footer_lines: list[str] | None = None):
@@ -2333,7 +3447,58 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
     if criticidade_items:
-        for _, num, full_title in criticidade_items:
+        for key, num, full_title in criticidade_items:
+            if key == 'incompatibilidade_patologica':
+                clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
+                if clinico_comp:
+                    _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp)
+                    continue
+            if key == 'teto':
+                teto_comp = _build_teto_context(cnpj, data_inicio, data_fim)
+                if teto_comp:
+                    _add_teto_text(doc, num, razao_social, teto_comp)
+                    continue
+            if key == 'polimedicamento' and full_title.startswith('Vendas de quatro ou mais itens'):
+                polimedicamento_comp = _build_polimedicamento_context(cnpj, data_inicio, data_fim)
+                if polimedicamento_comp:
+                    _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp)
+                    continue
+            if key == 'ticket_medio':
+                ticket_comp = _build_ticket_medio_context(cnpj, data_inicio, data_fim)
+                if ticket_comp:
+                    _add_ticket_medio_text(doc, num, razao_social, ticket_comp)
+                    continue
+            if key == 'receita_paciente':
+                receita_comp = _build_receita_paciente_context(cnpj, data_inicio, data_fim)
+                if receita_comp:
+                    _add_receita_paciente_text(doc, num, razao_social, receita_comp)
+                    continue
+            if key == 'per_capita':
+                per_capita_comp = _build_per_capita_context(cnpj, data_inicio, data_fim)
+                if per_capita_comp:
+                    _add_per_capita_text(doc, num, razao_social, per_capita_comp)
+                    continue
+            if key == 'alto_custo':
+                alto_custo_comp = _build_alto_custo_context(cnpj, data_inicio, data_fim)
+                if alto_custo_comp:
+                    _add_alto_custo_text(doc, num, razao_social, alto_custo_comp)
+                    continue
+            if key == 'vendas_rapidas':
+                vendas_rapidas_comp = _build_vendas_rapidas_context(cnpj, data_inicio, data_fim)
+                if vendas_rapidas_comp:
+                    _add_vendas_rapidas_text(doc, num, razao_social, vendas_rapidas_comp)
+                    continue
+            if key == 'recorrencia_sistemica':
+                recorrencia_comp = _build_recorrencia_sistemica_context(cnpj, data_inicio, data_fim)
+                if recorrencia_comp:
+                    _add_recorrencia_sistemica_text(doc, num, razao_social, recorrencia_comp)
+                    continue
+            if key == 'dias_pico':
+                dias_pico_comp = _build_dias_pico_context(cnpj, data_inicio, data_fim)
+                if dias_pico_comp:
+                    _add_dias_pico_text(doc, num, razao_social, dias_pico_comp)
+                    continue
+
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
     elif not falecidos_comp:
@@ -2345,6 +3510,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         doc.add_paragraph('Considerando o elevado score de risco e os indícios de irregularidades detectados nas seções anteriores, sugere-se a priorização deste estabelecimento para auditoria in loco ou solicitação formal de documentos para comprovação das vendas realizadas.')
     else:
         doc.add_paragraph('O estabelecimento apresenta indicadores que, embora monitorados, não atingiram os limiares de priorização para fiscalização imediata, recomendando-se a manutenção do acompanhamento sistêmico.')
+
+    if falecidos_comp:
+        _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)

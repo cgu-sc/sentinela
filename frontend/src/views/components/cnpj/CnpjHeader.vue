@@ -97,6 +97,11 @@ const displayPercValSemComp = computed(() => displaySummary.value?.percValSemCom
 
 const risco = computed(() => displayPercValSemComp.value);
 
+const riskPanelClass = computed(() => {
+  const rc = getRiskClass(risco.value);
+  return rc === 'risk-critical' ? 'risk-high' : rc;
+});
+
 const formatPeriodMonth = (date) => {
   const normalized = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(normalized.getTime())) return null;
@@ -380,78 +385,46 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           </button>
         </div>
         <div
-          class="analysis-period-badge"
-          :class="{ 'analysis-period-badge--loading': periodLoading && !filterStore.isAnimating }"
-          v-tooltip.bottom="'Período de análise aplicado aos indicadores financeiros'"
+          class="risk-context-panel"
+          :class="riskPanelClass"
         >
-          <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
-          <span class="analysis-period-label">Período analisado</span>
-          <strong>{{ analysisPeriodLabel }}</strong>
-        </div>
-        <div class="header-kpis-new">
-          <!-- Bloco Unificado de Risco -->
           <div
-            class="kpi-pill-group"
-            :class="[
-              getRiskClass(risco) === 'risk-critical'
-                ? 'risk-high'
-                : getRiskClass(risco),
-            ]"
+            class="rcp-period"
+            :class="{ 'rcp-period--loading': periodLoading && !filterStore.isAnimating }"
           >
-            <div
-              class="pill-item"
-              v-if="cnpjData.score_risco_final != null"
-              v-tooltip.bottom="'Score de Risco Consolidado'"
-            >
-              <span class="pill-label">Score de Risco</span>
-              <span class="pill-value">
-                {{ cnpjData.score_risco_final.toFixed(1) }}
-                <small
-                  style="
-                    color: var(--text-color);
-                    opacity: 0.8;
-                    font-size: 0.75em;
-                    font-weight: 600;
-                    padding-left: 3px;
-                  "
-                  >·
-                  {{
-                    cnpjData.classificacao_risco?.replace("RISCO ", "") ?? ""
-                  }}</small
-                >
-              </span>
-            </div>
-
-            <div
-              class="pill-divider"
-              v-if="cnpjData.score_risco_final != null"
-            ></div>
-
-            <div class="pill-item" :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }">
-              <span class="pill-label">Valor sem Comprovação</span>
-              <span class="pill-value currency">
-                {{ formatCurrencyFull(displayValSemComp) }}
-                <small
-                  style="
-                    color: var(--text-color);
-                    opacity: 0.8;
-                    font-size: 0.8em;
-                    font-weight: 600;
-                    padding-left: 4px;
-                  "
-                  >({{ displayPercValSemComp.toFixed(2) }}%)</small
-                >
-              </span>
-            </div>
+            <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
+            <span class="rcp-period-label">Período analisado</span>
+            <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
           </div>
-
-          <!-- Bloco Neutro - Agora em formato Pill -->
-          <div class="kpi-pill-group kpi-pill-group--neutral" :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }">
-            <div class="pill-item">
-              <span class="pill-label">Total Movimentado</span>
-              <span class="pill-value total">
-                {{ formatCurrencyFull(displayTotalMov) }}
+          <div class="rcp-metrics">
+            <div
+              class="rcp-item"
+              v-if="cnpjData.score_risco_final != null"
+            >
+              <span class="rcp-label">Score de Risco</span>
+              <span class="rcp-value">
+                {{ cnpjData.score_risco_final.toFixed(1) }}
+                <span class="rcp-badge">{{ cnpjData.classificacao_risco?.replace("RISCO ", "") ?? "" }}</span>
               </span>
+            </div>
+            <div class="rcp-divider" v-if="cnpjData.score_risco_final != null" />
+            <div
+              class="rcp-item"
+              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+            >
+              <span class="rcp-label">Sem Comprovação</span>
+              <span class="rcp-value">
+                {{ formatCurrencyFull(displayValSemComp) }}
+                <span class="rcp-pct">{{ displayPercValSemComp.toFixed(2) }}%</span>
+              </span>
+            </div>
+            <div class="rcp-divider" />
+            <div
+              class="rcp-item"
+              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+            >
+              <span class="rcp-label">Total Movimentado</span>
+              <span class="rcp-value rcp-value--neutral">{{ formatCurrencyFull(displayTotalMov) }}</span>
             </div>
           </div>
         </div>
@@ -600,7 +573,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.75rem;
   flex-shrink: 0;
 }
@@ -840,7 +813,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 .header-main-info {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 2rem;
   min-width: 0;
 }
@@ -1399,4 +1372,145 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   letter-spacing: 0.04em;
   line-height: 1;
 }
+
+/* ── RISK CONTEXT PANEL ─────────────────────────────────── */
+.risk-context-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-self: stretch;
+  min-width: 390px;
+  border: 1px solid var(--card-border);
+  border-left-width: 3px;
+  border-left-color: var(--primary-color);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+
+.risk-context-panel.risk-high    { border-left-color: var(--risk-high); }
+.risk-context-panel.risk-critical { border-left-color: var(--risk-critical); }
+.risk-context-panel.risk-medium  { border-left-color: var(--risk-medium); }
+.risk-context-panel.risk-low     { border-left-color: var(--risk-low); }
+
+.rcp-period {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem 0.23rem 0.7rem;
+  background: color-mix(in srgb, var(--primary-color) 5%, var(--establishment-header-bg));
+  border-bottom: 1px solid var(--card-border);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.risk-context-panel.risk-high    .rcp-period { background: color-mix(in srgb, var(--risk-high) 6%, var(--establishment-header-bg)); }
+.risk-context-panel.risk-critical .rcp-period { background: color-mix(in srgb, var(--risk-critical) 6%, var(--establishment-header-bg)); }
+.risk-context-panel.risk-medium  .rcp-period { background: color-mix(in srgb, var(--risk-medium) 6%, var(--establishment-header-bg)); }
+.risk-context-panel.risk-low     .rcp-period { background: color-mix(in srgb, var(--risk-low) 6%, var(--establishment-header-bg)); }
+
+.rcp-period--loading {
+  opacity: 0.75;
+  filter: saturate(0.7);
+}
+
+.rcp-period i {
+  font-size: 0.68rem;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.risk-context-panel.risk-high    .rcp-period i { color: var(--risk-high); }
+.risk-context-panel.risk-critical .rcp-period i { color: var(--risk-critical); }
+.risk-context-panel.risk-medium  .rcp-period i { color: var(--risk-medium); }
+.risk-context-panel.risk-low     .rcp-period i { color: var(--risk-low); }
+
+.rcp-period-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rcp-period-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--establishment-header-text);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.rcp-metrics {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  padding: 0 0.5rem 0 0.7rem;
+}
+
+.rcp-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.08rem 0.65rem;
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.rcp-divider {
+  width: 1px;
+  height: 1.8rem;
+  background: var(--card-border);
+  flex-shrink: 0;
+  margin: 0 0.1rem;
+}
+
+.rcp-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.12rem;
+  white-space: nowrap;
+}
+
+.rcp-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--establishment-header-text);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.rcp-value--neutral {
+  opacity: 0.7;
+}
+
+.rcp-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.risk-context-panel.risk-high    .rcp-badge { color: var(--risk-high); }
+.risk-context-panel.risk-critical .rcp-badge { color: var(--risk-critical); }
+.risk-context-panel.risk-medium  .rcp-badge { color: var(--risk-medium); }
+.risk-context-panel.risk-low     .rcp-badge { color: var(--risk-low); }
+
+.rcp-pct {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.risk-context-panel.risk-high    .rcp-pct { color: var(--risk-high); }
+.risk-context-panel.risk-critical .rcp-pct { color: var(--risk-critical); }
+.risk-context-panel.risk-medium  .rcp-pct { color: var(--risk-medium); }
+.risk-context-panel.risk-low     .rcp-pct { color: var(--risk-low); }
 </style>

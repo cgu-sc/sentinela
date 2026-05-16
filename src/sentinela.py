@@ -44,7 +44,8 @@ decimal.getcontext().prec = 10
 # CONSTANTES GLOBAIS E DE STATUS
 # =============================================================================
 DATA_INICIAL_ANALISE = '2015-07-01'
-DATA_FINAL_ANALISE = datetime.strptime('2024-12-10', '%Y-%m-%d').date()
+DATA_FINAL_ANALISE = date(2024, 12, 10)
+DATA_FINAL_ANALISE_EXCLUSIVA = date(2024, 12, 11)
 CRITERIO_ESTOQUE_INICIAL = 'Critério para estimativa do estoque inicial: Soma das duas últimas aquisições, considerando os 6 meses anteriores à primeira venda.'
 TEMPO_ESPERA_ENTRE_CNPJS = 0
 
@@ -83,11 +84,17 @@ conn, cursor = conectar_bd()
 
 # Variáveis globais de referência
 total_cnpjs = 0
-data_inicio_estoque = None
+data_inicio_estoque = datetime.strptime('2015-01-01', '%Y-%m-%d').date()
 dados_farmacias = {}
 dados_medicamentos = {}
 contato_farmacia = {}
 farmacia_inicio_venda = {}
+
+
+def normalizar_codigo_barra(codigo_barra):
+    if codigo_barra is None:
+        return ''
+    return str(codigo_barra).strip()
 
 # =============================================================================
 # CARREGAMENTO DE DADOS INICIAIS (TABELAS AUXILIARES)
@@ -96,9 +103,10 @@ try:
     logging.info("Executando consultas iniciais para carregar tabelas acessorias")
 
     cursor.execute('select count(cnpj) from [temp_CGUSC].fp.classificacao_blocos')
-    total_cnpjs = cursor.fetchone()[0]
+    row_count = cursor.fetchone()
+    total_cnpjs = row_count[0] if row_count else 0
 
-    cursor.execute('select min(data_estoque_inicial) data from estoque_inicial')
+    cursor.execute('select min(data_estoque_inicial) data from [temp_CGUSC].[fp].estoque_inicial')
     row = cursor.fetchone()
     data_inicio_estoque = row[0] if row and row[0] else datetime.strptime('2015-01-01', '%Y-%m-%d').date()
 
@@ -110,7 +118,7 @@ try:
     cursor.execute('select codigo_barra,principio_ativo from temp_CGUSC.[fp].medicamentos_patologia')
     cols = [column[0] for column in cursor.description]
     for row in cursor.fetchall():
-        dados_medicamentos[row[0]] = dict(zip(cols, row))
+        dados_medicamentos[normalizar_codigo_barra(row[0])] = dict(zip(cols, row))
 
     cursor.execute('select * from temp_CGUSC.[fp].contato_farmacia')
     cols = [column[0] for column in cursor.description]
@@ -150,7 +158,7 @@ def verificar_processamento_existente(cursor, cnpj):
 
         if row:
             situacao = row[0]
-            data_proc = row[1].strftime('%d/%m/%Y %H:%M')
+            data_proc = row[1].strftime('%d/%m/%Y %H:%M') if row[1] else 'data desconhecida'
 
             # Se a situação for 1 (SUCCESS com irregularidades) ou 6 (NO_ISSUES sem irregularidades), pule.
             if situacao in (SIT_SUCCESS, SIT_NO_ISSUES):  # (1 ou 6)
@@ -172,45 +180,216 @@ def verificar_processamento_existente(cursor, cnpj):
 
 # --- CLASSE AUXILIAR PARA TRADUZIR DATAS E DECIMAIS PARA JSON ---
 class CustomJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (date, datetime)):
-            return obj.isoformat()  # Converte data para string "2024-01-01"
-        if isinstance(obj, Decimal):
-            return float(obj)  # Converte Decimal para Float
-        return super().default(obj)
+    def default(self, o):
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()  # Converte data para string "2024-01-01"
+        if isinstance(o, Decimal):
+            return float(o)  # Converte Decimal para Float
+        return super().default(o)
 
 
-def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_brutos):
+def compactar_json(dados):
+    json_str = json.dumps(dados, cls=CustomJSONEncoder)
+    return zlib.compress(json_str.encode('utf-8'), level=9)
+
+
+def percentual_decimal(numerador, denominador):
+    numerador = Decimal(str(numerador or 0))
+    denominador = Decimal(str(denominador or 0))
+    if denominador == 0:
+        return Decimal(0)
+    return (numerador / denominador) * Decimal(100)
+
+
+def normalizar_data_irregular(valor):
+    return None if str(valor) == '9999-01-01' else valor
+
+
+def carregar_notas_estoque_inicial(cursor, cnpj):
+    cursor.execute('''
+        SELECT codigo_barra, numeroNFE, dataEmissaoNFE, qnt
+        FROM [temp_CGUSC].[fp].estoque_inicial_notas
+        WHERE cnpj_estabelecimento = ?
+        ORDER BY codigo_barra, dataEmissaoNFE, numeroNFE
+    ''', cnpj)
+
+    notas_por_gtin = defaultdict(list)
+    for row in cursor.fetchall():
+        gtin = normalizar_codigo_barra(row.codigo_barra)
+        notas_por_gtin[gtin].append({
+            'numero_nfe': str(row.numeroNFE) if row.numeroNFE is not None else None,
+            'data': row.dataEmissaoNFE,
+            'quantidade': row.qnt,
+        })
+    return dict(notas_por_gtin)
+
+
+def montar_memoria_calculo_v2(cnpj, tabela_completa, tabela_sumario, tabela_estoque_inicial):
+    total_vendas = Decimal(0)
+    total_vendas_sem_comprovacao = Decimal(0)
+    valor_total = Decimal(0)
+    valor_sem_comprovacao = Decimal(0)
+    gtins_irregulares = 0
+    gtins = []
+
+    for cod in sorted(tabela_completa.keys()):
+        moves = tabela_completa[cod]
+        sm = tabela_sumario[cod]
+
+        vendas = Decimal(str(sm['total_vendas_gtin']))
+        vendas_sem_comprovacao = Decimal(str(sm['total_vendas_sc_gtin']))
+        valor = Decimal(str(sm['total_valor_vendas_gtin']))
+        valor_irregular = Decimal(str(sm['total_valor_vendas_sc_gtin']))
+
+        total_vendas += vendas
+        total_vendas_sem_comprovacao += vendas_sem_comprovacao
+        valor_total += valor
+        valor_sem_comprovacao += valor_irregular
+        if vendas_sem_comprovacao > 0:
+            gtins_irregulares += 1
+
+        estoque_info = tabela_estoque_inicial.get(cod, {
+            'quantidade': Decimal(0),
+            'data_referencia': None,
+            'notas': [],
+        })
+
+        eventos: list[dict[str, object]] = []
+        referencias_pendentes: list[dict[str, object]] = []
+        primeira_venda = None
+        primeira_irregularidade = None
+        ultima_venda = None
+        estoque_final_gtin = Decimal(0)
+
+        for mov in moves:
+            tipo = mov.get('tipo')
+            if tipo in ('h', 's'):
+                continue
+
+            if tipo == 'e':
+                quantidade = Decimal(str(mov.get('estoque_inicial') or 0))
+                data_ref = mov.get('data_estoque_inicial') or mov.get('data_aquis_dev_estoq')
+                eventos.append({
+                    'tipo': 'estoque_inicial',
+                    'data': data_ref,
+                    'quantidade': quantidade,
+                    'estoque_final': quantidade,
+                })
+                referencias_pendentes = [{'tipo': 'estoque_inicial'}]
+                estoque_final_gtin = quantidade
+                continue
+
+            if tipo in ('c', 'd'):
+                tipo_v2 = 'aquisicao' if tipo == 'c' else 'saida_estoque'
+                quantidade = Decimal(str(mov.get('qnt_aquis_dev') or 0))
+                data_nf = mov.get('data_aquis_dev_estoq')
+                numero_nfe = str(mov.get('numero_nfe')) if mov.get('numero_nfe') is not None else None
+                estoque_inicial_nf = Decimal(str(mov.get('estoque_inicial') or 0))
+                estoque_final_nf = Decimal(str(mov.get('estoque_final') or 0))
+                evento_nf = {
+                    'tipo': tipo_v2,
+                    'data': data_nf,
+                    'numero_nfe': numero_nfe,
+                    'quantidade': quantidade,
+                    'estoque_inicial': estoque_inicial_nf,
+                    'estoque_final': estoque_final_nf,
+                }
+                eventos.append(evento_nf)
+                referencias_pendentes.append({
+                    'tipo': tipo_v2,
+                    'data': data_nf,
+                    'numero_nfe': numero_nfe,
+                    'quantidade': quantidade,
+                })
+                estoque_final_gtin = estoque_final_nf
+                continue
+
+            if tipo == 'v':
+                periodo_inicial = mov.get('periodo_inicial')
+                periodo_final = mov.get('periodo_final')
+                periodo_irregular = normalizar_data_irregular(mov.get('periodo_inicial_nao_comprovacao'))
+                if primeira_venda is None or (periodo_inicial and periodo_inicial < primeira_venda):
+                    primeira_venda = periodo_inicial
+                if periodo_irregular and (primeira_irregularidade is None or periodo_irregular < primeira_irregularidade):
+                    primeira_irregularidade = periodo_irregular
+                if ultima_venda is None or (periodo_final and periodo_final > ultima_venda):
+                    ultima_venda = periodo_final
+
+                eventos.append({
+                    'tipo': 'venda',
+                    'periodo_inicial': periodo_inicial,
+                    'periodo_final': periodo_final,
+                    'periodo_inicio_irregular': periodo_irregular,
+                    'estoque_inicial': Decimal(str(mov.get('estoque_inicial') or 0)),
+                    'estoque_final': Decimal(str(mov.get('estoque_final') or 0)),
+                    'vendas': Decimal(str(mov.get('vendas_periodo') or 0)),
+                    'vendas_sem_comprovacao': Decimal(str(mov.get('vendas_sem_comprovacao') or 0)),
+                    'valor': Decimal(str(mov.get('valor_movimentado') or 0)),
+                    'valor_sem_comprovacao': Decimal(str(mov.get('valor_sem_comprovacao') or 0)),
+                    'notas_referencia': list(referencias_pendentes) or [{'tipo': 'estoque_inicial'}],
+                })
+                referencias_pendentes = []
+                estoque_final_gtin = Decimal(str(mov.get('estoque_final') or 0))
+
+        gtins.append({
+            'gtin': cod,
+            'estoque_inicial': {
+                'quantidade': Decimal(str(estoque_info.get('quantidade') or 0)),
+                'data_referencia': estoque_info.get('data_referencia'),
+                'notas': estoque_info.get('notas', []),
+            },
+            'summary': {
+                'vendas': vendas,
+                'vendas_sem_comprovacao': vendas_sem_comprovacao,
+                'valor': valor,
+                'valor_sem_comprovacao': valor_irregular,
+                'pct_sem_comprovacao': percentual_decimal(valor_irregular, valor),
+                'primeira_venda': primeira_venda,
+                'primeira_irregularidade': primeira_irregularidade,
+                'ultima_venda': ultima_venda,
+                'estoque_final': estoque_final_gtin,
+            },
+            'eventos': eventos,
+        })
+
+    return {
+        'schema_version': 2,
+        'cnpj': cnpj,
+        'periodo': {
+            'inicio': DATA_INICIAL_ANALISE,
+            'fim': DATA_FINAL_ANALISE,
+        },
+        'criterio_estoque_inicial': CRITERIO_ESTOQUE_INICIAL,
+        'summary': {
+            'total_vendas': total_vendas,
+            'total_vendas_sem_comprovacao': total_vendas_sem_comprovacao,
+            'valor_total': valor_total,
+            'valor_sem_comprovacao': valor_sem_comprovacao,
+            'pct_sem_comprovacao': percentual_decimal(valor_sem_comprovacao, valor_total),
+            'total_gtins': len(gtins),
+            'gtins_irregulares': gtins_irregulares,
+        },
+        'gtins': gtins,
+    }
+
+
+def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_brutos, dados_estruturados):
     """
-    Serializa a memória de cálculo para JSON, COMPACTA (Zlib) e salva como binário.
-    Redução de tamanho estimada: ~90%.
+    Serializa a memoria de calculo nos formatos legado e estruturado v2.
     """
-    if not id_processamento or not dados_brutos:
-        return
+    if not id_processamento or not dados_brutos or not dados_estruturados:
+        raise ValueError(f"Memória de cálculo vazia ou processamento inválido para {cnpj}")
 
-    try:
-        # 1. Gera o texto JSON
-        json_str = json.dumps(dados_brutos, cls=CustomJSONEncoder)
+    dados_comprimidos = compactar_json(dados_brutos)
+    dados_comprimidos_v2 = compactar_json(dados_estruturados)
 
-        # 2. Converte para Bytes e Comprime (Nível 9 = Máxima compressão)
-        dados_comprimidos = zlib.compress(json_str.encode('utf-8'), level=9)
+    cursor.execute('''
+        INSERT INTO temp_CGUSC.fp.memoria_calculo_consolidada
+        (id_processamento, cnpj, dados_comprimidos, dados_comprimidos_v2, schema_version)
+        VALUES (?, ?, ?, ?, ?)
+    ''', id_processamento, cnpj, dados_comprimidos, dados_comprimidos_v2, 2)
 
-        # Opcional: Log para você ver a diferença (pode remover depois)
-        # tamanho_original = len(json_str) / 1024
-        # tamanho_final = len(dados_comprimidos) / 1024
-        # logging.info(f"Compressão CNPJ {cnpj}: {tamanho_original:.1f}KB -> {tamanho_final:.1f}KB")
-
-        # 3. Salva no Banco (Coluna VARBINARY)
-        cursor.execute('''
-            INSERT INTO temp_CGUSC.fp.memoria_calculo_consolidada 
-            (id_processamento, cnpj, dados_comprimidos)
-            VALUES (?, ?, ?)
-        ''', id_processamento, cnpj, dados_comprimidos)
-
-        conn.commit()
-
-    except Exception as e:
-        logging.error(f"Erro ao salvar memória comprimida para {cnpj}: {e}")
+    conn.commit()
 
 
 # =============================================================================
@@ -326,11 +505,27 @@ def finalizar_processamento_erro(cursor, conn, id_processamento, cnpj,
                                  tempo_total, erro):
     """
     Atualiza o registro com status de FALHA e detalhes do erro.
+    Remove resultados filhos associados ao processamento para evitar dados parciais.
     """
     try:
         if not id_processamento: return
 
         erro_msg = f"ERRO: {str(erro)[:450]}"  # Limita tamanho da mensagem
+
+        cursor.execute('''
+            DELETE FROM [temp_CGUSC].[fp].[memoria_calculo_consolidada]
+            WHERE id_processamento = ?
+        ''', id_processamento)
+
+        cursor.execute('''
+            DELETE FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin]
+            WHERE id_processamento = ?
+        ''', id_processamento)
+
+        cursor.execute('''
+            DELETE FROM [temp_CGUSC].[fp].[dados_processamento_gtin]
+            WHERE id_processamento = ?
+        ''', id_processamento)
 
         cursor.execute('''
             UPDATE [temp_CGUSC].[fp].[processamento]
@@ -399,7 +594,8 @@ def exibir_cabecalho():
     print(f"Total de CNPJs a serem analisados: {total_cnpjs}")
     data_inicio_formatada = datetime.strptime(DATA_INICIAL_ANALISE, '%Y-%m-%d').strftime('%d/%m/%Y')
     data_fim_formatada = DATA_FINAL_ANALISE.strftime('%d/%m/%Y')
-    data_inicio_estoque_formatada = data_inicio_estoque.strftime('%d/%m/%Y')
+    data_inicio_estoque_ref = data_inicio_estoque or datetime.strptime('2015-01-01', '%Y-%m-%d').date()
+    data_inicio_estoque_formatada = data_inicio_estoque_ref.strftime('%d/%m/%Y')
     print(f"Período da Análise: {data_inicio_formatada} a {data_fim_formatada}")
     print(f"Data mínima para definição dos estoques inicias: {data_inicio_estoque_formatada}")
     print(f"{CRITERIO_ESTOQUE_INICIAL}")
@@ -437,7 +633,8 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
     # Chama Procedure (SQL)
     try:
         cursor.execute("SET NOCOUNT ON; DECLARE @r INT; EXEC [fp].[procPreparaDados] @classif = ?, @rowcount = @r OUTPUT, @validar = 1; SELECT @r;", valor_i)
-        row_saida = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        row_saida = row[0] if row else 0
     except pyodbc.Error as e:
         logging.error(f"Erro na Procedure do Bloco {valor_i}: {e}")
         continue
@@ -530,25 +727,27 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                         -- PARTE 1: VENDAS
                         SELECT NULL as numeroNFE, mov.valor_pago, mov.codigo_barra as codigoBarra, 
                                TRY_CAST(mov.data_hora as date) as data_movimentacao, 
+                               mov.data_hora as ordem_movimentacao,
                                mov.qnt_autorizada / TRY_CAST(medicamentos.qnt_comprimidos_caixa as decimal(10,0)) as qnt_caixas, 
                                'V' as compra_venda, -1 as tipo_operacao 
                         FROM temp_CGUSC.fp.movimentacao mov
                         inner join temp_CGUSC.[fp].[medicamentos_patologia] medicamentos on medicamentos.codigo_barra = mov.codigo_barra
-                        where mov.data_hora >= ? and mov.data_hora <= ? and mov.cnpj = ?
+                        where mov.data_hora >= ? and mov.data_hora < ? and mov.cnpj = ?
 
                         union all
 
                         -- PARTE 2: AQUISIÇÕES
-                        select numeroNFE, 0 as valor_pago, fazenda.codigoBarra, [dataEmissaoNFE] as data_movimentacao, 
+                        select numeroNFE, 0 as valor_pago, fazenda.codigoBarra, [dataEmissaoNFE] as data_movimentacao,
+                               CAST([dataEmissaoNFE] AS datetime2) as ordem_movimentacao,
                                quantidade as qnt_caixas, 'C' as compra_venda, tipoOperacao as tipo_operacao
                         from db_farmaciapopular_nf.dbo.[aquisicoesFazenda_2015_2025] fazenda
                         inner join [temp_CGUSC].[fp].medicamentos_patologia med on med.codigo_barra = fazenda.codigoBarra
                         inner join [temp_CGUSC].[fp].farmacia_inicio_venda_gtin B on B.cnpj = fazenda.destinatarioNFE and B.codigo_barra = fazenda.codigoBarra
-                        where destinatarioNFE = ? and [dataEmissaoNFE] >= ? and [dataEmissaoNFE] <= ? and tipoOperacao in (1,-1,0)
-                    ) as t1 where qnt_caixas <> 0 order by codigoBarra, data_movimentacao asc, compra_venda asc
-                    ''',
-                           dt_objeto_inicio, DATA_FINAL_ANALISE, cnpj,  # Parametros Vendas (Objetos date/datetime)
-                           cnpj, dt_objeto_inicio, DATA_FINAL_ANALISE  # Parametros Aquisições (Objetos date/datetime)
+                        where destinatarioNFE = ? and [dataEmissaoNFE] >= CAST(B.data_inicio_venda AS date) and [dataEmissaoNFE] <= ? and tipoOperacao in (1,0)
+                    ) as t1 where qnt_caixas <> 0 order by codigoBarra, ordem_movimentacao asc, compra_venda asc
+                           ''',
+                           dt_objeto_inicio, DATA_FINAL_ANALISE_EXCLUSIVA, cnpj,  # Parametros Vendas (limite final exclusivo)
+                           cnpj, DATA_FINAL_ANALISE  # Parametros Aquisições (Objetos date/datetime)
                            )
 
             cols = [column[0] for column in cursor.description]
@@ -594,8 +793,23 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             # --- 3. QUERIES AUXILIARES ---
             t0 = time.time()
-            cursor.execute('select codigo_barra,estoque_inicial from [temp_CGUSC].[fp].estoque_inicial where cnpj_estabelecimento = ?', cnpj)
-            tabela_codigo_barra_estoque_inicial = {row.codigo_barra: row.estoque_inicial for row in cursor.fetchall()}
+            notas_estoque_inicial = carregar_notas_estoque_inicial(cursor, cnpj)
+
+            cursor.execute('''
+                select codigo_barra, estoque_inicial, data_estoque_inicial
+                from [temp_CGUSC].[fp].estoque_inicial
+                where cnpj_estabelecimento = ?
+            ''', cnpj)
+            tabela_estoque_inicial_detalhada = {}
+            tabela_codigo_barra_estoque_inicial = {}
+            for row in cursor.fetchall():
+                gtin = normalizar_codigo_barra(row.codigo_barra)
+                tabela_codigo_barra_estoque_inicial[gtin] = row.estoque_inicial
+                tabela_estoque_inicial_detalhada[gtin] = {
+                    'quantidade': row.estoque_inicial,
+                    'data_referencia': row.data_estoque_inicial,
+                    'notas': notas_estoque_inicial.get(gtin, []),
+                }
             t_query_aux = time.time() - t0 # ATUALIZA VARIÁVEL DE PERFORMANCE
 
             # =====================================================================
@@ -608,11 +822,11 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             range_periodos = pd.date_range(dt_inicio_fmt, dt_final_fmt, freq='MS').strftime("%Y-%m").tolist()
 
             estado = {
-                'codigo_barra': 0,
-                'estoque_inicial': 0, 'estoque_final': 0,
-                'operacao_anterior': 0,
-                'vendas_periodo': 0, 'vendas_sem_comprovacao': 0,
-                'valor_movimentado': 0, 'valor_sem_comprovacao': 0,
+                'codigo_barra': '',
+                'estoque_inicial': Decimal(0), 'estoque_final': Decimal(0),
+                'operacao_anterior': '',
+                'vendas_periodo': Decimal(0), 'vendas_sem_comprovacao': Decimal(0),
+                'valor_movimentado': Decimal(0), 'valor_sem_comprovacao': Decimal(0),
                 'periodo_inicial': 0, 'periodo_final': 0,
                 'data_inicio_nao_comprovacao': '9999-01-01', 'flag_primeira_irregularidade': 1
             }
@@ -625,10 +839,10 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                 yield last, False
 
             def reset_venda():
-                estado['vendas_periodo'] = 0
-                estado['vendas_sem_comprovacao'] = 0
-                estado['valor_movimentado'] = 0
-                estado['valor_sem_comprovacao'] = 0
+                estado['vendas_periodo'] = Decimal(0)
+                estado['vendas_sem_comprovacao'] = Decimal(0)
+                estado['valor_movimentado'] = Decimal(0)
+                estado['valor_sem_comprovacao'] = Decimal(0)
                 estado['periodo_inicial'] = 0
                 estado['periodo_final'] = 0
                 estado['data_inicio_nao_comprovacao'] = '9999-01-01'
@@ -647,24 +861,26 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             # -- LÓGICA CORE (PRESERVADA) --
             for row, has_more in lookahead(results):
+                curr_cod = normalizar_codigo_barra(row["codigoBarra"])
+
                 # Mudança de Medicamento (GTIN)
-                if estado['codigo_barra'] == 0 or estado['codigo_barra'] != row["codigoBarra"]:
-                    if estado['codigo_barra'] != 0 and estado['operacao_anterior'] == 'V':
+                if estado['codigo_barra'] == '' or estado['codigo_barra'] != curr_cod:
+                    if estado['codigo_barra'] != '' and estado['operacao_anterior'] == 'V':
                         incluir_venda()
                         tabela_completa[estado['codigo_barra']] = movimentacao_codigo_barra
 
                     movimentacao_codigo_barra = []
-                    estado['codigo_barra'] = row["codigoBarra"]
+                    estado['codigo_barra'] = curr_cod
                     tabela_completa[estado['codigo_barra']] = []
                     tabela_codigo_barra_datas_vendas[estado['codigo_barra']] = {p: {'qnt_vendas_mes':0,'valor_vendas_mes':0,'qnt_vendas_sc_mes':0,'valor_vendas_sc_mes':0} for p in range_periodos}
 
                     reset_venda()
-                    estado['estoque_inicial'] = 0; estado['estoque_final'] = 0; estado['operacao_anterior'] = 0
+                    estado['estoque_inicial'] = Decimal(0); estado['estoque_final'] = Decimal(0); estado['operacao_anterior'] = ''
 
                     if estado['codigo_barra'] in tabela_codigo_barra_estoque_inicial:
                         estado['estoque_inicial'] = tabela_codigo_barra_estoque_inicial[estado['codigo_barra']]
                         estado['estoque_final'] = estado['estoque_inicial']
-                        dt_est = datetime.strptime('2015-07-01', '%Y-%m-%d').date()
+                        dt_est = tabela_estoque_inicial_detalhada[estado['codigo_barra']]['data_referencia']
                         movimentacao_codigo_barra.append({
                             'tipo':'e', 'codigo_barra': estado['codigo_barra'], 'estoque_inicial': estado['estoque_inicial'],
                             'data_estoque_inicial': dt_est, 'data_aquis_dev_estoq': dt_est, 'qnt_aquis_dev': 0, 'numero_nfe': None
@@ -675,7 +891,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                             'data_aquis_dev_estoq': None, 'qnt_aquis_dev': 0, 'numero_nfe': None
                         })
 
-                if estado['codigo_barra'] == row["codigoBarra"]:
+                if estado['codigo_barra'] == curr_cod:
                     # Venda
                     if row["compra_venda"] == "V":
                         mes = row["data_movimentacao"].strftime("%Y-%m")
@@ -706,27 +922,35 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                         estado['valor_movimentado'] += row["valor_pago"]
                         estado['estoque_final'] -= row["qnt_caixas"]
 
-                        if estado['estoque_final'] < 0: estado['estoque_final'] = 0
+                        if estado['estoque_final'] < 0: estado['estoque_final'] = Decimal(0)
                         estado['operacao_anterior'] = "V"
 
                         if not has_more: incluir_venda()
 
                     # Compra/Devolução
                     elif row["compra_venda"] == "C":
-                        is_compra = (row["tipo_operacao"] == 1)
+                        if row["tipo_operacao"] == 1:
+                            tipo_movimento = 'c'
+                            qnt_ajustada = row["qnt_caixas"]
+                        elif row["tipo_operacao"] == 0:
+                            tipo_movimento = 'd'
+                            qnt_ajustada = -row["qnt_caixas"]
+                        else:
+                            continue
+
                         if estado['operacao_anterior'] == "V":
                             incluir_venda()
                             reset_venda()
 
                         if estado['estoque_final'] >= 0:
                             movimentacao_codigo_barra.append({
-                                'tipo': 'c' if is_compra else 'd', 'codigo_barra': estado['codigo_barra'],
+                                'tipo': tipo_movimento, 'codigo_barra': estado['codigo_barra'],
                                 'estoque_inicial': estado['estoque_final'],
-                                'estoque_final': estado['estoque_final'] + row["qnt_caixas"] if is_compra else estado['estoque_final'] - row["qnt_caixas"],
+                                'estoque_final': estado['estoque_final'] + qnt_ajustada,
                                 'data_aquis_dev_estoq': row["data_movimentacao"], 'qnt_aquis_dev': row["qnt_caixas"], 'numero_nfe': row["numeroNFE"]
                             })
 
-                        estado['estoque_inicial'] = estado['estoque_final'] + row["qnt_caixas"] if is_compra else estado['estoque_final'] - row["qnt_caixas"]
+                        estado['estoque_inicial'] = estado['estoque_final'] + qnt_ajustada
                         estado['estoque_final'] = estado['estoque_inicial']
                         estado['operacao_anterior'] = "C"
 
@@ -738,15 +962,30 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             irregularidade_geral_detectada = False # Flag para o Status Final
 
             for cod, moves in tabela_completa.items():
-                total_compras_gtin = 0; total_vendas_gtin = 0; total_vendas_sc_gtin = 0; total_valor_vendas_gtin = Decimal(0); total_valor_vendas_sc_gtin = Decimal(0)
-                for m in moves:
-                    if m['tipo'] == 'c': total_compras_gtin += m['qnt_aquis_dev']
-                    elif m['tipo'] == 'd': total_compras_gtin -= m['qnt_aquis_dev']
-                    elif m['tipo'] == 'v':
-                        total_vendas_gtin += m['vendas_periodo']; total_vendas_sc_gtin += m['vendas_sem_comprovacao']
-                        total_valor_vendas_gtin += m['valor_movimentado']; total_valor_vendas_sc_gtin += m['valor_sem_comprovacao']
+                total_compras_gtin = Decimal(0)
+                total_vendas_gtin = Decimal(0)
+                total_vendas_sc_gtin = Decimal(0)
+                total_valor_vendas_gtin = Decimal(0)
+                total_valor_vendas_sc_gtin = Decimal(0)
 
-                        if m['vendas_sem_comprovacao'] > 0:
+                for m in moves:
+                    tp = m.get('tipo')
+                    if tp == 'c':
+                        total_compras_gtin += Decimal(str(m.get('qnt_aquis_dev', 0)))
+                    elif tp == 'd':
+                        total_compras_gtin -= Decimal(str(m.get('qnt_aquis_dev', 0)))
+                    elif tp == 'v':
+                        vendas_periodo = Decimal(str(m.get('vendas_periodo', 0)))
+                        vendas_sem_comprovacao = Decimal(str(m.get('vendas_sem_comprovacao', 0)))
+                        valor_movimentado = Decimal(str(m.get('valor_movimentado', 0)))
+                        valor_sem_comprovacao = Decimal(str(m.get('valor_sem_comprovacao', 0)))
+
+                        total_vendas_gtin += vendas_periodo
+                        total_vendas_sc_gtin += vendas_sem_comprovacao
+                        total_valor_vendas_gtin += valor_movimentado
+                        total_valor_vendas_sc_gtin += valor_sem_comprovacao
+
+                        if vendas_sem_comprovacao > 0:
                             irregularidade_geral_detectada = True
 
                 tabelaSumario[cod] = {'total_compras_gtin': total_compras_gtin, 'total_vendas_gtin': total_vendas_gtin, 'total_vendas_sc_gtin': total_vendas_sc_gtin, 'total_valor_vendas_gtin': total_valor_vendas_gtin, 'total_valor_vendas_sc_gtin': total_valor_vendas_sc_gtin}
@@ -802,10 +1041,16 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             t0 = time.time()
             d_rel = []
             for cod in sorted(tabela_completa.keys()): d_rel.extend(tabela_completa[cod])
+            memoria_v2 = montar_memoria_calculo_v2(
+                cnpj,
+                tabela_completa,
+                tabelaSumario,
+                tabela_estoque_inicial_detalhada,
+            )
 
             if id_proc_atual:
                 # Grava o JSON com todo o histórico processado
-                salvar_memoria_calculo(cursor, conn, id_proc_atual, cnpj, d_rel)
+                salvar_memoria_calculo(cursor, conn, id_proc_atual, cnpj, d_rel, memoria_v2)
 
             t_db_write = time.time() - t0
 
@@ -849,6 +1094,12 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             t_total = time.time() - t_start_cnpj
             logging.critical(f"ERRO FATAL NO PROCESSAMENTO DO CNPJ {cnpj}: {e}", exc_info=True)
             if id_proc_atual:
+                try:
+                    conn.rollback()
+                    logging.info(f"CNPJ {cnpj} - Transacao pendente descartada apos falha.")
+                except pyodbc.Error as rollback_error:
+                    logging.error(f"CNPJ {cnpj} - Falha ao executar rollback apos erro: {rollback_error}")
+
                 finalizar_processamento_erro(cursor, conn, id_proc_atual, cnpj, t_total, e)
 
         time.sleep(TEMPO_ESPERA_ENTRE_CNPJS)

@@ -8,7 +8,8 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.lista_cnpjs
 SELECT DISTINCT A.cnpj
 INTO temp_CGUSC.fp.lista_cnpjs
 FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
-WHERE A.data_hora BETWEEN '2015-07-01' AND '2024-12-10'
+WHERE A.data_hora >= '2015-07-01'
+  AND A.data_hora < '2024-12-11'
 GROUP BY A.cnpj;
 
 -- Cria índice clusterizado para performance máxima nos JOINs subsequentes
@@ -22,20 +23,19 @@ ON temp_CGUSC.fp.lista_cnpjs (cnpj);
 -- Particionamento dos CNPJs para processamento em pequenos lotes
 --**************************************************************************************************************************************
 
--- Verifica se a tabela temporária existe e a remove, se necessário
-IF OBJECT_ID('temp_CGUSC.dbo.classif', 'U') IS NOT NULL
-    DROP TABLE temp_CGUSC.dbo.classif;
+-- Verifica se a tabela de lotes existe e a remove, se necessario
+DROP TABLE IF EXISTS temp_CGUSC.fp.classificacao_blocos;
 
 -- Cria uma tabela temporária com CNPJs classificados em 50 grupos
 SELECT 
     cnpj,
     NTILE(50) OVER (ORDER BY cnpj) AS classif
-INTO temp_CGUSC.dbo.classif
+INTO temp_CGUSC.fp.classificacao_blocos
 FROM temp_CGUSC.fp.lista_cnpjs;
 
 -- Cria índice no campo classif para otimizar JOINs
-CREATE NONCLUSTERED INDEX IX_classif_classif 
-ON temp_CGUSC.dbo.classif (classif) 
+CREATE NONCLUSTERED INDEX IX_classificacao_blocos_classif
+ON temp_CGUSC.fp.classificacao_blocos (classif)
 INCLUDE (cnpj);
 
 
@@ -60,7 +60,8 @@ INTO temp_CGUSC.fp.farmacia_inicio_venda
 FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.lista_cnpjs B 
     ON B.cnpj = A.cnpj
-WHERE A.data_hora BETWEEN '2015-07-01' AND '2024-12-10'
+WHERE A.data_hora >= '2015-07-01'
+  AND A.data_hora < '2024-12-11'
 GROUP BY A.cnpj;
 
 
@@ -71,11 +72,11 @@ GROUP BY A.cnpj;
 DROP TABLE IF EXISTS TEMP_CGUSC.fp.farmacia_inicio_venda_gtin
 select a.cnpj, a.codigo_barra, min(data_hora) as data_inicio_venda
 into TEMP_CGUSC.fp.farmacia_inicio_venda_gtin
-from FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
+FROM db_farmaciaPopular.dbo.relatorio_movimentacao_2015_2024 A
 inner join temp_CGUSC.fp.medicamentos_patologia B on B.codigo_barra = A.codigo_barra
 inner join temp_CGUSC.fp.lista_cnpjs C on C.cnpj = A.cnpj
 WHERE 
-a.data_hora >= '2015-07-01' and a.data_hora <= '2024-12-10'
+a.data_hora >= '2015-07-01' and a.data_hora < '2024-12-11'
 group by A.cnpj,A.codigo_barra
 
 
@@ -110,7 +111,7 @@ drop table if exists #notas_estoque_inicialFP_temp2
 select cnpj_estabelecimento,codigo_barra,numeroNFE,dataEmissaoNFE, quantidade,
     ROW_NUMBER() OVER (
         PARTITION BY codigo_barra,cnpj_estabelecimento
-        ORDER BY dataEmissaoNFE desc
+        ORDER BY dataEmissaoNFE desc, numeroNFE desc
     ) row_num
 into #notas_estoque_inicialFP_temp2
 from #notas_estoque_inicialFP
@@ -131,8 +132,8 @@ where row_num < 3
 group by a.cnpj_estabelecimento,a.codigo_barra,b.data_inicio_venda
 order by a.codigo_barra asc
 
-CREATE NONCLUSTERED INDEX index1 ON temp_CGUSC.dbo.estoque_inicialFP(cnpj_estabelecimento)
-CREATE NONCLUSTERED INDEX index2 ON temp_CGUSC.dbo.estoque_inicialFP(codigo_barra)
+CREATE NONCLUSTERED INDEX index1 ON temp_CGUSC.fp.estoque_inicial(cnpj_estabelecimento)
+CREATE NONCLUSTERED INDEX index2 ON temp_CGUSC.fp.estoque_inicial(codigo_barra)
 
 
 -- Salvar as notas de fiscais de aquisição consideradas na Estimativa do Estoque Inicial
@@ -245,6 +246,8 @@ CREATE TABLE fp.memoria_calculo_consolidada (
     
     -- O "Coração" da Auditoria: Todo o cálculo do Python em formato JSON
     dados_comprimidos VARBINARY(MAX),
+    dados_comprimidos_v2 VARBINARY(MAX),
+    schema_version TINYINT NOT NULL DEFAULT 1,
     
     data_carga DATETIME DEFAULT GETDATE()
 );

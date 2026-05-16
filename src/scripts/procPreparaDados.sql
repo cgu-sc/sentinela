@@ -5,7 +5,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-ALTER PROCEDURE [dbo].[procPreparaDados] 
+CREATE OR ALTER PROCEDURE [fp].[procPreparaDados] 
     @classif INT,
     @rowcount INT OUTPUT,
     @validar BIT = 1
@@ -24,16 +24,15 @@ BEGIN
 
     BEGIN TRY
 
-        -- 4. Limpa e Recria a 'movimentacaoFP'
-		IF OBJECT_ID('temp_CGUSC.dbo.movimentacaoFP') IS NOT NULL
-			DROP TABLE temp_CGUSC.dbo.movimentacaoFP;
+        -- 4. Limpa e Recria a tabela de movimentacao consumida pelo sentinela.py
+		DROP TABLE IF EXISTS temp_CGUSC.fp.movimentacao;
 
-		CREATE TABLE temp_CGUSC.dbo.movimentacaoFP (
+		CREATE TABLE temp_CGUSC.fp.movimentacao (
 			[cnpj] [varchar](14) NULL,
-			[data_hora] [datetime] NULL,
-			[codigo_barra] [varchar](50) NULL,
-			[qnt_autorizada] [int] NULL,
-			[valor_pago] [decimal](18, 2) NULL
+			[data_hora] [datetime2](7) NULL,
+			[codigo_barra] [bigint] NULL,
+			[qnt_autorizada] [smallint] NULL,
+			[valor_pago] [decimal](15, 2) NULL
 		);
 
         -- ====================================================================
@@ -46,8 +45,8 @@ BEGIN
             PRINT '========================================';
             PRINT 'Calculando dados esperados para classif ' + CAST(@classif AS VARCHAR) + '...';
             
-            SELECT @qtd_cnpjs = COUNT(*)
-            FROM temp_CGUSC.dbo.classif
+            SELECT @qtd_cnpjs = COUNT(DISTINCT cnpj)
+            FROM temp_CGUSC.fp.classificacao_blocos
             WHERE classif = @classif;
             
             IF @qtd_cnpjs = 0
@@ -64,7 +63,7 @@ BEGIN
             FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 m
             WHERE m.cnpj IN (
                 SELECT cnpj 
-                FROM temp_CGUSC.dbo.classif 
+                FROM temp_CGUSC.fp.classificacao_blocos 
                 WHERE classif = @classif
             );
             
@@ -89,7 +88,7 @@ BEGIN
         BEGIN
             PRINT 'Processando ano: ' + CAST(@Ano AS VARCHAR(4));
 
-            INSERT INTO temp_CGUSC.dbo.movimentacaoFP (
+            INSERT INTO temp_CGUSC.fp.movimentacao (
                 cnpj, data_hora, 
                 codigo_barra, qnt_autorizada, valor_pago
             )
@@ -99,10 +98,13 @@ BEGIN
             FROM 
                 db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 a
             INNER JOIN 
-                temp_CGUSC.dbo.classif b ON b.cnpj = a.cnpj
+                (
+                    SELECT DISTINCT cnpj
+                    FROM temp_CGUSC.fp.classificacao_blocos
+                    WHERE classif = @classif
+                ) b ON b.cnpj = a.cnpj
             WHERE 
-                b.classif = @classif 
-                AND a.data_hora >= DATEFROMPARTS(@Ano, 1, 1) 
+                a.data_hora >= DATEFROMPARTS(@Ano, 1, 1) 
                 AND a.data_hora <  DATEFROMPARTS(@Ano + 1, 1, 1);
 
             SET @RowsAno = @@ROWCOUNT;
@@ -118,12 +120,12 @@ BEGIN
 
         PRINT '';
         PRINT 'Criando índices...';
-        CREATE NONCLUSTERED INDEX IX_movimentacaoFP_codigo_barra 
-        ON temp_CGUSC.dbo.movimentacaoFP (codigo_barra);
-        CREATE NONCLUSTERED INDEX IX_movimentacaoFP_cnpj 
-        ON temp_CGUSC.dbo.movimentacaoFP (cnpj);
-        CREATE NONCLUSTERED INDEX IX_movimentacaoFP_data_hora 
-        ON temp_CGUSC.dbo.movimentacaoFP (data_hora);
+        CREATE NONCLUSTERED INDEX IX_movimentacao_codigo_barra 
+        ON temp_CGUSC.fp.movimentacao (codigo_barra);
+        CREATE NONCLUSTERED INDEX IX_movimentacao_cnpj 
+        ON temp_CGUSC.fp.movimentacao (cnpj);
+        CREATE NONCLUSTERED INDEX IX_movimentacao_data_hora 
+        ON temp_CGUSC.fp.movimentacao (data_hora);
 
         -- ====================================================================
         -- ETAPA 6: VALIDAÇÃO PÓS-PROCESSAMENTO

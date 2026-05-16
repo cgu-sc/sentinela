@@ -203,15 +203,17 @@ const ranking = computed(() => {
         medicamento: key,
         principio_ativo: item.principio_ativo,
         gtin_count: 0,
-        qnt_vendas: 0,
-        qnt_vendas_sem_comprovacao: 0,
+        qnt_caixas_vendidas: 0,
+        qnt_caixas_sem_comprovacao: 0,
+        num_autorizacoes: 0,
         valor_vendas: 0,
         valor_sem_comprovacao: 0
       };
     }
     grouped[key].gtin_count += 1;
-    grouped[key].qnt_vendas += item.qnt_vendas;
-    grouped[key].qnt_vendas_sem_comprovacao += item.qnt_vendas_sem_comprovacao;
+    grouped[key].qnt_caixas_vendidas += item.qnt_caixas_vendidas;
+    grouped[key].qnt_caixas_sem_comprovacao += item.qnt_caixas_sem_comprovacao;
+    grouped[key].num_autorizacoes += item.num_autorizacoes;
     grouped[key].valor_vendas += item.valor_vendas;
     grouped[key].valor_sem_comprovacao += item.valor_sem_comprovacao;
   });

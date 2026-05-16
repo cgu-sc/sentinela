@@ -25,8 +25,8 @@ class ResultadoSentinelaSchema(BaseModel):
     nu_populacao: Optional[int] = 0
     cnpj: Optional[str] = None
     razao_social: Optional[str] = None
-    qnt_medicamentos_vendidos: Optional[int] = 0
-    qnt_medicamentos_vendidos_sem_comprovacao: Optional[int] = 0
+    qnt_caixas_vendidas: Optional[int] = 0
+    qnt_caixas_sem_comprovacao: Optional[int] = 0
     nu_autorizacoes: Optional[int] = 0
     valor_vendas: Optional[float] = 0.0
     valor_sem_comprovacao: Optional[float] = 0.0

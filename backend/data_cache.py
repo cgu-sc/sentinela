@@ -848,8 +848,8 @@ def _sync_movimentacao(engine, progress_callback):
                M.periodo,
                CAST(M.total_vendas AS FLOAT) AS total_vendas,
                CAST(M.total_sem_comprovacao AS FLOAT) AS total_sem_comprovacao,
-               M.total_qnt_vendas,
-               M.total_qnt_sem_comprovacao
+               M.total_qnt_caixas_vendidas,
+               M.total_qnt_caixas_sem_comprovacao
         FROM [temp_CGUSC].[fp].[movimentacao_mensal_cnpj] M
         INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] DF ON DF.cnpj = M.cnpj
     """
@@ -871,8 +871,8 @@ def _sync_movimentacao(engine, progress_callback):
     _df_movimentacao = pl.concat(chunk_list).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("periodo").cast(pl.Date),
-        pl.col("total_qnt_vendas").cast(pl.Int64),
-        pl.col("total_qnt_sem_comprovacao").cast(pl.Int64),
+        pl.col("total_qnt_caixas_vendidas").cast(pl.Int64),
+        pl.col("total_qnt_caixas_sem_comprovacao").cast(pl.Int64),
         pl.col("total_vendas").cast(pl.Float64),
         pl.col("total_sem_comprovacao").cast(pl.Float64),
     ]).sort(["id_cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
@@ -980,8 +980,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "periodo",
                 "total_vendas",
                 "total_sem_comprovacao",
-                "total_qnt_vendas",
-                "total_qnt_sem_comprovacao",
+                "total_qnt_caixas_vendidas",
+                "total_qnt_caixas_sem_comprovacao",
             },
             "perfil_estabelecimento": {
                 "id_cnpj",

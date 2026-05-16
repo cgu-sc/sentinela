@@ -40,8 +40,8 @@ class ResultadoSentinelaSchema(BaseModel):
     nu_populacao: Optional[int] = 0
     cnpj: Optional[str] = None
     razao_social: Optional[str] = None
-    qnt_medicamentos_vendidos: Optional[int] = 0
-    qnt_medicamentos_vendidos_sem_comprovacao: Optional[int] = 0
+    qnt_caixas_vendidas: Optional[int] = 0
+    qnt_caixas_sem_comprovacao: Optional[int] = 0
     nu_autorizacoes: Optional[int] = 0
     valor_vendas: Optional[float] = 0.0
     valor_sem_comprovacao: Optional[float] = 0.0
@@ -657,8 +657,9 @@ class CrmRaioXResponse(BaseModel):
 
 class MesMensalGtinItem(BaseModel):
     mes: str                          # "YYYY-MM"
-    qnt_vendas: int
-    qnt_vendas_sem_comprovacao: int
+    qnt_caixas_vendidas: int
+    qnt_caixas_sem_comprovacao: int
+    num_autorizacoes: int = 0
     valor_vendas: float
     valor_sem_comprovacao: float
     pct_sem_comprovacao: float        # 0–100
@@ -678,8 +679,9 @@ class GtinDetalhamentoMensalItem(BaseModel):
     principio_ativo: Optional[str] = None
     produto: Optional[str] = None
     laboratorio: Optional[str] = None
-    qnt_vendas: int = 0
-    qnt_vendas_sem_comprovacao: int = 0
+    qnt_caixas_vendidas: int = 0
+    qnt_caixas_sem_comprovacao: int = 0
+    num_autorizacoes: int = 0
     valor_vendas: float = 0.0
     valor_sem_comprovacao: float = 0.0
     pct_sem_comprovacao: float = 0.0

@@ -90,8 +90,8 @@ class DashboardService:
             cnpj_agg = period_df.group_by("id_cnpj").agg([
                 pl.sum("total_vendas").alias("tv"),
                 pl.sum("total_sem_comprovacao").alias("tsc"),
-                pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("tqv"),
-                pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("tqsc"),
+                pl.col("total_qnt_caixas_vendidas").cast(pl.Int64).sum().alias("tqv"),
+                pl.col("total_qnt_caixas_sem_comprovacao").cast(pl.Int64).sum().alias("tqsc"),
             ]).with_columns([
                 (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(None) * 100).fill_null(0).alias("pct")
             ])
@@ -119,8 +119,8 @@ class DashboardService:
                     pl.n_unique("id_cnpj").alias("cnpjs"),
                     pl.sum("total_vendas").alias("totalMov"),
                     pl.sum("total_sem_comprovacao").alias("valSemComp"),
-                    pl.col("total_qnt_vendas").cast(pl.Int64).sum().alias("totalQtde"),
-                    pl.col("total_qnt_sem_comprovacao").cast(pl.Int64).sum().alias("qtdeSemComp"),
+                    pl.col("total_qnt_caixas_vendidas").cast(pl.Int64).sum().alias("totalQtde"),
+                    pl.col("total_qnt_caixas_sem_comprovacao").cast(pl.Int64).sum().alias("qtdeSemComp"),
                 ])
                 .with_columns([
                     (pl.col("valSemComp") / pl.when(pl.col("totalMov") > 0).then(pl.col("totalMov")).otherwise(None) * 100).alias("percValSemComp"),
@@ -152,7 +152,7 @@ class DashboardService:
             sql = text("""
                 SELECT 
                     uf, id_ibge7, municipio, nu_populacao, cnpj, razao_social, 
-                    qnt_medicamentos_vendidos, qnt_medicamentos_vendidos_sem_comprovacao, 
+                    qnt_caixas_vendidas, qnt_caixas_sem_comprovacao,
                     nu_autorizacoes, valor_vendas, valor_sem_comprovacao, 
                     percentual_sem_comprovacao, num_estabelecimentos_mesmo_municipio, 
                     num_meses_movimentacao, CodPorteEmpresa

@@ -246,9 +246,9 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
             tabela_codigo_barra_datas_vendas[codigo_barra] = {}
 
             dict_temporario = {}
-            dict_temporario['qnt_vendas'] = 0
+            dict_temporario['qnt_caixas_vendidas'] = 0
             dict_temporario['valor_vendas'] = 0
-            dict_temporario['qnt_vendas_sem_comprovacao'] = 0
+            dict_temporario['qnt_caixas_sem_comprovacao'] = 0
             dict_temporario['valor_sem_comprovacao'] = 0
             for i in range_periodos_analise:
                 tabela_codigo_barra_datas_vendas[codigo_barra][i] = dict_temporario
@@ -273,16 +273,16 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
 
                 if mes_ano in tabela_codigo_barra_datas_vendas[codigo_barra].keys():
                     dict_temp = {}
-                    dict_temp['qnt_vendas'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_vendas'] + row["qnt_caixas"]
+                    dict_temp['qnt_caixas_vendidas'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_caixas_vendidas'] + row["qnt_caixas"]
                     dict_temp['valor_vendas'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['valor_vendas'] + row["valor_pago"]
-                    dict_temp['qnt_vendas_sem_comprovacao'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_vendas_sem_comprovacao']
+                    dict_temp['qnt_caixas_sem_comprovacao'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_caixas_sem_comprovacao']
                     dict_temp['valor_sem_comprovacao'] = tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['valor_sem_comprovacao']
                     tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano] = dict_temp
                 else:
                     dict_temp = {}
-                    dict_temp['qnt_vendas'] = row["qnt_caixas"]
+                    dict_temp['qnt_caixas_vendidas'] = row["qnt_caixas"]
                     dict_temp['valor_vendas'] = row["valor_pago"]
-                    dict_temp['qnt_vendas_sem_comprovacao'] = 0
+                    dict_temp['qnt_caixas_sem_comprovacao'] = 0
                     dict_temp['valor_sem_comprovacao'] = 0
                     tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano] = dict_temp
 
@@ -297,7 +297,7 @@ for cnpj in tqdm(lista_cnpjs_reprocessar, desc="Reprocessando CNPJs"):
                     valor_sem_comprovacao += (abs(devolucao_temp) * valor_individual_medicamento)
                     vendas_sem_comprovacao += abs(devolucao_temp)
 
-                    tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_vendas_sem_comprovacao'] += abs(devolucao_temp)
+                    tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['qnt_caixas_sem_comprovacao'] += abs(devolucao_temp)
                     tabela_codigo_barra_datas_vendas[codigo_barra][mes_ano]['valor_sem_comprovacao'] += (abs(devolucao_temp) * valor_individual_medicamento)
 
                 if (periodo_inicial == 0):

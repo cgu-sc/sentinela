@@ -213,7 +213,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
 def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoMensalGtinResponse:
     """
     Retorna a série mensal de quantidades e valores (por GTIN agregado) para um CNPJ.
-    Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin.parquet na primeira chamada.
+    Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin_v2.parquet na primeira chamada.
 
     Args:
         cnpj: CNPJ completo (14 dígitos).
@@ -227,7 +227,7 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
     import time
 
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin_v2.parquet")
 
     df: pl.DataFrame | None = None
     from_cache = False
@@ -252,7 +252,8 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
                 pdf = pd.read_sql(
                     text("""
                         SELECT m.codigo_barra, m.periodo,
-                               m.qnt_vendas, m.qnt_vendas_sem_comprovacao,
+                               m.qnt_caixas_vendidas, m.qnt_caixas_sem_comprovacao,
+                               m.num_autorizacoes,
                                CAST(m.valor_vendas AS FLOAT)         AS valor_vendas,
                                CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
                         FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
@@ -267,8 +268,9 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
             df = pl.from_pandas(pdf).with_columns([
                 pl.col("codigo_barra").cast(pl.String),
                 pl.col("periodo").cast(pl.Date),
-                pl.col("qnt_vendas").cast(pl.Int64),
-                pl.col("qnt_vendas_sem_comprovacao").cast(pl.Int64),
+                pl.col("qnt_caixas_vendidas").cast(pl.Int64),
+                pl.col("qnt_caixas_sem_comprovacao").cast(pl.Int64),
+                pl.col("num_autorizacoes").cast(pl.Int64),
                 pl.col("valor_vendas").cast(pl.Float64),
                 pl.col("valor_sem_comprovacao").cast(pl.Float64),
             ])
@@ -310,8 +312,9 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
         .with_columns(pl.col("periodo").dt.strftime("%Y-%m").alias("mes"))
         .group_by("mes")
         .agg([
-            pl.sum("qnt_vendas").alias("qnt_vendas"),
-            pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
+            pl.sum("qnt_caixas_vendidas").alias("qnt_caixas_vendidas"),
+            pl.sum("qnt_caixas_sem_comprovacao").alias("qnt_caixas_sem_comprovacao"),
+            pl.sum("num_autorizacoes").alias("num_autorizacoes"),
             pl.sum("valor_vendas").alias("valor_vendas"),
             pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
         ])
@@ -329,8 +332,9 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
     meses = [
         MesMensalGtinItem(
             mes=r["mes"],
-            qnt_vendas=int(r["qnt_vendas"] or 0),
-            qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"] or 0),
+            qnt_caixas_vendidas=int(r["qnt_caixas_vendidas"] or 0),
+            qnt_caixas_sem_comprovacao=int(r["qnt_caixas_sem_comprovacao"] or 0),
+            num_autorizacoes=int(r["num_autorizacoes"] or 0),
             valor_vendas=round(float(r["valor_vendas"] or 0.0), 2),
             valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"] or 0.0), 2),
             pct_sem_comprovacao=float(r["pct_sem_comprovacao"] or 0.0),
@@ -348,14 +352,14 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
 def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalResponse:
     """
     Retorna o ranking de GTINs para um período (ex: '2019-07' ou '2019-S1').
-    Lê do parquet 'movimentacao_mensal_gtin.parquet'.
+    Lê do parquet 'movimentacao_mensal_gtin_v2.parquet'.
     """
     import time
     from sqlalchemy import text
     
     t0 = time.perf_counter()
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin_v2.parquet")
     
     if not os.path.exists(PARQUET_PATH):
         get_evolucao_mensal_gtin(cnpj)
@@ -410,12 +414,13 @@ def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalR
     agg = (
         df.group_by("codigo_barra")
         .agg([
-            pl.sum("qnt_vendas").alias("qnt_vendas"),
-            pl.sum("qnt_vendas_sem_comprovacao").alias("qnt_vendas_sem_comprovacao"),
+            pl.sum("qnt_caixas_vendidas").alias("qnt_caixas_vendidas"),
+            pl.sum("qnt_caixas_sem_comprovacao").alias("qnt_caixas_sem_comprovacao"),
+            pl.sum("num_autorizacoes").alias("num_autorizacoes"),
             pl.sum("valor_vendas").alias("valor_vendas"),
             pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
         ])
-        .filter(pl.col("qnt_vendas") > 0)
+        .filter(pl.col("qnt_caixas_vendidas") > 0)
         .with_columns(
             pl.when(pl.col("valor_vendas") > 0)
               .then((pl.col("valor_sem_comprovacao") / pl.col("valor_vendas")) * 100)
@@ -449,8 +454,9 @@ def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalR
             principio_ativo=info.get("principio_ativo"),
             produto=info.get("produto"),
             laboratorio=info.get("laboratorio"),
-            qnt_vendas=int(r["qnt_vendas"]),
-            qnt_vendas_sem_comprovacao=int(r["qnt_vendas_sem_comprovacao"]),
+            qnt_caixas_vendidas=int(r["qnt_caixas_vendidas"]),
+            qnt_caixas_sem_comprovacao=int(r["qnt_caixas_sem_comprovacao"]),
+            num_autorizacoes=int(r["num_autorizacoes"]),
             valor_vendas=round(float(r["valor_vendas"]), 2),
             valor_sem_comprovacao=round(float(r["valor_sem_comprovacao"]), 2),
             pct_sem_comprovacao=float(r["pct_sem_comprovacao"])

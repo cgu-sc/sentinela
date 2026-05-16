@@ -11,8 +11,8 @@ SELECT df.[cnpj]
       ,[natuezaJuridica]
     ,M.cnpj_matriz
     ,M.razao_social_matriz
-    ,r.[qnt_medicamentos_vendidos] AS qnt_medicamentos_vendidos_TOTAL
-      ,r.[qnt_medicamentos_vendidos_sem_comprovacao] AS qnt_medicamentos_vendidos_sem_comprovacao_TOTAL
+    ,r.[qnt_caixas_vendidas] AS qnt_caixas_vendidas_TOTAL
+      ,r.[qnt_caixas_sem_comprovacao] AS qnt_caixas_sem_comprovacao_TOTAL
       ,r.[nu_autorizacoes] AS nu_autorizacoes_TOTAL
       ,r.[valor_vendas] AS valor_vendas_TOTAL
       ,r.[valor_sem_comprovacao] AS valor_sem_comprovacao_TOTAL

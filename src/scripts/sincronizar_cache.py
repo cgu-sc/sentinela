@@ -40,7 +40,7 @@ from data_cache import (
 
 _CNPJ_PARQUETS = [
     "memoria_calculo_v2.parquet",
-    "movimentacao_mensal_gtin.parquet",
+    "movimentacao_mensal_gtin_v2.parquet",
     "falecidos.parquet",
     "dados_crms.parquet",
     "geografico.parquet",
@@ -79,11 +79,12 @@ def _schema_cnpj_parquet(pl):
             "valor_irregular": pl.Float64,
             "notas": pl.Utf8,
         },
-        "movimentacao_mensal_gtin.parquet": {
+        "movimentacao_mensal_gtin_v2.parquet": {
             "codigo_barra": pl.Utf8,
             "periodo": pl.Date,
-            "qnt_vendas": pl.Int64,
-            "qnt_vendas_sem_comprovacao": pl.Int64,
+            "qnt_caixas_vendidas": pl.Int64,
+            "qnt_caixas_sem_comprovacao": pl.Int64,
+            "num_autorizacoes": pl.Int64,
             "valor_vendas": pl.Float64,
             "valor_sem_comprovacao": pl.Float64,
         },

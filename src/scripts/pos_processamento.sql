@@ -14,8 +14,8 @@ CREATE TABLE fp.movimentacao_mensal_cnpj (
     periodo DATE NOT NULL,
     total_vendas DECIMAL(9, 2),
     total_sem_comprovacao DECIMAL(9, 2),
-    total_qnt_vendas INT,                    -- Voltando para INT (SMALLINT estourou com 55k)
-    total_qnt_sem_comprovacao INT            -- Voltando para INT
+    total_qnt_caixas_vendidas INT,                    -- Voltando para INT (SMALLINT estourou com 55k)
+    total_qnt_caixas_sem_comprovacao INT            -- Voltando para INT
 );
 GO
 
@@ -23,15 +23,15 @@ GO
 INSERT INTO fp.movimentacao_mensal_cnpj (
     cnpj, periodo,
     total_vendas, total_sem_comprovacao,
-    total_qnt_vendas, total_qnt_sem_comprovacao
+    total_qnt_caixas_vendidas, total_qnt_caixas_sem_comprovacao
 )
 SELECT
     p.cnpj,
     m.periodo,
     CAST(SUM(m.valor_vendas) AS DECIMAL(9,2)),
     CAST(SUM(m.valor_sem_comprovacao) AS DECIMAL(9,2)),
-    SUM(m.qnt_vendas),
-    SUM(m.qnt_vendas_sem_comprovacao)
+    SUM(m.qnt_caixas_vendidas),
+    SUM(m.qnt_caixas_sem_comprovacao)
 FROM fp.movimentacao_mensal_gtin m
 INNER JOIN fp.processamento p ON p.id = m.id_processamento
 GROUP BY p.cnpj, m.periodo;
@@ -51,8 +51,8 @@ ON fp.movimentacao_mensal_cnpj (
     cnpj,
     total_vendas,
     total_sem_comprovacao,
-    total_qnt_vendas,
-    total_qnt_sem_comprovacao
+    total_qnt_caixas_vendidas,
+    total_qnt_caixas_sem_comprovacao
 );
 GO
 
@@ -179,8 +179,8 @@ IF EXISTS #movimentacao_gerencial_temp
 		--,B.municipio
 		,B.cnpj
 		,B.razao_social
-		,sum(A.qnt_vendas) AS qnt_vendas
-		,sum(A.qnt_vendas_sem_comprovacao) AS qnt_vendas_sem_comprovacao
+		,sum(A.qnt_caixas_vendidas) AS qnt_caixas_vendidas
+		,sum(A.qnt_caixas_sem_comprovacao) AS qnt_caixas_sem_comprovacao
 		,sum(A.valor_vendas) AS valor_vendas
 		,sum(valor_sem_comprovacao) AS valor_sem_comprovacao
 	INTO #movimentacao_gerencial_temp
@@ -218,8 +218,8 @@ IF EXISTS #movimentacao_gerencial_temp3
 		,A.municipio
 		,A.cnpj
 		,A.razao_social
-		,A.qnt_vendas
-		,A.qnt_vendas_sem_comprovacao
+		,A.qnt_caixas_vendidas
+		,A.qnt_caixas_sem_comprovacao
 		,A.valor_vendas
 		,A.valor_sem_comprovacao
 		,A.codibge
@@ -246,8 +246,8 @@ IF EXISTS #movimentacao_gerencial_temp3
 		,A.municipio
 		,A.cnpj
 		,A.razao_social
-		,A.qnt_vendas
-		,A.qnt_vendas_sem_comprovacao
+		,A.qnt_caixas_vendidas
+		,A.qnt_caixas_sem_comprovacao
 		,A.valor_vendas
 		,A.valor_sem_comprovacao
 		,A.codibge
@@ -265,8 +265,8 @@ IF EXISTS #movimentacao_gerencial
 		,A.municipio
 		,A.cnpj
 		,A.razao_social
-		,A.qnt_vendas
-		,A.qnt_vendas_sem_comprovacao
+		,A.qnt_caixas_vendidas
+		,A.qnt_caixas_sem_comprovacao
 		,A.valor_vendas
 		,A.valor_sem_comprovacao
 		,A.codibge
@@ -280,8 +280,8 @@ IF EXISTS #movimentacao_gerencial
 		,A.municipio
 		,A.cnpj
 		,A.razao_social
-		,A.qnt_vendas
-		,A.qnt_vendas_sem_comprovacao
+		,A.qnt_caixas_vendidas
+		,A.qnt_caixas_sem_comprovacao
 		,A.valor_vendas
 		,A.valor_sem_comprovacao
 		,A.codibge
@@ -345,8 +345,8 @@ SELECT DISTINCT
     A.razao_social,
     
     -- DADOS BÁSICOS DE MOVIMENTAÇÃO
-    A.qnt_vendas AS qnt_medicamentos_vendidos,
-    A.qnt_vendas_sem_comprovacao AS qnt_medicamentos_vendidos_sem_comprovacao,
+    A.qnt_caixas_vendidas AS qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao AS qnt_caixas_sem_comprovacao,
     h.total_autorizacoes AS nu_autorizacoes,
     A.valor_vendas,
     A.valor_sem_comprovacao,
@@ -461,8 +461,8 @@ GROUP BY
     F.nu_populacao,
     A.cnpj,
     A.razao_social,
-    A.qnt_vendas,
-    A.qnt_vendas_sem_comprovacao,
+    A.qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao,
     h.total_autorizacoes,
     A.valor_vendas,
     A.valor_sem_comprovacao,
@@ -620,8 +620,8 @@ SELECT
     B.id,
     B.cnpj,
     B.razao_social,
-    SUM(A.qnt_vendas) AS qnt_vendas,
-    SUM(A.qnt_vendas_sem_comprovacao) AS qnt_vendas_sem_comprovacao,
+    SUM(A.qnt_caixas_vendidas) AS qnt_caixas_vendidas,
+    SUM(A.qnt_caixas_sem_comprovacao) AS qnt_caixas_sem_comprovacao,
     SUM(A.valor_vendas) AS valor_vendas,
     SUM(A.valor_sem_comprovacao) AS valor_sem_comprovacao
 INTO #movimentacao_gerencial_temp
@@ -636,8 +636,8 @@ SELECT
     A.id,
     A.cnpj,
     A.razao_social,
-    A.qnt_vendas,
-    A.qnt_vendas_sem_comprovacao,
+    A.qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao,
     A.valor_vendas,
     A.valor_sem_comprovacao,
     B.codibge,
@@ -679,8 +679,8 @@ SELECT
     A.municipio,
     A.cnpj,
     A.razao_social,
-    A.qnt_vendas,
-    A.qnt_vendas_sem_comprovacao,
+    A.qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao,
     A.valor_vendas,
     A.valor_sem_comprovacao,
     A.codibge,
@@ -701,8 +701,8 @@ SELECT
     municipio,
     cnpj,
     razao_social,
-    MAX(qnt_vendas) AS qnt_vendas,
-    MAX(qnt_vendas_sem_comprovacao) AS qnt_vendas_sem_comprovacao,
+    MAX(qnt_caixas_vendidas) AS qnt_caixas_vendidas,
+    MAX(qnt_caixas_sem_comprovacao) AS qnt_caixas_sem_comprovacao,
     MAX(valor_vendas) AS valor_vendas,
     MAX(valor_sem_comprovacao) AS valor_sem_comprovacao,
     codibge,
@@ -777,8 +777,8 @@ SELECT DISTINCT
     F.nu_populacao,
     A.cnpj,
     A.razao_social,
-    A.qnt_vendas AS qnt_medicamentos_vendidos,
-    A.qnt_vendas_sem_comprovacao AS qnt_medicamentos_vendidos_sem_comprovacao,
+    A.qnt_caixas_vendidas AS qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao AS qnt_caixas_sem_comprovacao,
     H.total_autorizacoes AS nu_autorizacoes,
     A.valor_vendas,
     A.valor_sem_comprovacao,
@@ -815,8 +815,8 @@ SELECT DISTINCT
     A.razao_social,
     
     -- DADOS BÁSICOS DE MOVIMENTAÇÃO
-    A.qnt_vendas AS qnt_medicamentos_vendidos,
-    A.qnt_vendas_sem_comprovacao AS qnt_medicamentos_vendidos_sem_comprovacao,
+    A.qnt_caixas_vendidas AS qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao AS qnt_caixas_sem_comprovacao,
     h.total_autorizacoes AS nu_autorizacoes,
     A.valor_vendas,
     A.valor_sem_comprovacao,
@@ -935,8 +935,8 @@ GROUP BY
     F.nu_populacao,
     A.cnpj,
     A.razao_social,
-    A.qnt_vendas,
-    A.qnt_vendas_sem_comprovacao,
+    A.qnt_caixas_vendidas,
+    A.qnt_caixas_sem_comprovacao,
     h.total_autorizacoes,
     A.valor_vendas,
     A.valor_sem_comprovacao,

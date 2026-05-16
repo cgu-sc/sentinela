@@ -174,8 +174,8 @@ SELECT
 	,a.razao_social
 	,a.CodPorteEmpresa
 	,p.descricao AS porte_empresa
-	,qnt_vendas
-	,qnt_vendas_sem_comprovacao
+	,qnt_caixas_vendidas
+	,qnt_caixas_sem_comprovacao
 	,valor_vendas
 	,valor_sem_comprovacao
 	,id_ibge7 AS codibge
@@ -250,8 +250,8 @@ SELECT
 	,M.razao_social_matriz
     ,cnpj
 	,razao_social
-	,qnt_vendas
-	,qnt_vendas_sem_comprovacao
+	,qnt_caixas_vendidas
+	,qnt_caixas_sem_comprovacao
 	,valor_vendas
 	,valor_sem_comprovacao
 	,codibge

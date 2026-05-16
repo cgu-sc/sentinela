@@ -279,29 +279,6 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 	CREATE INDEX ix_processamento_cnpj ON temp_cgusc.fp.processamento(cnpj);
 	CREATE INDEX ix_processamento_data ON temp_cgusc.fp.processamento(data_processamento);
 
--- Cria a tabela temporária dados_processamento_gtin para armazenar detalhes dos processamentos
-	drop table if exists temp_cgusc.fp.dados_processamento_gtin
-	CREATE TABLE temp_cgusc.fp.dados_processamento_gtin(
-	[id] INT Identity(1,1) Primary Key,
-	[id_processamento] INT NULL,
-	[codigo_barra] [VARCHAR](14) NOT NULL,
-	[tipo] [char](1) NOT NULL,
-	[periodo_inicial] [date] NULL,
-	[periodo_inicial_nao_comprovacao] [date] NULL,
-	[periodo_final] [date] NULL,
-	[estoque_inicial] [int] NULL,
-	[estoque_final] [int] NULL,
-	[vendas_periodo] [int] NULL,
-	[vendas_sem_comprovacao] [int] NULL,
-	[valor_movimentado] [DECIMAL](11, 2) NULL,
-	[valor_sem_comprovacao] [DECIMAL](11, 2) NULL,
-	[data_aquis_dev_estoq] [date] NULL,
-	[qnt_aquis_dev] [int] NULL,
-	[numero_nfe] [varchar](max) NULL,
-	constraint fk2_id_processamento_movimentacao foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id)
-	);
-
-	CREATE INDEX ix_dadosProcGtin_proc ON temp_cgusc.fp.dados_processamento_gtin(id_processamento);
 
 -- Cria a tabela temporária movimentacaoMensalCodigoBarraFP para movimentações mensais por código de barra
 	drop table if exists temp_cgusc.fp.movimentacao_mensal_gtin
@@ -310,10 +287,11 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 	[id_processamento] INT NULL,
 	[codigo_barra] [VARCHAR](14) NOT NULL,
 	[periodo] [date] NULL,
-	[qnt_vendas] [int] NULL,
-	[qnt_vendas_sem_comprovacao] [int] NULL,
-	[valor_vendas] [DECIMAL](11, 2) NULL,
-	[valor_sem_comprovacao] [DECIMAL](11, 2) NULL,
+	[qnt_caixas_vendidas] [smallint] NULL,
+	[qnt_caixas_sem_comprovacao] [smallint] NULL,
+	[num_autorizacoes] [smallint] NULL,
+	[valor_vendas] [DECIMAL](9, 2) NULL,
+	[valor_sem_comprovacao] [DECIMAL](9, 2) NULL,
 	constraint fk2_id_processamento_movimentacao_codigo_barra foreign key (id_processamento) references temp_cgusc.[fp].[processamento](id)
 	);
 

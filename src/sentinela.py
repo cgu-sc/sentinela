@@ -872,7 +872,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                     movimentacao_codigo_barra = []
                     estado['codigo_barra'] = curr_cod
                     tabela_completa[estado['codigo_barra']] = []
-                    tabela_codigo_barra_datas_vendas[estado['codigo_barra']] = {p: {'qnt_vendas_mes':0,'valor_vendas_mes':0,'qnt_vendas_sc_mes':0,'valor_vendas_sc_mes':0} for p in range_periodos}
+                    tabela_codigo_barra_datas_vendas[estado['codigo_barra']] = {p: {'qnt_caixas_vendidas_mes':0,'qnt_caixas_sem_comprovacao_mes':0,'num_autorizacoes_mes':0,'valor_vendas_mes':0,'valor_sem_comprovacao_mes':0} for p in range_periodos}
 
                     reset_venda()
                     estado['estoque_inicial'] = Decimal(0); estado['estoque_final'] = Decimal(0); estado['operacao_anterior'] = ''
@@ -896,7 +896,8 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                     if row["compra_venda"] == "V":
                         mes = row["data_movimentacao"].strftime("%Y-%m")
                         if mes in tabela_codigo_barra_datas_vendas[estado['codigo_barra']]:
-                            tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['qnt_vendas_mes'] += row["qnt_caixas"]
+                            tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['qnt_caixas_vendidas_mes'] += row["qnt_caixas"]
+                            tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['num_autorizacoes_mes'] += 1
                             tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['valor_vendas_mes'] += row["valor_pago"]
 
                         val_unit = Decimal(str(row["valor_pago"])) / Decimal(str(row["qnt_caixas"])) if row["qnt_caixas"] else Decimal(0)
@@ -913,8 +914,8 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                             estado['valor_sem_comprovacao'] += val_sc
 
                             if mes in tabela_codigo_barra_datas_vendas[estado['codigo_barra']]:
-                                tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['qnt_vendas_sc_mes'] += qtd_sc
-                                tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['valor_vendas_sc_mes'] += val_sc
+                                tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['qnt_caixas_sem_comprovacao_mes'] += qtd_sc
+                                tabela_codigo_barra_datas_vendas[estado['codigo_barra']][mes]['valor_sem_comprovacao_mes'] += val_sc
 
                         if estado['periodo_inicial'] == 0: estado['periodo_inicial'] = row["data_movimentacao"]
                         estado['periodo_final'] = row["data_movimentacao"]
@@ -1007,14 +1008,14 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             if id_proc_atual:
                 for cod, periodos in tabela_codigo_barra_datas_vendas.items():
                     for per, vals in periodos.items():
-                        if vals['qnt_vendas_mes'] > 0:
+                        if vals['qnt_caixas_vendidas_mes'] > 0:
                             cursor.execute('''
                                             insert into [temp_CGUSC].[fp].movimentacao_mensal_gtin 
-                                            (id_processamento, codigo_barra, periodo, qnt_vendas, qnt_vendas_sem_comprovacao, [valor_vendas], [valor_sem_comprovacao]) 
-                                            values (?,?,?,?,?,?,?)
-                                        ''', id_proc_atual, cod, per + '-01', vals['qnt_vendas_mes'],
-                                           vals['qnt_vendas_sc_mes'], vals['valor_vendas_mes'],
-                                           vals['valor_vendas_sc_mes'])
+                                            (id_processamento, codigo_barra, periodo, qnt_caixas_vendidas, qnt_caixas_sem_comprovacao, num_autorizacoes, [valor_vendas], [valor_sem_comprovacao])
+                                            values (?,?,?,?,?,?,?,?)
+                                        ''', id_proc_atual, cod, per + '-01', vals['qnt_caixas_vendidas_mes'],
+                                           vals['qnt_caixas_sem_comprovacao_mes'], vals['num_autorizacoes_mes'],
+                                           vals['valor_vendas_mes'], vals['valor_sem_comprovacao_mes'])
                 conn.commit()
 
             t_db_write = time.time() - t0  # ATUALIZA VARIÁVEL DE PERFORMANCE

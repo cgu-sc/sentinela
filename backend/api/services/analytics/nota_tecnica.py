@@ -9,8 +9,11 @@ from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
 from docx.enum.section import WD_SECTION
+from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import XmlPart
 from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
+from docx.oxml import OxmlElement, parse_xml
 from PIL import Image, ImageDraw, ImageFont
 
 from data_cache import get_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_localidades_df, get_medicamentos_df
@@ -19,6 +22,7 @@ from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
 from .socios import get_socios_farmacia
+from .falecidos import get_falecidos_data
 from .indicadores import _INDICATOR_FLAGS
 from .regional import get_regional_benchmarking
 
@@ -150,6 +154,102 @@ def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False
     return run
 
 
+def _sup_note(para, number: int, *, color: str = '0F172A'):
+    """Adiciona numero sobrescrito para nota manual de rodape."""
+    run = para.add_run(str(number))
+    run.font.superscript = True
+    run.font.size = Pt(7)
+    run.font.color.rgb = _rgb(color)
+    return run
+
+
+def _get_or_add_footnotes_part(doc):
+    """Obtém ou cria a parte XML de footnotes reais do Word."""
+    try:
+        return doc.part.part_related_by(RT.FOOTNOTES)
+    except KeyError:
+        xml = (
+            '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+            '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+            '</w:footnotes>'
+        )
+        part = XmlPart(
+            PackURI('/word/footnotes.xml'),
+            CT.WML_FOOTNOTES,
+            parse_xml(xml),
+            doc.part.package,
+        )
+        doc.part.relate_to(part, RT.FOOTNOTES)
+        return part
+
+
+def _ensure_footnote(doc, number: int, text: str):
+    """Garante a existencia de uma nota de rodape numerada."""
+    part = _get_or_add_footnotes_part(doc)
+    footnotes = part.element
+    for existing in footnotes.findall(qn('w:footnote')):
+        if existing.get(qn('w:id')) == str(number):
+            return
+
+    footnote = OxmlElement('w:footnote')
+    footnote.set(qn('w:id'), str(number))
+    p = OxmlElement('w:p')
+    p_pr = OxmlElement('w:pPr')
+    p_style = OxmlElement('w:pStyle')
+    p_style.set(qn('w:val'), 'FootnoteText')
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:before'), '0')
+    spacing.set(qn('w:after'), '0')
+    spacing.set(qn('w:line'), '240')
+    spacing.set(qn('w:lineRule'), 'auto')
+    p_pr.append(p_style)
+    p_pr.append(spacing)
+    p.append(p_pr)
+
+    r_ref = OxmlElement('w:r')
+    r_ref_pr = OxmlElement('w:rPr')
+    r_ref_style = OxmlElement('w:rStyle')
+    r_ref_style.set(qn('w:val'), 'FootnoteReference')
+    r_ref_size = OxmlElement('w:sz')
+    r_ref_size.set(qn('w:val'), '16')
+    r_ref_pr.append(r_ref_style)
+    r_ref_pr.append(r_ref_size)
+    r_ref.append(r_ref_pr)
+    r_ref_note = OxmlElement('w:footnoteRef')
+    r_ref.append(r_ref_note)
+    p.append(r_ref)
+
+    r_text = OxmlElement('w:r')
+    r_text_pr = OxmlElement('w:rPr')
+    r_text_size = OxmlElement('w:sz')
+    r_text_size.set(qn('w:val'), '16')
+    r_text_pr.append(r_text_size)
+    r_text.append(r_text_pr)
+    t = OxmlElement('w:t')
+    t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    t.text = f' {text}'
+    r_text.append(t)
+    p.append(r_text)
+
+    footnote.append(p)
+    footnotes.append(footnote)
+
+
+def _footnote_ref(doc, para, number: int, text: str):
+    """Insere referência de footnote real e garante seu texto."""
+    _ensure_footnote(doc, number, text)
+    run = para.add_run()
+    r = run._r
+    r_pr = r.get_or_add_rPr()
+    r_style = OxmlElement('w:rStyle')
+    r_style.set(qn('w:val'), 'FootnoteReference')
+    r_pr.append(r_style)
+    ref = OxmlElement('w:footnoteReference')
+    ref.set(qn('w:id'), str(number))
+    r.append(ref)
+    return run
+
 
 def _format_cpf_cnpj(v: str | None) -> str:
     """Formata CPF ou CNPJ com máscara padrão."""
@@ -204,12 +304,44 @@ def _format_month_year_long_pt(month_key: str) -> str:
     return f"{month_name} de {year}"
 
 
+def _format_date_month_year_long_pt(value: date) -> str:
+    """Formata uma data como mes por extenso e ano."""
+    return _format_month_year_long_pt(f"{value.year:04d}-{value.month:02d}")
+
+
 def _format_semestre_pt(semestre: str) -> str:
     """Formata labels como 1S/2021 para 1º Semestre/2021."""
     label = str(semestre or "").strip()
     if len(label) >= 7 and label[0] in {"1", "2"} and label[1].upper() == "S" and label[2] == "/":
         return f"{label[0]}º Semestre/{label[3:]}"
     return label
+
+
+def _semester_key_from_date(value: date) -> int:
+    semestre = 1 if value.month <= 6 else 2
+    return value.year * 100 + semestre
+
+
+def _semester_key_from_label(semestre: str) -> int | None:
+    label = str(semestre or "").strip()
+    if len(label) >= 7 and label[0] in {"1", "2"} and label[1].upper() == "S" and label[2] == "/":
+        try:
+            return int(label[3:]) * 100 + int(label[0])
+        except ValueError:
+            return None
+    if "-S" in label:
+        year, sem = label.split("-S", 1)
+        try:
+            return int(year) * 100 + int(sem[:1])
+        except ValueError:
+            return None
+    return None
+
+
+def _semester_distance(start_key: int, end_key: int) -> int:
+    start_year, start_sem = divmod(start_key, 100)
+    end_year, end_sem = divmod(end_key, 100)
+    return (end_year - start_year) * 2 + (end_sem - start_sem)
 
 
 def _format_list_pt(items: list[str]) -> str:
@@ -465,6 +597,8 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     """Insere figura da evolucao financeira no documento."""
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
     _run(
         p_title,
         f'Figura 01 - Evolução semestral dos recursos recebidos e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
@@ -476,6 +610,8 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     chart_stream = _build_evolucao_financeira_chart(evolucao_comp)
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_img.paragraph_format.keep_with_next = False
+    p_img.paragraph_format.keep_together = True
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
 
@@ -827,9 +963,11 @@ def _build_evolucao_financeira_context(
         semestre = str(item["semestre"])
         taxa_crescimento_raw = item.get("taxa_crescimento_pct")
         limite_volume_atipico_raw = item.get("limite_volume_atipico_pct")
+        chave_semestre = item.get("chave_semestre") or _semester_key_from_label(semestre)
         rows.append({
             "semestre": semestre,
             "semestre_fmt": _format_semestre_pt(semestre),
+            "chave_semestre": int(chave_semestre) if chave_semestre is not None else None,
             "mes_inicio": item.get("mes_inicio"),
             "mes_fim": item.get("mes_fim"),
             "total": round(total, 2),
@@ -894,6 +1032,114 @@ def _build_evolucao_financeira_context(
         "semestres_atipicos": semestres_atipicos,
         "top_irregulares": top_irregulares,
     }
+
+
+def _build_socios_volume_atipico_context(
+    socios_ativos: list[Any],
+    evolucao_comp: dict[str, Any],
+    max_semestres_apos_entrada: int = 2,
+) -> list[dict[str, Any]]:
+    """Identifica aumentos atipicos proximos ao ingresso de socios ativos."""
+    semestres_atipicos = evolucao_comp.get("semestres_atipicos") or []
+    matches: list[dict[str, Any]] = []
+
+    for socio in socios_ativos:
+        entrada = getattr(socio, "data_entrada_sociedade", None)
+        if not entrada:
+            continue
+
+        entrada_key = _semester_key_from_date(entrada)
+        nome = getattr(socio, "nome_socio", None) or "sócio não identificado"
+
+        for semestre in semestres_atipicos:
+            semestre_key = semestre.get("chave_semestre") or _semester_key_from_label(semestre.get("semestre"))
+            if semestre_key is None:
+                continue
+
+            distancia = _semester_distance(entrada_key, int(semestre_key))
+            if 0 <= distancia <= max_semestres_apos_entrada:
+                matches.append({
+                    "nome_socio": nome,
+                    "entrada": entrada,
+                    "entrada_txt": _format_date_month_year_long_pt(entrada),
+                    "semestre_fmt": semestre.get("semestre_fmt") or _format_semestre_pt(semestre.get("semestre")),
+                    "taxa_crescimento_pct": semestre.get("taxa_crescimento_pct"),
+                    "distancia_semestres": distancia,
+                })
+
+    return sorted(matches, key=lambda item: (item["entrada"], item["distancia_semestres"], item["nome_socio"]))
+
+
+def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str, Any]]):
+    """Adiciona quadro com ingressos societarios proximos a aumentos atipicos."""
+    if not socios_volume_atipico:
+        return
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_title,
+        'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(socios_volume_atipico) + 1, cols=5)
+    table.style = 'Table Grid'
+
+    headers = [
+        'Sócio',
+        'Entrada na sociedade',
+        'Semestre do aumento',
+        'Crescimento',
+        'Distância temporal',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(socios_volume_atipico, start=1):
+        cells = table.rows[row_idx].cells
+        distancia = int(item.get("distancia_semestres") or 0)
+        if distancia == 0:
+            distancia_txt = 'Mesmo semestre'
+        elif distancia == 1:
+            distancia_txt = '1 semestre após a entrada'
+        else:
+            distancia_txt = f'{distancia} semestres após a entrada'
+
+        taxa = item.get("taxa_crescimento_pct")
+        taxa_txt = f'+{_format_decimal_pt(float(taxa), 1)}%' if taxa is not None else '-'
+
+        values = [
+            item.get("nome_socio") or '—',
+            item.get("entrada_txt") or '—',
+            item.get("semestre_fmt") or '—',
+            taxa_txt,
+            distancia_txt,
+        ]
+        for col_idx, value in enumerate(values):
+            para = cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in (1, 2, 3, 4) else WD_ALIGN_PARAGRAPH.LEFT
+            _run(para, value, color='0F172A', size=8, bold=col_idx == 3 and taxa is not None)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
+        color='64748B',
+        size=8,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str):
@@ -1020,7 +1266,7 @@ def _add_quadro_evolucao_financeira(
     )
 
     rows_data = evolucao_comp["rows"]
-    table = doc.add_table(rows=len(rows_data) + 2, cols=5)
+    table = doc.add_table(rows=len(rows_data) + 2, cols=6)
     table.style = 'Table Grid'
 
     headers = [
@@ -1029,6 +1275,7 @@ def _add_quadro_evolucao_financeira(
         'Vendas regulares',
         'Vendas sem comprovação',
         '% sem comprovação',
+        'Aumento atípico',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -1052,6 +1299,17 @@ def _add_quadro_evolucao_financeira(
             size=8,
             bold=item["pct_irregular"] >= 50,
         )
+        cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None:
+            _run(
+                cells[5].paragraphs[0],
+                f'+{_format_decimal_pt(item["taxa_crescimento_pct"], 1)}%',
+                color='334155',
+                size=8,
+                bold=True,
+            )
+        else:
+            _run(cells[5].paragraphs[0], '-', color='64748B', size=8)
 
     total_cells = table.rows[-1].cells
     _run(total_cells[0].paragraphs[0], 'TOTAL', color='0F172A', size=8, bold=True)
@@ -1061,6 +1319,7 @@ def _add_quadro_evolucao_financeira(
         f'R$ {_format_decimal_pt(evolucao_comp["regular"], 2)}',
         f'R$ {_format_decimal_pt(evolucao_comp["irregular"], 2)}',
         f'{_format_decimal_pt(evolucao_comp["pct_irregular"], 2)}%',
+        '-',
     ]
     for col_idx, value in enumerate(totals, start=1):
         total_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT if col_idx < 4 else WD_ALIGN_PARAGRAPH.CENTER
@@ -1090,6 +1349,7 @@ def _add_quadro_evolucao_financeira(
         color='64748B',
         size=8,
     )
+    _keep_small_table_together(p_title, table, [p_obs, p_foot])
 
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
@@ -1132,6 +1392,138 @@ def _get_criticos(cnpj: str) -> set[str]:
         return set()
 
 
+def _build_falecidos_context(
+    cnpj: str,
+    uf_farmacia: str | None,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Agrega transacoes de falecidos para a Nota Tecnica quando houver dados."""
+    try:
+        falecidos = get_falecidos_data(cnpj, data_inicio, data_fim)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Falecidos indisponivel para {cnpj}: {exc}")
+        return None
+
+    transacoes = getattr(falecidos, "transacoes", None) or []
+    if not transacoes:
+        return None
+
+    summary = getattr(falecidos, "summary", None)
+    total_autorizacoes = int(getattr(summary, "total_autorizacoes", len(transacoes)) or 0)
+    cpfs_distintos = int(getattr(summary, "cpfs_distintos", 0) or 0)
+    valor_total = float(getattr(summary, "valor_total", 0.0) or 0.0)
+
+    cpfs = {
+        getattr(t, "cpf", None)
+        for t in transacoes
+        if getattr(t, "cpf", None)
+    }
+    if cpfs:
+        cpfs_distintos = len(cpfs)
+
+    datas = [
+        getattr(t, "data_autorizacao", None)
+        for t in transacoes
+        if getattr(t, "data_autorizacao", None)
+    ]
+    inicio_ref = data_inicio or (min(datas) if datas else None)
+    fim_ref = data_fim or (max(datas) if datas else None)
+    if inicio_ref and fim_ref:
+        periodo_desc = (
+            f'no ano de {inicio_ref.year}'
+            if inicio_ref.year == fim_ref.year
+            else f'no período de {inicio_ref.year} a {fim_ref.year}'
+        )
+    elif inicio_ref:
+        periodo_desc = f'a partir de {inicio_ref.year}'
+    elif fim_ref:
+        periodo_desc = f'até {fim_ref.year}'
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "total_autorizacoes": total_autorizacoes,
+        "cpfs_distintos": cpfs_distintos,
+        "valor_total": valor_total,
+        "periodo_desc": periodo_desc,
+    }
+
+
+def _add_falecidos_criticidade_text(doc, num: str, razao_social: str, falecidos_comp: dict[str, Any]):
+    """Adiciona texto analitico de vendas para pessoas falecidas."""
+    total_autorizacoes = falecidos_comp["total_autorizacoes"]
+    cpfs_distintos = falecidos_comp["cpfs_distintos"]
+    valor_total = falecidos_comp["valor_total"]
+    periodo_desc = falecidos_comp["periodo_desc"]
+
+    doc.add_heading(f'{num} Vendas de medicamento para pessoas falecidas', level=2)
+    p1 = doc.add_paragraph()
+    _run(p1, f'Em análise a informações contidas no Sistema Autorizador de Vendas (SAV) do PFPB, lançados pela Farmácia {razao_social} {periodo_desc}, foram identificados registros de vendas (distribuição) de medicamentos para pessoas na data de seus óbitos e/ou posteriormente a essa data, identificados nas bases de dados do SIRC', color='0F172A', size=10)
+    _footnote_ref(
+        doc,
+        p1,
+        14,
+        'O Sistema Nacional de Informações de Registro Civil (Sirc) é uma base de governo federal que tem por finalidade captar, processar, arquivar e disponibilizar dados relativos a registros de nascimento, casamento, óbito e natimorto, produzidos pelos cartórios de registro civil das pessoas naturais. Sistema disponível em: https://sirc.gov.br/o-que-e/.',
+    )
+    _run(p1, ' e SISOBI', color='0F172A', size=10)
+    _footnote_ref(
+        doc,
+        p1,
+        15,
+        'O Sistema de Controle de Óbitos (Sisobi) é ainda utilizado pelos cartórios para tratamento de certidões anteriores à implantação do Sistema Nacional de Informações de Registro Civil (Sirc). Sistema disponível em: https://www.dataprev.gov.br/sisobi/.',
+    )
+    _run(p1, '. Foram realizadas ', color='0F172A', size=10)
+    _run(p1, f'{total_autorizacoes:,}'.replace(',', '.'), color='334155', size=10, bold=True)
+    _run(p1, ' vendas em data posterior ao registro de morte de ', color='0F172A', size=10)
+    _run(p1, f'{cpfs_distintos:,}'.replace(',', '.'), color='334155', size=10, bold=True)
+    _run(p1, ' beneficiários. Estas vendas representaram um valor total de ', color='0F172A', size=10)
+    _run(p1, f'R$ {_format_decimal_pt(valor_total, 2)}', color='334155', size=10, bold=True)
+    _run(p1, ', no referido período.', color='0F172A', size=10)
+
+
+def _configure_section(section, footer_lines: list[str] | None = None):
+    """Configura margens e rodape independente para uma secao."""
+    section.footer.is_linked_to_previous = False
+    section.top_margin = Inches(0.5)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.7)
+    section.right_margin = Inches(0.7)
+
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    footer.text = ''
+    for idx, line in enumerate(footer_lines or []):
+        if idx > 0:
+            footer.add_run('\n')
+        _run(footer, line, color='64748B', size=8)
+
+
+def _start_section(doc, *, footer_lines: list[str] | None = None, start=WD_SECTION.CONTINUOUS):
+    """Inicia uma secao com rodape proprio."""
+    section = doc.add_section(start)
+    _configure_section(section, footer_lines)
+    return section
+
+
+def _iter_criticidade_items(
+    criticos: set[str],
+    razao_social: str,
+    *,
+    start_index: int = 1,
+    exclude_keys: set[str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """Retorna criticidades criticas com numeracao da secao 7."""
+    items: list[tuple[str, str, str]] = []
+    exclude_keys = exclude_keys or set()
+    for key, _, title in _SECAO5_MAP:
+        if key in exclude_keys or key not in criticos:
+            continue
+        full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
+        items.append((key, f'7.{start_index + len(items)}', full_title))
+    return items
+
+
 def _add_toc_entry(doc, num: str, title: str, page: str = 'xx'):
     """Adiciona uma entrada no sumário com tab stop, líder de pontos e recuo para evitar sobreposição."""
     p = doc.add_paragraph()
@@ -1153,7 +1545,7 @@ def _add_toc_entry(doc, num: str, title: str, page: str = 'xx'):
     p.paragraph_format.space_after = Pt(2)
 
 
-def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
+def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str, has_falecidos: bool = False):
     """Constrói a página de sumário dinâmica."""
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1172,12 +1564,14 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str):
     _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='6')
     _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
-    for key, num, title in _SECAO5_MAP:
-        if key in criticos:
-            full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
-            _add_toc_entry(doc, f'  {num}', full_title, page='6')
+    _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='7')
+    if has_falecidos:
+        _add_toc_entry(doc, '  7.1', 'Vendas de medicamento para pessoas falecidas', page='7')
+    criticidade_start = 2 if has_falecidos else 1
+    for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
+        _add_toc_entry(doc, f'  {num}', full_title, page='7')
 
-    _add_toc_entry(doc, '7.', 'CONCLUSÃO E ENCAMINHAMENTO', page='7')
+    _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='8')
     doc.add_page_break()
 
 
@@ -1410,6 +1804,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     else:
         periodo_txt = 'Histórico completo'
 
+    falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim)
+
     # 3. Documento e margens
     doc = Document()
     style_normal: Any = doc.styles['Normal']
@@ -1523,7 +1919,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # SUMÁRIO
     criticos = _get_criticos(cnpj)
-    _build_sumario(doc, criticos, razao_social, cnpj_fmt)
+    _build_sumario(doc, criticos, razao_social, cnpj_fmt, has_falecidos=bool(falecidos_comp))
 
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
     sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1578,38 +1974,22 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     run_periodo.bold = True
     p_intro.add_run(', ausência significativa de estoque compatível com as vendas (distribuições) realizadas de medicamentos para a população (denominada pela CGU como “vendas sem comprovação”), o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio de registro fictício de dispensações de medicamentos.')
     
-    snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}', '[Subitem 5.4.1] crescimento excessivo de dispensação do medicamento para tratamento da doença de Parkinson']
-    mapping_intro = {
-        'falecidos': '[Subitem 5.5] vendas de medicamentos para pessoas falecidas',
-        'incompatibilidade_patologica': '[Subitem 5.6] vendas de medicamento com incompatibilidade patológica',
-        'teto': '[Subitem 5.7] vendas no “teto máximo” para clientes com percentual excessivo',
-        'polimedicamento': ['[Subitem 5.8] vendas desproporcionais de quatro ou mais itens de medicamentos por cupom', '[Subitem 5.9] quantidade média de medicamentos por cupom vendidos muito superior ao dos estabelecimentos da região'],
-        'ticket_medio': '[Subitem 5.10] valor exorbitante do “ticket médio” dos medicamentos vendidos',
-        'receita_paciente': '[Subitem 5.11] faturamento médio mensal por cliente demasiado',
-        'per_capita': '[Subitem 5.12] faturamento mensal per capita bem acima dos estabelecimentos da região',
-        'alto_custo': '[Subitem 5.13] vendas excessiva de medicamentos de alto custo',
-        'vendas_rapidas': '[Subitem 5.14] vendas de medicamentos em tempo inferior a 60 segundos',
-        'recorrencia_sistemica': '[Subitem 5.15] vendas de medicamentos com precisão absoluta de 30 dias muito superior aos dos estabelecimentos de sua região',
-        'dias_pico': '[Subitem 5.16] vendas de medicamentos em dias de pico com percentual elevado',
-        'dispersao_geografica': '[Subitem 5.17] vendas exageradas de medicamentos para pessoas residentes em outros Estados',
-        'compra_unica': '[Subitem 5.18] volume elevado de pacientes com registro de venda única de medicamento',
-        'hhi_crm': '[Subitem 5.19] concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB',
-        'exclusividade_crm': f'[Subitem 5.20] vendas de medicamentos vinculados a CRMs de médicos cujos registros foram realizados exclusivamente pela Farmácia {razao_social}',
-        'crms_irregulares': '[Subitem 5.21] vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs',
-    }
-    for key, snippet in mapping_intro.items():
-        if key in criticos:
-            if isinstance(snippet, list): snippets.extend(snippet)
-            else: snippets.append(snippet)
+    snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
+    criticidade_start = 1
+    if falecidos_comp:
+        snippets.append('[Subitem 7.1] vendas de medicamento para pessoas falecidas')
+        criticidade_start = 2
+    for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
+        snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
     
     texto_snippets = (", ".join(snippets[:-1]) + " e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
     doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram com o achado principal de “vendas sem comprovação”, como {texto_snippets}.')
     doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e junto ao PFPB e compatibilidade entre o número de empregados e volume de recursos recebidos do MS.')
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
-    if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Subitem 5.4.1] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
-    if 'falecidos' in criticos: fontes.append('[Subitem 5.5] SIRC e SISOB')
-    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Subitem 5.19] [Subitem 5.20] [Subitem 5.21] e Cadastros de médicos do Conselho Regional de Medicina (CRM)')
+    if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Item 7] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
+    if falecidos_comp: fontes.append('[Subitem 7.1] SIRC e SISOBI')
+    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Item 7] Cadastros de médicos do Conselho Regional de Medicina (CRM)')
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
 
     # ── 7. Seção 4.1: Sobre o Programa (Rodapé notas 2 a 6) ──────────────────
@@ -1794,16 +2174,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
 
-    # ── 10. Seção 5.3+ (Zera os rodapés para o restante do documento) ────────
-    sec_53 = doc.add_section(WD_SECTION.CONTINUOUS)
-    sec_53.footer.is_linked_to_previous = False
-    for p in sec_53.footer.paragraphs:
-        p.text = ''  # Limpa o rodapé para não herdar as notas 8-11
-    f_53 = sec_53.footer.paragraphs[0]
-    f_53.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_53, '(11) A região de saúde utilizada para os comparativos do Sistema Sentinela segue a mesma estabelecida pelo Sistema Único de Saúde (ver https://www.gov.br/saude/pt-br/se/dgip/regionalizacao), que, em resumo, a considera como um espaço geográfico contínuo, formado pelo agrupamento de municípios limítrofes, que compartilham características culturais, econômicas e sociais semelhantes.', color='64748B', size=8)
-    sec_53.top_margin = Inches(0.5); sec_53.bottom_margin = Inches(0.5)
-    sec_53.left_margin = Inches(0.7); sec_53.right_margin = Inches(0.7)
+    # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
+    _start_section(doc)
 
     doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}.', level=1)
     p_53 = doc.add_paragraph()
@@ -1845,10 +2217,12 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_regional_53, 'Tal percentual é ', color='0F172A', size=10)
     _run(p_regional_53, f'{multiplicador_fmt} vezes', color='334155', size=10, bold=True)
     _run(p_regional_53, ' a mediana dos percentuais de “vendas sem comprovação” das farmácias da sua região', color='0F172A', size=10)
-    run_sup11 = p_regional_53.add_run('11')
-    run_sup11.font.superscript = True
-    run_sup11.font.size = Pt(7)
-    run_sup11.font.color.rgb = _rgb('0F172A')
+    _footnote_ref(
+        doc,
+        p_regional_53,
+        11,
+        'A região de saúde utilizada para os comparativos do Sistema Sentinela segue a mesma estabelecida pelo Sistema Único de Saúde (ver https://www.gov.br/saude/pt-br/se/dgip/regionalizacao), que, em resumo, a considera como um espaço geográfico contínuo, formado pelo agrupamento de municípios limítrofes, que compartilham características culturais, econômicas e sociais semelhantes.',
+    )
     _run(p_regional_53, ', que contempla ', color='0F172A', size=10)
     _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='0F172A', size=10, bold=True)
     _run(p_regional_53, f' {que_opera_txt} no PFPB, localizadas nos seguintes municípios do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
@@ -1886,10 +2260,12 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_heading(f'6.1 Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
 
     evolucao_comp = _build_evolucao_financeira_context(cnpj, data_inicio, data_fim)
+    socios_volume_atipico = _build_socios_volume_atipico_context(socios_ativos, evolucao_comp)
 
     semestres_atipicos = evolucao_comp["semestres_atipicos"]
     if semestres_atipicos:
         p_54_contexto = doc.add_paragraph()
+        p_54_contexto.paragraph_format.space_before = Pt(6)
         _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e demasiados que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
 
         p_54_analise = doc.add_paragraph()
@@ -1919,16 +2295,32 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
 
     _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
+    if socios_volume_atipico:
+        p_socios_volume = doc.add_paragraph()
+        p_socios_volume.paragraph_format.space_before = Pt(6)
+        _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado no quadro a seguir.', color='0F172A', size=10)
+    _add_quadro_socios_volume_atipico(doc, socios_volume_atipico)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
 
-    for key, num, title in _SECAO5_MAP:
-        if key in criticos:
-            full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
+    # Seção 7 sem rodapé herdado da seção 6.
+    _start_section(doc)
+    doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1)
+    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram com o achado principal de “vendas sem comprovação” para ela apuradas.')
+    criticidade_start = 1
+    if falecidos_comp:
+        _add_falecidos_criticidade_text(doc, '7.1', razao_social, falecidos_comp)
+        criticidade_start = 2
+
+    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    if criticidade_items:
+        for _, num, full_title in criticidade_items:
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
+    elif not falecidos_comp:
+        doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
 
-    # 7. CONCLUSÃO
-    doc.add_heading('7. CONCLUSÃO E ENCAMINHAMENTO', level=1)
+    # 8. CONCLUSÃO
+    doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1)
     if risco_label in ('CRÍTICO', 'ATENÇÃO'):
         doc.add_paragraph('Considerando o elevado score de risco e os indícios de irregularidades detectados nas seções anteriores, sugere-se a priorização deste estabelecimento para auditoria in loco ou solicitação formal de documentos para comprovação das vendas realizadas.')
     else:

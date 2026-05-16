@@ -32,6 +32,7 @@ from .nota_tecnica_criticidades import (
     _SECAO5_MAP,
     _add_alto_custo_text,
     _add_dias_pico_text,
+    _add_dispersao_geografica_text,
     _add_falecidos_criticidade_text,
     _add_incompatibilidade_patologica_text,
     _add_per_capita_text,
@@ -43,6 +44,7 @@ from .nota_tecnica_criticidades import (
     _add_vendas_rapidas_text,
     _build_alto_custo_context,
     _build_dias_pico_context,
+    _build_dispersao_geografica_context,
     _build_falecidos_context,
     _build_incompatibilidade_patologica_context,
     _build_per_capita_context,
@@ -790,6 +792,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 dias_pico_comp = _build_dias_pico_context(cnpj, data_inicio, data_fim)
                 if dias_pico_comp:
                     _add_dias_pico_text(doc, num, razao_social, dias_pico_comp)
+                    continue
+            if key == 'dispersao_geografica':
+                dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
+                if dispersao_comp:
+                    _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp)
                     continue
 
             doc.add_heading(f'{num} {full_title}', level=2)

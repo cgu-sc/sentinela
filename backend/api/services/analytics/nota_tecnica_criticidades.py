@@ -1004,3 +1004,88 @@ def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[s
     _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
     _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+
+def _build_dispersao_geografica_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any] | None:
+    """Busca os dados atuais da matriz para o texto de dispersao geografica."""
+    try:
+        df = get_df_matriz_risco()
+        df = df.rename({c: c.lower() for c in df.columns})
+        rows = df.filter(pl.col("cnpj") == cnpj)
+        if rows.is_empty():
+            return None
+        row = rows.row(0, named=True)
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para dispersao geografica {cnpj}: {exc}")
+        return None
+
+    def as_float(key: str) -> float:
+        value = row.get(key)
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if data_inicio and data_fim:
+        periodo_desc = (
+            f'no ano de {data_inicio.year}'
+            if data_inicio.year == data_fim.year
+            else f'no período de {data_inicio.year} a {data_fim.year}'
+        )
+    else:
+        periodo_desc = 'no período analisado'
+
+    return {
+        "periodo_desc": periodo_desc,
+        "percentual": as_float("pct_geografico"),
+        "mediana_regiao": as_float("med_geografico_reg"),
+        "mediana_uf": as_float("med_geografico_uf"),
+        "mediana_brasil": as_float("med_geografico_br"),
+        "multiplicador_regiao": as_float("risco_geografico_reg"),
+        "multiplicador_uf": as_float("risco_geografico_uf"),
+        "multiplicador_brasil": as_float("risco_geografico_br"),
+    }
+
+
+def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_comp: dict[str, Any]):
+    """Adiciona texto analitico de vendas para residentes em outros Estados usando a matriz atual."""
+    periodo_desc = dispersao_comp["periodo_desc"]
+    percentual_fmt = _format_decimal_pt(dispersao_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(dispersao_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(dispersao_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(dispersao_comp["multiplicador_brasil"], 2)
+
+    doc.add_heading(
+        f'{num} Vendas de medicamentos para pessoas residentes em outros Estados realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        level=2,
+    )
+
+    p1 = doc.add_paragraph()
+    _run(
+        p1,
+        'No âmbito do PFPB, o comportamento esperado é que a grande maioria dos clientes atendidos pelas farmácias residam no mesmo Estado do estabelecimento. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p1,
+        'Para tal verificação, é realizado o comparativo entre o endereço do beneficiário, contido na base do Cadastro de Pessoa Física (CPF), e o endereço de registro do próprio estabelecimento, contido no Cadastro Nacional de Pessoa Jurídica (CNPJ). A identificação de vendas de medicamentos para pessoas de outros Estados acima do padrão dos demais estabelecimentos localizados na mesma região sugere a ocorrência de vendas fictícias.',
+        color='0F172A',
+        size=10,
+    )
+
+    p2 = doc.add_paragraph()
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
+    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas para pessoas residentes em outros Estados. Tal percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)

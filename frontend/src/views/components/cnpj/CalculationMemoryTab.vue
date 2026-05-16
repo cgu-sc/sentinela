@@ -369,7 +369,7 @@ const pctIrregular = (section) => {
               <tr>
                   <th>Princípio Ativo</th>
                   <th>Período sem Comprovação</th>
-                  <th class="text-right">Vendas (Total/Irregular)</th>
+                  <th class="text-right">Caixas Vendidas (Total/Irregular)</th>
                   <th class="text-right">Valor (Total/Irregular)</th>
                   <th class="text-right">Ticket Médio</th>
                   <th class="text-right" v-tooltip.top="'Percentual que o valor não comprovado desta substância representa em relação ao valor total sem comprovação de todos os itens do CNPJ.'">
@@ -512,7 +512,7 @@ const pctIrregular = (section) => {
               <div class="gcol gcol-date">Última Venda</div>
               <div class="gcol gcol-num">Est. Ini.</div>
               <div class="gcol gcol-num">Est. Fin.</div>
-              <div class="gcol gcol-num">Vendas (Tot/Irr)</div>
+              <div class="gcol gcol-num">Caixas Vendidas (Tot/Irr)</div>
               <div class="gcol gcol-cur">Valor (Tot/Irr)</div>
               <div class="gcol gcol-nf">Notas Fiscais</div>
             </div>

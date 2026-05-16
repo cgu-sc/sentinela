@@ -211,9 +211,12 @@ def _ensure_footnote(doc, number: int, text: str):
     r_ref_pr = OxmlElement('w:rPr')
     r_ref_style = OxmlElement('w:rStyle')
     r_ref_style.set(qn('w:val'), 'FootnoteReference')
+    r_ref_vert = OxmlElement('w:vertAlign')
+    r_ref_vert.set(qn('w:val'), 'superscript')
     r_ref_size = OxmlElement('w:sz')
-    r_ref_size.set(qn('w:val'), '16')
+    r_ref_size.set(qn('w:val'), '20')
     r_ref_pr.append(r_ref_style)
+    r_ref_pr.append(r_ref_vert)
     r_ref_pr.append(r_ref_size)
     r_ref.append(r_ref_pr)
     r_ref_note = OxmlElement('w:footnoteRef')
@@ -245,6 +248,12 @@ def _footnote_ref(doc, para, number: int, text: str):
     r_style = OxmlElement('w:rStyle')
     r_style.set(qn('w:val'), 'FootnoteReference')
     r_pr.append(r_style)
+    r_vert = OxmlElement('w:vertAlign')
+    r_vert.set(qn('w:val'), 'superscript')
+    r_pr.append(r_vert)
+    r_size = OxmlElement('w:sz')
+    r_size.set(qn('w:val'), '20')
+    r_pr.append(r_size)
     ref = OxmlElement('w:footnoteReference')
     ref.set(qn('w:id'), str(number))
     r.append(ref)
@@ -1673,12 +1682,17 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     _run(p_ops, 'Os parágrafos, a seguir, trazem problemas identificados em trabalhos de Operações Especiais sobre o programa.', color='0F172A', size=10)
 
     # Seção de Mão de Obra e RT (Placeholders em vermelho)
+    nota_rais_8 = 'Relação Anual de Informações Sociais, atualização em XXX de XXX. Consulta realizada em xx.xx.xxxx.'
+    nota_farmaceutica_9 = 'Art. 5º da Lei nº 13.021, de 08.08.2014.'
+    nota_esocial_10 = (
+        'eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas '
+        'do governo federal.'
+    )
+
     doc.add_paragraph()
     p_rais = doc.add_paragraph()
     _run(p_rais, 'Segundo dados da Relação Anual de Informações Sociais (RAIS)', color='0F172A', size=10)
-    run_sup8 = p_rais.add_run('8')
-    run_sup8.font.superscript = True
-    run_sup8.font.size = Pt(7)
+    _footnote_ref(doc, p_rais, 8, nota_rais_8)
     _run(p_rais, f' do Ministério do Trabalho e Emprego, a Farmácia {data.get("razao_social") or ""} possuía ', color='0F172A', size=10)
     _run(p_rais, 'yy', color='334155', size=10, bold=True)
     _run(p_rais, ' funcionários registrados em ', color='0F172A', size=10)
@@ -1692,13 +1706,9 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     p_esocial = doc.add_paragraph()
     p_esocial.paragraph_format.space_before = Pt(6)
     _run(p_esocial, 'Destaca-se, também, o fato de que a legislação', color='0F172A', size=10)
-    run_sup9 = p_esocial.add_run('9')
-    run_sup9.font.superscript = True
-    run_sup9.font.size = Pt(7)
+    _footnote_ref(doc, p_esocial, 9, nota_farmaceutica_9)
     _run(p_esocial, ' sobre o exercício e a fiscalização das atividades farmacêuticas dispõe que a farmácia e a drogaria terão, obrigatoriamente, a responsabilidade e a assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento. Assim sendo, fica evidenciado mais uma possível irregularidade, pois em consulta ao eSocial', color='0F172A', size=10)
-    run_sup10 = p_esocial.add_run('10')
-    run_sup10.font.superscript = True
-    run_sup10.font.size = Pt(7)
+    _footnote_ref(doc, p_esocial, 10, nota_esocial_10)
     _run(p_esocial, ' (atualizado até ', color='0F172A', size=10)
     _run(p_esocial, 'XXXXX', color='334155', size=10, bold=True)
     _run(p_esocial, ') foi identificado que, no período de ', color='0F172A', size=10)
@@ -1924,11 +1934,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
     sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_ref.footer.is_linked_to_previous = False
-    f_ref = sec_ref.footer.paragraphs[0]
-    f_ref.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_ref, '(1) De acordo com informações contidas no site do Ministério da Saúde a respeito do Programa Farmácia Popular do Brasil: ', color='64748B', size=8)
-    _run(f_ref, 'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/legislacao', color='64748B', size=8)
-    _run(f_ref, f' (acessado em {date.today().strftime("%d/%m/%Y")}).', color='64748B', size=8)
+    sec_ref.footer.paragraphs[0].text = ''
     
     sec_ref.top_margin = Inches(0.5); sec_ref.bottom_margin = Inches(0.5)
     sec_ref.left_margin = Inches(0.7); sec_ref.right_margin = Inches(0.7)
@@ -1939,8 +1945,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # 2. REFERÊNCIAS
     h2 = doc.add_heading('2. REFERÊNCIAS', level=1)
-    run_sup = h2.add_run('(1)')
-    run_sup.font.superscript = True
+    _footnote_ref(
+        doc,
+        h2,
+        1,
+        'De acordo com informações contidas no site do Ministério da Saúde a respeito do Programa Farmácia Popular do Brasil: '
+        'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/legislacao '
+        f'(acessado em {date.today().strftime("%d/%m/%Y")}).',
+    )
     doc.add_paragraph('As principais referências normativas e técnicas utilizadas nesta análise incluem:')
     ref_list = [
         'Lei nº 10.858, de 06.05.2004 (deu origem ao Programa Farmácia Popular do Brasil - PFPB);',
@@ -1992,16 +2004,32 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Item 7] Cadastros de médicos do Conselho Regional de Medicina (CRM)')
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
 
-    # ── 7. Seção 4.1: Sobre o Programa (Rodapé notas 2 a 6) ──────────────────
+    nota_pfpb_2 = (
+        'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
+        f'em {date.today().strftime("%d/%m/%Y")}.'
+    )
+    nota_pfpb_3 = (
+        'A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: '
+        'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf'
+    )
+    nota_pfpb_4 = (
+        'Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 '
+        'do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde '
+        'reabriu a necessidade a partir de 17 de abril de 2025.'
+    )
+    nota_pfpb_5 = (
+        'Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte '
+        'do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.'
+    )
+    nota_pfpb_6 = (
+        'A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 '
+        'que o estabelecimento deveria manter por cinco anos.'
+    )
+
+    # ── 7. Seção 4.1: Sobre o Programa ─────────────────────────────────────
     sec_41 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_41.footer.is_linked_to_previous = False
-    f_41 = sec_41.footer.paragraphs[0]
-    f_41.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_41, f'(2) Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, em {date.today().strftime("%d/%m/%Y")}.\n', color='64748B', size=8)
-    _run(f_41, '(3) A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf\n', color='64748B', size=8)
-    _run(f_41, '(4) Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde reabriu a necessidade a partir de 17 de abril de 2025.\n', color='64748B', size=8)
-    _run(f_41, '(5) Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.\n', color='64748B', size=8)
-    _run(f_41, '(6) A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 que o estabelecimento deveria manter por cinco anos.', color='64748B', size=8)
+    sec_41.footer.paragraphs[0].text = ''
     sec_41.top_margin = Inches(0.5); sec_41.bottom_margin = Inches(0.5)
     sec_41.left_margin = Inches(0.7); sec_41.right_margin = Inches(0.7)
 
@@ -2012,8 +2040,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         'O Programa Farmácia Popular do Brasil, instituído em 2004 para ampliar o acesso a medicamentos essenciais, '
         'consolidou-se como um pilar da saúde pública brasileira. Segundo site do Ministério da Saúde'
     )
-    run_sup2 = p_intro_41.add_run('2')
-    run_sup2.font.superscript = True
+    _footnote_ref(doc, p_intro_41, 2, nota_pfpb_2)
     p_intro_41.add_run(', o Programa Farmácia Popular do Brasil – PFPB é:')
     # Bloco de Citação 1
     p_quote1 = doc.add_paragraph(style='Quote')
@@ -2031,31 +2058,33 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     p_quote2 = doc.add_paragraph(style='Quote')
     p_quote2.paragraph_format.left_indent = Inches(1.57) # ~4cm
     p_quote2.add_run('A partir de 14 de fevereiro de 2025, o Programa Farmácia Popular passou a disponibilizar gratuitamente 100% dos medicamentos e insumos de seu elenco à população brasileira. O programa atende 12 indicações, contemplando medicamentos para hipertensão, diabetes, asma, osteoporose, dislipidemia (colesterol alto), rinite, doença de Parkinson, glaucoma, diabetes mellitus associada a doenças cardiovasculares e anticoncepção. Além disso, oferece fraldas geriátricas para pessoas com incontinência e absorventes higiênicos para beneficiárias do Programa Dignidade Menstrual')
-    run_sup3 = p_quote2.add_run('3')
-    run_sup3.font.superscript = True
+    _footnote_ref(doc, p_quote2, 3, nota_pfpb_3)
     p_quote2.add_run('.')
     for run in p_quote2.runs:
         if not run.font.superscript: run.font.size = Pt(10)
 
     p_op = doc.add_paragraph('A operacionalização do programa ocorre com a participação de drogarias credenciadas pelo Ministério da Saúde (MS)')
-    run_sup4 = p_op.add_run('4')
-    run_sup4.font.superscript = True
+    _footnote_ref(doc, p_op, 4, nota_pfpb_4)
     p_op.add_run(', que realizam a dispensação gratuita de medicamentos diretamente aos cidadãos. As drogarias são posteriormente ressarcidas pela União, de acordo com informações relativas às quantidades distribuídas de cada medicamento')
-    run_sup5 = p_op.add_run('5')
-    run_sup5.font.superscript = True
+    _footnote_ref(doc, p_op, 5, nota_pfpb_5)
     p_op.add_run('.')
 
     p_sav = doc.add_paragraph('As informações acerca da dispensação são encaminhadas pelas drogarias credenciadas ao MS mensalmente por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
-    run_sup6 = p_sav.add_run('6')
-    run_sup6.font.superscript = True
+    _footnote_ref(doc, p_sav, 6, nota_pfpb_6)
     p_sav.add_run(', em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
 
-    # ── 8. Seção 4.2: Metodologia CGU (Rodapé nota 7) ────────────────────────
+    nota_cgu_7 = (
+        'A CGU, em seu Relatório de Auditoria nº 823121, considerou "vendas sem comprovação" no âmbito do PFPB '
+        'a diferença identificada por princípio ativo/insumo, após o batimento entre Notas Fiscais de entrada '
+        '(compartilhadas pela Receita Federal do Brasil e relativas a aquisições de medicamentos do PFPB) e registro '
+        'de saída no Sistema Autorizador de Vendas – SAV (onde as dispensações subsidiadas são informadas), tendo '
+        'como elo os números que constam abaixo dos códigos de barra (Código GTIN).'
+    )
+
+    # ── 8. Seção 4.2: Metodologia CGU ───────────────────────────────────────
     sec_42 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_42.footer.is_linked_to_previous = False
-    f_42 = sec_42.footer.paragraphs[0]
-    f_42.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_42, '(7) A CGU, em seu Relatório de Auditoria nº 823121, considerou "vendas sem comprovação" no âmbito do PFPB a diferença identificada por princípio ativo/insumo, após o batimento entre Notas Fiscais de entrada (compartilhadas pela Receita Federal do Brasil e relativas a aquisições de medicamentos do PFPB) e registro de saída no Sistema Autorizador de Vendas – SAV (onde as dispensações subsidiadas são informadas), tendo como elo os números que constam abaixo dos códigos de barra (Código GTIN).', color='64748B', size=8)
+    sec_42.footer.paragraphs[0].text = ''
     sec_42.top_margin = Inches(0.5); sec_42.bottom_margin = Inches(0.5)
     sec_42.left_margin = Inches(0.7); sec_42.right_margin = Inches(0.7)
 
@@ -2067,8 +2096,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     p_sent.add_run('Sistema Sentinela').bold = True
     p_sent.add_run(', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
     p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”')
-    run_sup7 = p_cgu.add_run('7')
-    run_sup7.font.superscript = True
+    _footnote_ref(doc, p_cgu, 7, nota_cgu_7)
     p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
     doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir desta informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, de não existência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia em que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base da Receita Federal do Brasil de Notas Fiscais Eletrônicas (NF-e), utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e suas compras posteriores com as vendas realizadas no âmbito do Programa.')
     p_cutoff = doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
@@ -2102,18 +2130,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_sav_5, ultimo_mes_sav["mes_formatado"], underline=True)
     _run(p_sav_5, ', último mês com movimentação disponível para a Farmácia na base de dados.')
 
-    # ── Seção de informações cadastrais (Rodapé notas 8, 9, 10) ──────────────
+    # ── Seção de informações cadastrais ────────────────────────────────────
     sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
     sec_51.footer.is_linked_to_previous = False
-    f_51 = sec_51.footer.paragraphs[0]
-    f_51.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(f_51, '(8) Relação Anual de Informações Sociais, atualização em ', color='64748B', size=8)
-    _run(f_51, 'XXX de XXX', color='334155', size=8, bold=True)
-    _run(f_51, '. Consulta realizada em ', color='64748B', size=8)
-    _run(f_51, 'xx.xx.xxxx', color='334155', size=8, bold=True)
-    _run(f_51, '.\n', color='64748B', size=8)
-    _run(f_51, '(9) Art. 5º da Lei nº 13.021, de 08.08.2014.\n', color='64748B', size=8)
-    _run(f_51, '(10) eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas do governo federal.\n', color='64748B', size=8)
+    sec_51.footer.paragraphs[0].text = ''
     sec_51.top_margin = Inches(0.5); sec_51.bottom_margin = Inches(0.5)
     sec_51.left_margin = Inches(0.7); sec_51.right_margin = Inches(0.7)
 

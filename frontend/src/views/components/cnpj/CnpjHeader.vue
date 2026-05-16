@@ -323,7 +323,59 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
       </div>
 
       <div class="header-right-col">
-        <div class="list-actions">
+        <div
+          class="risk-context-panel"
+          :class="riskPanelClass"
+        >
+          <div
+            class="rcp-period"
+            :class="{ 'rcp-period--loading': periodLoading && !filterStore.isAnimating }"
+          >
+            <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
+            <span class="rcp-period-label">Período analisado</span>
+            <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
+          </div>
+          <div class="rcp-metrics">
+            <div class="rcp-score-row" v-if="cnpjData.score_risco_final != null">
+              <div class="rcp-item">
+                <span class="rcp-label">Score de Risco</span>
+                <span class="rcp-value">
+                  {{ cnpjData.score_risco_final.toFixed(1) }}
+                  <span class="rcp-badge">{{ cnpjData.classificacao_risco?.replace("RISCO ", "") ?? "" }}</span>
+                </span>
+              </div>
+            </div>
+            <div
+              class="rcp-progress-wrap"
+              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+            >
+              <div class="rcp-progress-header">
+                <span class="rcp-pct-inline">{{ displayPercValSemComp.toFixed(2) }}% <span class="rcp-pct-label">sem comprovação</span></span>
+              </div>
+              <div class="rcp-progress-track">
+                <div
+                  class="rcp-progress-fill"
+                  :style="{ width: `${Math.min(displayPercValSemComp, 100)}%` }"
+                />
+              </div>
+            </div>
+            <div
+              class="rcp-financials"
+              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+            >
+              <div class="rcp-item">
+                <span class="rcp-label">Sem Comprovação</span>
+                <span class="rcp-value">{{ formatCurrencyFull(displayValSemComp) }}</span>
+              </div>
+              <div class="rcp-divider" />
+              <div class="rcp-item">
+                <span class="rcp-label">Total Movimentado</span>
+                <span class="rcp-value">{{ formatCurrencyFull(displayTotalMov) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="list-actions list-actions--vertical">
           <button
             v-if="requestTimesTooltip"
             class="list-btn list-btn--icon-only list-btn--timing"
@@ -338,9 +390,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             :disabled="isExporting"
             v-tooltip.bottom="'Gerar Relatório PDF'"
           >
-            <i
-              :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"
-            />
+            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           </button>
           <button
             class="list-btn list-btn--icon-only list-btn--note"
@@ -352,28 +402,12 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           </button>
           <button
             class="list-btn list-btn--icon-only"
-            :class="
-              farmaciaLists.isInteresse(cnpj)
-                ? 'list-btn--interesse-active'
-                : 'list-btn--interesse'
-            "
+            :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
             @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
-            v-tooltip.bottom="
-              farmaciaLists.isInteresse(cnpj)
-                ? 'Remover da Lista de Interesse'
-                : 'Adicionar à Lista de Interesse'
-            "
+            v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
           >
-            <i
-              :class="
-                farmaciaLists.isInteresse(cnpj)
-                  ? 'pi pi-star-fill'
-                  : 'pi pi-star'
-              "
-            />
+            <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
           </button>
-
-          <!-- Botão de Observação -->
           <button
             v-if="farmaciaLists.isInteresse(cnpj)"
             class="list-btn list-btn--icon-only list-btn--obs"
@@ -383,50 +417,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           >
             <i :class="hasObservacao ? 'pi pi-comment' : 'pi pi-pencil'" />
           </button>
-        </div>
-        <div
-          class="risk-context-panel"
-          :class="riskPanelClass"
-        >
-          <div
-            class="rcp-period"
-            :class="{ 'rcp-period--loading': periodLoading && !filterStore.isAnimating }"
-          >
-            <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
-            <span class="rcp-period-label">Período analisado</span>
-            <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
-          </div>
-          <div class="rcp-metrics">
-            <div
-              class="rcp-item"
-              v-if="cnpjData.score_risco_final != null"
-            >
-              <span class="rcp-label">Score de Risco</span>
-              <span class="rcp-value">
-                {{ cnpjData.score_risco_final.toFixed(1) }}
-                <span class="rcp-badge">{{ cnpjData.classificacao_risco?.replace("RISCO ", "") ?? "" }}</span>
-              </span>
-            </div>
-            <div class="rcp-divider" v-if="cnpjData.score_risco_final != null" />
-            <div
-              class="rcp-item"
-              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
-            >
-              <span class="rcp-label">Sem Comprovação</span>
-              <span class="rcp-value">
-                {{ formatCurrencyFull(displayValSemComp) }}
-                <span class="rcp-pct">{{ displayPercValSemComp.toFixed(2) }}%</span>
-              </span>
-            </div>
-            <div class="rcp-divider" />
-            <div
-              class="rcp-item"
-              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
-            >
-              <span class="rcp-label">Total Movimentado</span>
-              <span class="rcp-value rcp-value--neutral">{{ formatCurrencyFull(displayTotalMov) }}</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -571,9 +561,8 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 
 .header-right-col {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-start;
+  flex-direction: row;
+  align-items: stretch;
   gap: 0.75rem;
   flex-shrink: 0;
 }
@@ -1434,18 +1423,24 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 }
 
 .rcp-period-value {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--establishment-header-text);
-  opacity: 0.9;
+  opacity: 1;
   white-space: nowrap;
 }
 
 .rcp-metrics {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   flex: 1;
-  padding: 0 0.5rem 0 0.7rem;
+  justify-content: flex-start;
+  padding: 0.35rem 0.75rem 0.45rem;
+  gap: 0;
+}
+
+.rcp-financials {
+  margin-top: auto;
 }
 
 .rcp-item {
@@ -1464,7 +1459,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 }
 
 .rcp-label {
-  font-size: 0.64rem;
+  font-size: 0.67rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1490,27 +1485,99 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 }
 
 .rcp-badge {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 30%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
 }
 
-.risk-context-panel.risk-high    .rcp-badge { color: var(--risk-high); }
-.risk-context-panel.risk-critical .rcp-badge { color: var(--risk-critical); }
-.risk-context-panel.risk-medium  .rcp-badge { color: var(--risk-medium); }
-.risk-context-panel.risk-low     .rcp-badge { color: var(--risk-low); }
+.risk-context-panel.risk-high    .rcp-badge { color: var(--risk-high);     border-color: color-mix(in srgb, var(--risk-high) 35%, transparent);     background: color-mix(in srgb, var(--risk-high) 12%, transparent); }
+.risk-context-panel.risk-critical .rcp-badge { color: var(--risk-critical); border-color: color-mix(in srgb, var(--risk-critical) 35%, transparent); background: color-mix(in srgb, var(--risk-critical) 12%, transparent); }
+.risk-context-panel.risk-medium  .rcp-badge { color: var(--risk-medium);   border-color: color-mix(in srgb, var(--risk-medium) 35%, transparent);   background: color-mix(in srgb, var(--risk-medium) 12%, transparent); }
+.risk-context-panel.risk-low     .rcp-badge { color: var(--risk-low);      border-color: color-mix(in srgb, var(--risk-low) 35%, transparent);      background: color-mix(in srgb, var(--risk-low) 12%, transparent); }
 
-.rcp-pct {
-  font-size: 0.72rem;
+.rcp-score-row {
+  display: flex;
+  align-items: center;
+}
+
+.rcp-score-row .rcp-item {
+  padding-left: 0;
+}
+
+.rcp-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.rcp-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.rcp-pct-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.rcp-progress-track {
+  height: 6px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.rcp-progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.risk-context-panel.risk-high    .rcp-progress-fill { background: var(--risk-high); }
+.risk-context-panel.risk-critical .rcp-progress-fill { background: var(--risk-critical); }
+.risk-context-panel.risk-medium  .rcp-progress-fill { background: var(--risk-medium); }
+.risk-context-panel.risk-low     .rcp-progress-fill { background: var(--risk-low); }
+
+.rcp-pct-inline {
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-muted);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
-.risk-context-panel.risk-high    .rcp-pct { color: var(--risk-high); }
-.risk-context-panel.risk-critical .rcp-pct { color: var(--risk-critical); }
-.risk-context-panel.risk-medium  .rcp-pct { color: var(--risk-medium); }
-.risk-context-panel.risk-low     .rcp-pct { color: var(--risk-low); }
+.risk-context-panel.risk-high    .rcp-pct-inline { color: var(--risk-high); }
+.risk-context-panel.risk-critical .rcp-pct-inline { color: var(--risk-critical); }
+.risk-context-panel.risk-medium  .rcp-pct-inline { color: var(--risk-medium); }
+.risk-context-panel.risk-low     .rcp-pct-inline { color: var(--risk-low); }
+
+.rcp-financials {
+  display: flex;
+  align-items: center;
+}
+
+.rcp-financials .rcp-item:first-child {
+  padding-left: 0;
+}
+
+.list-actions--vertical {
+  display: grid;
+  grid-template-columns: repeat(2, 34px);
+  align-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.5rem 0.6rem;
+  border-left: 1px solid var(--card-border);
+}
 </style>

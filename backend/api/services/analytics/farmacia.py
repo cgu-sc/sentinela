@@ -396,7 +396,6 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
             # Formata campos decimais
             for key in ["valor_movimentado", "valor_sem_comprovacao"]:
                 if key in item and item[key] is not None:
-                    from decimal import Decimal
                     item[key] = Decimal(str(item[key]))
     
     except (SQLAInterfaceError, Exception):

@@ -268,9 +268,8 @@ CREATE TABLE fp.memoria_calculo_consolidada (
     id_processamento BIGINT NOT NULL, -- Link com a tabela processamentosFP
     cnpj VARCHAR(14) NOT NULL,
     
-    -- O "Coração" da Auditoria: Todo o cálculo do Python em formato JSON
-    dados_comprimidos VARBINARY(MAX),
-    dados_comprimidos_v2 VARBINARY(MAX),
+    -- O "Coração" da Auditoria: Todo o cálculo do Python em formato JSON estruturado (Payload v2)
+    memoria_calculo_payload VARBINARY(MAX),
     schema_version TINYINT NOT NULL DEFAULT 1,
     
     data_carga DATETIME DEFAULT GETDATE()

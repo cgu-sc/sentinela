@@ -380,18 +380,18 @@ def montar_memoria_calculo_v2(cnpj, tabela_completa, tabela_sumario, tabela_esto
 
 def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_estruturados):
     """
-    Serializa a memoria de calculo no formato estruturado v2.
+    Serializa a memoria de calculo no formato estruturado (Payload v2).
     """
     if not id_processamento or not dados_estruturados:
         raise ValueError(f"Memória de cálculo vazia ou processamento inválido para {cnpj}")
 
-    dados_comprimidos_v2 = compactar_json(dados_estruturados)
+    payload_comprimido = compactar_json(dados_estruturados)
 
     cursor.execute('''
         INSERT INTO temp_CGUSC.fp.memoria_calculo_consolidada
-        (id_processamento, cnpj, dados_comprimidos_v2, schema_version)
+        (id_processamento, cnpj, memoria_calculo_payload, schema_version)
         VALUES (?, ?, ?, ?)
-    ''', id_processamento, cnpj, dados_comprimidos_v2, 2)
+    ''', id_processamento, cnpj, payload_comprimido, 2)
 
     conn.commit()
 

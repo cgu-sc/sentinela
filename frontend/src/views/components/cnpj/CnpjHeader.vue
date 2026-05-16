@@ -375,49 +375,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             </div>
           </div>
         </div>
-        <div class="list-actions list-actions--vertical">
-          <button
-            v-if="requestTimesTooltip"
-            class="list-btn list-btn--icon-only list-btn--timing"
-            v-tooltip.bottom="requestTimesTooltip"
-            style="cursor: default;"
-          >
-            <i class="pi pi-stopwatch" />
-          </button>
-          <button
-            class="list-btn list-btn--icon-only list-btn--export"
-            @click="emit('export')"
-            :disabled="isExporting"
-            v-tooltip.bottom="'Gerar Relatório PDF'"
-          >
-            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
-          </button>
-          <button
-            class="list-btn list-btn--icon-only list-btn--note"
-            @click="emit('generateNote')"
-            :disabled="isGeneratingNote"
-            v-tooltip.bottom="'Gerar Nota Técnica'"
-          >
-            <i :class="isGeneratingNote ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
-          </button>
-          <button
-            class="list-btn list-btn--icon-only"
-            :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
-            @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
-            v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
-          >
-            <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
-          </button>
-          <button
-            v-if="farmaciaLists.isInteresse(cnpj)"
-            class="list-btn list-btn--icon-only list-btn--obs"
-            :class="{ 'list-btn--obs-active': hasObservacao }"
-            @click="openObsDialog"
-            v-tooltip.bottom="hasObservacao ? 'Editar Observação' : 'Adicionar Observação'"
-          >
-            <i :class="hasObservacao ? 'pi pi-comment' : 'pi pi-pencil'" />
-          </button>
-        </div>
       </div>
     </div>
 
@@ -515,6 +472,49 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
           </div>
         </div>
       </div>
+      <div class="list-actions list-actions--vertical">
+          <button
+            v-if="requestTimesTooltip"
+            class="list-btn list-btn--icon-only list-btn--timing"
+            v-tooltip.bottom="requestTimesTooltip"
+            style="cursor: default;"
+          >
+            <i class="pi pi-stopwatch" />
+          </button>
+          <button
+            class="list-btn list-btn--icon-only list-btn--export"
+            @click="emit('export')"
+            :disabled="isExporting"
+            v-tooltip.bottom="'Gerar Relatório PDF'"
+          >
+            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+          </button>
+          <button
+            class="list-btn list-btn--icon-only list-btn--note"
+            @click="emit('generateNote')"
+            :disabled="isGeneratingNote"
+            v-tooltip.bottom="'Gerar Nota Técnica'"
+          >
+            <i :class="isGeneratingNote ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
+          </button>
+          <button
+            class="list-btn list-btn--icon-only"
+            :class="farmaciaLists.isInteresse(cnpj) ? 'list-btn--interesse-active' : 'list-btn--interesse'"
+            @click="farmaciaLists.toggleInteresse(cnpj, cnpjData.razao_social)"
+            v-tooltip.bottom="farmaciaLists.isInteresse(cnpj) ? 'Remover da Lista de Interesse' : 'Adicionar à Lista de Interesse'"
+          >
+            <i :class="farmaciaLists.isInteresse(cnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
+          </button>
+          <button
+            v-if="farmaciaLists.isInteresse(cnpj)"
+            class="list-btn list-btn--icon-only list-btn--obs"
+            :class="{ 'list-btn--obs-active': hasObservacao }"
+            @click="openObsDialog"
+            v-tooltip.bottom="hasObservacao ? 'Editar Observação' : 'Adicionar Observação'"
+          >
+            <i :class="hasObservacao ? 'pi pi-comment' : 'pi pi-pencil'" />
+          </button>
+        </div>
     </div>
 
     <div class="header-loading" v-else>
@@ -1573,11 +1573,12 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 }
 
 .list-actions--vertical {
-  display: grid;
-  grid-template-columns: repeat(2, 34px);
-  align-content: center;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0 0.5rem 0.6rem;
+  padding-left: 1rem;
+  margin-left: auto;
   border-left: 1px solid var(--card-border);
 }
 </style>

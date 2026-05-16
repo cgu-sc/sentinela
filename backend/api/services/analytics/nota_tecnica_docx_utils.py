@@ -1,0 +1,283 @@
+from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import XmlPart
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
+
+
+def _cell_bg(cell, fill_hex: str):
+    """Define cor de fundo de uma celula."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    for existing in tcPr.findall(qn('w:shd')):
+        tcPr.remove(existing)
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), fill_hex)
+    tcPr.append(shd)
+
+
+def _cell_bg_run(run, fill_hex: str):
+    """Define cor de fundo para um run especifico."""
+    r = run._r
+    rPr = r.get_or_add_rPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), fill_hex)
+    rPr.append(shd)
+
+
+def _cell_borders(cell, left=None, right=None, top=None, bottom=None):
+    """Define bordas coloridas em lados especificos da celula. None = sem borda."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    for existing in tcPr.findall(qn('w:tcBorders')):
+        tcPr.remove(existing)
+    tcBorders = OxmlElement('w:tcBorders')
+    for side, spec in (('left', left), ('right', right), ('top', top), ('bottom', bottom)):
+        el = OxmlElement(f'w:{side}')
+        if spec:
+            el.set(qn('w:val'), 'single')
+            el.set(qn('w:sz'), spec['sz'])
+            el.set(qn('w:space'), '0')
+            el.set(qn('w:color'), spec['color'])
+        else:
+            el.set(qn('w:val'), 'none')
+        tcBorders.append(el)
+    tcPr.append(tcBorders)
+
+
+def _tbl_no_borders(tbl):
+    """Remove todas as bordas visiveis de uma tabela no nivel da tabela."""
+    tblEl = tbl._tbl
+    tblPr = tblEl.find(qn('w:tblPr'))
+    if tblPr is None:
+        tblPr = OxmlElement('w:tblPr')
+        tblEl.insert(0, tblPr)
+    for existing in tblPr.findall(qn('w:tblBorders')):
+        tblPr.remove(existing)
+    tblBorders = OxmlElement('w:tblBorders')
+    for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        el = OxmlElement(f'w:{side}')
+        el.set(qn('w:val'), 'none')
+        tblBorders.append(el)
+    tblPr.append(tblBorders)
+
+
+def _row_cant_split(row):
+    """Evita que uma linha da tabela seja quebrada entre paginas pelo Word."""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn('w:cantSplit')) is None:
+        cant_split = OxmlElement('w:cantSplit')
+        trPr.append(cant_split)
+
+
+def _repeat_table_header(row):
+    """Marca uma linha de tabela para repetir como cabecalho nas paginas seguintes."""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn('w:tblHeader')) is None:
+        tbl_header = OxmlElement('w:tblHeader')
+        tbl_header.set(qn('w:val'), 'true')
+        trPr.append(tbl_header)
+
+
+def _keep_small_table_together(title_para, table, trailing_paragraphs=None):
+    """Mantem titulo e tabela curta juntos quando houver espaco na pagina."""
+    title_para.paragraph_format.keep_with_next = True
+    title_para.paragraph_format.keep_together = True
+
+    table_paragraphs = []
+    for row in table.rows:
+        _row_cant_split(row)
+        for cell in row.cells:
+            table_paragraphs.extend(cell.paragraphs)
+
+    for para in table_paragraphs:
+        para.paragraph_format.keep_together = True
+        para.paragraph_format.keep_with_next = True
+
+    trailing_paragraphs = trailing_paragraphs or []
+    for para in trailing_paragraphs:
+        para.paragraph_format.keep_together = True
+        para.paragraph_format.keep_with_next = True
+
+    if trailing_paragraphs:
+        trailing_paragraphs[-1].paragraph_format.keep_with_next = False
+    elif table_paragraphs:
+        table_paragraphs[-1].paragraph_format.keep_with_next = False
+
+
+def _rgb(hex6: str) -> RGBColor:
+    return RGBColor(int(hex6[0:2], 16), int(hex6[2:4], 16), int(hex6[4:6], 16))
+
+
+def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False, italic=False, underline=False):
+    run = para.add_run(text)
+    run.bold = bold
+    run.italic = italic
+    run.underline = underline
+    run.font.size = Pt(size)
+    run.font.color.rgb = _rgb(color)
+    return run
+
+
+def _sup_note(para, number: int, *, color: str = '0F172A'):
+    """Adiciona numero sobrescrito para nota manual de rodape."""
+    run = para.add_run(str(number))
+    run.font.superscript = True
+    run.font.size = Pt(7)
+    run.font.color.rgb = _rgb(color)
+    return run
+
+
+def _get_or_add_footnotes_part(doc):
+    """Obtem ou cria a parte XML de footnotes reais do Word."""
+    try:
+        return doc.part.part_related_by(RT.FOOTNOTES)
+    except KeyError:
+        xml = (
+            '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+            '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+            '</w:footnotes>'
+        )
+        part = XmlPart(
+            PackURI('/word/footnotes.xml'),
+            CT.WML_FOOTNOTES,
+            parse_xml(xml),
+            doc.part.package,
+        )
+        doc.part.relate_to(part, RT.FOOTNOTES)
+        return part
+
+
+def _ensure_footnote(doc, number: int, text: str):
+    """Garante a existencia de uma nota de rodape numerada."""
+    part = _get_or_add_footnotes_part(doc)
+    footnotes = part.element
+    for existing in footnotes.findall(qn('w:footnote')):
+        if existing.get(qn('w:id')) == str(number):
+            return
+
+    footnote = OxmlElement('w:footnote')
+    footnote.set(qn('w:id'), str(number))
+    p = OxmlElement('w:p')
+    p_pr = OxmlElement('w:pPr')
+    p_style = OxmlElement('w:pStyle')
+    p_style.set(qn('w:val'), 'FootnoteText')
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:before'), '0')
+    spacing.set(qn('w:after'), '0')
+    spacing.set(qn('w:line'), '240')
+    spacing.set(qn('w:lineRule'), 'auto')
+    p_pr.append(p_style)
+    p_pr.append(spacing)
+    p.append(p_pr)
+
+    r_ref = OxmlElement('w:r')
+    r_ref_pr = OxmlElement('w:rPr')
+    r_ref_style = OxmlElement('w:rStyle')
+    r_ref_style.set(qn('w:val'), 'FootnoteReference')
+    r_ref_vert = OxmlElement('w:vertAlign')
+    r_ref_vert.set(qn('w:val'), 'superscript')
+    r_ref_size = OxmlElement('w:sz')
+    r_ref_size.set(qn('w:val'), '20')
+    r_ref_pr.append(r_ref_style)
+    r_ref_pr.append(r_ref_vert)
+    r_ref_pr.append(r_ref_size)
+    r_ref.append(r_ref_pr)
+    r_ref_note = OxmlElement('w:footnoteRef')
+    r_ref.append(r_ref_note)
+    p.append(r_ref)
+
+    r_text = OxmlElement('w:r')
+    r_text_pr = OxmlElement('w:rPr')
+    r_text_size = OxmlElement('w:sz')
+    r_text_size.set(qn('w:val'), '16')
+    r_text_pr.append(r_text_size)
+    r_text.append(r_text_pr)
+    t = OxmlElement('w:t')
+    t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    t.text = f' {text}'
+    r_text.append(t)
+    p.append(r_text)
+
+    footnote.append(p)
+    footnotes.append(footnote)
+
+
+def _footnote_ref(doc, para, number: int, text: str):
+    """Insere referencia de footnote real e garante seu texto."""
+    _ensure_footnote(doc, number, text)
+    run = para.add_run()
+    r = run._r
+    r_pr = r.get_or_add_rPr()
+    r_style = OxmlElement('w:rStyle')
+    r_style.set(qn('w:val'), 'FootnoteReference')
+    r_pr.append(r_style)
+    r_vert = OxmlElement('w:vertAlign')
+    r_vert.set(qn('w:val'), 'superscript')
+    r_pr.append(r_vert)
+    r_size = OxmlElement('w:sz')
+    r_size.set(qn('w:val'), '20')
+    r_pr.append(r_size)
+    ref = OxmlElement('w:footnoteReference')
+    ref.set(qn('w:id'), str(number))
+    r.append(ref)
+    return run
+
+
+def _set_cell_width(cell, width):
+    cell.width = width
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_w = tc_pr.find(qn('w:tcW'))
+    if tc_w is None:
+        tc_w = OxmlElement('w:tcW')
+        tc_pr.append(tc_w)
+    tc_w.set(qn('w:w'), str(int(width.twips)))
+    tc_w.set(qn('w:type'), 'dxa')
+
+
+def _set_table_fixed_widths(table, widths):
+    """Fixa a grade da tabela para o Word nao redistribuir as colunas."""
+    tbl = table._tbl
+    tbl_pr = tbl.tblPr
+
+    tbl_layout = tbl_pr.find(qn('w:tblLayout'))
+    if tbl_layout is None:
+        tbl_layout = OxmlElement('w:tblLayout')
+        tbl_pr.append(tbl_layout)
+    tbl_layout.set(qn('w:type'), 'fixed')
+
+    tbl_w = tbl_pr.find(qn('w:tblW'))
+    if tbl_w is None:
+        tbl_w = OxmlElement('w:tblW')
+        tbl_pr.append(tbl_w)
+    tbl_w.set(qn('w:w'), str(sum(int(width.twips) for width in widths)))
+    tbl_w.set(qn('w:type'), 'dxa')
+
+    existing_grid = tbl.find(qn('w:tblGrid'))
+    if existing_grid is not None:
+        tbl.remove(existing_grid)
+    tbl_grid = OxmlElement('w:tblGrid')
+    for width in widths:
+        grid_col = OxmlElement('w:gridCol')
+        grid_col.set(qn('w:w'), str(int(width.twips)))
+        tbl_grid.append(grid_col)
+    tbl.insert(1, tbl_grid)
+
+    for idx, width in enumerate(widths):
+        table.columns[idx].width = width
+
+
+def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):
+    p = cell.paragraphs[0]
+    p.text = ''
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    if align is not None:
+        p.alignment = align
+    _run(p, text, color=color, size=size, bold=bold)

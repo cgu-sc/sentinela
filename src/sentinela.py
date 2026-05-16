@@ -378,21 +378,20 @@ def montar_memoria_calculo_v2(cnpj, tabela_completa, tabela_sumario, tabela_esto
     }
 
 
-def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_brutos, dados_estruturados):
+def salvar_memoria_calculo(cursor, conn, id_processamento, cnpj, dados_estruturados):
     """
-    Serializa a memoria de calculo nos formatos legado e estruturado v2.
+    Serializa a memoria de calculo no formato estruturado v2.
     """
-    if not id_processamento or not dados_brutos or not dados_estruturados:
+    if not id_processamento or not dados_estruturados:
         raise ValueError(f"Memória de cálculo vazia ou processamento inválido para {cnpj}")
 
-    dados_comprimidos = compactar_json(dados_brutos)
     dados_comprimidos_v2 = compactar_json(dados_estruturados)
 
     cursor.execute('''
         INSERT INTO temp_CGUSC.fp.memoria_calculo_consolidada
-        (id_processamento, cnpj, dados_comprimidos, dados_comprimidos_v2, schema_version)
-        VALUES (?, ?, ?, ?, ?)
-    ''', id_processamento, cnpj, dados_comprimidos, dados_comprimidos_v2, 2)
+        (id_processamento, cnpj, dados_comprimidos_v2, schema_version)
+        VALUES (?, ?, ?, ?)
+    ''', id_processamento, cnpj, dados_comprimidos_v2, 2)
 
     conn.commit()
 
@@ -1048,8 +1047,6 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             # GERAÇÃO DE RELATÓRIOS (EXCEL) - COM O 4º ARGUMENTO
             # =====================================================================
             t0 = time.time()
-            d_rel = []
-            for cod in sorted(tabela_completa.keys()): d_rel.extend(tabela_completa[cod])
             memoria_v2 = montar_memoria_calculo_v2(
                 cnpj,
                 tabela_completa,
@@ -1058,8 +1055,8 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
             )
 
             if id_proc_atual:
-                # Grava o JSON com todo o histórico processado
-                salvar_memoria_calculo(cursor, conn, id_proc_atual, cnpj, d_rel, memoria_v2)
+                # Grava o JSON estruturado v2
+                salvar_memoria_calculo(cursor, conn, id_proc_atual, cnpj, memoria_v2)
 
             t_db_write = time.time() - t0
 

@@ -305,12 +305,12 @@ def _title_case_pt(value: Any) -> str:
 
 def _format_month_year_pt(month_key: str) -> str:
     """Formata uma chave mensal YYYY-MM como MM/YYYY."""
-    parts = str(month_key or "").split("-")
+    parts = (month_key or "").split("-")
     if len(parts) != 2:
-        return str(month_key or "—")
+        return month_key or "—"
     year, month = parts
     if len(year) != 4 or len(month) != 2:
-        return str(month_key or "—")
+        return month_key or "—"
     return f"{month}/{year}"
 
 
@@ -330,13 +330,13 @@ def _format_month_year_long_pt(month_key: str) -> str:
         "11": "novembro",
         "12": "dezembro",
     }
-    parts = str(month_key or "").split("-")
+    parts = (month_key or "").split("-")
     if len(parts) != 2:
-        return str(month_key or "—")
+        return month_key or "—"
     year, month = parts
     month_name = month_names.get(month)
     if len(year) != 4 or month_name is None:
-        return str(month_key or "—")
+        return month_key or "—"
     return f"{month_name} de {year}"
 
 
@@ -347,7 +347,7 @@ def _format_date_month_year_long_pt(value: date) -> str:
 
 def _format_semestre_pt(semestre: str) -> str:
     """Formata labels como 1S/2021 para 1º Semestre/2021."""
-    label = str(semestre or "").strip()
+    label = (semestre or "").strip()
     if len(label) >= 7 and label[0] in {"1", "2"} and label[1].upper() == "S" and label[2] == "/":
         return f"{label[0]}º Semestre/{label[3:]}"
     return label
@@ -359,7 +359,7 @@ def _semester_key_from_date(value: date) -> int:
 
 
 def _semester_key_from_label(semestre: str) -> int | None:
-    label = str(semestre or "").strip()
+    label = (semestre or "").strip()
     if len(label) >= 7 and label[0] in {"1", "2"} and label[1].upper() == "S" and label[2] == "/":
         try:
             return int(label[3:]) * 100 + int(label[0])
@@ -410,10 +410,14 @@ def _load_chart_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont
     return ImageFont.load_default()
 
 
-def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
+def _text_size(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> tuple[int, int]:
     """Mede texto em pixels com compatibilidade entre versoes do Pillow."""
     bbox = draw.textbbox((0, 0), text, font=font)
-    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
 def _draw_dashed_line(
@@ -440,7 +444,7 @@ def _draw_rotated_text(
     text: str,
     center: tuple[int, int],
     *,
-    font: ImageFont.ImageFont,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     fill: tuple[int, int, int],
     angle: int = -38,
 ):
@@ -708,14 +712,14 @@ def _build_regional_comparison_context(
         raise RuntimeError("percValSemComp e obrigatorio para comparacao regional da Nota Tecnica.")
 
     percentuais_regionais = [
-        float(f.percValSemComp)
+        f.percValSemComp
         for f in regional.farmacias
         if f.percValSemComp is not None
     ]
     if not percentuais_regionais:
         raise RuntimeError("Percentuais regionais obrigatorios ausentes para comparacao da Nota Tecnica.")
 
-    mediana_regional = float(median(percentuais_regionais))
+    mediana_regional = median(percentuais_regionais)
     if mediana_regional <= 0:
         raise RuntimeError("Mediana regional deve ser maior que zero para calcular o multiplicador da Nota Tecnica.")
 
@@ -787,7 +791,8 @@ def _build_scope_percentual_comparison(
         label = f"UF {uf}" if uf else "Brasil"
         raise RuntimeError(f"Percentuais ausentes para calcular mediana de {label} da Nota Tecnica.")
 
-    mediana = float(cnpj_agg.get_column("percValSemComp").median() or 0.0)
+    mediana_raw = cnpj_agg.get_column("percValSemComp").median()
+    mediana = float(mediana_raw if isinstance(mediana_raw, (int, float)) else 0.0)
     if mediana <= 0:
         label = f"UF {uf}" if uf else "Brasil"
         raise RuntimeError(f"Mediana de {label} deve ser maior que zero para calcular o multiplicador da Nota Tecnica.")
@@ -1458,11 +1463,11 @@ def _build_falecidos_context(
     if cpfs:
         cpfs_distintos = len(cpfs)
 
-    datas = [
-        getattr(t, "data_autorizacao", None)
-        for t in transacoes
-        if getattr(t, "data_autorizacao", None)
-    ]
+    datas: list[date] = []
+    for t in transacoes:
+        data_autorizacao = getattr(t, "data_autorizacao", None)
+        if isinstance(data_autorizacao, date):
+            datas.append(data_autorizacao)
     inicio_ref = data_inicio or (min(datas) if datas else None)
     fim_ref = data_fim or (max(datas) if datas else None)
     if inicio_ref and fim_ref:
@@ -2411,15 +2416,24 @@ def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
         grupo["max_dias"] = max(grupo["max_dias"], dias)
 
     def sort_key(item: dict[str, Any]):
-        primeira_data = min(
-            (getattr(t, "data_autorizacao", None) for t in item["transacoes"] if getattr(t, "data_autorizacao", None)),
-            default=date.max,
-        )
+        datas_validas = [
+            data_autorizacao
+            for t in item["transacoes"]
+            if isinstance((data_autorizacao := getattr(t, "data_autorizacao", None)), date)
+        ]
+        primeira_data = min(datas_validas, default=date.max)
         return (item["cpf"], primeira_data)
 
     grupos_lista = sorted(grupos.values(), key=sort_key)
     for grupo in grupos_lista:
-        grupo["transacoes"].sort(key=lambda t: (getattr(t, "data_autorizacao", None) or date.max, getattr(t, "num_autorizacao", "") or ""))
+        grupo["transacoes"].sort(
+            key=lambda t: (
+                getattr(t, "data_autorizacao", None)
+                if isinstance(getattr(t, "data_autorizacao", None), date)
+                else date.max,
+                getattr(t, "num_autorizacao", "") or "",
+            )
+        )
     return grupos_lista
 
 
@@ -2561,12 +2575,13 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
                 cell = row.cells[idx]
                 _set_cell_width(cell, widths[idx])
                 if idx == 0:
-                    _write_person_cell(cell, _title_case_pt(getattr(t, "nome_falecido", None)), getattr(t, "cpf", None))
+                    cpf = str(getattr(t, "cpf", "") or "")
+                    _write_person_cell(cell, _title_case_pt(getattr(t, "nome_falecido", None)), cpf)
                     continue
                 align = WD_ALIGN_PARAGRAPH.RIGHT if idx in {4, 5} else WD_ALIGN_PARAGRAPH.LEFT
                 if idx in {2, 3}:
                     align = WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell(cell, value, size=7.4, color='0F172A', align=align)
+                _write_cell(cell, value or "—", size=7.4, color='0F172A', align=align)
 
         subtotal_row = table.add_row()
         _row_cant_split(subtotal_row)

@@ -12,11 +12,11 @@ from .nota_tecnica_formatters import _format_decimal_pt
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
 
 _SECAO5_MAP = [
-    ('falecidos',                    '5.5',  'Vendas de medicamento para pessoas falecidas'),
-    ('incompatibilidade_patologica', '5.6',  'Vendas de medicamento com incompatibilidade patológica'),
+    ('falecidos',                    '5.5',  'Vendas de medicamentos para pessoas falecidas'),
+    ('incompatibilidade_patologica', '5.6',  'Vendas de medicamentos com incompatibilidade patológica'),
     ('teto',                         '5.7',  'Vendas no “teto máximo” para clientes da Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('polimedicamento',              '5.8',  'Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('ticket_medio',                 '5.10', 'Valor do “ticket médio”, dos medicamentos vendidos pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
+    ('ticket_medio',                 '5.10', 'Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('receita_paciente',             '5.11', 'Faturamento médio mensal por cliente, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('per_capita',                   '5.12', 'Faturamento mensal per capita, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('alto_custo',                   '5.13', 'Vendas de medicamentos de alto custo realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
@@ -26,7 +26,7 @@ _SECAO5_MAP = [
     ('dispersao_geografica',         '5.17', 'Vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
-    ('exclusividade_crm',            '5.20', 'Vendas de medicamentos vinculados a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {farmacia}'),
+    ('exclusividade_crm',            '5.20', 'Vendas de medicamentos vinculadas a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {farmacia}'),
 ]
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
 
@@ -463,7 +463,7 @@ def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[s
     multiplicador_br_fmt = _format_decimal_pt(ticket_comp["multiplicador_brasil"], 2)
 
     doc.add_heading(
-        f'{num} Valor do “ticket médio”, dos medicamentos vendidos pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
+        f'{num} Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
 

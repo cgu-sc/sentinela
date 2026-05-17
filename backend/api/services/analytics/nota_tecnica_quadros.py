@@ -19,7 +19,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         p_title,
         'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
         color='0F172A',
-        size=10,
+        size=9,
         bold=True,
     )
 
@@ -88,7 +88,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
         p_title,
         'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
         color='0F172A',
-        size=10,
+        size=9,
         bold=True,
     )
 
@@ -134,9 +134,9 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(
         p_title,
-        f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoques amparados em notas fiscais de suas aquisições, no período de {periodo_txt}.',
+        f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
         color='0F172A',
-        size=10,
+        size=9,
         bold=True,
     )
 
@@ -148,7 +148,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         'GTIN/Código de Barras',
         'Descrição',
         'Quantidade de vendas sem comprovação',
-        'Valor em venda sem comprovação (R$)',
+        'Valor de vendas sem comprovação (R$)',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -183,7 +183,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    _run(p_foot, f'Fonte: informações acerca das dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
+    _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
 
 
 def _add_quadro_evolucao_financeira(
@@ -193,13 +193,18 @@ def _add_quadro_evolucao_financeira(
     evolucao_comp: dict[str, Any],
 ):
     """Adiciona quadro semestral de transferencias e vendas sem comprovacao."""
+    periodo_semestres = (
+        f'no {evolucao_comp["primeiro_semestre_fmt"]}'
+        if evolucao_comp["primeiro_semestre"] == evolucao_comp["ultimo_semestre"]
+        else f'do {evolucao_comp["primeiro_semestre_fmt"]} ao {evolucao_comp["ultimo_semestre_fmt"]}'
+    )
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(
         p_title,
-        f'Quadro 05 - Recebimento de recursos do Ministério da Saúde e “vendas sem comprovação” relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período de {evolucao_comp["periodo_semestres"]}.',
+        f'Quadro 05 - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='0F172A',
-        size=10,
+        size=9,
         bold=True,
     )
 
@@ -271,15 +276,6 @@ def _add_quadro_evolucao_financeira(
                 p.paragraph_format.space_before = Pt(1)
                 p.paragraph_format.space_after = Pt(1)
 
-    p_obs = doc.add_paragraph()
-    _run(
-        p_obs,
-        'Obs. De acordo com o SIAFI, esta empresa possui a conta bancária: xxxxx-x, agência: xxxx, banco: xxx. Informação pendente de integração/fonte.',
-        color='334155',
-        size=8,
-        bold=True,
-    )
-
     p_foot = doc.add_paragraph()
     _run(
         p_foot,
@@ -287,7 +283,7 @@ def _add_quadro_evolucao_financeira(
         color='64748B',
         size=8,
     )
-    _keep_small_table_together(p_title, table, [p_obs, p_foot])
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_txt: str):
@@ -429,7 +425,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p_title, f'Quadro 02 – Dispensações de medicamentos, informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação de Notas Fiscais de aquisições.', color='0F172A', size=10, bold=True)
+    _run(p_title, f'Quadro 02 – Dispensações de medicamentos, informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação de Notas Fiscais de aquisições.', color='0F172A', size=9, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
@@ -470,6 +466,5 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
 
     p_foot = doc.add_paragraph()
     p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(p_foot, f'* Correspondente ao período {periodo_txt}.\n', color='64748B', size=8)
     _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=8)
     _keep_small_table_together(p_title, table, [p_foot])

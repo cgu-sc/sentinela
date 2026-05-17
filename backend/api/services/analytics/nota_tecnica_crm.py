@@ -43,6 +43,10 @@ def _format_date_br(value: Any) -> str:
     return text
 
 
+def _vez_ou_vezes(value: float) -> str:
+    return "vez" if abs(value) <= 1 else "vezes"
+
+
 def _crm_num_uf(id_medico: Any) -> tuple[str, str]:
     text = str(id_medico or "").strip()
     if "/" not in text:
@@ -440,21 +444,21 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     )
 
     p3 = doc.add_paragraph()
-    _run(p3, "Conforme o Quadro 07, observa-se concentração relevante das dispensações em torno do médico ", color="0F172A", size=10)
+    _run(p3, "Conforme o Quadro 07, observa-se concentração relevante das dispensações no médico ", color="0F172A", size=10)
     _run(p3, nome_medico, color="334155", size=10, bold=True)
     _run(p3, ", CRM ", color="0F172A", size=10)
     _run(p3, crm_ident, color="334155", size=10, bold=True)
-    _run(p3, f". Das {total_autorizacoes} autorizações verificadas no período, ", color="0F172A", size=10)
+    _run(p3, ". No período analisado, esse CRM concentrou ", color="0F172A", size=10)
     _run(p3, f"{principal_autorizacoes}", color="334155", size=10, bold=True)
-    _run(p3, " estavam vinculadas a esse CRM, o que corresponde a ", color="0F172A", size=10)
+    _run(p3, f" das {total_autorizacoes} autorizações verificadas, correspondendo a ", color="0F172A", size=10)
     _run(p3, f'{_format_decimal_pt(hhi_crm_comp["pct_autorizacoes"], 2)}%', color="334155", size=10, bold=True)
     _run(
         p3,
-        f" da produção da farmácia. Considerando que foram identificados {total_medicos} médicos no período, a média foi de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM, de modo que o volume associado ao CRM {crm_ident} foi ",
+        f" da produção da farmácia. Embora tenham sido identificados {total_medicos} médicos no período, com média de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM, o volume associado ao CRM {crm_ident} foi ",
         color="0F172A",
         size=10,
     )
-    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["mult_autorizacoes"], 2)} vezes superior à média', color="334155", size=10, bold=True)
+    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["mult_autorizacoes"], 2)} vezes superior a essa média', color="334155", size=10, bold=True)
     _run(p3, ".", color="0F172A", size=10)
 
     p4 = doc.add_paragraph()
@@ -491,13 +495,16 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     multiplicador_reg_fmt = _format_decimal_pt(irregulares_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(irregulares_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(irregulares_comp["multiplicador_brasil"], 2)
+    multiplicador_reg_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_regiao"]))
+    multiplicador_uf_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_uf"]))
+    multiplicador_br_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_brasil"]))
 
     doc.add_heading(f"{num} Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs", level=2)
 
     p1 = doc.add_paragraph()
     _run(
         p1,
-        "Para as vendas de medicamentos no âmbito do PFPB, espera-se que 100% dos médicos que prescrevem receitas para que seus pacientes possam retirar medicamentos nas farmácias estejam com seus registros junto ao Conselho Regional de Medicina (CRM) ativo e regular. Para este indicador, foram consolidadas duas situações de irregularidade: CRMs inválidos ou não localizados na base do Conselho Federal de Medicina (CFM) e receitas com data de prescrição anterior à inscrição do médico no CFM. Qualquer situação diferente do esperado aponta para o recebimento e processamento de receitas médicas sem validade legal.",
+        "No âmbito do PFPB, as dispensações devem estar respaldadas por prescrições emitidas por médicos com registro ativo e regular no Conselho Regional de Medicina (CRM). Para este indicador, foram consideradas duas situações de irregularidade: CRMs inválidos ou não localizados na base do Conselho Federal de Medicina (CFM), e prescrições com data anterior à inscrição do médico no respectivo conselho. A ocorrência de qualquer dessas situações aponta para o processamento de dispensações com prescrição médica incompatível com os requisitos legais do Programa.",
         color="0F172A",
         size=10,
     )
@@ -505,7 +512,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     p2 = doc.add_paragraph()
     _run(p2, f"Em relação à Farmácia {razao_social}, verificou-se que, do total de ", color="0F172A", size=10)
     _run(p2, f"R$ {_format_decimal_pt(total_financeiro_base, 2)}", color="334155", size=10, bold=True)
-    _run(p2, f" das vendas de medicamentos por ela efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=10)
+    _run(p2, f" em vendas de medicamentos efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=10)
     _run(p2, f"{_format_decimal_pt(pct_irregular, 2)}%", color="334155", size=10, bold=True)
     _run(p2, " (", color="0F172A", size=10)
     _run(p2, f"R$ {_format_decimal_pt(valor_irregular, 2)}", color="334155", size=10, bold=True)
@@ -516,18 +523,18 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
         _run(p2, " com números inválidos e ", color="0F172A", size=10)
         _run(p2, f"{qtd_antes_registro}", color="334155", size=10, bold=True)
         _run(p2, " com prescrição médica emitida antes do registro do CRM", color="0F172A", size=10)
-    _run(p2, ". Tal percentual é ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_reg_fmt} vezes", color="334155", size=10, bold=True)
-    _run(p2, " superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual é ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_uf_fmt} vezes", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano das farmácias do seu Estado e ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_br_fmt} vezes", color="334155", size=10, bold=True)
+    _run(p2, ". Tal percentual corresponde a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
+    _run(p2, " o percentual mediano de vendas com essa mesma criticidade entre as farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=10, bold=True)
+    _run(p2, " o percentual mediano das farmácias do seu Estado e a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
 
     title = doc.add_paragraph()
     _run(
         title,
-        f"Quadro 08 - Médicos (CRM) com irregularidade em seus registros, vinculados a vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
+        f"Quadro 08 - Médicos com CRM irregular ou inválido vinculados a vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,
@@ -615,16 +622,23 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     multiplicador_reg_fmt = _format_decimal_pt(exclusividade_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(exclusividade_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(exclusividade_comp["multiplicador_brasil"], 2)
+    multiplicador_reg_unidade = _vez_ou_vezes(_as_float(exclusividade_comp["multiplicador_regiao"]))
+    multiplicador_uf_unidade = _vez_ou_vezes(_as_float(exclusividade_comp["multiplicador_uf"]))
+    multiplicador_br_unidade = _vez_ou_vezes(_as_float(exclusividade_comp["multiplicador_brasil"]))
+    crm_exclusivo_desc = "CRM de médico" if qtd_exclusivos == 1 else "CRMs de médicos"
+    crm_exclusivo_quant = "CRM exclusivo" if qtd_exclusivos == 1 else "CRMs exclusivos"
+    identificados_intro = "Foi identificado" if qtd_exclusivos == 1 else "Foram identificados"
+    equivalente_txt = "equivalente" if qtd_exclusivos == 1 else "equivalentes"
 
     doc.add_heading(
-        f"{num} Vendas de medicamentos vinculados a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {razao_social}",
+        f"{num} Vendas de medicamentos vinculadas a CRMs registrados exclusivamente pela Farmácia {razao_social} no Sistema Autorizador de Vendas do PFPB",
         level=2,
     )
 
     p1 = doc.add_paragraph()
     _run(
         p1,
-        "No âmbito do PFPB, espera-se que os médicos que prescrevem receitas tenham pacientes que retiram medicamentos em mais de uma farmácia. A identificação de registros de retiradas de medicamentos por parte de clientes de um médico em apenas um único estabelecimento farmacêutico sugere a ocorrência de médico “parceiro” de fraudes cometidas pelo estabelecimento e/ou de uso indevido de CRMs por parte da farmácia.",
+        "No âmbito do PFPB, espera-se que médicos prescritores tenham dispensações registradas em mais de uma farmácia, em razão da diversidade esperada de pacientes e estabelecimentos. A identificação de retiradas de medicamentos associadas a um médico em apenas um estabelecimento farmacêutico pode indicar atuação direcionada junto à farmácia ou uso indevido de CRM pelo estabelecimento.",
         color="0F172A",
         size=10,
     )
@@ -633,25 +647,25 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     if has_detalhe_exclusivos:
         _run(p2, f"Em relação à Farmácia {razao_social}, verificou-se que, do total de ", color="0F172A", size=10)
         _run(p2, f"R$ {_format_decimal_pt(total_financeiro_base, 2)}", color="334155", size=10, bold=True)
-        _run(p2, f" das vendas de medicamentos por ela efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=10)
-        _run(p2, f"{_format_decimal_pt(pct_valor_exclusivo, 2)}%", color="334155", size=10, bold=True)
-        _run(p2, " (", color="0F172A", size=10)
+        _run(p2, f" em vendas de medicamentos efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=10)
         _run(p2, f"R$ {_format_decimal_pt(exclusivos_valor, 2)}", color="334155", size=10, bold=True)
-        _run(p2, ") estão associados a CRMs de médicos cujos clientes retiraram seus medicamentos exclusivamente nesse estabelecimento. Foram identificados ", color="0F172A", size=10)
+        _run(p2, ", equivalente a ", color="0F172A", size=10)
+        _run(p2, f"{_format_decimal_pt(pct_valor_exclusivo, 2)}%", color="334155", size=10, bold=True)
+        _run(p2, f", esteve associado a {crm_exclusivo_desc} cujos clientes retiraram seus medicamentos exclusivamente nesse estabelecimento. {identificados_intro} ", color="0F172A", size=10)
         _run(p2, f"{qtd_exclusivos}", color="334155", size=10, bold=True)
-        _run(p2, " CRMs exclusivos, equivalentes a ", color="0F172A", size=10)
+        _run(p2, f" {crm_exclusivo_quant}, {equivalente_txt} a ", color="0F172A", size=10)
     else:
         _run(p2, f"Em relação à Farmácia {razao_social}, o indicador de exclusividade de CRMs foi classificado como crítico na matriz de risco do Sistema Sentinela. O percentual de CRMs exclusivos observado foi de ", color="0F172A", size=10)
     _run(p2, f"{_format_decimal_pt(pct_medicos_exclusivos, 2)}%", color="334155", size=10, bold=True)
     if has_detalhe_exclusivos:
-        _run(p2, f" dos {total_medicos} médicos observados. Esse percentual de CRMs exclusivos é ", color="0F172A", size=10)
+        _run(p2, f" dos {total_medicos} médicos observados. Esse percentual corresponde a ", color="0F172A", size=10)
     else:
-        _run(p2, ". Esse percentual é ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_reg_fmt} vezes", color="334155", size=10, bold=True)
-    _run(p2, " superior ao percentual mediano de CRMs exclusivos das farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual é ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_uf_fmt} vezes", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano das farmácias do seu Estado e ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_br_fmt} vezes", color="334155", size=10, bold=True)
+        _run(p2, ". Esse percentual corresponde a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
+    _run(p2, " o percentual mediano de CRMs exclusivos das farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=10, bold=True)
+    _run(p2, " o percentual mediano das farmácias do seu Estado e a ", color="0F172A", size=10)
+    _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
 
     if not has_detalhe_exclusivos:
@@ -660,7 +674,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     title = doc.add_paragraph()
     _run(
         title,
-        f"Quadro 09 - Médicos (CRM) com registros realizados exclusivamente pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
+        f"Quadro 09 - Médicos com CRMs registrados exclusivamente pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,

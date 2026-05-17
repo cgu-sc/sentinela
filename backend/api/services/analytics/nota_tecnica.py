@@ -102,6 +102,11 @@ def _risk_color(classificacao: str | None, score: float) -> tuple[str, str]:
         return 'F97316', 'ATENÇÃO'
     return '10B981', 'NORMAL'
 
+
+def _vez_ou_vezes(value: float) -> str:
+    return "vez" if abs(value) <= 1 else "vezes"
+
+
 def _configure_section(section, footer_lines: list[str] | None = None):
     """Configura margens e rodape independente para uma secao."""
     section.footer.is_linked_to_previous = False
@@ -205,7 +210,7 @@ def _add_resumo_criticidades_conclusao(doc, resumos: list[str]):
     p_intro = doc.add_paragraph()
     _run(
         p_intro,
-        'Além disso, foram identificadas, para o mesmo período, as seguintes criticidades que corroboram com aquele achado principal:',
+        'Além disso, foram identificadas, para o mesmo período, as seguintes criticidades que corroboram aquele achado principal:',
         color='0F172A',
         size=10,
     )
@@ -338,7 +343,7 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str, ha
     _add_toc_entry(doc, '3.', 'INTRODUÇÃO', page='4')
     _add_toc_entry(doc, '4.', 'SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', page='5')
     _add_toc_entry(doc, '  4.1', 'Sobre o Programa Farmácia Popular do Brasil', page='5')
-    _add_toc_entry(doc, '  4.2', 'Sobre metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', page='5')
+    _add_toc_entry(doc, '  4.2', 'Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', page='5')
 
     _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
@@ -536,7 +541,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # 1. ASSUNTO
     _format_main_heading(doc.add_heading('1. ASSUNTO', level=1))
-    doc.add_paragraph(f'A presente Nota Técnica (NT), de caráter investigativo e sigiloso, tem como objetivo demonstrar indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), credenciada junto ao Programa Farmácia Popular do Brasil (PFPB) do Ministério da Saúde (MS) para a dispensação gratuita de medicamentos para cidadãos.')
+    doc.add_paragraph(f'A presente Nota Técnica (NT), de caráter investigativo e sigiloso, tem como objetivo apresentar indícios de irregularidades na atuação da Farmácia {razao_social} (CNPJ {cnpj_fmt}), credenciada junto ao Programa Farmácia Popular do Brasil (PFPB), do Ministério da Saúde (MS), para a dispensação gratuita de medicamentos aos cidadãos.')
 
     # 2. REFERÊNCIAS
     h2 = _format_main_heading(doc.add_heading('2. REFERÊNCIAS', level=1))
@@ -550,15 +555,15 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     doc.add_paragraph('As principais referências normativas e técnicas utilizadas nesta análise incluem:')
     ref_list = [
-        'Lei nº 10.858, de 06.05.2004 (deu origem ao Programa Farmácia Popular do Brasil - PFPB);',
-        'Decreto 5.909 de 20.05.2004 (regulamentou o PFPB);',
-        'Portaria GM/MS nº 491 de 09.03.2006 (habilitou farmácias e drogarias privadas);',
-        'Portaria GM/MS nº 184, de 03.02.2011 (normas operacionais);',
-        'Portaria de Consolidação GM/MS nº 5, de 28.09.2017 (marco regulatório atual do Programa Farmácia Popular do Brasil);',
-        'Portaria GM/MS nº 2.898, de 03.11.2021 (aumenta o prazo para guarda da documentação comprobatória das dispensações para um período de dez anos);',
-        'Portaria GM/MS nº 1.053, de 12.05.2022 (regulamenta o procedimento de averiguação dos fatos relacionados a indícios ou notícias de irregularidades no âmbito do PFPB);',
-        'Relatório de Apuração da CGU nº 823121, publicado em 04.01.2024;',
-        'Portaria GM/MS nº 6.613, de 13.02.2025 (extinguiu a modalidade do copagamento do Programa).',
+        'Lei nº 10.858, de 06.05.2004, que instituiu o Programa Farmácia Popular do Brasil (PFPB);',
+        'Decreto nº 5.090, de 20.05.2004, que regulamentou o PFPB;',
+        'Portaria GM/MS nº 491, de 09.03.2006, que habilitou farmácias e drogarias privadas;',
+        'Portaria GM/MS nº 184, de 03.02.2011, que estabeleceu normas operacionais do Programa;',
+        'Portaria de Consolidação GM/MS nº 5, de 28.09.2017, marco regulatório atual do Programa Farmácia Popular do Brasil;',
+        'Portaria GM/MS nº 2.898, de 03.11.2021, que ampliou para dez anos o prazo de guarda da documentação comprobatória das dispensações;',
+        'Portaria GM/MS nº 1.053, de 12.05.2022, que regulamentou o procedimento de averiguação de fatos relacionados a indícios ou notícias de irregularidades no âmbito do PFPB;',
+        'Relatório de Apuração CGU nº 823121, publicado em 04.01.2024;',
+        'Portaria GM/MS nº 6.613, de 13.02.2025, que extinguiu a modalidade de copagamento do Programa.',
     ]
     for ref in ref_list: doc.add_paragraph(ref, style='List Bullet')
 
@@ -571,33 +576,34 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # 3. INTRODUÇÃO
     _format_main_heading(doc.add_heading('3. INTRODUÇÃO', level=1))
-    doc.add_paragraph(f'No âmbito dos trabalhos realizados pela CGU de monitoramento e avaliação de gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, trata a presente Nota Técnica (NT) de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
+    doc.add_paragraph(f'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
     
-    p_intro = doc.add_paragraph('A partir de metodologia desenvolvida pela CGU, consignada em seu Relatório de Auditoria nº 823121 (contido no ANEXO I desta Nota Técnica), foi identificada para a Farmácia ')
+    p_intro = doc.add_paragraph('A partir da metodologia desenvolvida pela CGU, consignada no Relatório de Auditoria nº 823121 (ANEXO I desta Nota Técnica), foi identificada, para a Farmácia ')
     p_intro.add_run(razao_social).bold = True
     p_intro.add_run(', no período de ')
     run_periodo = p_intro.add_run(periodo_txt)
     run_periodo.underline = True
     run_periodo.bold = True
-    p_intro.add_run(', ausência significativa de estoque compatível com as vendas (distribuições) realizadas de medicamentos para a população (denominada pela CGU como “vendas sem comprovação”), o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio de registro fictício de dispensações de medicamentos.')
+    p_intro.add_run(', ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.')
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
     if falecidos_comp:
-        snippets.append('[Subitem 7.1] vendas de medicamento para pessoas falecidas')
+        snippets.append('[Subitem 7.1] vendas de medicamentos para pessoas falecidas')
         criticidade_start = 2
     for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
         snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
     
-    texto_snippets = (", ".join(snippets[:-1]) + " e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
-    doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram com o achado principal de “vendas sem comprovação”, como {texto_snippets}.')
-    doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e junto ao PFPB e compatibilidade entre o número de empregados e volume de recursos recebidos do MS.')
+    texto_snippets = ("; ".join(snippets[:-1]) + "; e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
+    doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”, como: {texto_snippets}.')
+    doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
-    if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Item 7] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
-    if falecidos_comp: fontes.append('[Subitem 7.1] SIRC e SISOBI')
-    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Item 7] Cadastros de médicos do Conselho Regional de Medicina (CRM)')
-    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
+    if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
+    if falecidos_comp: fontes.append('SIRC e SISOBI')
+    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
+    fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
+    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos pelas farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
 
     nota_pfpb_2 = (
         'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
@@ -605,20 +611,20 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     nota_pfpb_3 = (
         'A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: '
-        'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf'
+        'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/arquivos/elenco-de-medicamentos-e-insumos.pdf.'
     )
     nota_pfpb_4 = (
-        'Após um intervalo sem a renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 '
+        'Após um intervalo sem exigência de renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 '
         'do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde '
-        'reabriu a necessidade a partir de 17 de abril de 2025.'
+        'retomou essa exigência a partir de 17 de abril de 2025.'
     )
     nota_pfpb_5 = (
         'Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte '
         'do custo), que foi extinta após a edição da Portaria GM/MS nº 6.613, de 13.02.2025.'
     )
     nota_pfpb_6 = (
-        'A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava em seu art. 22 '
-        'que o estabelecimento deveria manter por cinco anos.'
+        'A Portaria GM/MS nº 111/2016, substituída pela Portaria GM/MS nº 2.898/2021, determinava, em seu art. 22, '
+        'que o estabelecimento deveria manter a documentação comprobatória por cinco anos.'
     )
 
     # ── 7. Seção 4.1: Sobre o Programa ─────────────────────────────────────
@@ -658,13 +664,13 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     for run in p_quote2.runs:
         if not run.font.superscript: run.font.size = Pt(10)
 
-    p_op = doc.add_paragraph('A operacionalização do programa ocorre com a participação de drogarias credenciadas pelo Ministério da Saúde (MS)')
+    p_op = doc.add_paragraph('A operacionalização do Programa ocorre com a participação de drogarias credenciadas pelo Ministério da Saúde (MS)')
     _footnote_ref(doc, p_op, 4, nota_pfpb_4)
     p_op.add_run(', que realizam a dispensação gratuita de medicamentos diretamente aos cidadãos. As drogarias são posteriormente ressarcidas pela União, de acordo com informações relativas às quantidades distribuídas de cada medicamento')
     _footnote_ref(doc, p_op, 5, nota_pfpb_5)
     p_op.add_run('.')
 
-    p_sav = doc.add_paragraph('As informações acerca da dispensação são encaminhadas pelas drogarias credenciadas ao MS mensalmente por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
+    p_sav = doc.add_paragraph('As informações sobre as dispensações são encaminhadas mensalmente pelas drogarias credenciadas ao MS por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e normas anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
     _footnote_ref(doc, p_sav, 6, nota_pfpb_6)
     p_sav.add_run(', em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
 
@@ -683,26 +689,26 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_42.top_margin = Inches(0.5); sec_42.bottom_margin = Inches(0.5)
     sec_42.left_margin = Inches(0.7); sec_42.right_margin = Inches(0.7)
 
-    doc.add_heading('4.2. Sobre metodologia desenvolvida pela CGU para apuração de possíveis "vendas sem comprovação"', level=2)
-    doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a imensa capilaridade de mais de 30 mil estabelecimentos credenciados.')
+    doc.add_heading('4.2. Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', level=2)
+    doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a capilaridade de mais de 30 mil estabelecimentos credenciados.')
     p_sent = doc.add_paragraph('Para enfrentar essa realidade, a CGU elaborou o ')
     p_sent.add_run('Relatório de Apuração nº 823121').bold = True
     p_sent.add_run(' (ANEXO I desta NT), fundamentado no desenvolvimento do ')
     p_sent.add_run('Sistema Sentinela').bold = True
     p_sent.add_run(', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.')
-    p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Uma vez isto ocorrendo, a Farmácia estaria praticando uma “venda sem comprovação”')
+    p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Caso isso ocorra, a farmácia estaria praticando uma “venda sem comprovação”')
     _footnote_ref(doc, p_cgu, 7, nota_cgu_7)
     p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
-    doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir desta informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, de não existência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia em que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base da Receita Federal do Brasil de Notas Fiscais Eletrônicas (NF-e), utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e suas compras posteriores com as vendas realizadas no âmbito do Programa.')
+    doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir dessa informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, em razão da inexistência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base de Notas Fiscais Eletrônicas (NF-e) da Receita Federal do Brasil, utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e de suas compras posteriores com as vendas realizadas no âmbito do Programa.')
     p_cutoff = doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
     p_cutoff.add_run('cut-off').italic = True
-    p_cutoff.add_run(', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do programa PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo "virtual" favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia, que fazem parte do rol do PFPB, somente foram vendidos para clientes que fizeram uso do Programa, ou seja, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
+    p_cutoff.add_run(', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo “virtual” favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia que fazem parte do rol do PFPB foram vendidos somente para clientes que fizeram uso do Programa. Assim, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
 
-    p_gtin = doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 05/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ')
+    p_gtin = doc.add_paragraph('Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 5/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ')
     p_gtin.add_run('GTIN/EAN').bold = True
     p_gtin.add_run('. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.')
-    doc.add_paragraph('Além do levantamento de valores de “Vendas sem Comprovação” para todos as empresas que operam no PFPB, o Sistema Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram com a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
-    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas para ela extraídos do Sistema Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram com este achado principal.')
+    doc.add_paragraph('Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sistema Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
+    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sistema Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.')
 
     # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
     sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -723,7 +729,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_sav_5, f'R$ {_format_decimal_pt(ultimo_mes_sav["total"], 2)}', underline=True)
     _run(p_sav_5, ' em ')
     _run(p_sav_5, ultimo_mes_sav["mes_formatado"], underline=True)
-    _run(p_sav_5, ', último mês com movimentação disponível para a Farmácia na base de dados.')
+    _run(p_sav_5, ', último mês com movimentação disponível para a farmácia na base de dados.')
 
     # ── Seção de informações cadastrais ────────────────────────────────────
     sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -753,9 +759,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     cap_social_txt = f"R$ {cap_social_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
     p_intro_51 = doc.add_paragraph()
-    _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhada, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de ')
+    _run(p_intro_51, f'De acordo com informações contidas no Cadastro Nacional de Pessoas Jurídicas da Receita Federal do Brasil (RFB), a seguir detalhadas, a Farmácia {razao_social}, localizada no município de {municipio}/{uf}, é uma {porte_txt}, com capital social de ')
     _run(p_intro_51, cap_social_txt, bold=True)
-    _run(p_intro_51, ' e com situação ')
+    _run(p_intro_51, ' e situação ')
     _run(p_intro_51, situacao.upper(), bold=True, underline=True)
     _run(p_intro_51, ':')
 
@@ -792,7 +798,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc)
 
-    _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}.', level=1))
+    _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
     p_53 = doc.add_paragraph()
     _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO II desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
     
@@ -823,14 +829,18 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     multiplicador_fmt = _format_decimal_pt(regional_comp["multiplicador"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(regional_comp["multiplicador_uf"], 2)
     multiplicador_brasil_fmt = _format_decimal_pt(regional_comp["multiplicador_brasil"], 2)
+    multiplicador_unidade = _vez_ou_vezes(float(regional_comp["multiplicador"] or 0.0))
+    multiplicador_uf_unidade = _vez_ou_vezes(float(regional_comp["multiplicador_uf"] or 0.0))
+    multiplicador_brasil_unidade = _vez_ou_vezes(float(regional_comp["multiplicador_brasil"] or 0.0))
     qtd_farmacias = regional_comp["qtd_farmacias"]
     farmacia_txt = "farmácia" if qtd_farmacias == 1 else "farmácias"
     que_opera_txt = "que opera" if qtd_farmacias == 1 else "que operam"
+    localizada_txt = "localizada" if qtd_farmacias == 1 else "localizadas"
     municipios_txt = _format_list_pt(regional_comp["municipios"])
 
     p_regional_53 = doc.add_paragraph()
-    _run(p_regional_53, 'Tal percentual é ', color='0F172A', size=10)
-    _run(p_regional_53, f'{multiplicador_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p_regional_53, 'Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p_regional_53, f'{multiplicador_fmt} {multiplicador_unidade}', color='334155', size=10, bold=True)
     _run(p_regional_53, ' a mediana dos percentuais de “vendas sem comprovação” das farmácias da sua região', color='0F172A', size=10)
     _footnote_ref(
         doc,
@@ -840,14 +850,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     _run(p_regional_53, ', que contempla ', color='0F172A', size=10)
     _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='0F172A', size=10, bold=True)
-    _run(p_regional_53, f' {que_opera_txt} no PFPB, localizadas nos seguintes municípios do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
+    _run(p_regional_53, f' {que_opera_txt} no PFPB, {localizada_txt} nos seguintes municípios do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
 
     p_geo_ampliado = doc.add_paragraph()
-    _run(p_geo_ampliado, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p_geo_ampliado, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p_geo_ampliado, f' a mediana dos percentuais de “vendas sem comprovação” das farmácias localizadas em seu Estado ({regional_comp["uf"]}) e ', color='0F172A', size=10)
-    _run(p_geo_ampliado, f'{multiplicador_brasil_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p_geo_ampliado, ' a das farmácias de todo o Brasil.', color='0F172A', size=10)
+    _run(p_geo_ampliado, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p_geo_ampliado, f'{multiplicador_uf_fmt} {multiplicador_uf_unidade}', color='334155', size=10, bold=True)
+    _run(p_geo_ampliado, f' a mediana dos percentuais de “vendas sem comprovação” das farmácias localizadas em seu Estado ({regional_comp["uf"]}) e a ', color='0F172A', size=10)
+    _run(p_geo_ampliado, f'{multiplicador_brasil_fmt} {multiplicador_brasil_unidade}', color='334155', size=10, bold=True)
+    _run(p_geo_ampliado, ' a mediana dos percentuais das farmácias de todo o Brasil.', color='0F172A', size=10)
 
     _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
 
@@ -873,7 +883,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     p_gtin_intro = doc.add_paragraph()
-    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoques amparados em notas fiscais de suas aquisições, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=10)
+    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoque amparado em notas fiscais de aquisição, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=10)
 
     _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
 
@@ -884,13 +894,13 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='0F172A', size=10, bold=True)
     _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='334155', size=10, bold=True)
-    _run(p_gtin_conclusao, '. Observa-se, contudo, concentração relevante em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, '. Observa-se, contudo, concentração relevante em apenas ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'{gtin_comp["representativos_count"]} {representativos_txt}', color='0F172A', size=10, bold=True)
-    _run(p_gtin_conclusao, ', que respondem por ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, ', responsáveis por ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["representativos_valor"], 2)}', color='334155', size=10, bold=True)
-    _run(p_gtin_conclusao, ', equivalentes a ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, ', o equivalente a ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'{_format_decimal_pt(gtin_comp["representativos_pct"], 1)}%', color='334155', size=10, bold=True)
-    _run(p_gtin_conclusao, f' do total listado, considerando o menor conjunto de GTINs necessário para atingir ao menos {_format_decimal_pt(gtin_comp["concentration_target_pct"], 0)}% do valor sem comprovação.', color='0F172A', size=10)
+    _run(p_gtin_conclusao, ' do total analisado.', color='0F172A', size=10)
     
     doc.add_heading(f'6.1 Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
 
@@ -901,7 +911,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     if semestres_atipicos:
         p_54_contexto = doc.add_paragraph()
         p_54_contexto.paragraph_format.space_before = Pt(6)
-        _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e demasiados que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
+        _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e excessivos que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
 
         p_54_analise = doc.add_paragraph()
         _run(p_54_analise, f'A Farmácia {razao_social} recebeu recursos provenientes do Ministério da Saúde, referentes ao PFPB, no período de ', color='0F172A', size=10)
@@ -915,7 +925,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             )
             for row in semestres_atipicos
         ])
-        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências no ', color='0F172A', size=10)
+        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências em ', color='0F172A', size=10)
         _run(p_54_analise, crescimento_labels, color='334155', size=10, bold=True)
         _run(p_54_analise, ', sempre em comparação ao semestre imediatamente anterior. ', color='0F172A', size=10)
 
@@ -923,7 +933,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         if top_irregulares:
             top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares])
             top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
-            _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” no ', color='0F172A', size=10)
+            _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” em ', color='0F172A', size=10)
             _run(p_54_analise, top_labels, color='334155', size=10)
             _run(p_54_analise, ', que somam ', color='0F172A', size=10)
             _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='334155', size=10, bold=True)
@@ -940,7 +950,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
-    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram com o achado principal de “vendas sem comprovação” para ela apuradas.')
+    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram o achado principal de “vendas sem comprovação” para ela apuradas.')
     resumos_criticidades: list[str] = []
     criticidade_start = 1
     if falecidos_comp:

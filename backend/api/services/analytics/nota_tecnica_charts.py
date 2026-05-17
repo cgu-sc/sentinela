@@ -251,7 +251,221 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
     return stream
 
 
-def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any]):
+def _monotone_smooth_curve(x_values: list[int], y_values: list[float], *, np):
+    """Gera pontos intermediarios para uma curva visual suave e monotona."""
+    if len(x_values) < 3 or len(x_values) != len(y_values):
+        return x_values, y_values
+
+    x = np.asarray(x_values, dtype=float)
+    y = np.asarray(y_values, dtype=float)
+    order = np.argsort(x)
+    x = x[order]
+    y = y[order]
+
+    unique_x, unique_idx = np.unique(x, return_index=True)
+    x = unique_x
+    y = y[unique_idx]
+    n = len(x)
+    if n < 3:
+        return x.tolist(), y.tolist()
+
+    y = np.maximum.accumulate(y)
+
+    # Percentis de regioes pequenas costumam gerar muitos valores repetidos.
+    # Para a figura, criamos ancoras no centro de cada patamar e interpolamos
+    # entre elas com smoothstep. Isso adiciona pontos e remove o aspecto de escada.
+    anchors_x = [float(x[0])]
+    anchors_y = [float(y[0])]
+    start = 0
+    tolerance = 1e-9
+    for idx in range(1, n + 1):
+        if idx == n or abs(float(y[idx]) - float(y[start])) > tolerance:
+            end = idx - 1
+            center_x = float((x[start] + x[end]) / 2)
+            anchors_x.append(center_x)
+            anchors_y.append(float(y[start]))
+            start = idx
+    anchors_x.append(float(x[-1]))
+    anchors_y.append(float(y[-1]))
+
+    anchors_x = np.asarray(anchors_x, dtype=float)
+    anchors_y = np.asarray(anchors_y, dtype=float)
+    order = np.argsort(anchors_x)
+    anchors_x = anchors_x[order]
+    anchors_y = np.maximum.accumulate(anchors_y[order])
+
+    unique_anchor_x, unique_anchor_idx = np.unique(anchors_x, return_index=True)
+    anchors_x = unique_anchor_x
+    anchors_y = anchors_y[unique_anchor_idx]
+    if len(anchors_x) < 2:
+        return x.tolist(), y.tolist()
+
+    x_smooth = np.linspace(float(anchors_x[0]), float(anchors_x[-1]), max(1200, len(anchors_x) * 80))
+    segment_idx = np.searchsorted(anchors_x, x_smooth, side="right") - 1
+    segment_idx = np.clip(segment_idx, 0, len(anchors_x) - 2)
+    x0 = anchors_x[segment_idx]
+    x1 = anchors_x[segment_idx + 1]
+    y0 = anchors_y[segment_idx]
+    y1 = anchors_y[segment_idx + 1]
+    t = (x_smooth - x0) / np.maximum(x1 - x0, 1e-9)
+    t = np.clip(t, 0.0, 1.0)
+    eased = (3 * t**2) - (2 * t**3)
+    y_smooth = y0 + (y1 - y0) * eased
+
+    y_smooth = np.maximum.accumulate(y_smooth)
+    y_smooth = np.clip(y_smooth, min(float(np.nanmin(y)), 0.0), max(float(np.nanmax(y)), 100.0))
+    return x_smooth.tolist(), y_smooth.tolist()
+
+
+def _add_gradient_area(ax, x_values: list[float], y_values: list[float], *, np, color_hex: str, y_max: float):
+    """Preenche a area sob a curva com degrade vertical recortado pelo poligono."""
+    from matplotlib.colors import to_rgba
+    from matplotlib.path import Path
+    from matplotlib.patches import PathPatch
+
+    x = np.asarray(x_values, dtype=float)
+    y = np.asarray(y_values, dtype=float)
+    if len(x) < 2:
+        return
+
+    rgba = np.array(to_rgba(color_hex))
+    gradient = np.zeros((256, 1, 4), dtype=float)
+    gradient[:, 0, :3] = rgba[:3]
+    gradient[:, 0, 3] = np.linspace(0.03, 0.24, 256)
+
+    image = ax.imshow(
+        gradient,
+        extent=[float(np.nanmin(x)), float(np.nanmax(x)), 0, y_max],
+        origin="lower",
+        aspect="auto",
+        interpolation="bicubic",
+        zorder=2,
+    )
+
+    vertices = [(float(x[0]), 0.0), *zip(x.astype(float), y.astype(float)), (float(x[-1]), 0.0), (float(x[0]), 0.0)]
+    codes = [Path.MOVETO] + [Path.LINETO] * len(x) + [Path.LINETO, Path.CLOSEPOLY]
+    clip_path = PathPatch(Path(vertices, codes), facecolor="none", edgecolor="none", transform=ax.transData)
+    ax.add_patch(clip_path)
+    image.set_clip_path(clip_path)
+
+
+def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
+    """Gera grafico PNG da posicao percentilica do CNPJ com matplotlib."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import FuncFormatter
+
+    percentiles = percentil_comp.get("percentiles") or []
+    x_values = [int(point.get("percentile") or 0) for point in percentiles]
+    y_values = [float(point.get("score") or 0.0) for point in percentiles]
+    current_value = float(percentil_comp.get("current_value") or 0.0)
+    percentile_rank = int(percentil_comp.get("percentile_rank") or 100)
+    metric_label = percentil_comp.get("metric_label") or "% de vendas sem comprovação"
+
+    fig, ax = plt.subplots(figsize=(11.0, 5.4), dpi=180)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    line_color = "#E11D48"
+    area_color = "#F43F5E"
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid_color = "#CBD5E1"
+
+    x_curve, y_curve = _monotone_smooth_curve(x_values, y_values, np=np)
+    ax.plot(x_curve, y_curve, color=line_color, linewidth=2.8, solid_capstyle="round", zorder=3)
+
+    marker_y = current_value
+    ax.axvline(percentile_rank, color=line_color, linestyle=(0, (5, 5)), linewidth=1.5, alpha=0.72, zorder=1)
+    ax.axhline(marker_y, color=line_color, linestyle=(0, (5, 5)), linewidth=1.3, alpha=0.42, zorder=1)
+    ax.scatter([percentile_rank], [marker_y], s=94, color="white", edgecolor=line_color, linewidth=2.4, zorder=5)
+    ax.scatter([percentile_rank], [marker_y], s=28, color=line_color, zorder=6)
+
+    current_txt = f"{_format_decimal_pt(current_value, 1)}%"
+    badge_txt = f"Estabelecimento\nPercentil {percentile_rank} - {current_txt}"
+    ax.annotate(
+        badge_txt,
+        xy=(percentile_rank, marker_y),
+        xytext=(18, 28),
+        textcoords="offset points",
+        fontsize=10,
+        fontweight="bold",
+        color=line_color,
+        bbox=dict(boxstyle="round,pad=0.55,rounding_size=0.25", fc="white", ec=line_color, lw=1.35),
+        arrowprops=dict(arrowstyle="-", color=line_color, lw=1.2, shrinkA=0, shrinkB=8),
+        zorder=7,
+    )
+
+    ax.set_title(
+        "Distribuição percentílica regional do percentual de vendas sem comprovação",
+        fontsize=15,
+        fontweight="bold",
+        color=text_color,
+        pad=18,
+    )
+    ax.set_xlabel("Percentil dos estabelecimentos da Região de Saúde", fontsize=10.5, color=muted, labelpad=10)
+    ax.set_ylabel(metric_label, fontsize=10.5, color=muted, labelpad=10)
+
+    max_y = max([current_value, *y_values, 1.0])
+    upper = min(100.0, max_y * 1.16 if max_y < 90 else 100.0)
+    ax.set_xlim(1, 100)
+    ax.set_ylim(0, upper)
+    _add_gradient_area(ax, x_curve, y_curve, np=np, color_hex=area_color, y_max=upper)
+    ax.set_xticks([1, 20, 40, 60, 80, 100])
+    ax.set_xticklabels(["1%", "20%", "40%", "60%", "80%", "100%"])
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{_format_decimal_pt(value, 0)}%"))
+
+    ax.grid(axis="y", color=grid_color, linestyle=(0, (5, 7)), linewidth=0.8, alpha=0.72)
+    ax.grid(axis="x", visible=False)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#E2E8F0")
+    ax.spines["bottom"].set_color("#E2E8F0")
+    ax.tick_params(axis="both", colors=muted, labelsize=9.5, length=0)
+
+    fig.tight_layout(pad=1.7)
+    stream = io.BytesIO()
+    fig.savefig(stream, format="png", dpi=180, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    stream.seek(0)
+    return stream
+
+
+def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil_comp: dict[str, Any], figure_number: int = 1):
+    """Insere figura de percentil de risco no documento."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    _run(
+        p_title,
+        f'Figura {figure_number:02d} - Posição percentílica da Farmácia {razao_social} (CNPJ {cnpj_fmt}) quanto ao percentual de vendas sem comprovação na Região de Saúde.',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    chart_stream = _build_percentil_risco_chart(percentil_comp)
+    p_img = doc.add_paragraph()
+    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_img.paragraph_format.keep_with_next = False
+    p_img.paragraph_format.keep_together = True
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
+
+
+def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura da evolucao financeira no documento."""
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -259,7 +473,7 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     p_title.paragraph_format.keep_together = True
     _run(
         p_title,
-        f'Figura 01 - Evolução semestral dos recursos recebidos e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
+        f'Figura {figure_number:02d} - Evolução semestral dos recursos recebidos e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
         color='0F172A',
         size=10,
         bold=True,

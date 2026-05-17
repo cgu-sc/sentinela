@@ -17,7 +17,7 @@ from .nota_tecnica_formatters import (
     _semester_key_from_date,
     _semester_key_from_label,
 )
-from .regional import get_regional_benchmarking
+from .regional import get_metric_percentiles, get_regional_benchmarking
 
 
 def _resolve_regional_context(cadastro: dict) -> dict[str, Any]:
@@ -102,6 +102,43 @@ def _build_regional_comparison_context(
         "mediana_uf": uf_comp["mediana"],
         "multiplicador_brasil": br_comp["multiplicador"],
         "mediana_brasil": br_comp["mediana"],
+    }
+
+
+def _build_percentil_risco_context(
+    cnpj_data: dict,
+    cadastro: dict,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Monta a curva de percentis do percentual de vendas sem comprovacao na regiao."""
+    regional_context = _resolve_regional_context(cadastro)
+    percentiles = get_metric_percentiles(
+        scope="regiao",
+        uf=regional_context["uf"],
+        regiao_id=str(regional_context["id_regiao_saude"]),
+        metric="percentual_sem_comprovacao",
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+    if not percentiles:
+        raise RuntimeError("Percentis regionais indisponiveis para Figura de Percentil de Risco.")
+
+    valor_cnpj = min(float(cnpj_data.get("percValSemComp") or 0.0), 100.0)
+    percentile_rank = 100
+    for point in percentiles:
+        if float(point.get("score") or 0.0) >= valor_cnpj:
+            percentile_rank = int(point.get("percentile") or 100)
+            break
+
+    return {
+        **regional_context,
+        "scope": "regiao",
+        "metric": "percentual_sem_comprovacao",
+        "metric_label": "% de vendas sem comprovação",
+        "current_value": valor_cnpj,
+        "percentile_rank": percentile_rank,
+        "percentiles": percentiles,
     }
 
 

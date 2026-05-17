@@ -344,7 +344,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
             _tq0 = _time.perf_counter()
             result = conn.execute(text("""
                 SELECT TOP 1
-                    dados_comprimidos_v2,
+                    memoria_calculo_payload,
                     schema_version,
                     id_processamento
                 FROM temp_CGUSC.fp.memoria_calculo_consolidada
@@ -357,7 +357,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
                 print(f"⚠️ Nenhum dado no banco para CNPJ {cnpj}")
                 return MovimentacaoResponse(cnpj=cnpj, summary=empty_summary, rows=[])
 
-            dados_comprimidos_v2 = result[0]
+            memoria_calculo_payload = result[0]
 
             # 2b. Busca nomes dos princípios ativos (GTIN → Nome)
             med_rows = conn.execute(text("""
@@ -376,7 +376,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
                     pass
 
         # 2c. Descompacta e desserializa
-        json_str_v2 = zlib.decompress(dados_comprimidos_v2).decode("utf-8")
+        json_str_v2 = zlib.decompress(memoria_calculo_payload).decode("utf-8")
         dados_v2 = json.loads(json_str_v2)
         dados = _legacy_rows_from_memoria_v2(dados_v2)
 

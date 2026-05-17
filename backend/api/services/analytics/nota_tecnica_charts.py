@@ -333,17 +333,17 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
         for idx, row in enumerate(rows)
     ]
 
-    fig, ax = plt.subplots(figsize=(11.0, 5.4), dpi=180)
+    fig, ax = plt.subplots(figsize=(10.2, 5.0), dpi=130)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
     text_color = "#0F172A"
     muted = "#64748B"
     grid_color = "#CBD5E1"
-    regular_bottom = "#10B981"
-    regular_top = "#6EE7B7"
-    irregular_bottom = "#E11D48"
-    irregular_top = "#FB7185"
+    regular_bottom = "#34C79A"
+    regular_top = "#A7F3D0"
+    irregular_bottom = "#F05A6E"
+    irregular_top = "#FDA4AF"
 
     x_positions = np.arange(len(rows), dtype=float)
     bar_width = min(0.64, max(0.38, 7.0 / max(len(rows), 1)))
@@ -422,9 +422,13 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
         text.set_color(muted)
 
     fig.tight_layout(pad=1.7)
-    stream = io.BytesIO()
-    fig.savefig(stream, format="png", dpi=180, bbox_inches="tight", facecolor="white")
+    raw_stream = io.BytesIO()
+    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)
+    raw_stream.seek(0)
+
+    stream = io.BytesIO()
+    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
     stream.seek(0)
     return stream
 
@@ -542,7 +546,7 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
     percentile_rank = int(percentil_comp.get("percentile_rank") or 100)
     metric_label = percentil_comp.get("metric_label") or "% de vendas sem comprovação"
 
-    fig, ax = plt.subplots(figsize=(11.0, 5.4), dpi=180)
+    fig, ax = plt.subplots(figsize=(10.2, 5.0), dpi=130)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
@@ -604,9 +608,13 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
     ax.tick_params(axis="both", colors=muted, labelsize=9.5, length=0)
 
     fig.tight_layout(pad=1.7)
-    stream = io.BytesIO()
-    fig.savefig(stream, format="png", dpi=180, bbox_inches="tight", facecolor="white")
+    raw_stream = io.BytesIO()
+    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)
+    raw_stream.seek(0)
+
+    stream = io.BytesIO()
+    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
     stream.seek(0)
     return stream
 

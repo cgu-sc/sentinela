@@ -31,6 +31,14 @@ _SECAO5_MAP = [
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
 
 
+def _vez_ou_vezes(valor_formatado: str) -> str:
+    try:
+        valor = float(valor_formatado.replace(".", "").replace(",", "."))
+    except ValueError:
+        return "vezes"
+    return "vez" if abs(valor) <= 1 else "vezes"
+
+
 def _get_criticos(cnpj: str) -> set[str]:
     """Identifica quais indicadores estão em nível CRÍTICO para o CNPJ."""
     if _FORCAR_TODOS_CRITICOS_NOTA_TECNICA:
@@ -117,9 +125,9 @@ def _add_falecidos_criticidade_text(doc, num: str, razao_social: str, falecidos_
     valor_total = falecidos_comp["valor_total"]
     periodo_desc = falecidos_comp["periodo_desc"]
 
-    doc.add_heading(f'{num} Vendas de medicamento para pessoas falecidas', level=2)
+    doc.add_heading(f'{num} Vendas de medicamentos para pessoas falecidas', level=2)
     p1 = doc.add_paragraph()
-    _run(p1, f'Em análise a informações contidas no Sistema Autorizador de Vendas (SAV) do PFPB, lançados pela Farmácia {razao_social} {periodo_desc}, foram identificados registros de vendas (distribuição) de medicamentos para pessoas na data de seus óbitos e/ou posteriormente a essa data, identificados nas bases de dados do SIRC', color='0F172A', size=10)
+    _run(p1, f'Em análise às informações lançadas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do PFPB, {periodo_desc}, foram identificados registros de vendas (distribuição) de medicamentos para pessoas na data de seus óbitos e/ou posteriormente a essa data, com confirmação nas bases de dados do SIRC', color='0F172A', size=10)
     _footnote_ref(
         doc,
         p1,
@@ -179,10 +187,10 @@ def _build_incompatibilidade_patologica_context(
         periodo_desc = (
             f'no ano de {data_inicio.year}'
             if data_inicio.year == data_fim.year
-            else f'no periodo de {data_inicio.year} a {data_fim.year}'
+            else f'no período de {data_inicio.year} a {data_fim.year}'
         )
     else:
-        periodo_desc = 'no periodo analisado'
+        periodo_desc = 'no período analisado'
 
     return {
         "periodo_desc": periodo_desc,
@@ -204,7 +212,7 @@ def _add_incompatibilidade_patologica_text(doc, num: str, razao_social: str, cli
     multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(f'{num} Vendas de medicamento com incompatibilidade patológica', level=2)
+    doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
 
     p1 = doc.add_paragraph()
     _run(
@@ -223,13 +231,13 @@ def _add_incompatibilidade_patologica_text(doc, num: str, razao_social: str, cli
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se, {periodo_desc}, percentual atípico de vendas desses medicamentos, correspondente a ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas monitoradas pelo indicador. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior à mediana dos percentuais de vendas com essa mesma criticidade realizadas pelas farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas monitoradas pelo indicador. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' a mediana dos percentuais de vendas com essa mesma criticidade realizadas pelas farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias localizadas em seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -306,7 +314,7 @@ def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any]):
     )
     _run(
         p1,
-        'A expectativa da análise é que o percentual levantado para vendas de medicamento “no teto” pelo estabelecimento acompanhe o padrão das demais farmácias localizadas na mesma região. Percentual muito acima da mediana da região sugere a ocorrência de vendas fictícias.',
+        'A expectativa da análise é que o percentual levantado para vendas de medicamentos “no teto” pelo estabelecimento acompanhe o padrão das demais farmácias localizadas na mesma região. Percentual muito acima da mediana da região sugere a ocorrência de vendas fictícias.',
         color='0F172A',
         size=10,
     )
@@ -314,13 +322,13 @@ def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any]):
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas no “teto máximo”. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com esta configuração das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o das farmácias localizadas no seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas no “teto máximo”. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com essa configuração das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias localizadas em seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -391,7 +399,7 @@ def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_
     )
     _run(
         p1,
-        'A ocorrência de cupons de vendas com quatro ou mais medicamentos foge do padrão epidemiológico esperado. Nesse sentido, cupons de vendas com essa composição e emitidos por uma farmácia num padrão muito acima dos demais estabelecimentos da sua região sugerem a ocorrência de vendas fictícias.',
+        'A ocorrência de cupons de vendas com quatro ou mais medicamentos foge do padrão epidemiológico esperado. Nesse sentido, cupons de vendas com essa composição e emitidos por uma farmácia em padrão muito acima dos demais estabelecimentos de sua região sugerem a ocorrência de vendas fictícias.',
         color='0F172A',
         size=10,
     )
@@ -399,13 +407,13 @@ def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a cupons de venda contendo quatro ou mais medicamentos. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com este mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o das farmácias localizadas no seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a cupons de venda contendo quatro ou mais medicamentos. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com o mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o das farmácias localizadas em seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -470,7 +478,7 @@ def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[s
     p1 = doc.add_paragraph()
     _run(
         p1,
-        'O comportamento esperado, no âmbito do PFPB, é de que o valor financeiro médio (“ticket médio”) das dispensações de medicamentos de uma farmácia para seus clientes acompanhe o padrão dos estabelecimentos de sua região, num determinado período. ',
+        'O comportamento esperado, no âmbito do PFPB, é de que o valor financeiro médio (“ticket médio”) das dispensações de medicamentos de uma farmácia para seus clientes acompanhe o padrão dos estabelecimentos de sua região, em um determinado período. ',
         color='0F172A',
         size=10,
     )
@@ -484,13 +492,13 @@ def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[s
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que o valor de ticket médio por ela registrado, {periodo_desc}, foi de ', color='0F172A', size=10)
     _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
-    _run(p2, '. Tal valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior à mediana dos valores das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' a mediana dos valores das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -555,7 +563,7 @@ def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: d
     p1 = doc.add_paragraph()
     _run(
         p1,
-        'O comportamento esperado, no âmbito do PFPB, é que o gasto médio mensal por cliente (CPF) em um estabelecimento farmacêutico num determinado período acompanhe o padrão das demais farmácias localizadas em sua mesma região. ',
+        'O comportamento esperado, no âmbito do PFPB, é que o gasto médio mensal por cliente (CPF) em um estabelecimento farmacêutico, em determinado período, acompanhe o padrão das demais farmácias localizadas em sua mesma região. ',
         color='0F172A',
         size=10,
     )
@@ -569,13 +577,13 @@ def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: d
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que o valor médio mensal por cliente, {periodo_desc}, foi de ', color='0F172A', size=10)
     _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
-    _run(p2, '. Tal valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao valor mediano das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -646,7 +654,7 @@ def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict
     )
     _run(
         p1,
-        'Quando o estabelecimento apresenta valores de vendas per capita mensal muito desproporcionais às farmácias da sua região, tal comportamento sugere forte probabilidade de que ele esteja captando e utilizando CPFs de pessoas residentes em outras regiões.',
+        'Quando o estabelecimento apresenta valores de vendas per capita mensal muito desproporcionais às farmácias de sua região, tal comportamento sugere forte probabilidade de que ele esteja captando e utilizando CPFs de pessoas residentes em outras regiões.',
         color='0F172A',
         size=10,
     )
@@ -654,13 +662,13 @@ def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que seu faturamento mensal per capita, {periodo_desc}, foi de ', color='0F172A', size=10)
     _run(p2, f'R$ {valor_fmt}', color='334155', size=10, bold=True)
-    _run(p2, '. Tal valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao valor mediano das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o valor é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o valor mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, '. Tal valor corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o valor equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o valor mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -739,13 +747,13 @@ def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a medicamentos de alto custo. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com este mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a medicamentos de alto custo. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com o mesmo perfil das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -807,7 +815,7 @@ def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_co
     p1 = doc.add_paragraph()
     _run(
         p1,
-        'No âmbito do PFPB, o comportamento esperado é que a dispensação de medicamento para o cidadão, no balcão da farmácia, seja realizada em alguns minutos, tendo em vista o tempo envolvido num atendimento humano padrão, que envolve etapas logísticas como conferência de documentação, busca do produto e assinatura',
+        'No âmbito do PFPB, o comportamento esperado é que a dispensação de medicamento para o cidadão, no balcão da farmácia, seja realizada em alguns minutos, tendo em vista o tempo envolvido em um atendimento humano padrão, que envolve etapas logísticas como conferência de documentação, busca do produto e assinatura',
         color='0F172A',
         size=10,
     )
@@ -828,13 +836,13 @@ def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_co
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em tempo inferior a 60 segundos. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em tempo inferior a 60 segundos. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -905,7 +913,7 @@ def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrenci
     )
     _run(
         p1,
-        'A expectativa para as retiradas de medicamentos é de que siga um comportamento de consumo real, no qual as datas de retirada costumam variar alguns dias ao longo dos meses, e não de serem realizadas sistematicamente com precisão absoluta de 30 em 30 dias. Nesse sentido, a identificação de vendas de medicamentos realizadas precisamente no prazo de 30 dias e com percentual acima do padrão dos demais estabelecimentos localizados na mesma região sugere indício de agendamento automatizado para vendas fictícias.',
+        'Espera-se que as retiradas de medicamentos sigam um comportamento de consumo real, no qual as datas de retirada costumam variar alguns dias ao longo dos meses, e não que sejam realizadas sistematicamente com precisão absoluta de 30 em 30 dias. Nesse sentido, a identificação de vendas de medicamentos realizadas precisamente no prazo de 30 dias e com percentual acima do padrão dos demais estabelecimentos localizados na mesma região sugere indício de agendamento automatizado para vendas fictícias.',
         color='0F172A',
         size=10,
     )
@@ -913,13 +921,13 @@ def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrenci
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas com prazos precisos de 30 dias. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas com prazos precisos de 30 dias. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -998,13 +1006,13 @@ def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[s
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em dias de pico. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em dias de pico. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
 
@@ -1069,13 +1077,13 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
     p1 = doc.add_paragraph()
     _run(
         p1,
-        'No âmbito do PFPB, o comportamento esperado é que a grande maioria dos clientes atendidos pelas farmácias residam no mesmo Estado do estabelecimento. ',
+        'No âmbito do PFPB, o comportamento esperado é que a grande maioria dos clientes atendidos pelas farmácias resida no mesmo Estado do estabelecimento. ',
         color='0F172A',
         size=10,
     )
     _run(
         p1,
-        'Para tal verificação, é realizado o comparativo entre o endereço do beneficiário, contido na base do Cadastro de Pessoa Física (CPF), e o endereço de registro do próprio estabelecimento, contido no Cadastro Nacional de Pessoa Jurídica (CNPJ). A identificação de vendas de medicamentos para pessoas de outros Estados acima do padrão dos demais estabelecimentos localizados na mesma região sugere a ocorrência de vendas fictícias.',
+        'Para tal verificação, é realizado o comparativo entre o endereço do beneficiário, contido na base do Cadastro de Pessoa Física (CPF), e o endereço de registro do próprio estabelecimento, contido no Cadastro Nacional de Pessoas Jurídicas (CNPJ). A identificação de vendas de medicamentos para pessoas de outros Estados acima do padrão dos demais estabelecimentos localizados na mesma região sugere a ocorrência de vendas fictícias.',
         color='0F172A',
         size=10,
     )
@@ -1083,11 +1091,11 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
     _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas para pessoas residentes em outros Estados. Tal percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' superior ao percentual mediano de vendas com esta mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual é ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} vezes', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias do seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} vezes', color='334155', size=10, bold=True)
+    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas para pessoas residentes em outros Estados. Tal percentual corresponde a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
+    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
+    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
+    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)

@@ -352,7 +352,7 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str, ha
 
     _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='7')
     if has_falecidos:
-        _add_toc_entry(doc, '  7.1', 'Vendas de medicamento para pessoas falecidas', page='7')
+        _add_toc_entry(doc, '  7.1', 'Vendas de medicamentos para pessoas falecidas', page='7')
     criticidade_start = 2 if has_falecidos else 1
     for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
         _add_toc_entry(doc, f'  {num}', full_title, page='7')
@@ -815,7 +815,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt)
     
     p_conclusao_53 = doc.add_paragraph()
-    _run(p_conclusao_53, f'Depreende-se do quadro anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no sistema SAV não se encontra compatível com seus estoques, contabilizado de acordo a metodologia adotada pela CGU, o que levou a estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=10)
+    _run(p_conclusao_53, f'Depreende-se do quadro anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no SAV não se encontra compatível com seus estoques, contabilizados de acordo com a metodologia adotada pela CGU, o que levou à estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=10)
     
     perc_fmt = f"{cnpj_data.get('percValSemComp', 0):.2f}%".replace('.', ',')
     val_fmt = f"{cnpj_data.get('valSemComp', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -950,7 +950,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
-    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram o achado principal de “vendas sem comprovação” para ela apuradas.')
+    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram o achado principal de “vendas sem comprovação” apurado para ela.')
     resumos_criticidades: list[str] = []
     criticidade_start = 1
     if falecidos_comp:
@@ -1095,14 +1095,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=10, bold=True)
     _run(p_conclusao, ' (', color='0F172A', size=10)
     _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=10, bold=True)
-    _run(p_conclusao, ' daquele total), em virtude da prática de “vendas sem comprovação”, tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque que a suporte.', color='0F172A', size=10)
+    _run(p_conclusao, ' daquele total), em virtude da prática de “vendas sem comprovação”, tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la.', color='0F172A', size=10)
 
     _add_resumo_criticidades_conclusao(doc, resumos_criticidades)
 
     p_fontes_conclusao = doc.add_paragraph()
     _run(
         p_fontes_conclusao,
-        f'De acordo com a “Introdução” desta Nota Técnica e os subitens de sua “Análise”, as suspeitas de “vendas sem comprovação” e as criticidades que as corroboram foram identificadas com base em informações autodeclaradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas do PFPB, em cópias de notas fiscais eletrônicas relativas às suas aquisições de medicamentos, compartilhadas pela Receita Federal do Brasil, e em dados contidos em bases oficiais, que complementam as análises advindas daquele Sistema. Dada a relevância, gravidade e sensibilidade desses achados, que sugerem ação deliberada por parte do estabelecimento para desvios de recursos do PFPB, não foi realizada fiscalização in loco e nem solicitada justificativa para os mesmos.',
+        f'De acordo com a “Introdução” desta Nota Técnica e os subitens de sua “Análise”, as suspeitas de “vendas sem comprovação” e as criticidades que as corroboram foram identificadas com base em informações autodeclaradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas do PFPB, em cópias de notas fiscais eletrônicas relativas às suas aquisições de medicamentos, compartilhadas pela Receita Federal do Brasil, e em dados contidos em bases oficiais, que complementam as análises advindas daquele Sistema. Dada a relevância, gravidade e sensibilidade desses achados, que sugerem possível ação deliberada por parte do estabelecimento voltada ao desvio de recursos do PFPB, não foi realizada fiscalização in loco nem solicitada justificativa ao estabelecimento.',
         color='0F172A',
         size=10,
     )

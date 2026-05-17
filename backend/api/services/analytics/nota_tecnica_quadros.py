@@ -399,9 +399,9 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     _run(p_rais, 'yy', color='334155', size=10, bold=True)
     _run(p_rais, ' funcionários registrados em ', color='0F172A', size=10)
     _run(p_rais, 'XXXX', color='334155', size=10, bold=True)
-    _run(p_rais, '. Contudo, apenas ', color='0F172A', size=10)
+    _run(p_rais, '. Contudo, há registro de apenas ', color='0F172A', size=10)
     _run(p_rais, 'x', color='334155', size=10, bold=True)
-    _run(p_rais, ' funcionário(s) consta(m) nos anos de ', color='0F172A', size=10)
+    _run(p_rais, ' funcionário(s) nos anos de ', color='0F172A', size=10)
     _run(p_rais, '20XX, 20YY e 20ZZ', color='334155', size=10, bold=True)
     _run(p_rais, ', período em que, conforme será visto mais adiante, a transferência de recursos aumentou de forma relevante.', color='0F172A', size=10)
 
@@ -409,7 +409,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     p_esocial.paragraph_format.space_before = Pt(6)
     _run(p_esocial, 'Destaca-se, também, o fato de que a legislação', color='0F172A', size=10)
     _footnote_ref(doc, p_esocial, 9, nota_farmaceutica_9)
-    _run(p_esocial, ' sobre o exercício e a fiscalização das atividades farmacêuticas dispõe que a farmácia e a drogaria terão, obrigatoriamente, a responsabilidade e a assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento. Assim sendo, fica evidenciado mais uma possível irregularidade, pois em consulta ao eSocial', color='0F172A', size=10)
+    _run(p_esocial, ' sobre o exercício e a fiscalização das atividades farmacêuticas dispõe que a farmácia e a drogaria terão, obrigatoriamente, a responsabilidade e a assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento. Assim sendo, fica evidenciada mais uma possível irregularidade, pois em consulta ao eSocial', color='0F172A', size=10)
     _footnote_ref(doc, p_esocial, 10, nota_esocial_10)
     _run(p_esocial, ' (atualizado até ', color='0F172A', size=10)
     _run(p_esocial, 'XXXXX', color='334155', size=10, bold=True)
@@ -425,7 +425,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p_title, f'Quadro 02 – Dispensações de medicamentos, informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação de Notas Fiscais de aquisições.', color='0F172A', size=9, bold=True)
+    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição.', color='0F172A', size=9, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
@@ -440,17 +440,17 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
         _cell_bg(cell, 'E2E8F0')
 
     r1 = table.rows[1].cells
-    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia *')
+    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia')
     _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
     _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'))
     
     r2 = table.rows[2].cells
-    _run(r2[0].paragraphs[0], 'Valor sem comprovação distribuído (R$) *')
+    _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)')
     _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
     _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'))
 
     r3 = table.rows[3].cells
-    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação *')
+    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação')
     _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','))
     _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','))
     

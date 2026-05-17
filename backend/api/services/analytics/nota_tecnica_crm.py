@@ -361,19 +361,19 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     p1 = doc.add_paragraph()
     _run(
         p1,
-        "Dentre os dados lançados pelas farmácias credenciadas no PFPB no Sistema Auxiliar de Venda (SAV) está o número de inscrição do médico no Conselho Regional de Medicina (CRM) e sua respectiva unidade federativa, a fim de respaldar as dispensações de medicamentos por meio das prescrições (receitas). ",
+        "Dentre os dados lançados pelas farmácias credenciadas no PFPB no Sistema Autorizador de Vendas (SAV) está o número de inscrição do médico no Conselho Regional de Medicina (CRM) e sua respectiva unidade federativa, a fim de respaldar as dispensações de medicamentos por meio das prescrições (receitas). ",
         color="0F172A",
         size=10,
     )
     _run(
         p1,
-        'O comportamento esperado para os estabelecimentos é de que diversos pacientes apresentem receitas de médicos distintos. Concentração excessiva pode indicar a ocorrência de acordos entre pacientes e médicos para prescrição de receitas falsas, médicos "parceiros" de fraudes cometidas pelo estabelecimento e/ou ainda uso indevidos de CRMs por parte da farmácia.',
+        "O comportamento esperado para os estabelecimentos é de que diversos pacientes apresentem receitas de médicos distintos. Concentração excessiva pode indicar a ocorrência de acordos irregulares relacionados à prescrição de receitas, atuação direcionada de prescritores junto ao estabelecimento e/ou uso indevido de CRMs por parte da farmácia.",
         color="0F172A",
         size=10,
     )
 
     p2 = doc.add_paragraph()
-    _run(p2, f"No período {periodo_intervalo}, de um universo de ", color="0F172A", size=10)
+    _run(p2, f"No período {periodo_intervalo}, foram identificados ", color="0F172A", size=10)
     _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
     _run(
         p2,
@@ -385,7 +385,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     title = doc.add_paragraph()
     _run(
         title,
-        f"Quadro 07 - Médicos (CRM) com maiores valores pagos pelo PFPB no Sistema Autorizador de Vendas, lançados pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período {periodo_intervalo}.",
+        f"Quadro 07 - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,
@@ -458,7 +458,9 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
         color="0F172A",
         size=10,
     )
-    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["mult_autorizacoes"], 2)} vezes superior a essa média', color="334155", size=10, bold=True)
+    mult_autorizacoes = _as_float(hhi_crm_comp["mult_autorizacoes"])
+    mult_autorizacoes_fmt = _format_decimal_pt(mult_autorizacoes, 2)
+    _run(p3, f'{mult_autorizacoes_fmt} {_vez_ou_vezes(mult_autorizacoes)} essa média', color="334155", size=10, bold=True)
     _run(p3, ".", color="0F172A", size=10)
 
     p4 = doc.add_paragraph()
@@ -527,7 +529,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o percentual mediano de vendas com essa mesma criticidade entre as farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
     _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano das farmácias do seu Estado e a ", color="0F172A", size=10)
+    _run(p2, " o percentual mediano das farmácias de seu Estado e a ", color="0F172A", size=10)
     _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
 
@@ -664,7 +666,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o percentual mediano de CRMs exclusivos das farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
     _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano das farmácias do seu Estado e a ", color="0F172A", size=10)
+    _run(p2, " o percentual mediano das farmácias de seu Estado e a ", color="0F172A", size=10)
     _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
 

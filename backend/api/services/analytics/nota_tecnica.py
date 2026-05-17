@@ -120,6 +120,15 @@ def _start_section(doc, *, footer_lines: list[str] | None = None, start=WD_SECTI
     return section
 
 
+def _format_main_heading(heading):
+    """Padroniza o espacamento dos titulos principais da Nota Tecnica."""
+    heading.paragraph_format.space_before = Pt(14)
+    heading.paragraph_format.space_after = Pt(10)
+    heading.paragraph_format.line_spacing = 1.0
+    heading.paragraph_format.keep_with_next = True
+    return heading
+
+
 def _add_confidential_watermark(section):
     """Adiciona marca d'agua discreta no cabecalho da secao."""
     header = section.header
@@ -520,11 +529,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_ref.left_margin = Inches(0.7); sec_ref.right_margin = Inches(0.7)
 
     # 1. ASSUNTO
-    doc.add_heading('1. ASSUNTO', level=1)
+    _format_main_heading(doc.add_heading('1. ASSUNTO', level=1))
     doc.add_paragraph(f'A presente Nota Técnica (NT), de caráter investigativo e sigiloso, tem como objetivo demonstrar indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), credenciada junto ao Programa Farmácia Popular do Brasil (PFPB) do Ministério da Saúde (MS) para a dispensação gratuita de medicamentos para cidadãos.')
 
     # 2. REFERÊNCIAS
-    h2 = doc.add_heading('2. REFERÊNCIAS', level=1)
+    h2 = _format_main_heading(doc.add_heading('2. REFERÊNCIAS', level=1))
     _footnote_ref(
         doc,
         h2,
@@ -555,7 +564,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_intro.left_margin = Inches(0.7); sec_intro.right_margin = Inches(0.7)
 
     # 3. INTRODUÇÃO
-    doc.add_heading('3. INTRODUÇÃO', level=1)
+    _format_main_heading(doc.add_heading('3. INTRODUÇÃO', level=1))
     doc.add_paragraph(f'No âmbito dos trabalhos realizados pela CGU de monitoramento e avaliação de gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, trata a presente Nota Técnica (NT) de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
     
     p_intro = doc.add_paragraph('A partir de metodologia desenvolvida pela CGU, consignada em seu Relatório de Auditoria nº 823121 (contido no ANEXO I desta Nota Técnica), foi identificada para a Farmácia ')
@@ -614,7 +623,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_41.left_margin = Inches(0.7); sec_41.right_margin = Inches(0.7)
 
     # 4. SÍNTESE
-    doc.add_heading('4. SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', level=1)
+    _format_main_heading(doc.add_heading('4. SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', level=1))
     doc.add_heading('4.1. Sobre o Programa Farmácia Popular do Brasil', level=2)
     p_intro_41 = doc.add_paragraph(
         'O Programa Farmácia Popular do Brasil, instituído em 2004 para ampliar o acesso a medicamentos essenciais, '
@@ -696,7 +705,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_5_intro.left_margin = Inches(0.7); sec_5_intro.right_margin = Inches(0.7)
 
     # 5. SOBRE A FARMACIA
-    doc.add_heading(f'5. SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', level=1)
+    _format_main_heading(doc.add_heading(f'5. SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', level=1))
     ultimo_mes_sav = _build_ultimo_mes_sav_context(cnpj, data_inicio, data_fim)
     situacao_pfpb = "ATIVA" if cnpj_data.get("is_conexao_ativa") else "INATIVA"
     p_sav_5 = doc.add_paragraph(
@@ -777,7 +786,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc)
 
-    doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}.', level=1)
+    _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}.', level=1))
     p_53 = doc.add_paragraph()
     _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO II desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
     
@@ -904,7 +913,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
-    doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1)
+    _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
     doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram com o achado principal de “vendas sem comprovação” para ela apuradas.')
     resumos_criticidades: list[str] = []
     criticidade_start = 1
@@ -1035,11 +1044,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
 
     # 8. CONCLUSÃO
-    h8 = doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1)
-    h8.paragraph_format.space_before = Pt(14)
-    h8.paragraph_format.space_after = Pt(10)
-    h8.paragraph_format.line_spacing = 1.0
-    h8.paragraph_format.keep_with_next = True
+    h8 = _format_main_heading(doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1))
     total_mov_conclusao = float(cnpj_data.get('totalMov') or 0.0)
     val_sem_comp_conclusao = float(cnpj_data.get('valSemComp') or 0.0)
     perc_sem_comp_conclusao = float(cnpj_data.get('percValSemComp') or 0.0)

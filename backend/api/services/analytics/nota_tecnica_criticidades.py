@@ -16,7 +16,6 @@ _SECAO5_MAP = [
     ('incompatibilidade_patologica', '5.6',  'Vendas de medicamento com incompatibilidade patológica'),
     ('teto',                         '5.7',  'Vendas no “teto máximo” para clientes da Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('polimedicamento',              '5.8',  'Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('polimedicamento',              '5.9',  'Quantidade média de medicamentos por cupom, vendidos pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('ticket_medio',                 '5.10', 'Valor do “ticket médio”, dos medicamentos vendidos pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('receita_paciente',             '5.11', 'Faturamento médio mensal por cliente, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('per_capita',                   '5.12', 'Faturamento mensal per capita, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),

@@ -157,8 +157,13 @@ def _build_anexo_ii_context(cnpj: str, db_or_engine: Any) -> dict[str, Any]:
             "valor_irregular": round(valor_irregular, 2),
             "pct_prejuizo_total": (valor_irregular / total_irregular * 100) if total_irregular > 0 else 0.0,
         }
+        detail_rows = [
+            row
+            for row in section.get("rows", [])
+            if row.get("tipo_linha") in {"venda_normal", "venda_irregular"}
+        ]
         consolidados.append(consolidado)
-        detalhes.append({**consolidado, "rows": irregular_rows})
+        detalhes.append({**consolidado, "rows": detail_rows})
 
     consolidados.sort(key=lambda item: item["valor_irregular"], reverse=True)
     detalhes.sort(key=lambda item: item["valor_irregular"], reverse=True)
@@ -182,6 +187,109 @@ def _add_table_header(table, headers: list[str], widths: list[Any], *, size: flo
         _write_cell(cell, label, size=size, bold=True, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
+def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]]):
+    if not detalhes:
+        return
+
+    p_intro = doc.add_paragraph()
+    p_intro.paragraph_format.space_before = Pt(12)
+    _run(
+        p_intro,
+        "Detalhamento da memória de cálculo dos GTINs que apresentaram vendas sem comprovação",
+        color="0F172A",
+        size=9,
+        bold=True,
+    )
+
+    headers = [
+        "Período inicial",
+        "Início da não comprovação",
+        "Período final",
+        "Estoque inicial",
+        "Estoque final",
+        "Caixas vendidas",
+        "Caixas sem comprovação",
+        "Valor vendido",
+        "Valor sem comprovação",
+        "NF-e consideradas",
+    ]
+    widths = [
+        Inches(0.74),
+        Inches(0.82),
+        Inches(0.74),
+        Inches(0.62),
+        Inches(0.62),
+        Inches(0.64),
+        Inches(0.72),
+        Inches(0.78),
+        Inches(0.82),
+        Inches(3.55),
+    ]
+
+    for idx, detalhe in enumerate(detalhes, start=1):
+        rows = detalhe.get("rows") or []
+        if not rows:
+            continue
+
+        p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(9)
+        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(
+            p_title,
+            f"Quadro II.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
+            color="0F172A",
+            size=8.2,
+            bold=True,
+        )
+
+        table = doc.add_table(rows=1, cols=len(headers))
+        table.style = "Table Grid"
+        table.autofit = False
+        _set_table_fixed_widths(table, widths)
+        _add_table_header(table, headers, widths, size=7.6)
+
+        for item in rows:
+            row = table.add_row()
+            _row_cant_split(row)
+            has_irregular = float(item.get("valor_irregular") or 0.0) > 0
+            values = [
+                item.get("periodo_inicial") or "-",
+                item.get("periodo_inicio_irregular") or "-",
+                item.get("periodo_final") or "-",
+                f'{int(item.get("estoque_inicial") or 0):,}'.replace(",", "."),
+                f'{int(item.get("estoque_final") or 0):,}'.replace(",", "."),
+                f'{int(item.get("vendas") or 0):,}'.replace(",", "."),
+                f'{int(item.get("vendas_irregular") or 0):,}'.replace(",", "."),
+                f'R$ {_format_decimal_pt(float(item.get("valor") or 0.0), 2)}',
+                f'R$ {_format_decimal_pt(float(item.get("valor_irregular") or 0.0), 2)}',
+                item.get("notas") or "-",
+            ]
+            for col_idx, value in enumerate(values):
+                cell = row.cells[col_idx]
+                _set_cell_width(cell, widths[col_idx])
+                if has_irregular:
+                    _cell_bg(cell, "FEF2F2")
+                align = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 9 else WD_ALIGN_PARAGRAPH.CENTER
+                _write_cell(cell, str(value), size=6.9 if col_idx == 9 else 7.3, color="0F172A", align=align)
+
+        subtotal_row = table.add_row()
+        _row_cant_split(subtotal_row)
+        label_cell = subtotal_row.cells[0].merge(subtotal_row.cells[4])
+        _cell_bg(label_cell, "F8FAFC")
+        _write_cell(label_cell, "Subtotal do GTIN", size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.RIGHT)
+        subtotal_values = [
+            f'{int(detalhe.get("vendas") or 0):,}'.replace(",", "."),
+            f'{int(detalhe.get("vendas_irregular") or 0):,}'.replace(",", "."),
+            f'R$ {_format_decimal_pt(float(detalhe.get("valor") or 0.0), 2)}',
+            f'R$ {_format_decimal_pt(float(detalhe.get("valor_irregular") or 0.0), 2)}',
+            "",
+        ]
+        for offset, value in enumerate(subtotal_values, start=5):
+            cell = subtotal_row.cells[offset]
+            _cell_bg(cell, "F8FAFC")
+            _write_cell(cell, value, size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.CENTER)
+
+
 def _add_anexo_ii_memoria_calculo(
     doc,
     razao_social: str,
@@ -189,7 +297,7 @@ def _add_anexo_ii_memoria_calculo(
     periodo_txt: str,
     anexo_ii_comp: dict[str, Any],
 ):
-    """Adiciona o Anexo II com resumo e quadro consolidado da memoria de calculo."""
+    """Adiciona o Anexo II com resumo, consolidado e detalhamento da memoria de calculo."""
     section = doc.add_section(WD_SECTION.NEW_PAGE)
     section.footer.is_linked_to_previous = False
     section.footer.paragraphs[0].text = ""
@@ -203,6 +311,7 @@ def _add_anexo_ii_memoria_calculo(
 
     summary = anexo_ii_comp.get("summary") or {}
     consolidados = anexo_ii_comp.get("consolidado") or []
+    detalhes = anexo_ii_comp.get("detalhes") or []
 
     doc.add_heading("ANEXO II - MEMÓRIA DE CÁLCULO DAS VENDAS SEM COMPROVAÇÃO", level=1)
     p_intro = doc.add_paragraph()
@@ -317,3 +426,5 @@ def _add_anexo_ii_memoria_calculo(
         color="64748B",
         size=8,
     )
+
+    _add_anexo_ii_detalhamento(doc, detalhes)

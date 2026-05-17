@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import os
 
 import pandas as pd
@@ -6,13 +5,7 @@ import polars as pl
 from sqlalchemy import text
 
 from cache_files import SOCIOS_PARQUET
-
-
-@dataclass(frozen=True)
-class CacheLoadResult:
-    df: pl.DataFrame | None
-    from_cache: bool
-    error: str | None = None
+from cache_producers.types import CacheLoadResult
 
 
 def load_socios(cnpj: str, engine=None) -> CacheLoadResult:

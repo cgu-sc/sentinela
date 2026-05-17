@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 import copy
 import json
@@ -12,16 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import InterfaceError as SQLAInterfaceError
 
 from cache_files import MEMORIA_CALCULO_PARQUET
-
-
-@dataclass(frozen=True)
-class CacheLoadResult:
-    df: pl.DataFrame
-    from_cache: bool
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms: float | None = None
-    error: str | None = None
+from cache_producers.types import CacheLoadResult
 
 
 def _cache_path(cnpj: str) -> str:

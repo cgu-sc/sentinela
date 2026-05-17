@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import os
 import time
 
@@ -18,22 +17,13 @@ from cache_files import (
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
 )
+from cache_producers.types import CacheLoadResult
 
 _CRM_ALERTS_CACHE_VERSION = 2
 _CRM_SEVERITY_CACHE_VERSION = 2
 _CRM_RAIOX_TX_CACHE_VERSION = 2
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
-
-
-@dataclass(frozen=True)
-class CacheLoadResult:
-    df: pl.DataFrame
-    from_cache: bool
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms: float | None = None
-    error: str | None = None
 
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import os
 import time
 
@@ -7,16 +6,7 @@ import polars as pl
 from sqlalchemy import text
 
 from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
-
-
-@dataclass(frozen=True)
-class CacheLoadResult:
-    df: pl.DataFrame
-    from_cache: bool
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms: float | None = None
-    error: str | None = None
+from cache_producers.types import CacheLoadResult
 
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:

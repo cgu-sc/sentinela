@@ -3,7 +3,6 @@ from datetime import date
 import calendar
 import polars as pl
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from fastapi import HTTPException
 import os
 import zlib
@@ -56,6 +55,30 @@ from ...schemas.analytics import (
 )
 
 from ._cache import _get_cnpj_cache_dir
+from cache_producers.falecidos import load_or_sync_falecidos
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    if isinstance(value, (int, float, Decimal, str, bytes)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, (int, float, Decimal, str, bytes)):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+    return default
+
 
 def get_falecidos_data(
     cnpj: str,
@@ -69,62 +92,19 @@ def get_falecidos_data(
     os demais CNPJs onde os mesmos CPFs compraram, permitindo calcular o ranking
     Multi-CNPJ a partir do cache local sem depender do dataset global.
     """
-    import time
-    import pandas as pd
-    from sqlalchemy import text
+    result = load_or_sync_falecidos(cnpj)
+    if result.error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Base de obitos indisponivel: {result.error}",
+        )
 
-    PARQUET_PATH = os.path.join(_get_cnpj_cache_dir(cnpj), FALECIDOS_PARQUET)
-    from_cache    = False
-    query_time_ms: float | None = None
-    save_time_ms:  float | None = None
-    read_time_ms:  float | None = None
-    df_all = None
-
+    df_all = result.df if result.df is not None else pl.DataFrame()
+    from_cache = result.from_cache
+    query_time_ms = result.query_time_ms
+    save_time_ms = result.save_time_ms
+    read_time_ms = result.read_time_ms
     # ── 1. Tentar carregar do cache local ────────────────────────────────
-    if os.path.exists(PARQUET_PATH):
-        try:
-            t0 = time.perf_counter()
-            df_all = pl.read_parquet(PARQUET_PATH)
-            read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
-            from_cache = True
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● FALECIDOS ● ⚠️ ERRO DE LEITURA ({e})")
-
-    # ── 2. Gerar parquet via SQL (primeira vez ou cache corrompido) ──────
-    if df_all is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                t0 = time.perf_counter()
-                pdf = pd.read_sql(
-                    text("""
-                        SELECT f.*
-                        FROM [temp_CGUSC].[fp].[falecidos_por_farmacia] f
-                        WHERE f.cpf IN (
-                            SELECT DISTINCT cpf
-                            FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]
-                            WHERE cnpj = :cnpj
-                        )
-                    """),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-                query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
-
-            df_all = pl.from_pandas(pdf).with_columns([
-                pl.col("dt_nascimento").cast(pl.Date, strict=False),
-                pl.col("dt_obito").cast(pl.Date, strict=False),
-                pl.col("data_autorizacao").cast(pl.Date, strict=False),
-            ])
-            t1 = time.perf_counter()
-            df_all.write_parquet(PARQUET_PATH, compression="zstd")
-            save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
-            print(f"⏱  Falecidos {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
-
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● FALECIDOS ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df_all = None
-
     _empty_response = FalecidosResponse(
         cnpj=cnpj,
         summary=FalecidosSummarySchema(
@@ -170,9 +150,9 @@ def get_falecidos_data(
         # 1. KPIs Básicos
         cpfs_distintos = df_target["cpf"].n_unique()
         total_autorizacoes = df_target.height
-        valor_total = float(df_target["valor_total_autorizacao"].sum() or 0.0)
-        media_dias = float(df_target["dias_apos_obito"].mean() or 0.0)
-        max_dias = int(df_target["dias_apos_obito"].max() or 0)
+        valor_total = _safe_float(df_target["valor_total_autorizacao"].sum())
+        media_dias = _safe_float(df_target["dias_apos_obito"].mean())
+        max_dias = _safe_int(df_target["dias_apos_obito"].max())
 
         # 2. Lógica Multi-CNPJ (Inteligência Cross-Pharmacy)
         # Encontra outros estabelecimentos onde ESSES CPFs compraram
@@ -186,6 +166,11 @@ def get_falecidos_data(
 
         # 3. Ranking de Outros Estabelecimentos
         # Precisamos dos nomes das farmácias. Vamos usar a rede_df se possível.
+        df_outros_nomes = df_outros.with_columns([
+            pl.lit(None).cast(pl.Utf8).alias("razao_social"),
+            pl.lit(None).cast(pl.Utf8).alias("municipio"),
+            pl.lit(None).cast(pl.Utf8).alias("uf"),
+        ])
         try:
             rede_df = get_rede_df().select(["cnpj", "razao_social", "municipio", "uf"])
             df_outros_nomes = df_outros.join(rede_df, on="cnpj", how="left")
@@ -224,7 +209,7 @@ def get_falecidos_data(
             if perfil.is_empty():
                 raise RuntimeError(f"CNPJ {cnpj} sem id_cnpj no perfil_estabelecimento.")
             mov_df = get_df().filter(pl.col("id_cnpj") == perfil.item(0, 0))
-            total_faturamento = float(mov_df["total_vendas"].sum() or 1.0)
+            total_faturamento = _safe_float(mov_df["total_vendas"].sum(), 1.0)
             pct_faturamento = valor_total / total_faturamento if total_faturamento > 0 else 0.0
         except: pass
 
@@ -256,9 +241,9 @@ def get_falecidos_data(
                 fonte_obito=r["fonte_obito"],
                 num_autorizacao=str(r["num_autorizacao"]),
                 data_autorizacao=r["data_autorizacao"],
-                qtd_itens_na_autorizacao=int(r["qtd_itens_na_autorizacao"] or 0),
-                valor_total_autorizacao=float(r["valor_total_autorizacao"] or 0.0),
-                dias_apos_obito=int(r["dias_apos_obito"] or 0),
+                qtd_itens_na_autorizacao=_safe_int(r["qtd_itens_na_autorizacao"]),
+                valor_total_autorizacao=_safe_float(r["valor_total_autorizacao"]),
+                dias_apos_obito=_safe_int(r["dias_apos_obito"]),
                 outros_estabelecimentos=r["outros"]
             )
             for r in df_final.sort(["cpf", "data_autorizacao"]).iter_rows(named=True)
@@ -349,7 +334,7 @@ def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineRespons
                 municipio=r.get("municipio"),
                 uf=r.get("uf"),
                 data_autorizacao=r.get("data_autorizacao"),
-                valor_total_autorizacao=float(r.get("valor_total_autorizacao") or 0.0),
+                valor_total_autorizacao=_safe_float(r.get("valor_total_autorizacao")),
                 num_autorizacao=str(r.get("num_autorizacao") or ""),
                 is_this_cnpj=(str(r["cnpj"]) == cnpj_referencia),
             ))

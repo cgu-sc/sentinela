@@ -1,5 +1,23 @@
 """Nomes canonicos dos arquivos de cache Parquet."""
 
+MOVIMENTACAO_PARQUET = "movimentacao.parquet"
+LOCALIDADES_PARQUET = "localidades.parquet"
+REDES_FARMACEUTICAS_PARQUET = "redes_farmaceuticas.parquet"
+MATRIZ_RISCO_PARQUET = "matriz_risco.parquet"
+BENCH_CRM_UF_PARQUET = "bench_crm_uf.parquet"
+BENCH_CRM_REGIAO_PARQUET = "bench_crm_regiao.parquet"
+BENCH_CRM_BR_PARQUET = "bench_crm_br.parquet"
+FARMACIAS_PARQUET = "farmacias.parquet"
+PERFIL_ESTABELECIMENTO_PARQUET = "perfil_estabelecimento.parquet"
+SOCIOS_PARQUET = "socios.parquet"
+TEIA_FONTE_NIVEL2_PARQUET = "teia_fonte_nivel2.parquet"
+TEIA_FONTE_NIVEL3_PARQUET = "teia_fonte_nivel3.parquet"
+TEIA_FONTE_NIVEL4_PARQUET = "teia_fonte_nivel4.parquet"
+MEDICAMENTOS_PARQUET = "medicamentos.parquet"
+VOLUME_ATIPICO_SEMESTRAL_PARQUET = "volume_atipico_semestral.parquet"
+DADOS_PAR_PARQUET = "dados_par.parquet"
+PAR_TEIA_ALVOS_PARQUET = "par_teia_alvos.parquet"
+
 MEMORIA_CALCULO_PARQUET = "memoria_calculo.parquet"
 MOVIMENTACAO_MENSAL_GTIN_PARQUET = "movimentacao_mensal_gtin.parquet"
 FALECIDOS_PARQUET = "falecidos.parquet"
@@ -19,25 +37,3 @@ TEIA_GRAFO_NIVEL3_NODES_PARQUET = "teia_grafo_nivel3_nodes.parquet"
 TEIA_GRAFO_NIVEL3_EDGES_PARQUET = "teia_grafo_nivel3_edges.parquet"
 TEIA_GRAFO_NIVEL4_NODES_PARQUET = "teia_grafo_nivel4_nodes.parquet"
 TEIA_GRAFO_NIVEL4_EDGES_PARQUET = "teia_grafo_nivel4_edges.parquet"
-
-CNPJ_PARQUETS = (
-    MEMORIA_CALCULO_PARQUET,
-    MOVIMENTACAO_MENSAL_GTIN_PARQUET,
-    FALECIDOS_PARQUET,
-    DADOS_CRMS_PARQUET,
-    GEOGRAFICO_PARQUET,
-    VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
-    CRM_RAIOX_TX_PARQUET,
-    CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
-    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
-    CRM_PERFIL_DIARIO_PARQUET,
-    CRM_HORARIO_PARQUET,
-    CRM_HORARIO_EVENTOS_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
-    TEIA_GRAFO_NIVEL2_NODES_PARQUET,
-    TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
-    TEIA_GRAFO_NIVEL3_NODES_PARQUET,
-    TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
-    TEIA_GRAFO_NIVEL4_NODES_PARQUET,
-    TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
-)

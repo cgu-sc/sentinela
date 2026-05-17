@@ -1,0 +1,1 @@
+"""Produtores de caches Parquet."""

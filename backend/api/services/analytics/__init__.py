@@ -1,8 +1,12 @@
 from ._cache import (
     _get_cnpj_cache_dir,
     _known_cnpj_dirs,
+)
+from cache_producers.crm import (
     sync_crm_raiox_tx,
     sync_mediana_autorizacoes_horaria,
+)
+from cache_producers.network import (
     sync_network,
 )
 from .crm import (

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import polars as pl
 from sqlalchemy import text
-import cache_files
+import cache_registry
 
 # --- LÓGICA DE CAMINHO PARA CACHE ---
 # Se rodando via EXE (PyInstaller), sys.frozen é True
@@ -28,23 +28,30 @@ def get_cache_dir() -> str:
     return path_root
 
 _CACHE_DIR = get_cache_dir()
-_PARQUET_PATH = os.path.join(_CACHE_DIR, "movimentacao.parquet")
-_LOCALIDADES_PARQUET_PATH = os.path.join(_CACHE_DIR, "localidades.parquet")
-_REDE_PARQUET_PATH = os.path.join(_CACHE_DIR, "redes_farmaceuticas.parquet")
-_MATRIZ_PARQUET_PATH = os.path.join(_CACHE_DIR, "matriz_risco.parquet")
-_BENCH_CRM_UF_PATH     = os.path.join(_CACHE_DIR, "bench_crm_uf.parquet")
-_BENCH_CRM_REGIAO_PATH = os.path.join(_CACHE_DIR, "bench_crm_regiao.parquet")
-_BENCH_CRM_BR_PATH     = os.path.join(_CACHE_DIR, "bench_crm_br.parquet")
-_DADOS_FARMACIA_PARQUET_PATH = os.path.join(_CACHE_DIR, "farmacias.parquet")
-_PERFIL_ESTABELECIMENTO_PARQUET_PATH = os.path.join(_CACHE_DIR, "perfil_estabelecimento.parquet")
-_DADOS_SOCIOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "socios.parquet")
-_TEIA_FONTE_NIVEL2_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel2.parquet")
-_TEIA_FONTE_NIVEL3_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel3.parquet")
-_TEIA_FONTE_NIVEL4_PARQUET_PATH = os.path.join(_CACHE_DIR, "teia_fonte_nivel4.parquet")
-_MEDICAMENTOS_PARQUET_PATH   = os.path.join(_CACHE_DIR, "medicamentos.parquet")
-_VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = os.path.join(_CACHE_DIR, "volume_atipico_semestral.parquet")
-_DADOS_PAR_PARQUET_PATH = os.path.join(_CACHE_DIR, "dados_par.parquet")
-_PAR_TEIA_ALVOS_PARQUET_PATH = os.path.join(_CACHE_DIR, "par_teia_alvos.parquet")
+_GLOBAL_PARQUETS = cache_registry.get_global_parquet_files_by_key()
+
+
+def _global_cache_path(key: str) -> str:
+    return os.path.join(_CACHE_DIR, _GLOBAL_PARQUETS[key])
+
+
+_PARQUET_PATH = _global_cache_path("movimentacao")
+_LOCALIDADES_PARQUET_PATH = _global_cache_path("localidades")
+_REDE_PARQUET_PATH = _global_cache_path("rede")
+_MATRIZ_PARQUET_PATH = _global_cache_path("matriz_risco")
+_BENCH_CRM_UF_PATH = _global_cache_path("bench_crm_uf")
+_BENCH_CRM_REGIAO_PATH = _global_cache_path("bench_crm_regiao")
+_BENCH_CRM_BR_PATH = _global_cache_path("bench_crm_br")
+_DADOS_FARMACIA_PARQUET_PATH = _global_cache_path("dados_farmacia")
+_PERFIL_ESTABELECIMENTO_PARQUET_PATH = _global_cache_path("perfil_estabelecimento")
+_DADOS_SOCIOS_PARQUET_PATH = _global_cache_path("dados_socios")
+_TEIA_FONTE_NIVEL2_PARQUET_PATH = _global_cache_path("teia_fonte_nivel2")
+_TEIA_FONTE_NIVEL3_PARQUET_PATH = _global_cache_path("teia_fonte_nivel3")
+_TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
+_MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
+_VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
+_DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
+_PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -104,265 +111,6 @@ def _empty_par_teia_alvos_df() -> pl.DataFrame:
         "qtd_empresas_par_qualquer": pl.Int32,
     })
 
-_CNPJ_PARQUETS = cache_files.CNPJ_PARQUETS
-
-
-def _schema_cnpj_parquet() -> dict[str, dict]:
-    """Schemas usados para criar parquets vazios quando nao ha dados no SQL."""
-    par_fields = {
-        "is_par": pl.Boolean,
-        "qtd_processos_par": pl.Int32,
-        "par_situacoes": pl.Utf8,
-        "par_primeira_instauracao": pl.Date,
-        "par_ultima_instauracao": pl.Date,
-        "par_ultima_conclusao": pl.Date,
-    }
-    edge_schema = {
-        "id": pl.Utf8,
-        "source": pl.Utf8,
-        "target": pl.Utf8,
-        "label": pl.Utf8,
-        "type": pl.Utf8,
-        "network_level": pl.Utf8,
-        "is_ativo": pl.Boolean,
-        "data_entrada_sociedade": pl.Date,
-        "data_exclusao_sociedade": pl.Date,
-    }
-    n2_n4_node_schema = {
-        "id": pl.Utf8,
-        "label": pl.Utf8,
-        "type": pl.Utf8,
-        "network_level": pl.Utf8,
-        "razao_social": pl.Utf8,
-        "nome_socio": pl.Utf8,
-        "nome_fantasia": pl.Utf8,
-        "id_cnae_principal": pl.Int32,
-        "cnae_principal": pl.Utf8,
-        "id_cnae_secundario": pl.Int32,
-        "cnae_secundario": pl.Utf8,
-        "municipio": pl.Utf8,
-        "uf": pl.Utf8,
-        "situacao_rf": pl.Utf8,
-        "classification_version": pl.Int16,
-        "is_falecido": pl.Boolean,
-        "is_cadunico": pl.Boolean,
-        "is_cnae_farmacia_ausente": pl.Boolean,
-        **par_fields,
-    }
-    n3_node_schema = {
-        "id": pl.Utf8,
-        "label": pl.Utf8,
-        "type": pl.Utf8,
-        "network_level": pl.Utf8,
-        "nome_socio": pl.Utf8,
-        "municipio": pl.Utf8,
-        "uf": pl.Utf8,
-        "is_falecido": pl.Boolean,
-        "is_cadunico": pl.Boolean,
-        "is_cnae_farmacia_ausente": pl.Boolean,
-        **par_fields,
-    }
-    return {
-        cache_files.MEMORIA_CALCULO_PARQUET: {
-            "tipo_linha": pl.Utf8,
-            "gtin": pl.Utf8,
-            "medicamento": pl.Utf8,
-            "periodo_inicial": pl.Utf8,
-            "periodo_inicio_irregular": pl.Utf8,
-            "periodo_final": pl.Utf8,
-            "estoque_inicial": pl.Int64,
-            "estoque_final": pl.Int64,
-            "vendas": pl.Int64,
-            "vendas_irregular": pl.Int64,
-            "valor": pl.Float64,
-            "valor_irregular": pl.Float64,
-            "notas": pl.Utf8,
-        },
-        cache_files.MOVIMENTACAO_MENSAL_GTIN_PARQUET: {
-            "codigo_barra": pl.Utf8,
-            "periodo": pl.Date,
-            "qnt_caixas_vendidas": pl.Int64,
-            "qnt_caixas_sem_comprovacao": pl.Int64,
-            "num_autorizacoes": pl.Int64,
-            "valor_vendas": pl.Float64,
-            "valor_sem_comprovacao": pl.Float64,
-        },
-        cache_files.FALECIDOS_PARQUET: {
-            "cpf": pl.Utf8,
-            "cnpj": pl.Utf8,
-            "nome_falecido": pl.Utf8,
-            "municipio_falecido": pl.Utf8,
-            "uf_falecido": pl.Utf8,
-            "dt_nascimento": pl.Date,
-            "dt_obito": pl.Date,
-            "fonte_obito": pl.Utf8,
-            "data_autorizacao": pl.Date,
-            "num_autorizacao": pl.Utf8,
-            "qtd_itens_na_autorizacao": pl.Int64,
-            "valor_total_autorizacao": pl.Float64,
-            "dias_apos_obito": pl.Int64,
-        },
-        cache_files.DADOS_CRMS_PARQUET: {
-            "id_medico": pl.Utf8,
-            "no_medico": pl.Utf8,
-            "competencia": pl.Int32,
-            "vl_total_prescricoes": pl.Float64,
-            "nu_prescricoes_mes": pl.Int64,
-            "nu_prescricoes_total_brasil": pl.Int64,
-            "flag_crm_invalido": pl.Int8,
-            "flag_prescricao_antes_registro": pl.Int8,
-            "alerta_concentracao_multiplos_crms": pl.Int8,
-            "flag_concentracao_mesmo_crm": pl.Int8,
-            "flag_distancia_geografica": pl.Int8,
-            "dt_primeira_prescricao": pl.Utf8,
-            "dt_inscricao_crm": pl.Date,
-            "nu_estabelecimentos": pl.Int64,
-        },
-        cache_files.GEOGRAFICO_PARQUET: {
-            "id_medico": pl.Utf8,
-            "competencia": pl.Int32,
-            "cnpj_a": pl.Utf8,
-            "no_municipio_a": pl.Utf8,
-            "sg_uf_a": pl.Utf8,
-            "dt_ini_a": pl.Utf8,
-            "dt_fim_a": pl.Utf8,
-            "nu_prescricoes_a": pl.Int32,
-            "cnpj_b": pl.Utf8,
-            "no_municipio_b": pl.Utf8,
-            "sg_uf_b": pl.Utf8,
-            "dt_ini_b": pl.Utf8,
-            "dt_fim_b": pl.Utf8,
-            "nu_prescricoes_b": pl.Int32,
-            "distancia_km": pl.Float64,
-        },
-        cache_files.VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET: {
-            "id_cnpj": pl.Int32,
-            "competencia": pl.Int32,
-            "dt_alerta": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "nu_prescricoes": pl.Int32,
-            "nu_crms": pl.Int32,
-            "mediana_hora": pl.Float64,
-            "multiplicador": pl.Float64,
-        },
-        cache_files.CRM_RAIOX_TX_PARQUET: {
-            "dt_janela": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "data_hora": pl.Utf8,
-            "num_autorizacao": pl.Utf8,
-            "id_medico": pl.Utf8,
-            "codigo_barra": pl.Utf8,
-            "valor_pago": pl.Float64,
-            "_crm_raiox_tx_cache_version": pl.Int32,
-        },
-        cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET: {
-            "id_medico": pl.Utf8,
-            "competencia": pl.Int32,
-            "dt_alerta": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "nu_prescricoes_dia": pl.Int32,
-            "nu_minutos_dia": pl.Int32,
-            "taxa_hora": pl.Float64,
-            "dt_ini_hora": pl.Datetime,
-            "dt_fim_hora": pl.Datetime,
-            "severidade": pl.Utf8,
-            "criterio_pior_ritmo": pl.Utf8,
-            "_crm_alerts_cache_version": pl.Int32,
-            "nu_5min": pl.Int32,
-            "nu_10min": pl.Int32,
-            "nu_15min": pl.Int32,
-            "nu_20min": pl.Int32,
-            "nu_25min": pl.Int32,
-            "nu_30min": pl.Int32,
-            "nu_60min": pl.Int32,
-        },
-        cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET: {
-            "id_cnpj": pl.Int32,
-            "competencia": pl.Int32,
-            "dt_dia": pl.Utf8,
-            "dt_alerta": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "dt_ini_concentracao": pl.Utf8,
-            "dt_fim_concentracao": pl.Utf8,
-            "nu_prescricoes": pl.Int32,
-            "nu_crms": pl.Int32,
-            "nu_60min": pl.Int32,
-            "nu_minutos_span": pl.Int32,
-            "nu_crms_distintos": pl.Int32,
-            "severidade": pl.Utf8,
-            "criterio_pior_ritmo": pl.Utf8,
-            "_crm_alerts_cache_version": pl.Int32,
-            "nu_5min": pl.Int32,
-            "nu_10min": pl.Int32,
-            "nu_15min": pl.Int32,
-            "nu_20min": pl.Int32,
-            "nu_25min": pl.Int32,
-            "nu_30min": pl.Int32,
-        },
-        cache_files.CRM_PERFIL_DIARIO_PARQUET: {
-            "dt_janela": pl.Utf8,
-            "competencia": pl.Int32,
-            "nu_prescricoes_dia": pl.Int32,
-            "nu_crms_distintos": pl.Int32,
-            "mediana_diaria": pl.Float64,
-            "is_dia_com_volume_horario_anomalo": pl.Int8,
-            "is_anomalo_unico": pl.Int8,
-            "is_crm_multiplo": pl.Int8,
-        },
-        cache_files.CRM_HORARIO_PARQUET: {
-            "dt_janela": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "nu_prescricoes": pl.Int32,
-            "nu_crms_diferentes": pl.Int32,
-            "mediana_hora": pl.Float64,
-            "is_hora_com_alerta": pl.Int8,
-            "is_volume_horario_anomalo": pl.Int8,
-            "is_crm_unico": pl.Int8,
-            "is_crm_multiplo": pl.Int8,
-        },
-        cache_files.CRM_HORARIO_EVENTOS_PARQUET: {
-            "tipo": pl.Utf8,
-            "dt_dia": pl.Utf8,
-            "id_medico": pl.Utf8,
-            "nu_crms_distintos": pl.Int32,
-            "dt_ini_concentracao": pl.Datetime,
-            "dt_fim_concentracao": pl.Datetime,
-            "severidade": pl.Utf8,
-            "hora_inicio": pl.Utf8,
-            "hora_fim": pl.Utf8,
-            "minuto_inicio": pl.Int32,
-            "minuto_fim": pl.Int32,
-            "_crm_severity_cache_version": pl.Int32,
-        },
-        cache_files.MEDIANA_AUTORIZACOES_HORARIA_PARQUET: {
-            "ano": pl.Int32,
-            "trimestre": pl.Int32,
-            "hr_janela": pl.Int32,
-            "mediana_hora": pl.Float64,
-        },
-        cache_files.TEIA_GRAFO_NIVEL2_NODES_PARQUET: n2_n4_node_schema,
-        cache_files.TEIA_GRAFO_NIVEL2_EDGES_PARQUET: edge_schema,
-        cache_files.TEIA_GRAFO_NIVEL3_NODES_PARQUET: n3_node_schema,
-        cache_files.TEIA_GRAFO_NIVEL3_EDGES_PARQUET: edge_schema,
-        cache_files.TEIA_GRAFO_NIVEL4_NODES_PARQUET: n2_n4_node_schema,
-        cache_files.TEIA_GRAFO_NIVEL4_EDGES_PARQUET: edge_schema,
-    }
-
-
-def _criar_parquets_cnpj_vazios(cnpj_dir: str, arquivos: list[str]) -> list[str]:
-    """Materializa parquets vazios para caches opcionais sem dados."""
-    schemas = _schema_cnpj_parquet()
-    criados = []
-    for arquivo in arquivos:
-        schema = schemas.get(arquivo)
-        if not schema:
-            continue
-        path = os.path.join(cnpj_dir, arquivo)
-        pl.DataFrame(schema=schema).write_parquet(path, compression="zstd")
-        criados.append(arquivo)
-    return criados
-
-
 def _buscar_cnpjs_matriz(engine) -> list[str]:
     """Busca os CNPJs ativos da matriz de risco para sincronizacao em lote."""
     with engine.connect() as conn:
@@ -378,7 +126,7 @@ def _buscar_cnpjs_matriz(engine) -> list[str]:
 
 def _sync_falecidos(engine, progress_callback=None):
     """Gera os parquets de falecidos por CNPJ usando a rotina atual da API."""
-    from api.services.analytics import AnalyticsService
+    from cache_producers.falecidos import load_or_sync_falecidos
 
     with engine.connect() as conn:
         res = conn.execute(text("""
@@ -397,17 +145,16 @@ def _sync_falecidos(engine, progress_callback=None):
         return
 
     for i, cnpj in enumerate(cnpjs, 1):
-        try:
-            AnalyticsService.get_falecidos_data(str(cnpj))
-        except Exception as e:
-            print(f"\n  Aviso: erro ao sincronizar falecidos do CNPJ {cnpj}: {e}")
+        result = load_or_sync_falecidos(str(cnpj), engine)
+        if result.error:
+            raise RuntimeError(f"falecidos {cnpj}: {result.error}")
         if progress_callback:
             progress_callback(int((i / total) * 100))
 
 
 def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
     """Gera todos os parquets mantidos em sentinela_cache/<cnpj>/."""
-    from api.services.analytics import AnalyticsService
+    import cache_manager
 
     print("Atualizando indicadores PAR antes da teia por CNPJ...")
     _sync_dados_par(engine)
@@ -415,60 +162,7 @@ def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None 
     if not cnpjs:
         cnpjs = _buscar_cnpjs_matriz(engine)
 
-    cnpjs = [cnpj.strip() for cnpj in cnpjs if cnpj.strip()]
-    total = len(cnpjs)
-    print(f"Sincronizando todos os parquets por CNPJ para {total} estabelecimento(s)...")
-
-    if total == 0:
-        if progress_callback:
-            progress_callback(100)
-        return
-
-    etapas = [
-        ("memoria_calculo", lambda cnpj: AnalyticsService.get_movimentacao_data(cnpj, engine, check_cache=False)),
-        ("movimentacao_mensal_gtin", lambda cnpj: AnalyticsService.get_evolucao_mensal_gtin(cnpj)),
-        ("falecidos", lambda cnpj: AnalyticsService.get_falecidos_data(cnpj)),
-        ("crm_dados", lambda cnpj: AnalyticsService.get_crm_data(cnpj)),
-        ("crm_perfil_diario", lambda cnpj: AnalyticsService.get_crm_perfil_diario(cnpj)),
-        ("crm_perfil_horario", lambda cnpj: AnalyticsService.get_crm_perfil_horario(cnpj)),
-        ("crm_raiox_tx", lambda cnpj: AnalyticsService.sync_crm_raiox_tx(cnpj)),
-        ("mediana_horaria", lambda cnpj: AnalyticsService.sync_mediana_autorizacoes_horaria(cnpj)),
-        ("teia_societaria", lambda cnpj: AnalyticsService.sync_network(cnpj)),
-    ]
-
-    for i, cnpj in enumerate(cnpjs, 1):
-        print(f"\n  [{i}/{total}] CNPJ {cnpj}")
-
-        for nome_etapa, func in etapas:
-            try:
-                print(f"    - {nome_etapa}...", end="", flush=True)
-                func(cnpj)
-                print(" ok")
-            except Exception as e:
-                print(f" erro: {e}")
-
-        cnpj_dir = AnalyticsService._get_cnpj_cache_dir(cnpj)
-        faltantes = [
-            arquivo for arquivo in _CNPJ_PARQUETS
-            if not os.path.exists(os.path.join(cnpj_dir, arquivo))
-        ]
-        if faltantes:
-            criados = _criar_parquets_cnpj_vazios(cnpj_dir, faltantes)
-            if criados:
-                print(f"    Parquets vazios criados: {', '.join(criados)}")
-
-            ainda_faltantes = [
-                arquivo for arquivo in _CNPJ_PARQUETS
-                if not os.path.exists(os.path.join(cnpj_dir, arquivo))
-            ]
-            if ainda_faltantes:
-                print(f"    Aviso: parquets faltantes: {', '.join(ainda_faltantes)}")
-
-        if progress_callback:
-            progress_callback(int((i / total) * 100))
-
-    if progress_callback:
-        progress_callback(100)
+    cache_manager.sync_cnpj_caches(engine, cnpjs, progress_callback)
 
 
 def _sync_teia_expansao_completa(engine, progress_callback=None):
@@ -1308,7 +1002,7 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
 
 def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
     """Tarefa: Gera todos os parquets (médicos, diário, horário, alertas) para os CNPJs selecionados."""
-    from api.services.analytics import AnalyticsService
+    import cache_manager
     
     # Se não informar CNPJs, busca os que já processaram o índice de risco (ativos)
     if not cnpjs:
@@ -1326,22 +1020,29 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
     for i, cnpj in enumerate(cnpjs, 1):
         try:
             # 1. Lista de Médicos e Alertas (Gera 3 parquets: _prescritores, _crm_unico_alertas, _cnpj_alerts)
-            AnalyticsService.get_crm_data(cnpj)
+            cache_manager.sync_cnpj_cache("dados_crms", cnpj, engine)
+            cache_manager.sync_cnpj_cache("geografico", cnpj, engine)
+            cache_manager.sync_cnpj_cache("volume_horario_anomalo_alertas", cnpj, engine)
+            cache_manager.sync_cnpj_cache("crm_concentracao_unico_alertas", cnpj, engine)
+            cache_manager.sync_cnpj_cache("crm_concentracao_multiplo_alertas", cnpj, engine)
             
             # 2. Perfil Diário Unificado (is_dia_com_volume_horario_anomalo + is_anomalo_unico)
-            AnalyticsService.get_crm_perfil_diario(cnpj)
+            cache_manager.sync_cnpj_cache("crm_perfil_diario", cnpj, engine)
 
             # 3. Detalhamento Horário de Anomalias (auto-warms medianas internamente)
-            AnalyticsService.get_crm_perfil_horario(cnpj)
+            cache_manager.sync_cnpj_cache("crm_horario", cnpj, engine)
+            cache_manager.sync_cnpj_cache("crm_horario_eventos", cnpj, engine)
+            cache_manager.sync_cnpj_cache("mediana_autorizacoes_horaria", cnpj, engine)
 
             # 4. Transações Raio-X (unificado: múltiplos + único)
-            AnalyticsService.sync_crm_raiox_tx(cnpj)
+            cache_manager.sync_cnpj_cache("crm_raiox_tx", cnpj, engine)
 
             if progress_callback:
                 p = int((i / total) * 100)
                 progress_callback(p)
         except Exception as e:
             print(f"\n[AVISO]  Erro ao sincronizar CNPJ {cnpj}: {e}")
+            raise
 
     if progress_callback:
         progress_callback(100)

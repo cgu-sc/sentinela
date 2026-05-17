@@ -3,7 +3,6 @@ from datetime import date
 import calendar
 import polars as pl
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from fastapi import HTTPException
 import os
 import zlib
@@ -57,6 +56,7 @@ from ...schemas.analytics import (
 
 from ._cache import _get_cnpj_cache_dir
 from .volume_atipico import normalize_volume_atipico_limite
+from cache_producers.financeiro import load_or_sync_movimentacao_mensal_gtin
 
 def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_atipico_limite=None) -> EvolucaoFinanceiraResponse:
     """
@@ -224,66 +224,18 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
     Returns:
         EvolucaoMensalGtinResponse com lista de meses ordenados ASC.
     """
-    import pandas as pd
-    import time
+    result = load_or_sync_movimentacao_mensal_gtin(cnpj)
+    if result.error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Evolucao mensal por GTIN indisponivel: {result.error}",
+        )
 
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, MOVIMENTACAO_MENSAL_GTIN_PARQUET)
-
-    df: pl.DataFrame | None = None
-    from_cache = False
-    query_time_ms: float | None = None
-    save_time_ms:  float | None = None
-    read_time_ms:  float | None = None
-
-    if os.path.exists(PARQUET_PATH):
-        try:
-            t0 = time.perf_counter()
-            df = pl.read_parquet(PARQUET_PATH)
-            read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
-            from_cache = True
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● GTIN ● ⚠️ ERRO DE LEITURA ({e})")
-
-    if df is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                t0 = time.perf_counter()
-                pdf = pd.read_sql(
-                    text("""
-                        SELECT gtin.codigo_barra, m.periodo,
-                               m.qnt_caixas_vendidas, m.qnt_caixas_sem_comprovacao,
-                               m.num_autorizacoes,
-                               CAST(m.valor_vendas AS FLOAT)         AS valor_vendas,
-                               CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
-                        FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
-                        INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
-                        INNER JOIN [temp_CGUSC].[fp].[medicamentos_patologia_chave] gtin ON gtin.id = m.id_gtin
-                        WHERE p.cnpj = :cnpj AND p.situacao = 1
-                    """),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-                query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
-
-            df = pl.from_pandas(pdf).with_columns([
-                pl.col("codigo_barra").cast(pl.String),
-                pl.col("periodo").cast(pl.Date),
-                pl.col("qnt_caixas_vendidas").cast(pl.Int64),
-                pl.col("qnt_caixas_sem_comprovacao").cast(pl.Int64),
-                pl.col("num_autorizacoes").cast(pl.Int64),
-                pl.col("valor_vendas").cast(pl.Float64),
-                pl.col("valor_sem_comprovacao").cast(pl.Float64),
-            ])
-            t1 = time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="zstd")
-            save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
-
-            print(f"⏱  GTIN {cnpj}: SQL {query_time_ms}ms | parquet {save_time_ms}ms")
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● GTIN ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df = pl.DataFrame()
+    df = result.df
+    from_cache = result.from_cache
+    query_time_ms = result.query_time_ms
+    save_time_ms = result.save_time_ms
+    read_time_ms = result.read_time_ms
 
     if df.is_empty():
         return EvolucaoMensalGtinResponse(
@@ -357,7 +309,6 @@ def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalR
     Le do parquet mensal GTIN.
     """
     import time
-    from sqlalchemy import text
     
     t0 = time.perf_counter()
     cnpj_dir = _get_cnpj_cache_dir(cnpj)

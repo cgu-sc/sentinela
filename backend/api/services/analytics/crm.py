@@ -3,7 +3,6 @@ from datetime import date
 import calendar
 import polars as pl
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from fastapi import HTTPException
 import os
 import zlib
@@ -67,7 +66,19 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-from ._cache import _get_cnpj_cache_dir, sync_crm_raiox_tx, sync_mediana_autorizacoes_horaria
+from ._cache import _get_cnpj_cache_dir
+from cache_producers.crm import (
+    load_or_sync_crm_data,
+    load_or_sync_crm_horario_eventos,
+    load_or_sync_crm_multi_alertas,
+    load_or_sync_crm_perfil_diario,
+    load_or_sync_crm_perfil_horario,
+    load_or_sync_crm_unico_alertas,
+    load_or_sync_geografico,
+    load_or_sync_volume_horario_anomalo,
+    sync_crm_raiox_tx,
+    sync_mediana_autorizacoes_horaria,
+)
 
 _CRM_SEVERITY_CACHE_VERSION = 2
 _CRM_ALERTS_CACHE_VERSION = 2
@@ -116,6 +127,13 @@ def _to_int(value: Any, default: int = 0) -> int:
             return default
     return default
 
+
+def _raise_cache_unavailable(area: str, error: str | None) -> None:
+    raise HTTPException(
+        status_code=503,
+        detail=f"{area} indisponivel: {error or 'falha ao sincronizar cache local.'}",
+    )
+
 def get_crm_data(
     cnpj: str,
     data_inicio: str | None = None,
@@ -123,11 +141,7 @@ def get_crm_data(
 ) -> PrescritoresResponse:
     """Retorna KPIs e top prescritores de um CNPJ a partir do parquet por CNPJ (lazy cache)."""
     import traceback
-    import pandas as pd
-    from data_cache import get_cache_dir
-
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, DADOS_CRMS_PARQUET)
 
     # â”€â”€ helpers de competÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _to_comp(date_str: str) -> int:
@@ -137,83 +151,16 @@ def get_crm_data(
     comp_fim = _to_comp(data_fim)    if data_fim    else None
 
     # â”€â”€ 1. Carrega ou gera o parquet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    import time as _time
-    df: pl.DataFrame | None = None
-    from_cache    = False
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms:  float | None = None
-    stale_df: pl.DataFrame | None = None
+    result = load_or_sync_crm_data(cnpj)
+    if result.error:
+        _raise_cache_unavailable("Base de dados de prescricoes", result.error)
 
-    if os.path.exists(PARQUET_PATH):
-        try:
-            _t0 = _time.perf_counter()
-            df = pl.read_parquet(PARQUET_PATH)
-            read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            missing_medico_cols = [col for col in ["no_medico", "dt_inscricao_crm"] if col not in df.columns]
-            if not missing_medico_cols:
-                from_cache = True
-            else:
-                print(f"[ CACHE ] {cnpj} ● CRM ● cache sem {', '.join(missing_medico_cols)}; regenerando parquet.")
-                stale_df = df
-                if "no_medico" not in stale_df.columns:
-                    stale_df = stale_df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
-                if "dt_inscricao_crm" not in stale_df.columns:
-                    stale_df = stale_df.with_columns(pl.lit(None, dtype=pl.Date).alias("dt_inscricao_crm"))
-                df = None
-        except Exception as e:
-            print(f"âš ï¸ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
+    df = result.df
+    from_cache = result.from_cache
+    read_time_ms = result.read_time_ms
+    query_time_ms = result.query_time_ms
+    save_time_ms = result.save_time_ms
 
-    if df is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                _t0 = _time.perf_counter()
-                pdf = pd.read_sql(
-                    text("SELECT E.id_medico, E.competencia, E.vl_total_prescricoes, "
-                         "E.nu_prescricoes_mes, E.nu_prescricoes_total_brasil, "
-                         "E.flag_crm_invalido, "
-                         "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
-                         "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                         "E.dt_primeira_prescricao, M.no_medico, M.dt_inscricao AS dt_inscricao_crm, "
-                         "E.nu_estabelecimentos"
-                         " FROM temp_CGUSC.fp.app_crm_export E"
-                         " LEFT JOIN temp_CGUSC.fp.build_dados_medico M ON M.id_medico = E.id_medico"
-                         " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
-                         " WHERE F.cnpj = :cnpj"),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-                query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            if pdf.empty:
-                df = pl.DataFrame(schema={
-                    "id_medico": pl.Utf8,
-                    "competencia": pl.Int32,
-                    "vl_total_prescricoes": pl.Float64,
-                    "no_medico": pl.Utf8,
-                    "dt_inscricao_crm": pl.Date,
-                })
-            else:
-                df = pl.from_pandas(pdf)
-            if "no_medico" not in df.columns:
-                df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
-            if "dt_inscricao_crm" not in df.columns:
-                df = df.with_columns(pl.lit(None, dtype=pl.Date).alias("dt_inscricao_crm"))
-            for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
-                if col in df.columns:
-                    df = df.with_columns(pl.col(col).cast(pl.Int8))
-            _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="zstd")
-            save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● CRM ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            if stale_df is not None:
-                df = stale_df
-                from_cache = True
-            else:
-                df = None
-
-    # â”€â”€ 2. Filtro de perÃ­odo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # ── 2. Validação de Disponibilidade e Histórico ──────────────────────
     if df is None or len(df.columns) == 0:
         raise HTTPException(
@@ -394,7 +341,7 @@ def get_crm_data(
         "razaoSocial":                    razao_social,
         "municipio":                      municipio,
         "uf":                             uf_str,
-        "from_cache":                     os.path.exists(PARQUET_PATH),
+        "from_cache":                     from_cache,
     }
 
     # â”€â”€ 7. Alertas diÃ¡rios â€” injeta em cada mÃ©dico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -424,33 +371,10 @@ def get_crm_data(
         m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
 
     # ——— 7.1 Alertas Geográficos (Distância) ——————————————————————————————————————
-    ALERTAS_GEO_PATH = os.path.join(cnpj_dir, GEOGRAFICO_PARQUET)
-    df_geo: pl.DataFrame | None = None
-
-    if os.path.exists(ALERTAS_GEO_PATH):
-        try: df_geo = pl.read_parquet(ALERTAS_GEO_PATH)
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● GEO ● ⚠️ ERRO DE LEITURA ({e})")
-        
-    if df_geo is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                pdf_geo = pd.read_sql(
-                    text("SELECT * FROM temp_CGUSC.fp.app_alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
-                    conn, params={"cnpj": cnpj}
-                )
-            df_geo = pl.from_pandas(pdf_geo) if not pdf_geo.empty else pl.DataFrame(schema={
-                "id_medico": pl.Utf8, "competencia": pl.Int32, "cnpj_a": pl.Utf8, 
-                "no_municipio_a": pl.Utf8, "sg_uf_a": pl.Utf8, "dt_ini_a": pl.Utf8, 
-                "dt_fim_a": pl.Utf8, "nu_prescricoes_a": pl.Int32, "cnpj_b": pl.Utf8, 
-                "no_municipio_b": pl.Utf8, "sg_uf_b": pl.Utf8, "dt_ini_b": pl.Utf8, 
-                "dt_fim_b": pl.Utf8, "nu_prescricoes_b": pl.Int32, "distancia_km": pl.Float64
-            })
-            df_geo.write_parquet(ALERTAS_GEO_PATH, compression="zstd")
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● GEO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df_geo = pl.DataFrame()
+    geo_result = load_or_sync_geografico(cnpj)
+    if geo_result.error:
+        _raise_cache_unavailable("Alertas geograficos CRM", geo_result.error)
+    df_geo = geo_result.df
 
     alertas_geo_por_medico: dict[str, list[dict]] = {}
     if not df_geo.is_empty():
@@ -484,47 +408,17 @@ def get_crm_data(
 
     # ——— 7.3 Pré-Sincronização do Raio-X Unificado ———————————————————————————————
     # Garante que o parquet Raio-X exista para uso offline
-    try:
-        sync_crm_raiox_tx(cnpj)
-    except Exception as e:
-        print(f"[ ANALYTICS ] {cnpj} ● RAIO-X ● ⚠️ ERRO NA SINCRONIZAÇÃO ({e})")
+    raio_x_result = sync_crm_raiox_tx(cnpj)
+    if raio_x_result.error:
+        _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
 
     # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
-    CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET)
-
-    df_ca: pl.DataFrame | None = None
-
-    if os.path.exists(CNPJ_ALERTS_PATH):
-        try:
-            df_ca = pl.read_parquet(CNPJ_ALERTS_PATH)
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● SURTOS ● ⚠️ ERRO DE LEITURA ({e})")
-    
-    if df_ca is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                pdf_ca = pd.read_sql(
-                    text("SELECT V.id_cnpj, V.competencia, V.dt_alerta, V.hr_janela,"
-                         " V.nu_prescricoes, V.nu_crms, V.mediana_hora, V.multiplicador"
-                         " FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V"
-                         " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj"
-                         " WHERE F.cnpj = :cnpj"),
-                    conn, params={"cnpj": cnpj}
-                )
-            df_ca = pl.from_pandas(pdf_ca) if not pdf_ca.empty else pl.DataFrame(schema={
-                "id_cnpj": pl.Int32, "competencia": pl.Int32, "dt_alerta": pl.Utf8,
-                "hr_janela": pl.Int32, "nu_prescricoes": pl.Int32, "nu_crms": pl.Int32,
-                "mediana_hora": pl.Float64, "multiplicador": pl.Float64
-            })
-            df_ca.write_parquet(CNPJ_ALERTS_PATH, compression="zstd")
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● SURTOS ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df_ca = pl.DataFrame()
-
-    # ——— 8. Alertas do Estabelecimento (Consolidação das 3 Fontes) —————————————————
     cnpj_alerts_list = []
-    
+    volume_result = load_or_sync_volume_horario_anomalo(cnpj)
+    if volume_result.error:
+        _raise_cache_unavailable("Alertas de volume horario CRM", volume_result.error)
+    df_ca = volume_result.df
+
     # 8.1 - Alertas de Volume (df_ca)
     if df_ca is not None and not df_ca.is_empty():
         _ca = df_ca
@@ -804,100 +698,11 @@ def _build_crm_unico_concentration_map(df_alertas: pl.DataFrame) -> dict[str, di
     return scores
 
 def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
-    alertas_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
-    rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_UNICO_RHYTHM_WINDOWS}
-    required_columns = {
-        "id_medico",
-        "competencia",
-        "dt_alerta",
-        "hr_janela",
-        "nu_prescricoes_dia",
-        "nu_minutos_dia",
-        "taxa_hora",
-        "dt_ini_hora",
-        "dt_fim_hora",
-        "severidade",
-        "criterio_pior_ritmo",
-        "_crm_alerts_cache_version",
-        *rhythm_columns,
-    }
+    result = load_or_sync_crm_unico_alertas(cnpj)
+    if result.error:
+        _raise_cache_unavailable("Alertas de concentracao CRM unico", result.error)
+    return result.df
 
-    if os.path.exists(alertas_path):
-        try:
-            cached_df = pl.read_parquet(alertas_path)
-            has_current_version = (
-                "_crm_alerts_cache_version" in cached_df.columns
-                and (cached_df.height == 0 or _to_int(cached_df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION)
-            )
-            if required_columns.issubset(set(cached_df.columns)) and has_current_version:
-                return cached_df
-        except Exception:
-            pass
-
-    schema = {
-        "id_medico": pl.Utf8,
-        "competencia": pl.Int32,
-        "dt_alerta": pl.Utf8,
-        "hr_janela": pl.Int32,
-        "nu_prescricoes_dia": pl.Int32,
-        "nu_minutos_dia": pl.Int32,
-        "taxa_hora": pl.Float64,
-        "dt_ini_hora": pl.Datetime,
-        "dt_fim_hora": pl.Datetime,
-        "severidade": pl.Utf8,
-        "criterio_pior_ritmo": pl.Utf8,
-        "_crm_alerts_cache_version": pl.Int32,
-        **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_UNICO_RHYTHM_WINDOWS},
-    }
-
-    try:
-        import pandas as pd
-        from database import engine as _engine
-
-        with _engine.connect() as conn:
-            pdf_alertas = pd.read_sql(
-                text("""
-                    SELECT
-                        A.id_medico,
-                        YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
-                        A.dt_dia AS dt_alerta,
-                        DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
-                        A.nu_autorizacoes_pior_ritmo AS nu_prescricoes_dia,
-                        A.janela_pior_ritmo_minutos AS nu_minutos_dia,
-                        A.taxa_hora_pior_ritmo AS taxa_hora,
-                        A.dt_ini_concentracao AS dt_ini_hora,
-                        A.dt_fim_concentracao AS dt_fim_hora,
-                        CASE A.id_severidade
-                            WHEN 4 THEN 'EXTREMO'
-                            WHEN 3 THEN 'CRITICO'
-                            WHEN 2 THEN 'GRAVE'
-                            WHEN 1 THEN 'ALTO'
-                            ELSE 'ALERTA'
-                        END AS severidade,
-                        A.criterio_pior_ritmo,
-                        A.nu_5min,
-                        A.nu_10min,
-                        A.nu_15min,
-                        A.nu_20min,
-                        A.nu_25min,
-                        A.nu_30min,
-                        A.nu_60min
-                    FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                    WHERE F.cnpj = :cnpj
-                    ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao
-                """),
-                conn,
-                params={"cnpj": cnpj},
-            )
-
-        df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema=schema)
-        df_alertas = df_alertas.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
-        df_alertas.write_parquet(alertas_path, compression="zstd")
-        return df_alertas
-    except Exception as e:
-        print(f"Erro ao sincronizar alertas unicos do Raio-X '{cnpj}': {e}")
-        return pl.DataFrame(schema=schema)
 
 def get_crm_perfil_diario(
     cnpj: str,
@@ -914,50 +719,16 @@ def get_crm_perfil_diario(
     Fonte: temp_CGUSC.fp.app_crm_perfil_diario
     Cache: sentinela_cache/<cnpj>/crm_perfil_diario.
     """
-    import pandas as pd
-
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, CRM_PERFIL_DIARIO_PARQUET)
+    result = load_or_sync_crm_perfil_diario(cnpj)
+    if result.error:
+        _raise_cache_unavailable("Perfil diario CRM", result.error)
 
-    import time as _time
-    df: pl.DataFrame | None = None
-    from_cache    = False
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms:  float | None = None
-
-    if os.path.exists(PARQUET_PATH):
-        try:
-            _t0 = _time.perf_counter()
-            df = pl.read_parquet(PARQUET_PATH)
-            if "is_crm_multiplo" not in df.columns:
-                df = None
-                raise ValueError("Parquet crm_perfil_diario sem coluna is_crm_multiplo; regenerando cache.")
-            read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            from_cache = True
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● PERFIL DIÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
-
-    if df is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                _t0 = _time.perf_counter()
-                pdf = pd.read_sql(
-                    text("SELECT P.* FROM temp_CGUSC.fp.app_crm_perfil_diario P"
-                         " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
-                         " WHERE F.cnpj = :cnpj ORDER BY P.dt_janela"),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-                query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            df = pl.from_pandas(pdf)
-            _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="zstd")
-            save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● PERFIL DIÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df = pl.DataFrame()
+    df = result.df
+    from_cache = result.from_cache
+    read_time_ms = result.read_time_ms
+    query_time_ms = result.query_time_ms
+    save_time_ms = result.save_time_ms
 
     if df.is_empty():
         return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
@@ -987,6 +758,8 @@ def get_crm_perfil_diario(
             windows=_CRM_MULTIPLO_RHYTHM_WINDOWS,
             crms_col="nu_crms_distintos",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Erro ao calcular scores de criticidade CRM '{cnpj}': {e}")
 
@@ -1025,55 +798,16 @@ def get_crm_perfil_horario(
     por ponto horário, lidos de temp_CGUSC.fp.app_crm_perfil_horario.
     Cache: sentinela_cache/<cnpj>/crm_horario.
     """
-    import pandas as pd
-    from sqlalchemy import text
-    
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, CRM_HORARIO_PARQUET)
-    EVENTS_PARQUET_PATH = os.path.join(cnpj_dir, CRM_HORARIO_EVENTOS_PARQUET)
+    result = load_or_sync_crm_perfil_horario(cnpj)
+    if result.error:
+        _raise_cache_unavailable("Perfil horario CRM", result.error)
 
-    import time as _time
-    df: pl.DataFrame | None = None
-    from_cache    = False
-    read_time_ms: float | None = None
-    query_time_ms: float | None = None
-    save_time_ms:  float | None = None
-
-    if os.path.exists(PARQUET_PATH):
-        try:
-            _t0 = _time.perf_counter()
-            df = pl.read_parquet(PARQUET_PATH)
-            if "is_crm_multiplo" not in df.columns or "is_hora_com_alerta" not in df.columns:
-                df = None
-                raise ValueError("Parquet crm_horario sem colunas atualizadas; regenerando cache.")
-            read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            from_cache = True
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● PERFIL HORÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
-
-    if df is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                _t0 = _time.perf_counter()
-                pdf = pd.read_sql(
-                    text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
-                         "P.is_hora_com_alerta, P.is_volume_horario_anomalo, P.is_crm_unico, P.is_crm_multiplo "
-                         "FROM temp_CGUSC.fp.app_crm_perfil_horario P "
-                         "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                         "WHERE F.cnpj = :cnpj "
-                         "ORDER BY P.dt_janela, P.hr_janela"),
-                    conn,
-                    params={"cnpj": cnpj},
-                )
-                query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            df = pl.from_pandas(pdf)
-            _t1 = _time.perf_counter()
-            df.write_parquet(PARQUET_PATH, compression="zstd")
-            save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● PERFIL HORÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df = pl.DataFrame()
+    df = result.df
+    from_cache = result.from_cache
+    read_time_ms = result.read_time_ms
+    query_time_ms = result.query_time_ms
+    save_time_ms = result.save_time_ms
 
     if df.is_empty():
         return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
@@ -1092,96 +826,10 @@ def get_crm_perfil_horario(
                                         read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
     # --- 2. Carregar/Gerar Eventos Temporais (Trilha) ---
-    df_events: pl.DataFrame | None = None
-    if os.path.exists(EVENTS_PARQUET_PATH):
-        try:
-            df_events = pl.read_parquet(EVENTS_PARQUET_PATH)
-            if (
-                "_crm_severity_cache_version" not in df_events.columns
-                or _to_int(df_events["_crm_severity_cache_version"].max()) < _CRM_SEVERITY_CACHE_VERSION
-            ):
-                df_events = None
-                raise ValueError("Parquet crm_horario_eventos com severidade legada; regenerando cache.")
-        except Exception as e:
-            print(f"[ CACHE ] {cnpj} ● EVENTOS HORÁRIO ● ⚠️ ERRO DE LEITURA ({e})")
-            pass
-
-    if df_events is None:
-        try:
-            from database import engine as _engine
-            with _engine.connect() as conn:
-                pdf_events = pd.read_sql(
-                    text("""
-                        SELECT 
-                            'UNICO' as tipo,
-                            A.dt_dia,
-                            A.id_medico,
-                            NULL as nu_crms_distintos,
-                            A.dt_ini_concentracao,
-                            A.dt_fim_concentracao,
-                            CASE A.id_severidade
-                                WHEN 4 THEN 'EXTREMO'
-                                WHEN 3 THEN 'CRITICO'
-                                WHEN 2 THEN 'GRAVE'
-                                WHEN 1 THEN 'ALTO'
-                                ELSE 'ALERTA'
-                            END AS severidade
-                        FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
-                        INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                        WHERE F.cnpj = :cnpj
-                        
-                        UNION ALL
-                        
-                        SELECT 
-                            'MULTIPLO' as tipo,
-                            A.dt_dia,
-                            NULL as id_medico,
-                            A.nu_crms_distintos,
-                            A.dt_ini_concentracao,
-                            A.dt_fim_concentracao,
-                            CASE A.id_severidade
-                                WHEN 4 THEN 'EXTREMO'
-                                WHEN 3 THEN 'CRITICO'
-                                WHEN 2 THEN 'GRAVE'
-                                WHEN 1 THEN 'ALTO'
-                                ELSE 'ALERTA'
-                            END AS severidade
-                        FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
-                        INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                        WHERE F.cnpj = :cnpj
-                        
-                        UNION ALL
-                        
-                        SELECT 
-                            'VOLUME' as tipo,
-                            V.dt_alerta as dt_dia,
-                            NULL as id_medico,
-                            V.nu_crms as nu_crms_distintos,
-                            DATEADD(HOUR, V.hr_janela, CAST(V.dt_alerta AS DATETIME)) as dt_ini_concentracao,
-                            DATEADD(HOUR, V.hr_janela + 1, CAST(V.dt_alerta AS DATETIME)) as dt_fim_concentracao,
-                            'CRITICO' as severidade
-                        FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V
-                        INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj
-                        WHERE F.cnpj = :cnpj
-                    """),
-                    conn,
-                    params={"cnpj": cnpj}
-                )
-                df_events = pl.from_pandas(pdf_events)
-                # Cálculos de minutos e formatação
-                if not df_events.is_empty():
-                    df_events = df_events.with_columns([
-                        pl.col("dt_ini_concentracao").dt.strftime("%H:%M").alias("hora_inicio"),
-                        pl.col("dt_fim_concentracao").dt.strftime("%H:%M").alias("hora_fim"),
-                        (pl.col("dt_ini_concentracao").dt.hour() * 60 + pl.col("dt_ini_concentracao").dt.minute()).alias("minuto_inicio"),
-                        (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
-                        pl.lit(_CRM_SEVERITY_CACHE_VERSION).alias("_crm_severity_cache_version"),
-                    ])
-                df_events.write_parquet(EVENTS_PARQUET_PATH, compression="zstd")
-        except Exception:
-            print(f"[ ANALYTICS ] {cnpj} ● PERFIL HORÁRIO ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df_events = pl.DataFrame()
-
+    events_result = load_or_sync_crm_horario_eventos(cnpj)
+    if events_result.error:
+        _raise_cache_unavailable("Eventos horarios CRM", events_result.error)
+    df_events = events_result.df
     # Filtro de período nos eventos
     if not df_events.is_empty():
         if data_inicio:
@@ -1192,7 +840,9 @@ def get_crm_perfil_horario(
             df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) <= d_fim)
 
     # Garante que o parquet de medianas existe (auto-warming)
-    sync_mediana_autorizacoes_horaria(cnpj)
+    mediana_result = sync_mediana_autorizacoes_horaria(cnpj)
+    if mediana_result.error:
+        _raise_cache_unavailable("Mediana horaria CRM", mediana_result.error)
 
     # Carrega lookup de medianas: (ano, trimestre, hr_janela) â†’ mediana_hora
     from datetime import datetime as _dt
@@ -1268,7 +918,9 @@ def get_crm_perfil_horario(
         ]
 
     # AUTO-WARMING: PrÃ©-aquece o parquet de TransaÃ§Ãµes Literais (Raio-X Unificado)
-    sync_crm_raiox_tx(cnpj)
+    raio_x_result = sync_crm_raiox_tx(cnpj)
+    if raio_x_result.error:
+        _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
 
     return CrmHourlyProfileResponse(cnpj=cnpj, points=points, events=events_list, from_cache=from_cache,
                                     read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
@@ -1300,7 +952,7 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     if hour is None:
         return True
 
-    target_hour = int(hour)
+    target_hour = hour
     start_hour = _extract_alert_hour(start_value)
     end_hour = _extract_alert_hour(end_value)
 
@@ -1320,112 +972,20 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     return start_hour <= target_hour <= end_hour
 
 def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
-    alertas_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET)
-    rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS}
-    required_columns = {
-        "id_cnpj",
-        "competencia",
-        "dt_dia",
-        "dt_alerta",
-        "hr_janela",
-        "dt_ini_concentracao",
-        "dt_fim_concentracao",
-        "nu_prescricoes",
-        "nu_crms",
-        "nu_60min",
-        "nu_minutos_span",
-        "nu_crms_distintos",
-        "severidade",
-        "criterio_pior_ritmo",
-        "_crm_alerts_cache_version",
-        *rhythm_columns,
-    }
+    result = load_or_sync_crm_multi_alertas(cnpj)
+    if result.error:
+        _raise_cache_unavailable("Alertas de concentracao CRM multiplo", result.error)
+    return result.df
 
-    if os.path.exists(alertas_path):
-        try:
-            cached_df = pl.read_parquet(alertas_path)
-            has_current_version = (
-                "_crm_alerts_cache_version" in cached_df.columns
-                and (cached_df.height == 0 or _to_int(cached_df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION)
-            )
-            if required_columns.issubset(set(cached_df.columns)) and has_current_version:
-                return cached_df
-        except Exception:
-            pass
-
-    try:
-        import pandas as pd
-        from database import engine as _engine
-
-        with _engine.connect() as conn:
-            pdf_alertas = pd.read_sql(
-                text("""
-                    SELECT
-                        A.id_cnpj,
-                        YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
-                        A.dt_dia,
-                        A.dt_ini_concentracao AS dt_alerta,
-                        DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
-                        A.dt_ini_concentracao,
-                        A.dt_fim_concentracao,
-                        A.nu_autorizacoes_pior_ritmo AS nu_prescricoes,
-                        A.nu_crms_distintos AS nu_crms,
-                        A.nu_60min,
-                        A.janela_pior_ritmo_minutos AS nu_minutos_span,
-                        A.nu_crms_distintos,
-                        CASE A.id_severidade
-                            WHEN 4 THEN 'EXTREMO'
-                            WHEN 3 THEN 'CRITICO'
-                            WHEN 2 THEN 'GRAVE'
-                            WHEN 1 THEN 'ALTO'
-                            ELSE 'ALERTA'
-                        END AS severidade,
-                        A.criterio_pior_ritmo,
-                        A.nu_5min,
-                        A.nu_10min,
-                        A.nu_15min,
-                        A.nu_20min,
-                        A.nu_25min,
-                        A.nu_30min
-                    FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                    WHERE F.cnpj = :cnpj
-                """),
-                conn,
-                params={"cnpj": cnpj},
-            )
-
-        df_alertas = pl.from_pandas(pdf_alertas) if not pdf_alertas.empty else pl.DataFrame(schema={
-            "id_cnpj": pl.Int32,
-            "competencia": pl.Int32,
-            "dt_dia": pl.Utf8,
-            "dt_alerta": pl.Utf8,
-            "hr_janela": pl.Int32,
-            "dt_ini_concentracao": pl.Utf8,
-            "dt_fim_concentracao": pl.Utf8,
-            "nu_prescricoes": pl.Int32,
-            "nu_crms": pl.Int32,
-            "nu_60min": pl.Int32,
-            "nu_minutos_span": pl.Int32,
-            "nu_crms_distintos": pl.Int32,
-            "severidade": pl.Utf8,
-            "criterio_pior_ritmo": pl.Utf8,
-            "_crm_alerts_cache_version": pl.Int32,
-            **{f"nu_{minutes}min": pl.Int32 for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS if minutes != 60},
-        })
-        df_alertas = df_alertas.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
-        df_alertas.write_parquet(alertas_path, compression="zstd")
-        return df_alertas
-    except Exception as e:
-        print(f"Erro ao sincronizar alertas multiplos '{cnpj}': {e}")
-        return pl.DataFrame()
 
 def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmRaioXResponse":
     """Retorna transacoes e alertas CRM unificados para uma data/hora."""
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     parquet_path = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
 
-    sync_crm_raiox_tx(cnpj)
+    raio_x_result = sync_crm_raiox_tx(cnpj)
+    if raio_x_result.error:
+        _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
 
     read_time_ms = None
     transactions: list[dict] = []
@@ -1457,9 +1017,8 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 transactions = enriched_df.to_dicts()
 
         alertas_unico: list[dict] = []
-        unico_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
-        if os.path.exists(unico_path):
-            df_unico = pl.read_parquet(unico_path)
+        df_unico = _load_crm_unico_alertas(cnpj, cnpj_dir)
+        if not df_unico.is_empty():
             day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
             if hour is not None:
                 day_unico = day_unico.filter(
@@ -1536,16 +1095,12 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             from_cache=os.path.exists(parquet_path),
             read_time_ms=read_time_ms,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Erro no Raio-X CRM unificado: {e}")
-        return CrmRaioXResponse(
-            cnpj=cnpj,
-            dt_janela=date_str,
-            hour=hour,
-            transactions=[],
-            alertas_unico=[],
-            alertas_multi=[],
-            from_cache=False,
-            read_time_ms=read_time_ms,
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro no Raio-X CRM unificado: {e}",
         )
 

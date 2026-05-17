@@ -1,7 +1,7 @@
 """Nomes canonicos dos arquivos de cache Parquet."""
 
-MEMORIA_CALCULO_PARQUET = "memoria_calculo_v2.parquet"
-MOVIMENTACAO_MENSAL_GTIN_PARQUET = "movimentacao_mensal_gtin_v2.parquet"
+MEMORIA_CALCULO_PARQUET = "memoria_calculo.parquet"
+MOVIMENTACAO_MENSAL_GTIN_PARQUET = "movimentacao_mensal_gtin.parquet"
 FALECIDOS_PARQUET = "falecidos.parquet"
 DADOS_CRMS_PARQUET = "dados_crms.parquet"
 GEOGRAFICO_PARQUET = "geografico.parquet"

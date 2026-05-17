@@ -7,6 +7,8 @@ from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
 from docx.enum.section import WD_SECTION
+from docx.oxml import parse_xml
+from data_cache import get_localidades_df
 
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
@@ -117,6 +119,158 @@ def _start_section(doc, *, footer_lines: list[str] | None = None, start=WD_SECTI
     return section
 
 
+def _add_confidential_watermark(section):
+    """Adiciona marca d'agua discreta no cabecalho da secao."""
+    header = section.header
+    header.is_linked_to_previous = False
+    paragraph = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    watermark_xml = """
+    <w:r
+        xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:v="urn:schemas-microsoft-com:vml"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:w10="urn:schemas-microsoft-com:office:word">
+      <w:pict>
+        <v:shape id="sentinela_confidential_watermark"
+          o:spid="_x0000_s1025"
+          type="#_x0000_t136"
+          style="position:absolute;margin-left:0;margin-top:0;width:650pt;height:150pt;rotation:315;z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"
+          fillcolor="#D9D9D9"
+          stroked="f">
+          <v:fill opacity="0.35"/>
+          <v:textpath
+            style="font-family:Arial;font-size:64pt;font-weight:bold"
+            string="ACESSO RESTRITO"/>
+          <w10:wrap type="none"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+    """
+    paragraph._p.append(parse_xml(watermark_xml))
+
+
+def _valor_estimado_por_percentual(total_mov: float, percentual: float) -> float:
+    return total_mov * percentual / 100 if total_mov > 0 and percentual > 0 else 0.0
+
+
+def _normalize_id_ibge7(value: Any) -> str:
+    text = str(value or "").strip()
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.zfill(7) if text.isdigit() else text
+
+
+def _resolve_unidade_pf(cadastro: dict[str, Any]) -> str:
+    id_ibge7 = _normalize_id_ibge7(cadastro.get("id_ibge7"))
+    if not id_ibge7:
+        return "Delegacia de Polícia Federal competente"
+
+    try:
+        df_loc = get_localidades_df()
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] Jurisdicao PF indisponivel para id_ibge7 {id_ibge7}: {exc}")
+        return "Delegacia de Polícia Federal competente"
+
+    if not {"id_ibge7", "unidade_pf"}.issubset(set(df_loc.columns)):
+        return "Delegacia de Polícia Federal competente"
+    for row in df_loc.iter_rows(named=True):
+        if _normalize_id_ibge7(row.get("id_ibge7")) == id_ibge7:
+            unidade_pf = str(row.get("unidade_pf") or "").strip(" .")
+            return unidade_pf or "Delegacia de Polícia Federal competente"
+    return "Delegacia de Polícia Federal competente"
+
+
+def _add_resumo_criticidades_conclusao(doc, resumos: list[str]):
+    if not resumos:
+        return
+
+    p_intro = doc.add_paragraph()
+    _run(
+        p_intro,
+        'Além disso, foram identificadas, para o mesmo período, as seguintes criticidades que corroboram com aquele achado principal:',
+        color='0F172A',
+        size=10,
+    )
+    for resumo in resumos:
+        p_item = doc.add_paragraph(style='List Bullet')
+        _run(p_item, resumo, color='0F172A', size=10)
+
+
+def _build_resumo_falecidos(num: str, falecidos_comp: dict[str, Any]) -> str:
+    return (
+        f'[Subitem {num}]: Registros, {falecidos_comp["periodo_desc"]}, de '
+        f'{falecidos_comp["total_autorizacoes"]:,}'.replace(',', '.')
+        + ' vendas de medicamentos em data igual e/ou posterior ao registro de morte de '
+        + f'{falecidos_comp["cpfs_distintos"]:,}'.replace(',', '.')
+        + ' beneficiários. Estas vendas representaram um valor total de '
+        + f'R$ {_format_decimal_pt(falecidos_comp["valor_total"], 2)};'
+    )
+
+
+def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mov: float) -> str | None:
+    percentual = float(comp.get("percentual") or 0.0)
+    multiplicador = float(comp.get("multiplicador_regiao") or 0.0)
+    valor_estimado = _valor_estimado_por_percentual(total_mov, percentual)
+
+    percentuais_templates = {
+        "incompatibilidade_patologica": "Vendas de medicamentos com incompatibilidade patológica",
+        "teto": "Vendas correspondentes ao limite máximo de retirada mensal de medicamento por cliente",
+        "polimedicamento": "Vendas correspondentes a quatro ou mais itens de medicamentos por cupom",
+        "alto_custo": "Vendas de medicamentos de alto custo",
+        "vendas_rapidas": "Vendas de medicamentos em tempo inferior a 60 segundos",
+        "recorrencia_sistemica": "Vendas de medicamentos com precisão absoluta de 30 dias",
+        "dias_pico": "Vendas de medicamentos em dias de pico",
+        "dispersao_geografica": "Vendas para pessoas residentes em outros Estados",
+    }
+    if key in percentuais_templates:
+        return (
+            f'[Subitem {num}]: {percentuais_templates[key]} com percentual de '
+            f'{_format_decimal_pt(percentual, 2)}% de suas vendas totais, superior em '
+            f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região. '
+            f'Estas vendas representaram um valor total estimado de R$ {_format_decimal_pt(valor_estimado, 2)};'
+        )
+
+    if key == "ticket_medio":
+        return (
+            f'[Subitem {num}]: Valor do ticket médio de medicamentos de R$ {_format_decimal_pt(comp.get("valor") or 0.0, 2)}, '
+            f'superior em {_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região;'
+        )
+    if key == "receita_paciente":
+        return (
+            f'[Subitem {num}]: Faturamento médio mensal por cliente de R$ {_format_decimal_pt(comp.get("valor") or 0.0, 2)}, '
+            f'superior em {_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região;'
+        )
+    if key == "per_capita":
+        return (
+            f'[Subitem {num}]: Faturamento mensal per capita de R$ {_format_decimal_pt(comp.get("valor") or 0.0, 2)}, '
+            f'superior em {_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região;'
+        )
+    if key == "hhi_crm":
+        principal = comp.get("principal") or {}
+        crm_ident = str(principal.get("id_medico") or "não informado")
+        return (
+            f'[Subitem {num}]: Concentração atípica de registros vinculados ao CRM {crm_ident}, com '
+            f'{comp.get("principal_autorizacoes") or 0:,}'.replace(',', '.')
+            + f' autorizações ({_format_decimal_pt(comp.get("pct_autorizacoes") or 0.0, 2)}% do total) e valor associado de '
+            + f'R$ {_format_decimal_pt(comp.get("principal_valor") or 0.0, 2)};'
+        )
+    if key == "crms_irregulares":
+        return (
+            f'[Subitem {num}]: Vendas de medicamentos prescritos por médicos com CRMs irregulares ou inválidos, equivalentes a '
+            f'{_format_decimal_pt(comp.get("pct_irregular") or 0.0, 2)}% das vendas totais. '
+            f'Estas vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("valor_irregular") or 0.0, 2)};'
+        )
+    if key == "exclusividade_crm":
+        return (
+            f'[Subitem {num}]: Vendas de medicamentos vinculadas a CRMs cujos registros no SAV foram realizados exclusivamente pela farmácia, equivalentes a '
+            f'{_format_decimal_pt(comp.get("pct_valor_exclusivo") or comp.get("matriz_pct_exclusividade") or 0.0, 2)}% das vendas totais. '
+            f'Estas vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("exclusivos_valor") or 0.0, 2)};'
+        )
+    return None
+
+
 def _iter_criticidade_items(
     criticos: set[str],
     razao_social: str,
@@ -207,6 +361,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     razao_social = (cadastro.get('razao_social') or cnpj_data.get('razao_social') or 'NÃO INFORMADO').upper()
     municipio = cnpj_data.get('municipio') or cadastro.get('municipio') or '—'
     uf = cnpj_data.get('uf') or cadastro.get('uf') or '—'
+    unidade_pf = _resolve_unidade_pf(cadastro)
     cnpj_fmt = f'{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}' if len(cnpj) == 14 and cnpj.isdigit() else cnpj
 
     logradouro = ' '.join(p for p in [cadastro.get('tipo_logradouro') or '', cadastro.get('logradouro') or ''] if p).strip()
@@ -294,7 +449,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 6. Selo de Sigilo ──────────────────────────────────────────────
     p_sigilo = doc.add_paragraph()
     p_sigilo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r_sigilo = _run(p_sigilo, ' DOCUMENTO SIGILOSO ', color='FFFFFF', size=10, bold=True)
+    r_sigilo = _run(p_sigilo, ' ACESSO RESTRITO ', color='FFFFFF', size=10, bold=True)
     _cell_bg_run(r_sigilo, 'EF4444') # Fundo vermelho para o selo de sigilo
     
     doc.add_paragraph('\n')
@@ -345,6 +500,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 4. Seção 1: Sumário (Sem Rodapé) ──────────────────────────────────
     sec_sumario = doc.add_section()
     sec_sumario.footer.is_linked_to_previous = False
+    _add_confidential_watermark(sec_sumario)
     
     sec_sumario.top_margin = Inches(0.5); sec_sumario.bottom_margin = Inches(0.5)
     sec_sumario.left_margin = Inches(0.7); sec_sumario.right_margin = Inches(0.7)
@@ -748,9 +904,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _start_section(doc)
     doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1)
     doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no Sistema SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram com o achado principal de “vendas sem comprovação” para ela apuradas.')
+    resumos_criticidades: list[str] = []
     criticidade_start = 1
     if falecidos_comp:
         _add_falecidos_criticidade_text(doc, '7.1', razao_social, falecidos_comp)
+        resumos_criticidades.append(_build_resumo_falecidos('7.1', falecidos_comp))
         criticidade_start = 2
 
     criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
@@ -760,71 +918,113 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
                 if clinico_comp:
                     _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp)
+                    resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'teto':
                 teto_comp = _build_teto_context(cnpj, data_inicio, data_fim)
                 if teto_comp:
                     _add_teto_text(doc, num, razao_social, teto_comp)
+                    resumo = _build_resumo_criticidade(num, key, teto_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'polimedicamento' and full_title.startswith('Vendas de quatro ou mais itens'):
                 polimedicamento_comp = _build_polimedicamento_context(cnpj, data_inicio, data_fim)
                 if polimedicamento_comp:
                     _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp)
+                    resumo = _build_resumo_criticidade(num, key, polimedicamento_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'ticket_medio':
                 ticket_comp = _build_ticket_medio_context(cnpj, data_inicio, data_fim)
                 if ticket_comp:
                     _add_ticket_medio_text(doc, num, razao_social, ticket_comp)
+                    resumo = _build_resumo_criticidade(num, key, ticket_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'receita_paciente':
                 receita_comp = _build_receita_paciente_context(cnpj, data_inicio, data_fim)
                 if receita_comp:
                     _add_receita_paciente_text(doc, num, razao_social, receita_comp)
+                    resumo = _build_resumo_criticidade(num, key, receita_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'per_capita':
                 per_capita_comp = _build_per_capita_context(cnpj, data_inicio, data_fim)
                 if per_capita_comp:
                     _add_per_capita_text(doc, num, razao_social, per_capita_comp)
+                    resumo = _build_resumo_criticidade(num, key, per_capita_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'alto_custo':
                 alto_custo_comp = _build_alto_custo_context(cnpj, data_inicio, data_fim)
                 if alto_custo_comp:
                     _add_alto_custo_text(doc, num, razao_social, alto_custo_comp)
+                    resumo = _build_resumo_criticidade(num, key, alto_custo_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'vendas_rapidas':
                 vendas_rapidas_comp = _build_vendas_rapidas_context(cnpj, data_inicio, data_fim)
                 if vendas_rapidas_comp:
                     _add_vendas_rapidas_text(doc, num, razao_social, vendas_rapidas_comp)
+                    resumo = _build_resumo_criticidade(num, key, vendas_rapidas_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'recorrencia_sistemica':
                 recorrencia_comp = _build_recorrencia_sistemica_context(cnpj, data_inicio, data_fim)
                 if recorrencia_comp:
                     _add_recorrencia_sistemica_text(doc, num, razao_social, recorrencia_comp)
+                    resumo = _build_resumo_criticidade(num, key, recorrencia_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'dias_pico':
                 dias_pico_comp = _build_dias_pico_context(cnpj, data_inicio, data_fim)
                 if dias_pico_comp:
                     _add_dias_pico_text(doc, num, razao_social, dias_pico_comp)
+                    resumo = _build_resumo_criticidade(num, key, dias_pico_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'dispersao_geografica':
                 dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
                 if dispersao_comp:
                     _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp)
+                    resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'hhi_crm':
                 hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim)
                 if hhi_crm_comp:
                     _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp)
+                    resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                     continue
             if key == 'crms_irregulares':
                 crms_irregulares_comp = _build_crms_irregulares_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
                 if crms_irregulares_comp:
                     _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp)
+                    resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                 continue
             if key == 'exclusividade_crm':
                 exclusividade_comp = _build_exclusividade_crm_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
                 if exclusividade_comp:
                     _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp)
+                    resumo = _build_resumo_criticidade(num, key, exclusividade_comp, float(cnpj_data.get('totalMov') or 0.0))
+                    if resumo:
+                        resumos_criticidades.append(resumo)
                 continue
 
             doc.add_heading(f'{num} {full_title}', level=2)
@@ -833,11 +1033,56 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
 
     # 8. CONCLUSÃO
-    doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1)
-    if risco_label in ('CRÍTICO', 'ATENÇÃO'):
-        doc.add_paragraph('Considerando o elevado score de risco e os indícios de irregularidades detectados nas seções anteriores, sugere-se a priorização deste estabelecimento para auditoria in loco ou solicitação formal de documentos para comprovação das vendas realizadas.')
-    else:
-        doc.add_paragraph('O estabelecimento apresenta indicadores que, embora monitorados, não atingiram os limiares de priorização para fiscalização imediata, recomendando-se a manutenção do acompanhamento sistêmico.')
+    h8 = doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1)
+    h8.paragraph_format.space_before = Pt(14)
+    h8.paragraph_format.space_after = Pt(10)
+    h8.paragraph_format.line_spacing = 1.0
+    h8.paragraph_format.keep_with_next = True
+    total_mov_conclusao = float(cnpj_data.get('totalMov') or 0.0)
+    val_sem_comp_conclusao = float(cnpj_data.get('valSemComp') or 0.0)
+    perc_sem_comp_conclusao = float(cnpj_data.get('percValSemComp') or 0.0)
+    periodo_conclusao_txt = periodo_txt.replace('/', '.')
+
+    p_conclusao = doc.add_paragraph()
+    _run(p_conclusao, 'Conforme detalhado no subitem 6 desta Nota Técnica, de um total de ', color='0F172A', size=10)
+    _run(p_conclusao, f'R$ {_format_decimal_pt(total_mov_conclusao, 2)}', color='334155', size=10, bold=True)
+    _run(p_conclusao, f' de medicamentos distribuídos pela Farmácia {razao_social} no âmbito do Programa Farmácia Popular do Brasil, no período de ', color='0F172A', size=10)
+    _run(p_conclusao, periodo_conclusao_txt, color='334155', size=10, bold=True)
+    _run(p_conclusao, ', foi identificado possível prejuízo ao erário público no valor de ', color='0F172A', size=10)
+    _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=10, bold=True)
+    _run(p_conclusao, ' (', color='0F172A', size=10)
+    _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=10, bold=True)
+    _run(p_conclusao, ' daquele total), em virtude da prática de “vendas sem comprovação”, tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque que a suporte.', color='0F172A', size=10)
+
+    _add_resumo_criticidades_conclusao(doc, resumos_criticidades)
+
+    p_fontes_conclusao = doc.add_paragraph()
+    _run(
+        p_fontes_conclusao,
+        f'De acordo com a “Introdução” desta Nota Técnica e os subitens de sua “Análise”, as suspeitas de “vendas sem comprovação” e as criticidades que as corroboram foram identificadas com base em informações autodeclaradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas do PFPB, em cópias de notas fiscais eletrônicas relativas às suas aquisições de medicamentos, compartilhadas pela Receita Federal do Brasil, e em dados contidos em bases oficiais, que complementam as análises advindas daquele Sistema. Dada a relevância, gravidade e sensibilidade desses achados, que sugerem ação deliberada por parte do estabelecimento para desvios de recursos do PFPB, não foi realizada fiscalização in loco e nem solicitada justificativa para os mesmos.',
+        color='0F172A',
+        size=10,
+    )
+
+    p_encaminhamento = doc.add_paragraph()
+    _run(
+        p_encaminhamento,
+        f'Em virtude das constatações contidas na presente Nota Técnica, que indicam a necessidade de aprofundamento das investigações, propõe-se seu encaminhamento para a {unidade_pf}, para adoção das medidas que julgar pertinentes.',
+        color='0F172A',
+        size=10,
+    )
+
+    doc.add_paragraph()
+    p_despacho_titulo = doc.add_paragraph()
+    _run(
+        p_despacho_titulo,
+        'Despacho do(a) Superintendente da Controladoria-Regional da União em ______________________________',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+    p_despacho = doc.add_paragraph()
+    _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
 
     if falecidos_comp:
         _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp)

@@ -138,11 +138,16 @@ def get_crm_data(
             _t0 = _time.perf_counter()
             df = pl.read_parquet(PARQUET_PATH)
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            if "no_medico" in df.columns:
+            missing_medico_cols = [col for col in ["no_medico", "dt_inscricao_crm"] if col not in df.columns]
+            if not missing_medico_cols:
                 from_cache = True
             else:
-                print(f"[ CACHE ] {cnpj} ● CRM ● cache sem no_medico; regenerando parquet.")
-                stale_df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
+                print(f"[ CACHE ] {cnpj} ● CRM ● cache sem {', '.join(missing_medico_cols)}; regenerando parquet.")
+                stale_df = df
+                if "no_medico" not in stale_df.columns:
+                    stale_df = stale_df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
+                if "dt_inscricao_crm" not in stale_df.columns:
+                    stale_df = stale_df.with_columns(pl.lit(None, dtype=pl.Date).alias("dt_inscricao_crm"))
                 df = None
         except Exception as e:
             print(f"âš ï¸ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
@@ -174,11 +179,14 @@ def get_crm_data(
                     "competencia": pl.Int32,
                     "vl_total_prescricoes": pl.Float64,
                     "no_medico": pl.Utf8,
+                    "dt_inscricao_crm": pl.Date,
                 })
             else:
                 df = pl.from_pandas(pdf)
             if "no_medico" not in df.columns:
                 df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
+            if "dt_inscricao_crm" not in df.columns:
+                df = df.with_columns(pl.lit(None, dtype=pl.Date).alias("dt_inscricao_crm"))
             for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
                 if col in df.columns:
                     df = df.with_columns(pl.col(col).cast(pl.Int8))

@@ -56,6 +56,10 @@ from .nota_tecnica_criticidades import (
     _build_vendas_rapidas_context,
     _get_criticos,
 )
+from .nota_tecnica_crm import (
+    _add_hhi_crm_text,
+    _build_hhi_crm_context,
+)
 from .nota_tecnica_formatters import (
     _format_decimal_pt,
     _format_list_pt,
@@ -797,6 +801,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
                 if dispersao_comp:
                     _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp)
+                    continue
+            if key == 'hhi_crm':
+                hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim)
+                if hhi_crm_comp:
+                    _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp)
                     continue
 
             doc.add_heading(f'{num} {full_title}', level=2)

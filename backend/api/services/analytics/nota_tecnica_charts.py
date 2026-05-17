@@ -138,7 +138,7 @@ def _draw_gradient_rect(
     image.alpha_composite(gradient, (x1, y1))
 
 
-def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesIO:
+def _build_evolucao_financeira_chart_pillow(evolucao_comp: dict[str, Any]) -> io.BytesIO:
     """Gera grafico PNG de evolucao financeira no estilo visual do ECharts."""
     rows = evolucao_comp["rows"]
     width, height = 1800, 900
@@ -247,6 +247,184 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
     img = img.convert("RGB")
     stream = io.BytesIO()
     img.save(stream, format="PNG", optimize=True)
+    stream.seek(0)
+    return stream
+
+
+def _add_gradient_bar_segment(
+    ax,
+    *,
+    x_center: float,
+    bottom: float,
+    height: float,
+    width: float,
+    bottom_color: str,
+    top_color: str,
+    np,
+    rounded: bool = False,
+    zorder: int = 3,
+):
+    """Desenha um segmento de barra com degrade vertical recortado por patch."""
+    if height <= 0:
+        return
+
+    from matplotlib.colors import to_rgba
+    from matplotlib.patches import FancyBboxPatch, Rectangle
+
+    x0 = x_center - width / 2
+    y0 = bottom
+    y1 = bottom + height
+
+    if rounded:
+        patch = FancyBboxPatch(
+            (x0, y0),
+            width,
+            height,
+            boxstyle=f"round,pad=0,rounding_size={min(width * 0.18, height * 0.18)}",
+            linewidth=0,
+            facecolor="none",
+            transform=ax.transData,
+            zorder=zorder,
+        )
+    else:
+        patch = Rectangle(
+            (x0, y0),
+            width,
+            height,
+            linewidth=0,
+            facecolor="none",
+            transform=ax.transData,
+            zorder=zorder,
+        )
+    ax.add_patch(patch)
+
+    c0 = np.array(to_rgba(bottom_color))
+    c1 = np.array(to_rgba(top_color))
+    gradient = np.zeros((256, 1, 4), dtype=float)
+    for idx, ratio in enumerate(np.linspace(0, 1, 256)):
+        gradient[idx, 0, :] = c0 * (1 - ratio) + c1 * ratio
+
+    image = ax.imshow(
+        gradient,
+        extent=[x0, x0 + width, y0, y1],
+        origin="lower",
+        aspect="auto",
+        interpolation="bicubic",
+        zorder=zorder,
+    )
+    image.set_clip_path(patch)
+
+
+def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesIO:
+    """Gera grafico PNG de evolucao financeira com matplotlib."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import FuncFormatter
+
+    rows = evolucao_comp["rows"]
+    labels = [row.get("semestre_fmt") or row.get("semestre") or "" for row in rows]
+    regular_values = [max(float(row.get("regular") or 0.0), 0.0) for row in rows]
+    irregular_values = [max(float(row.get("irregular") or 0.0), 0.0) for row in rows]
+    total_values = [
+        max(float(row.get("total") or (regular_values[idx] + irregular_values[idx])), 0.0)
+        for idx, row in enumerate(rows)
+    ]
+
+    fig, ax = plt.subplots(figsize=(11.0, 5.4), dpi=180)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid_color = "#CBD5E1"
+    regular_bottom = "#10B981"
+    regular_top = "#6EE7B7"
+    irregular_bottom = "#E11D48"
+    irregular_top = "#FB7185"
+
+    x_positions = np.arange(len(rows), dtype=float)
+    bar_width = min(0.64, max(0.38, 7.0 / max(len(rows), 1)))
+
+    for idx, x_pos in enumerate(x_positions):
+        regular = regular_values[idx]
+        irregular = irregular_values[idx]
+        total = total_values[idx]
+        if total <= 0:
+            continue
+        _add_gradient_bar_segment(
+            ax,
+            x_center=x_pos,
+            bottom=0.0,
+            height=regular,
+            width=bar_width,
+            bottom_color=regular_bottom,
+            top_color=regular_top,
+            np=np,
+            rounded=irregular <= 0,
+            zorder=3,
+        )
+        _add_gradient_bar_segment(
+            ax,
+            x_center=x_pos,
+            bottom=regular,
+            height=irregular,
+            width=bar_width,
+            bottom_color=irregular_bottom,
+            top_color=irregular_top,
+            np=np,
+            rounded=True,
+            zorder=4,
+        )
+
+    axis_max = _nice_axis_max(max(total_values or [1.0]) * 1.12)
+    ax.set_ylim(0, axis_max)
+    ax.set_xlim(-0.65, len(rows) - 0.35 if rows else 0.65)
+
+    ax.set_title(
+        "Evolução semestral das transferências e vendas sem comprovação",
+        fontsize=15,
+        fontweight="bold",
+        color=text_color,
+        pad=18,
+    )
+    ax.set_ylabel("Valor movimentado", fontsize=10.5, color=muted, labelpad=10)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=9.4, color=muted)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: _axis_currency_label(float(value))))
+    ax.tick_params(axis="y", colors=muted, labelsize=9.5, length=0)
+    ax.tick_params(axis="x", length=0)
+
+    ax.grid(axis="y", color=grid_color, linestyle=(0, (5, 7)), linewidth=0.8, alpha=0.72)
+    ax.grid(axis="x", visible=False)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#E2E8F0")
+    ax.spines["bottom"].set_color("#E2E8F0")
+
+    legend_handles = [
+        Patch(facecolor=regular_top, edgecolor="none", label="Vendas regulares"),
+        Patch(facecolor=irregular_bottom, edgecolor="none", label="Vendas sem comprovação"),
+    ]
+    legend = ax.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=2,
+        frameon=False,
+        fontsize=9.8,
+        handlelength=1.4,
+        columnspacing=1.8,
+    )
+    for text in legend.get_texts():
+        text.set_color(muted)
+
+    fig.tight_layout(pad=1.7)
+    stream = io.BytesIO()
+    fig.savefig(stream, format="png", dpi=180, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     stream.seek(0)
     return stream
 

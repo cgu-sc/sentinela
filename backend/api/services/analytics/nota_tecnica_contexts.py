@@ -105,6 +105,53 @@ def _build_regional_comparison_context(
     }
 
 
+def _build_posicionamento_regional_context(
+    cnpj: str,
+    cadastro: dict,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Monta o contexto do scatter de posicionamento regional da Nota Tecnica."""
+    regional_context = _resolve_regional_context(cadastro)
+    regional = get_regional_benchmarking(
+        uf=regional_context["uf"],
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        regiao_id=regional_context["id_regiao_saude"],
+    )
+
+    if not regional.farmacias:
+        raise RuntimeError("Benchmarking regional sem farmacias para Figura de Posicionamento Regional.")
+
+    cnpj_norm = "".join(ch for ch in str(cnpj) if ch.isdigit())
+    rows: list[dict[str, Any]] = []
+    current_row: dict[str, Any] | None = None
+    for farmacia in regional.farmacias:
+        farmacia_cnpj = "".join(ch for ch in str(farmacia.cnpj or "") if ch.isdigit())
+        row = {
+            "cnpj": farmacia_cnpj,
+            "razao_social": farmacia.razao_social or "",
+            "municipio": farmacia.municipio or "",
+            "total_mov": float(farmacia.totalMov or 0.0),
+            "pct_sem_comprovacao": min(float(farmacia.percValSemComp or 0.0), 100.0),
+            "score_risco": float(farmacia.score_risco or 0.0),
+            "is_current": farmacia_cnpj == cnpj_norm,
+        }
+        rows.append(row)
+        if row["is_current"]:
+            current_row = row
+
+    if current_row is None:
+        raise RuntimeError("CNPJ analisado nao encontrado no benchmarking regional da Nota Tecnica.")
+
+    return {
+        **regional_context,
+        "rows": rows,
+        "current": current_row,
+        "metric_label": "% de dispensações sem comprovação",
+    }
+
+
 def _build_percentil_risco_context(
     cnpj_data: dict,
     cadastro: dict,

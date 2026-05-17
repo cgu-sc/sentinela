@@ -13,13 +13,18 @@ from data_cache import get_localidades_df
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
 from .socios import get_socios_farmacia
-from .nota_tecnica_charts import _add_figura_evolucao_financeira, _add_figura_percentil_risco
+from .nota_tecnica_charts import (
+    _add_figura_evolucao_financeira,
+    _add_figura_percentil_risco,
+    _add_figura_posicionamento_regional,
+)
 from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
 from .nota_tecnica_anexos import _add_anexo_iii_falecidos
 from .nota_tecnica_contexts import (
     _build_evolucao_financeira_context,
     _build_gtin_sem_comprovacao_context,
     _build_percentil_risco_context,
+    _build_posicionamento_regional_context,
     _build_regional_comparison_context,
     _build_socios_volume_atipico_context,
     _build_ultimo_mes_sav_context,
@@ -846,6 +851,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
 
+    posicionamento_regional_comp = _build_posicionamento_regional_context(cnpj, cadastro, data_inicio, data_fim)
+    p_posicionamento_intro = doc.add_paragraph()
+    _run(
+        p_posicionamento_intro,
+        'O posicionamento regional permite observar, simultaneamente, o valor total movimentado e o percentual de dispensações sem comprovação de cada estabelecimento da mesma Região de Saúde, destacando a posição relativa da farmácia analisada.',
+        color='0F172A',
+        size=10,
+    )
+    _add_figura_posicionamento_regional(doc, razao_social, cnpj_fmt, posicionamento_regional_comp, figure_number=1)
+
     percentil_risco_comp = _build_percentil_risco_context(cnpj_data, cadastro, data_inicio, data_fim)
     p_percentil_intro = doc.add_paragraph()
     _run(
@@ -854,7 +869,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         color='0F172A',
         size=10,
     )
-    _add_figura_percentil_risco(doc, razao_social, cnpj_fmt, percentil_risco_comp, figure_number=1)
+    _add_figura_percentil_risco(doc, razao_social, cnpj_fmt, percentil_risco_comp, figure_number=2)
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     p_gtin_intro = doc.add_paragraph()
@@ -920,7 +935,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         p_socios_volume.paragraph_format.space_before = Pt(6)
         _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado no quadro a seguir.', color='0F172A', size=10)
     _add_quadro_socios_volume_atipico(doc, socios_volume_atipico)
-    _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=2)
+    _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=3)
 
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)

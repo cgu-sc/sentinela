@@ -385,7 +385,7 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
 
     ax.set_title(
         "Evolução semestral das transferências e vendas sem comprovação",
-        fontsize=15,
+        fontsize=12,
         fontweight="bold",
         color=text_color,
         pad=18,
@@ -582,7 +582,7 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
 
     ax.set_title(
         "Distribuição percentílica regional do percentual de vendas sem comprovação",
-        fontsize=15,
+        fontsize=12,
         fontweight="bold",
         color=text_color,
         pad=18,
@@ -617,6 +617,197 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
     Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
     stream.seek(0)
     return stream
+
+
+def _build_posicionamento_regional_chart(posicionamento_comp: dict[str, Any]) -> io.BytesIO:
+    """Gera scatter PNG do posicionamento regional com matplotlib."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import FuncFormatter
+
+    rows = posicionamento_comp.get("rows") or []
+    current = posicionamento_comp.get("current") or {}
+    others = [row for row in rows if not row.get("is_current")]
+
+    other_x = [float(row.get("total_mov") or 0.0) for row in others]
+    other_y = [float(row.get("pct_sem_comprovacao") or 0.0) for row in others]
+    current_x = float(current.get("total_mov") or 0.0)
+    current_y = float(current.get("pct_sem_comprovacao") or 0.0)
+
+    all_x = [float(row.get("total_mov") or 0.0) for row in rows]
+    all_y = [float(row.get("pct_sem_comprovacao") or 0.0) for row in rows]
+    median_y = float(np.median(all_y)) if all_y else 0.0
+    x_max = _nice_axis_max(max([*all_x, 1.0]) * 1.12)
+    y_max = min(100.0, max([*all_y, 1.0]) * 1.16 if max([*all_y, 1.0]) < 90 else 100.0)
+    y_max = max(y_max, 10.0)
+
+    fig, ax = plt.subplots(figsize=(10.2, 5.0), dpi=130)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid_color = "#CBD5E1"
+    other_color = "#94A3B8"
+    current_color = "#F05A6E"
+
+    ax.scatter(
+        other_x,
+        other_y,
+        s=42,
+        color=other_color,
+        alpha=0.58,
+        edgecolors="white",
+        linewidths=0.8,
+        zorder=3,
+        label="Outras farmácias",
+    )
+    ax.scatter(
+        [current_x],
+        [current_y],
+        s=170,
+        color=current_color,
+        alpha=0.96,
+        edgecolors="white",
+        linewidths=2.0,
+        zorder=5,
+        label="Estabelecimento analisado",
+    )
+    ax.scatter(
+        [current_x],
+        [current_y],
+        s=260,
+        facecolors="none",
+        edgecolors=current_color,
+        linewidths=1.5,
+        alpha=0.28,
+        zorder=4,
+    )
+
+    ax.axhline(
+        median_y,
+        color="#F59E0B",
+        linestyle=(0, (5, 5)),
+        linewidth=1.2,
+        alpha=0.7,
+        zorder=1,
+    )
+    ax.text(
+        0.99,
+        median_y,
+        f"Mediana regional: {_format_decimal_pt(median_y, 2)}%",
+        transform=ax.get_yaxis_transform(),
+        ha="right",
+        va="bottom",
+        fontsize=8.8,
+        color="#B45309",
+    )
+
+    label = f"Estabelecimento\n{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}%"
+    label_dx = -22 if current_x > x_max * 0.72 else 20
+    label_dy = -26 if current_y > y_max * 0.76 else 22
+    ax.annotate(
+        label,
+        xy=(current_x, current_y),
+        xytext=(label_dx, label_dy),
+        textcoords="offset points",
+        fontsize=9.4,
+        fontweight="bold",
+        color=current_color,
+        ha="right" if label_dx < 0 else "left",
+        va="top" if label_dy < 0 else "bottom",
+        bbox=dict(boxstyle="round,pad=0.5,rounding_size=0.22", fc="white", ec=current_color, lw=1.2),
+        arrowprops=dict(arrowstyle="-", color=current_color, lw=1.1, shrinkA=0, shrinkB=9),
+        zorder=7,
+    )
+
+    ax.set_xlim(0, x_max)
+    ax.set_ylim(0, y_max)
+
+    ax.set_title(
+        "Posicionamento regional por volume e percentual sem comprovação",
+        fontsize=12,
+        fontweight="bold",
+        color=text_color,
+        pad=18,
+    )
+    ax.set_xlabel("Valor total movimentado", fontsize=10.5, color=muted, labelpad=10)
+    ax.set_ylabel(posicionamento_comp.get("metric_label") or "% de dispensações sem comprovação", fontsize=10.5, color=muted, labelpad=10)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: _axis_currency_label(float(value))))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{_format_decimal_pt(value, 0)}%"))
+    ax.tick_params(axis="both", colors=muted, labelsize=9.5, length=0)
+
+    ax.grid(axis="both", color=grid_color, linestyle=(0, (5, 7)), linewidth=0.8, alpha=0.62)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#E2E8F0")
+    ax.spines["bottom"].set_color("#E2E8F0")
+
+    legend = ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=2,
+        frameon=False,
+        fontsize=9.6,
+        columnspacing=1.8,
+        handletextpad=0.45,
+    )
+    for text in legend.get_texts():
+        text.set_color(muted)
+
+    fig.tight_layout(pad=1.7)
+    raw_stream = io.BytesIO()
+    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    raw_stream.seek(0)
+
+    stream = io.BytesIO()
+    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
+    stream.seek(0)
+    return stream
+
+
+def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, posicionamento_comp: dict[str, Any], figure_number: int = 1):
+    """Insere figura de posicionamento regional no documento."""
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    _run(
+        p_title,
+        f'Figura {figure_number:02d} - Posicionamento regional da Farmácia {razao_social} (CNPJ {cnpj_fmt}) em relação aos estabelecimentos da mesma Região de Saúde.',
+        color='0F172A',
+        size=10,
+        bold=True,
+    )
+
+    chart_stream = _build_posicionamento_regional_chart(posicionamento_comp)
+    p_img = doc.add_paragraph()
+    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_img.paragraph_format.keep_with_next = False
+    p_img.paragraph_format.keep_together = True
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
 
 
 def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil_comp: dict[str, Any], figure_number: int = 1):

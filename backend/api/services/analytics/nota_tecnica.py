@@ -14,6 +14,7 @@ from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
 from .socios import get_socios_farmacia
 from .nota_tecnica_charts import _add_figura_evolucao_financeira
+from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
 from .nota_tecnica_anexos import _add_anexo_iii_falecidos
 from .nota_tecnica_contexts import (
     _build_evolucao_financeira_context,
@@ -387,6 +388,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         periodo_txt = 'Histórico completo'
 
     falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim)
+    anexo_ii_comp = _build_anexo_ii_context(cnpj, db)
 
     # 3. Documento e margens
     doc = Document()
@@ -1083,6 +1085,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     p_despacho = doc.add_paragraph()
     _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
+
+    _add_anexo_ii_memoria_calculo(doc, razao_social, cnpj_fmt, periodo_txt, anexo_ii_comp)
 
     if falecidos_comp:
         _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp)

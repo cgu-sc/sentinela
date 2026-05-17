@@ -131,13 +131,19 @@ def get_crm_data(
     read_time_ms: float | None = None
     query_time_ms: float | None = None
     save_time_ms:  float | None = None
+    stale_df: pl.DataFrame | None = None
 
     if os.path.exists(PARQUET_PATH):
         try:
             _t0 = _time.perf_counter()
             df = pl.read_parquet(PARQUET_PATH)
             read_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
-            from_cache = True
+            if "no_medico" in df.columns:
+                from_cache = True
+            else:
+                print(f"[ CACHE ] {cnpj} ● CRM ● cache sem no_medico; regenerando parquet.")
+                stale_df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
+                df = None
         except Exception as e:
             print(f"âš ï¸ Erro ao ler parquet CRM '{cnpj}': {e}", flush=True)
 
@@ -152,9 +158,10 @@ def get_crm_data(
                          "E.flag_crm_invalido, "
                          "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
                          "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                         "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
+                         "E.dt_primeira_prescricao, M.no_medico, M.dt_inscricao AS dt_inscricao_crm, "
                          "E.nu_estabelecimentos"
                          " FROM temp_CGUSC.fp.app_crm_export E"
+                         " LEFT JOIN temp_CGUSC.fp.build_dados_medico M ON M.id_medico = E.id_medico"
                          " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
                          " WHERE F.cnpj = :cnpj"),
                     conn,
@@ -163,10 +170,15 @@ def get_crm_data(
                 query_time_ms = round((_time.perf_counter() - _t0) * 1000, 1)
             if pdf.empty:
                 df = pl.DataFrame(schema={
-                    "id_medico": pl.Utf8, "competencia": pl.Int32, "vl_total_prescricoes": pl.Float64
+                    "id_medico": pl.Utf8,
+                    "competencia": pl.Int32,
+                    "vl_total_prescricoes": pl.Float64,
+                    "no_medico": pl.Utf8,
                 })
             else:
                 df = pl.from_pandas(pdf)
+            if "no_medico" not in df.columns:
+                df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
             for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
                 if col in df.columns:
                     df = df.with_columns(pl.col(col).cast(pl.Int8))
@@ -175,7 +187,11 @@ def get_crm_data(
             save_time_ms = round((_time.perf_counter() - _t1) * 1000, 1)
         except Exception:
             print(f"[ ANALYTICS ] {cnpj} ● CRM ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-            df = None
+            if stale_df is not None:
+                df = stale_df
+                from_cache = True
+            else:
+                df = None
 
     # â”€â”€ 2. Filtro de perÃ­odo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # ── 2. Validação de Disponibilidade e Histórico ──────────────────────
@@ -237,6 +253,7 @@ def get_crm_data(
             pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
             pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
             pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do mÃ©dico
+            pl.col("no_medico").drop_nulls().first().alias("no_medico"),
             pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
             pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
             pl.max("alerta_concentracao_multiplos_crms").alias("alerta_concentracao_multiplos_crms"),

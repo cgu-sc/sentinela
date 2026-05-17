@@ -105,6 +105,7 @@ def _schema_cnpj_parquet(pl):
         },
         "dados_crms.parquet": {
             "id_medico": pl.Utf8,
+            "no_medico": pl.Utf8,
             "competencia": pl.Int32,
             "vl_total_prescricoes": pl.Float64,
             "nu_prescricoes_mes": pl.Int64,

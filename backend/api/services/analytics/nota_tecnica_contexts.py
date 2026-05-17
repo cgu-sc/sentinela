@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import polars as pl
 
+from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
 from data_cache import get_df, get_df_perfil_estabelecimento, get_localidades_df, get_medicamentos_df
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
@@ -290,7 +291,7 @@ def _build_gtin_sem_comprovacao_context(
     """Agrega todos os GTINs com valor sem comprovacao no periodo e calcula concentracao."""
     get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
 
-    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), "movimentacao_mensal_gtin_v2.parquet")
+    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), MOVIMENTACAO_MENSAL_GTIN_PARQUET)
     if not os.path.exists(parquet_path):
         raise RuntimeError(f"Parquet mensal por GTIN obrigatorio nao encontrado para Nota Tecnica: {parquet_path}.")
 

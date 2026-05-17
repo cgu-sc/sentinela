@@ -10,6 +10,18 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
+from cache_files import (
+    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
+    CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
+    CRM_HORARIO_EVENTOS_PARQUET,
+    CRM_HORARIO_PARQUET,
+    CRM_PERFIL_DIARIO_PARQUET,
+    CRM_RAIOX_TX_PARQUET,
+    DADOS_CRMS_PARQUET,
+    GEOGRAFICO_PARQUET,
+    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
+    VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
+)
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -115,7 +127,7 @@ def get_crm_data(
     from data_cache import get_cache_dir
 
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "dados_crms.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, DADOS_CRMS_PARQUET)
 
     # â”€â”€ helpers de competÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _to_comp(date_str: str) -> int:
@@ -412,7 +424,7 @@ def get_crm_data(
         m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
 
     # ——— 7.1 Alertas Geográficos (Distância) ——————————————————————————————————————
-    ALERTAS_GEO_PATH = os.path.join(cnpj_dir, "geografico.parquet")
+    ALERTAS_GEO_PATH = os.path.join(cnpj_dir, GEOGRAFICO_PARQUET)
     df_geo: pl.DataFrame | None = None
 
     if os.path.exists(ALERTAS_GEO_PATH):
@@ -471,14 +483,14 @@ def get_crm_data(
     df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
 
     # ——— 7.3 Pré-Sincronização do Raio-X Unificado ———————————————————————————————
-    # Garante que o arquivo crm_raiox_tx.parquet exista para uso offline
+    # Garante que o parquet Raio-X exista para uso offline
     try:
         sync_crm_raiox_tx(cnpj)
     except Exception as e:
         print(f"[ ANALYTICS ] {cnpj} ● RAIO-X ● ⚠️ ERRO NA SINCRONIZAÇÃO ({e})")
 
     # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
-    CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, "volume_horario_anomalo_alertas.parquet")
+    CNPJ_ALERTS_PATH = os.path.join(cnpj_dir, VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET)
 
     df_ca: pl.DataFrame | None = None
 
@@ -574,7 +586,7 @@ def get_crm_data(
     cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
 
     # ——— 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ———————
-    TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
+    TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
     alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
 
     if os.path.exists(TX_PARQUET_PATH):
@@ -792,7 +804,7 @@ def _build_crm_unico_concentration_map(df_alertas: pl.DataFrame) -> dict[str, di
     return scores
 
 def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
-    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
+    alertas_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
     rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_UNICO_RHYTHM_WINDOWS}
     required_columns = {
         "id_medico",
@@ -900,12 +912,12 @@ def get_crm_perfil_diario(
       - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
 
     Fonte: temp_CGUSC.fp.app_crm_perfil_diario
-    Cache: sentinela_cache/<cnpj>/crm_perfil_diario.parquet
+    Cache: sentinela_cache/<cnpj>/crm_perfil_diario.
     """
     import pandas as pd
 
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "crm_perfil_diario.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, CRM_PERFIL_DIARIO_PARQUET)
 
     import time as _time
     df: pl.DataFrame | None = None
@@ -1011,14 +1023,14 @@ def get_crm_perfil_horario(
 
     Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
     por ponto horário, lidos de temp_CGUSC.fp.app_crm_perfil_horario.
-    Cache: sentinela_cache/<cnpj>/crm_horario.parquet
+    Cache: sentinela_cache/<cnpj>/crm_horario.
     """
     import pandas as pd
     from sqlalchemy import text
     
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "crm_horario.parquet")
-    EVENTS_PARQUET_PATH = os.path.join(cnpj_dir, "crm_horario_eventos.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, CRM_HORARIO_PARQUET)
+    EVENTS_PARQUET_PATH = os.path.join(cnpj_dir, CRM_HORARIO_EVENTOS_PARQUET)
 
     import time as _time
     df: pl.DataFrame | None = None
@@ -1184,7 +1196,7 @@ def get_crm_perfil_horario(
 
     # Carrega lookup de medianas: (ano, trimestre, hr_janela) â†’ mediana_hora
     from datetime import datetime as _dt
-    MEDIANA_PATH = os.path.join(cnpj_dir, "mediana_autorizacoes_horaria.parquet")
+    MEDIANA_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_PARQUET)
     mediana_lookup: dict = {}
     if os.path.exists(MEDIANA_PATH):
         try:
@@ -1308,7 +1320,7 @@ def _alert_overlaps_hour(start_value, end_value, hour: Optional[int]) -> bool:
     return start_hour <= target_hour <= end_hour
 
 def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
-    alertas_path = os.path.join(cnpj_dir, "crm_concentracao_multiplo_alertas.parquet")
+    alertas_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET)
     rhythm_columns = {f"nu_{minutes}min" for minutes in _CRM_MULTIPLO_RHYTHM_WINDOWS}
     required_columns = {
         "id_cnpj",
@@ -1411,7 +1423,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
 def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmRaioXResponse":
     """Retorna transacoes e alertas CRM unificados para uma data/hora."""
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    parquet_path = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
+    parquet_path = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
 
     sync_crm_raiox_tx(cnpj)
 
@@ -1445,7 +1457,7 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 transactions = enriched_df.to_dicts()
 
         alertas_unico: list[dict] = []
-        unico_path = os.path.join(cnpj_dir, "crm_concentracao_unico_alertas.parquet")
+        unico_path = os.path.join(cnpj_dir, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
         if os.path.exists(unico_path):
             df_unico = pl.read_parquet(unico_path)
             day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)

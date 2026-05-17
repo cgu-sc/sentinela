@@ -10,6 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
+from cache_files import MEMORIA_CALCULO_PARQUET
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -136,7 +137,7 @@ def get_movimentacao_data(cnpj: str, engine, check_cache: bool = False) -> Movim
     from data_cache import get_cache_dir
     
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    CACHE_PATH = os.path.join(cnpj_dir, "memoria_calculo_v2.parquet")
+    CACHE_PATH = os.path.join(cnpj_dir, MEMORIA_CALCULO_PARQUET)
 
     empty_summary = MovimentacaoSummarySchema()
 

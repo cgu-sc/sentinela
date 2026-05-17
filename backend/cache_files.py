@@ -1,0 +1,43 @@
+"""Nomes canonicos dos arquivos de cache Parquet."""
+
+MEMORIA_CALCULO_PARQUET = "memoria_calculo_v2.parquet"
+MOVIMENTACAO_MENSAL_GTIN_PARQUET = "movimentacao_mensal_gtin_v2.parquet"
+FALECIDOS_PARQUET = "falecidos.parquet"
+DADOS_CRMS_PARQUET = "dados_crms.parquet"
+GEOGRAFICO_PARQUET = "geografico.parquet"
+VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET = "volume_horario_anomalo_alertas.parquet"
+CRM_RAIOX_TX_PARQUET = "crm_raiox_tx.parquet"
+CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET = "crm_concentracao_unico_alertas.parquet"
+CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET = "crm_concentracao_multiplo_alertas.parquet"
+CRM_PERFIL_DIARIO_PARQUET = "crm_perfil_diario.parquet"
+CRM_HORARIO_PARQUET = "crm_horario.parquet"
+CRM_HORARIO_EVENTOS_PARQUET = "crm_horario_eventos.parquet"
+MEDIANA_AUTORIZACOES_HORARIA_PARQUET = "mediana_autorizacoes_horaria.parquet"
+TEIA_GRAFO_NIVEL2_NODES_PARQUET = "teia_grafo_nivel2_nodes.parquet"
+TEIA_GRAFO_NIVEL2_EDGES_PARQUET = "teia_grafo_nivel2_edges.parquet"
+TEIA_GRAFO_NIVEL3_NODES_PARQUET = "teia_grafo_nivel3_nodes.parquet"
+TEIA_GRAFO_NIVEL3_EDGES_PARQUET = "teia_grafo_nivel3_edges.parquet"
+TEIA_GRAFO_NIVEL4_NODES_PARQUET = "teia_grafo_nivel4_nodes.parquet"
+TEIA_GRAFO_NIVEL4_EDGES_PARQUET = "teia_grafo_nivel4_edges.parquet"
+
+CNPJ_PARQUETS = (
+    MEMORIA_CALCULO_PARQUET,
+    MOVIMENTACAO_MENSAL_GTIN_PARQUET,
+    FALECIDOS_PARQUET,
+    DADOS_CRMS_PARQUET,
+    GEOGRAFICO_PARQUET,
+    VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
+    CRM_RAIOX_TX_PARQUET,
+    CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
+    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
+    CRM_PERFIL_DIARIO_PARQUET,
+    CRM_HORARIO_PARQUET,
+    CRM_HORARIO_EVENTOS_PARQUET,
+    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
+    TEIA_GRAFO_NIVEL2_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL3_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL4_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
+)

@@ -10,6 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
+from cache_files import FALECIDOS_PARQUET
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -72,7 +73,7 @@ def get_falecidos_data(
     import pandas as pd
     from sqlalchemy import text
 
-    PARQUET_PATH = os.path.join(_get_cnpj_cache_dir(cnpj), "falecidos.parquet")
+    PARQUET_PATH = os.path.join(_get_cnpj_cache_dir(cnpj), FALECIDOS_PARQUET)
     from_cache    = False
     query_time_ms: float | None = None
     save_time_ms:  float | None = None
@@ -305,7 +306,7 @@ def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineRespons
         # O parquet por CNPJ contém todas as transações dos CPFs do estabelecimento
         # (incluindo outras farmácias), suficiente para montar a linha do tempo.
         PARQUET_PATH = os.path.join(
-            _get_cnpj_cache_dir(cnpj_referencia), "falecidos.parquet"
+            _get_cnpj_cache_dir(cnpj_referencia), FALECIDOS_PARQUET
         )
         if not os.path.exists(PARQUET_PATH):
             return MultiCnpjTimelineResponse(

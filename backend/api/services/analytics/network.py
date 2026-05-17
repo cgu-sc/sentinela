@@ -2,6 +2,14 @@ import os
 import time
 from typing import Optional
 import polars as pl
+from cache_files import (
+    TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL2_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL3_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL4_NODES_PARQUET,
+)
 from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkResponse, NetworkSummarySchema, NetworkLevelSummarySchema
 from ._cache import _get_cnpj_cache_dir, sync_network
 
@@ -81,14 +89,14 @@ def _level_count(df: pl.DataFrame, level: str) -> int:
 def _build_network_summary(cnpj: str) -> NetworkSummarySchema:
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     node_frames = [
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")),
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")),
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_NODES_PARQUET)),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_NODES_PARQUET)),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_NODES_PARQUET)),
     ]
     edge_frames = [
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")),
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")),
-        _read_parquet_or_empty(os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_EDGES_PARQUET)),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_EDGES_PARQUET)),
+        _read_parquet_or_empty(os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_EDGES_PARQUET)),
     ]
 
     levels = {
@@ -122,7 +130,7 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     Retorna a rede de relacionamentos societários de um CNPJ.
 
     Estratégia cache-first (padrão do projeto):
-      1. Verifica se sentinela_cache/{cnpj}/teia_grafo_nivel2_nodes.parquet existe e é válido.
+      1. Verifica se o cache de teia nivel 2 existe e e valido.
       2. Cache hit  → lê do Parquet e reconstrói NetworkResponse (rápido, offline-safe).
       3. Cache miss → chama sync_network() para buscar do banco e salvar Parquet,
                       depois lê o Parquet recém-gerado.
@@ -130,8 +138,8 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     t0 = time.perf_counter()
 
     cnpj_dir    = _get_cnpj_cache_dir(cnpj)
-    NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")
-    EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
+    NODES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_NODES_PARQUET)
+    EDGES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_EDGES_PARQUET)
 
     # ── Cache miss: gera o Parquet ────────────────────────────────────────────
     # Agora o sync_network gera 4 arquivos (nodes, edges + expansion_nodes, expansion_edges) sob o novo padrão teia_grafo_*
@@ -166,8 +174,8 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
     """
     t0 = time.perf_counter()
     cnpj_dir = _get_cnpj_cache_dir(cnpj_alvo)
-    EXP_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
-    EXP_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
+    EXP_NODES_PATH = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_NODES_PARQUET)
+    EXP_EDGES_PATH = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_EDGES_PARQUET)
 
     sync_network(cnpj_alvo)
     if not os.path.exists(EXP_NODES_PATH) or not os.path.exists(EXP_EDGES_PATH):
@@ -217,8 +225,8 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
     """
     t0 = time.perf_counter()
     cnpj_dir = _get_cnpj_cache_dir(cnpj_alvo)
-    N4_NODES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
-    N4_EDGES_PATH = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
+    N4_NODES_PATH = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_NODES_PARQUET)
+    N4_EDGES_PATH = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_EDGES_PARQUET)
 
     sync_network(cnpj_alvo)
     if not os.path.exists(N4_NODES_PATH) or not os.path.exists(N4_EDGES_PATH):
@@ -262,8 +270,8 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
 def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
     """Retorna TODOS os sócios de nível 3 (Sócios de N2) em lote."""
     CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
-    NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_nodes.parquet")
-    EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel3_edges.parquet")
+    NODES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL3_NODES_PARQUET)
+    EDGES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL3_EDGES_PARQUET)
 
     sync_network(cnpj_alvo)
     if not os.path.exists(NODES_PATH):
@@ -285,8 +293,8 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
 def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
     """Retorna TODAS as empresas de nível 4 (Participações de N3) em lote."""
     CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
-    NODES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_nodes.parquet")
-    EDGES_PATH = os.path.join(CACHE_DIR, "teia_grafo_nivel4_edges.parquet")
+    NODES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL4_NODES_PARQUET)
+    EDGES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL4_EDGES_PARQUET)
 
     sync_network(cnpj_alvo)
     if not os.path.exists(NODES_PATH):

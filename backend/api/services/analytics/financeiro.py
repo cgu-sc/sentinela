@@ -10,6 +10,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
+from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_df_volume_atipico_semestral
 from ...schemas.analytics import (
     AnalyticsKPISchema,
@@ -213,7 +214,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
 def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoMensalGtinResponse:
     """
     Retorna a série mensal de quantidades e valores (por GTIN agregado) para um CNPJ.
-    Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin_v2.parquet na primeira chamada.
+    Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin na primeira chamada.
 
     Args:
         cnpj: CNPJ completo (14 dígitos).
@@ -227,7 +228,7 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
     import time
 
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin_v2.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, MOVIMENTACAO_MENSAL_GTIN_PARQUET)
 
     df: pl.DataFrame | None = None
     from_cache = False
@@ -353,14 +354,14 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
 def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalResponse:
     """
     Retorna o ranking de GTINs para um período (ex: '2019-07' ou '2019-S1').
-    Lê do parquet 'movimentacao_mensal_gtin_v2.parquet'.
+    Le do parquet mensal GTIN.
     """
     import time
     from sqlalchemy import text
     
     t0 = time.perf_counter()
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "movimentacao_mensal_gtin_v2.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, MOVIMENTACAO_MENSAL_GTIN_PARQUET)
     
     if not os.path.exists(PARQUET_PATH):
         get_evolucao_mensal_gtin(cnpj)

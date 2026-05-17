@@ -11,6 +11,16 @@ import json
 import copy
 import unicodedata
 from decimal import Decimal, ROUND_HALF_UP
+from cache_files import (
+    CRM_RAIOX_TX_PARQUET,
+    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
+    TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL2_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL3_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL4_NODES_PARQUET,
+)
 from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
@@ -125,7 +135,7 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
     from database import engine as _engine
     
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    TX_PARQUET_PATH = os.path.join(cnpj_dir, "crm_raiox_tx.parquet")
+    TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
 
     # Se o cache já existe e parece saudável, não faz nada
     if os.path.exists(TX_PARQUET_PATH):
@@ -185,7 +195,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
     """Sincroniza o cache parquet de medianas horárias de autorizações para um CNPJ.
 
     Lê temp_CGUSC.fp.app_mediana_autorizacoes_horaria e grava
-    sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.parquet.
+    sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.
     Usado pelo get_crm_perfil_horario para preencher a mediana de referência
     em horas sem atividade no dia selecionado.
     """
@@ -195,7 +205,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
     from database import engine as _engine
 
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, "mediana_autorizacoes_horaria.parquet")
+    PARQUET_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_PARQUET)
 
     if os.path.exists(PARQUET_PATH):
         try:
@@ -241,12 +251,12 @@ def sync_network(cnpj: str) -> None:
     """
     import time
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    N2_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_nodes.parquet")
-    N2_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel2_edges.parquet")
-    N3_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel3_nodes.parquet")
-    N3_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel3_edges.parquet")
-    N4_NODES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_nodes.parquet")
-    N4_EDGES_PATH  = os.path.join(cnpj_dir, "teia_grafo_nivel4_edges.parquet")
+    N2_NODES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_NODES_PARQUET)
+    N2_EDGES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL2_EDGES_PARQUET)
+    N3_NODES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_NODES_PARQUET)
+    N3_EDGES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL3_EDGES_PARQUET)
+    N4_NODES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_NODES_PARQUET)
+    N4_EDGES_PATH  = os.path.join(cnpj_dir, TEIA_GRAFO_NIVEL4_EDGES_PARQUET)
 
     # Cache hit: se os arquivos existem e são válidos, assume sucesso
     if all(os.path.exists(p) for p in [N2_NODES_PATH, N2_EDGES_PATH, N3_NODES_PATH, N3_EDGES_PATH, N4_NODES_PATH, N4_EDGES_PATH]):

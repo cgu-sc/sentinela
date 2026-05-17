@@ -57,7 +57,11 @@ from .nota_tecnica_criticidades import (
     _get_criticos,
 )
 from .nota_tecnica_crm import (
+    _add_crms_irregulares_text,
+    _add_exclusividade_crm_text,
     _add_hhi_crm_text,
+    _build_crms_irregulares_context,
+    _build_exclusividade_crm_context,
     _build_hhi_crm_context,
 )
 from .nota_tecnica_formatters import (
@@ -419,7 +423,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('[Item 7] dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if falecidos_comp: fontes.append('[Subitem 7.1] SIRC e SISOBI')
-    if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('[Item 7] Cadastros de médicos do Conselho Regional de Medicina (CRM)')
+    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('[Item 7] Cadastros de médicos do Conselho Regional de Medicina (CRM)')
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos por parte das farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {"; ".join(fontes)}.')
 
     nota_pfpb_2 = (
@@ -812,6 +816,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if hhi_crm_comp:
                     _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp)
                     continue
+            if key == 'crms_irregulares':
+                crms_irregulares_comp = _build_crms_irregulares_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
+                if crms_irregulares_comp:
+                    _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp)
+                continue
+            if key == 'exclusividade_crm':
+                exclusividade_comp = _build_exclusividade_crm_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
+                if exclusividade_comp:
+                    _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp)
+                continue
 
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')

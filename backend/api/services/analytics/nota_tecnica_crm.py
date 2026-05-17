@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Optional
 
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches
 
@@ -75,14 +76,23 @@ def _build_hhi_crm_context(
     if total_medicos <= 0 or total_autorizacoes <= 0:
         return None
 
-    top_crms = sorted(
+    crms_ordenados = sorted(
         crms,
         key=lambda row: (
-            _as_int(row.get("nu_prescricoes")),
             _as_float(row.get("vl_total_prescricoes")),
+            _as_int(row.get("nu_prescricoes")),
         ),
         reverse=True,
-    )[:3]
+    )
+    top_crms: list[dict[str, Any]] = []
+    autorizacoes_acumuladas = 0
+    for row in crms_ordenados:
+        if len(top_crms) >= 10:
+            break
+        top_crms.append(row)
+        autorizacoes_acumuladas += _as_int(row.get("nu_prescricoes"))
+        if len(top_crms) >= 5 and (autorizacoes_acumuladas / total_autorizacoes * 100) >= 80:
+            break
     principal = top_crms[0]
     principal_autorizacoes = _as_int(principal.get("nu_prescricoes"))
     principal_valor = _as_float(principal.get("vl_total_prescricoes"))
@@ -128,6 +138,8 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     principal = hhi_crm_comp["principal"]
     principal_autorizacoes = hhi_crm_comp["principal_autorizacoes"]
     principal_valor = hhi_crm_comp["principal_valor"]
+    top_autorizacoes = sum(_as_int(row.get("nu_prescricoes")) for row in hhi_crm_comp["top_crms"])
+    top_pct_autorizacoes = (top_autorizacoes / total_autorizacoes * 100) if total_autorizacoes else 0.0
 
     crm_num, crm_uf = _crm_num_uf(principal.get("id_medico"))
     crm_ident = f"{crm_num}/{crm_uf}" if crm_uf else crm_num
@@ -157,7 +169,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
     _run(
         p2,
-        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento, foi identificado que poucos CRMs concentraram grande quantidade de lançamentos, conforme apresentado a seguir:",
+        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. O quadro a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual e acumulada de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
         color="0F172A",
         size=10,
     )
@@ -165,23 +177,25 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     title = doc.add_paragraph()
     _run(
         title,
-        f"Quadro 07 - Médicos (CRM) com maiores números de registros no Sistema Autorizador de Vendas, lançados pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período {periodo_intervalo}.",
+        f"Quadro 07 - Médicos (CRM) com maiores valores pagos pelo PFPB no Sistema Autorizador de Vendas, lançados pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,
     )
 
     headers = [
-        "CRM",
-        "UF",
+        "CRM/UF",
         "Nome",
         "Data da inscrição no CFM",
         "Número de autorizações vinculadas ao CRM",
+        "% sobre a produção total da farmácia",
+        "% acumulado da produção total",
         "Valor total pago pelo PFPB tendo como base o CRM",
     ]
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
-    widths = [Inches(0.75), Inches(0.35), Inches(1.75), Inches(0.85), Inches(1.15), Inches(1.35)]
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    widths = [Inches(0.9), Inches(1.55), Inches(0.75), Inches(0.95), Inches(0.8), Inches(0.8), Inches(1.15)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -189,56 +203,72 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
         _cell_bg(cell, "E2E8F0")
         _write_cell(cell, header, size=7.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
+    autorizacoes_acumuladas_tabela = 0
     for row in hhi_crm_comp["top_crms"]:
         cells = table.add_row().cells
         crm_row, uf_row = _crm_num_uf(row.get("id_medico"))
+        row_autorizacoes = _as_int(row.get("nu_prescricoes"))
+        autorizacoes_acumuladas_tabela += row_autorizacoes
+        pct_producao_total = (row_autorizacoes / total_autorizacoes * 100) if total_autorizacoes else 0.0
+        pct_acumulado = (autorizacoes_acumuladas_tabela / total_autorizacoes * 100) if total_autorizacoes else 0.0
+        crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         values = [
-            crm_row,
-            uf_row,
+            crm_uf,
             str(row.get("no_medico") or "Não localizado"),
             _format_date_br(row.get("dt_inscricao_crm")),
-            str(_as_int(row.get("nu_prescricoes"))),
+            str(row_autorizacoes),
+            f'{_format_decimal_pt(pct_producao_total, 2)}%',
+            f'{_format_decimal_pt(pct_acumulado, 2)}%',
             f'R$ {_format_decimal_pt(_as_float(row.get("vl_total_prescricoes")), 2)}',
         ]
         for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (4, 5) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 3) else None
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
             _write_cell(cells[idx], value, size=7.0, align=align)
 
     fonte = doc.add_paragraph()
+    fonte.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(
         fonte,
-        "Fonte: Consulta ao CRM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
+        "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
         color="475569",
         size=8,
         italic=True,
     )
 
     p3 = doc.add_paragraph()
-    _run(p3, "Conforme Quadro 07, foi identificada uma concentração atípica de registros relacionados com o médico ", color="0F172A", size=10)
+    _run(p3, "Conforme o Quadro 07, observa-se concentração relevante das dispensações em torno do médico ", color="0F172A", size=10)
     _run(p3, nome_medico, color="334155", size=10, bold=True)
     _run(p3, ", CRM ", color="0F172A", size=10)
     _run(p3, crm_ident, color="334155", size=10, bold=True)
     _run(p3, f". Das {total_autorizacoes} autorizações verificadas no período, ", color="0F172A", size=10)
-    _run(p3, f'{principal_autorizacoes} autorizações ({_format_decimal_pt(hhi_crm_comp["pct_autorizacoes"], 2)}%)', color="334155", size=10, bold=True)
+    _run(p3, f"{principal_autorizacoes}", color="334155", size=10, bold=True)
+    _run(p3, " estavam vinculadas a esse CRM, o que corresponde a ", color="0F172A", size=10)
+    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["pct_autorizacoes"], 2)}%', color="334155", size=10, bold=True)
     _run(
         p3,
-        f" estavam associadas ao mesmo médico. Nota-se que a média foi de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM (= {total_autorizacoes} autorizações / {total_medicos} médicos), logo o CRM {crm_ident} teve número de autorizações a ele atreladas ",
+        f" da produção da farmácia. Considerando que foram identificados {total_medicos} médicos no período, a média foi de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM, de modo que o volume associado ao CRM {crm_ident} foi ",
         color="0F172A",
         size=10,
     )
-    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["mult_autorizacoes"], 2)} vezes', color="334155", size=10, bold=True)
-    _run(p3, f" maior que a média ({principal_autorizacoes} autorizações).", color="0F172A", size=10)
+    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["mult_autorizacoes"], 2)} vezes superior à média', color="334155", size=10, bold=True)
+    _run(p3, ".", color="0F172A", size=10)
 
     p4 = doc.add_paragraph()
-    _run(p4, f"Já o valor recebido pela Farmácia por medicamentos prescritos pelo médico {nome_medico} foi de ", color="0F172A", size=10)
+    _run(p4, f"Em termos financeiros, as vendas vinculadas ao referido CRM somaram ", color="0F172A", size=10)
     _run(p4, f"R$ {_format_decimal_pt(principal_valor, 2)}", color="334155", size=10, bold=True)
-    _run(p4, ", ou seja ", color="0F172A", size=10)
+    _run(p4, ", equivalentes a ", color="0F172A", size=10)
     _run(p4, f'{_format_decimal_pt(hhi_crm_comp["pct_valor"], 2)}%', color="334155", size=10, bold=True)
     _run(
         p4,
-        f" dos R$ {_format_decimal_pt(valor_total, 2)} analisados no período. Destaca-se que a média foi de R$ {_format_decimal_pt(media_valor, 2)} por CRM (= R$ {_format_decimal_pt(valor_total, 2)} / {total_medicos} médicos), logo, o CRM {crm_ident} teve o valor ",
+        f" dos R$ {_format_decimal_pt(valor_total, 2)} analisados. Esse montante também se mostra destoante da distribuição média por médico, uma vez que supera em ",
         color="0F172A",
         size=10,
     )
     _run(p4, f'{_format_decimal_pt(hhi_crm_comp["mult_valor"], 2)} vezes', color="334155", size=10, bold=True)
-    _run(p4, " maior que a média.", color="0F172A", size=10)
+    _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A coincidência entre concentração de autorizações e concentração de valores reforça o caráter atípico do padrão observado.", color="0F172A", size=10)
+
+    if top_pct_autorizacoes >= 80:
+        p5 = doc.add_paragraph()
+        _run(p5, "Ademais, os CRMs listados no Quadro 07 concentram conjuntamente ", color="0F172A", size=10)
+        _run(p5, f"{_format_decimal_pt(top_pct_autorizacoes, 2)}%", color="334155", size=10, bold=True)
+        _run(p5, " da produção total da farmácia, alcançando o patamar de concentração definido para a seleção do quadro e indicando que a dispersão esperada entre prescritores não se verificou de forma regular no período analisado.", color="0F172A", size=10)

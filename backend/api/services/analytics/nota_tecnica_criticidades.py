@@ -25,15 +25,17 @@ _SECAO5_MAP = [
     ('recorrencia_sistemica',        '5.15', 'Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('dias_pico',                    '5.16', 'Vendas de medicamentos em dias de pico realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('dispersao_geografica',         '5.17', 'Vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('compra_unica',                 '5.18', 'Volume elevado de pacientes com registro de venda única de medicamento'),
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
-    ('exclusividade_crm',            '5.20', 'Vendas de medicamentos vinculados a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {farmacia}'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
 ]
+_FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
 
 
 def _get_criticos(cnpj: str) -> set[str]:
     """Identifica quais indicadores estão em nível CRÍTICO para o CNPJ."""
+    if _FORCAR_TODOS_CRITICOS_NOTA_TECNICA:
+        return {key for key, _, _ in _SECAO5_MAP}
+
     try:
         df = get_df_matriz_risco()
         df = df.rename({c: c.lower() for c in df.columns})

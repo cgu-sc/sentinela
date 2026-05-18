@@ -1,10 +1,12 @@
 from typing import Any, List, Optional
-from datetime import date
+from datetime import date, datetime
 import calendar
 import polars as pl
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 import os
+from pathlib import Path
+import time
 import zlib
 import json
 import copy
@@ -84,6 +86,67 @@ _CRM_SEVERITY_CACHE_VERSION = 2
 _CRM_ALERTS_CACHE_VERSION = 2
 
 
+def _format_timing_ms(ms: float) -> str:
+    return f"{ms / 1000:.3f}s" if ms >= 1000 else f"{ms:.1f}ms"
+
+
+class _CrmTiming:
+    def __init__(self, cnpj: str, data_inicio: str | None, data_fim: str | None, enabled: bool = False):
+        self.cnpj = cnpj
+        self.data_inicio = data_inicio
+        self.data_fim = data_fim
+        self.enabled = enabled
+        self.started_at = datetime.now()
+        self._start = time.perf_counter()
+        self._last = self._start
+        self.steps: list[tuple[str, float, float]] = []
+        self.details: dict[str, Any] = {}
+
+    def mark(self, label: str):
+        if not self.enabled:
+            return
+        now = time.perf_counter()
+        self.steps.append((label, (now - self._last) * 1000, (now - self._start) * 1000))
+        self._last = now
+
+    def detail(self, key: str, value: Any):
+        if self.enabled:
+            self.details[key] = value
+
+    def write(self, status: str = "OK", error: str | None = None):
+        if not self.enabled:
+            return
+        total_ms = (time.perf_counter() - self._start) * 1000
+        periodo = (
+            f"{self.data_inicio or 'inicio-aberto'} a {self.data_fim or 'fim-aberto'}"
+            if self.data_inicio or self.data_fim
+            else "historico completo"
+        )
+        log_path = Path(__file__).resolve().parents[4] / "logs" / "crm_timing.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        lines = [
+            "=" * 88,
+            f"{self.started_at:%Y-%m-%d %H:%M:%S} | CRM base | CNPJ {self.cnpj} | periodo {periodo} | status {status}",
+            f"TOTAL: {_format_timing_ms(total_ms)}",
+        ]
+        if self.details:
+            lines.append("Detalhes:")
+            for key, value in self.details.items():
+                lines.append(f"  - {key}: {value}")
+        lines.append("Etapas:")
+        lines.extend(
+            f"  - {label:<52} {_format_timing_ms(step_ms):>9} | acumulado {_format_timing_ms(total_step_ms)}"
+            for label, step_ms, total_step_ms in self.steps
+        )
+        if error:
+            lines.append(f"Erro: {error}")
+        lines.append("")
+
+        with log_path.open("a", encoding="utf-8") as fp:
+            fp.write("\n".join(lines) + "\n")
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     """Converte valores de linhas Polars/Pandas para float com estreitamento de tipo."""
     if value is None:
@@ -138,10 +201,13 @@ def get_crm_data(
     cnpj: str,
     data_inicio: str | None = None,
     data_fim: str | None = None,
+    timing_log: bool = False,
 ) -> PrescritoresResponse:
     """Retorna KPIs e top prescritores de um CNPJ a partir do parquet por CNPJ (lazy cache)."""
     import traceback
+    timing = _CrmTiming(cnpj, data_inicio, data_fim, enabled=timing_log)
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
+    timing.mark("resolver diretorio cache CNPJ")
 
     # â”€â”€ helpers de competÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _to_comp(date_str: str) -> int:
@@ -152,14 +218,21 @@ def get_crm_data(
 
     # â”€â”€ 1. Carrega ou gera o parquet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     result = load_or_sync_crm_data(cnpj)
+    timing.mark("load_or_sync_crm_data")
     if result.error:
+        timing.write(status="ERRO", error=result.error)
         _raise_cache_unavailable("Base de dados de prescricoes", result.error)
 
-    df = result.df
+    df = result.df if result.df is not None else pl.DataFrame()
     from_cache = result.from_cache
     read_time_ms = result.read_time_ms
     query_time_ms = result.query_time_ms
     save_time_ms = result.save_time_ms
+    timing.detail("from_cache", from_cache)
+    timing.detail("read_time_ms", _format_timing_ms(read_time_ms or 0.0))
+    timing.detail("query_time_ms", _format_timing_ms(query_time_ms or 0.0))
+    timing.detail("save_time_ms", _format_timing_ms(save_time_ms or 0.0))
+    timing.detail("linhas_base_antes_filtro", len(df) if df is not None else 0)
 
     # ── 2. Validação de Disponibilidade e Histórico ──────────────────────
     if df is None or len(df.columns) == 0:
@@ -175,10 +248,15 @@ def get_crm_data(
         df = df.filter(pl.col("competencia") >= comp_ini)
     if comp_fim:
         df = df.filter(pl.col("competencia") <= comp_fim)
+    timing.detail("linhas_base_periodo", len(df))
+    timing.mark("validacao e filtro periodo")
 
     if df.is_empty():
-        return PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache, tem_historico=tem_historico,
-                                    read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
+        response = PrescritoresResponse(cnpj=cnpj, summary={}, crms_interesse=[], from_cache=from_cache, tem_historico=tem_historico,
+                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
+        timing.mark("response vazio")
+        timing.write()
+        return response
 
     # â”€â”€ 3. Agrega por id_medico (colapsa competÃªncias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total_valor = _to_float(df["vl_total_prescricoes"].sum())
@@ -267,6 +345,8 @@ def get_crm_data(
     )
 
     crms_interesse_list = [r for r in df_med.iter_rows(named=True)]
+    timing.detail("medicos_agregados", len(crms_interesse_list))
+    timing.mark("agregacao por medico e conversao linhas")
 
     # â”€â”€ 4. Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     top1       = df_med.row(0, named=True)
@@ -285,6 +365,7 @@ def get_crm_data(
     pct_top5      = round(top5_valor / total_valor * 100, 2)                  if total_valor else 0.0
     pct_invalido  = round(vl_invalido  / total_valor * 100, 2)                if total_valor else 0.0
     pct_antes_reg = round(vl_antes_reg / total_valor * 100, 2)                if total_valor else 0.0
+    timing.mark("summary CRM")
 
     # â”€â”€ 5. Benchmarks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     bench_top5_reg = 0.0
@@ -307,6 +388,7 @@ def get_crm_data(
             bench_top5_reg = _to_float(df_reg["mediana_concentracao_top5_reg"].mean())
     except Exception:
         pass
+    timing.mark("benchmarks CRM")
 
     # â”€â”€ 6. Metadados do CNPJ (matriz de risco) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     razao_social = municipio = uf_str = None
@@ -321,6 +403,7 @@ def get_crm_data(
             uf_str       = r.get("uf")
     except Exception:
         pass
+    timing.mark("metadata matriz risco")
 
     summary_dict = {
         "pct_concentracao_top1":          pct_top1,
@@ -371,15 +454,18 @@ def get_crm_data(
 
     for m in crms_interesse_list:
         m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
+    timing.detail("alertas_crm_unico_linhas", len(df_ad) if df_ad is not None else 0)
+    timing.mark("alertas CRM unico por medico")
 
     # ——— 7.1 Alertas Geográficos (Distância) ——————————————————————————————————————
     geo_result = load_or_sync_geografico(cnpj)
     if geo_result.error:
+        timing.write(status="ERRO", error=geo_result.error)
         _raise_cache_unavailable("Alertas geograficos CRM", geo_result.error)
     df_geo = geo_result.df
 
     alertas_geo_por_medico: dict[str, list[dict]] = {}
-    if not df_geo.is_empty():
+    if df_geo is not None and not df_geo.is_empty():
         if comp_ini: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
         if comp_fim: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
         
@@ -404,20 +490,27 @@ def get_crm_data(
 
     for m in crms_interesse_list:
         m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
+    timing.detail("alertas_geograficos_linhas", len(df_geo) if df_geo is not None else 0)
+    timing.mark("alertas geograficos")
 
     # ——— 7.2 Alertas de Múltiplos CRMs (Surtos Coordenados) ———————————————————————
     df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
+    timing.detail("alertas_multiplos_linhas", len(df_cm) if df_cm is not None else 0)
+    timing.mark("load alertas multiplos CRM")
 
     # ——— 7.3 Pré-Sincronização do Raio-X Unificado ———————————————————————————————
     # Garante que o parquet Raio-X exista para uso offline
     raio_x_result = sync_crm_raiox_tx(cnpj)
     if raio_x_result.error:
+        timing.write(status="ERRO", error=raio_x_result.error)
         _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
+    timing.mark("sync raio-x CRM")
 
     # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
     cnpj_alerts_list = []
     volume_result = load_or_sync_volume_horario_anomalo(cnpj)
     if volume_result.error:
+        timing.write(status="ERRO", error=volume_result.error)
         _raise_cache_unavailable("Alertas de volume horario CRM", volume_result.error)
     df_ca = volume_result.df
 
@@ -486,6 +579,9 @@ def get_crm_data(
 
     # Ordenação Final por Data/Hora
     cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
+    timing.detail("alertas_volume_linhas", len(df_ca) if df_ca is not None else 0)
+    timing.detail("alertas_cnpj_total", len(cnpj_alerts_list))
+    timing.mark("alertas CNPJ e ordenacao")
 
     # ——— 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ———————
     TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
@@ -518,66 +614,108 @@ def get_crm_data(
                 if comp_fim:
                     df_cm_period = df_cm_period.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
 
-                def _as_datetime(value):
-                    if value is None:
-                        return None
-                    if hasattr(value, "to_pydatetime"):
-                        return value.to_pydatetime()
-                    if hasattr(value, "strftime"):
-                        return value
-                    text_value = str(value)
-                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
-                        try:
-                            from datetime import datetime as _datetime
-                            return _datetime.strptime(text_value[:26], fmt)
-                        except ValueError:
+                def _datetime_expr(df_ref: pl.DataFrame, column: str):
+                    dtype = df_ref.schema.get(column)
+                    expr = pl.col(column)
+                    if dtype == pl.Utf8:
+                        return expr.str.strptime(pl.Datetime, strict=False)
+                    if dtype == pl.Date:
+                        return expr.cast(pl.Datetime)
+                    return expr.cast(pl.Datetime, strict=False)
+
+                tx_join = df_tx.with_columns([
+                    _datetime_expr(df_tx, "data_hora").alias("_tx_data_hora"),
+                    pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
+                    pl.col("id_medico").cast(pl.Utf8).alias("_id_medico"),
+                    pl.col("num_autorizacao").cast(pl.Utf8).alias("_num_autorizacao"),
+                ]).select([
+                    "_dt_alerta",
+                    "_tx_data_hora",
+                    "_id_medico",
+                    "_num_autorizacao",
+                ])
+
+                cm_join = df_cm_period.with_row_index("_alerta_idx").with_columns([
+                    pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
+                    _datetime_expr(df_cm_period, "dt_ini_concentracao").alias("_dt_ini"),
+                    _datetime_expr(df_cm_period, "dt_fim_concentracao").alias("_dt_fim"),
+                ]).select([
+                    "_alerta_idx",
+                    "_dt_alerta",
+                    "_dt_ini",
+                    "_dt_fim",
+                    "hr_janela",
+                    "nu_prescricoes",
+                    "nu_crms",
+                    "nu_crms_distintos",
+                    "severidade",
+                    "criterio_pior_ritmo",
+                ])
+
+                joined = (
+                    tx_join
+                    .join(cm_join, on="_dt_alerta", how="inner")
+                    .filter(
+                        pl.col("_tx_data_hora").is_not_null()
+                        & pl.col("_dt_ini").is_not_null()
+                        & pl.col("_dt_fim").is_not_null()
+                        & (pl.col("_tx_data_hora") >= pl.col("_dt_ini"))
+                        & (pl.col("_tx_data_hora") <= pl.col("_dt_fim"))
+                        & pl.col("_id_medico").is_not_null()
+                        & (pl.col("_id_medico") != "")
+                    )
+                )
+                timing.detail("cruzamento_join_linhas", len(joined))
+
+                if not joined.is_empty():
+                    cruzamento = (
+                        joined
+                        .group_by(["_alerta_idx", "_id_medico"])
+                        .agg([
+                            pl.col("_num_autorizacao").n_unique().alias("nu_presc_crm"),
+                            pl.col("_dt_alerta").first().alias("dt"),
+                            pl.col("_dt_ini").first().alias("_dt_ini"),
+                            pl.col("_dt_fim").first().alias("_dt_fim"),
+                            pl.col("hr_janela").first().alias("hr_janela"),
+                            pl.col("nu_prescricoes").first().alias("nu_prescricoes"),
+                            pl.col("nu_crms").first().alias("nu_crms"),
+                            pl.col("nu_crms_distintos").first().alias("nu_crms_distintos"),
+                            pl.col("severidade").first().alias("severidade"),
+                            pl.col("criterio_pior_ritmo").first().alias("criterio_pior_ritmo"),
+                        ])
+                    )
+
+                    for row in cruzamento.iter_rows(named=True):
+                        dt_ini = row.get("_dt_ini")
+                        dt_fim = row.get("_dt_fim")
+                        if dt_ini is None or dt_fim is None:
                             continue
-                    return None
 
-                tx_by_date: dict[str, list[dict]] = {}
-                for tx in df_tx.iter_rows(named=True):
-                    tx_by_date.setdefault(str(tx["dt_janela"])[:10], []).append(tx)
+                        mid = str(row.get("_id_medico") or "")
+                        hr = _to_int(row.get("hr_janela"), getattr(dt_ini, "hour", 0))
+                        total = _to_int(row.get("nu_prescricoes"))
+                        crms_total = _to_int(row.get("nu_crms") or row.get("nu_crms_distintos"))
+                        severidade = row.get("severidade") or "ALERTA"
+                        inicio = dt_ini.strftime("%H:%M") if hasattr(dt_ini, "strftime") else str(dt_ini)[11:16]
+                        fim = dt_fim.strftime("%H:%M") if hasattr(dt_fim, "strftime") else str(dt_fim)[11:16]
+                        desc = f"{total} autorizacoes entre {inicio} e {fim}, envolvendo {crms_total} CRMs ({severidade})"
 
-                for alerta in df_cm_period.iter_rows(named=True):
-                    dt_alerta = str(alerta["dt_alerta"])[:10]
-                    dt_ini = _as_datetime(alerta.get("dt_ini_concentracao"))
-                    dt_fim = _as_datetime(alerta.get("dt_fim_concentracao"))
-                    if dt_ini is None or dt_fim is None:
-                        continue
-
-                    por_medico: dict[str, set] = {}
-                    for tx in tx_by_date.get(dt_alerta, []):
-                        tx_dt = _as_datetime(tx.get("data_hora"))
-                        if tx_dt is None or tx_dt < dt_ini or tx_dt > dt_fim:
-                            continue
-                        mid = str(tx.get("id_medico") or "")
-                        if not mid:
-                            continue
-                        por_medico.setdefault(mid, set()).add(str(tx.get("num_autorizacao") or ""))
-
-                    hr = _to_int(alerta.get("hr_janela"), dt_ini.hour)
-                    total = _to_int(alerta.get("nu_prescricoes"))
-                    crms_total = _to_int(alerta.get("nu_crms") or alerta.get("nu_crms_distintos"))
-                    severidade = alerta.get("severidade") or "ALERTA"
-                    inicio = dt_ini.strftime("%H:%M")
-                    fim = dt_fim.strftime("%H:%M")
-                    desc = f"{total} autorizacoes entre {inicio} e {fim}, envolvendo {crms_total} CRMs ({severidade})"
-
-                    for mid, autorizacoes in por_medico.items():
                         alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
-                            "dt": dt_alerta,
+                            "dt": str(row.get("dt") or "")[:10],
                             "hr": hr,
-                            "nu_presc_crm": len(autorizacoes),
+                            "nu_presc_crm": _to_int(row.get("nu_presc_crm")),
                             "nu_presc_total": total,
                             "nu_crms_total": crms_total,
                             "multiplicador": 0,
                             "mediana_hora": 0,
                             "severidade": severidade,
-                            "criterio_pior_ritmo": alerta.get("criterio_pior_ritmo"),
+                            "criterio_pior_ritmo": row.get("criterio_pior_ritmo"),
                             "descricao": desc
                         })
 
-        except Exception:
+        except Exception as exc:
+            timing.detail("cruzamento_erro", str(exc))
+            print(f"[CRM] Erro ao processar cruzamento de surtos para {cnpj}: {exc}")
             # print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
             pass
 
@@ -585,9 +723,11 @@ def get_crm_data(
     for m in crms_interesse_list:
         m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
         m["alerta_concentracao_multiplos_crms"] = 1 if m["alertas_crm_multiplos"] else 0
+    timing.detail("medicos_com_alertas_multiplos", len(alertas_crm_multiplos_por_medico))
+    timing.mark("cruzamento raio-x x surtos multiplos")
 
 
-    return PrescritoresResponse(
+    response = PrescritoresResponse(
         cnpj=cnpj,
         summary=summary_dict,
         crms_interesse=crms_interesse_list,
@@ -598,6 +738,9 @@ def get_crm_data(
         query_time_ms=query_time_ms,
         save_time_ms=save_time_ms,
     )
+    timing.mark("montagem response")
+    timing.write()
+    return response
 
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
@@ -709,7 +852,7 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
     result = load_or_sync_crm_unico_alertas(cnpj)
     if result.error:
         _raise_cache_unavailable("Alertas de concentracao CRM unico", result.error)
-    return result.df
+    return result.df if result.df is not None else pl.DataFrame()
 
 
 def get_crm_perfil_diario(
@@ -732,7 +875,7 @@ def get_crm_perfil_diario(
     if result.error:
         _raise_cache_unavailable("Perfil diario CRM", result.error)
 
-    df = result.df
+    df = result.df if result.df is not None else pl.DataFrame()
     from_cache = result.from_cache
     read_time_ms = result.read_time_ms
     query_time_ms = result.query_time_ms
@@ -811,7 +954,7 @@ def get_crm_perfil_horario(
     if result.error:
         _raise_cache_unavailable("Perfil horario CRM", result.error)
 
-    df = result.df
+    df = result.df if result.df is not None else pl.DataFrame()
     from_cache = result.from_cache
     read_time_ms = result.read_time_ms
     query_time_ms = result.query_time_ms
@@ -837,7 +980,7 @@ def get_crm_perfil_horario(
     events_result = load_or_sync_crm_horario_eventos(cnpj)
     if events_result.error:
         _raise_cache_unavailable("Eventos horarios CRM", events_result.error)
-    df_events = events_result.df
+    df_events = events_result.df if events_result.df is not None else pl.DataFrame()
     # Filtro de período nos eventos
     if not df_events.is_empty():
         if data_inicio:
@@ -983,7 +1126,7 @@ def _load_crm_multi_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
     result = load_or_sync_crm_multi_alertas(cnpj)
     if result.error:
         _raise_cache_unavailable("Alertas de concentracao CRM multiplo", result.error)
-    return result.df
+    return result.df if result.df is not None else pl.DataFrame()
 
 
 def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "CrmRaioXResponse":

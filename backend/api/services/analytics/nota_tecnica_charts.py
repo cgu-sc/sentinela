@@ -1,80 +1,13 @@
 import io
-import os
+import html
+from collections.abc import Sequence
 from typing import Any
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches
-from PIL import Image, ImageDraw, ImageFont
 
 from .nota_tecnica_docx_utils import _run
 from .nota_tecnica_formatters import _format_decimal_pt
-
-
-def _hex_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Converte cor hexadecimal para RGB."""
-    clean = hex_color.strip().lstrip("#")
-    return int(clean[0:2], 16), int(clean[2:4], 16), int(clean[4:6], 16)
-
-
-def _load_chart_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Carrega fonte do sistema para graficos da Nota Tecnica."""
-    candidates = [
-        r"C:\Windows\Fonts\seguisb.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf",
-        r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size=size)
-    return ImageFont.load_default()
-
-
-def _text_size(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-) -> tuple[int, int]:
-    """Mede texto em pixels com compatibilidade entre versoes do Pillow."""
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
-
-
-def _draw_dashed_line(
-    draw: ImageDraw.ImageDraw,
-    start: tuple[int, int],
-    end: tuple[int, int],
-    *,
-    fill: tuple[int, int, int, int],
-    width: int = 2,
-    dash: int = 12,
-    gap: int = 10,
-):
-    """Desenha linha horizontal tracejada."""
-    x1, y1 = start
-    x2, y2 = end
-    x = x1
-    while x < x2:
-        draw.line((x, y1, min(x + dash, x2), y2), fill=fill, width=width)
-        x += dash + gap
-
-
-def _draw_rotated_text(
-    image: Image.Image,
-    text: str,
-    center: tuple[int, int],
-    *,
-    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-    fill: tuple[int, int, int],
-    angle: int = -38,
-):
-    """Desenha texto rotacionado com ancoragem central."""
-    temp = Image.new("RGBA", (360, 90), (255, 255, 255, 0))
-    temp_draw = ImageDraw.Draw(temp)
-    text_w, text_h = _text_size(temp_draw, text, font)
-    temp_draw.text(((temp.width - text_w) // 2, (temp.height - text_h) // 2), text, fill=(*fill, 255), font=font)
-    rotated = temp.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
-    x = center[0] - rotated.width // 2
-    y = center[1] - rotated.height // 2
-    image.alpha_composite(rotated, (x, y))
 
 
 def _axis_currency_label(value: float) -> str:
@@ -103,152 +36,123 @@ def _nice_axis_max(value: float) -> float:
     return nice * magnitude
 
 
-def _draw_gradient_rect(
-    image: Image.Image,
-    box: tuple[int, int, int, int],
-    *,
-    top_color: str,
-    bottom_color: str,
-    radius: int = 0,
-    top_only: bool = False,
-):
-    """Desenha retangulo vertical com gradiente e cantos opcionais."""
-    x1, y1, x2, y2 = box
-    width = max(1, x2 - x1)
-    height = max(1, y2 - y1)
-    top = _hex_rgb(top_color)
-    bottom = _hex_rgb(bottom_color)
+def _svg_escape(value: Any) -> str:
+    """Escapa texto para uso seguro em SVG."""
+    escaped = html.escape(str(value or ""), quote=True)
+    return escaped.encode("ascii", "xmlcharrefreplace").decode("ascii")
 
-    gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    grad_draw = ImageDraw.Draw(gradient)
-    for y in range(height):
-        ratio = y / max(height - 1, 1)
-        color = tuple(int(top[i] * (1 - ratio) + bottom[i] * ratio) for i in range(3))
-        grad_draw.line((0, y, width, y), fill=(*color, 255))
 
-    mask = Image.new("L", (width, height), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    if radius > 0:
-        mask_draw.rounded_rectangle((0, 0, width, height), radius=radius, fill=255)
-        if top_only:
-            mask_draw.rectangle((0, min(radius, height), width, height), fill=255)
+def _svg_to_png_stream(svg: str) -> io.BytesIO:
+    """Converte SVG para PNG mantendo a insercao no DOCX compativel."""
+    svg_bytes = svg.encode("utf-8")
+    png_result: Any
+    try:
+        import resvg_py
+
+        png_result = resvg_py.svg_to_bytes(svg_string=svg, background="white")
+    except Exception:
+        try:
+            import cairosvg
+
+            png_result = cairosvg.svg2png(bytestring=svg_bytes)
+        except Exception:
+            try:
+                from reportlab.graphics import renderPM  # type: ignore[reportMissingTypeStubs]
+                from svglib.svglib import svg2rlg  # type: ignore[reportMissingTypeStubs]
+
+                drawing = svg2rlg(io.BytesIO(svg_bytes))  # type: ignore[reportArgumentType]
+                if drawing is None:
+                    raise RuntimeError("svglib returned no drawing")
+                png_result = renderPM.drawToString(drawing, fmt="PNG")
+            except Exception as svglib_error:
+                raise RuntimeError(
+                    "SVG to PNG conversion failed with resvg_py, cairosvg and svglib"
+                ) from svglib_error
+    if png_result is None:
+        raise RuntimeError("SVG to PNG conversion returned no PNG bytes")
+    if isinstance(png_result, str):
+        png_bytes = png_result.encode("utf-8")
+    elif isinstance(png_result, bytes):
+        png_bytes = png_result
+    elif isinstance(png_result, bytearray):
+        png_bytes = bytes(png_result)
     else:
-        mask_draw.rectangle((0, 0, width, height), fill=255)
-    gradient.putalpha(mask)
-    image.alpha_composite(gradient, (x1, y1))
-
-
-def _build_evolucao_financeira_chart_pillow(evolucao_comp: dict[str, Any]) -> io.BytesIO:
-    """Gera grafico PNG de evolucao financeira no estilo visual do ECharts."""
-    rows = evolucao_comp["rows"]
-    width, height = 1800, 900
-    left, right, top, bottom = 165, 75, 120, 210
-    plot_w = width - left - right
-    plot_h = height - top - bottom
-    plot_bottom = top + plot_h
-
-    img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
-    draw = ImageDraw.Draw(img)
-
-    font_title = _load_chart_font(34, bold=True)
-    font_axis = _load_chart_font(24)
-    font_axis_bold = _load_chart_font(20, bold=True)
-    font_small = _load_chart_font(20)
-    text_color = _hex_rgb("0F172A")
-    muted = _hex_rgb("64748B")
-    grid = (15, 23, 42, 24)
-    regular_top = "34D399"
-    regular_bottom = "10B981"
-    irregular_top = "F43F5E"
-    irregular_bottom = "E11D48"
-
-    title = "Evolução semestral das transferências e vendas sem comprovação"
-    title_w, _ = _text_size(draw, title, font_title)
-    draw.text(((width - title_w) // 2, 34), title, fill=text_color, font=font_title)
-
-    legend_y = 83
-    legend_items = [
-        ("Vendas regulares", regular_top, regular_bottom),
-        ("Vendas sem comprovação", irregular_top, irregular_bottom),
-    ]
-    legend_total_w = 0
-    for label, _, _ in legend_items:
-        label_w, _ = _text_size(draw, label, font_small)
-        legend_total_w += 34 + 10 + label_w + 36
-    legend_x = (width - legend_total_w) // 2
-    for label, top_c, bottom_c in legend_items:
-        _draw_gradient_rect(img, (legend_x, legend_y + 4, legend_x + 34, legend_y + 22), top_color=top_c, bottom_color=bottom_c, radius=7)
-        draw.text((legend_x + 44, legend_y), label, fill=muted, font=font_small)
-        label_w, _ = _text_size(draw, label, font_small)
-        legend_x += 34 + 10 + label_w + 36
-
-    max_total = max(float(row["total"]) for row in rows)
-    axis_max = _nice_axis_max(max_total * 1.10)
-    tick_count = 5
-    for idx in range(tick_count + 1):
-        value = axis_max * idx / tick_count
-        y = int(plot_bottom - (value / axis_max) * plot_h)
-        _draw_dashed_line(draw, (left, y), (width - right, y), fill=grid, width=2)
-        label = _axis_currency_label(value)
-        label_w, label_h = _text_size(draw, label, font_axis)
-        draw.text((left - label_w - 18, y - label_h // 2), label, fill=muted, font=font_axis)
-
-    n = len(rows)
-    slot = plot_w / max(n, 1)
-    bar_w = int(min(58, max(22, slot * 0.58)))
-    radius = max(8, min(18, bar_w // 3))
-
-    for idx, row in enumerate(rows):
-        center_x = int(left + slot * idx + slot / 2)
-        x1 = center_x - bar_w // 2
-        x2 = center_x + bar_w // 2
-        regular = max(float(row["regular"]), 0.0)
-        irregular = max(float(row["irregular"]), 0.0)
-        total = max(float(row["total"]), 0.0)
-        if total <= 0:
-            continue
-
-        total_h = max(2, int((total / axis_max) * plot_h))
-        regular_h = int((regular / axis_max) * plot_h)
-        irregular_h = max(0, total_h - regular_h)
-        y_total = plot_bottom - total_h
-        y_regular = plot_bottom - regular_h
-
-        if regular_h > 0:
-            regular_radius = radius if irregular_h == 0 else 0
-            _draw_gradient_rect(
-                img,
-                (x1, y_regular, x2, plot_bottom),
-                top_color=regular_top,
-                bottom_color=regular_bottom,
-                radius=regular_radius,
-                top_only=irregular_h == 0,
-            )
-        if irregular_h > 0:
-            _draw_gradient_rect(
-                img,
-                (x1, y_total, x2, y_regular),
-                top_color=irregular_top,
-                bottom_color=irregular_bottom,
-                radius=radius,
-                top_only=True,
-            )
-
-        label = row.get("semestre_fmt") or row["semestre"]
-        _draw_rotated_text(
-            img,
-            label,
-            (center_x + 9, plot_bottom + 54),
-            font=font_axis_bold,
-            fill=muted,
-            angle=-38,
-        )
-
-    img = img.convert("RGB")
-    stream = io.BytesIO()
-    img.save(stream, format="PNG")
+        raise RuntimeError(f"SVG to PNG conversion returned unsupported type: {type(png_result)!r}")
+    if not png_bytes:
+        raise RuntimeError("SVG to PNG conversion returned empty PNG bytes")
+    stream = io.BytesIO(png_bytes)
     stream.seek(0)
     return stream
+
+
+def _svg_currency_axis_label(value: float) -> str:
+    return _svg_escape(_axis_currency_label(value))
+
+
+def _svg_point_path(points: list[tuple[float, float]]) -> str:
+    if not points:
+        return ""
+    first_x, first_y = points[0]
+    commands = [f"M {first_x:.2f} {first_y:.2f}"]
+    commands.extend(f"L {x:.2f} {y:.2f}" for x, y in points[1:])
+    return " ".join(commands)
+
+
+def _svg_smooth_path(points: list[tuple[float, float]]) -> str:
+    if not points:
+        return ""
+    if len(points) == 1:
+        x, y = points[0]
+        return f"M {x:.2f} {y:.2f}"
+
+    commands = [f"M {points[0][0]:.2f} {points[0][1]:.2f}"]
+    for idx in range(1, len(points)):
+        x0, y0 = points[idx - 1]
+        x1, y1 = points[idx]
+        dx = (x1 - x0) * 0.5
+        commands.append(
+            f"C {x0 + dx:.2f} {y0:.2f}, {x1 - dx:.2f} {y1:.2f}, {x1:.2f} {y1:.2f}"
+        )
+    return " ".join(commands)
+
+
+def _percentile_curve_anchors(x_values: list[int], y_values: list[float]) -> list[tuple[float, float]]:
+    paired = sorted((float(x), y) for x, y in zip(x_values, y_values))
+    if not paired:
+        return [(1.0, 0.0), (100.0, 0.0)]
+
+    unique: list[tuple[float, float]] = []
+    seen: set[float] = set()
+    for x, y in paired:
+        if x in seen:
+            continue
+        seen.add(x)
+        unique.append((x, y))
+
+    cumulative: list[tuple[float, float]] = []
+    current_y = 0.0
+    for x, y in unique:
+        current_y = max(current_y, y)
+        cumulative.append((x, current_y))
+
+    anchors: list[tuple[float, float]] = [(cumulative[0][0], cumulative[0][1])]
+    start = 0
+    tolerance = 1e-9
+    for idx in range(1, len(cumulative) + 1):
+        if idx == len(cumulative) or abs(cumulative[idx][1] - cumulative[start][1]) > tolerance:
+            end = idx - 1
+            center_x = (cumulative[start][0] + cumulative[end][0]) / 2
+            anchors.append((center_x, cumulative[start][1]))
+            start = idx
+    anchors.append((cumulative[-1][0], cumulative[-1][1]))
+
+    deduped: list[tuple[float, float]] = []
+    for x, y in sorted(anchors):
+        if deduped and abs(deduped[-1][0] - x) <= tolerance:
+            deduped[-1] = (x, max(deduped[-1][1], y))
+        else:
+            deduped.append((x, y))
+    return deduped if len(deduped) >= 2 else cumulative
 
 
 def _add_gradient_bar_segment(
@@ -429,10 +333,10 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
     return stream
 
 
-def _monotone_smooth_curve(x_values: list[int], y_values: list[float], *, np):
+def _monotone_smooth_curve(x_values: list[int], y_values: list[float], *, np) -> tuple[list[float], list[float]]:
     """Gera pontos intermediarios para uma curva visual suave e monotona."""
     if len(x_values) < 3 or len(x_values) != len(y_values):
-        return x_values, y_values
+        return [float(value) for value in x_values], list(y_values)
 
     x = np.asarray(x_values, dtype=float)
     y = np.asarray(y_values, dtype=float)
@@ -495,7 +399,7 @@ def _monotone_smooth_curve(x_values: list[int], y_values: list[float], *, np):
     return x_smooth.tolist(), y_smooth.tolist()
 
 
-def _add_gradient_area(ax, x_values: list[float], y_values: list[float], *, np, color_hex: str, y_max: float):
+def _add_gradient_area(ax, x_values: Sequence[float], y_values: Sequence[float], *, np, color_hex: str, y_max: float):
     """Preenche a area sob a curva com degrade vertical recortado pelo poligono."""
     from matplotlib.colors import to_rgba
     from matplotlib.path import Path
@@ -757,6 +661,276 @@ def _build_posicionamento_regional_chart(posicionamento_comp: dict[str, Any]) ->
     return stream
 
 
+def _build_evolucao_financeira_chart_svg(evolucao_comp: dict[str, Any]) -> str:
+    """Gera SVG da evolucao financeira para conversao posterior em PNG."""
+    rows = evolucao_comp["rows"]
+    width, height = 1326, 650
+    left, right, top, bottom = 120, 56, 110, 120
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    plot_bottom = top + plot_h
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid = "#CBD5E1"
+
+    max_total = max(float(row.get("total") or 0.0) for row in rows) if rows else 1.0
+    axis_max = _nice_axis_max(max_total * 1.10)
+    tick_count = 5
+    n = max(len(rows), 1)
+    slot = plot_w / n
+    bar_w = min(88, max(24, slot * 0.82))
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<defs>",
+        '<linearGradient id="regularBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B8F5DC"/><stop offset="100%" stop-color="#34D399"/></linearGradient>',
+        '<linearGradient id="irregularBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FDA4AF"/><stop offset="100%" stop-color="#F0526B"/></linearGradient>',
+        "</defs>",
+        '<rect width="100%" height="100%" fill="#FFFFFF"/>',
+        f'<text x="{width / 2:.0f}" y="42" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="{text_color}">Evolu&#231;&#227;o semestral das transfer&#234;ncias e vendas sem comprova&#231;&#227;o</text>',
+        f'<rect x="{width / 2 - 215:.0f}" y="68" width="24" height="12" fill="url(#regularBar)"/>',
+        f'<text x="{width / 2 - 181:.0f}" y="79" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">Vendas regulares</text>',
+        f'<rect x="{width / 2 + 20:.0f}" y="68" width="24" height="12" fill="url(#irregularBar)"/>',
+        f'<text x="{width / 2 + 54:.0f}" y="79" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">Vendas sem comprova&#231;&#227;o</text>',
+        f'<text x="31" y="{top + plot_h / 2:.0f}" transform="rotate(-90 31 {top + plot_h / 2:.0f})" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{muted}">Valor movimentado</text>',
+    ]
+
+    for idx in range(tick_count + 1):
+        value = axis_max * idx / tick_count
+        y = plot_bottom - (value / axis_max) * plot_h
+        parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{width - right}" y2="{y:.2f}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.75"/>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5:.2f}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">{_svg_currency_axis_label(value)}</text>')
+
+    for idx, row in enumerate(rows):
+        center_x = left + slot * idx + slot / 2
+        x = center_x - bar_w / 2
+        regular = max(float(row.get("regular") or 0.0), 0.0)
+        irregular = max(float(row.get("irregular") or 0.0), 0.0)
+        total = max(float(row.get("total") or (regular + irregular)), 0.0)
+        if total > 0:
+            total_h = max(2.0, (total / axis_max) * plot_h)
+            regular_h = (regular / axis_max) * plot_h
+            irregular_h = max(0.0, total_h - regular_h)
+            if regular_h > 0:
+                y_regular = plot_bottom - regular_h
+                parts.append(f'<rect x="{x:.2f}" y="{y_regular:.2f}" width="{bar_w:.2f}" height="{regular_h:.2f}" fill="url(#regularBar)"/>')
+            if irregular_h > 0:
+                y_total = plot_bottom - total_h
+                parts.append(f'<rect x="{x:.2f}" y="{y_total:.2f}" width="{bar_w:.2f}" height="{irregular_h:.2f}" fill="url(#irregularBar)"/>')
+
+        label = _svg_escape(row.get("semestre_fmt") or row.get("semestre") or "")
+        label = label.replace("&#186;", "&#176;").replace("&#170;", "&#176;")
+        parts.append(f'<text x="{center_x + 8:.2f}" y="{plot_bottom + 42}" transform="rotate(-38 {center_x + 8:.2f} {plot_bottom + 42})" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="{muted}">{label}</text>')
+
+    parts.append(f'<line x1="{left}" y1="{plot_bottom}" x2="{width - right}" y2="{plot_bottom}" stroke="#E2E8F0" stroke-width="1"/>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
+    """Gera SVG do grafico de percentil para conversao posterior em PNG."""
+    percentiles = percentil_comp.get("percentiles") or []
+    x_values = [int(point.get("percentile") or 0) for point in percentiles]
+    y_values = [float(point.get("score") or 0.0) for point in percentiles]
+    current_value = float(percentil_comp.get("current_value") or 0.0)
+    percentile_rank = int(percentil_comp.get("percentile_rank") or 100)
+    metric_label = _svg_escape(percentil_comp.get("metric_label") or "% de vendas sem comprovacao")
+
+    width, height = 1326, 650
+    left, right, top, bottom = 96, 56, 106, 90
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    plot_bottom = top + plot_h
+    line_color = "#E11D48"
+    area_color = "#F43F5E"
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid = "#CBD5E1"
+    max_y = max([current_value, *y_values, 1.0])
+    upper = min(100.0, max_y * 1.16 if max_y < 90 else 100.0)
+
+    def sx(value: float) -> float:
+        return left + ((value - 1.0) / 99.0) * plot_w
+
+    def sy(value: float) -> float:
+        return plot_bottom - (max(0.0, min(value, upper)) / upper) * plot_h
+
+    anchors = _percentile_curve_anchors(x_values, y_values)
+    curve = [(sx(x), sy(y)) for x, y in anchors]
+    curve_path = _svg_smooth_path(curve)
+    area_path = f"{curve_path} L {curve[-1][0]:.2f} {plot_bottom:.2f} L {curve[0][0]:.2f} {plot_bottom:.2f} Z" if curve else ""
+    marker_x = sx(float(percentile_rank))
+    marker_y = sy(current_value)
+    badge_x = min(marker_x + 28, width - right - 245)
+    badge_y = max(marker_y - 62, top + 12)
+    current_txt = _svg_escape(f"{_format_decimal_pt(current_value, 1)}%")
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<defs>",
+        '<linearGradient id="percentilArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F43F5E" stop-opacity="0.24"/><stop offset="100%" stop-color="#F43F5E" stop-opacity="0.03"/></linearGradient>',
+        "</defs>",
+        '<rect width="100%" height="100%" fill="#FFFFFF"/>',
+        f'<text x="{width / 2:.0f}" y="42" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="{text_color}">Distribui&#231;&#227;o percent&#237;lica regional do percentual de vendas sem comprova&#231;&#227;o</text>',
+    ]
+    for idx in range(6):
+        value = upper * idx / 5
+        y = sy(value)
+        parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{width - right}" y2="{y:.2f}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.75"/>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5:.2f}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">{_svg_escape(_format_decimal_pt(value, 0))}%</text>')
+
+    if area_path:
+        parts.append(f'<path d="{area_path}" fill="url(#percentilArea)"/>')
+    if curve_path:
+        parts.append(f'<path d="{curve_path}" fill="none" stroke="{line_color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>')
+
+    parts.extend([
+        f'<line x1="{marker_x:.2f}" y1="{top}" x2="{marker_x:.2f}" y2="{plot_bottom}" stroke="{line_color}" stroke-width="2" stroke-dasharray="6 6" opacity="0.7"/>',
+        f'<line x1="{left}" y1="{marker_y:.2f}" x2="{width - right}" y2="{marker_y:.2f}" stroke="{line_color}" stroke-width="2" stroke-dasharray="6 6" opacity="0.36"/>',
+        f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="12" fill="#FFFFFF" stroke="{line_color}" stroke-width="4"/>',
+        f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="5" fill="{line_color}"/>',
+        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x:.2f}" y2="{badge_y + 42:.2f}" stroke="{line_color}" stroke-width="2" opacity="0.8"/>',
+        f'<rect x="{badge_x:.2f}" y="{badge_y:.2f}" width="230" height="64" rx="9" fill="#FFFFFF" stroke="{line_color}" stroke-width="2"/>',
+        f'<text x="{badge_x + 14:.2f}" y="{badge_y + 25:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{line_color}">Estabelecimento</text>',
+        f'<text x="{badge_x + 14:.2f}" y="{badge_y + 49:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{line_color}">Percentil {percentile_rank} - {current_txt}</text>',
+    ])
+    for tick in [1, 20, 40, 60, 80, 100]:
+        x = sx(float(tick))
+        parts.append(f'<text x="{x:.2f}" y="{plot_bottom + 34}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">{tick}%</text>')
+    parts.extend([
+        f'<line x1="{left}" y1="{plot_bottom}" x2="{width - right}" y2="{plot_bottom}" stroke="#E2E8F0" stroke-width="1"/>',
+        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{plot_bottom}" stroke="#E2E8F0" stroke-width="1"/>',
+        f'<text x="{width / 2:.0f}" y="{height - 18}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{muted}">Percentil dos estabelecimentos da Regi&#227;o de Sa&#250;de</text>',
+        f'<text x="24" y="{top + plot_h / 2:.0f}" transform="rotate(-90 24 {top + plot_h / 2:.0f})" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{muted}">{metric_label}</text>',
+        "</svg>",
+    ])
+    return "".join(parts)
+
+
+def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]) -> str:
+    """Gera SVG do posicionamento regional para conversao posterior em PNG."""
+    rows = posicionamento_comp.get("rows") or []
+    current = posicionamento_comp.get("current") or {}
+    others = [row for row in rows if not row.get("is_current")]
+    all_x = [float(row.get("total_mov") or 0.0) for row in rows]
+    all_y = [float(row.get("pct_sem_comprovacao") or 0.0) for row in rows]
+    current_x = float(current.get("total_mov") or 0.0)
+    current_y = float(current.get("pct_sem_comprovacao") or 0.0)
+    sorted_y = sorted(all_y)
+    mid = len(sorted_y) // 2
+    median_y = ((sorted_y[mid - 1] + sorted_y[mid]) / 2) if sorted_y and len(sorted_y) % 2 == 0 else (sorted_y[mid] if sorted_y else 0.0)
+    x_max = _nice_axis_max(max([*all_x, 1.0]) * 1.12)
+    max_y = max([*all_y, 1.0])
+    y_max = min(100.0, max_y * 1.16 if max_y < 90 else 100.0)
+    y_max = max(y_max, 10.0)
+
+    width, height = 1326, 650
+    left, right, top, bottom = 112, 56, 106, 90
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    plot_bottom = top + plot_h
+    text_color = "#0F172A"
+    muted = "#64748B"
+    grid = "#CBD5E1"
+    other_color = "#94A3B8"
+    current_color = "#F05A6E"
+
+    def sx(value: float) -> float:
+        return left + (max(0.0, min(value, x_max)) / x_max) * plot_w
+
+    def sy(value: float) -> float:
+        return plot_bottom - (max(0.0, min(value, y_max)) / y_max) * plot_h
+
+    marker_x = sx(current_x)
+    marker_y = sy(current_y)
+    label_left = marker_x > left + plot_w * 0.72
+    label_top = marker_y < top + plot_h * 0.24
+    badge_w, badge_h = 250, 64
+    badge_x = marker_x - badge_w - 28 if label_left else marker_x + 28
+    badge_y = marker_y + 22 if label_top else marker_y - badge_h - 22
+    badge_x = max(left + 8, min(badge_x, width - right - badge_w))
+    badge_y = max(top + 8, min(badge_y, plot_bottom - badge_h - 8))
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#FFFFFF"/>',
+        f'<text x="{width / 2:.0f}" y="42" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="{text_color}">Posicionamento regional por volume e percentual sem comprova&#231;&#227;o</text>',
+    ]
+    for idx in range(6):
+        value = y_max * idx / 5
+        y = sy(value)
+        parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{width - right}" y2="{y:.2f}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.65"/>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5:.2f}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">{_svg_escape(_format_decimal_pt(value, 0))}%</text>')
+    for idx in range(6):
+        value = x_max * idx / 5
+        x = sx(value)
+        parts.append(f'<line x1="{x:.2f}" y1="{top}" x2="{x:.2f}" y2="{plot_bottom}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.45"/>')
+        parts.append(f'<text x="{x:.2f}" y="{plot_bottom + 34}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">{_svg_currency_axis_label(value)}</text>')
+
+    median_screen_y = sy(median_y)
+    parts.extend([
+        f'<line x1="{left}" y1="{median_screen_y:.2f}" x2="{width - right}" y2="{median_screen_y:.2f}" stroke="#F59E0B" stroke-width="2" stroke-dasharray="6 6" opacity="0.72"/>',
+        f'<text x="{width - right - 8}" y="{median_screen_y - 8:.2f}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#B45309">Mediana regional: {_svg_escape(_format_decimal_pt(median_y, 2))}%</text>',
+    ])
+    for row in others:
+        x = sx(float(row.get("total_mov") or 0.0))
+        y = sy(float(row.get("pct_sem_comprovacao") or 0.0))
+        parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="{other_color}" opacity="0.58" stroke="#FFFFFF" stroke-width="1.4"/>')
+
+    current_label = f"{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}%"
+    parts.extend([
+        f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="19" fill="none" stroke="{current_color}" stroke-width="2" opacity="0.28"/>',
+        f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="13" fill="{current_color}" opacity="0.96" stroke="#FFFFFF" stroke-width="3"/>',
+        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x + (0 if label_left else badge_w):.2f}" y2="{badge_y + badge_h / 2:.2f}" stroke="{current_color}" stroke-width="2" opacity="0.85"/>',
+        f'<rect x="{badge_x:.2f}" y="{badge_y:.2f}" width="{badge_w}" height="{badge_h}" rx="9" fill="#FFFFFF" stroke="{current_color}" stroke-width="2"/>',
+        f'<text x="{badge_x + 14:.2f}" y="{badge_y + 25:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{current_color}">Estabelecimento</text>',
+        f'<text x="{badge_x + 14:.2f}" y="{badge_y + 49:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{current_color}">{_svg_escape(current_label)}</text>',
+        f'<circle cx="{width / 2 - 170}" cy="73" r="7" fill="{other_color}" opacity="0.58" stroke="#FFFFFF" stroke-width="1.4"/>',
+        f'<text x="{width / 2 - 154}" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">Outras farm&#225;cias</text>',
+        f'<circle cx="{width / 2 + 42}" cy="73" r="9" fill="{current_color}" stroke="#FFFFFF" stroke-width="2"/>',
+        f'<text x="{width / 2 + 60}" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="{muted}">Estabelecimento analisado</text>',
+        f'<line x1="{left}" y1="{plot_bottom}" x2="{width - right}" y2="{plot_bottom}" stroke="#E2E8F0" stroke-width="1"/>',
+        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{plot_bottom}" stroke="#E2E8F0" stroke-width="1"/>',
+        f'<text x="{width / 2:.0f}" y="{height - 18}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{muted}">Valor total movimentado</text>',
+        f'<text x="24" y="{top + plot_h / 2:.0f}" transform="rotate(-90 24 {top + plot_h / 2:.0f})" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{muted}">{_svg_escape(posicionamento_comp.get("metric_label") or "% de dispensacoes sem comprovacao")}</text>',
+        "</svg>",
+    ])
+    return "".join(parts)
+
+
+def _build_evolucao_financeira_chart_svg_png(evolucao_comp: dict[str, Any]) -> io.BytesIO:
+    return _svg_to_png_stream(_build_evolucao_financeira_chart_svg(evolucao_comp))
+
+
+def _build_percentil_risco_chart_svg_png(percentil_comp: dict[str, Any]) -> io.BytesIO:
+    return _svg_to_png_stream(_build_percentil_risco_chart_svg(percentil_comp))
+
+
+def _build_posicionamento_regional_chart_svg_png(posicionamento_comp: dict[str, Any]) -> io.BytesIO:
+    return _svg_to_png_stream(_build_posicionamento_regional_chart_svg(posicionamento_comp))
+
+
+def _build_evolucao_financeira_chart_prefer_svg(evolucao_comp: dict[str, Any]) -> io.BytesIO:
+    try:
+        return _build_evolucao_financeira_chart_svg_png(evolucao_comp)
+    except Exception:
+        return _build_evolucao_financeira_chart(evolucao_comp)
+
+
+def _build_percentil_risco_chart_prefer_svg(percentil_comp: dict[str, Any]) -> io.BytesIO:
+    try:
+        return _build_percentil_risco_chart_svg_png(percentil_comp)
+    except Exception:
+        return _build_percentil_risco_chart(percentil_comp)
+
+
+def _build_posicionamento_regional_chart_prefer_svg(posicionamento_comp: dict[str, Any]) -> io.BytesIO:
+    try:
+        return _build_posicionamento_regional_chart_svg_png(posicionamento_comp)
+    except Exception:
+        return _build_posicionamento_regional_chart(posicionamento_comp)
+
+
 def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, posicionamento_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura de posicionamento regional no documento."""
     p_title = doc.add_paragraph()
@@ -771,13 +945,22 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
         bold=True,
     )
 
-    chart_stream = _build_posicionamento_regional_chart(posicionamento_comp)
+    chart_stream = _build_posicionamento_regional_chart_prefer_svg(posicionamento_comp)
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_img.paragraph_format.keep_with_next = False
     p_img.paragraph_format.keep_together = True
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
 
     p_foot = doc.add_paragraph()
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -802,7 +985,7 @@ def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil
         bold=True,
     )
 
-    chart_stream = _build_percentil_risco_chart(percentil_comp)
+    chart_stream = _build_percentil_risco_chart_prefer_svg(percentil_comp)
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_img.paragraph_format.keep_with_next = False
@@ -834,10 +1017,11 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
         bold=True,
     )
 
-    chart_stream = _build_evolucao_financeira_chart(evolucao_comp)
+    chart_stream = _build_evolucao_financeira_chart_prefer_svg(evolucao_comp)
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_img.paragraph_format.keep_with_next = False
     p_img.paragraph_format.keep_together = True
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
+

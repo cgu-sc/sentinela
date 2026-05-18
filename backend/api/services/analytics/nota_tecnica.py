@@ -100,6 +100,22 @@ def _format_timing_ms(ms: float) -> str:
     return f"{ms / 1000:.3f}s" if ms >= 1000 else f"{ms:.1f}ms"
 
 
+def _nota_tecnica_timing_enabled() -> bool:
+    value = os.getenv("NOTA_TECNICA_TIMING_LOG")
+    if value is None:
+        env_path = _project_root() / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                text = line.strip()
+                if not text or text.startswith("#") or "=" not in text:
+                    continue
+                key, raw_value = text.split("=", 1)
+                if key.strip() == "NOTA_TECNICA_TIMING_LOG":
+                    value = raw_value.strip().strip('"').strip("'")
+                    break
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class _NotaTecnicaTiming:
     def __init__(self, cnpj: str, data_inicio: Optional[date], data_fim: Optional[date]):
         self.cnpj = cnpj
@@ -432,6 +448,7 @@ def _build_sumario(
 
 def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, data_fim: Optional[date] = None):
     """Gera a Nota Técnica Preliminar em formato .docx."""
+    timing_log_enabled = _nota_tecnica_timing_enabled()
     timing = _NotaTecnicaTiming(cnpj, data_inicio, data_fim)
 
     # 1. Coleta de dados
@@ -487,6 +504,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             cnpj,
             data_inicio.isoformat() if data_inicio else None,
             data_fim.isoformat() if data_fim else None,
+            timing_log=timing_log_enabled,
         )
     except Exception as exc:
         print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
@@ -1280,5 +1298,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.save(file_stream)
     file_stream.seek(0)
     timing.mark("serializacao DOCX")
-    timing.write()
+    if timing_log_enabled:
+        timing.write()
     return file_stream

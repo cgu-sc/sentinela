@@ -542,7 +542,11 @@ def get_crm_data(
         if comp_fim: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
         for r in _cm.iter_rows(named=True):
             nu_prescricoes = _to_int(r.get("nu_prescricoes"))
-            nu_minutos = _to_int(r.get("nu_minutos_span"))
+            nu_minutos = _to_int(r.get("nu_minutos_intervalo") or r.get("nu_minutos_span"))
+            nu_minutos_ritmo = _to_int(r.get("nu_minutos_span"))
+            taxa_hora = _to_float(r.get("taxa_hora"))
+            if taxa_hora <= 0 and nu_minutos_ritmo > 0:
+                taxa_hora = nu_prescricoes * 60.0 / nu_minutos_ritmo
             cnpj_alerts_list.append({
                 "tipo": "MULTIPLO",
                 "dt": str(r["dt_alerta"]),
@@ -550,9 +554,10 @@ def get_crm_data(
                 "nu_prescricoes": nu_prescricoes,
                 "nu_crms": _to_int(r.get("nu_crms")),
                 "nu_minutos": nu_minutos,
-                "taxa_hora": (nu_prescricoes * 60.0 / nu_minutos) if nu_minutos > 0 else 0.0,
+                "taxa_hora": taxa_hora,
                 "dt_ini_hora": str(r.get("dt_ini_concentracao") or ""),
                 "dt_fim_hora": str(r.get("dt_fim_concentracao") or ""),
+                "id_severidade": _to_int(r.get("id_severidade")),
                 "multiplicador": 0.0,
                 "mediana_hora": 0.0
             })
@@ -653,6 +658,10 @@ def get_crm_data(
                     "nu_prescricoes",
                     "nu_crms",
                     "nu_crms_distintos",
+                    "nu_minutos_intervalo",
+                    "nu_minutos_span",
+                    "taxa_hora",
+                    "id_severidade",
                     "severidade",
                     "criterio_pior_ritmo",
                 ])
@@ -685,6 +694,10 @@ def get_crm_data(
                             pl.col("nu_prescricoes").first().alias("nu_prescricoes"),
                             pl.col("nu_crms").first().alias("nu_crms"),
                             pl.col("nu_crms_distintos").first().alias("nu_crms_distintos"),
+                            pl.col("nu_minutos_intervalo").first().alias("nu_minutos_intervalo"),
+                            pl.col("nu_minutos_span").first().alias("nu_minutos_span"),
+                            pl.col("taxa_hora").first().alias("taxa_hora"),
+                            pl.col("id_severidade").first().alias("id_severidade"),
                             pl.col("severidade").first().alias("severidade"),
                             pl.col("criterio_pior_ritmo").first().alias("criterio_pior_ritmo"),
                         ])
@@ -700,6 +713,8 @@ def get_crm_data(
                         hr = _to_int(row.get("hr_janela"), getattr(dt_ini, "hour", 0))
                         total = _to_int(row.get("nu_prescricoes"))
                         crms_total = _to_int(row.get("nu_crms") or row.get("nu_crms_distintos"))
+                        nu_minutos = _to_int(row.get("nu_minutos_intervalo") or row.get("nu_minutos_span"))
+                        taxa_hora = _to_float(row.get("taxa_hora"))
                         severidade = row.get("severidade") or "ALERTA"
                         inicio = dt_ini.strftime("%H:%M") if hasattr(dt_ini, "strftime") else str(dt_ini)[11:16]
                         fim = dt_fim.strftime("%H:%M") if hasattr(dt_fim, "strftime") else str(dt_fim)[11:16]
@@ -711,6 +726,11 @@ def get_crm_data(
                             "nu_presc_crm": _to_int(row.get("nu_presc_crm")),
                             "nu_presc_total": total,
                             "nu_crms_total": crms_total,
+                            "nu_minutos": nu_minutos,
+                            "taxa_hora": taxa_hora,
+                            "dt_ini_hora": str(dt_ini),
+                            "dt_fim_hora": str(dt_fim),
+                            "id_severidade": _to_int(row.get("id_severidade")),
                             "multiplicador": 0,
                             "mediana_hora": 0,
                             "severidade": severidade,
@@ -1162,12 +1182,14 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             if not filtered_df.is_empty():
                 from data_cache import get_medicamentos_df
 
-                df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"])
+                df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"]).with_columns(
+                    pl.col("codigo_barra").cast(pl.Utf8)
+                )
+                filtered_df = filtered_df.with_columns(pl.col("codigo_barra").cast(pl.Utf8))
                 enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
                 enriched_df = enriched_df.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
                     pl.col("id_medico").cast(pl.Utf8),
-                    pl.col("codigo_barra").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8),
                 ])
                 transactions = enriched_df.to_dicts()

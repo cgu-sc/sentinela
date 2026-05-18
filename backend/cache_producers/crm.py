@@ -19,9 +19,9 @@ from cache_files import (
 )
 from cache_producers.types import CacheLoadResult
 
-_CRM_ALERTS_CACHE_VERSION = 2
+_CRM_ALERTS_CACHE_VERSION = 3
 _CRM_SEVERITY_CACHE_VERSION = 2
-_CRM_RAIOX_TX_CACHE_VERSION = 2
+_CRM_RAIOX_TX_CACHE_VERSION = 3
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 
@@ -341,7 +341,10 @@ def load_or_sync_crm_multi_alertas(cnpj: str, engine=None) -> CacheLoadResult:
                A.dt_ini_concentracao, A.dt_fim_concentracao,
                A.nu_autorizacoes_pior_ritmo AS nu_prescricoes,
                A.nu_crms_distintos AS nu_crms, A.nu_60min,
+               A.nu_minutos_span AS nu_minutos_intervalo,
                A.janela_pior_ritmo_minutos AS nu_minutos_span,
+               A.taxa_hora_pior_ritmo AS taxa_hora,
+               A.id_severidade,
                A.nu_crms_distintos,
                CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
                     WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade,
@@ -380,7 +383,10 @@ def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
     if result.error or result.df is None:
         return result
 
-    df = result.df.with_columns(pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"))
+    df = result.df.with_columns([
+        pl.col("codigo_barra").cast(pl.Utf8),
+        pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"),
+    ])
     df.write_parquet(parquet_path, compression="zstd")
     return CacheLoadResult(df, result.from_cache, result.read_time_ms, result.query_time_ms, result.save_time_ms, result.error)
 

@@ -69,10 +69,15 @@ const normalizeCnpj = (value) => String(value ?? "").replace(/\D/g, "");
 const cnpj = computed(() => normalizeCnpj(route.params.cnpj));
 
 const getTabIndexFromRoute = () => {
-  const tabParam = Array.isArray(route.query.tab)
+  const sectionParam = Array.isArray(route.query.s)
+    ? route.query.s[0]
+    : route.query.s;
+  const legacyTabParam = Array.isArray(route.query.tab)
     ? route.query.tab[0]
     : route.query.tab;
-  const tabIndex = TAB_INDEX_BY_SLUG[String(tabParam ?? "").toLowerCase()];
+  const tabIndex = TAB_INDEX_BY_SLUG[
+    String(sectionParam ?? legacyTabParam ?? "").toLowerCase()
+  ];
   return Number.isInteger(tabIndex) ? tabIndex : TAB_INDEX.EVOLUTION;
 };
 
@@ -179,17 +184,18 @@ const setActiveTab = (index, { syncUrl = true } = {}) => {
   if (!syncUrl) return;
 
   const tabSlug = TAB_SLUG_BY_INDEX[index];
-  if (!tabSlug || route.query.tab === tabSlug) return;
+  if (!tabSlug || (route.query.s === tabSlug && route.query.tab == null)) return;
 
+  const { tab: _legacyTab, ...query } = route.query;
   router.replace({
     name: route.name,
     params: route.params,
-    query: { ...route.query, tab: tabSlug },
+    query: { ...query, s: tabSlug },
   });
 };
 
 watch(
-  () => route.query.tab,
+  () => [route.query.s, route.query.tab],
   () => {
     const routeTabIndex = getTabIndexFromRoute();
     if (cnpjNav.activeTabIndex !== routeTabIndex) {

@@ -660,6 +660,9 @@ def _build_crm_evidencias_complementares_context(
                 "nu_presc_crm": _as_int(alerta.get("nu_presc_crm")),
                 "nu_presc_total": nu_presc_total,
                 "nu_crms_total": _as_int(alerta.get("nu_crms_total")),
+                "nu_minutos": _as_int(alerta.get("nu_minutos")),
+                "taxa_hora": _as_float(alerta.get("taxa_hora")),
+                "id_severidade": _as_int(alerta.get("id_severidade")),
                 "severidade": alerta.get("severidade") or "ALERTA",
                 "descricao": alerta.get("descricao"),
             })
@@ -701,7 +704,7 @@ def _build_crm_evidencias_complementares_context(
         reverse=True,
     )
     crm_unico_rows.sort(
-        key=lambda item: (item["id_severidade"], item["nu_prescricoes"], item["taxa_hora"]),
+        key=lambda item: (item["taxa_hora"], item["nu_prescricoes"], item["id_severidade"]),
         reverse=True,
     )
     crms_multiplos_rows.sort(
@@ -725,16 +728,35 @@ def _build_crm_evidencias_complementares_context(
         for row in crms_multiplos_rows:
             key = (str(row.get("dt") or ""), _as_int(row.get("hr")))
             atual = eventos_derivados.get(key)
-            if atual is None or _as_int(row.get("nu_presc_total")) > _as_int(atual.get("nu_prescricoes")):
-                eventos_derivados[key] = {
-                    "tipo": "MULTIPLO",
-                    "dt": row.get("dt"),
-                    "hr": row.get("hr"),
-                    "nu_prescricoes": _as_int(row.get("nu_presc_total")),
-                    "nu_crms": _as_int(row.get("nu_crms_total")),
-                }
+            candidato = {
+                "tipo": "MULTIPLO",
+                "dt": row.get("dt"),
+                "hr": row.get("hr"),
+                "nu_prescricoes": _as_int(row.get("nu_presc_total")),
+                "nu_crms": _as_int(row.get("nu_crms_total")),
+                "nu_minutos": _as_int(row.get("nu_minutos")),
+                "taxa_hora": _as_float(row.get("taxa_hora")),
+                "id_severidade": _as_int(row.get("id_severidade")),
+            }
+            if atual is None or (
+                _as_float(candidato.get("taxa_hora")),
+                _as_int(candidato.get("nu_prescricoes")),
+                _as_int(candidato.get("nu_crms")),
+            ) > (
+                _as_float(atual.get("taxa_hora")),
+                _as_int(atual.get("nu_prescricoes")),
+                _as_int(atual.get("nu_crms")),
+            ):
+                eventos_derivados[key] = candidato
         surtos_multiplos = list(eventos_derivados.values())
-    surtos_multiplos.sort(key=lambda item: (_as_int(item.get("nu_prescricoes")), _as_int(item.get("nu_crms"))), reverse=True)
+    surtos_multiplos.sort(
+        key=lambda item: (
+            _as_float(item.get("taxa_hora")),
+            _as_int(item.get("nu_prescricoes")),
+            _as_int(item.get("nu_crms")),
+        ),
+        reverse=True,
+    )
     qtd_surtos_multiplos = len(surtos_multiplos)
     surtos_multiplos_top = surtos_multiplos[:10]
     if surtos_multiplos_top:
@@ -778,14 +800,14 @@ def _build_crm_evidencias_complementares_context(
         "crm_unico": {
             "qtd_medicos": qtd_crm_unico,
             "qtd_alertas": len(crm_unico_rows),
-            "maior_qtd": crm_unico_rows[0]["nu_prescricoes"] if crm_unico_rows else 0,
+            "maior_qtd": max((row["nu_prescricoes"] for row in crm_unico_rows), default=0),
             "rows": crm_unico_top_rows,
         } if qtd_crm_unico > 0 else None,
         "crms_multiplos": {
             "qtd_medicos": qtd_crms_multiplos,
             "qtd_surtos": qtd_surtos_multiplos,
             "qtd_participacoes": len(crms_multiplos_rows),
-            "maior_qtd": surtos_multiplos[0].get("nu_prescricoes") if surtos_multiplos else 0,
+            "maior_qtd": max((_as_int(row.get("nu_prescricoes")) for row in surtos_multiplos), default=0),
             "eventos": surtos_multiplos_top,
         } if qtd_surtos_multiplos > 0 or qtd_crms_multiplos > 0 else None,
     }
@@ -802,6 +824,11 @@ def _add_crm_distancia_complementar_text(
     qtd_alertas = _as_int(distancia_comp.get("qtd_alertas"))
     maior_distancia = _as_float(distancia_comp.get("maior_distancia_km"))
     rows = list(distancia_comp.get("rows") or [])
+    distancias_exibidas = {
+        int(round(_as_float(row.get("distancia_km"))))
+        for row in rows
+        if _as_float(row.get("distancia_km")) > 0
+    }
     identificado_txt = "foi identificado" if qtd_medicos == 1 else "foram identificados"
     crm_txt = "CRM" if qtd_medicos == 1 else "CRMs"
     evidencia_txt = "evidência geográfica" if qtd_alertas == 1 else "evidências geográficas"
@@ -823,7 +850,10 @@ def _add_crm_distancia_complementar_text(
         size=10,
     )
     _run(p_dist, f"{qtd_alertas}", color="334155", size=10, bold=True)
-    _run(p_dist, f" {evidencia_txt}. A maior distância observada foi de ", color="0F172A", size=10)
+    if len(distancias_exibidas) == 1 and qtd_alertas > 1:
+        _run(p_dist, f" {evidencia_txt}. A distância observada nas evidências foi de ", color="0F172A", size=10)
+    else:
+        _run(p_dist, f" {evidencia_txt}. A maior distância observada foi de ", color="0F172A", size=10)
     _run(p_dist, f"{_format_decimal_pt(maior_distancia, 0)} km", color="334155", size=10, bold=True)
     _run(
         p_dist,
@@ -975,25 +1005,36 @@ def _add_crm_unico_complementar_text(
     qtd_alertas = _as_int(crm_unico_comp.get("qtd_alertas"))
     maior_qtd = _as_int(crm_unico_comp.get("maior_qtd"))
     rows = list(crm_unico_comp.get("rows") or [])
+    principal = rows[0] if rows else {}
+    principal_intervalo = None
+    if principal:
+        principal_intervalo = principal.get("nu_minutos_intervalo")
+        if principal_intervalo is None:
+            principal_intervalo = principal.get("nu_minutos")
 
-    doc.add_heading(f"{letra}) Autorizações registradas em curto intervalo para um mesmo CRM", level=3)
+    doc.add_heading(f"{letra}) Autorizações concentradas para um único CRM", level=3)
 
     p = doc.add_paragraph()
-    _run(p, f"Também foram identificados ", color="0F172A", size=10)
+    _run(p, "Foram identificados ", color="0F172A", size=10)
     _run(p, f"{qtd_alertas}", color="334155", size=10, bold=True)
     _run(
         p,
-        f" {_plural(qtd_alertas, 'episódio', 'episódios')} em que autorizações vinculadas a um mesmo CRM foram registradas em janela temporal reduzida, envolvendo ",
+        f" {_plural(qtd_alertas, 'episódio', 'episódios')} em que autorizações vinculadas a um mesmo CRM foram registradas em intervalo reduzido, envolvendo ",
         color="0F172A",
         size=10,
     )
     _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
-    _run(p, f" {_plural(qtd_medicos, 'médico', 'médicos')}. ", color="0F172A", size=10)
-    _run(p, "O maior episódio concentrou ", color="0F172A", size=10)
-    _run(p, f"{maior_qtd}", color="334155", size=10, bold=True)
     _run(
         p,
-        " autorizações, padrão que pode indicar lançamentos sequenciais incompatíveis com atendimento ordinário de balcão.",
+        f" {_plural(qtd_medicos, 'médico', 'médicos')}. Esse padrão indica concentração incomum de lançamentos no SAV e pode sugerir uso sequencial do mesmo registro profissional em operações de balcão. ",
+        color="0F172A",
+        size=10,
+    )
+    _run(p, "O episódio de maior ritmo observado concentrou ", color="0F172A", size=10)
+    _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
+    _run(
+        p,
+        f" autorizações em {_format_janela_minutos(principal_intervalo) if principal_intervalo is not None else 'intervalo reduzido'}.",
         color="0F172A",
         size=10,
     )
@@ -1003,11 +1044,11 @@ def _add_crm_unico_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, "Principais episódios de concentração temporal para um único CRM.", color="0F172A", size=9, bold=True)
+    _run(title, "Principais episódios de autorizações concentradas para um único CRM.", color="0F172A", size=9, bold=True)
 
-    headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Valor", "Intervalo", "Taxa/hora"]
+    headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.72), Inches(0.75), Inches(1.95), Inches(0.82), Inches(1.05), Inches(0.85), Inches(0.96)]
+    widths = [Inches(0.72), Inches(0.75), Inches(1.95), Inches(0.82), Inches(0.85), Inches(0.96), Inches(1.05)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1020,14 +1061,14 @@ def _add_crm_unico_complementar_text(
             crm_uf,
             str(row.get("no_medico") or "Não localizado"),
             str(_as_int(row.get("nu_prescricoes"))),
+            _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
+            f'{_format_decimal_pt(_as_float(row.get("taxa_hora")), 1)}/h',
             f'R$ {_format_decimal_pt(_as_float(row.get("valor_alerta")), 2)}'
             if row.get("valor_alerta_disponivel")
             else "N/d",
-            _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
-            f'{_format_decimal_pt(_as_float(row.get("taxa_hora")), 1)}/h',
         ]
         for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 5) else None
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 4) else None
             _write_cell(cells[idx], value, size=6.8, align=align)
 
 
@@ -1042,38 +1083,50 @@ def _add_crms_multiplos_complementar_text(
     qtd_surtos = _as_int(crms_multiplos_comp.get("qtd_surtos"))
     maior_qtd = _as_int(crms_multiplos_comp.get("maior_qtd"))
     eventos = list(crms_multiplos_comp.get("eventos") or [])
+    principal = eventos[0] if eventos else {}
 
-    doc.add_heading(f"{letra}) Autorizações registradas em curto intervalo envolvendo múltiplos CRMs", level=3)
+    doc.add_heading(f"{letra}) Autorizações concentradas envolvendo múltiplos CRMs", level=3)
 
     p = doc.add_paragraph()
     _run(p, f"No nível do estabelecimento, foram identificados ", color="0F172A", size=10)
     _run(p, f"{qtd_surtos}", color="334155", size=10, bold=True)
     _run(
         p,
-        f" {_plural(qtd_surtos, 'episódio', 'episódios')} de concentração temporal envolvendo múltiplos CRMs, com participação de ",
+        f" {_plural(qtd_surtos, 'episódio', 'episódios')} em que autorizações associadas a diferentes CRMs foram registradas em curto intervalo, com participação de ",
         color="0F172A",
         size=10,
     )
     _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
-    _run(p, f" {_plural(qtd_medicos, 'médico', 'médicos')} entre os principais prescritores analisados. ", color="0F172A", size=10)
+    _run(
+        p,
+        f" {_plural(qtd_medicos, 'médico', 'médicos')} entre os principais prescritores analisados. Esse comportamento sugere concentração operacional de lançamentos e pode indicar processamento sequencial de autorizações com alternância de registros profissionais. ",
+        color="0F172A",
+        size=10,
+    )
     if maior_qtd > 0:
-        _run(p, "O maior episódio reuniu ", color="0F172A", size=10)
-        _run(p, f"{maior_qtd}", color="334155", size=10, bold=True)
-        _run(
-            p,
-            " autorizações em uma mesma janela, sugerindo volume concentrado de lançamentos no SAV.",
-            color="0F172A",
-            size=10,
-        )
+        _run(p, "O principal episódio reuniu ", color="0F172A", size=10)
+        _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
+        _run(p, " autorizações", color="0F172A", size=10)
+        if principal:
+            _run(p, ", envolvendo ", color="0F172A", size=10)
+            _run(p, f"{_as_int(principal.get('nu_crms'))}", color="334155", size=10, bold=True)
+            _run(
+                p,
+                f" CRMs distintos em {_format_janela_minutos(principal.get('nu_minutos'))}.",
+                color="0F172A",
+                size=10,
+            )
+        else:
+            _run(p, ".", color="0F172A", size=10)
 
     if eventos:
         title = doc.add_paragraph()
         _format_crm_table_title(title)
-        _run(title, "Principais episódios de concentração temporal para múltiplos CRMs.", color="0F172A", size=9, bold=True)
+        _run(title, "Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="0F172A", size=9, bold=True)
 
-        headers = ["Data", "Hora", "CRMs", "Autorizações", "Valor", "Janela", "Taxa/hora"]
+        headers = ["Data", "Hora", "CRMs", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(0.72), Inches(0.72), Inches(0.72), Inches(0.95), Inches(1.25), Inches(1.0), Inches(1.74)]
+        widths = [Inches(0.72), Inches(0.72), Inches(0.72), Inches(0.95), Inches(1.0), Inches(1.74), Inches(1.25)]
         _crm_table_header(table, headers, widths)
         for evento in eventos:
             cells = table.add_row().cells
@@ -1082,14 +1135,14 @@ def _add_crms_multiplos_complementar_text(
                 _format_time_hour(evento.get("hr")),
                 str(_as_int(evento.get("nu_crms"))),
                 str(_as_int(evento.get("nu_prescricoes"))),
+                _format_janela_minutos(evento.get("nu_minutos")),
+                f'{_format_decimal_pt(_as_float(evento.get("taxa_hora")), 1)}/h',
                 f'R$ {_format_decimal_pt(_as_float(evento.get("valor_alerta")), 2)}'
                 if evento.get("valor_alerta_disponivel")
                 else "N/d",
-                _format_janela_minutos(evento.get("nu_minutos")),
-                f'{_format_decimal_pt(_as_float(evento.get("taxa_hora")), 1)}/h',
             ]
             for idx, value in enumerate(values):
-                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 6) else WD_ALIGN_PARAGRAPH.CENTER
+                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
                 _write_cell(cells[idx], value, size=6.8, align=align)
 
 

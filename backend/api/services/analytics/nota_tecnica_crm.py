@@ -1,5 +1,5 @@
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
 import polars as pl
@@ -138,12 +138,19 @@ def _datetime_in_alert_window(tx_dt: datetime, dt_ini: datetime, dt_fim: datetim
     if tx_dt.second != 0 or tx_dt.microsecond != 0:
         return False
 
-    # Algumas bases do Raio-X chegam truncadas no minuto, enquanto o alerta
-    # preserva segundos. Nesses casos, compara tambem no grao de minuto para
-    # nao perder a primeira autorizacao da janela.
-    tx_min = tx_dt.replace(second=0, microsecond=0)
-    ini_min = dt_ini.replace(second=0, microsecond=0)
-    fim_min = dt_fim.replace(second=0, microsecond=0)
+    def _floor_minute(value: datetime) -> datetime:
+        return value.replace(second=0, microsecond=0)
+
+    def _round_minute(value: datetime) -> datetime:
+        floored = _floor_minute(value)
+        return floored + timedelta(minutes=1) if value.second >= 30 or value.microsecond else floored
+
+    # Algumas bases publicadas do Raio-X preservam apenas o minuto. Historicamente
+    # isso apareceu tanto como truncamento quanto como arredondamento para o minuto
+    # mais proximo, enquanto os alertas preservam segundos.
+    tx_min = _floor_minute(tx_dt)
+    ini_min = min(_floor_minute(dt_ini), _round_minute(dt_ini))
+    fim_min = max(_floor_minute(dt_fim), _round_minute(dt_fim))
     return ini_min <= tx_min <= fim_min
 
 

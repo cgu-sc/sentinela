@@ -36,6 +36,14 @@ def _as_int(value: Any) -> int:
         return 0
 
 
+def _select_crm_concentracao_table_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if _as_float(row.get("taxa_hora")) > 30]
+
+
+def _crm_event_key(row: dict[str, Any]) -> tuple[str, int]:
+    return (str(row.get("dt") or "")[:10], _as_int(row.get("hr")))
+
+
 def _format_date_br(value: Any) -> str:
     if value is None:
         return "Não localizada"
@@ -78,6 +86,13 @@ def _format_time_hour(value: Any) -> str:
         return f"{int(float(value or 0)):02d}:00"
     except (TypeError, ValueError):
         return "—"
+
+
+def _format_datetime_br_minute(value: Any) -> str:
+    dt = _parse_datetime_crm(value)
+    if dt is None:
+        return "N/d"
+    return dt.strftime("%d/%m/%y %H:%M")
 
 
 def _format_janela_minutos(value: Any) -> str:
@@ -152,6 +167,25 @@ def _datetime_in_alert_window(tx_dt: datetime, dt_ini: datetime, dt_fim: datetim
     ini_min = min(_floor_minute(dt_ini), _round_minute(dt_ini))
     fim_min = max(_floor_minute(dt_fim), _round_minute(dt_fim))
     return ini_min <= tx_min <= fim_min
+
+
+def _datetime_windows_overlap(
+    a_ini_raw: Any,
+    a_fim_raw: Any,
+    b_ini_raw: Any,
+    b_fim_raw: Any,
+) -> bool:
+    a_ini = _parse_datetime_crm(a_ini_raw)
+    a_fim = _parse_datetime_crm(a_fim_raw)
+    b_ini = _parse_datetime_crm(b_ini_raw)
+    b_fim = _parse_datetime_crm(b_fim_raw)
+    if a_ini is None or a_fim is None or b_ini is None or b_fim is None:
+        return False
+    if a_fim < a_ini:
+        a_ini, a_fim = a_fim, a_ini
+    if b_fim < b_ini:
+        b_ini, b_fim = b_fim, b_ini
+    return a_ini <= b_fim and b_ini <= a_fim
 
 
 def _enrich_crm_unico_valores(cnpj: str, rows: list[dict[str, Any]]) -> None:
@@ -282,6 +316,68 @@ def _crm_table_header(table, headers: list[str], widths: list[Any]):
         cell = table.rows[0].cells[idx]
         _cell_bg(cell, "E2E8F0")
         _write_cell(cell, header, size=7.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+
+def _crm_alertas_contexto_labels(row: dict[str, Any]) -> list[str]:
+    labels: list[str] = []
+    if _as_int(row.get("flag_crm_invalido")) > 0:
+        labels.append("CRM inexistente")
+    if _as_int(row.get("flag_prescricao_antes_registro")) > 0:
+        labels.append("CRM irregular")
+    if _as_int(row.get("flag_crm_exclusivo")) > 0:
+        labels.append("CRM exclusivo")
+    if row.get("alertas_crm_unico"):
+        labels.append("Lançamentos sequenciais")
+    if row.get("alerta5_geografico") or row.get("alertas_geograficos"):
+        labels.append("Registro geográfico")
+
+    prescricoes_dia_local = _as_float(row.get("nu_prescricoes_dia"))
+    prescricoes_dia_brasil = _as_float(row.get("prescricoes_dia_total_brasil"))
+    alerta_30_local = _as_int(row.get("flag_robo")) > 0 or prescricoes_dia_local > 30
+    alerta_30_brasil = _as_int(row.get("flag_robo_oculto")) > 0 or prescricoes_dia_brasil > 30
+    if alerta_30_local and alerta_30_brasil:
+        labels.append(">30 presc./dia local/Brasil")
+    elif alerta_30_local:
+        labels.append(">30 presc./dia local")
+    elif alerta_30_brasil:
+        labels.append(">30 presc./dia Brasil")
+
+    return labels
+
+
+def _build_principais_crms_contexto_rows(crms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    crms_ordenados = sorted(
+        crms,
+        key=lambda row: (
+            _as_float(row.get("vl_total_prescricoes")),
+            _as_int(row.get("nu_prescricoes")),
+        ),
+        reverse=True,
+    )
+    top10_ids = {str(row.get("id_medico") or "") for row in crms_ordenados[:10]}
+    crms_selecionados = list(crms_ordenados[:10])
+    crms_selecionados.extend(
+        row
+        for row in crms_ordenados[10:]
+        if str(row.get("id_medico") or "") not in top10_ids
+        and _crm_alertas_contexto_labels(row)
+    )
+
+    rows: list[dict[str, Any]] = []
+    for row in crms_selecionados:
+        contexto_row = {
+            "id_medico": row.get("id_medico"),
+            "no_medico": row.get("no_medico") or "Não localizado",
+            "nu_prescricoes": _as_int(row.get("nu_prescricoes")),
+            "vl_total_prescricoes": _as_float(row.get("vl_total_prescricoes")),
+            "pct_participacao": _as_float(row.get("pct_participacao")),
+            "pct_acumulado": _as_float(row.get("pct_acumulado")),
+            "nu_prescricoes_dia": _as_float(row.get("nu_prescricoes_dia")),
+            "prescricoes_dia_total_brasil": _as_float(row.get("prescricoes_dia_total_brasil")),
+        }
+        contexto_row["alertas_contexto"] = _crm_alertas_contexto_labels(row)
+        rows.append(contexto_row)
+    return rows
 
 
 def _build_hhi_crm_context(
@@ -593,6 +689,7 @@ def _build_crm_evidencias_complementares_context(
     if not crms and not cnpj_alerts:
         return None
 
+    principais_crms_contexto = _build_principais_crms_contexto_rows(crms)
     distancia_rows: list[dict[str, Any]] = []
     distancia_medicos: set[str] = set()
     intensiva_rows: list[dict[str, Any]] = []
@@ -669,6 +766,8 @@ def _build_crm_evidencias_complementares_context(
                 "nu_crms_total": _as_int(alerta.get("nu_crms_total")),
                 "nu_minutos": _as_int(alerta.get("nu_minutos")),
                 "taxa_hora": _as_float(alerta.get("taxa_hora")),
+                "dt_ini_hora": alerta.get("dt_ini_hora"),
+                "dt_fim_hora": alerta.get("dt_fim_hora"),
                 "id_severidade": _as_int(alerta.get("id_severidade")),
                 "severidade": alerta.get("severidade") or "ALERTA",
                 "descricao": alerta.get("descricao"),
@@ -725,11 +824,33 @@ def _build_crm_evidencias_complementares_context(
     qtd_distancia = len(distancia_medicos)
     qtd_crm_unico = len(crm_unico_medicos)
     qtd_crms_multiplos = len(crms_multiplos_medicos)
+    intensiva_local_rows = [row for row in intensiva_rows if row["nu_prescricoes_dia"] > 30]
     surtos_multiplos = [
         alerta
         for alerta in cnpj_alerts
         if alerta.get("tipo") == "MULTIPLO" and _as_int(alerta.get("nu_prescricoes")) > 0
     ]
+    principal_crm_por_evento: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in crms_multiplos_rows:
+        key = (str(row.get("dt") or ""), _as_int(row.get("hr")))
+        atual = principal_crm_por_evento.get(key)
+        if atual is None or (
+            _as_int(row.get("nu_presc_crm")),
+            str(row.get("id_medico") or ""),
+        ) > (
+            _as_int(atual.get("nu_presc_crm")),
+            str(atual.get("id_medico") or ""),
+        ):
+            principal_crm_por_evento[key] = {
+                "id_medico": row.get("id_medico"),
+                "nu_presc_crm": _as_int(row.get("nu_presc_crm")),
+            }
+    for alerta in surtos_multiplos:
+        key = (str(alerta.get("dt") or "")[:10], _as_int(alerta.get("hr")))
+        principal_crm = principal_crm_por_evento.get(key)
+        if principal_crm:
+            alerta["crm_principal"] = principal_crm.get("id_medico")
+            alerta["crm_principal_autorizacoes"] = _as_int(principal_crm.get("nu_presc_crm"))
     if not surtos_multiplos and crms_multiplos_rows:
         eventos_derivados: dict[tuple[str, int], dict[str, Any]] = {}
         for row in crms_multiplos_rows:
@@ -743,6 +864,10 @@ def _build_crm_evidencias_complementares_context(
                 "nu_crms": _as_int(row.get("nu_crms_total")),
                 "nu_minutos": _as_int(row.get("nu_minutos")),
                 "taxa_hora": _as_float(row.get("taxa_hora")),
+                "dt_ini_hora": row.get("dt_ini_hora"),
+                "dt_fim_hora": row.get("dt_fim_hora"),
+                "crm_principal": row.get("id_medico"),
+                "crm_principal_autorizacoes": _as_int(row.get("nu_presc_crm")),
                 "id_severidade": _as_int(row.get("id_severidade")),
             }
             if atual is None or (
@@ -765,25 +890,66 @@ def _build_crm_evidencias_complementares_context(
         reverse=True,
     )
     qtd_surtos_multiplos = len(surtos_multiplos)
-    surtos_multiplos_top = surtos_multiplos[:10]
+    crm_unico_por_medico: dict[str, list[dict[str, Any]]] = {}
+    for row in crm_unico_rows:
+        crm_unico_por_medico.setdefault(str(row.get("id_medico") or ""), []).append(row)
+    surtos_multiplos = [
+        alerta
+        for alerta in surtos_multiplos
+        if not any(
+            _datetime_windows_overlap(
+                alerta.get("dt_ini_hora"),
+                alerta.get("dt_fim_hora"),
+                unico.get("dt_ini_hora"),
+                unico.get("dt_fim_hora"),
+            )
+            for unico in crm_unico_por_medico.get(str(alerta.get("crm_principal") or ""), [])
+        )
+    ]
+    qtd_surtos_multiplos = len(surtos_multiplos)
+    surtos_multiplos_top = _select_crm_concentracao_table_rows(surtos_multiplos)
     if surtos_multiplos_top:
         _enrich_crm_multiplo_valores(cnpj, surtos_multiplos_top)
-    crm_unico_top_rows = crm_unico_rows[:10]
+    crm_unico_top_rows = _select_crm_concentracao_table_rows(crm_unico_rows)
     if crm_unico_top_rows:
         _enrich_crm_unico_valores(cnpj, crm_unico_top_rows)
+    crm_unico_top_medicos = {
+        str(row.get("id_medico") or "")
+        for row in crm_unico_top_rows
+        if str(row.get("id_medico") or "")
+    }
+    surtos_multiplos_top_keys = {_crm_event_key(row) for row in surtos_multiplos_top}
+    crms_multiplos_top_rows = [
+        row for row in crms_multiplos_rows if _crm_event_key(row) in surtos_multiplos_top_keys
+    ]
+    crms_multiplos_top_medicos = {
+        str(row.get("id_medico") or "")
+        for row in crms_multiplos_top_rows
+        if str(row.get("id_medico") or "")
+    }
+    if not crms_multiplos_top_medicos and surtos_multiplos_top:
+        qtd_crms_multiplos_top = max((_as_int(row.get("nu_crms")) for row in surtos_multiplos_top), default=0)
+    else:
+        qtd_crms_multiplos_top = len(crms_multiplos_top_medicos)
+    qtd_principais_contexto_alertas = sum(
+        1 for row in principais_crms_contexto if row.get("alertas_contexto")
+    )
 
     total_evidencias = (
         qtd_intensiva_local
-        + qtd_intensiva_brasil
         + qtd_distancia
-        + qtd_crm_unico
-        + qtd_crms_multiplos
-        + qtd_surtos_multiplos
+        + len(crm_unico_top_medicos)
+        + qtd_crms_multiplos_top
+        + len(surtos_multiplos_top)
     )
-    if total_evidencias <= 0:
+    if total_evidencias <= 0 and qtd_principais_contexto_alertas <= 0:
         return None
 
     return {
+        "principais_crms_contexto": {
+            "rows": principais_crms_contexto,
+            "qtd_com_alerta": qtd_principais_contexto_alertas,
+        } if principais_crms_contexto else None,
         "qtd_intensiva_local": qtd_intensiva_local,
         "qtd_intensiva_brasil": qtd_intensiva_brasil,
         "qtd_distancia": qtd_distancia,
@@ -797,26 +963,26 @@ def _build_crm_evidencias_complementares_context(
             "rows": distancia_rows[:10],
         } if qtd_distancia > 0 else None,
         "intensiva": {
-            "qtd_medicos": len(intensiva_medicos),
+            "qtd_medicos": len({row["id_medico"] for row in intensiva_local_rows}),
             "qtd_local": qtd_intensiva_local,
             "qtd_brasil": qtd_intensiva_brasil,
-            "maior_media_local": max((row["nu_prescricoes_dia"] for row in intensiva_rows), default=0.0),
-            "maior_media_brasil": max((row["prescricoes_dia_total_brasil"] for row in intensiva_rows), default=0.0),
-            "rows": intensiva_rows[:10],
-        } if intensiva_medicos else None,
+            "maior_media_local": max((row["nu_prescricoes_dia"] for row in intensiva_local_rows), default=0.0),
+            "maior_media_brasil": max((row["prescricoes_dia_total_brasil"] for row in intensiva_local_rows), default=0.0),
+            "rows": intensiva_local_rows[:10],
+        } if qtd_intensiva_local > 0 else None,
         "crm_unico": {
-            "qtd_medicos": qtd_crm_unico,
-            "qtd_alertas": len(crm_unico_rows),
-            "maior_qtd": max((row["nu_prescricoes"] for row in crm_unico_rows), default=0),
+            "qtd_medicos": len(crm_unico_top_medicos),
+            "qtd_alertas": len(crm_unico_top_rows),
+            "maior_qtd": max((row["nu_prescricoes"] for row in crm_unico_top_rows), default=0),
             "rows": crm_unico_top_rows,
-        } if qtd_crm_unico > 0 else None,
+        } if crm_unico_top_rows else None,
         "crms_multiplos": {
-            "qtd_medicos": qtd_crms_multiplos,
-            "qtd_surtos": qtd_surtos_multiplos,
-            "qtd_participacoes": len(crms_multiplos_rows),
-            "maior_qtd": max((_as_int(row.get("nu_prescricoes")) for row in surtos_multiplos), default=0),
+            "qtd_medicos": qtd_crms_multiplos_top,
+            "qtd_surtos": len(surtos_multiplos_top),
+            "qtd_participacoes": len(crms_multiplos_top_rows),
+            "maior_qtd": max((_as_int(row.get("nu_prescricoes")) for row in surtos_multiplos_top), default=0),
             "eventos": surtos_multiplos_top,
-        } if qtd_surtos_multiplos > 0 or qtd_crms_multiplos > 0 else None,
+        } if surtos_multiplos_top else None,
     }
 
 
@@ -930,45 +1096,32 @@ def _add_crm_intensiva_complementar_text(
     doc.add_heading(f"{letra}) Médicos com mais de 30 prescrições por dia", level=3)
 
     p = doc.add_paragraph()
-    _run(p, f"Em relação à Farmácia {razao_social}, foram identificados ", color="0F172A", size=10)
+    _run(
+        p,
+        f"Na Farmácia {razao_social}, {_plural(qtd_medicos, 'foi identificado', 'foram identificados')} ",
+        color="0F172A",
+        size=10,
+    )
     _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
+    _run(p, f" {_plural(qtd_medicos, 'CRM com média', 'CRMs com média')} superior a ", color="0F172A", size=10)
+    _run(p, "30 prescrições por dia", color="334155", size=10, bold=True)
     _run(
         p,
-        f" {_plural(qtd_medicos, 'médico', 'médicos')} com média superior a 30 prescrições por dia em pelo menos uma das bases de comparação analisadas. Desse total, ",
+        " no próprio estabelecimento, indicando uso intensivo do mesmo registro médico nas autorizações do SAV. ",
         color="0F172A",
         size=10,
     )
-    _run(p, f"{qtd_local}", color="334155", size=10, bold=True)
-    _run(p, " no estabelecimento analisado e ", color="0F172A", size=10)
-    _run(p, f"{qtd_brasil}", color="334155", size=10, bold=True)
-    _run(
-        p,
-        " considerando a atuação no Brasil. ",
-        color="0F172A",
-        size=10,
-    )
-    if qtd_local == 0 and qtd_brasil > 0:
-        _run(
-            p,
-            "Nesse caso, a evidência não indica volume diário elevado dentro do estabelecimento analisado; indica que ao menos um CRM informado em autorizações da farmácia apresenta padrão de uso intensivo no conjunto nacional, o que contextualiza a utilização desse registro médico no SAV.",
-            color="0F172A",
-            size=10,
-        )
-    else:
-        _run(
-            p,
-            "Quando o patamar é observado no próprio estabelecimento, a evidência aponta concentração local de lançamentos associados ao mesmo CRM; quando aparece apenas na comparação nacional, aponta uso intensivo do CRM também em outros estabelecimentos.",
-            color="0F172A",
-            size=10,
-        )
-    if maior_media_local > 0 or maior_media_brasil > 0:
-        _run(p, " No estabelecimento analisado, a maior média entre esses CRMs foi de ", color="0F172A", size=10)
-        _run(p, f"{_format_decimal_pt(maior_media_local, 2)} prescrições/dia no estabelecimento", color="334155", size=10, bold=True)
-        if qtd_local == 0 and maior_media_local < 30:
-            _run(p, ", abaixo do limiar de 30 prescrições/dia; no Brasil, a maior média chegou a ", color="0F172A", size=10)
-        else:
-            _run(p, "; no Brasil, a maior média chegou a ", color="0F172A", size=10)
-        _run(p, f"{_format_decimal_pt(maior_media_brasil, 2)} prescrições/dia no Brasil", color="334155", size=10, bold=True)
+    if maior_media_local > 0:
+        _run(p, "A maior média local observada foi de ", color="0F172A", size=10)
+        _run(p, f"{_format_decimal_pt(maior_media_local, 2)} prescrições/dia", color="334155", size=10, bold=True)
+        if qtd_brasil > 0 and maior_media_brasil > 0:
+            _run(
+                p,
+                f"; considerando todas as autorizações associadas {_plural(qtd_medicos, 'a esse CRM', 'a esses CRMs')} no Brasil, a maior média chegou a ",
+                color="0F172A",
+                size=10,
+            )
+            _run(p, f"{_format_decimal_pt(maior_media_brasil, 2)} prescrições/dia", color="334155", size=10, bold=True)
         _run(p, ".", color="0F172A", size=10)
 
     if not rows:
@@ -1022,26 +1175,30 @@ def _add_crm_unico_complementar_text(
     doc.add_heading(f"{letra}) Autorizações concentradas para um único CRM", level=3)
 
     p = doc.add_paragraph()
-    _run(p, "Foram identificados ", color="0F172A", size=10)
+    _run(p, f"{_plural(qtd_alertas, 'Foi identificado', 'Foram identificados')} ", color="0F172A", size=10)
     _run(p, f"{qtd_alertas}", color="334155", size=10, bold=True)
     _run(
         p,
-        f" {_plural(qtd_alertas, 'episódio', 'episódios')} em que autorizações vinculadas a um mesmo CRM foram registradas em intervalo reduzido, envolvendo ",
+        f" {_plural(qtd_alertas, 'episódio', 'episódios')} em que autorizações vinculadas a um mesmo CRM foram registradas em curto intervalo de tempo, envolvendo ",
         color="0F172A",
         size=10,
     )
     _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
     _run(
         p,
-        f" {_plural(qtd_medicos, 'médico', 'médicos')}. Esse padrão indica concentração incomum de lançamentos no SAV e pode sugerir uso sequencial do mesmo registro profissional em operações de balcão. ",
+        f" {_plural(qtd_medicos, 'médico', 'médicos')}. Esse padrão indica concentração incomum de lançamentos no SAV e pode sugerir uso sequencial {_plural(qtd_medicos, 'desse registro profissional', 'desses registros profissionais')} em operações de balcão. ",
         color="0F172A",
         size=10,
     )
     _run(p, "O episódio de maior ritmo observado concentrou ", color="0F172A", size=10)
     _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
+    ritmo_principal = _as_float(principal.get("taxa_hora"))
     _run(
         p,
-        f" autorizações em {_format_janela_minutos(principal_intervalo) if principal_intervalo is not None else 'intervalo reduzido'}.",
+        (
+            f" autorizações em {_format_janela_minutos(principal_intervalo) if principal_intervalo is not None else 'intervalo reduzido'}, "
+            f"o que corresponde a um ritmo de {_format_decimal_pt(ritmo_principal, 1)} autorizações por hora."
+        ),
         color="0F172A",
         size=10,
     )
@@ -1053,9 +1210,9 @@ def _add_crm_unico_complementar_text(
     _format_crm_table_title(title)
     _run(title, "Principais episódios de autorizações concentradas para um único CRM.", color="0F172A", size=9, bold=True)
 
-    headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
+    headers = ["Início", "Fim", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.72), Inches(0.75), Inches(1.95), Inches(0.82), Inches(0.85), Inches(0.96), Inches(1.05)]
+    widths = [Inches(1.08), Inches(1.08), Inches(0.65), Inches(2.37), Inches(0.42), Inches(0.45), Inches(0.45), Inches(0.6)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1064,7 +1221,8 @@ def _add_crm_unico_complementar_text(
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         intervalo = row.get("nu_minutos_intervalo")
         values = [
-            _format_date_br(row.get("dt")),
+            _format_datetime_br_minute(row.get("dt_ini_hora") or row.get("dt")),
+            _format_datetime_br_minute(row.get("dt_fim_hora") or row.get("dt")),
             crm_uf,
             str(row.get("no_medico") or "Não localizado"),
             str(_as_int(row.get("nu_prescricoes"))),
@@ -1075,7 +1233,7 @@ def _add_crm_unico_complementar_text(
             else "N/d",
         ]
         for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 4) else None
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 2, 5) else None
             _write_cell(cells[idx], value, size=6.8, align=align)
 
 
@@ -1095,7 +1253,12 @@ def _add_crms_multiplos_complementar_text(
     doc.add_heading(f"{letra}) Autorizações concentradas envolvendo múltiplos CRMs", level=3)
 
     p = doc.add_paragraph()
-    _run(p, f"No nível do estabelecimento, foram identificados ", color="0F172A", size=10)
+    _run(
+        p,
+        f"No nível do estabelecimento, {_plural(qtd_surtos, 'foi identificado', 'foram identificados')} ",
+        color="0F172A",
+        size=10,
+    )
     _run(p, f"{qtd_surtos}", color="334155", size=10, bold=True)
     _run(
         p,
@@ -1131,16 +1294,24 @@ def _add_crms_multiplos_complementar_text(
         _format_crm_table_title(title)
         _run(title, "Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="0F172A", size=9, bold=True)
 
-        headers = ["Data", "Hora", "CRMs", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
+        headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(0.72), Inches(0.72), Inches(0.72), Inches(0.95), Inches(1.0), Inches(1.74), Inches(1.25)]
+        widths = [Inches(1.0), Inches(1.0), Inches(0.48), Inches(1.0), Inches(0.68), Inches(0.66), Inches(0.9), Inches(1.38)]
         _crm_table_header(table, headers, widths)
         for evento in eventos:
             cells = table.add_row().cells
+            crm_principal = str(evento.get("crm_principal") or "N/d")
+            crm_principal_aut = _as_int(evento.get("crm_principal_autorizacoes"))
+            crm_principal_txt = (
+                f"{crm_principal} ({crm_principal_aut})"
+                if crm_principal_aut > 0 and crm_principal != "N/d"
+                else crm_principal
+            )
             values = [
-                _format_date_br(evento.get("dt")),
-                _format_time_hour(evento.get("hr")),
+                _format_datetime_br_minute(evento.get("dt_ini_hora") or evento.get("dt")),
+                _format_datetime_br_minute(evento.get("dt_fim_hora") or evento.get("dt")),
                 str(_as_int(evento.get("nu_crms"))),
+                crm_principal_txt,
                 str(_as_int(evento.get("nu_prescricoes"))),
                 _format_janela_minutos(evento.get("nu_minutos")),
                 f'{_format_decimal_pt(_as_float(evento.get("taxa_hora")), 1)}/h',
@@ -1149,8 +1320,87 @@ def _add_crms_multiplos_complementar_text(
                 else "N/d",
             ]
             for idx, value in enumerate(values):
-                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
+                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
                 _write_cell(cells[idx], value, size=6.8, align=align)
+
+
+def _add_principais_crms_contexto_text(
+    doc,
+    razao_social: str,
+    principais_comp: dict[str, Any],
+):
+    """Adiciona uma tabela-resumo dos principais CRMs por valor autorizado."""
+    rows = list(principais_comp.get("rows") or [])
+    if not rows:
+        return
+
+    qtd_com_alerta = _as_int(principais_comp.get("qtd_com_alerta"))
+
+    p = doc.add_paragraph()
+    _run(
+        p,
+        f"Para contextualizar os achados, o quadro a seguir apresenta os 10 principais CRMs utilizados pela Farmácia {razao_social}, ordenados pelo valor autorizado no SAV.",
+        color="0F172A",
+        size=10,
+    )
+    if qtd_com_alerta > 0:
+        _run(
+            p,
+            " CRMs fora do top 10 também são exibidos quando possuem alertas ou anomalias relevantes para a análise; nesses casos, as linhas aparecem destacadas.",
+            color="0F172A",
+            size=10,
+        )
+
+    title = doc.add_paragraph()
+    _format_crm_table_title(title)
+    _run(title, "Principais CRMs do estabelecimento por valor autorizado.", color="0F172A", size=9, bold=True)
+
+    headers = [
+        "CRM/UF",
+        "Nome",
+        "Alertas/anomalias",
+        "Autorizações",
+        "Valor autorizado",
+        "Part.",
+        "Presc./dia",
+    ]
+    table = doc.add_table(rows=1, cols=len(headers))
+    widths = [
+        Inches(0.7),
+        Inches(1.45),
+        Inches(1.35),
+        Inches(0.68),
+        Inches(1.0),
+        Inches(0.62),
+        Inches(1.3),
+    ]
+    _crm_table_header(table, headers, widths)
+
+    for row in rows:
+        cells = table.add_row().cells
+        alertas = list(row.get("alertas_contexto") or [])
+        if alertas:
+            for cell in cells:
+                _cell_bg(cell, "FFF7ED")
+
+        crm_row, uf_row = _crm_num_uf(row.get("id_medico"))
+        crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
+        presc_dia = (
+            f'{_format_decimal_pt(_as_float(row.get("nu_prescricoes_dia")), 2)} local\n'
+            f'{_format_decimal_pt(_as_float(row.get("prescricoes_dia_total_brasil")), 2)} Brasil'
+        )
+        values = [
+            crm_uf,
+            str(row.get("no_medico") or "Não localizado"),
+            "; ".join(alertas) if alertas else "Sem alerta",
+            str(_as_int(row.get("nu_prescricoes"))),
+            f'R$ {_format_decimal_pt(_as_float(row.get("vl_total_prescricoes")), 2)}',
+            f'{_format_decimal_pt(_as_float(row.get("pct_participacao")), 2)}%',
+            presc_dia,
+        ]
+        for idx, value in enumerate(values):
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 6) else None
+            _write_cell(cells[idx], value, size=6.6, align=align)
 
 
 def _add_crm_evidencias_complementares_text(
@@ -1169,6 +1419,10 @@ def _add_crm_evidencias_complementares_text(
         color="0F172A",
         size=10,
     )
+
+    principais_crms_comp = evidencias_comp.get("principais_crms_contexto")
+    if principais_crms_comp:
+        _add_principais_crms_contexto_text(doc, razao_social, principais_crms_comp)
 
     letras = iter("abcdefghijklmnopqrstuvwxyz")
 

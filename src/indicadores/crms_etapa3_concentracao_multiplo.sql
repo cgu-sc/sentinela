@@ -884,7 +884,20 @@ BEGIN
             COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora)
                                 THEN B.num_autorizacao END)                           AS nu_60min,
 
-            COUNT(DISTINCT B.id_medico)                                            AS nu_crms_distintos,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(SECOND, 359, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_5min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 10, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_10min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 15, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_15min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 20, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_20min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 25, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_25min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 30, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_30min,
+            COUNT(DISTINCT CASE WHEN B.data_hora <= DATEADD(MINUTE, 60, A.data_hora)
+                                THEN B.id_medico END)                                AS nu_crms_60min,
 
             -- Timestamps de fim real para cada sub-janela
             MAX(CASE WHEN B.data_hora <= DATEADD(SECOND, 359, A.data_hora) THEN B.data_hora END) AS fim_real_5min,
@@ -904,16 +917,15 @@ BEGIN
             AND B.data_hora BETWEEN A.data_hora AND DATEADD(MINUTE, 60, A.data_hora)
         GROUP BY A.id_cnpj, A.data_hora
     ) Agg
-    WHERE nu_crms_distintos >= 2
-    AND (
-           nu_5min  >=  6
-        OR nu_10min >=  8
-        OR nu_15min >= 10
-        OR nu_20min >= 11
-        OR nu_25min >= 12
-        OR nu_30min >= 12
-        OR nu_60min >= 18
-        OR (nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3)
+    WHERE (
+           (nu_5min  >=  6 AND nu_crms_5min  >= 2)
+        OR (nu_10min >=  8 AND nu_crms_10min >= 2)
+        OR (nu_15min >= 10 AND nu_crms_15min >= 2)
+        OR (nu_20min >= 11 AND nu_crms_20min >= 2)
+        OR (nu_25min >= 12 AND nu_crms_25min >= 2)
+        OR (nu_30min >= 12 AND nu_crms_30min >= 2)
+        OR (nu_60min >= 18 AND nu_crms_60min >= 2)
+        OR (nu_60min >= 15 AND nu_minutos_span_full <= nu_60min * 3 AND nu_crms_60min >= 2)
     );
 
     PRINT '      3.B Self-join concentracao_raw: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
@@ -935,9 +947,9 @@ BEGIN
             Base.id_cnpj,
             CAST(Base.janela_inicio AS DATE)                                      AS dt_dia,
             CAST(Base.janela_inicio AS DATETIME)                                  AS dt_ini_concentracao,
-            CAST(Base.dt_fim_real AS DATETIME)                                    AS dt_fim_concentracao,
-            CAST(DATEDIFF(MINUTE, Base.janela_inicio, Base.dt_fim_real) AS TINYINT) AS nu_minutos_span,
-            CAST(Base.nu_crms_distintos AS TINYINT)                               AS nu_crms_distintos,
+            CAST(Ritmo.dt_fim_real AS DATETIME)                                   AS dt_fim_concentracao,
+            CAST(DATEDIFF(MINUTE, Base.janela_inicio, Ritmo.dt_fim_real) AS TINYINT) AS nu_minutos_span,
+            CAST(Ritmo.nu_crms_distintos_ritmo AS TINYINT)                        AS nu_crms_distintos,
             CAST(Base.nu_5min AS SMALLINT)                                        AS nu_5min,
             CAST(Base.nu_10min AS SMALLINT)                                       AS nu_10min,
             CAST(Base.nu_15min AS SMALLINT)                                       AS nu_15min,
@@ -945,7 +957,7 @@ BEGIN
             CAST(Base.nu_25min AS SMALLINT)                                       AS nu_25min,
             CAST(Base.nu_30min AS SMALLINT)                                       AS nu_30min,
             CAST(Base.nu_60min AS SMALLINT)                                       AS nu_60min,
-            Base.id_severidade,
+            Ritmo.id_severidade_criterio AS id_severidade,
             Ritmo.janela_pior_ritmo_minutos,
             Ritmo.nu_autorizacoes_pior_ritmo,
             Ritmo.taxa_hora_pior_ritmo,
@@ -981,22 +993,25 @@ BEGIN
         ) Base
         CROSS APPLY (
             SELECT TOP 1
+                V.dt_fim_real,
                 V.janela_pior_ritmo_minutos,
                 V.nu_autorizacoes_pior_ritmo,
+                V.nu_crms_distintos_ritmo,
+                V.id_severidade_criterio,
                 CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
                 V.criterio_pior_ritmo
             FROM (VALUES
-                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(4 AS TINYINT), CAST(1 AS TINYINT), CAST('8_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 8 THEN 1 ELSE 0 END),
-                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(4 AS TINYINT), CAST(2 AS TINYINT), CAST('11_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 11 THEN 1 ELSE 0 END),
-                (CAST(5 AS TINYINT), CAST(Base.nu_5min AS SMALLINT), CAST(3 AS TINYINT), CAST(3 AS TINYINT), CAST('6_EM_5MIN' AS VARCHAR(30)), CASE WHEN Base.nu_5min >= 6 THEN 1 ELSE 0 END),
-                (CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(3 AS TINYINT), CAST(4 AS TINYINT), CAST('8_EM_10MIN' AS VARCHAR(30)), CASE WHEN Base.nu_10min >= 8 THEN 1 ELSE 0 END),
-                (CAST(15 AS TINYINT), CAST(Base.nu_15min AS SMALLINT), CAST(2 AS TINYINT), CAST(5 AS TINYINT), CAST('10_EM_15MIN' AS VARCHAR(30)), CASE WHEN Base.nu_15min >= 10 THEN 1 ELSE 0 END),
-                (CAST(20 AS TINYINT), CAST(Base.nu_20min AS SMALLINT), CAST(2 AS TINYINT), CAST(6 AS TINYINT), CAST('11_EM_20MIN' AS VARCHAR(30)), CASE WHEN Base.nu_20min >= 11 THEN 1 ELSE 0 END),
-                (CAST(25 AS TINYINT), CAST(Base.nu_25min AS SMALLINT), CAST(1 AS TINYINT), CAST(7 AS TINYINT), CAST('12_EM_25MIN' AS VARCHAR(30)), CASE WHEN Base.nu_25min >= 12 THEN 1 ELSE 0 END),
-                (CAST(30 AS TINYINT), CAST(Base.nu_30min AS SMALLINT), CAST(1 AS TINYINT), CAST(8 AS TINYINT), CAST('12_EM_30MIN' AS VARCHAR(30)), CASE WHEN Base.nu_30min >= 12 THEN 1 ELSE 0 END),
-                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(9 AS TINYINT), CAST('18_EM_60MIN' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 18 THEN 1 ELSE 0 END),
-                (CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(1 AS TINYINT), CAST(10 AS TINYINT), CAST('TAXA_20_HORA' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 15 AND Base.nu_minutos_span_full <= Base.nu_60min * 3 THEN 1 ELSE 0 END)
-            ) V(janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
+                (Base.fim_real_5min,  CAST(5 AS TINYINT),  CAST(Base.nu_5min AS SMALLINT),  CAST(Base.nu_crms_5min AS TINYINT),  CAST(4 AS TINYINT), CAST(1 AS TINYINT),  CAST('8_EM_5MIN' AS VARCHAR(30)),    CASE WHEN Base.nu_5min >= 8  AND Base.nu_crms_5min  >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_10min, CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(Base.nu_crms_10min AS TINYINT), CAST(4 AS TINYINT), CAST(2 AS TINYINT),  CAST('11_EM_10MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_10min >= 11 AND Base.nu_crms_10min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_5min,  CAST(5 AS TINYINT),  CAST(Base.nu_5min AS SMALLINT),  CAST(Base.nu_crms_5min AS TINYINT),  CAST(3 AS TINYINT), CAST(3 AS TINYINT),  CAST('6_EM_5MIN' AS VARCHAR(30)),    CASE WHEN Base.nu_5min >= 6  AND Base.nu_crms_5min  >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_10min, CAST(10 AS TINYINT), CAST(Base.nu_10min AS SMALLINT), CAST(Base.nu_crms_10min AS TINYINT), CAST(3 AS TINYINT), CAST(4 AS TINYINT),  CAST('8_EM_10MIN' AS VARCHAR(30)),   CASE WHEN Base.nu_10min >= 8  AND Base.nu_crms_10min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_15min, CAST(15 AS TINYINT), CAST(Base.nu_15min AS SMALLINT), CAST(Base.nu_crms_15min AS TINYINT), CAST(2 AS TINYINT), CAST(5 AS TINYINT),  CAST('10_EM_15MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_15min >= 10 AND Base.nu_crms_15min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_20min, CAST(20 AS TINYINT), CAST(Base.nu_20min AS SMALLINT), CAST(Base.nu_crms_20min AS TINYINT), CAST(2 AS TINYINT), CAST(6 AS TINYINT),  CAST('11_EM_20MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_20min >= 11 AND Base.nu_crms_20min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_25min, CAST(25 AS TINYINT), CAST(Base.nu_25min AS SMALLINT), CAST(Base.nu_crms_25min AS TINYINT), CAST(1 AS TINYINT), CAST(7 AS TINYINT),  CAST('12_EM_25MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_25min >= 12 AND Base.nu_crms_25min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_30min, CAST(30 AS TINYINT), CAST(Base.nu_30min AS SMALLINT), CAST(Base.nu_crms_30min AS TINYINT), CAST(1 AS TINYINT), CAST(8 AS TINYINT),  CAST('12_EM_30MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_30min >= 12 AND Base.nu_crms_30min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_60min, CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(Base.nu_crms_60min AS TINYINT), CAST(1 AS TINYINT), CAST(9 AS TINYINT),  CAST('18_EM_60MIN' AS VARCHAR(30)),  CASE WHEN Base.nu_60min >= 18 AND Base.nu_crms_60min >= 2 THEN 1 ELSE 0 END),
+                (Base.fim_real_60min, CAST(60 AS TINYINT), CAST(Base.nu_60min AS SMALLINT), CAST(Base.nu_crms_60min AS TINYINT), CAST(1 AS TINYINT), CAST(10 AS TINYINT), CAST('TAXA_20_HORA' AS VARCHAR(30)), CASE WHEN Base.nu_60min >= 15 AND Base.nu_minutos_span_full <= Base.nu_60min * 3 AND Base.nu_crms_60min >= 2 THEN 1 ELSE 0 END)
+            ) V(dt_fim_real, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, nu_crms_distintos_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
             WHERE V.atingiu = 1
             ORDER BY
                 V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) DESC,

@@ -62,6 +62,19 @@ const chartOption = computed(() => {
   const xData = localData.value.map(d => `${d.percentile}%`);
   const yData = localData.value.map(d => d.score);
 
+  // Suaviza a curva quando a região tem poucos CNPJs (dados esparsos → escadinha).
+  // A janela cresce conforme o número de valores únicos diminui, zerando quando os dados
+  // já são densos o suficiente (ex: escopo Brasil).
+  const uniqueCount = new Set(yData).size;
+  const halfWindow  = Math.round(100 / Math.max(uniqueCount, 1) *1.8);
+  const smoothedY   = halfWindow < 2 ? yData : yData.map((_, i) => {
+    const s = Math.max(0, i - halfWindow);
+    const e = Math.min(yData.length - 1, i + halfWindow);
+    let sum = 0;
+    for (let j = s; j <= e; j++) sum += yData[j];
+    return sum / (e - s + 1);
+  });
+
   let markerXIndex = localData.value.findIndex(d => d.score >= localScore.value);
   if (markerXIndex === -1) markerXIndex = localData.value.length - 1;
 
@@ -149,7 +162,7 @@ const chartOption = computed(() => {
       {
         name:   'Curva de Risco',
         type:   'line',
-        data:   yData,
+        data:   smoothedY,
         smooth: 0.4,
         symbol: 'none',
         lineStyle: { width: 2.5, color: '#ef4444' },

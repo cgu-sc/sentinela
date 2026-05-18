@@ -8,13 +8,13 @@ from docx.shared import Inches, Pt
 from .farmacia import get_movimentacao_data
 from .nota_tecnica_docx_utils import (
     _cell_bg,
+    _append_table_row_fast,
     _repeat_table_header,
     _row_cant_split,
     _run,
     _set_cell_width,
     _set_table_fixed_widths,
     _write_cell,
-    _write_cell_fast,
 )
 from .nota_tecnica_formatters import _format_decimal_pt
 
@@ -250,7 +250,6 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         _add_table_header(table, headers, widths, size=7.6)
 
         for item in rows:
-            row = table.add_row()
             has_irregular = float(item.get("valor_irregular") or 0.0) > 0
             values = [
                 item.get("periodo_inicial") or "-",
@@ -264,12 +263,15 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
                 f'R$ {_format_decimal_pt(float(item.get("valor_irregular") or 0.0), 2)}',
                 item.get("notas") or "-",
             ]
-            for col_idx, value in enumerate(values):
-                cell = row.cells[col_idx]
-                if has_irregular:
-                    _cell_bg(cell, "FEF2F2")
-                align = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 9 else WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell_fast(cell, str(value), size=6.9 if col_idx == 9 else 7.3, color="0F172A", align=align)
+            _append_table_row_fast(
+                table,
+                values,
+                widths,
+                alignments=["center"] * 9 + ["left"],
+                sizes=[7.3] * 9 + [6.9],
+                color="0F172A",
+                fill="FEF2F2" if has_irregular else None,
+            )
 
         subtotal_row = table.add_row()
         _row_cant_split(subtotal_row)

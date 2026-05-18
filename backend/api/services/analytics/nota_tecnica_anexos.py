@@ -3,9 +3,10 @@ from typing import Any
 
 from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches, Pt
+from docx.shared import Inches
 
 from .nota_tecnica_docx_utils import (
+    _append_table_row_fast,
     _cell_bg,
     _repeat_table_header,
     _row_cant_split,
@@ -13,7 +14,6 @@ from .nota_tecnica_docx_utils import (
     _set_cell_width,
     _set_table_fixed_widths,
     _write_cell,
-    _write_cell_fast,
 )
 from .nota_tecnica_formatters import (
     _format_cpf_cnpj,
@@ -67,17 +67,6 @@ def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
             )
         )
     return grupos_lista
-
-
-def _write_person_cell(cell, nome: str, cpf: str):
-    p = cell.paragraphs[0]
-    p.text = ''
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    _run(p, nome, color='0F172A', size=8.2)
-    p.add_run('\n')
-    _run(p, _format_cpf_cnpj(cpf), color='64748B', size=7.0)
 
 
 def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_comp: dict[str, Any], timing: Any = None):
@@ -144,25 +133,27 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
 
     for grupo_idx, grupo in enumerate(grupos, start=1):
         for t in grupo["transacoes"]:
-            row = table.add_row()
+            cpf = str(getattr(t, "cpf", "") or "")
             values = [
-                None,
+                [
+                    {"text": _title_case_pt(getattr(t, "nome_falecido", None)), "color": "0F172A", "size": 8.2},
+                    {"break": True},
+                    {"text": _format_cpf_cnpj(cpf), "color": "64748B", "size": 7.0},
+                ],
                 f'{grupo["municipio"]}/{grupo["uf"]}',
                 _format_date_pt(getattr(t, "dt_obito", None)),
                 _format_date_pt(getattr(t, "data_autorizacao", None)),
                 _format_decimal_pt(float(getattr(t, "valor_total_autorizacao", 0.0) or 0.0), 2),
                 f'{int(getattr(t, "dias_apos_obito", 0) or 0)} d',
             ]
-            for idx, value in enumerate(values):
-                cell = row.cells[idx]
-                if idx == 0:
-                    cpf = str(getattr(t, "cpf", "") or "")
-                    _write_person_cell(cell, _title_case_pt(getattr(t, "nome_falecido", None)), cpf)
-                    continue
-                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in {4, 5} else WD_ALIGN_PARAGRAPH.LEFT
-                if idx in {2, 3}:
-                    align = WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell_fast(cell, value or "—", size=7.4, color='0F172A', align=align)
+            _append_table_row_fast(
+                table,
+                [value or "—" for value in values],
+                widths,
+                alignments=["left", "left", "center", "center", "right", "right"],
+                sizes=[7.4] * len(headers),
+                color="0F172A",
+            )
 
         subtotal_row = table.add_row()
         _row_cant_split(subtotal_row)

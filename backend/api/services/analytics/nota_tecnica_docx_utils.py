@@ -310,3 +310,85 @@ def _write_cell_fast(cell, text: str, *, size: float = 6.4, bold: bool = False, 
     text_el.text = text_value
     r.append(text_el)
     p._p.append(r)
+
+
+def _append_table_row_fast(table, values, widths, *, alignments=None, sizes=None, color: str = '0F172A', fill: str | None = None):
+    tr = OxmlElement('w:tr')
+    alignments = alignments or []
+    sizes = sizes or []
+
+    for idx, value in enumerate(values):
+        tc = OxmlElement('w:tc')
+        tc_pr = OxmlElement('w:tcPr')
+
+        if idx < len(widths):
+            tc_w = OxmlElement('w:tcW')
+            tc_w.set(qn('w:w'), str(int(widths[idx].twips)))
+            tc_w.set(qn('w:type'), 'dxa')
+            tc_pr.append(tc_w)
+
+        if fill:
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), fill)
+            tc_pr.append(shd)
+
+        tc.append(tc_pr)
+
+        p = OxmlElement('w:p')
+        p_pr = OxmlElement('w:pPr')
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '0')
+        spacing.set(qn('w:after'), '0')
+        p_pr.append(spacing)
+
+        align = alignments[idx] if idx < len(alignments) else None
+        if align:
+            jc = OxmlElement('w:jc')
+            jc.set(qn('w:val'), align)
+            p_pr.append(jc)
+
+        p.append(p_pr)
+
+        def append_run(text_value, *, run_color=color, run_size=None, line_break=False):
+            r = OxmlElement('w:r')
+            r_pr = OxmlElement('w:rPr')
+            color_el = OxmlElement('w:color')
+            color_el.set(qn('w:val'), run_color)
+            r_pr.append(color_el)
+            sz = OxmlElement('w:sz')
+            size = run_size if run_size is not None else (sizes[idx] if idx < len(sizes) else 6.4)
+            sz.set(qn('w:val'), str(int(round(size * 2))))
+            r_pr.append(sz)
+            r.append(r_pr)
+
+            if line_break:
+                r.append(OxmlElement('w:br'))
+            else:
+                text_el = OxmlElement('w:t')
+                text_str = str(text_value)
+                if text_str.startswith(' ') or text_str.endswith(' '):
+                    text_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+                text_el.text = text_str
+                r.append(text_el)
+            p.append(r)
+
+        if isinstance(value, list):
+            for segment in value:
+                if isinstance(segment, dict):
+                    append_run(
+                        segment.get('text', ''),
+                        run_color=segment.get('color', color),
+                        run_size=segment.get('size'),
+                        line_break=bool(segment.get('break')),
+                    )
+                else:
+                    append_run(segment)
+        else:
+            append_run(value)
+
+        tc.append(p)
+        tr.append(tc)
+
+    table._tbl.append(tr)

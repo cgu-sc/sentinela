@@ -658,12 +658,15 @@ def _build_crm_evidencias_complementares_context(
                 "dt_ini_a": alerta.get("dt_ini_a"),
                 "dt_fim_a": alerta.get("dt_fim_a"),
                 "nu_presc_a": _as_int(alerta.get("nu_presc_a")),
+                "vl_autorizacoes_a": _as_float(alerta.get("vl_autorizacoes_a")),
                 "cnpj_b": alerta.get("cnpj_b"),
                 "municipio_b": alerta.get("municipio_b"),
                 "uf_b": alerta.get("uf_b"),
                 "dt_ini_b": alerta.get("dt_ini_b"),
                 "dt_fim_b": alerta.get("dt_fim_b"),
                 "nu_presc_b": _as_int(alerta.get("nu_presc_b")),
+                "vl_autorizacoes_b": _as_float(alerta.get("vl_autorizacoes_b")),
+                "vl_autorizacoes_total": _as_float(alerta.get("vl_autorizacoes_total")),
                 "distancia_km": distancia_km,
             })
 
@@ -819,9 +822,9 @@ def _add_crm_distancia_complementar_text(
         bold=True,
     )
 
-    headers = ["CRM/UF", "Nome", "Estabelecimento A", "Estabelecimento B", "Distância", "Compet."]
+    headers = ["CRM/UF", "Nome", "Estabelecimento A", "Estabelecimento B", "Valor total", "Distância", "Compet."]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.85), Inches(1.35), Inches(1.55), Inches(1.55), Inches(0.75), Inches(0.65)]
+    widths = [Inches(0.68), Inches(1.35), Inches(1.65), Inches(1.65), Inches(0.85), Inches(0.52), Inches(0.4)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -841,11 +844,12 @@ def _add_crm_distancia_complementar_text(
             str(row.get("no_medico") or "Não localizado"),
             local_a,
             local_b,
+            f'R$ {_format_decimal_pt(_as_float(row.get("vl_autorizacoes_total")), 2)}',
             f'{_format_decimal_pt(_as_float(row.get("distancia_km")), 0)} km',
             _format_competencia_crm(row.get("competencia")),
         ]
         for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 4, 5) else None
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx == 4 else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 5, 6) else None
             _write_cell(cells[idx], value, size=6.8, align=align)
 
 
@@ -916,7 +920,7 @@ def _add_crm_intensiva_complementar_text(
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.85), Inches(1.35), Inches(0.75), Inches(0.8), Inches(0.8), Inches(0.8), Inches(1.0)]
+    widths = [Inches(0.75), Inches(1.75), Inches(0.75), Inches(0.85), Inches(0.85), Inches(0.9), Inches(1.25)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -980,7 +984,7 @@ def _add_crm_unico_complementar_text(
 
     headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Valor", "Janela", "Taxa/hora"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.72), Inches(0.78), Inches(1.5), Inches(0.78), Inches(0.9), Inches(0.72), Inches(0.7)]
+    widths = [Inches(0.72), Inches(0.75), Inches(1.95), Inches(0.82), Inches(1.05), Inches(0.85), Inches(0.96)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1045,7 +1049,7 @@ def _add_crms_multiplos_complementar_text(
 
         headers = ["Data", "Hora", "CRMs", "Autorizações", "Valor", "Janela", "Taxa/hora"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(0.72), Inches(0.72), Inches(0.62), Inches(0.82), Inches(0.9), Inches(0.72), Inches(0.7)]
+        widths = [Inches(0.72), Inches(0.72), Inches(0.72), Inches(0.95), Inches(1.25), Inches(1.0), Inches(1.74)]
         _crm_table_header(table, headers, widths)
         for evento in eventos:
             cells = table.add_row().cells
@@ -1167,7 +1171,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.9), Inches(1.55), Inches(0.75), Inches(0.95), Inches(0.8), Inches(0.8), Inches(1.15)]
+    widths = [Inches(0.8), Inches(1.8), Inches(0.75), Inches(0.95), Inches(0.85), Inches(0.85), Inches(1.1)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -1319,7 +1323,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.75), Inches(1.35), Inches(0.75), Inches(1.05), Inches(0.85), Inches(0.75), Inches(1.15)]
+    widths = [Inches(0.75), Inches(1.65), Inches(0.75), Inches(1.1), Inches(0.9), Inches(0.8), Inches(1.15)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -1451,16 +1455,15 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     headers = [
         "CRM/UF",
         "Nome",
-        "Data da inscrição no CFM",
-        "Número de autorizações vinculadas ao CRM",
-        "% sobre a produção total da farmácia",
-        "Valor total pago pelo PFPB tendo como base o CRM",
-        "% sobre o valor total da farmácia",
+        "Inscrição no CFM",
+        "Núm. autorizações",
+        "Valor total",
+        "% sobre o valor total",
     ]
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.85), Inches(1.45), Inches(0.75), Inches(0.9), Inches(0.8), Inches(1.1), Inches(0.9)]
+    widths = [Inches(0.8), Inches(2.25), Inches(0.9), Inches(1.0), Inches(1.25), Inches(0.9)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -1474,19 +1477,17 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         row_autorizacoes = _as_int(row.get("nu_prescricoes"))
         row_valor = _as_float(row.get("vl_total_prescricoes"))
-        pct_producao_total = (row_autorizacoes / total_autorizacoes * 100) if total_autorizacoes else 0.0
         pct_valor_total = (row_valor / total_financeiro_base * 100) if total_financeiro_base else 0.0
         values = [
             crm_uf,
             str(row.get("no_medico") or "Não localizado"),
             _format_date_br(row.get("dt_inscricao_crm")),
             str(row_autorizacoes),
-            f"{_format_decimal_pt(pct_producao_total, 2)}%",
             f"R$ {_format_decimal_pt(row_valor, 2)}",
             f"{_format_decimal_pt(pct_valor_total, 2)}%",
         ]
         for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
             _write_cell(cells[idx], value, size=7.0, align=align)
 
     fonte = doc.add_paragraph()

@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 from typing import Any, Optional
 from docx import Document
-from docx.shared import Emu, Inches, Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER, WD_TAB_ALIGNMENT
 from docx.enum.section import WD_SECTION
 from docx.oxml import parse_xml
@@ -88,6 +88,7 @@ from .nota_tecnica_docx_utils import (
     _cell_borders,
     _footnote_ref,
     _run,
+    _set_table_fixed_widths,
     _tbl_no_borders,
 )
 
@@ -584,8 +585,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 6. Resumo Executivo da Auditoria (Capa) ──────────────────────────
     tbl_resumo = doc.add_table(rows=1, cols=2)
     tbl_resumo.autofit = False
-    tbl_resumo.columns[0].width = Inches(4.5)
-    tbl_resumo.columns[1].width = Emu(PAGE_W - Inches(4.5))
+    _set_table_fixed_widths(tbl_resumo, [Inches(4.5), Inches(2.6)])
     _tbl_no_borders(tbl_resumo)
     
     # Coluna 1: Dados do Estabelecimento

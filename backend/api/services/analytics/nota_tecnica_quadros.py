@@ -12,6 +12,7 @@ from .nota_tecnica_docx_utils import (
     _format_block_title,
     _keep_small_table_together,
     _run,
+    _set_table_fixed_widths,
 )
 from .nota_tecnica_formatters import _format_cpf_cnpj, _format_decimal_pt
 
@@ -51,6 +52,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
 
     table = doc.add_table(rows=len(socios_volume_atipico) + 1, cols=5)
     table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(1.9), Inches(1.25), Inches(1.25), Inches(1.0), Inches(1.7)])
 
     headers = [
         'Sócio',
@@ -121,6 +123,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     table = doc.add_table(rows=5, cols=2)
     table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(4.7), Inches(2.4)])
 
     hdr_cells = table.rows[0].cells
     _run(hdr_cells[0].paragraphs[0], 'Métrica', bold=True)
@@ -170,6 +173,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     rows_data = gtin_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=4)
     table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(1.25), Inches(3.25), Inches(1.3), Inches(1.3)])
 
     headers = [
         'GTIN/Código de Barras',
@@ -239,6 +243,7 @@ def _add_quadro_evolucao_financeira(
     rows_data = evolucao_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)
     table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(0.8), Inches(1.3), Inches(1.25), Inches(1.35), Inches(1.1), Inches(1.3)])
 
     headers = [
         'Semestre',
@@ -329,6 +334,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     # Configura larguras (Total ~7.1 inches)
     col_label_w = Inches(2.2)
     col_value_w = Inches(4.9)
+    _set_table_fixed_widths(tbl, [col_label_w, col_value_w])
 
     rows_to_add = [
         ('CNPJ', data.get('cnpj_fmt')),
@@ -459,6 +465,7 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(3.4), Inches(1.85), Inches(1.85)])
     
     hdr_cells = table.rows[0].cells
     _run(hdr_cells[0].paragraphs[0], 'Situação', bold=True)

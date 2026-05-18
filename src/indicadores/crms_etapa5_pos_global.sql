@@ -501,6 +501,7 @@ SELECT
     D.id_medico,
     D.competencia,
     D.nu_prescricoes_medico,
+    D.vl_autorizacoes_medico,
     D.dt_prescricao_inicial_medico,
     D.dt_prescricao_final_medico,
     G.latitude,
@@ -530,12 +531,14 @@ CREATE CLUSTERED INDEX IDX_GeoBase
         T1.no_municipio AS no_municipio_a,
         T1.sg_uf AS sg_uf_a,
         T1.nu_prescricoes_medico AS nu_prescricoes_a,
+        T1.vl_autorizacoes_medico AS vl_autorizacoes_a,
         T2.nu_cnpj AS cnpj_b,
         T2.dt_prescricao_inicial_medico AS dt_ini_b,
         T2.dt_prescricao_final_medico AS dt_fim_b,
         T2.no_municipio AS no_municipio_b,
         T2.sg_uf AS sg_uf_b,
         T2.nu_prescricoes_medico AS nu_prescricoes_b,
+        T2.vl_autorizacoes_medico AS vl_autorizacoes_b,
         CASE
             WHEN ABS(T1.latitude - T2.latitude) > 2.0
               OR ABS(T1.longitude - T2.longitude) > 2.0
@@ -576,12 +579,15 @@ SELECT
     P.dt_ini_a,
     P.dt_fim_a,
     P.nu_prescricoes_a,
+    CAST(P.vl_autorizacoes_a AS DECIMAL(18,2)) AS vl_autorizacoes_a,
     P.cnpj_b,
     P.no_municipio_b,
     CAST(P.sg_uf_b AS VARCHAR(2)) AS sg_uf_b,
     P.dt_ini_b,
     P.dt_fim_b,
     P.nu_prescricoes_b,
+    CAST(P.vl_autorizacoes_b AS DECIMAL(18,2)) AS vl_autorizacoes_b,
+    CAST(P.vl_autorizacoes_a + P.vl_autorizacoes_b AS DECIMAL(18,2)) AS vl_autorizacoes_total,
     CAST(P.distancia_km AS DECIMAL(10,2)) AS distancia_km,
     T.total_pares
 INTO temp_CGUSC.fp.build_alertas_crm_geografico

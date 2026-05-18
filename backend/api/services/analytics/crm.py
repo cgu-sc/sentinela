@@ -479,12 +479,15 @@ def get_crm_data(
                 "dt_ini_a":       str(row["dt_ini_a"]),
                 "dt_fim_a":       str(row["dt_fim_a"]),
                 "nu_presc_a":     row["nu_prescricoes_a"],
+                "vl_autorizacoes_a": _to_float(row.get("vl_autorizacoes_a")),
                 "cnpj_b":         row["cnpj_b"],
                 "municipio_b":    row["no_municipio_b"],
                 "uf_b":           row["sg_uf_b"],
                 "dt_ini_b":       str(row["dt_ini_b"]),
                 "dt_fim_b":       str(row["dt_fim_b"]),
                 "nu_presc_b":     row["nu_prescricoes_b"],
+                "vl_autorizacoes_b": _to_float(row.get("vl_autorizacoes_b")),
+                "vl_autorizacoes_total": _to_float(row.get("vl_autorizacoes_total")),
                 "distancia_km":   _to_float(row.get("distancia_km")),
             })
 

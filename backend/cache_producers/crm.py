@@ -125,13 +125,42 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
 
 
 def load_or_sync_geografico(cnpj: str, engine=None) -> CacheLoadResult:
-    return _load_or_sync_sql_cache(
+    schema = _empty_schema(GEOGRAFICO_PARQUET)
+    required = set(schema)
+    parquet_path = _path(cnpj, GEOGRAFICO_PARQUET)
+    df, read_time_ms = _read_parquet(parquet_path)
+    if df is not None:
+        missing_cols = sorted(required - set(df.columns))
+        if not missing_cols:
+            return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+        print(f"[ CACHE ] {cnpj} - geografico - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+
+    result = _load_or_sync_sql_cache(
         cnpj,
         GEOGRAFICO_PARQUET,
         text("SELECT * FROM temp_CGUSC.fp.app_alertas_crm_geografico WHERE cnpj_a = :cnpj OR cnpj_b = :cnpj"),
         {"cnpj": cnpj},
         engine,
+        read_existing=False,
     )
+    result_df = result.df
+    if result_df is not None:
+        missing_cols = sorted(required - set(result_df.columns))
+        if missing_cols:
+            result_df = result_df.with_columns([
+                pl.lit(None, dtype=schema[col]).alias(col)
+                for col in missing_cols
+            ])
+            result_df.write_parquet(parquet_path, compression="zstd")
+            return CacheLoadResult(
+                result_df,
+                from_cache=result.from_cache,
+                read_time_ms=result.read_time_ms,
+                query_time_ms=result.query_time_ms,
+                save_time_ms=result.save_time_ms,
+                error=result.error,
+            )
+    return result
 
 
 def load_or_sync_volume_horario_anomalo(cnpj: str, engine=None) -> CacheLoadResult:
@@ -283,7 +312,7 @@ def load_or_sync_crm_unico_alertas(cnpj: str, engine=None) -> CacheLoadResult:
         ORDER BY A.dt_dia, A.id_medico, A.dt_ini_concentracao
     """)
     result = _load_or_sync_sql_cache(cnpj, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET, query, {"cnpj": cnpj}, engine, read_existing=False)
-    if result.error:
+    if result.error or result.df is None:
         return result
 
     df = result.df.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
@@ -321,7 +350,7 @@ def load_or_sync_crm_multi_alertas(cnpj: str, engine=None) -> CacheLoadResult:
         WHERE F.cnpj = :cnpj
     """)
     result = _load_or_sync_sql_cache(cnpj, CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET, query, {"cnpj": cnpj}, engine, read_existing=False)
-    if result.error:
+    if result.error or result.df is None:
         return result
 
     df = result.df.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
@@ -346,7 +375,7 @@ def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
                  "WHERE F.cnpj = :cnpj "
                  "ORDER BY P.data_hora ASC, P.num_autorizacao ASC")
     result = _load_or_sync_sql_cache(cnpj, CRM_RAIOX_TX_PARQUET, query, {"cnpj": cnpj}, engine, read_existing=False)
-    if result.error:
+    if result.error or result.df is None:
         return result
 
     df = result.df.with_columns(pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"))

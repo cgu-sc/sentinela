@@ -14,6 +14,7 @@ from .nota_tecnica_docx_utils import (
     _set_cell_width,
     _set_table_fixed_widths,
     _write_cell,
+    _write_cell_fast,
 )
 from .nota_tecnica_formatters import _format_decimal_pt
 
@@ -268,7 +269,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
                 if has_irregular:
                     _cell_bg(cell, "FEF2F2")
                 align = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 9 else WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell(cell, str(value), size=6.9 if col_idx == 9 else 7.3, color="0F172A", align=align)
+                _write_cell_fast(cell, str(value), size=6.9 if col_idx == 9 else 7.3, color="0F172A", align=align)
 
         subtotal_row = table.add_row()
         _row_cant_split(subtotal_row)

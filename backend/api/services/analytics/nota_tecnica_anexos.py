@@ -13,6 +13,7 @@ from .nota_tecnica_docx_utils import (
     _set_cell_width,
     _set_table_fixed_widths,
     _write_cell,
+    _write_cell_fast,
 )
 from .nota_tecnica_formatters import (
     _format_cpf_cnpj,
@@ -161,7 +162,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
                 align = WD_ALIGN_PARAGRAPH.RIGHT if idx in {4, 5} else WD_ALIGN_PARAGRAPH.LEFT
                 if idx in {2, 3}:
                     align = WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell(cell, value or "—", size=7.4, color='0F172A', align=align)
+                _write_cell_fast(cell, value or "—", size=7.4, color='0F172A', align=align)
 
         subtotal_row = table.add_row()
         _row_cant_split(subtotal_row)

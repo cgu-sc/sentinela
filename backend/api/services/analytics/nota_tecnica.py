@@ -1,7 +1,9 @@
 import io
 import os
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
+from pathlib import Path
+import time
 from typing import Any, Optional
 from docx import Document
 from docx.shared import Emu, Inches, Pt, RGBColor
@@ -12,6 +14,7 @@ from data_cache import get_localidades_df
 
 from .farmacia import get_dados_farmacia
 from .dashboard import get_dashboard_data
+from .crm import get_crm_data
 from .socios import get_socios_farmacia
 from .nota_tecnica_charts import (
     _add_figura_evolucao_financeira,
@@ -87,6 +90,57 @@ from .nota_tecnica_docx_utils import (
     _run,
     _tbl_no_borders,
 )
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _format_timing_ms(ms: float) -> str:
+    return f"{ms / 1000:.3f}s" if ms >= 1000 else f"{ms:.1f}ms"
+
+
+class _NotaTecnicaTiming:
+    def __init__(self, cnpj: str, data_inicio: Optional[date], data_fim: Optional[date]):
+        self.cnpj = cnpj
+        self.data_inicio = data_inicio
+        self.data_fim = data_fim
+        self.started_at = datetime.now()
+        self._start = time.perf_counter()
+        self._last = self._start
+        self.steps: list[tuple[str, float, float]] = []
+
+    def mark(self, label: str):
+        now = time.perf_counter()
+        self.steps.append((label, (now - self._last) * 1000, (now - self._start) * 1000))
+        self._last = now
+
+    def write(self, status: str = "OK", error: str | None = None):
+        total_ms = (time.perf_counter() - self._start) * 1000
+        periodo = (
+            f"{self.data_inicio or 'inicio-aberto'} a {self.data_fim or 'fim-aberto'}"
+            if self.data_inicio or self.data_fim
+            else "historico completo"
+        )
+        log_path = _project_root() / "logs" / "nota_tecnica_timing.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        lines = [
+            "=" * 88,
+            f"{self.started_at:%Y-%m-%d %H:%M:%S} | Nota Tecnica | CNPJ {self.cnpj} | periodo {periodo} | status {status}",
+            f"TOTAL: {_format_timing_ms(total_ms)}",
+            "Etapas:",
+        ]
+        lines.extend(
+            f"  - {label:<52} {_format_timing_ms(step_ms):>9} | acumulado {_format_timing_ms(total_step_ms)}"
+            for label, step_ms, total_step_ms in self.steps
+        )
+        if error:
+            lines.append(f"Erro: {error}")
+        lines.append("")
+
+        with log_path.open("a", encoding="utf-8") as fp:
+            fp.write("\n".join(lines) + "\n")
 
 
 def _risk_color(classificacao: str | None, score: float) -> tuple[str, str]:
@@ -378,18 +432,22 @@ def _build_sumario(
 
 def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, data_fim: Optional[date] = None):
     """Gera a Nota Técnica Preliminar em formato .docx."""
+    timing = _NotaTecnicaTiming(cnpj, data_inicio, data_fim)
 
     # 1. Coleta de dados
     cadastro_obj = get_dados_farmacia(cnpj)
     cadastro = cadastro_obj.model_dump() if cadastro_obj is not None else {}
+    timing.mark("dados cadastrais")
 
     resumo = get_dashboard_data(db, data_inicio, data_fim, cnpjs=[cnpj])
     cnpj_data_obj = resumo.resultado_cnpjs[0] if hasattr(resumo, 'resultado_cnpjs') and resumo.resultado_cnpjs else None
     cnpj_data = cnpj_data_obj.model_dump() if cnpj_data_obj is not None else {}
+    timing.mark("dashboard / resumo do CNPJ")
 
     # Coleta de sócios
     socios_res = get_socios_farmacia(cnpj)
     socios_ativos = [s for s in socios_res.socios if not s.data_exclusao_sociedade]
+    timing.mark("socios")
 
     # 2. Campos derivados
     razao_social = (cadastro.get('razao_social') or cnpj_data.get('razao_social') or 'NÃO INFORMADO').upper()
@@ -421,8 +479,21 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         periodo_txt = 'Histórico completo'
 
     falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim)
+    timing.mark("contexto falecidos")
     anexo_ii_comp = _build_anexo_ii_context(cnpj, db)
-    crm_evidencias_comp = _build_crm_evidencias_complementares_context(cnpj, data_inicio, data_fim)
+    timing.mark("contexto anexo II memoria de calculo")
+    try:
+        crm_data_comp = get_crm_data(
+            cnpj,
+            data_inicio.isoformat() if data_inicio else None,
+            data_fim.isoformat() if data_fim else None,
+        )
+    except Exception as exc:
+        print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
+        crm_data_comp = None
+    timing.mark("contexto CRM base")
+    crm_evidencias_comp = _build_crm_evidencias_complementares_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
+    timing.mark("contexto evidencias CRM complementares")
 
     # 3. Documento e margens
     doc = Document()
@@ -447,6 +518,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         section.bottom_margin = Inches(0.5)
         section.left_margin = Inches(0.7)
         section.right_margin = Inches(0.7)
+    timing.mark("inicializacao DOCX")
 
     PAGE_W = Inches(7.1)
     BAR_W = Inches(0.18)
@@ -551,6 +623,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         has_falecidos=bool(falecidos_comp),
         has_crm_evidencias=bool(crm_evidencias_comp),
     )
+    timing.mark("capa e sumario")
 
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
     sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -815,6 +888,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     }
     # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
+    timing.mark("secao 5 identificacao e quadro cadastral")
 
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc)
@@ -845,8 +919,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_conclusao_53, ', que corresponde a um potencial desvio de recursos públicos no montante estimado de ', color='0F172A', size=10)
     _run(p_conclusao_53, f'R$ {val_fmt}', color='334155', size=10, bold=True)
     _run(p_conclusao_53, '.', color='0F172A', size=10)
+    timing.mark("secao 6 quadro geral de vendas sem comprovacao")
 
     regional_comp = _build_regional_comparison_context(cnpj_data, cadastro, data_inicio, data_fim)
+    timing.mark("contexto comparativo regional")
     multiplicador_fmt = _format_decimal_pt(regional_comp["multiplicador"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(regional_comp["multiplicador_uf"], 2)
     multiplicador_brasil_fmt = _format_decimal_pt(regional_comp["multiplicador_brasil"], 2)
@@ -881,8 +957,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _run(p_geo_ampliado, ' a mediana dos percentuais das farmácias de todo o Brasil.', color='0F172A', size=10)
 
     _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
+    timing.mark("quadro comparativo regional")
 
     posicionamento_regional_comp = _build_posicionamento_regional_context(cnpj, cadastro, data_inicio, data_fim)
+    timing.mark("contexto posicionamento regional")
     p_posicionamento_intro = doc.add_paragraph()
     _run(
         p_posicionamento_intro,
@@ -891,8 +969,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         size=10,
     )
     _add_figura_posicionamento_regional(doc, razao_social, cnpj_fmt, posicionamento_regional_comp, figure_number=1)
+    timing.mark("figura posicionamento regional")
 
     percentil_risco_comp = _build_percentil_risco_context(cnpj_data, cadastro, data_inicio, data_fim)
+    timing.mark("contexto percentil de risco")
     p_percentil_intro = doc.add_paragraph()
     _run(
         p_percentil_intro,
@@ -901,12 +981,15 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         size=10,
     )
     _add_figura_percentil_risco(doc, razao_social, cnpj_fmt, percentil_risco_comp, figure_number=2)
+    timing.mark("figura percentil de risco")
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
+    timing.mark("contexto GTIN sem comprovacao")
     p_gtin_intro = doc.add_paragraph()
     _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoque amparado em notas fiscais de aquisição, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=10)
 
     _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
+    timing.mark("quadro GTIN sem comprovacao")
 
     p_gtin_conclusao = doc.add_paragraph()
     gtins_txt = "GTIN" if gtin_comp["total_gtins"] == 1 else "GTINs"
@@ -926,7 +1009,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_heading(f'6.1 Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', level=2)
 
     evolucao_comp = _build_evolucao_financeira_context(cnpj, data_inicio, data_fim)
+    timing.mark("contexto evolucao financeira")
     socios_volume_atipico = _build_socios_volume_atipico_context(socios_ativos, evolucao_comp)
+    timing.mark("contexto socios x volume atipico")
 
     semestres_atipicos = evolucao_comp["semestres_atipicos"]
     if semestres_atipicos:
@@ -967,6 +1052,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado no quadro a seguir.', color='0F172A', size=10)
     _add_quadro_socios_volume_atipico(doc, socios_volume_atipico)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=3)
+    timing.mark("quadros e figura evolucao financeira")
 
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
@@ -978,6 +1064,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         _add_falecidos_criticidade_text(doc, '7.1', razao_social, falecidos_comp)
         resumos_criticidades.append(_build_resumo_falecidos('7.1', falecidos_comp))
         criticidade_start = 2
+        timing.mark("secao 7 falecidos texto")
 
     criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
     if criticidade_items:
@@ -989,6 +1076,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'teto':
                 teto_comp = _build_teto_context(cnpj, data_inicio, data_fim)
@@ -997,6 +1085,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, teto_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'polimedicamento' and full_title.startswith('Vendas de quatro ou mais itens'):
                 polimedicamento_comp = _build_polimedicamento_context(cnpj, data_inicio, data_fim)
@@ -1005,6 +1094,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, polimedicamento_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'ticket_medio':
                 ticket_comp = _build_ticket_medio_context(cnpj, data_inicio, data_fim)
@@ -1013,6 +1103,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, ticket_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'receita_paciente':
                 receita_comp = _build_receita_paciente_context(cnpj, data_inicio, data_fim)
@@ -1021,6 +1112,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, receita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'per_capita':
                 per_capita_comp = _build_per_capita_context(cnpj, data_inicio, data_fim)
@@ -1029,6 +1121,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, per_capita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'alto_custo':
                 alto_custo_comp = _build_alto_custo_context(cnpj, data_inicio, data_fim)
@@ -1037,6 +1130,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, alto_custo_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'vendas_rapidas':
                 vendas_rapidas_comp = _build_vendas_rapidas_context(cnpj, data_inicio, data_fim)
@@ -1045,6 +1139,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, vendas_rapidas_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'recorrencia_sistemica':
                 recorrencia_comp = _build_recorrencia_sistemica_context(cnpj, data_inicio, data_fim)
@@ -1053,6 +1148,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, recorrencia_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'dias_pico':
                 dias_pico_comp = _build_dias_pico_context(cnpj, data_inicio, data_fim)
@@ -1061,6 +1157,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, dias_pico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'dispersao_geografica':
                 dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
@@ -1069,40 +1166,59 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'hhi_crm':
-                hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim)
+                hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
                 if hhi_crm_comp:
                     _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp)
                     resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                    timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'crms_irregulares':
-                crms_irregulares_comp = _build_crms_irregulares_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
+                crms_irregulares_comp = _build_crms_irregulares_context(
+                    cnpj,
+                    data_inicio,
+                    data_fim,
+                    cnpj_data.get('totalMov'),
+                    crm_data=crm_data_comp,
+                )
                 if crms_irregulares_comp:
                     _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp)
                     resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                timing.mark(f"secao 7 criticidade {key}")
                 continue
             if key == 'exclusividade_crm':
-                exclusividade_comp = _build_exclusividade_crm_context(cnpj, data_inicio, data_fim, cnpj_data.get('totalMov'))
+                exclusividade_comp = _build_exclusividade_crm_context(
+                    cnpj,
+                    data_inicio,
+                    data_fim,
+                    cnpj_data.get('totalMov'),
+                    crm_data=crm_data_comp,
+                )
                 if exclusividade_comp:
                     _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp)
                     resumo = _build_resumo_criticidade(num, key, exclusividade_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
+                timing.mark(f"secao 7 criticidade {key}")
                 continue
 
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
+            timing.mark(f"secao 7 criticidade {key}")
     elif not falecidos_comp:
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
+    timing.mark("secao 7 fechamento criticidades")
 
     if crm_evidencias_comp:
         crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
         _add_crm_evidencias_complementares_text(doc, crm_evidencias_num, razao_social, crm_evidencias_comp)
+        timing.mark("secao 7 evidencias CRM complementares")
 
     # 8. CONCLUSÃO
     h8 = _format_main_heading(doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1))
@@ -1151,13 +1267,18 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     p_despacho = doc.add_paragraph()
     _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
+    timing.mark("conclusao e encaminhamento")
 
-    _add_anexo_ii_memoria_calculo(doc, razao_social, cnpj_fmt, periodo_txt, anexo_ii_comp)
+    _add_anexo_ii_memoria_calculo(doc, razao_social, cnpj_fmt, periodo_txt, anexo_ii_comp, timing=timing)
+    timing.mark("anexo II fechamento")
 
     if falecidos_comp:
-        _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp)
+        _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing)
+        timing.mark("anexo III fechamento")
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
+    timing.mark("serializacao DOCX")
+    timing.write()
     return file_stream

@@ -250,17 +250,19 @@ def _build_hhi_crm_context(
     cnpj: str,
     data_inicio: Optional[date],
     data_fim: Optional[date],
+    crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de concentração atípica de CRM."""
-    try:
-        crm_data = get_crm_data(
-            cnpj,
-            data_inicio.isoformat() if data_inicio else None,
-            data_fim.isoformat() if data_fim else None,
-        )
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
-        return None
+    if crm_data is None:
+        try:
+            crm_data = get_crm_data(
+                cnpj,
+                data_inicio.isoformat() if data_inicio else None,
+                data_fim.isoformat() if data_fim else None,
+            )
+        except Exception as exc:
+            print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
+            return None
 
     crms = list(getattr(crm_data, "crms_interesse", None) or [])
     if not crms:
@@ -328,6 +330,7 @@ def _build_exclusividade_crm_context(
     data_inicio: Optional[date],
     data_fim: Optional[date],
     total_mov_quadro_02: Any = None,
+    crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de CRMs exclusivos."""
     matriz_row: dict[str, Any] = {}
@@ -346,15 +349,16 @@ def _build_exclusividade_crm_context(
         except (TypeError, ValueError):
             return 0.0
 
-    try:
-        crm_data = get_crm_data(
-            cnpj,
-            data_inicio.isoformat() if data_inicio else None,
-            data_fim.isoformat() if data_fim else None,
-        )
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
-        crm_data = None
+    if crm_data is None:
+        try:
+            crm_data = get_crm_data(
+                cnpj,
+                data_inicio.isoformat() if data_inicio else None,
+                data_fim.isoformat() if data_fim else None,
+            )
+        except Exception as exc:
+            print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
+            crm_data = None
 
     crms = list(getattr(crm_data, "crms_interesse", None) or [])
 
@@ -438,6 +442,7 @@ def _build_crms_irregulares_context(
     data_inicio: Optional[date],
     data_fim: Optional[date],
     total_mov_quadro_02: Any = None,
+    crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de CRMs irregulares ou invalidos."""
     matriz_row: dict[str, Any] = {}
@@ -456,15 +461,16 @@ def _build_crms_irregulares_context(
         except (TypeError, ValueError):
             return 0.0
 
-    try:
-        crm_data = get_crm_data(
-            cnpj,
-            data_inicio.isoformat() if data_inicio else None,
-            data_fim.isoformat() if data_fim else None,
-        )
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
-        crm_data = None
+    if crm_data is None:
+        try:
+            crm_data = get_crm_data(
+                cnpj,
+                data_inicio.isoformat() if data_inicio else None,
+                data_fim.isoformat() if data_fim else None,
+            )
+        except Exception as exc:
+            print(f"[NOTA_TECNICA] CRM indisponivel para {cnpj}: {exc}")
+            crm_data = None
 
     crms = list(getattr(crm_data, "crms_interesse", None) or [])
     total_autorizacoes = sum(_as_int(row.get("nu_prescricoes")) for row in crms)
@@ -530,17 +536,19 @@ def _build_crm_evidencias_complementares_context(
     cnpj: str,
     data_inicio: Optional[date],
     data_fim: Optional[date],
+    crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Detecta evidencias operacionais de CRM independentes da matriz de risco."""
-    try:
-        crm_data = get_crm_data(
-            cnpj,
-            data_inicio.isoformat() if data_inicio else None,
-            data_fim.isoformat() if data_fim else None,
-        )
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Evidencias complementares CRM indisponiveis para {cnpj}: {exc}")
-        return None
+    if crm_data is None:
+        try:
+            crm_data = get_crm_data(
+                cnpj,
+                data_inicio.isoformat() if data_inicio else None,
+                data_fim.isoformat() if data_fim else None,
+            )
+        except Exception as exc:
+            print(f"[NOTA_TECNICA] Evidencias complementares CRM indisponiveis para {cnpj}: {exc}")
+            return None
 
     crms = list(getattr(crm_data, "crms_interesse", None) or [])
     cnpj_alerts = list(getattr(crm_data, "cnpj_alerts", None) or [])

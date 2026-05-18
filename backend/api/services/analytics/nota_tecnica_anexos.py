@@ -79,7 +79,7 @@ def _write_person_cell(cell, nome: str, cpf: str):
     _run(p, _format_cpf_cnpj(cpf), color='64748B', size=7.0)
 
 
-def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_comp: dict[str, Any]):
+def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_comp: dict[str, Any], timing: Any = None):
     """Adiciona o Anexo III com detalhamento das vendas para pessoas falecidas."""
     transacoes = falecidos_comp.get("transacoes") or []
     if not transacoes:
@@ -100,6 +100,8 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
     total_autorizacoes = int(falecidos_comp.get("total_autorizacoes") or len(transacoes))
     cpfs_distintos = int(falecidos_comp.get("cpfs_distintos") or len(grupos))
     valor_total = float(falecidos_comp.get("valor_total") or 0.0)
+    if timing:
+        timing.mark(f"anexo III agrupamento ({len(grupos)} CPFs, {len(transacoes)} transacoes)")
 
     doc.add_heading('ANEXO III - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
     p_intro = doc.add_paragraph()
@@ -136,8 +138,10 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
         _set_cell_width(cell, widths[idx])
         _cell_bg(cell, 'E2E8F0')
         _write_cell(cell, label, size=7.3, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.CENTER)
+    if timing:
+        timing.mark("anexo III cabecalho tabela")
 
-    for grupo in grupos:
+    for grupo_idx, grupo in enumerate(grupos, start=1):
         for t in grupo["transacoes"]:
             row = table.add_row()
             _row_cant_split(row)
@@ -151,7 +155,6 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
             ]
             for idx, value in enumerate(values):
                 cell = row.cells[idx]
-                _set_cell_width(cell, widths[idx])
                 if idx == 0:
                     cpf = str(getattr(t, "cpf", "") or "")
                     _write_person_cell(cell, _title_case_pt(getattr(t, "nome_falecido", None)), cpf)
@@ -178,6 +181,8 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
         _write_cell(value_cell, _format_decimal_pt(grupo["total_valor"], 2), size=7.4, bold=True, color='475569', align=WD_ALIGN_PARAGRAPH.RIGHT)
         _cell_bg(subtotal_row.cells[5], 'F8FAFC')
         _write_cell(subtotal_row.cells[5], '', size=7.4)
+        if timing:
+            timing.mark(f"anexo III CPF {grupo_idx} ({len(grupo['transacoes'])} transacoes)")
 
     total_row = table.add_row()
     _row_cant_split(total_row)
@@ -196,3 +201,5 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
     _write_cell(total_value, _format_decimal_pt(valor_total, 2), size=7.6, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.RIGHT)
     _cell_bg(total_row.cells[5], 'E2E8F0')
     _write_cell(total_row.cells[5], '', size=7.6)
+    if timing:
+        timing.mark("anexo III total geral")

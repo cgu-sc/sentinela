@@ -187,7 +187,7 @@ def _add_table_header(table, headers: list[str], widths: list[Any], *, size: flo
         _write_cell(cell, label, size=size, bold=True, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
-def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]]):
+def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any = None):
     if not detalhes:
         return
 
@@ -266,7 +266,6 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]]):
             ]
             for col_idx, value in enumerate(values):
                 cell = row.cells[col_idx]
-                _set_cell_width(cell, widths[col_idx])
                 if has_irregular:
                     _cell_bg(cell, "FEF2F2")
                 align = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 9 else WD_ALIGN_PARAGRAPH.CENTER
@@ -288,6 +287,8 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]]):
             cell = subtotal_row.cells[offset]
             _cell_bg(cell, "F8FAFC")
             _write_cell(cell, value, size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.CENTER)
+        if timing:
+            timing.mark(f"anexo II detalhe GTIN {idx} ({len(rows)} linhas)")
 
 
 def _add_anexo_ii_memoria_calculo(
@@ -296,6 +297,7 @@ def _add_anexo_ii_memoria_calculo(
     cnpj_fmt: str,
     periodo_txt: str,
     anexo_ii_comp: dict[str, Any],
+    timing: Any = None,
 ):
     """Adiciona o Anexo II com resumo, consolidado e detalhamento da memoria de calculo."""
     section = doc.add_section(WD_SECTION.NEW_PAGE)
@@ -352,6 +354,8 @@ def _add_anexo_ii_memoria_calculo(
     for idx, value in enumerate(summary_values):
         _set_cell_width(row.cells[idx], summary_widths[idx])
         _write_cell(row.cells[idx], value, size=7.5, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
+    if timing:
+        timing.mark("anexo II resumo geral")
 
     p_title2 = doc.add_paragraph()
     p_title2.paragraph_format.space_before = Pt(10)
@@ -403,7 +407,6 @@ def _add_anexo_ii_memoria_calculo(
             ]
             for idx, value in enumerate(values):
                 cell = row.cells[idx]
-                _set_cell_width(cell, widths[idx])
                 _write_cell(cell, value, size=6.7, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
     else:
         row = table.add_row()
@@ -416,6 +419,8 @@ def _add_anexo_ii_memoria_calculo(
             color="475569",
             align=WD_ALIGN_PARAGRAPH.CENTER,
         )
+    if timing:
+        timing.mark(f"anexo II quadro consolidado ({len(consolidados)} GTINs)")
 
     p_foot = doc.add_paragraph()
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -427,4 +432,7 @@ def _add_anexo_ii_memoria_calculo(
         size=8,
     )
 
-    _add_anexo_ii_detalhamento(doc, detalhes)
+    _add_anexo_ii_detalhamento(doc, detalhes, timing=timing)
+    if timing:
+        total_linhas = sum(len(item.get("rows") or []) for item in detalhes)
+        timing.mark(f"anexo II detalhamento total ({len(detalhes)} GTINs, {total_linhas} linhas)")

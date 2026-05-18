@@ -47,10 +47,34 @@ const TAB_INDEX = {
   REGIONAL: 8,
 };
 
+const TAB_SLUG_BY_INDEX = {
+  [TAB_INDEX.EVOLUTION]: "movimentacao",
+  [TAB_INDEX.DIAGNOSIS]: "diagnostico",
+  [TAB_INDEX.MOVEMENT]: "memoria",
+  [TAB_INDEX.INDICATORS]: "indicadores",
+  [TAB_INDEX.CRMS]: "autorizacoes",
+  [TAB_INDEX.MORTALITY]: "falecidos",
+  [TAB_INDEX.SOCIOS]: "socios",
+  [TAB_INDEX.NETWORK]: "teia",
+  [TAB_INDEX.REGIONAL]: "regional",
+};
+
+const TAB_INDEX_BY_SLUG = Object.fromEntries(
+  Object.entries(TAB_SLUG_BY_INDEX).map(([index, slug]) => [slug, Number(index)]),
+);
+
 const route = useRoute();
 const router = useRouter();
 const normalizeCnpj = (value) => String(value ?? "").replace(/\D/g, "");
 const cnpj = computed(() => normalizeCnpj(route.params.cnpj));
+
+const getTabIndexFromRoute = () => {
+  const tabParam = Array.isArray(route.query.tab)
+    ? route.query.tab[0]
+    : route.query.tab;
+  const tabIndex = TAB_INDEX_BY_SLUG[String(tabParam ?? "").toLowerCase()];
+  return Number.isInteger(tabIndex) ? tabIndex : TAB_INDEX.EVOLUTION;
+};
 
 // ── Stores ────────────────────────────────────────────────
 const analyticsStore = useAnalyticsStore();
@@ -149,6 +173,32 @@ const handleGenerateNote = async () => {
 // ── Composables (Fim) ─────────────────────────────────────
 
 // ── Dados do CNPJ ─────────────────────────────────────────
+const setActiveTab = (index, { syncUrl = true } = {}) => {
+  cnpjNav.activeTabIndex = index;
+
+  if (!syncUrl) return;
+
+  const tabSlug = TAB_SLUG_BY_INDEX[index];
+  if (!tabSlug || route.query.tab === tabSlug) return;
+
+  router.replace({
+    name: route.name,
+    params: route.params,
+    query: { ...route.query, tab: tabSlug },
+  });
+};
+
+watch(
+  () => route.query.tab,
+  () => {
+    const routeTabIndex = getTabIndexFromRoute();
+    if (cnpjNav.activeTabIndex !== routeTabIndex) {
+      setActiveTab(routeTabIndex, { syncUrl: false });
+    }
+  },
+  { immediate: true },
+);
+
 const cnpjData = computed(
   () =>
     resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ??
@@ -219,7 +269,7 @@ watch(
     // Ao trocar de CNPJ, reseta tudo e dispara todos os fetches em paralelo
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
-      cnpjNav.reset(TAB_INDEX.EVOLUTION);
+      cnpjNav.reset(getTabIndexFromRoute());
     }
     const requestId = ++cnpjValidationRequest;
     if (!newCnpj) {
@@ -393,7 +443,7 @@ const isInitialLoading = computed(() => {
       v-if="canRenderDetail"
       class="detail-tabs"
       :activeIndex="cnpjNav.activeTabIndex"
-      @tab-change="cnpjNav.activeTabIndex = $event.index"
+      @tab-change="setActiveTab($event.index)"
     >
       <TabPanel>
         <template #header

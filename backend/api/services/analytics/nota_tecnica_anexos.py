@@ -144,7 +144,6 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
     for grupo_idx, grupo in enumerate(grupos, start=1):
         for t in grupo["transacoes"]:
             row = table.add_row()
-            _row_cant_split(row)
             values = [
                 None,
                 f'{grupo["municipio"]}/{grupo["uf"]}',

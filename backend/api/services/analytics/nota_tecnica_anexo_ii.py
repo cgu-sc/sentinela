@@ -250,7 +250,6 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
 
         for item in rows:
             row = table.add_row()
-            _row_cant_split(row)
             has_irregular = float(item.get("valor_irregular") or 0.0) > 0
             values = [
                 item.get("periodo_inicial") or "-",

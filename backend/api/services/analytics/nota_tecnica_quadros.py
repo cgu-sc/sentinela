@@ -5,8 +5,34 @@ from typing import Any
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
-from .nota_tecnica_docx_utils import _cell_bg, _footnote_ref, _keep_small_table_together, _run
+from .nota_tecnica_docx_utils import (
+    _cell_bg,
+    _footnote_ref,
+    _format_block_footnote,
+    _format_block_title,
+    _keep_small_table_together,
+    _run,
+)
 from .nota_tecnica_formatters import _format_cpf_cnpj, _format_decimal_pt
+
+
+def _format_quadro_title(paragraph, *, space_before: float = 16, space_after: float = 8):
+    _format_block_title(
+        paragraph,
+        space_before=space_before,
+        space_after=space_after,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
+
+
+def _format_quadro_footnote(paragraph, *, space_before: float = 5, space_after: float = 18):
+    _format_block_footnote(
+        paragraph,
+        space_before=space_before,
+        space_after=space_after,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
+
 
 def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str, Any]]):
     """Adiciona quadro com ingressos societarios proximos a aumentos atipicos."""
@@ -14,7 +40,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         return
 
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(
         p_title,
         'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
@@ -71,6 +97,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sistema Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
@@ -83,7 +110,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
 def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str):
     """Adiciona quadro compacto comparando a farmacia auditada com a mediana regional."""
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(
         p_title,
         'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
@@ -122,16 +149,16 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
                 p.paragraph_format.space_before = Pt(2)
                 p.paragraph_format.space_after = Pt(2)
 
-    _keep_small_table_together(p_title, table)
-
     p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
     _run(p_foot, f'Fonte: Sistema Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gtin_comp: dict[str, Any], periodo_txt: str):
     """Adiciona quadro com todos os GTINs com vendas sem comprovacao no periodo."""
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(
         p_title,
         f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
@@ -183,6 +210,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
     _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
 
 
@@ -199,7 +227,7 @@ def _add_quadro_evolucao_financeira(
         else f'do {evolucao_comp["primeiro_semestre_fmt"]} ao {evolucao_comp["ultimo_semestre_fmt"]}'
     )
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(
         p_title,
         f'Quadro 05 - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
@@ -277,6 +305,7 @@ def _add_quadro_evolucao_financeira(
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sistema Sentinela, aba “Evolução Financeira”, a partir das dispensações informadas no Sistema Autorizador de Vendas do PFPB e do levantamento de “vendas sem comprovação”.',
@@ -288,9 +317,8 @@ def _add_quadro_evolucao_financeira(
 
 def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_txt: str):
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
-    doc.add_paragraph()
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='0F172A', size=9, bold=True)
     _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=8)
 
@@ -349,6 +377,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     
     p_nota = doc.add_paragraph()
     p_nota.paragraph_format.space_before = Pt(6)
+    p_nota.paragraph_format.space_after = Pt(2)
     relacao_txt = f"{relacao_pct:,.2f}%".replace(',', 'X').replace('.', ',').replace('X', '.')
     total_mov_txt = f"R$ {total_mov:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     _run(p_nota, f"* A relação do valor de vendas no âmbito do PFPB sobre o capital social é de {relacao_txt}, ou seja, ela recebeu ", color='475569', size=8)
@@ -358,6 +387,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     _run(p_nota, " o valor do seu capital social.", color='475569', size=8)
 
     p_fonte = doc.add_paragraph()
+    _format_quadro_footnote(p_fonte)
     dt_extracao = data.get('data_processamento')
     dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
     _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=7, italic=True)
@@ -424,7 +454,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
 
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_quadro_title(p_title)
     _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição.', color='0F172A', size=9, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
@@ -465,6 +495,7 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
                 p.paragraph_format.space_after = Pt(2)
 
     p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
     p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=8)
     _keep_small_table_together(p_title, table, [p_foot])

@@ -11,7 +11,14 @@ from cache_files import CRM_RAIOX_TX_PARQUET
 from data_cache import get_df_matriz_risco
 from ._cache import _get_cnpj_cache_dir
 from .crm import get_crm_data
-from .nota_tecnica_docx_utils import _cell_bg, _run, _set_table_fixed_widths, _write_cell
+from .nota_tecnica_docx_utils import (
+    _cell_bg,
+    _format_block_footnote,
+    _format_block_title,
+    _run,
+    _set_table_fixed_widths,
+    _write_cell,
+)
 from .nota_tecnica_formatters import _format_decimal_pt
 
 
@@ -82,6 +89,14 @@ def _format_janela_minutos(value: Any) -> str:
     horas = minutos // 60
     resto = minutos % 60
     return f"{horas}h {resto}min" if resto else f"{horas}h"
+
+
+def _format_crm_table_title(paragraph):
+    _format_block_title(paragraph, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+
+
+def _format_crm_table_footnote(paragraph):
+    _format_block_footnote(paragraph, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _parse_datetime_crm(value: Any) -> datetime | None:
@@ -795,6 +810,7 @@ def _add_crm_distancia_complementar_text(
         return
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(
         title,
         "Principais evidências de distância geográfica associadas a CRMs informados no SAV.",
@@ -895,6 +911,7 @@ def _add_crm_intensiva_complementar_text(
         return
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(title, "Principais médicos com volume médio diário superior a 30 prescrições.", color="0F172A", size=9, bold=True)
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
@@ -958,6 +975,7 @@ def _add_crm_unico_complementar_text(
         return
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(title, "Principais episódios de concentração temporal para um único CRM.", color="0F172A", size=9, bold=True)
 
     headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Valor", "Janela", "Taxa/hora"]
@@ -1022,6 +1040,7 @@ def _add_crms_multiplos_complementar_text(
 
     if eventos:
         title = doc.add_paragraph()
+        _format_crm_table_title(title)
         _run(title, "Principais episódios de concentração temporal para múltiplos CRMs.", color="0F172A", size=9, bold=True)
 
         headers = ["Data", "Hora", "CRMs", "Autorizações", "Valor", "Janela", "Taxa/hora"]
@@ -1127,6 +1146,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     )
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(
         title,
         f"Quadro 07 - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
@@ -1178,7 +1198,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
             _write_cell(cells[idx], value, size=7.0, align=align)
 
     fonte = doc.add_paragraph()
-    fonte.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_crm_table_footnote(fonte)
     _run(
         fonte,
         "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
@@ -1278,6 +1298,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(
         title,
         f"Quadro 08 - Médicos com CRM irregular ou inválido vinculados a vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
@@ -1344,7 +1365,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
             _write_cell(cells[idx], value, size=7.0, align=align)
 
     fonte = doc.add_paragraph()
-    fonte.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_crm_table_footnote(fonte)
     _run(
         fonte,
         "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
@@ -1418,6 +1439,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
         return
 
     title = doc.add_paragraph()
+    _format_crm_table_title(title)
     _run(
         title,
         f"Quadro 09 - Médicos com CRMs registrados exclusivamente pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
@@ -1468,7 +1490,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
             _write_cell(cells[idx], value, size=7.0, align=align)
 
     fonte = doc.add_paragraph()
-    fonte.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_crm_table_footnote(fonte)
     _run(
         fonte,
         "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",

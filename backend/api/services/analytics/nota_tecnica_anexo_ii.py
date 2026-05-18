@@ -7,8 +7,10 @@ from docx.shared import Inches, Pt
 
 from .farmacia import get_movimentacao_data
 from .nota_tecnica_docx_utils import (
-    _cell_bg,
     _append_table_row_fast,
+    _cell_bg,
+    _format_block_footnote,
+    _format_block_title,
     _repeat_table_header,
     _row_cant_split,
     _run,
@@ -194,6 +196,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
 
     p_intro = doc.add_paragraph()
     p_intro.paragraph_format.space_before = Pt(12)
+    p_intro.paragraph_format.space_after = Pt(6)
     _run(
         p_intro,
         "Detalhamento da memória de cálculo dos GTINs que apresentaram vendas sem comprovação",
@@ -233,8 +236,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
             continue
 
         p_title = doc.add_paragraph()
-        p_title.paragraph_format.space_before = Pt(9)
-        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _format_block_title(p_title, space_before=14, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
         _run(
             p_title,
             f"Quadro II.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
@@ -319,6 +321,7 @@ def _add_anexo_ii_memoria_calculo(
 
     doc.add_heading("ANEXO II - MEMÓRIA DE CÁLCULO DAS VENDAS SEM COMPROVAÇÃO", level=1)
     p_intro = doc.add_paragraph()
+    p_intro.paragraph_format.space_after = Pt(8)
     _run(
         p_intro,
         f"O presente anexo apresenta a memória de cálculo utilizada para identificação das dispensações de medicamentos sem comprovação de estoque da Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período {periodo_txt}, a partir do confronto entre as vendas informadas no SAV e as notas fiscais eletrônicas de aquisição de medicamentos.",
@@ -327,7 +330,7 @@ def _add_anexo_ii_memoria_calculo(
     )
 
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
     _run(p_title, "Quadro II.1 - Resumo geral da memória de cálculo", color="0F172A", size=9, bold=True)
 
     summary_headers = [
@@ -360,8 +363,7 @@ def _add_anexo_ii_memoria_calculo(
         timing.mark("anexo II resumo geral")
 
     p_title2 = doc.add_paragraph()
-    p_title2.paragraph_format.space_before = Pt(10)
-    p_title2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
     _run(p_title2, "Quadro II.2 - Medicamentos com vendas sem comprovação, por GTIN", color="0F172A", size=9, bold=True)
 
     headers = [
@@ -425,8 +427,7 @@ def _add_anexo_ii_memoria_calculo(
         timing.mark(f"anexo II quadro consolidado ({len(consolidados)} GTINs)")
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.space_before = Pt(5)
+    _format_block_footnote(p_foot, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
     _run(
         p_foot,
         "Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.",

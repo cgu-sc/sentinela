@@ -3,6 +3,7 @@ from docx.opc.packuri import PackURI
 from docx.opc.part import XmlPart
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 
@@ -108,6 +109,42 @@ def _keep_small_table_together(title_para, table, trailing_paragraphs=None):
         trailing_paragraphs[-1].paragraph_format.keep_with_next = False
     elif table_paragraphs:
         table_paragraphs[-1].paragraph_format.keep_with_next = False
+
+
+def _format_block_title(
+    paragraph,
+    *,
+    space_before: float = 16,
+    space_after: float = 8,
+    alignment=WD_ALIGN_PARAGRAPH.CENTER,
+):
+    paragraph.alignment = alignment
+    paragraph.paragraph_format.keep_with_next = True
+    paragraph.paragraph_format.keep_together = True
+    paragraph.paragraph_format.space_before = Pt(space_before)
+    paragraph.paragraph_format.space_after = Pt(space_after)
+
+
+def _format_block_footnote(
+    paragraph,
+    *,
+    space_before: float = 5,
+    space_after: float = 18,
+    alignment=WD_ALIGN_PARAGRAPH.CENTER,
+):
+    paragraph.alignment = alignment
+    paragraph.paragraph_format.keep_with_next = False
+    paragraph.paragraph_format.keep_together = True
+    paragraph.paragraph_format.space_before = Pt(space_before)
+    paragraph.paragraph_format.space_after = Pt(space_after)
+
+
+def _format_picture_paragraph(paragraph, *, keep_with_next: bool = True):
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.keep_with_next = keep_with_next
+    paragraph.paragraph_format.keep_together = True
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(2)
 
 
 def _rgb(hex6: str) -> RGBColor:

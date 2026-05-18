@@ -3,7 +3,7 @@ from typing import Any
 
 from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import (
     _append_table_row_fast,
@@ -95,6 +95,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
 
     doc.add_heading('ANEXO III - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
     p_intro = doc.add_paragraph()
+    p_intro.paragraph_format.space_after = Pt(8)
     _run(
         p_intro,
         f'Detalhamento de transações agrupadas por CPF relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), '

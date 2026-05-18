@@ -6,7 +6,7 @@ from typing import Any
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches
 
-from .nota_tecnica_docx_utils import _run
+from .nota_tecnica_docx_utils import _format_block_footnote, _format_block_title, _format_picture_paragraph, _run
 from .nota_tecnica_formatters import _format_decimal_pt
 
 
@@ -44,40 +44,12 @@ def _svg_escape(value: Any) -> str:
 
 def _svg_to_png_stream(svg: str) -> io.BytesIO:
     """Converte SVG para PNG mantendo a insercao no DOCX compativel."""
-    svg_bytes = svg.encode("utf-8")
-    png_result: Any
-    try:
-        import resvg_py
+    import resvg_py
 
-        png_result = resvg_py.svg_to_bytes(svg_string=svg, background="white")
-    except Exception:
-        try:
-            import cairosvg
-
-            png_result = cairosvg.svg2png(bytestring=svg_bytes)
-        except Exception:
-            try:
-                from reportlab.graphics import renderPM  # type: ignore[reportMissingTypeStubs]
-                from svglib.svglib import svg2rlg  # type: ignore[reportMissingTypeStubs]
-
-                drawing = svg2rlg(io.BytesIO(svg_bytes))  # type: ignore[reportArgumentType]
-                if drawing is None:
-                    raise RuntimeError("svglib returned no drawing")
-                png_result = renderPM.drawToString(drawing, fmt="PNG")
-            except Exception as svglib_error:
-                raise RuntimeError(
-                    "SVG to PNG conversion failed with resvg_py, cairosvg and svglib"
-                ) from svglib_error
-    if png_result is None:
-        raise RuntimeError("SVG to PNG conversion returned no PNG bytes")
-    if isinstance(png_result, str):
-        png_bytes = png_result.encode("utf-8")
-    elif isinstance(png_result, bytes):
-        png_bytes = png_result
-    elif isinstance(png_result, bytearray):
-        png_bytes = bytes(png_result)
-    else:
+    png_result: Any = resvg_py.svg_to_bytes(svg_string=svg, background="white")
+    if not isinstance(png_result, bytes):
         raise RuntimeError(f"SVG to PNG conversion returned unsupported type: {type(png_result)!r}")
+    png_bytes = png_result
     if not png_bytes:
         raise RuntimeError("SVG to PNG conversion returned empty PNG bytes")
     stream = io.BytesIO(png_bytes)
@@ -241,7 +213,7 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid_color = "#CBD5E1"
     regular_bottom = "#34C79A"
@@ -452,7 +424,7 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
 
     line_color = "#E11D48"
     area_color = "#F43F5E"
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid_color = "#CBD5E1"
 
@@ -543,7 +515,7 @@ def _build_posicionamento_regional_chart(posicionamento_comp: dict[str, Any]) ->
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid_color = "#CBD5E1"
     other_color = "#94A3B8"
@@ -669,7 +641,7 @@ def _build_evolucao_financeira_chart_svg(evolucao_comp: dict[str, Any]) -> str:
     plot_w = width - left - right
     plot_h = height - top - bottom
     plot_bottom = top + plot_h
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid = "#CBD5E1"
 
@@ -743,7 +715,7 @@ def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
     plot_bottom = top + plot_h
     line_color = "#E11D48"
     area_color = "#F43F5E"
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid = "#CBD5E1"
     max_y = max([current_value, *y_values, 1.0])
@@ -829,7 +801,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
     plot_w = width - left - right
     plot_h = height - top - bottom
     plot_bottom = top + plot_h
-    text_color = "#0F172A"
+    text_color = "#334155"
     muted = "#64748B"
     grid = "#CBD5E1"
     other_color = "#94A3B8"
@@ -931,12 +903,18 @@ def _build_posicionamento_regional_chart_prefer_svg(posicionamento_comp: dict[st
         return _build_posicionamento_regional_chart(posicionamento_comp)
 
 
+def _format_figure_title(paragraph):
+    _format_block_title(paragraph, space_before=18, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+
+
+def _format_figure_footnote(paragraph):
+    _format_block_footnote(paragraph, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+
+
 def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, posicionamento_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura de posicionamento regional no documento."""
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.keep_with_next = True
-    p_title.paragraph_format.keep_together = True
+    _format_figure_title(p_title)
     _run(
         p_title,
         f'Figura {figure_number:02d} - Posicionamento regional da Farmácia {razao_social} (CNPJ {cnpj_fmt}) em relação aos estabelecimentos da mesma Região de Saúde.',
@@ -947,36 +925,22 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
 
     chart_stream = _build_posicionamento_regional_chart_prefer_svg(posicionamento_comp)
     p_img = doc.add_paragraph()
-    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_img.paragraph_format.keep_with_next = False
-    p_img.paragraph_format.keep_together = True
+    _format_picture_paragraph(p_img)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_figure_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
         color='64748B',
         size=8,
     )
-
-    p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(
-        p_foot,
-        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
-        color='64748B',
-        size=8,
-    )
-
 def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura de percentil de risco no documento."""
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.keep_with_next = True
-    p_title.paragraph_format.keep_together = True
+    _format_figure_title(p_title)
     _run(
         p_title,
         f'Figura {figure_number:02d} - Posição percentílica da Farmácia {razao_social} (CNPJ {cnpj_fmt}) quanto ao percentual de vendas sem comprovação na Região de Saúde.',
@@ -987,31 +951,25 @@ def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil
 
     chart_stream = _build_percentil_risco_chart_prefer_svg(percentil_comp)
     p_img = doc.add_paragraph()
-    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_img.paragraph_format.keep_with_next = False
-    p_img.paragraph_format.keep_together = True
+    _format_picture_paragraph(p_img)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _format_figure_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
         color='64748B',
         size=8,
     )
-
-
 def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura da evolucao financeira no documento."""
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.keep_with_next = True
-    p_title.paragraph_format.keep_together = True
+    _format_figure_title(p_title)
     _run(
         p_title,
-        f'Figura {figure_number:02d} - Evolução semestral dos recursos recebidos e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
+        f'Figura {figure_number:02d} - Evolução semestral dos recursos recebidos e das "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
         color='0F172A',
         size=9,
         bold=True,
@@ -1019,9 +977,15 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
 
     chart_stream = _build_evolucao_financeira_chart_prefer_svg(evolucao_comp)
     p_img = doc.add_paragraph()
-    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_img.paragraph_format.keep_with_next = False
-    p_img.paragraph_format.keep_together = True
+    _format_picture_paragraph(p_img)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
 
+    p_foot = doc.add_paragraph()
+    _format_figure_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )

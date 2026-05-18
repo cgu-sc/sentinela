@@ -299,9 +299,11 @@ def load_or_sync_crm_unico_alertas(cnpj: str, engine=None) -> CacheLoadResult:
                A.dt_dia AS dt_alerta, DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
                A.nu_autorizacoes_pior_ritmo AS nu_prescricoes_dia,
                A.janela_pior_ritmo_minutos AS nu_minutos_dia,
+               A.nu_minutos_span AS nu_minutos_intervalo,
                A.taxa_hora_pior_ritmo AS taxa_hora,
                A.dt_ini_concentracao AS dt_ini_hora,
                A.dt_fim_concentracao AS dt_fim_hora,
+               A.id_severidade,
                CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
                     WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade,
                A.criterio_pior_ritmo, A.nu_5min, A.nu_10min, A.nu_15min,

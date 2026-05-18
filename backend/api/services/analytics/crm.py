@@ -447,9 +447,11 @@ def get_crm_data(
                 "dt":             str(row["dt_alerta"]),
                 "nu_prescricoes": row["nu_prescricoes_dia"],
                 "nu_minutos":     row["nu_minutos_dia"],
+                "nu_minutos_intervalo": row.get("nu_minutos_intervalo"),
                 "taxa_hora":      _to_float(row.get("taxa_hora")),
                 "dt_ini_hora":    str(row.get("dt_ini_hora") or ""),
                 "dt_fim_hora":    str(row.get("dt_fim_hora") or ""),
+                "id_severidade":  _to_int(row.get("id_severidade")),
             })
 
     for m in crms_interesse_list:

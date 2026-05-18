@@ -131,6 +131,22 @@ def _parse_datetime_crm(value: Any) -> datetime | None:
     return None
 
 
+def _datetime_in_alert_window(tx_dt: datetime, dt_ini: datetime, dt_fim: datetime) -> bool:
+    if dt_ini <= tx_dt <= dt_fim:
+        return True
+
+    if tx_dt.second != 0 or tx_dt.microsecond != 0:
+        return False
+
+    # Algumas bases do Raio-X chegam truncadas no minuto, enquanto o alerta
+    # preserva segundos. Nesses casos, compara tambem no grao de minuto para
+    # nao perder a primeira autorizacao da janela.
+    tx_min = tx_dt.replace(second=0, microsecond=0)
+    ini_min = dt_ini.replace(second=0, microsecond=0)
+    fim_min = dt_fim.replace(second=0, microsecond=0)
+    return ini_min <= tx_min <= fim_min
+
+
 def _enrich_crm_unico_valores(cnpj: str, rows: list[dict[str, Any]]) -> None:
     targets: list[tuple[dict[str, Any], str, str, datetime, datetime]] = []
     for row in rows:
@@ -184,7 +200,7 @@ def _enrich_crm_unico_valores(cnpj: str, rows: list[dict[str, Any]]) -> None:
         valores = [
             valor
             for tx_dt, valor in tx_por_medico_data.get((id_medico, data_key), [])
-            if dt_ini <= tx_dt <= dt_fim
+            if _datetime_in_alert_window(tx_dt, dt_ini, dt_fim)
         ]
         valor = sum(valores)
         row["valor_alerta"] = valor
@@ -240,7 +256,7 @@ def _enrich_crm_multiplo_valores(cnpj: str, rows: list[dict[str, Any]]) -> None:
         valores = [
             valor
             for tx_dt, valor in tx_por_data.get(data_key, [])
-            if dt_ini <= tx_dt <= dt_fim
+            if _datetime_in_alert_window(tx_dt, dt_ini, dt_fim)
         ]
         valor = sum(valores)
         row["valor_alerta"] = valor
@@ -610,6 +626,7 @@ def _build_crm_evidencias_complementares_context(
             nu_prescricoes = _as_int(alerta.get("nu_prescricoes"))
             if nu_prescricoes <= 0:
                 continue
+            nu_minutos_intervalo_raw = alerta.get("nu_minutos_intervalo")
             if id_medico:
                 crm_unico_medicos.add(id_medico)
             crm_unico_rows.append({
@@ -618,7 +635,13 @@ def _build_crm_evidencias_complementares_context(
                 "dt": alerta.get("dt"),
                 "nu_prescricoes": nu_prescricoes,
                 "nu_minutos": _as_int(alerta.get("nu_minutos")),
+                "nu_minutos_intervalo": (
+                    _as_int(nu_minutos_intervalo_raw)
+                    if nu_minutos_intervalo_raw is not None
+                    else None
+                ),
                 "taxa_hora": _as_float(alerta.get("taxa_hora")),
+                "id_severidade": _as_int(alerta.get("id_severidade")),
                 "dt_ini_hora": alerta.get("dt_ini_hora"),
                 "dt_fim_hora": alerta.get("dt_fim_hora"),
             })
@@ -678,7 +701,7 @@ def _build_crm_evidencias_complementares_context(
         reverse=True,
     )
     crm_unico_rows.sort(
-        key=lambda item: (item["nu_prescricoes"], item["taxa_hora"]),
+        key=lambda item: (item["id_severidade"], item["nu_prescricoes"], item["taxa_hora"]),
         reverse=True,
     )
     crms_multiplos_rows.sort(
@@ -982,7 +1005,7 @@ def _add_crm_unico_complementar_text(
     _format_crm_table_title(title)
     _run(title, "Principais episódios de concentração temporal para um único CRM.", color="0F172A", size=9, bold=True)
 
-    headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Valor", "Janela", "Taxa/hora"]
+    headers = ["Data", "CRM/UF", "Nome", "Autorizações", "Valor", "Intervalo", "Taxa/hora"]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [Inches(0.72), Inches(0.75), Inches(1.95), Inches(0.82), Inches(1.05), Inches(0.85), Inches(0.96)]
     _crm_table_header(table, headers, widths)
@@ -991,6 +1014,7 @@ def _add_crm_unico_complementar_text(
         cells = table.add_row().cells
         crm_row, uf_row = _crm_num_uf(row.get("id_medico"))
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
+        intervalo = row.get("nu_minutos_intervalo")
         values = [
             _format_date_br(row.get("dt")),
             crm_uf,
@@ -999,7 +1023,7 @@ def _add_crm_unico_complementar_text(
             f'R$ {_format_decimal_pt(_as_float(row.get("valor_alerta")), 2)}'
             if row.get("valor_alerta_disponivel")
             else "N/d",
-            _format_janela_minutos(row.get("nu_minutos")),
+            _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
             f'{_format_decimal_pt(_as_float(row.get("taxa_hora")), 1)}/h',
         ]
         for idx, value in enumerate(values):

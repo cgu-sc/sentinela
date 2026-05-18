@@ -66,9 +66,11 @@ from .nota_tecnica_criticidades import (
     _get_criticos,
 )
 from .nota_tecnica_crm import (
+    _add_crm_evidencias_complementares_text,
     _add_crms_irregulares_text,
     _add_exclusividade_crm_text,
     _add_hhi_crm_text,
+    _build_crm_evidencias_complementares_context,
     _build_crms_irregulares_context,
     _build_exclusividade_crm_context,
     _build_hhi_crm_context,
@@ -331,7 +333,14 @@ def _add_toc_entry(doc, num: str, title: str, page: str = 'xx'):
     p.paragraph_format.space_after = Pt(2)
 
 
-def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str, has_falecidos: bool = False):
+def _build_sumario(
+    doc,
+    criticos: set[str],
+    razao_social: str,
+    cnpj_fmt: str,
+    has_falecidos: bool = False,
+    has_crm_evidencias: bool = False,
+):
     """Constrói a página de sumário dinâmica."""
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -354,8 +363,12 @@ def _build_sumario(doc, criticos: set[str], razao_social: str, cnpj_fmt: str, ha
     if has_falecidos:
         _add_toc_entry(doc, '  7.1', 'Vendas de medicamentos para pessoas falecidas', page='7')
     criticidade_start = 2 if has_falecidos else 1
-    for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
+    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    for _, num, full_title in criticidade_items:
         _add_toc_entry(doc, f'  {num}', full_title, page='7')
+    if has_crm_evidencias:
+        crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
+        _add_toc_entry(doc, f'  {crm_evidencias_num}', 'Evidências complementares relacionadas ao uso de CRMs no SAV', page='7')
 
     _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='8')
     doc.add_page_break()
@@ -409,6 +422,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim)
     anexo_ii_comp = _build_anexo_ii_context(cnpj, db)
+    crm_evidencias_comp = _build_crm_evidencias_complementares_context(cnpj, data_inicio, data_fim)
 
     # 3. Documento e margens
     doc = Document()
@@ -529,7 +543,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # SUMÁRIO
     criticos = _get_criticos(cnpj)
-    _build_sumario(doc, criticos, razao_social, cnpj_fmt, has_falecidos=bool(falecidos_comp))
+    _build_sumario(
+        doc,
+        criticos,
+        razao_social,
+        cnpj_fmt,
+        has_falecidos=bool(falecidos_comp),
+        has_crm_evidencias=bool(crm_evidencias_comp),
+    )
 
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
     sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1078,6 +1099,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
     elif not falecidos_comp:
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
+
+    if crm_evidencias_comp:
+        crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
+        _add_crm_evidencias_complementares_text(doc, crm_evidencias_num, razao_social, crm_evidencias_comp)
 
     # 8. CONCLUSÃO
     h8 = _format_main_heading(doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1))

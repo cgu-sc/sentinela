@@ -74,7 +74,7 @@ def _write_person_cell(cell, nome: str, cpf: str):
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(0)
-    _run(p, nome, color='0F172A', size=8.2, bold=True)
+    _run(p, nome, color='0F172A', size=8.2)
     p.add_run('\n')
     _run(p, _format_cpf_cnpj(cpf), color='64748B', size=7.0)
 

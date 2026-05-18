@@ -365,6 +365,8 @@ def get_crm_data(
                 "nu_prescricoes": row["nu_prescricoes_dia"],
                 "nu_minutos":     row["nu_minutos_dia"],
                 "taxa_hora":      _to_float(row.get("taxa_hora")),
+                "dt_ini_hora":    str(row.get("dt_ini_hora") or ""),
+                "dt_fim_hora":    str(row.get("dt_fim_hora") or ""),
             })
 
     for m in crms_interesse_list:
@@ -441,12 +443,18 @@ def get_crm_data(
         if comp_ini: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
         if comp_fim: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
         for r in _cm.iter_rows(named=True):
+            nu_prescricoes = _to_int(r.get("nu_prescricoes"))
+            nu_minutos = _to_int(r.get("nu_minutos_span"))
             cnpj_alerts_list.append({
                 "tipo": "MULTIPLO",
                 "dt": str(r["dt_alerta"]),
                 "hr": _to_int(r.get("hr_janela")),
-                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
+                "nu_prescricoes": nu_prescricoes,
                 "nu_crms": _to_int(r.get("nu_crms")),
+                "nu_minutos": nu_minutos,
+                "taxa_hora": (nu_prescricoes * 60.0 / nu_minutos) if nu_minutos > 0 else 0.0,
+                "dt_ini_hora": str(r.get("dt_ini_concentracao") or ""),
+                "dt_fim_hora": str(r.get("dt_fim_concentracao") or ""),
                 "multiplicador": 0.0,
                 "mediana_hora": 0.0
             })

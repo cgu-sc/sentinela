@@ -246,7 +246,7 @@ def _build_evolucao_financeira_chart_pillow(evolucao_comp: dict[str, Any]) -> io
 
     img = img.convert("RGB")
     stream = io.BytesIO()
-    img.save(stream, format="PNG", optimize=True)
+    img.save(stream, format="PNG")
     stream.seek(0)
     return stream
 
@@ -422,13 +422,9 @@ def _build_evolucao_financeira_chart(evolucao_comp: dict[str, Any]) -> io.BytesI
         text.set_color(muted)
 
     fig.tight_layout(pad=1.7)
-    raw_stream = io.BytesIO()
-    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    raw_stream.seek(0)
-
     stream = io.BytesIO()
-    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
+    fig.savefig(stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     stream.seek(0)
     return stream
 
@@ -608,13 +604,9 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
     ax.tick_params(axis="both", colors=muted, labelsize=9.5, length=0)
 
     fig.tight_layout(pad=1.7)
-    raw_stream = io.BytesIO()
-    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    raw_stream.seek(0)
-
     stream = io.BytesIO()
-    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
+    fig.savefig(stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     stream.seek(0)
     return stream
 
@@ -758,13 +750,9 @@ def _build_posicionamento_regional_chart(posicionamento_comp: dict[str, Any]) ->
         text.set_color(muted)
 
     fig.tight_layout(pad=1.7)
-    raw_stream = io.BytesIO()
-    fig.savefig(raw_stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    raw_stream.seek(0)
-
     stream = io.BytesIO()
-    Image.open(raw_stream).save(stream, format="PNG", optimize=True, compress_level=9)
+    fig.savefig(stream, format="png", dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     stream.seek(0)
     return stream
 

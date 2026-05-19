@@ -1,5 +1,6 @@
 import io
 import os
+import uuid
 from decimal import Decimal
 from datetime import date, datetime
 from pathlib import Path
@@ -178,6 +179,22 @@ def _risk_color(classificacao: str | None, score: float) -> tuple[str, str]:
 
 def _vez_ou_vezes(value: float) -> str:
     return "vez" if abs(value) <= 1 else "vezes"
+
+
+def _build_codigo_verificacao(cnpj: str, generated_at: datetime) -> str:
+    cnpj_digits = ''.join(ch for ch in str(cnpj or '') if ch.isdigit()) or 'SEM-CNPJ'
+    suffix = uuid.uuid4().hex[:8].upper()
+    return f'NT-{cnpj_digits}-{generated_at:%Y%m%d}-{suffix}'
+
+
+def _apply_codigo_verificacao_footer(doc, codigo_verificacao: str):
+    footer_text = f'Sistema Sentinela • Código de verificação: {codigo_verificacao}'
+    for section in doc.sections:
+        section.footer.is_linked_to_previous = False
+        footer = section.footer.paragraphs[0] if section.footer.paragraphs else section.footer.add_paragraph()
+        footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        footer.text = ''
+        _run(footer, footer_text, color='94A3B8', size=7)
 
 
 def _configure_section(section, footer_lines: list[str] | None = None):
@@ -451,6 +468,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     """Gera a Nota Técnica Preliminar em formato .docx."""
     timing_log_enabled = _nota_tecnica_timing_enabled()
     timing = _NotaTecnicaTiming(cnpj, data_inicio, data_fim)
+    generated_at = datetime.now()
+    codigo_verificacao = _build_codigo_verificacao(cnpj, generated_at)
 
     # 1. Coleta de dados
     cadastro_obj = get_dados_farmacia(cnpj)
@@ -626,7 +645,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_paragraph('\n')
     p_ts = doc.add_paragraph()
     p_ts.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    _run(p_ts, f'Relatório extraído do Sistema Sentinela em {date.today().strftime("%d/%m/%Y")}', color='94A3B8', size=8, italic=True)
+    _run(p_ts, f'Relatório extraído do Sistema Sentinela em {generated_at.strftime("%d/%m/%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
+    _run(p_ts, f'Código de verificação: {codigo_verificacao}', color='64748B', size=8, bold=True)
 
     # ── 4. Seção 1: Sumário (Sem Rodapé) ──────────────────────────────────
     sec_sumario = doc.add_section()
@@ -1299,6 +1319,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     if falecidos_comp:
         _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing)
         timing.mark("anexo III fechamento")
+
+    _apply_codigo_verificacao_footer(doc, codigo_verificacao)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)

@@ -22,6 +22,25 @@ from .nota_tecnica_formatters import (
     _title_case_pt,
 )
 
+def _format_municipio_falecido(value: Any) -> str:
+    text = str(value or "").strip()
+    sem_registro = {"", "-", "—", "–", "N/I", "NI", "N/A", "NAO INFORMADO", "NÃO INFORMADO"}
+    if text.upper() in sem_registro:
+        return "Sem Registro"
+    return _title_case_pt(text)
+
+
+def _format_municipio_uf_falecido_cell(grupo: dict[str, Any]) -> str | list[dict[str, Any]]:
+    municipio = grupo.get("municipio") or "Sem Registro"
+    uf = grupo.get("uf") or "—"
+    if municipio == "Sem Registro":
+        return [
+            {"text": "Sem Registro", "color": "DC2626"},
+            {"text": f"/{uf}", "color": "0F172A"},
+        ]
+    return f"{municipio}/{uf}"
+
+
 def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
     """Agrupa transacoes de falecidos por CPF, seguindo o modelo da aba Mortality."""
     grupos: dict[str, dict[str, Any]] = {}
@@ -31,7 +50,7 @@ def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
             grupos[cpf] = {
                 "cpf": cpf,
                 "nome": _title_case_pt(getattr(t, "nome_falecido", None)),
-                "municipio": _title_case_pt(getattr(t, "municipio_falecido", None)) if getattr(t, "municipio_falecido", None) else "—",
+                "municipio": _format_municipio_falecido(getattr(t, "municipio_falecido", None)),
                 "uf": getattr(t, "uf_falecido", None) or "—",
                 "dt_obito": getattr(t, "dt_obito", None),
                 "outros_cnpj": getattr(t, "outros_estabelecimentos", None),
@@ -141,7 +160,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
                     {"break": True},
                     {"text": _format_cpf_cnpj(cpf), "color": "64748B", "size": 7.0},
                 ],
-                f'{grupo["municipio"]}/{grupo["uf"]}',
+                _format_municipio_uf_falecido_cell(grupo),
                 _format_date_pt(getattr(t, "dt_obito", None)),
                 _format_date_pt(getattr(t, "data_autorizacao", None)),
                 _format_decimal_pt(float(getattr(t, "valor_total_autorizacao", 0.0) or 0.0), 2),

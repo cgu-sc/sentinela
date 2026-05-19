@@ -1021,6 +1021,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     farmacia_txt = "farmácia" if qtd_farmacias == 1 else "farmácias"
     que_opera_txt = "que opera" if qtd_farmacias == 1 else "que operam"
     localizada_txt = "localizada" if qtd_farmacias == 1 else "localizadas"
+    qtd_municipios = len(regional_comp["municipios"])
+    municipio_txt = "município" if qtd_municipios == 1 else "municípios"
     municipios_txt = _format_list_pt(regional_comp["municipios"])
 
     p_regional_53 = doc.add_paragraph()
@@ -1035,7 +1037,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     )
     _run(p_regional_53, ' que contempla ', color='0F172A', size=10)
     _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='334155', size=10, bold=True)
-    _run(p_regional_53, f' {que_opera_txt} no PFPB, {localizada_txt} nos seguintes municípios do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
+    _run(p_regional_53, f' {que_opera_txt} no PFPB, {localizada_txt} em {qtd_municipios} {municipio_txt} do Estado ({regional_comp["uf"]}): {municipios_txt}.', color='0F172A', size=10)
 
     p_geo_ampliado = doc.add_paragraph()
     _run(p_geo_ampliado, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)

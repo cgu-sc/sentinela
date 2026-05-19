@@ -79,10 +79,13 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
 
         taxa = item.get("taxa_crescimento_pct")
         taxa_txt = f'+{_format_decimal_pt(float(taxa), 1)}%' if taxa is not None else '-'
+        entrada_txt = item.get("entrada_txt") or '—'
+        if entrada_txt != '—':
+            entrada_txt = entrada_txt[:1].upper() + entrada_txt[1:]
 
         values = [
             item.get("nome_socio") or '—',
-            item.get("entrada_txt") or '—',
+            entrada_txt,
             item.get("semestre_fmt") or '—',
             taxa_txt,
             distancia_txt,
@@ -261,6 +264,7 @@ def _add_quadro_evolucao_financeira(
 
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
+        has_aumento_atipico = item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=8)
         for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):
@@ -276,16 +280,19 @@ def _add_quadro_evolucao_financeira(
             bold=item["pct_irregular"] >= 50,
         )
         cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        if item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None:
+        if has_aumento_atipico:
             _run(
                 cells[5].paragraphs[0],
                 f'+{_format_decimal_pt(item["taxa_crescimento_pct"], 1)}%',
-                color='334155',
+                color='991B1B',
                 size=8,
                 bold=True,
             )
         else:
             _run(cells[5].paragraphs[0], '-', color='64748B', size=8)
+        if has_aumento_atipico:
+            for cell in cells:
+                _cell_bg(cell, 'FEE2E2')
 
     total_cells = table.rows[-1].cells
     _run(total_cells[0].paragraphs[0], 'TOTAL', color='0F172A', size=8, bold=True)

@@ -1938,7 +1938,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     p1 = doc.add_paragraph()
     _run(
         p1,
-        "No âmbito do PFPB, espera-se que médicos prescritores tenham dispensações registradas em mais de uma farmácia, em razão da diversidade esperada de pacientes e estabelecimentos. A identificação de retiradas de medicamentos associadas a um médico em apenas um estabelecimento farmacêutico pode indicar atuação direcionada junto à farmácia ou uso indevido de CRM pelo estabelecimento.",
+        "No âmbito do PFPB, espera-se que médicos prescritores tenham dispensações registradas em mais de uma farmácia, em razão da diversidade esperada de pacientes e estabelecimentos. A identificação de autorizações associadas a um CRM em apenas um estabelecimento farmacêutico, considerando todos os estabelecimentos do PFPB no Brasil, pode indicar atuação direcionada junto à farmácia ou uso indevido de CRM pelo estabelecimento.",
         color="0F172A",
         size=10,
     )
@@ -1951,7 +1951,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
         _run(p2, f"R$ {_format_decimal_pt(exclusivos_valor, 2)}", color="334155", size=10, bold=True)
         _run(p2, ", equivalente a ", color="0F172A", size=10)
         _run(p2, f"{_format_decimal_pt(pct_valor_exclusivo, 2)}%", color="334155", size=10, bold=True)
-        _run(p2, f", esteve associado a {crm_exclusivo_desc} cujos clientes retiraram seus medicamentos exclusivamente nesse estabelecimento. {identificados_intro} ", color="0F172A", size=10)
+        _run(p2, f", esteve associado a {crm_exclusivo_desc} cujas autorizações no SAV, considerando todos os estabelecimentos do PFPB no Brasil, foram registradas apenas nesse estabelecimento. {identificados_intro} ", color="0F172A", size=10)
         _run(p2, f"{qtd_exclusivos}", color="334155", size=10, bold=True)
         _run(p2, f" {crm_exclusivo_quant}, {equivalente_txt} a ", color="0F172A", size=10)
     else:

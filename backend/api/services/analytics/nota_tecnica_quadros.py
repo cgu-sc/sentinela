@@ -327,6 +327,95 @@ def _add_quadro_evolucao_financeira(
     _keep_small_table_together(p_title, table, [p_foot])
 
 
+def _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: list[dict[str, Any]]):
+    """Adiciona quadro com medicamentos que mais contribuiram para semestres atipicos."""
+    if not medicamentos_aumento_atipico:
+        return
+
+    p_title = doc.add_paragraph()
+    _format_quadro_title(p_title)
+    _run(
+        p_title,
+        'Quadro 05-A - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
+        color='0F172A',
+        size=9,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(medicamentos_aumento_atipico) + 1, cols=7)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(0.95), Inches(0.85), Inches(2.0), Inches(0.7), Inches(0.85), Inches(1.0), Inches(0.75)])
+
+    headers = [
+        'Semestre',
+        'GTIN',
+        'Medicamento',
+        'Valor anterior',
+        'Valor no semestre',
+        'Aumento no semestre',
+        'Sem comprovação',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=7, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    semestre_block_index: dict[str, int] = {}
+    next_block_index = 0
+
+    for row_idx, item in enumerate(medicamentos_aumento_atipico, start=1):
+        cells = table.rows[row_idx].cells
+        is_demais = bool(item.get("is_demais"))
+        semestre_key = str(item.get("semestre_fmt") or item.get("semestre") or "")
+        if semestre_key not in semestre_block_index:
+            semestre_block_index[semestre_key] = next_block_index
+            next_block_index += 1
+        semestre_bg = 'E2E8F0' if semestre_block_index[semestre_key] % 2 == 0 else 'F8FAFC'
+        text_color = '0F172A'
+        increase_color = '334155'
+        cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[0].paragraphs[0], item["semestre_fmt"], color='334155', size=7, bold=True)
+        _cell_bg(cells[0], semestre_bg)
+        cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[1].paragraphs[0], item["gtin"], color=text_color, size=7)
+        _run(cells[2].paragraphs[0], item["descricao"], color=text_color, size=7)
+
+        for col_idx, key in enumerate(("valor_anterior", "valor_atual"), start=3):
+            cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color=text_color, size=7)
+
+        cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        aumento_txt = f'R$ {_format_decimal_pt(item["aumento_valor"], 2)}'
+        if item.get("aumento_relativo_pct") is not None:
+            aumento_txt += f'\n(+{_format_decimal_pt(item["aumento_relativo_pct"], 1)}%)'
+        _run(
+            cells[5].paragraphs[0],
+            aumento_txt,
+            color=increase_color,
+            size=7,
+            bold=True,
+        )
+        cells[6].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _run(cells[6].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color=text_color, size=7)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir da evolução mensal por GTIN. O percentual indicado no campo “Aumento no semestre” representa o crescimento do GTIN em relação ao semestre anterior e é exibido apenas quando o valor anterior é superior a R$ 1,00. GTINs com participação individual menor ou igual a 0,1% no aumento positivo do semestre são consolidados em uma linha agregada.',
+        color='64748B',
+        size=8,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
 def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_txt: str):
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
     p_title = doc.add_paragraph()

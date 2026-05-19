@@ -164,13 +164,20 @@ function abrirInfratores(mes) {
   insightSidebarVisible.value = true;
 }
 
-// Ao clicar em uma barra do gráfico mensal, seleciona o semestre correspondente
+// Ao clicar em uma barra do gráfico mensal, seleciona o semestre e abre o detalhamento.
+function getPeriodoFromMensalChartClick(params) {
+  if (params?.name) return params.name;
+  if (params?.dataIndex == null) return null;
+  return todosMeses.value[params.dataIndex]?.mes ?? null;
+}
+
 function onMensalChartClick(params) {
-  if (!params?.name) return;
-  const mesStr = params.name; // "YYYY-MM"
+  const mesStr = getPeriodoFromMensalChartClick(params);
+  if (!mesStr) return;
   const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const sem = semestres.find(s => mesPertenceAoSemestre(mesStr, s.semestre));
   if (sem) selectedSemestre.value = sem;
+  abrirInfratores(mesStr);
 }
 
 // Hover sync: disparado quando o cursor entra na área de uma categoria (quadro translúcido)
@@ -645,7 +652,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             <i v-if="evolucaoMensalGtinLoading" class="pi pi-spin pi-spinner refresh-spinner" />
           </div>
         </div>
-        <div v-if="todosMeses.length" class="evolucao-chart-wrap">
+        <div v-if="todosMeses.length" class="evolucao-chart-wrap mensal-chart-clickable">
           <VChart
             :option="mensalChartOption"
             :update-options="{ notMerge: true }"
@@ -922,6 +929,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
             :update-options="{ notMerge: true }"
             autoresize
             style="width: 100%; height: 100%;"
+            @click="onMensalChartClick"
           />
         </div>
         <template #footer>
@@ -1343,6 +1351,9 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 }
 
 .evolucao-chart-wrap.is-hovering-axis :deep(canvas) {
+  cursor: pointer !important;
+}
+.mensal-chart-clickable :deep(canvas) {
   cursor: pointer !important;
 }
 /* Remover borda branca de foco nos botões */

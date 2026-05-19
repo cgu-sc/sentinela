@@ -393,6 +393,192 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
     raise TypeError(f"Objeto semestral inesperado para Nota Tecnica: {type(model)!r}.")
 
 
+def _semestre_fmt_from_key(chave_semestre: int) -> str:
+    ano = int(chave_semestre) // 100
+    semestre = int(chave_semestre) % 100
+    return _format_semestre_pt(f"{semestre}S/{ano}")
+
+
+def _build_medicamentos_aumento_atipico_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    semestres_atipicos: list[dict[str, Any]],
+    max_por_semestre: Optional[int] = None,
+    participacao_minima_pct: float = 0.1,
+) -> list[dict[str, Any]]:
+    """Lista GTINs que mais contribuiram para os aumentos positivos em semestres atipicos."""
+    if not semestres_atipicos:
+        return []
+
+    get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
+
+    parquet_path = os.path.join(_get_cnpj_cache_dir(cnpj), MOVIMENTACAO_MENSAL_GTIN_PARQUET)
+    if not os.path.exists(parquet_path):
+        return []
+
+    df = pl.read_parquet(parquet_path)
+    required_cols = {
+        "codigo_barra",
+        "periodo",
+        "valor_vendas",
+        "valor_sem_comprovacao",
+    }
+    if required_cols - set(df.columns):
+        return []
+
+    df = df.with_columns([
+        pl.col("codigo_barra").cast(pl.String),
+        pl.col("periodo").cast(pl.Date),
+        pl.col("valor_vendas").cast(pl.Float64, strict=False).fill_null(0.0),
+        pl.col("valor_sem_comprovacao").cast(pl.Float64, strict=False).fill_null(0.0),
+    ])
+    if data_inicio:
+        df = df.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        df = df.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+    if df.is_empty():
+        return []
+
+    df = df.with_columns([
+        (
+            pl.col("periodo").dt.year() * 100
+            + pl.when(pl.col("periodo").dt.month() <= 6).then(pl.lit(1)).otherwise(pl.lit(2))
+        ).alias("chave_semestre")
+    ])
+
+    chaves: set[int] = set()
+    for semestre in semestres_atipicos:
+        chave = semestre.get("chave_semestre")
+        chave_anterior = semestre.get("chave_semestre_anterior")
+        if chave is not None:
+            chaves.add(int(chave))
+        if chave_anterior is not None:
+            chaves.add(int(chave_anterior))
+    if not chaves:
+        return []
+
+    agg = (
+        df.filter(pl.col("chave_semestre").is_in(sorted(chaves)))
+        .group_by(["chave_semestre", "codigo_barra"])
+        .agg([
+            pl.sum("valor_vendas").alias("valor_vendas"),
+            pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
+        ])
+    )
+    if agg.is_empty():
+        return []
+
+    valores: dict[tuple[int, str], dict[str, float]] = {}
+    for row in agg.iter_rows(named=True):
+        gtin = _normalize_gtin(row["codigo_barra"])
+        valores[(int(row["chave_semestre"]), gtin)] = {
+            "valor_vendas": float(row["valor_vendas"] or 0.0),
+            "valor_sem_comprovacao": float(row["valor_sem_comprovacao"] or 0.0),
+        }
+
+    try:
+        medicamentos_lookup = _build_medicamentos_lookup()
+    except RuntimeError:
+        medicamentos_lookup = {}
+    resultado: list[dict[str, Any]] = []
+
+    for semestre in semestres_atipicos:
+        chave = semestre.get("chave_semestre")
+        chave_anterior = semestre.get("chave_semestre_anterior")
+        if chave is None or chave_anterior is None:
+            continue
+
+        chave = int(chave)
+        chave_anterior = int(chave_anterior)
+        gtins = {
+            gtin
+            for key, gtin in valores
+            if key in {chave, chave_anterior}
+        }
+
+        candidatos: list[dict[str, Any]] = []
+        for gtin in gtins:
+            atual = valores.get((chave, gtin), {})
+            anterior = valores.get((chave_anterior, gtin), {})
+            valor_atual = float(atual.get("valor_vendas") or 0.0)
+            valor_anterior = float(anterior.get("valor_vendas") or 0.0)
+            aumento = valor_atual - valor_anterior
+            if aumento <= 0:
+                continue
+            candidatos.append({
+                "semestre": semestre.get("semestre"),
+                "semestre_fmt": semestre.get("semestre_fmt") or _semestre_fmt_from_key(chave),
+                "semestre_anterior_fmt": _semestre_fmt_from_key(chave_anterior),
+                "gtin": gtin,
+                "descricao": medicamentos_lookup.get(gtin) or "Descricao nao identificada",
+                "valor_anterior": round(valor_anterior, 2),
+                "valor_atual": round(valor_atual, 2),
+                "aumento_valor": round(aumento, 2),
+                "aumento_relativo_pct": round(aumento / valor_anterior * 100, 1) if valor_anterior > 1.0 else None,
+                "valor_sem_comprovacao": round(float(atual.get("valor_sem_comprovacao") or 0.0), 2),
+            })
+
+        if not candidatos:
+            continue
+
+        total_aumentos_positivos = sum(item["aumento_valor"] for item in candidatos)
+        candidatos_ordenados = sorted(candidatos, key=lambda row: row["aumento_valor"], reverse=True)
+        if max_por_semestre is not None:
+            candidatos_ordenados = candidatos_ordenados[:max_por_semestre]
+
+        demais = {
+            "qtd_gtins": 0,
+            "valor_anterior": 0.0,
+            "valor_atual": 0.0,
+            "aumento_valor": 0.0,
+            "valor_sem_comprovacao": 0.0,
+        }
+
+        for item in candidatos_ordenados:
+            participacao_aumento_pct = (
+                round(item["aumento_valor"] / total_aumentos_positivos * 100, 1)
+                if total_aumentos_positivos > 0
+                else 0.0
+            )
+            if participacao_aumento_pct <= participacao_minima_pct:
+                demais["qtd_gtins"] += 1
+                demais["valor_anterior"] += item["valor_anterior"]
+                demais["valor_atual"] += item["valor_atual"]
+                demais["aumento_valor"] += item["aumento_valor"]
+                demais["valor_sem_comprovacao"] += item["valor_sem_comprovacao"]
+                continue
+            item["participacao_aumento_pct"] = participacao_aumento_pct
+            resultado.append(item)
+
+        if demais["aumento_valor"] > 0:
+            gtins_txt = "GTIN" if demais["qtd_gtins"] == 1 else "GTINs"
+            resultado.append({
+                "semestre": semestre.get("semestre"),
+                "semestre_fmt": semestre.get("semestre_fmt") or _semestre_fmt_from_key(chave),
+                "semestre_anterior_fmt": _semestre_fmt_from_key(chave_anterior),
+                "gtin": f'{int(demais["qtd_gtins"])} {gtins_txt}',
+                "descricao": "GTINs com participacao individual menor ou igual a 0,1%",
+                "valor_anterior": round(demais["valor_anterior"], 2),
+                "valor_atual": round(demais["valor_atual"], 2),
+                "aumento_valor": round(demais["aumento_valor"], 2),
+                "aumento_relativo_pct": (
+                    round(demais["aumento_valor"] / demais["valor_anterior"] * 100, 1)
+                    if demais["valor_anterior"] > 1.0
+                    else None
+                ),
+                "valor_sem_comprovacao": round(demais["valor_sem_comprovacao"], 2),
+                "participacao_aumento_pct": (
+                    round(demais["aumento_valor"] / total_aumentos_positivos * 100, 1)
+                    if total_aumentos_positivos > 0
+                    else 0.0
+                ),
+                "is_demais": True,
+            })
+
+    return resultado
+
+
 def _build_ultimo_mes_sav_context(
     cnpj: str,
     data_inicio: Optional[date],
@@ -477,6 +663,12 @@ def _build_evolucao_financeira_context(
     pct_irregular_geral = (irregular_geral / total_geral * 100) if total_geral > 0 else 0.0
 
     semestres_atipicos = [row for row in rows if row["volume_atipico"]]
+    medicamentos_aumento_atipico = _build_medicamentos_aumento_atipico_context(
+        cnpj,
+        data_inicio,
+        data_fim,
+        semestres_atipicos,
+    )
     limites_volume_atipico = [
         row["limite_volume_atipico_pct"]
         for row in rows
@@ -519,6 +711,7 @@ def _build_evolucao_financeira_context(
         "crescimento_relevante": semestres_atipicos,
         "semestres_atipicos": semestres_atipicos,
         "top_irregulares": top_irregulares,
+        "medicamentos_aumento_atipico": medicamentos_aumento_atipico,
     }
 
 

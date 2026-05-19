@@ -39,6 +39,7 @@ from .nota_tecnica_quadros import (
     _add_quadro_evolucao_financeira,
     _add_quadro_gtins_sem_comprovacao,
     _add_quadro_identificacao,
+    _add_quadro_medicamentos_aumento_atipico,
     _add_quadro_socios_volume_atipico,
 )
 from .nota_tecnica_criticidades import (
@@ -1136,6 +1137,17 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
 
     _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
+    medicamentos_aumento_atipico = evolucao_comp.get("medicamentos_aumento_atipico") or []
+    if medicamentos_aumento_atipico:
+        p_medicamentos_volume = doc.add_paragraph()
+        p_medicamentos_volume.paragraph_format.space_before = Pt(6)
+        _run(
+            p_medicamentos_volume,
+            'Para qualificar os semestres destacados como atípicos, o quadro complementar a seguir decompõe o aumento financeiro por GTIN, comparando o semestre atípico com o semestre anterior utilizado no cálculo do alerta.',
+            color='0F172A',
+            size=10,
+        )
+    _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico)
     if socios_volume_atipico:
         p_socios_volume = doc.add_paragraph()
         p_socios_volume.paragraph_format.space_before = Pt(6)

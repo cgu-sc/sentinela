@@ -181,6 +181,30 @@ def _vez_ou_vezes(value: float) -> str:
     return "vez" if abs(value) <= 1 else "vezes"
 
 
+def _crm_evidencias_intro_resumo(crm_evidencias_comp: dict[str, Any] | None) -> str:
+    if not crm_evidencias_comp:
+        return ''
+
+    evidencias: list[str] = []
+    if crm_evidencias_comp.get("distancia"):
+        evidencias.append("distância geográfica elevada entre médicos prescritores e o estabelecimento")
+    if crm_evidencias_comp.get("intensiva"):
+        evidencias.append("volume diário atípico de prescrições por CRM")
+    if crm_evidencias_comp.get("volume_horario"):
+        evidencias.append("volume horário anômalo de autorizações")
+    if crm_evidencias_comp.get("crm_unico"):
+        evidencias.append("concentração temporal de autorizações vinculadas a um mesmo CRM")
+    if crm_evidencias_comp.get("crms_multiplos"):
+        evidencias.append("episódios de autorizações concentradas envolvendo múltiplos CRMs")
+    principais_contexto = crm_evidencias_comp.get("principais_crms_contexto") or {}
+    if principais_contexto.get("qtd_com_alerta"):
+        evidencias.append("CRMs de interesse com alertas operacionais associados ao estabelecimento")
+
+    if not evidencias:
+        return "evidências complementares relacionadas ao uso de CRMs no SAV"
+    return _format_list_pt(evidencias)
+
+
 def _build_codigo_verificacao(cnpj: str, generated_at: datetime) -> str:
     cnpj_digits = ''.join(ch for ch in str(cnpj or '') if ch.isdigit()) or 'SEM-CNPJ'
     suffix = uuid.uuid4().hex[:8].upper()
@@ -590,7 +614,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     p_titulo = doc.add_paragraph()
     p_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_titulo, 'NOTA TÉCNICA PRELIMINAR\n', color='0F172A', size=24, bold=True)
-    _run(p_titulo, 'SISTEMA SENTINELA', color='0F172A', size=14, bold=True)
+    _run(p_titulo, 'SENTINELA', color='0F172A', size=14, bold=True)
     _run(p_titulo, '\nPrograma Farmácia Popular do Brasil', color='64748B', size=10, italic=True)
 
     doc.add_paragraph('\n' * 2)
@@ -615,6 +639,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _cell_borders(c_info, bottom={'sz': '6', 'color': 'CBD5E1'})
     p_info = c_info.paragraphs[0]
     p_info.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p_info.paragraph_format.space_before = Pt(16)
     _run(p_info, 'IDENTIFICAÇÃO DO ESTABELECIMENTO AUDITADO\n', color='64748B', size=7, bold=True)
     _run(p_info, f'{razao_social}\n', color='0F172A', size=13, bold=True)
     if nome_fantasia:
@@ -630,6 +655,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _cell_borders(c_risk, left={'sz': '6', 'color': 'CBD5E1'}, bottom={'sz': '6', 'color': 'CBD5E1'})
     p_risk = c_risk.paragraphs[0]
     p_risk.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_risk.paragraph_format.space_before = Pt(10)
     
     _run(p_risk, 'CLASSIFICAÇÃO DE RISCO\n', color='64748B', size=7, bold=True)
     _run(p_risk, f'{risco_label}\n', color=risco_hex, size=18, bold=True)
@@ -645,6 +671,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_paragraph('\n')
     p_ts = doc.add_paragraph()
     p_ts.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_ts.paragraph_format.space_before = Pt(0)
+    _run(p_ts, '\n\n\n\n', color='94A3B8', size=8)
     _run(p_ts, f'Relatório extraído do Sistema Sentinela em {generated_at.strftime("%d/%m/%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
     _run(p_ts, f'Código de verificação: {codigo_verificacao}', color='64748B', size=8, bold=True)
 
@@ -727,11 +755,27 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     if falecidos_comp:
         snippets.append('[Subitem 7.1] vendas de medicamentos para pessoas falecidas')
         criticidade_start = 2
-    for _, num, full_title in _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'}):
+    criticidade_items_intro = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    for _, num, full_title in criticidade_items_intro:
         snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
+    crm_evidencias_num_intro = f'7.{criticidade_start + len(criticidade_items_intro)}'
     
-    texto_snippets = ("; ".join(snippets[:-1]) + "; e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
-    doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”, como: {texto_snippets}.')
+    if len(snippets) <= 4:
+        texto_snippets = ("; ".join(snippets[:-1]) + "; e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
+        doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”, como: {texto_snippets}.')
+    else:
+        doc.add_paragraph('Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”. Em síntese, destacam-se:')
+        for snippet in snippets:
+            p_snippet = doc.add_paragraph(style='List Bullet')
+            p_snippet.paragraph_format.space_after = Pt(2)
+            _run(p_snippet, f'{snippet}.', color='0F172A', size=9)
+    if crm_evidencias_comp:
+        if len(snippets) > 4:
+            doc.add_paragraph()
+        crm_evidencias_resumo = _crm_evidencias_intro_resumo(crm_evidencias_comp)
+        doc.add_paragraph(
+            f'Adicionalmente, o Subitem {crm_evidencias_num_intro} apresenta evidências complementares relacionadas ao uso de CRMs no SAV, incluindo {crm_evidencias_resumo}, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
+        )
     doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']

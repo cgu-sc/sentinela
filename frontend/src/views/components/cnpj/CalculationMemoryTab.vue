@@ -22,7 +22,6 @@ const error   = computed(() => cnpjDetailStore.movimentacaoError);
 const data    = computed(() => cnpjDetailStore.movimentacaoData);
 const {
   cachedData: cachedMovimentacaoData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(data, loading, error);
 const rows    = computed(() => cachedMovimentacaoData.value?.rows ?? []);
@@ -317,12 +316,11 @@ const pctIrregular = (section) => {
       :description="error"
     />
 
-    <!-- ── ESTADO: Carregando (inclui aguardando início do fetch) ───────────── -->
-    <TabPlaceholder
-      v-else-if="shouldShowInitialLoading || (!loaded && !cachedMovimentacaoData)"
-      variant="loading"
-      title="Processando memória de cálculo"
-      description="Buscando movimentações e calculando indicadores..."
+    <!-- ── ESTADO: Carregamento inicial silencioso ──────────────────────────── -->
+    <div
+      v-else-if="!loaded && !cachedMovimentacaoData"
+      class="mov-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <!-- ── ESTADO: Sem dados ───────────────────────────────────────────────── -->

@@ -23,7 +23,6 @@ const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewM
 const filterStore = useFilterStore();
 const {
   cachedData: cachedPrescritoresData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(prescritoresData, prescritoresLoading, prescritoresError);
 
@@ -145,11 +144,10 @@ defineExpose({
 
 <template>
   <div class="crm-tab-container">
-    <TabPlaceholder
-      v-if="shouldShowInitialLoading"
-      variant="loading"
-      title="Carregando análise de prescritores"
-      description="Buscando CRMs e histórico de prescrições..."
+    <div
+      v-if="prescritoresLoading && !cachedPrescritoresData && !prescritoresError"
+      class="crm-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder
@@ -161,7 +159,7 @@ defineExpose({
     />
 
     <TabPlaceholder
-      v-else-if="!cachedPrescritoresData || crmsInteresse.length === 0"
+      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0"
       :variant="cachedPrescritoresData?.tem_historico ? 'info' : 'success'"
       icon="pi-id-card"
       :title="cachedPrescritoresData?.tem_historico ? 'Sem prescrições no período' : 'CNPJ livre de ocorrências'"

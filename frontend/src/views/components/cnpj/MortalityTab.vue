@@ -25,7 +25,6 @@ const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = sto
 // Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
 const {
   cachedData: cachedFalecidosData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(falecidosData, falecidosLoading, falecidosError);
 
@@ -172,11 +171,10 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 <template>
   <div class="tab-content falecidos-tab" :class="{ 'is-refreshing': isRefreshing }">
-    <TabPlaceholder
-      v-if="shouldShowInitialLoading"
-      variant="loading"
-      title="Analisando base de óbitos"
-      description="Cruzando dados com registros de falecimento..."
+    <div
+      v-if="falecidosLoading && !cachedFalecidosData && !falecidosError"
+      class="falecidos-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder
@@ -435,12 +433,6 @@ const falecidosAgrupadosFiltrados = computed(() => {
       </div>
     </template>
 
-    <TabPlaceholder
-      v-else
-      variant="loading"
-      title="Analisando base de óbitos"
-      description="Cruzando dados com registros de falecimento..."
-    />
     <MortalityTimelineOverlay ref="timelineOverlay" :current-cnpj="cnpj" />
   </div>
 </template>

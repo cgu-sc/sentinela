@@ -1641,11 +1641,10 @@ const typeLabels = NETWORK_TYPE_LABELS;
 <template>
   <div class="network-tab tab-content">
     <!-- Estados ──────────────────────────────────────────────── -->
-    <TabPlaceholder
-      v-if="networkLoading"
-      variant="loading"
-      title="Construindo a Teia Societária"
-      description="Mapeando conexões e participações societárias…"
+    <div
+      v-if="networkLoading && !networkData && !networkError"
+      class="network-initial-loading-sentinel"
+      aria-hidden="true"
     />
     <TabPlaceholder
       v-else-if="networkError"

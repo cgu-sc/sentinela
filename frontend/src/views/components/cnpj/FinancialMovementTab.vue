@@ -37,7 +37,6 @@ const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolu
 // ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
 const {
   cachedData: cachedEvolucaoData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(evolucaoData, evolucaoLoading, evolucaoError);
 
@@ -558,11 +557,10 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
 <template>
   <div class="tab-content evolucao-tab">
-    <TabPlaceholder
-      v-if="shouldShowInitialLoading"
-      variant="loading"
-      title="Carregando movimentação financeira"
-      description="Buscando histórico semestral e mensal..."
+    <div
+      v-if="evolucaoLoading && !cachedEvolucaoData && !evolucaoError"
+      class="evolucao-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder
@@ -924,13 +922,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </template>
       </Dialog>
     </template>
-    <TabPlaceholder
-      v-else
-      variant="loading"
-      title="Carregando movimentação financeira"
-      description="Buscando histórico semestral e mensal..."
-    />
-    
     <GtinDetalhamentoMensalSidebar
       v-model:visible="insightSidebarVisible"
       :cnpj="cnpj"

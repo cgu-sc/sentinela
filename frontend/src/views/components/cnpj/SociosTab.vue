@@ -3,7 +3,6 @@ import { ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
 import { useFormatting } from "@/composables/useFormatting";
-import ProgressSpinner from "primevue/progressspinner";
 import TabPlaceholder from "./TabPlaceholder.vue";
 
 const cnpjDetailStore = useCnpjDetailStore();
@@ -73,11 +72,10 @@ const copyAndSignal = (text, key) => {
   <div class="socios-tab tab-content">
 
     <!-- ── Estados sem dados: fora do card ──────────────────────────────── -->
-    <TabPlaceholder
-      v-if="sociosLoading"
-      variant="loading"
-      title="Carregando quadro societário"
-      description="Buscando dados da Receita Federal..."
+    <div
+      v-if="sociosLoading && !sociosData && !sociosError"
+      class="socios-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder

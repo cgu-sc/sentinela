@@ -374,11 +374,15 @@ const isInitialLoading = computed(() => {
     cnpjDetailStore.cnpjAccessStatus === "checking" ||
     cnpjDetailStore.dadosCadastroLoading ||
     cnpjDetailStore.cnpjsAvulsosLoading ||
+    (cnpjDetailStore.indicadoresLoading &&
+      !cnpjDetailStore.indicadoresData) ||
     (cnpjDetailStore.prescritoresLoading &&
       !cnpjDetailStore.prescritoresData) ||
     (cnpjDetailStore.crmPerfilDiarioLoading &&
       !cnpjDetailStore.crmPerfilDiario) ||
-    (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira)
+    (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira) ||
+    (cnpjDetailStore.sociosLoading && !cnpjDetailStore.sociosData) ||
+    (cnpjDetailStore.networkLoading && !cnpjDetailStore.networkData)
   );
 });
 </script>

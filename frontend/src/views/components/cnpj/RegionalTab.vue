@@ -25,7 +25,6 @@ const { regionalData, regionalLoading, regionalLoaded, regionalError, fetchRegio
 
 const {
   cachedData: cachedRegionalData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(regionalData, regionalLoading, regionalError);
 
@@ -137,13 +136,6 @@ watch(
     />
 
     <TabPlaceholder
-      v-else-if="shouldShowInitialLoading"
-      variant="loading"
-      title="Carregando ranking regional"
-      :description="`Buscando dados da região ${geoData.no_regiao_saude}...`"
-    />
-
-    <TabPlaceholder
       v-else-if="regionalError"
       variant="error"
       icon="pi-exclamation-circle"
@@ -151,11 +143,10 @@ watch(
       :description="regionalError"
     />
 
-    <TabPlaceholder
+    <div
       v-else-if="!regionalLoaded && !cachedRegionalData"
-      variant="loading"
-      title="Preparando análise"
-      :description="`Organizando o ranking comparativo da região ${geoData.no_regiao_saude}...`"
+      class="regional-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder

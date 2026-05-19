@@ -5,7 +5,7 @@ from typing import Any, Optional
 import polars as pl
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 
 from cache_files import CRM_RAIOX_TX_PARQUET
 from data_cache import get_df_matriz_risco
@@ -27,6 +27,40 @@ def _as_float(value: Any) -> float:
         return float(value or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _as_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+        return None if result != result else result
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_optional_decimal_pt(value: Any, decimals: int = 1, empty: str = "n.c.") -> str:
+    number = _as_optional_float(value)
+    if number is None:
+        return empty
+    return _format_decimal_pt(number, decimals)
+
+
+def _volume_horario_excesso_value(row: dict[str, Any]) -> float | None:
+    multiplicador = _as_optional_float(row.get("multiplicador"))
+    if multiplicador is not None:
+        return multiplicador
+    mediana = _as_optional_float(row.get("mediana_hora"))
+    if mediana == 0:
+        return float(_as_int(row.get("nu_prescricoes")))
+    return None
+
+
+def _format_volume_horario_excesso(row: dict[str, Any]) -> str:
+    excesso = _volume_horario_excesso_value(row)
+    if excesso is None:
+        return "n.c."
+    return f"{_format_decimal_pt(excesso, 1)}x"
 
 
 def _as_int(value: Any) -> int:
@@ -88,6 +122,14 @@ def _format_time_hour(value: Any) -> str:
         return "—"
 
 
+def _format_hour_range(value: Any) -> str:
+    try:
+        hora = int(float(value or 0))
+    except (TypeError, ValueError):
+        return "—"
+    return f"{hora % 24:02d}:00 até {(hora + 1) % 24:02d}:00"
+
+
 def _format_datetime_br_minute(value: Any) -> str:
     dt = _parse_datetime_crm(value)
     if dt is None:
@@ -112,6 +154,19 @@ def _format_crm_table_title(paragraph):
 
 def _format_crm_table_footnote(paragraph):
     _format_block_footnote(paragraph, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+
+
+def _format_crm_subheading(paragraph):
+    paragraph.paragraph_format.space_before = Pt(14)
+    paragraph.paragraph_format.space_after = Pt(10)
+    paragraph.paragraph_format.line_spacing = 1.0
+    paragraph.paragraph_format.keep_with_next = True
+    paragraph.paragraph_format.keep_together = True
+    return paragraph
+
+
+def _add_crm_subheading(doc, text: str):
+    return _format_crm_subheading(doc.add_heading(text, level=3))
 
 
 def _parse_datetime_crm(value: Any) -> datetime | None:
@@ -825,6 +880,28 @@ def _build_crm_evidencias_complementares_context(
     qtd_crm_unico = len(crm_unico_medicos)
     qtd_crms_multiplos = len(crms_multiplos_medicos)
     intensiva_local_rows = [row for row in intensiva_rows if row["nu_prescricoes_dia"] > 30]
+    volume_horario_rows = [
+        {
+            "dt": alerta.get("dt"),
+            "hr": alerta.get("hr"),
+            "nu_prescricoes": _as_int(alerta.get("nu_prescricoes")),
+            "nu_crms": _as_int(alerta.get("nu_crms")),
+            "mediana_hora": _as_optional_float(alerta.get("mediana_hora")),
+            "multiplicador": _as_optional_float(alerta.get("multiplicador")),
+        }
+        for alerta in cnpj_alerts
+        if alerta.get("tipo") == "VOLUME"
+        and _as_int(alerta.get("nu_prescricoes")) > 0
+    ]
+    volume_horario_rows.sort(
+        key=lambda item: (
+            _volume_horario_excesso_value(item) is not None,
+            _volume_horario_excesso_value(item) or 0.0,
+            item["nu_prescricoes"],
+        ),
+        reverse=True,
+    )
+    volume_horario_top_rows = volume_horario_rows[:30]
     surtos_multiplos = [
         alerta
         for alerta in cnpj_alerts
@@ -937,6 +1014,7 @@ def _build_crm_evidencias_complementares_context(
 
     total_evidencias = (
         qtd_intensiva_local
+        + len(volume_horario_top_rows)
         + qtd_distancia
         + len(crm_unico_top_medicos)
         + qtd_crms_multiplos_top
@@ -956,6 +1034,19 @@ def _build_crm_evidencias_complementares_context(
         "qtd_crm_unico": qtd_crm_unico,
         "qtd_crms_multiplos": qtd_crms_multiplos,
         "qtd_surtos_multiplos": qtd_surtos_multiplos,
+        "volume_horario": {
+            "qtd_alertas": len(volume_horario_top_rows),
+            "maior_multiplicador": next(
+                (
+                    _volume_horario_excesso_value(row)
+                    for row in volume_horario_top_rows
+                    if _volume_horario_excesso_value(row) is not None
+                ),
+                None,
+            ),
+            "maior_qtd": max((row["nu_prescricoes"] for row in volume_horario_top_rows), default=0),
+            "rows": volume_horario_top_rows,
+        } if volume_horario_top_rows else None,
         "distancia": {
             "qtd_medicos": qtd_distancia,
             "qtd_alertas": len(distancia_rows),
@@ -1006,7 +1097,7 @@ def _add_crm_distancia_complementar_text(
     crm_txt = "CRM" if qtd_medicos == 1 else "CRMs"
     evidencia_txt = "evidência geográfica" if qtd_alertas == 1 else "evidências geográficas"
 
-    doc.add_heading(f"{letra}) Distância superior a 400 km entre estabelecimentos vinculados ao mesmo CRM", level=3)
+    _add_crm_subheading(doc, f"{letra}) Distância superior a 400 km entre estabelecimentos vinculados ao mesmo CRM")
 
     p_dist = doc.add_paragraph()
     _run(
@@ -1093,7 +1184,7 @@ def _add_crm_intensiva_complementar_text(
     maior_media_brasil = _as_float(intensiva_comp.get("maior_media_brasil"))
     rows = list(intensiva_comp.get("rows") or [])
 
-    doc.add_heading(f"{letra}) Médicos com mais de 30 prescrições por dia", level=3)
+    _add_crm_subheading(doc, f"{letra}) Médicos com mais de 30 prescrições por dia")
 
     p = doc.add_paragraph()
     _run(
@@ -1172,7 +1263,7 @@ def _add_crm_unico_complementar_text(
         if principal_intervalo is None:
             principal_intervalo = principal.get("nu_minutos")
 
-    doc.add_heading(f"{letra}) Autorizações concentradas para um único CRM", level=3)
+    _add_crm_subheading(doc, f"{letra}) Autorizações concentradas para um único CRM")
 
     p = doc.add_paragraph()
     _run(p, f"{_plural(qtd_alertas, 'Foi identificado', 'Foram identificados')} ", color="0F172A", size=10)
@@ -1250,7 +1341,7 @@ def _add_crms_multiplos_complementar_text(
     eventos = list(crms_multiplos_comp.get("eventos") or [])
     principal = eventos[0] if eventos else {}
 
-    doc.add_heading(f"{letra}) Autorizações concentradas envolvendo múltiplos CRMs", level=3)
+    _add_crm_subheading(doc, f"{letra}) Autorizações concentradas envolvendo múltiplos CRMs")
 
     p = doc.add_paragraph()
     _run(
@@ -1403,6 +1494,103 @@ def _add_principais_crms_contexto_text(
             _write_cell(cells[idx], value, size=6.6, align=align)
 
 
+def _add_crm_volume_horario_complementar_text(
+    doc,
+    letra: str,
+    razao_social: str,
+    volume_comp: dict[str, Any],
+):
+    """Adiciona o bloco de volume horario anomalo de autorizacoes."""
+    qtd_alertas = _as_int(volume_comp.get("qtd_alertas"))
+    rows = list(volume_comp.get("rows") or [])
+    principal = rows[0] if rows else {}
+
+    _add_crm_subheading(doc, f"{letra}) Volume horário anômalo de autorizações")
+
+    p = doc.add_paragraph()
+    _run(
+        p,
+        f"Na Farmácia {razao_social}, {_plural(qtd_alertas, 'foi identificado', 'foram identificados')} ",
+        color="0F172A",
+        size=10,
+    )
+    _run(p, f"{qtd_alertas}", color="334155", size=10, bold=True)
+    _run(
+        p,
+        f" {_plural(qtd_alertas, 'horário', 'horários')} com volume de autorizações acima do padrão histórico do próprio estabelecimento para a mesma faixa horária. A tabela exibe ",
+        color="0F172A",
+        size=10,
+    )
+    qtd_exibida = len(rows)
+    _run(
+        p,
+        f"{qtd_exibida} {_plural(qtd_exibida, 'principal horário', 'principais horários')}",
+        color="334155",
+        size=10,
+        bold=True,
+    )
+    _run(
+        p,
+        ", ordenados pelo afastamento em relação à mediana. ",
+        color="0F172A",
+        size=10,
+    )
+    if principal:
+        _run(p, "O principal horário concentrou ", color="0F172A", size=10)
+        _run(p, f"{_as_int(principal.get('nu_prescricoes'))}", color="334155", size=10, bold=True)
+        _run(
+            p,
+            f" autorizações em {_format_date_br(principal.get('dt'))}, às {_format_time_hour(principal.get('hr'))}, volume ",
+            color="0F172A",
+            size=10,
+        )
+        multiplicador_principal = _as_optional_float(principal.get("multiplicador"))
+        mediana_principal = _as_optional_float(principal.get("mediana_hora"))
+        excesso_principal = _volume_horario_excesso_value(principal)
+        if multiplicador_principal is not None:
+            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
+        elif excesso_principal is not None:
+            _run(p, f"{_format_decimal_pt(excesso_principal, 1)} vezes", color="334155", size=10, bold=True)
+        else:
+            _run(p, "sem comparação calculável", color="334155", size=10, bold=True)
+        _run(p, ", com mediana histórica de ", color="0F172A", size=10)
+        mediana_principal = _as_optional_float(principal.get("mediana_hora"))
+        _run(
+            p,
+            f"{_format_optional_decimal_pt(mediana_principal, 1)} {_plural(int(round(mediana_principal or 0.0)), 'autorização', 'autorizações')}",
+            color="334155",
+            size=10,
+            bold=True,
+        )
+        _run(p, " para esse horário.", color="0F172A", size=10)
+
+    if not rows:
+        return
+
+    title = doc.add_paragraph()
+    _format_crm_table_title(title)
+    _run(title, "Principais horários com volume anômalo de autorizações.", color="0F172A", size=9, bold=True)
+
+    headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Excesso"]
+    table = doc.add_table(rows=1, cols=len(headers))
+    widths = [Inches(1.0), Inches(0.75), Inches(1.25), Inches(0.75), Inches(1.35), Inches(2.0)]
+    _crm_table_header(table, headers, widths)
+
+    for row in rows:
+        cells = table.add_row().cells
+        values = [
+            _format_date_br(row.get("dt")),
+            _format_hour_range(row.get("hr")),
+            str(_as_int(row.get("nu_prescricoes"))),
+            str(_as_int(row.get("nu_crms"))),
+            _format_optional_decimal_pt(row.get("mediana_hora"), 1),
+            _format_volume_horario_excesso(row),
+        ]
+        for idx, value in enumerate(values):
+            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER
+            _write_cell(cells[idx], value, size=6.8, align=align)
+
+
 def _add_crm_evidencias_complementares_text(
     doc,
     num: str,
@@ -1426,6 +1614,9 @@ def _add_crm_evidencias_complementares_text(
 
     letras = iter("abcdefghijklmnopqrstuvwxyz")
 
+    volume_horario_comp = evidencias_comp.get("volume_horario")
+    if volume_horario_comp:
+        _add_crm_volume_horario_complementar_text(doc, next(letras), razao_social, volume_horario_comp)
     distancia_comp = evidencias_comp.get("distancia")
     if distancia_comp:
         _add_crm_distancia_complementar_text(doc, next(letras), razao_social, distancia_comp)

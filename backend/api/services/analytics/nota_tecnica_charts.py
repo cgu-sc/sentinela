@@ -709,7 +709,7 @@ def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
     metric_label = _svg_escape(percentil_comp.get("metric_label") or "% de vendas sem comprovacao")
 
     width, height = 1326, 650
-    left, right, top, bottom = 96, 56, 106, 90
+    left, right, top, bottom = 96, 56, 176, 90
     plot_w = width - left - right
     plot_h = height - top - bottom
     plot_bottom = top + plot_h
@@ -733,8 +733,9 @@ def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
     area_path = f"{curve_path} L {curve[-1][0]:.2f} {plot_bottom:.2f} L {curve[0][0]:.2f} {plot_bottom:.2f} Z" if curve else ""
     marker_x = sx(float(percentile_rank))
     marker_y = sy(current_value)
-    badge_x = min(marker_x + 28, width - right - 245)
-    badge_y = max(marker_y - 62, top + 12)
+    badge_w, badge_h = 260, 64
+    badge_x = width - right - badge_w
+    badge_y = 70
     current_txt = _svg_escape(f"{_format_decimal_pt(current_value, 1)}%")
 
     parts = [
@@ -761,8 +762,8 @@ def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
         f'<line x1="{left}" y1="{marker_y:.2f}" x2="{width - right}" y2="{marker_y:.2f}" stroke="{line_color}" stroke-width="2" stroke-dasharray="6 6" opacity="0.36"/>',
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="12" fill="#FFFFFF" stroke="{line_color}" stroke-width="4"/>',
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="5" fill="{line_color}"/>',
-        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x:.2f}" y2="{badge_y + 42:.2f}" stroke="{line_color}" stroke-width="2" opacity="0.8"/>',
-        f'<rect x="{badge_x:.2f}" y="{badge_y:.2f}" width="230" height="64" rx="9" fill="#FFFFFF" stroke="{line_color}" stroke-width="2"/>',
+        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x + badge_w / 2:.2f}" y2="{badge_y + badge_h:.2f}" stroke="{line_color}" stroke-width="2" opacity="0.8"/>',
+        f'<rect x="{badge_x:.2f}" y="{badge_y:.2f}" width="{badge_w}" height="{badge_h}" rx="9" fill="#FFFFFF" stroke="{line_color}" stroke-width="2"/>',
         f'<text x="{badge_x + 14:.2f}" y="{badge_y + 25:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{line_color}">Estabelecimento</text>',
         f'<text x="{badge_x + 14:.2f}" y="{badge_y + 49:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{line_color}">Percentil {percentile_rank} - {current_txt}</text>',
     ])
@@ -797,7 +798,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
     y_max = max(y_max, 10.0)
 
     width, height = 1326, 650
-    left, right, top, bottom = 112, 56, 106, 90
+    left, right, top, bottom = 112, 56, 176, 90
     plot_w = width - left - right
     plot_h = height - top - bottom
     plot_bottom = top + plot_h
@@ -815,13 +816,9 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
 
     marker_x = sx(current_x)
     marker_y = sy(current_y)
-    label_left = marker_x > left + plot_w * 0.72
-    label_top = marker_y < top + plot_h * 0.24
-    badge_w, badge_h = 250, 64
-    badge_x = marker_x - badge_w - 28 if label_left else marker_x + 28
-    badge_y = marker_y + 22 if label_top else marker_y - badge_h - 22
-    badge_x = max(left + 8, min(badge_x, width - right - badge_w))
-    badge_y = max(top + 8, min(badge_y, plot_bottom - badge_h - 8))
+    badge_w, badge_h = 280, 64
+    badge_x = width - right - badge_w
+    badge_y = 92
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -853,7 +850,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
     parts.extend([
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="19" fill="none" stroke="{current_color}" stroke-width="2" opacity="0.28"/>',
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="13" fill="{current_color}" opacity="0.96" stroke="#FFFFFF" stroke-width="3"/>',
-        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x + (0 if label_left else badge_w):.2f}" y2="{badge_y + badge_h / 2:.2f}" stroke="{current_color}" stroke-width="2" opacity="0.85"/>',
+        f'<line x1="{marker_x:.2f}" y1="{marker_y:.2f}" x2="{badge_x + badge_w / 2:.2f}" y2="{badge_y + badge_h:.2f}" stroke="{current_color}" stroke-width="2" opacity="0.85"/>',
         f'<rect x="{badge_x:.2f}" y="{badge_y:.2f}" width="{badge_w}" height="{badge_h}" rx="9" fill="#FFFFFF" stroke="{current_color}" stroke-width="2"/>',
         f'<text x="{badge_x + 14:.2f}" y="{badge_y + 25:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{current_color}">Estabelecimento</text>',
         f'<text x="{badge_x + 14:.2f}" y="{badge_y + 49:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{current_color}">{_svg_escape(current_label)}</text>',

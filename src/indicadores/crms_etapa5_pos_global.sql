@@ -2,20 +2,19 @@
 -- POS-PROCESSAMENTO GLOBAL PARA INDICADOR DE CRMs
 -- ============================================================================
 -- Script 3 do pipeline:
---   - valida que o pre-global e o loteado terminaram com sucesso;
+--   - valida que o loteado terminou com sucesso;
 --   - consolida alertas globais;
 --   - gera tabela final de exportacao;
 --   - gera benchmarks e matriz HHI.
 --
 -- Pre-requisitos:
---   1. temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata com status OK
---   2. temp_CGUSC.fp.build_crm_detalhado_lote_metadata com status OK
---   3. temp_CGUSC.fp.build_crm_pipeline_uf_controle com UFs OK no loteado
---   4. temp_CGUSC.fp.build_dados_medico
---   5. temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
---   6. temp_CGUSC.fp.build_dados_crm_detalhado
---   7. temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas
---   8. temp_CGUSC.fp.build_crm_raiox_tx
+--   1. temp_CGUSC.fp.build_crm_detalhado_lote_metadata com status OK
+--   2. temp_CGUSC.fp.build_crm_pipeline_uf_controle com UFs OK no loteado
+--   3. temp_CGUSC.fp.build_dados_medico
+--   4. temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos
+--   5. temp_CGUSC.fp.build_dados_crm_detalhado
+--   6. temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas
+--   7. temp_CGUSC.fp.build_crm_raiox_tx
 --
 -- Saidas persistentes:
 --   - temp_CGUSC.fp.build_alertas_crm_geografico
@@ -35,7 +34,7 @@ SET NOCOUNT ON;
 
 DECLARE @PrecheckDataInicio DATE = '2015-07-01';
 DECLARE @PrecheckDataFim    DATE = '2024-12-31';
-DECLARE @PrecheckVersao     VARCHAR(40) = 'v2_2026_05_07';
+DECLARE @PrecheckVersao     VARCHAR(40) = 'v3_2026_05_12';
 DECLARE @PrecheckOk         BIT;
 
 IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia') IS NULL
@@ -64,30 +63,6 @@ END;
 IF OBJECT_ID('temp_CGUSC.fp.fnCalcular_Distancia_KM') IS NULL
 BEGIN
     RAISERROR('Funcao temp_CGUSC.fp.fnCalcular_Distancia_KM nao encontrada.', 16, 1);
-    RETURN;
-END;
-
-IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata') IS NULL
-BEGIN
-    RAISERROR('Metadata pre-global temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
-    RETURN;
-END;
-
-SET @PrecheckOk = 0;
-SELECT @PrecheckOk = CASE WHEN EXISTS (
-    SELECT 1
-    FROM temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
-    WHERE id_pipeline = 1
-      AND pipeline_nome = 'crms_detalhado_pre_global'
-      AND pipeline_versao = @PrecheckVersao
-      AND dt_data_inicio = @PrecheckDataInicio
-      AND dt_data_fim = @PrecheckDataFim
-      AND status = 'OK'
-) THEN 1 ELSE 0 END;
-
-IF @PrecheckOk = 0
-BEGIN
-    RAISERROR('Pre-global incompativel ou nao finalizado com OK para esta versao/periodo.', 16, 1);
     RETURN;
 END;
 
@@ -258,8 +233,7 @@ DECLARE @DataFim    DATE = '2024-12-31';
 DECLARE @t0         DATETIME = GETDATE();
 DECLARE @t1         DATETIME;
 DECLARE @pipeline_nome        VARCHAR(80) = 'crms_detalhado_pos_global';
-DECLARE @pipeline_versao      VARCHAR(40) = 'v2_2026_05_07';
-DECLARE @pre_global_nome      VARCHAR(80) = 'crms_detalhado_pre_global';
+DECLARE @pipeline_versao      VARCHAR(40) = 'v3_2026_05_12';
 DECLARE @loteado_nome         VARCHAR(80) = 'crms_detalhado_loteado';
 DECLARE @metadata_ok          BIT;
 DECLARE @etapa               VARCHAR(80);
@@ -299,37 +273,6 @@ END;
 IF OBJECT_ID('temp_CGUSC.fp.fnCalcular_Distancia_KM') IS NULL
 BEGIN
     RAISERROR('Funcao temp_CGUSC.fp.fnCalcular_Distancia_KM nao encontrada.', 16, 1);
-    RETURN;
-END;
-
-IF OBJECT_ID('temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata') IS NULL
-BEGIN
-    RAISERROR('Metadata pre-global temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata nao encontrada. Rode crms_detalhado_pre_global_test.sql primeiro.', 16, 1);
-    RETURN;
-END;
-
-SET @metadata_ok = 0;
-EXEC sp_executesql
-    N'SELECT @ok = CASE WHEN EXISTS (
-          SELECT 1
-          FROM temp_CGUSC.fp.build_crm_detalhado_pre_global_metadata
-          WHERE id_pipeline = 1
-            AND pipeline_nome = @nome
-            AND pipeline_versao = @versao
-            AND dt_data_inicio = @inicio
-            AND dt_data_fim = @fim
-            AND status = ''OK''
-      ) THEN 1 ELSE 0 END;',
-    N'@nome VARCHAR(80), @versao VARCHAR(40), @inicio DATE, @fim DATE, @ok BIT OUTPUT',
-    @nome = @pre_global_nome,
-    @versao = @pipeline_versao,
-    @inicio = @DataInicio,
-    @fim = @DataFim,
-    @ok = @metadata_ok OUTPUT;
-
-IF @metadata_ok = 0
-BEGIN
-    RAISERROR('Pre-global incompativel ou nao finalizado com OK para esta versao/periodo.', 16, 1);
     RETURN;
 END;
 

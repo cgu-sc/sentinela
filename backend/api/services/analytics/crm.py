@@ -20,7 +20,7 @@ from cache_files import (
     CRM_RAIOX_TX_PARQUET,
     DADOS_CRMS_PARQUET,
     GEOGRAFICO_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
+    MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
     VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
 )
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
@@ -79,7 +79,7 @@ from cache_producers.crm import (
     load_or_sync_geografico,
     load_or_sync_volume_horario_anomalo,
     sync_crm_raiox_tx,
-    sync_mediana_autorizacoes_horaria,
+    sync_mediana_autorizacoes_horaria_movel,
 )
 
 _CRM_SEVERITY_CACHE_VERSION = 2
@@ -166,6 +166,29 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         except ValueError:
             return default
     return default
+
+
+def _to_optional_float(value: Any) -> float | None:
+    """Converte valores numericos preservando nulos como None."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, (int, float, Decimal)):
+        result = float(value)
+        return None if result != result else result
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            result = float(text.replace(",", "."))
+            return None if result != result else result
+        except ValueError:
+            return None
+    return None
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -531,7 +554,7 @@ def get_crm_data(
                 "hr": _to_int(r.get("hr_janela")),
                 "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
                 "nu_crms": _to_int(r.get("nu_crms")),
-                "multiplicador": _to_float(r.get("multiplicador")),
+                "multiplicador": _to_optional_float(r.get("multiplicador")),
                 "mediana_hora":  _to_float(r.get("mediana_hora"))
             })
 
@@ -1015,22 +1038,17 @@ def get_crm_perfil_horario(
             d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
             df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) <= d_fim)
 
-    # Garante que o parquet de medianas existe (auto-warming)
-    mediana_result = sync_mediana_autorizacoes_horaria(cnpj)
+    # Garante que o parquet de medianas moveis existe (auto-warming)
+    mediana_result = sync_mediana_autorizacoes_horaria_movel(cnpj)
     if mediana_result.error:
-        _raise_cache_unavailable("Mediana horaria CRM", mediana_result.error)
+        _raise_cache_unavailable("Mediana horaria movel CRM", mediana_result.error)
 
-    # Carrega lookup de medianas: (ano, trimestre, hr_janela) â†’ mediana_hora
-    from datetime import datetime as _dt
-    MEDIANA_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_PARQUET)
+    # Carrega lookup de medianas moveis por data/hora.
+    MEDIANA_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET)
     mediana_lookup: dict = {}
-    if os.path.exists(MEDIANA_PATH):
-        try:
-            df_med = pl.read_parquet(MEDIANA_PATH)
-            for r in df_med.iter_rows(named=True):
-                mediana_lookup[(_to_int(r.get("ano")), _to_int(r.get("trimestre")), _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora"))
-        except Exception:
-            pass
+    df_med = pl.read_parquet(MEDIANA_PATH)
+    for r in df_med.iter_rows(named=True):
+        mediana_lookup[(str(r.get("dt_janela"))[:10], _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora_movel"))
 
     # Indexa atividade real e flags de anomalia por (data, hora)
     activity: dict = {}
@@ -1045,20 +1063,14 @@ def get_crm_perfil_horario(
                 "is_crm_multiplo":           _to_int(r.get("is_crm_multiplo")),
             }
 
-    # Expande para 24 horas por dia anÃ´malo com mediana real para todas as horas
+    # Expande para 24 horas por dia anomalo com mediana movel para todas as horas.
     points = []
     for dt in sorted(dates_flags):
-        flags = dates_flags[dt]
-        try:
-            d = _dt.strptime(dt, "%Y-%m-%d")
-            ano, trimestre = d.year, (d.month - 1) // 3
-        except Exception:
-            ano, trimestre = 0, 0
         for h in range(24):
             row = activity.get((dt, h))
-            mediana = mediana_lookup.get((ano, trimestre, h), 0.0)
+            mediana = mediana_lookup.get((dt, h), 0.0)
             
-            # Pega as flags da HORA especÃ­fica (row), nÃ£o do dia (flags)
+            # Pega as flags da hora especifica, nao do dia.
             is_vol = _to_int(row.get("is_volume_horario_anomalo")) if row else 0
             is_uni = _to_int(row.get("is_crm_unico")) if row else 0
             is_mul = _to_int(row.get("is_crm_multiplo")) if row else 0

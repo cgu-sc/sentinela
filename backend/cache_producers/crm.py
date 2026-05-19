@@ -15,6 +15,7 @@ from cache_files import (
     DADOS_CRMS_PARQUET,
     GEOGRAFICO_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
+    MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
     VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
 )
 from cache_producers.types import CacheLoadResult
@@ -404,6 +405,26 @@ def sync_mediana_autorizacoes_horaria(cnpj: str, engine=None) -> CacheLoadResult
              "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
              "WHERE F.cnpj = :cnpj "
              "ORDER BY M.ano, M.trimestre, M.hr_janela"),
+        {"cnpj": cnpj},
+        engine,
+        read_existing=False,
+    )
+
+
+def sync_mediana_autorizacoes_horaria_movel(cnpj: str, engine=None) -> CacheLoadResult:
+    parquet_path = _path(cnpj, MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET)
+    df, read_time_ms = _read_parquet(parquet_path)
+    required_cols = {"dt_janela", "hr_janela", "mediana_hora_movel", "mad_hora_movel"}
+    if df is not None and required_cols.issubset(df.columns):
+        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+    return _load_or_sync_sql_cache(
+        cnpj,
+        MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
+        text("SELECT M.dt_janela, M.hr_janela, M.mediana_hora_movel, M.mad_hora_movel "
+             "FROM temp_CGUSC.fp.app_mediana_autorizacoes_horaria_movel M "
+             "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
+             "WHERE F.cnpj = :cnpj "
+             "ORDER BY M.dt_janela, M.hr_janela"),
         {"cnpj": cnpj},
         engine,
         read_existing=False,

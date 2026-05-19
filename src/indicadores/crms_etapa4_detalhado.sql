@@ -142,6 +142,7 @@ DECLARE @existia_tabela_loteada BIT   = CASE WHEN
      OR OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_diario') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_horario') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria') IS NOT NULL
+     OR OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.build_volume_horario_anomalo_alertas') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.build_crm_raiox_tx') IS NOT NULL
      OR OBJECT_ID('temp_CGUSC.fp.build_dados_crm_detalhado') IS NOT NULL
@@ -317,6 +318,7 @@ BEGIN
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_perfil_diario;
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_perfil_horario;
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_mediana_autorizacoes_horaria;
+        DROP TABLE IF EXISTS temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel;
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_volume_horario_anomalo_alertas;
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_raiox_tx;
         DROP TABLE IF EXISTS temp_CGUSC.fp.build_dados_crm_detalhado;
@@ -1078,6 +1080,17 @@ BEGIN
     );
 END;
 
+IF OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel (
+        id_cnpj              INT           NOT NULL,
+        dt_janela            DATE          NOT NULL,
+        hr_janela            TINYINT       NOT NULL,
+        mediana_hora_movel   DECIMAL(6,2)  NULL,
+        mad_hora_movel       DECIMAL(10,4) NULL
+    );
+END;
+
 IF OBJECT_ID('temp_CGUSC.fp.build_volume_horario_anomalo_alertas') IS NULL
 BEGIN
     CREATE TABLE temp_CGUSC.fp.build_volume_horario_anomalo_alertas (
@@ -1136,6 +1149,9 @@ IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID(
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria') AND name = 'IDX_MedianaHoraria')
     CREATE CLUSTERED INDEX IDX_MedianaHoraria ON temp_CGUSC.fp.build_mediana_autorizacoes_horaria(id_cnpj, ano, trimestre, hr_janela);
 
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel') AND name = 'IDX_MedianaHorariaMovel')
+    CREATE CLUSTERED INDEX IDX_MedianaHorariaMovel ON temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel(id_cnpj, dt_janela, hr_janela);
+
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.sys.indexes WHERE object_id = OBJECT_ID('temp_CGUSC.fp.build_volume_horario_anomalo_alertas') AND name = 'IDX_AlertaSequencialCNPJ')
     CREATE CLUSTERED INDEX IDX_AlertaSequencialCNPJ ON temp_CGUSC.fp.build_volume_horario_anomalo_alertas(id_cnpj, dt_alerta, hr_janela);
 
@@ -1186,6 +1202,11 @@ WHERE C.status = 'PROCESSANDO';
 
 DELETE T
 FROM temp_CGUSC.fp.build_mediana_autorizacoes_horaria T
+INNER JOIN temp_CGUSC.fp.build_crm_detalhado_lote_controle C ON C.id_cnpj = T.id_cnpj
+WHERE C.status = 'PROCESSANDO';
+
+DELETE T
+FROM temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel T
 INNER JOIN temp_CGUSC.fp.build_crm_detalhado_lote_controle C ON C.id_cnpj = T.id_cnpj
 WHERE C.status = 'PROCESSANDO';
 
@@ -1350,6 +1371,7 @@ BEGIN
     DELETE T FROM temp_CGUSC.fp.build_crm_perfil_diario T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.build_crm_perfil_horario T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.build_mediana_autorizacoes_horaria T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
+    DELETE T FROM temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.build_volume_horario_anomalo_alertas T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.build_crm_raiox_tx T INNER JOIN #lote_atual L ON L.id_cnpj = T.id_cnpj;
     DELETE T FROM temp_CGUSC.fp.build_dados_crm_detalhado T INNER JOIN #lote_atual L ON L.cnpj = T.nu_cnpj;
@@ -1398,6 +1420,9 @@ BEGIN
         DATEPART(HOUR, M.data_hora);
 
     CREATE CLUSTERED INDEX IDX_Mestra ON #base_horaria_mestra(nu_cnpj, id_medico, competencia);
+    CREATE NONCLUSTERED INDEX IDX_Mestra_DiaHora
+        ON #base_horaria_mestra(nu_cnpj, dt_dia, hr_janela)
+        INCLUDE (id_medico, competencia, nu_prescricoes_hora);
 
     PRINT '      2.A base_horaria_mestra: ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 
@@ -1479,6 +1504,7 @@ BEGIN
     GROUP BY nu_cnpj, competencia, dt_dia, hr_janela;
 
     CREATE CLUSTERED INDEX IDX_BH_Surto ON #base_horaria(cnpj, dt_janela, hr_janela);
+    CREATE NONCLUSTERED INDEX IDX_BH_Movel ON #base_horaria(cnpj, hr_janela, dt_janela) INCLUDE (nu_prescricoes_hora);
 
     DROP TABLE IF EXISTS #mediana_hora;
     SELECT DISTINCT
@@ -1490,45 +1516,159 @@ BEGIN
     INTO #mediana_hora
     FROM #base_horaria;
 
-    DROP TABLE IF EXISTS #mad_hora;
-    SELECT DISTINCT
+    DROP TABLE IF EXISTS #horas_janela;
+    CREATE TABLE #horas_janela (
+        hr_janela TINYINT NOT NULL PRIMARY KEY
+    );
+
+    INSERT INTO #horas_janela (hr_janela)
+    VALUES (0), (1), (2), (3), (4), (5), (6), (7),
+           (8), (9), (10), (11), (12), (13), (14), (15),
+           (16), (17), (18), (19), (20), (21), (22), (23);
+
+    DROP TABLE IF EXISTS #datas_horas_movel;
+    SELECT
+        D.cnpj,
+        D.competencia,
+        D.dt_janela,
+        H.hr_janela
+    INTO #datas_horas_movel
+    FROM (
+        SELECT DISTINCT cnpj, competencia, dt_janela
+        FROM #base_horaria
+    ) D
+    CROSS JOIN #horas_janela H;
+
+    CREATE CLUSTERED INDEX IDX_DatasHorasMovel
+        ON #datas_horas_movel(cnpj, dt_janela, hr_janela);
+
+    DROP TABLE IF EXISTS #dias_ativos_movel;
+    SELECT
+        cnpj,
+        dt_janela
+    INTO #dias_ativos_movel
+    FROM #base_horaria
+    GROUP BY cnpj, dt_janela;
+
+    CREATE CLUSTERED INDEX IDX_DiasAtivosMovel
+        ON #dias_ativos_movel(cnpj, dt_janela);
+
+    DROP TABLE IF EXISTS #baseline_horaria_movel;
+    SELECT
         H.cnpj,
         H.competencia,
+        H.dt_janela,
         H.hr_janela,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ABS(H.nu_prescricoes_hora - M.mediana_hora))
-            OVER (PARTITION BY H.cnpj, (H.competencia / 100), ((H.competencia % 100 - 1) / 3), H.hr_janela) AS mad_hora
-    INTO #mad_hora
-    FROM #base_horaria H
-    INNER JOIN #mediana_hora M
-        ON  M.cnpj = H.cnpj
-        AND M.competencia = H.competencia
-        AND M.hr_janela = H.hr_janela;
+        CAST(ISNULL(B.nu_prescricoes_hora, 0) AS SMALLINT) AS nu_prescricoes_hora
+    INTO #baseline_horaria_movel
+    FROM #datas_horas_movel H
+    INNER JOIN #dias_ativos_movel D
+        ON  D.cnpj = H.cnpj
+        AND D.dt_janela >= DATEADD(MONTH, -3, H.dt_janela)
+        AND D.dt_janela < H.dt_janela
+    LEFT JOIN #base_horaria B
+        ON  B.cnpj = D.cnpj
+        AND B.dt_janela = D.dt_janela
+        AND B.hr_janela = H.hr_janela;
+
+    CREATE CLUSTERED INDEX IDX_BaselineMovel
+        ON #baseline_horaria_movel(cnpj, dt_janela, hr_janela, nu_prescricoes_hora);
+
+    DROP TABLE IF EXISTS #meses_ativos_baseline;
+    SELECT
+        H.cnpj,
+        H.dt_janela,
+        COUNT(DISTINCT MA.competencia) AS qtd_meses_ativos_baseline
+    INTO #meses_ativos_baseline
+    FROM (
+        SELECT DISTINCT cnpj, dt_janela
+        FROM #datas_horas_movel
+    ) H
+    INNER JOIN #dias_ativos_movel D
+        ON  D.cnpj = H.cnpj
+        AND D.dt_janela >= DATEADD(MONTH, -3, H.dt_janela)
+        AND D.dt_janela < H.dt_janela
+    CROSS APPLY (
+        SELECT CAST(YEAR(D.dt_janela) * 100 + MONTH(D.dt_janela) AS INT) AS competencia
+    ) MA
+    GROUP BY H.cnpj, H.dt_janela;
+
+    CREATE CLUSTERED INDEX IDX_MesesAtivosBaseline
+        ON #meses_ativos_baseline(cnpj, dt_janela);
+
+    DROP TABLE IF EXISTS #mediana_hora_movel_calc;
+    SELECT DISTINCT
+        B.cnpj,
+        B.competencia,
+        B.dt_janela,
+        B.hr_janela,
+        MB.qtd_meses_ativos_baseline,
+        CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY B.nu_prescricoes_hora)
+            OVER (PARTITION BY B.cnpj, B.dt_janela, B.hr_janela) AS DECIMAL(6,2)) AS mediana_hora_movel
+    INTO #mediana_hora_movel_calc
+    FROM #baseline_horaria_movel B
+    INNER JOIN #meses_ativos_baseline MB
+        ON  MB.cnpj = B.cnpj
+        AND MB.dt_janela = B.dt_janela;
+
+    CREATE CLUSTERED INDEX IDX_MedianaMovelCalc
+        ON #mediana_hora_movel_calc(cnpj, dt_janela, hr_janela);
+
+    DROP TABLE IF EXISTS #mediana_hora_movel;
+    SELECT
+        cnpj,
+        competencia,
+        dt_janela,
+        hr_janela,
+        mediana_hora_movel
+    INTO #mediana_hora_movel
+    FROM #mediana_hora_movel_calc
+    WHERE qtd_meses_ativos_baseline >= 2;
+
+    CREATE CLUSTERED INDEX IDX_MedianaMovel ON #mediana_hora_movel(cnpj, dt_janela, hr_janela);
+
+    DROP TABLE IF EXISTS #mad_hora_movel;
+    SELECT DISTINCT
+        B.cnpj,
+        B.competencia,
+        B.dt_janela,
+        B.hr_janela,
+        CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ABS(B.nu_prescricoes_hora - M.mediana_hora_movel))
+            OVER (PARTITION BY B.cnpj, B.dt_janela, B.hr_janela) AS DECIMAL(10,4)) AS mad_hora_movel
+    INTO #mad_hora_movel
+    FROM #baseline_horaria_movel B
+    INNER JOIN #mediana_hora_movel M
+        ON  M.cnpj = B.cnpj
+        AND M.dt_janela = B.dt_janela
+        AND M.hr_janela = B.hr_janela;
+
+    CREATE CLUSTERED INDEX IDX_MadMovel ON #mad_hora_movel(cnpj, dt_janela, hr_janela);
 
     DROP TABLE IF EXISTS #anomalias_horarias;
     SELECT
         H.*,
-        CAST(M.mediana_hora AS DECIMAL(6,2)) AS mediana_hora,
-        CAST(MAD.mad_hora AS DECIMAL(10,4)) AS mad_hora,
+        M.mediana_hora_movel AS mediana_hora,
+        MAD.mad_hora_movel AS mad_hora,
         CASE
             WHEN H.nu_prescricoes_hora >= 10
-             AND MAD.mad_hora > 0
-             AND (0.6745 * (H.nu_prescricoes_hora - M.mediana_hora) / MAD.mad_hora) > 4.5
+             AND MAD.mad_hora_movel > 0
+             AND (0.6745 * (H.nu_prescricoes_hora - M.mediana_hora_movel) / MAD.mad_hora_movel) > 4.5
             THEN 1
             WHEN H.nu_prescricoes_hora >= 10
-             AND MAD.mad_hora = 0
-             AND H.nu_prescricoes_hora > M.mediana_hora
+             AND MAD.mad_hora_movel = 0
+             AND H.nu_prescricoes_hora > M.mediana_hora_movel
             THEN 1
             ELSE 0
         END AS is_anomalo_hora
     INTO #anomalias_horarias
     FROM #base_horaria H
-    INNER JOIN #mediana_hora M
+    LEFT JOIN #mediana_hora_movel M
         ON  M.cnpj = H.cnpj
-        AND M.competencia = H.competencia
+        AND M.dt_janela = H.dt_janela
         AND M.hr_janela = H.hr_janela
-    INNER JOIN #mad_hora MAD
+    LEFT JOIN #mad_hora_movel MAD
         ON  MAD.cnpj = H.cnpj
-        AND MAD.competencia = H.competencia
+        AND MAD.dt_janela = H.dt_janela
         AND MAD.hr_janela = H.hr_janela;
 
     CREATE CLUSTERED INDEX IDX_AnomaliaH ON #anomalias_horarias(cnpj, dt_janela, hr_janela);
@@ -1738,6 +1878,22 @@ BEGIN
     INNER JOIN #lote_atual L ON L.cnpj = M.cnpj
     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = L.id_cnpj;
 
+    INSERT INTO temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel
+        (id_cnpj, dt_janela, hr_janela, mediana_hora_movel, mad_hora_movel)
+    SELECT
+        F.id,
+        M.dt_janela,
+        M.hr_janela,
+        M.mediana_hora_movel,
+        MAD.mad_hora_movel
+    FROM #mediana_hora_movel M
+    INNER JOIN #mad_hora_movel MAD
+        ON  MAD.cnpj = M.cnpj
+        AND MAD.dt_janela = M.dt_janela
+        AND MAD.hr_janela = M.hr_janela
+    INNER JOIN #lote_atual L ON L.cnpj = M.cnpj
+    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = L.id_cnpj;
+
     INSERT INTO temp_CGUSC.fp.build_volume_horario_anomalo_alertas
         (id_cnpj, competencia, dt_alerta, hr_janela, nu_prescricoes, nu_crms, mediana_hora, multiplicador)
     SELECT
@@ -1794,7 +1950,8 @@ BEGIN
     INNER JOIN #lote_atual L ON L.id_cnpj = D.id_cnpj
     INNER JOIN #crm_mov_fonte_atual M
         ON  M.cnpj = L.cnpj
-        AND CAST(M.data_hora AS DATE) = D.dt_alerta
+        AND M.data_hora >= D.dt_alerta
+        AND M.data_hora < DATEADD(DAY, 1, D.dt_alerta)
     INNER JOIN temp_CGUSC.fp.medicamentos_patologia PAT ON PAT.codigo_barra = M.codigo_barra
     WHERE M.crm_uf IS NOT NULL
       AND M.crm IS NOT NULL
@@ -2212,6 +2369,7 @@ END;
 IF OBJECT_ID('temp_CGUSC.fp.build_dados_crm_detalhado') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_diario') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_horario') IS NOT NULL
+   AND OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.build_volume_horario_anomalo_alertas') IS NOT NULL
    AND OBJECT_ID('temp_CGUSC.fp.build_crm_raiox_tx') IS NOT NULL
 BEGIN
@@ -2219,6 +2377,7 @@ BEGIN
         (SELECT COUNT(*) FROM temp_CGUSC.fp.build_dados_crm_detalhado) AS qtd_dados_crm_detalhado,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_perfil_diario) AS qtd_perfil_diario,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_perfil_horario) AS qtd_perfil_horario,
+        (SELECT COUNT(*) FROM temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel) AS qtd_mediana_horaria_movel,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.build_volume_horario_anomalo_alertas) AS qtd_volume_alertas,
         (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_raiox_tx) AS qtd_raiox_tx;
 END;

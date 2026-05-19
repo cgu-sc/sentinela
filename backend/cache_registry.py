@@ -368,6 +368,18 @@ def _build_cnpj_cache_definitions() -> tuple[CacheDefinition, ...]:
             },
         ),
         CacheDefinition(
+            key="mediana_autorizacoes_horaria_movel",
+            filename=cache_files.MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
+            scope="cnpj",
+            producer="cache_producers.crm.sync_mediana_autorizacoes_horaria_movel",
+            schema={
+                "dt_janela": pl.Date,
+                "hr_janela": pl.Int32,
+                "mediana_hora_movel": pl.Float64,
+                "mad_hora_movel": pl.Float64,
+            },
+        ),
+        CacheDefinition(
             "teia_nivel2_nodes",
             cache_files.TEIA_GRAFO_NIVEL2_NODES_PARQUET,
             "cnpj",

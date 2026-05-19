@@ -1033,6 +1033,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             cache_manager.sync_cnpj_cache("crm_horario", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_horario_eventos", cnpj, engine)
             cache_manager.sync_cnpj_cache("mediana_autorizacoes_horaria", cnpj, engine)
+            cache_manager.sync_cnpj_cache("mediana_autorizacoes_horaria_movel", cnpj, engine)
 
             # 4. Transações Raio-X (unificado: múltiplos + único)
             cache_manager.sync_cnpj_cache("crm_raiox_tx", cnpj, engine)

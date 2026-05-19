@@ -51,6 +51,12 @@ BEGIN TRY
         EXEC sp_rename 'fp.mediana_autorizacoes_horaria', 'app_mediana_autorizacoes_horaria';
     END;
 
+    IF OBJECT_ID('fp.mediana_autorizacoes_horaria_movel', 'U') IS NOT NULL
+    BEGIN
+        IF OBJECT_ID('fp.app_mediana_autorizacoes_horaria_movel', 'U') IS NOT NULL DROP TABLE fp.app_mediana_autorizacoes_horaria_movel;
+        EXEC sp_rename 'fp.mediana_autorizacoes_horaria_movel', 'app_mediana_autorizacoes_horaria_movel';
+    END;
+
     IF OBJECT_ID('fp.volume_horario_anomalo_alertas', 'U') IS NOT NULL
     BEGIN
         IF OBJECT_ID('fp.app_volume_horario_anomalo_alertas', 'U') IS NOT NULL DROP TABLE fp.app_volume_horario_anomalo_alertas;

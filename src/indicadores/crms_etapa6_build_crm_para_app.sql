@@ -41,6 +41,11 @@ BEGIN
     RAISERROR('Tabela fp.build_mediana_autorizacoes_horaria nao encontrada.', 16, 1);
     RETURN;
 END;
+IF OBJECT_ID('fp.build_mediana_autorizacoes_horaria_movel', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.build_mediana_autorizacoes_horaria_movel nao encontrada.', 16, 1);
+    RETURN;
+END;
 IF OBJECT_ID('fp.build_volume_horario_anomalo_alertas', 'U') IS NULL
 BEGIN
     RAISERROR('Tabela fp.build_volume_horario_anomalo_alertas nao encontrada.', 16, 1);
@@ -91,6 +96,9 @@ BEGIN TRY
 
     IF OBJECT_ID('fp.app_mediana_autorizacoes_horaria', 'U') IS NOT NULL DROP TABLE fp.app_mediana_autorizacoes_horaria;
     EXEC sp_rename 'fp.build_mediana_autorizacoes_horaria', 'app_mediana_autorizacoes_horaria';
+
+    IF OBJECT_ID('fp.app_mediana_autorizacoes_horaria_movel', 'U') IS NOT NULL DROP TABLE fp.app_mediana_autorizacoes_horaria_movel;
+    EXEC sp_rename 'fp.build_mediana_autorizacoes_horaria_movel', 'app_mediana_autorizacoes_horaria_movel';
 
     IF OBJECT_ID('fp.app_volume_horario_anomalo_alertas', 'U') IS NOT NULL DROP TABLE fp.app_volume_horario_anomalo_alertas;
     EXEC sp_rename 'fp.build_volume_horario_anomalo_alertas', 'app_volume_horario_anomalo_alertas';

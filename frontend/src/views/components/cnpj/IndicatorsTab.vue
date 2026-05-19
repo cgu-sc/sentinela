@@ -16,7 +16,6 @@ const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError
 // ── Cache de Dados para Transição Suave ──────────────────
 const {
   cachedData: cachedIndicadoresData,
-  shouldShowInitialLoading,
   isRefreshing,
 } = useStableTabState(indicadoresData, indicadoresLoading, indicadoresError);
 // Inicializa o filtro a partir do localStorage (persistência)
@@ -116,11 +115,10 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
 <template>
   <div class="tab-content indicadores-tab" :class="{ 'is-refreshing': isRefreshing }">
 
-    <TabPlaceholder
-      v-if="shouldShowInitialLoading"
-      variant="loading"
-      title="Carregando indicadores"
-      description="Buscando métricas de risco e comparativos regionais..."
+    <div
+      v-if="indicadoresLoading && !cachedIndicadoresData && !indicadoresError"
+      class="indicadores-initial-loading-sentinel"
+      aria-hidden="true"
     />
 
     <TabPlaceholder
@@ -239,13 +237,6 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
         </div><!-- ind-card -->
       </div><!-- ind-section -->
     </template>
-
-    <TabPlaceholder
-      v-else
-      variant="loading"
-      title="Carregando indicadores"
-      description="Buscando métricas de risco e comparativos regionais..."
-    />
 
   </div>
 </template>

@@ -176,12 +176,12 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     rows_data = gtin_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=4)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.25), Inches(3.25), Inches(1.3), Inches(1.3)])
+    _set_table_fixed_widths(table, [Inches(1.05), Inches(3.65), Inches(1.1), Inches(1.3)])
 
     headers = [
-        'GTIN/Código de Barras',
+        'GTIN',
         'Descrição',
-        'Quantidade de vendas sem comprovação',
+        'Quantidade de medicamentos sem comprovação',
         'Valor de vendas sem comprovação (R$)',
     ]
     for idx, header in enumerate(headers):
@@ -197,7 +197,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _run(cells[2].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
         cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        _run(cells[3].paragraphs[0], _format_decimal_pt(item["valor_sem_comprovacao"], 2), color='0F172A', size=8)
+        _run(cells[3].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=8)
 
     total_cells = table.rows[-1].cells
     total_cells[0].merge(total_cells[1])
@@ -246,7 +246,7 @@ def _add_quadro_evolucao_financeira(
     rows_data = evolucao_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(0.8), Inches(1.3), Inches(1.25), Inches(1.35), Inches(1.1), Inches(1.3)])
+    _set_table_fixed_widths(table, [Inches(1.05), Inches(1.2), Inches(1.2), Inches(1.3), Inches(1.05), Inches(1.3)])
 
     headers = [
         'Semestre',

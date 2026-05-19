@@ -282,6 +282,7 @@ def _set_cell_width(cell, width):
 
 def _set_table_fixed_widths(table, widths):
     """Fixa a grade da tabela para o Word nao redistribuir as colunas."""
+    table.autofit = False
     tbl = table._tbl
     tbl_pr = tbl.tblPr
 
@@ -310,6 +311,8 @@ def _set_table_fixed_widths(table, widths):
 
     for idx, width in enumerate(widths):
         table.columns[idx].width = width
+        for cell in table.columns[idx].cells:
+            _set_cell_width(cell, width)
 
 
 def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):

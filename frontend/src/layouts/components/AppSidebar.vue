@@ -1139,7 +1139,7 @@ onBeforeUnmount(() => {
           Aumento Semestral Atípico
           <i
             class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="'Filtra estabelecimentos com crescimento percentual atípico no volume de movimentações em relação ao semestre anterior.'"
+            v-tooltip.right="'Filtra estabelecimentos com crescimento percentual atípico e aumento absoluto mínimo de R$ 5.000 em relação ao semestre anterior.'"
           />
           <button
             v-if="isFilterActive('volumeAtipicoEnabled')"

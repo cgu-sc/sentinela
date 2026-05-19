@@ -213,6 +213,13 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
         <div class="razao-social-row">
           <div class="titulo-group">
             <div class="titulo-row">
+              <button
+                class="back-btn"
+                @click="router.back()"
+                v-tooltip.bottom="'Voltar'"
+              >
+                <i class="pi pi-arrow-left" />
+              </button>
               <h1 class="razao-social-new" v-tooltip.bottom="tituloTooltip">
                 {{ tituloDisplay }}
               </h1>
@@ -1580,5 +1587,31 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   padding-left: 1rem;
   margin-left: auto;
   border-left: 1px solid var(--card-border);
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-btn i {
+  font-size: 0.8rem;
+}
+
+.back-btn:hover {
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 50%, transparent);
+  color: var(--text-color);
+  transform: translateX(-2px);
 }
 </style>

@@ -151,6 +151,11 @@ function formatGrowthPct(value) {
   })}%`;
 }
 
+function formatPositiveCurrency(value) {
+  if (value == null) return '';
+  return `+${formatCurrencyFull(value)}`;
+}
+
 const insightSidebarVisible = ref(false);
 const insightSelectedPeriod = ref(null);
 
@@ -256,8 +261,16 @@ const chartOption = computed(() => {
               <strong style="color:#f59e0b;">${formatGrowthPct(s.taxa_crescimento_pct)}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Aumento em valor</span>
+              <strong style="color:#f59e0b;">${formatPositiveCurrency(s.aumento_valor_semestre) || '—'}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
               <span style="opacity:.68;">Comparado a</span>
               <strong>${formatSemestreKey(s.chave_semestre_anterior) || 'semestre anterior válido'}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Mínimo material</span>
+              <strong>${formatCurrencyFull(s.limite_aumento_volume_atipico ?? 5000)}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;">
               <span style="opacity:.68;">Meses válidos</span>

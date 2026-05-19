@@ -265,6 +265,9 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
             qtd_meses_presentes,
             qtd_meses_validos,
             chave_semestre_anterior,
+            valor_semestre,
+            valor_semestre_anterior,
+            aumento_valor_semestre,
             taxa_crescimento_pct,
             multiplicador_nao_comprovacao
         FROM [temp_CGUSC].[fp].[volume_atipico_semestral]
@@ -286,6 +289,9 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
             pl.col("qtd_meses_presentes").cast(pl.Int8),
             pl.col("qtd_meses_validos").cast(pl.Int8),
             pl.col("chave_semestre_anterior").cast(pl.Int32, strict=False),
+            pl.col("valor_semestre").cast(pl.Float64),
+            pl.col("valor_semestre_anterior").cast(pl.Float64, strict=False),
+            pl.col("aumento_valor_semestre").cast(pl.Float64, strict=False),
             pl.col("taxa_crescimento_pct").cast(pl.Float32),
             pl.col("multiplicador_nao_comprovacao").cast(pl.Int8),
         ])

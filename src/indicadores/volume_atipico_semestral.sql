@@ -12,10 +12,13 @@ GO
 --   Uma linha por id_cnpj e semestre do calendario avaliado.
 --
 -- Importante:
---   Esta tabela NAO fixa limite de crescimento. Ela guarda taxa_crescimento_pct.
---   O excesso acima do limite escolhido deve ser calculado na API:
+--   Esta tabela NAO fixa limite de crescimento percentual. Ela guarda
+--   taxa_crescimento_pct e o aumento absoluto para que a API aplique tambem
+--   a regra de materialidade minima (ex: R$ 5.000).
+--   O excesso acima dos limites escolhidos deve ser calculado na API:
 --
 --     CASE WHEN taxa_crescimento_pct > @limite
+--           AND aumento_valor_semestre >= @limite_absoluto
 --          THEN (taxa_crescimento_pct - @limite) * multiplicador_nao_comprovacao
 --          ELSE 0
 --     END
@@ -251,6 +254,15 @@ SELECT
     S.qtd_meses_presentes,
     S.qtd_meses_validos,
     B.chave_semestre_anterior,
+    CAST(S.valor_semestre AS DECIMAL(18,2)) AS valor_semestre,
+    CAST(B.valor_semestre_anterior AS DECIMAL(18,2)) AS valor_semestre_anterior,
+    CAST(
+        CASE
+            WHEN B.valor_semestre_anterior > 0
+                THEN S.valor_semestre - B.valor_semestre_anterior
+            ELSE NULL
+        END
+    AS DECIMAL(18,2)) AS aumento_valor_semestre,
     CAST(
         CASE
             WHEN B.valor_semestre_anterior > 0
@@ -286,7 +298,7 @@ ON temp_CGUSC.fp.volume_atipico_semestral(id_cnpj, chave_semestre);
 
 CREATE NONCLUSTERED INDEX IDX_volume_atipico_semestral_filtro
 ON temp_CGUSC.fp.volume_atipico_semestral(status_semestre, chave_semestre)
-INCLUDE (id_cnpj, chave_semestre_anterior, taxa_crescimento_pct, multiplicador_nao_comprovacao);
+INCLUDE (id_cnpj, chave_semestre_anterior, valor_semestre, valor_semestre_anterior, aumento_valor_semestre, taxa_crescimento_pct, multiplicador_nao_comprovacao);
 
 DROP TABLE IF EXISTS #vol_base_vendas_mensais;
 DROP TABLE IF EXISTS #vol_cnpjs_universo;

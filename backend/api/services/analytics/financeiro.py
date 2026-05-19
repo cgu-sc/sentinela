@@ -55,7 +55,11 @@ from ...schemas.analytics import (
 )
 
 from ._cache import _get_cnpj_cache_dir
-from .volume_atipico import normalize_volume_atipico_limite
+from .volume_atipico import (
+    DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
+    is_volume_atipico_relevante,
+    normalize_volume_atipico_limite,
+)
 from cache_producers.financeiro import load_or_sync_movimentacao_mensal_gtin
 
 def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_atipico_limite=None) -> EvolucaoFinanceiraResponse:
@@ -131,6 +135,9 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                     "qtd_meses_presentes",
                     "qtd_meses_validos",
                     "chave_semestre_anterior",
+                    "valor_semestre",
+                    "valor_semestre_anterior",
+                    "aumento_valor_semestre",
                     "taxa_crescimento_pct",
                 ])
             )
@@ -167,15 +174,24 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                 meses_by_semestre[k] = []
             meses_by_semestre[k].append(m)
 
+        def _optional_float(value):
+            return float(value) if value is not None else None
+
         def _volume_info_for(row):
             chave_semestre = int(row["ano"]) * 100 + int(row["sem_num"])
             info = volume_atipico_by_semestre.get(chave_semestre, {})
             taxa = info.get("taxa_crescimento_pct")
-            return chave_semestre, info, float(taxa) if taxa is not None else None
+            aumento = info.get("aumento_valor_semestre")
+            return (
+                chave_semestre,
+                info,
+                _optional_float(taxa),
+                _optional_float(aumento),
+            )
 
         semestres = []
         for r in agg.iter_rows(named=True):
-            chave_semestre, volume_info, taxa_crescimento = _volume_info_for(r)
+            chave_semestre, volume_info, taxa_crescimento, aumento_valor = _volume_info_for(r)
             semestres.append(EvolucaoSemestreSchema(
                 semestre=r["semestre"],
                 total=round(r["total"], 2),
@@ -185,13 +201,21 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                 mes_inicio=r["dt_inicio"].strftime("%Y-%m") if r.get("dt_inicio") else None,
                 mes_fim=r["dt_fim"].strftime("%Y-%m") if r.get("dt_fim") else None,
                 chave_semestre=chave_semestre,
-                volume_atipico=(taxa_crescimento or 0) > limite_volume_atipico,
+                volume_atipico=is_volume_atipico_relevante(
+                    taxa_crescimento,
+                    aumento_valor,
+                    limite_volume_atipico,
+                ),
                 taxa_crescimento_pct=round(taxa_crescimento, 2) if taxa_crescimento is not None else None,
                 chave_semestre_anterior=int(volume_info["chave_semestre_anterior"]) if volume_info.get("chave_semestre_anterior") is not None else None,
+                valor_semestre=round(_optional_float(volume_info.get("valor_semestre")), 2) if volume_info.get("valor_semestre") is not None else None,
+                valor_semestre_anterior=round(_optional_float(volume_info.get("valor_semestre_anterior")), 2) if volume_info.get("valor_semestre_anterior") is not None else None,
+                aumento_valor_semestre=round(aumento_valor, 2) if aumento_valor is not None else None,
                 status_semestre=int(volume_info["status_semestre"]) if volume_info.get("status_semestre") is not None else None,
                 qtd_meses_presentes=int(volume_info["qtd_meses_presentes"]) if volume_info.get("qtd_meses_presentes") is not None else None,
                 qtd_meses_validos=int(volume_info["qtd_meses_validos"]) if volume_info.get("qtd_meses_validos") is not None else None,
                 limite_volume_atipico_pct=limite_volume_atipico,
+                limite_aumento_volume_atipico=DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
                 meses=[
                     {
                         "mes": m["mes"],

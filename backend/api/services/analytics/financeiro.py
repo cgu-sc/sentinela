@@ -250,6 +250,11 @@ def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> Evol
         )
 
     df = result.df
+    if df is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Evolucao mensal por GTIN indisponivel: cache sem DataFrame carregado.",
+        )
     from_cache = result.from_cache
     query_time_ms = result.query_time_ms
     save_time_ms = result.save_time_ms

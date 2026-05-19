@@ -26,6 +26,7 @@ from data_cache import (
     _sync_dados_farmacia,
     _sync_dados_par,
     _sync_dados_socios,
+    _sync_esocial,
     _sync_falecidos,
     _sync_localidades,
     _sync_matriz_risco,
@@ -40,6 +41,7 @@ from data_cache import (
 
 MODULOS = [
     {"id": 12, "name": "Volume Atipico Semestral", "func": _sync_volume_atipico_semestral, "peso": "~medio"},
+    {"id": 16, "name": "Contexto eSocial", "func": _sync_esocial, "peso": "~rapido"},
     {"id": 14, "name": "Indicadores PAR", "func": _sync_dados_par, "peso": "~rapido"},
     {"id": 1, "name": "Localidades (IBGE)", "func": _sync_localidades, "peso": "~rapido"},
     {"id": 2, "name": "Rede de Estabelecimentos", "func": _sync_rede, "peso": "~rapido"},

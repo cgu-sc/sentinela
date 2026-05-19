@@ -50,6 +50,8 @@ _TEIA_FONTE_NIVEL3_PARQUET_PATH = _global_cache_path("teia_fonte_nivel3")
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
 _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
+_ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
+_ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_trabalhador_ano")
 _DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
 _PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
 
@@ -72,6 +74,8 @@ _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
+_df_esocial_cnpj_ano: pl.DataFrame | None = None
+_df_esocial_cnpj_trabalhador_ano: pl.DataFrame | None = None
 _df_dados_par: pl.DataFrame | None = None
 _df_par_teia_alvos: pl.DataFrame | None = None
 
@@ -302,6 +306,205 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
         _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH,
         compression="zstd",
     )
+
+def _sync_esocial(engine, progress_callback=None):
+    """Sincroniza o contexto trabalhista anual do eSocial para uso analitico."""
+    global _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano
+    print("Sincronizando contexto trabalhista eSocial...")
+
+    trabalhador_required = {
+        "id_cnpj",
+        "ano_base",
+        "mes_base",
+        "competencia_base",
+        "cpf_trabalhador",
+        "matricula",
+        "cbo",
+        "titulo_cbo",
+        "dt_admissao",
+        "dt_rescisao",
+        "is_farmaceutico",
+        "is_cbo_invalido",
+        "is_cbo_nao_encontrado",
+        "dt_carga_fonte",
+        "dt_processamento",
+    }
+    ano_required = {
+        "id_cnpj",
+        "ano_base",
+        "mes_base",
+        "competencia_base",
+        "qtd_registros",
+        "qtd_trabalhadores",
+        "qtd_farmaceuticos",
+        "qtd_trabalhadores_cbo_invalido",
+        "qtd_trabalhadores_cbo_nao_encontrado",
+        "qtd_registros_farmaceuticos",
+        "qtd_registros_cbo_invalido",
+        "qtd_registros_cbo_nao_encontrado",
+        "has_farmaceutico",
+        "has_cbo_invalido",
+        "has_cbo_nao_encontrado",
+        "is_um_trabalhador",
+        "is_um_trabalhador_sem_farmaceutico",
+        "is_um_trabalhador_cbo_invalido",
+        "cbo_unico_trabalhador",
+        "titulo_cbo_unico_trabalhador",
+        "dt_carga_fonte",
+        "dt_processamento",
+    }
+
+    def _assert_source_table(table_name: str, required: set[str]) -> int:
+        with engine.connect() as conn:
+            exists = conn.execute(text(f"SELECT OBJECT_ID('{table_name}', 'U')")).scalar()
+            if exists is None:
+                raise RuntimeError(f"Tabela fonte {table_name} nao encontrada para sincronizar eSocial.")
+
+            rows = conn.execute(text(f"SELECT COUNT_BIG(*) FROM {table_name}")).scalar()
+            if rows == 0:
+                raise RuntimeError(f"Tabela fonte {table_name} esta vazia para sincronizar eSocial.")
+
+            cols = {
+                row[0]
+                for row in conn.execute(text("""
+                    SELECT COLUMN_NAME
+                    FROM temp_CGUSC.INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = 'fp'
+                      AND TABLE_NAME = :table_name
+                """), {"table_name": table_name.split(".")[-1]})
+            }
+
+        missing_cols = required - cols
+        if missing_cols:
+            raise RuntimeError(
+                f"Tabela fonte {table_name} sem colunas obrigatorias: "
+                + ", ".join(sorted(missing_cols))
+            )
+        return int(rows)
+
+    total_trabalhador = _assert_source_table(
+        "temp_CGUSC.fp.esocial_cnpj_trabalhador_ano",
+        trabalhador_required,
+    )
+    total_ano = _assert_source_table(
+        "temp_CGUSC.fp.esocial_cnpj_ano",
+        ano_required,
+    )
+
+    print(f"   -> Registros trabalhador/ano: {total_trabalhador:,}")
+    trabalhador_sql = """
+        SELECT
+            id_cnpj,
+            ano_base,
+            mes_base,
+            competencia_base,
+            cpf_trabalhador,
+            matricula,
+            cbo,
+            titulo_cbo,
+            dt_admissao,
+            dt_rescisao,
+            is_farmaceutico,
+            is_cbo_invalido,
+            is_cbo_nao_encontrado,
+            dt_carga_fonte,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[esocial_cnpj_trabalhador_ano]
+    """
+    trabalhador_chunks = []
+    rows_processed = 0
+    for chunk in pd.read_sql(trabalhador_sql, engine, chunksize=50_000):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("ano_base").cast(pl.Int16),
+            pl.col("mes_base").cast(pl.Int8),
+            pl.col("competencia_base").cast(pl.Int32),
+            pl.col("cpf_trabalhador").cast(pl.String),
+            pl.col("matricula").cast(pl.String),
+            pl.col("cbo").cast(pl.Int32, strict=False),
+            pl.col("titulo_cbo").cast(pl.String),
+            pl.col("dt_admissao").cast(pl.Date, strict=False),
+            pl.col("dt_rescisao").cast(pl.Date, strict=False),
+            pl.col("is_farmaceutico").cast(pl.Boolean),
+            pl.col("is_cbo_invalido").cast(pl.Boolean),
+            pl.col("is_cbo_nao_encontrado").cast(pl.Boolean),
+            pl.col("dt_carga_fonte").cast(pl.Date, strict=False),
+            pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+        ])
+        trabalhador_chunks.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_trabalhador) * 50)
+        print(f"   -> Progresso eSocial trabalhador/ano: {p * 2}% ({rows_processed:,} / {total_trabalhador:,})")
+        if progress_callback:
+            progress_callback(p)
+
+    _df_esocial_cnpj_trabalhador_ano = (
+        pl.concat(trabalhador_chunks).sort(["id_cnpj", "ano_base", "cpf_trabalhador", "matricula"])
+    )
+    _df_esocial_cnpj_trabalhador_ano.write_parquet(
+        _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
+        compression="zstd",
+    )
+
+    print(f"   -> Registros anuais agregados: {total_ano:,}")
+    ano_sql = """
+        SELECT
+            id_cnpj,
+            ano_base,
+            mes_base,
+            competencia_base,
+            qtd_registros,
+            qtd_trabalhadores,
+            qtd_farmaceuticos,
+            qtd_trabalhadores_cbo_invalido,
+            qtd_trabalhadores_cbo_nao_encontrado,
+            qtd_registros_farmaceuticos,
+            qtd_registros_cbo_invalido,
+            qtd_registros_cbo_nao_encontrado,
+            has_farmaceutico,
+            has_cbo_invalido,
+            has_cbo_nao_encontrado,
+            is_um_trabalhador,
+            is_um_trabalhador_sem_farmaceutico,
+            is_um_trabalhador_cbo_invalido,
+            cbo_unico_trabalhador,
+            titulo_cbo_unico_trabalhador,
+            dt_carga_fonte,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[esocial_cnpj_ano]
+    """
+    pdf_ano = pd.read_sql(ano_sql, engine)
+    _df_esocial_cnpj_ano = pl.from_pandas(pdf_ano).with_columns([
+        pl.col("id_cnpj").cast(pl.Int32),
+        pl.col("ano_base").cast(pl.Int16),
+        pl.col("mes_base").cast(pl.Int8),
+        pl.col("competencia_base").cast(pl.Int32),
+        pl.col("qtd_registros").cast(pl.Int64),
+        pl.col("qtd_trabalhadores").cast(pl.Int64),
+        pl.col("qtd_farmaceuticos").cast(pl.Int64),
+        pl.col("qtd_trabalhadores_cbo_invalido").cast(pl.Int64),
+        pl.col("qtd_trabalhadores_cbo_nao_encontrado").cast(pl.Int64),
+        pl.col("qtd_registros_farmaceuticos").cast(pl.Int64),
+        pl.col("qtd_registros_cbo_invalido").cast(pl.Int64),
+        pl.col("qtd_registros_cbo_nao_encontrado").cast(pl.Int64),
+        pl.col("has_farmaceutico").cast(pl.Boolean),
+        pl.col("has_cbo_invalido").cast(pl.Boolean),
+        pl.col("has_cbo_nao_encontrado").cast(pl.Boolean),
+        pl.col("is_um_trabalhador").cast(pl.Boolean),
+        pl.col("is_um_trabalhador_sem_farmaceutico").cast(pl.Boolean),
+        pl.col("is_um_trabalhador_cbo_invalido").cast(pl.Boolean),
+        pl.col("cbo_unico_trabalhador").cast(pl.Int32, strict=False),
+        pl.col("titulo_cbo_unico_trabalhador").cast(pl.String),
+        pl.col("dt_carga_fonte").cast(pl.Date, strict=False),
+        pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+    ]).sort(["id_cnpj", "ano_base"])
+    _df_esocial_cnpj_ano.write_parquet(
+        _ESOCIAL_CNPJ_ANO_PARQUET_PATH,
+        compression="zstd",
+    )
+
+    if progress_callback:
+        progress_callback(100)
 
 def _sync_dados_par(engine, progress_callback=None):
     """Sincroniza uma visão agregada de PAR por CNPJ, sem persistir detalhes sensíveis."""
@@ -1050,7 +1253,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1103,6 +1306,47 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "chave_semestre_anterior",
                 "taxa_crescimento_pct",
                 "aumento_valor_semestre",
+            },
+            "esocial_cnpj_ano": {
+                "id_cnpj",
+                "ano_base",
+                "mes_base",
+                "competencia_base",
+                "qtd_registros",
+                "qtd_trabalhadores",
+                "qtd_farmaceuticos",
+                "qtd_trabalhadores_cbo_invalido",
+                "qtd_trabalhadores_cbo_nao_encontrado",
+                "qtd_registros_farmaceuticos",
+                "qtd_registros_cbo_invalido",
+                "qtd_registros_cbo_nao_encontrado",
+                "has_farmaceutico",
+                "has_cbo_invalido",
+                "has_cbo_nao_encontrado",
+                "is_um_trabalhador",
+                "is_um_trabalhador_sem_farmaceutico",
+                "is_um_trabalhador_cbo_invalido",
+                "cbo_unico_trabalhador",
+                "titulo_cbo_unico_trabalhador",
+                "dt_carga_fonte",
+                "dt_processamento",
+            },
+            "esocial_cnpj_trabalhador_ano": {
+                "id_cnpj",
+                "ano_base",
+                "mes_base",
+                "competencia_base",
+                "cpf_trabalhador",
+                "matricula",
+                "cbo",
+                "titulo_cbo",
+                "dt_admissao",
+                "dt_rescisao",
+                "is_farmaceutico",
+                "is_cbo_invalido",
+                "is_cbo_nao_encontrado",
+                "dt_carga_fonte",
+                "dt_processamento",
             },
             "dados_par": {
                 "cnpj",
@@ -1157,6 +1401,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
+        _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
+        _df_esocial_cnpj_trabalhador_ano = _try_load("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)
         dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
         _df_dados_par = dados_par_loaded
         par_teia_alvos_loaded = _try_load("par_teia_alvos", _PAR_TEIA_ALVOS_PARQUET_PATH)
@@ -1187,6 +1433,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
+        {"name": "Contexto eSocial",      "weight": 2,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Indicadores PAR",       "weight": 1,  "func": lambda cb: _sync_dados_par(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Perfil Estabelecimentos", "weight": 5, "func": lambda cb: _sync_perfil_estabelecimento(engine, cb)},
@@ -1319,6 +1566,16 @@ def get_df_volume_atipico_semestral() -> pl.DataFrame:
         raise RuntimeError("Cache de Volume Atipico Semestral nao carregado. Execute uma sincronizacao.")
     return _df_volume_atipico_semestral
 
+def get_df_esocial_cnpj_ano() -> pl.DataFrame:
+    if _df_esocial_cnpj_ano is None:
+        raise RuntimeError("Cache de eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
+    return _df_esocial_cnpj_ano
+
+def get_df_esocial_cnpj_trabalhador_ano() -> pl.DataFrame:
+    if _df_esocial_cnpj_trabalhador_ano is None:
+        raise RuntimeError("Cache de trabalhadores eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
+    return _df_esocial_cnpj_trabalhador_ano
+
 def get_df_dados_par() -> pl.DataFrame:
     if _df_dados_par is None:
         raise RuntimeError("Cache de Indicadores PAR nao carregado. Execute uma sincronizacao.")
@@ -1347,6 +1604,8 @@ def get_cache_status() -> dict:
         "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
+        "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},
+        "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_trabalhador_ano is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
         "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},
     }

@@ -133,10 +133,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                     "chave_semestre",
                     "status_semestre",
                     "qtd_meses_presentes",
-                    "qtd_meses_validos",
                     "chave_semestre_anterior",
-                    "valor_semestre",
-                    "valor_semestre_anterior",
                     "aumento_valor_semestre",
                     "taxa_crescimento_pct",
                 ])
@@ -208,12 +205,9 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                 ),
                 taxa_crescimento_pct=round(taxa_crescimento, 2) if taxa_crescimento is not None else None,
                 chave_semestre_anterior=int(volume_info["chave_semestre_anterior"]) if volume_info.get("chave_semestre_anterior") is not None else None,
-                valor_semestre=round(_optional_float(volume_info.get("valor_semestre")), 2) if volume_info.get("valor_semestre") is not None else None,
-                valor_semestre_anterior=round(_optional_float(volume_info.get("valor_semestre_anterior")), 2) if volume_info.get("valor_semestre_anterior") is not None else None,
                 aumento_valor_semestre=round(aumento_valor, 2) if aumento_valor is not None else None,
                 status_semestre=int(volume_info["status_semestre"]) if volume_info.get("status_semestre") is not None else None,
                 qtd_meses_presentes=int(volume_info["qtd_meses_presentes"]) if volume_info.get("qtd_meses_presentes") is not None else None,
-                qtd_meses_validos=int(volume_info["qtd_meses_validos"]) if volume_info.get("qtd_meses_validos") is not None else None,
                 limite_volume_atipico_pct=limite_volume_atipico,
                 limite_aumento_volume_atipico=DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
                 meses=[

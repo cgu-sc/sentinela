@@ -197,12 +197,9 @@ class EvolucaoSemestreSchema(BaseModel):
     volume_atipico: bool = False
     taxa_crescimento_pct: Optional[float] = None
     chave_semestre_anterior: Optional[int] = None
-    valor_semestre: Optional[float] = None
-    valor_semestre_anterior: Optional[float] = None
     aumento_valor_semestre: Optional[float] = None
     status_semestre: Optional[int] = None
     qtd_meses_presentes: Optional[int] = None
-    qtd_meses_validos: Optional[int] = None
     limite_volume_atipico_pct: Optional[float] = None
     limite_aumento_volume_atipico: Optional[float] = None
     meses: List[EvolucaoMesSchema] = []

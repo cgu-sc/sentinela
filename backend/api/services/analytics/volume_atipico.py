@@ -43,14 +43,8 @@ def _assert_volume_schema(df: pl.DataFrame) -> None:
         "id_cnpj",
         "chave_semestre",
         "status_semestre",
-        "qtd_meses_presentes",
-        "qtd_meses_validos",
-        "chave_semestre_anterior",
-        "valor_semestre",
-        "valor_semestre_anterior",
         "aumento_valor_semestre",
         "taxa_crescimento_pct",
-        "multiplicador_nao_comprovacao",
     }
     missing = required - set(df.columns)
     if missing:
@@ -143,10 +137,7 @@ def get_volume_atipico_period_metrics(
     flag_expr = volume_atipico_flag_expr(limite)
     excesso_expr = (
         pl.when(flag_expr)
-        .then(
-            (pl.col("taxa_crescimento_pct") - limite)
-            * pl.col("multiplicador_nao_comprovacao")
-        )
+        .then(pl.col("taxa_crescimento_pct") - limite)
         .otherwise(0.0)
         .alias("excesso_volume_atipico")
     )

@@ -19,7 +19,7 @@ GO
 --
 --     CASE WHEN taxa_crescimento_pct > @limite
 --           AND aumento_valor_semestre >= @limite_absoluto
---          THEN (taxa_crescimento_pct - @limite) * multiplicador_nao_comprovacao
+--          THEN taxa_crescimento_pct - @limite
 --          ELSE 0
 --     END
 --
@@ -53,7 +53,6 @@ DROP TABLE IF EXISTS #vol_base_vendas_mensais;
 DROP TABLE IF EXISTS #vol_cnpjs_universo;
 DROP TABLE IF EXISTS #calendario_semestres;
 DROP TABLE IF EXISTS #vol_base_semestres;
-DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
 
 -- ============================================================================
 -- PASSO 0: UNIVERSO DE GTINS ELEGIVEIS
@@ -135,8 +134,8 @@ ON #calendario_semestres(chave_semestre);
 
 -- ============================================================================
 -- PASSO 2: SEMESTRES COM MOVIMENTACAO
--- A regra nao exige valor minimo mensal. qtd_meses_validos e mantido por
--- compatibilidade com a aplicacao e equivale a meses com venda no semestre.
+-- A regra nao exige valor minimo mensal. qtd_meses_presentes equivale a meses
+-- com venda no semestre.
 -- ============================================================================
 WITH VendasSemestrais AS (
     SELECT
@@ -163,7 +162,6 @@ SELECT
     C.chave_semestre,
     C.ordem_semestre,
     CAST(ISNULL(A.qtd_meses_presentes, 0) AS TINYINT) AS qtd_meses_presentes,
-    CAST(ISNULL(A.qtd_meses_presentes, 0) AS TINYINT) AS qtd_meses_validos,
     CAST(ISNULL(A.valor_semestre, 0) AS DECIMAL(18,2)) AS valor_semestre
 INTO #vol_base_semestres
 FROM #vol_cnpjs_universo U
@@ -175,35 +173,6 @@ LEFT JOIN AgregadoSemestre A
 
 CREATE CLUSTERED INDEX IDX_vol_base_semestres_cnpj
 ON #vol_base_semestres(cnpj, chave_semestre);
-
--- ============================================================================
--- PASSO 3: NAO COMPROVACAO POR SEMESTRE
--- ============================================================================
-SELECT
-    CAST(PRO.cnpj AS VARCHAR(14)) AS cnpj,
-    YEAR(MOV.periodo) AS ano,
-    CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS semestre,
-    SUM(MOV.valor_vendas) AS valor_total_vendas,
-    SUM(MOV.valor_sem_comprovacao) AS valor_sem_comprovacao,
-    CAST(
-        CASE
-            WHEN SUM(MOV.valor_vendas) <= 0 THEN 0
-            ELSE CAST(SUM(MOV.valor_sem_comprovacao) AS DECIMAL(18,6)) / CAST(SUM(MOV.valor_vendas) AS DECIMAL(18,6))
-        END
-    AS DECIMAL(18,6)) AS pct_nao_comprovacao
-INTO #NaoComprovacaoSemestral
-FROM temp_CGUSC.fp.movimentacao_mensal_gtin MOV
-INNER JOIN temp_CGUSC.fp.processamento PRO
-    ON PRO.id = MOV.id_processamento
-WHERE MOV.periodo >= @DataInicio
-  AND MOV.periodo < DATEADD(DAY, 1, @DataFim)
-GROUP BY
-    CAST(PRO.cnpj AS VARCHAR(14)),
-    YEAR(MOV.periodo),
-    CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END;
-
-CREATE CLUSTERED INDEX IDX_NaoComprovacaoSemestral_cnpj
-ON #NaoComprovacaoSemestral(cnpj, ano, semestre);
 
 IF EXISTS (
     SELECT 1
@@ -217,7 +186,7 @@ BEGIN
 END;
 
 -- ============================================================================
--- PASSO 4: MATERIALIZACAO SEMESTRAL
+-- PASSO 3: MATERIALIZACAO SEMESTRAL
 -- ============================================================================
 WITH SemestresComVenda AS (
     SELECT
@@ -252,10 +221,7 @@ SELECT
         END
     AS TINYINT) AS status_semestre,
     S.qtd_meses_presentes,
-    S.qtd_meses_validos,
     B.chave_semestre_anterior,
-    CAST(S.valor_semestre AS DECIMAL(18,2)) AS valor_semestre,
-    CAST(B.valor_semestre_anterior AS DECIMAL(18,2)) AS valor_semestre_anterior,
     CAST(
         CASE
             WHEN B.valor_semestre_anterior > 0
@@ -269,15 +235,7 @@ SELECT
                 THEN ((S.valor_semestre - B.valor_semestre_anterior) / CAST(B.valor_semestre_anterior AS DECIMAL(18,2))) * 100.0
             ELSE NULL
         END
-    AS DECIMAL(9,2)) AS taxa_crescimento_pct,
-    CAST(
-        CASE
-            WHEN ISNULL(NC.pct_nao_comprovacao, 0) > 0.5 THEN 6
-            WHEN ISNULL(NC.pct_nao_comprovacao, 0) > 0.2 THEN 4
-            WHEN ISNULL(NC.pct_nao_comprovacao, 0) > 0.05 THEN 2
-            ELSE 1
-        END
-    AS TINYINT) AS multiplicador_nao_comprovacao
+    AS DECIMAL(9,2)) AS taxa_crescimento_pct
 INTO temp_CGUSC.fp.volume_atipico_semestral
 FROM #vol_base_semestres S
 INNER JOIN temp_CGUSC.fp.dados_farmacia F
@@ -287,24 +245,19 @@ LEFT JOIN SemestresComVenda V
    AND V.chave_semestre = S.chave_semestre
 LEFT JOIN SemestresBase B
     ON B.cnpj = S.cnpj
-   AND B.chave_semestre = S.chave_semestre
-LEFT JOIN #NaoComprovacaoSemestral NC
-    ON NC.cnpj = S.cnpj
-   AND NC.ano = S.ano
-   AND NC.semestre = S.semestre;
+   AND B.chave_semestre = S.chave_semestre;
 
 CREATE CLUSTERED INDEX IDX_volume_atipico_semestral_cnpj
 ON temp_CGUSC.fp.volume_atipico_semestral(id_cnpj, chave_semestre);
 
 CREATE NONCLUSTERED INDEX IDX_volume_atipico_semestral_filtro
 ON temp_CGUSC.fp.volume_atipico_semestral(status_semestre, chave_semestre)
-INCLUDE (id_cnpj, chave_semestre_anterior, valor_semestre, valor_semestre_anterior, aumento_valor_semestre, taxa_crescimento_pct, multiplicador_nao_comprovacao);
+INCLUDE (id_cnpj, qtd_meses_presentes, chave_semestre_anterior, aumento_valor_semestre, taxa_crescimento_pct);
 
 DROP TABLE IF EXISTS #vol_base_vendas_mensais;
 DROP TABLE IF EXISTS #vol_cnpjs_universo;
 DROP TABLE IF EXISTS #calendario_semestres;
 DROP TABLE IF EXISTS #vol_base_semestres;
-DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
 DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 PRINT '>> temp_CGUSC.fp.volume_atipico_semestral criada com sucesso.';

@@ -269,12 +269,12 @@ const chartOption = computed(() => {
               <strong>${formatSemestreKey(s.chave_semestre_anterior) || 'semestre anterior válido'}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
-              <span style="opacity:.68;">Mínimo material</span>
+              <span style="opacity:.68;">Aumento mínimo para alerta</span>
               <strong>${formatCurrencyFull(s.limite_aumento_volume_atipico ?? 5000)}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;">
-              <span style="opacity:.68;">Meses válidos</span>
-              <strong>${s.qtd_meses_validos ?? '—'}/${s.qtd_meses_presentes ?? 6}</strong>
+              <span style="opacity:.68;">Meses com movimentação</span>
+              <strong>${s.qtd_meses_presentes ?? '—'}</strong>
             </div>
           </div>` : '';
         return `

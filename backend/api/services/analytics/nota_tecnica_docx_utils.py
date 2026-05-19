@@ -152,6 +152,8 @@ def _rgb(hex6: str) -> RGBColor:
 
 
 def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False, italic=False, underline=False):
+    if bold and color in {'0F172A', '475569', '64748B'}:
+        color = '334155'
     run = para.add_run(text)
     run.bold = bold
     run.italic = italic
@@ -311,6 +313,8 @@ def _set_table_fixed_widths(table, widths):
 
 
 def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):
+    if bold and color in {'0F172A', '475569', '64748B'}:
+        color = '334155'
     p = cell.paragraphs[0]
     p.text = ''
     p.paragraph_format.space_before = Pt(0)
@@ -321,6 +325,8 @@ def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color
 
 
 def _write_cell_fast(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):
+    if bold and color in {'0F172A', '475569', '64748B'}:
+        color = '334155'
     p = cell.paragraphs[0]
     p._p.clear_content()
     p.paragraph_format.space_before = Pt(0)

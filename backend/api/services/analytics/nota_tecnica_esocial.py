@@ -53,10 +53,27 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
     if not alerta:
         return
 
-    valor_txt = _format_decimal_pt(float(alerta.get("valor_pfpb_ultimo_mes") or 0.0), 2)
-    periodo_txt = alerta.get("ultimo_periodo_movimentacao_txt") or "período não identificado"
-    qtd_autorizacoes = int(alerta.get("qtd_autorizacoes_ultimo_mes") or 0)
-    dt_rescisao_txt = alerta.get("dt_ultima_rescisao_antes_ultima_movimentacao_txt") or "—"
+    campos_obrigatorios = {
+        "ultimo_periodo_movimentacao_txt",
+        "ultimo_mes_trabalhador_ativo_txt",
+        "qtd_dias_sem_funcionario_ate_ultima_movimentacao",
+        "valor_pfpb_periodo_sem_funcionario",
+        "qtd_autorizacoes_periodo_sem_funcionario",
+    }
+    missing_alerta = [campo for campo in campos_obrigatorios if alerta.get(campo) is None]
+    if missing_alerta:
+        raise RuntimeError(
+            "Contexto eSocial sem campos obrigatorios para alerta de movimentacao sem funcionario: "
+            + ", ".join(sorted(missing_alerta))
+        )
+
+    periodo_txt = str(alerta["ultimo_periodo_movimentacao_txt"])
+    ultimo_mes_ativo_txt = str(alerta["ultimo_mes_trabalhador_ativo_txt"])
+    qtd_dias_sem_funcionario = int(alerta["qtd_dias_sem_funcionario_ate_ultima_movimentacao"])
+    qtd_dias_txt = _format_decimal_pt(float(qtd_dias_sem_funcionario), 0)
+    valor_periodo_txt = _format_decimal_pt(float(alerta["valor_pfpb_periodo_sem_funcionario"]), 2)
+    qtd_autorizacoes_periodo = int(alerta["qtd_autorizacoes_periodo_sem_funcionario"])
+    qtd_autorizacoes_periodo_txt = _format_decimal_pt(float(qtd_autorizacoes_periodo), 0)
     ano_ultima_mov = int(alerta.get("ano_ultima_movimentacao") or 0)
     ano_ref_esocial = int(alerta.get("ano_esocial_referencia_ultima_movimentacao") or 0)
     sem_esocial_no_ano = bool(alerta.get("is_sem_esocial_no_ano_ultima_movimentacao"))
@@ -65,13 +82,13 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
     p.paragraph_format.space_before = Pt(6)
     _run(
         p,
-        f'Observa-se, adicionalmente, que o último mês com movimentação PFPB identificado para o estabelecimento foi {periodo_txt}, com valor total de R$ {valor_txt} e {qtd_autorizacoes} {_plural(qtd_autorizacoes, "autorização", "autorizações")}. ',
+        f'Observa-se, adicionalmente, que o último mês com movimentação de venda registrada no PFPB para o estabelecimento foi {periodo_txt}, enquanto o último mês com trabalhador ativo vinculado ao estabelecimento na base do eSocial foi {ultimo_mes_ativo_txt}. ',
         color='0F172A',
         size=10,
     )
     _run(
         p,
-        'Nessa competência, não foi identificado trabalhador ativo vinculado ao estabelecimento na base do eSocial.',
+        f'Assim, foram identificados {qtd_dias_txt} {_plural(qtd_dias_sem_funcionario, "dia", "dias")} sem trabalhador ativo no estabelecimento até a última movimentação registrada. Nesse período, a farmácia apresentou faturamento de R$ {valor_periodo_txt} e {qtd_autorizacoes_periodo_txt} {_plural(qtd_autorizacoes_periodo, "autorização", "autorizações")} no PFPB.',
         color='0F172A',
         size=10,
     )
@@ -79,13 +96,6 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
         _run(
             p,
             f' Não foram identificados vínculos no eSocial para {ano_ultima_mov}; por isso, a verificação considerou o último ano trabalhista disponível, {ano_ref_esocial}.',
-            color='0F172A',
-            size=10,
-        )
-    if dt_rescisao_txt != "—":
-        _run(
-            p,
-            f' A última rescisão registrada antes dessa movimentação ocorreu em {dt_rescisao_txt}.',
             color='0F172A',
             size=10,
         )

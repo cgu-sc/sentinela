@@ -696,6 +696,12 @@ def _build_esocial_context(
         "qtd_trabalhadores_ativos_ultima_movimentacao",
         "qtd_farmaceuticos_ativos_ultima_movimentacao",
         "dt_ultima_rescisao_antes_ultima_movimentacao",
+        "dt_ultimo_trabalhador_ativo",
+        "ultimo_mes_trabalhador_ativo",
+        "dt_inicio_periodo_sem_funcionario",
+        "qtd_dias_sem_funcionario_ate_ultima_movimentacao",
+        "valor_pfpb_periodo_sem_funcionario",
+        "qtd_autorizacoes_periodo_sem_funcionario",
         "has_movimentacao_sem_funcionario_ativo",
     }
     missing_ano = ano_required - set(df_ano.columns)
@@ -862,6 +868,11 @@ def _build_esocial_context(
             "qtd_autorizacoes_ultimo_mes",
             "qtd_trabalhadores_ativos_ultima_movimentacao",
             "qtd_farmaceuticos_ativos_ultima_movimentacao",
+            "ultimo_mes_trabalhador_ativo",
+            "dt_inicio_periodo_sem_funcionario",
+            "qtd_dias_sem_funcionario_ate_ultima_movimentacao",
+            "valor_pfpb_periodo_sem_funcionario",
+            "qtd_autorizacoes_periodo_sem_funcionario",
         }
         missing_alerta = [
             campo for campo in campos_alerta_obrigatorios
@@ -904,6 +915,29 @@ def _build_esocial_context(
             ),
             "dt_ultima_rescisao_antes_ultima_movimentacao_txt": _format_date_iso(
                 alert_row.get("dt_ultima_rescisao_antes_ultima_movimentacao")
+            ),
+            "dt_ultimo_trabalhador_ativo": alert_row.get("dt_ultimo_trabalhador_ativo"),
+            "dt_ultimo_trabalhador_ativo_txt": _format_date_iso(
+                alert_row.get("dt_ultimo_trabalhador_ativo")
+            ),
+            "ultimo_mes_trabalhador_ativo": alert_row.get("ultimo_mes_trabalhador_ativo"),
+            "ultimo_mes_trabalhador_ativo_txt": (
+                _format_date_month_year_long_pt(alert_row.get("ultimo_mes_trabalhador_ativo"))
+                if hasattr(alert_row.get("ultimo_mes_trabalhador_ativo"), "year")
+                else str(alert_row.get("ultimo_mes_trabalhador_ativo"))
+            ),
+            "dt_inicio_periodo_sem_funcionario": alert_row.get("dt_inicio_periodo_sem_funcionario"),
+            "dt_inicio_periodo_sem_funcionario_txt": _format_date_iso(
+                alert_row.get("dt_inicio_periodo_sem_funcionario")
+            ),
+            "qtd_dias_sem_funcionario_ate_ultima_movimentacao": int(
+                alert_row.get("qtd_dias_sem_funcionario_ate_ultima_movimentacao") or 0
+            ),
+            "valor_pfpb_periodo_sem_funcionario": float(
+                alert_row.get("valor_pfpb_periodo_sem_funcionario") or 0.0
+            ),
+            "qtd_autorizacoes_periodo_sem_funcionario": int(
+                alert_row.get("qtd_autorizacoes_periodo_sem_funcionario") or 0
             ),
         }
 

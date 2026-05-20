@@ -3,7 +3,7 @@ from typing import Any
 from docx.shared import Pt
 
 from .nota_tecnica_docx_utils import _run
-from .nota_tecnica_formatters import _format_list_pt
+from .nota_tecnica_formatters import _format_decimal_pt, _format_list_pt
 from .nota_tecnica_quadros import _add_quadro_esocial, _add_quadro_esocial_trabalhadores
 
 
@@ -46,6 +46,55 @@ def _add_legal_context(doc, suffix: str | None = None):
     )
     if suffix:
         _run(p_leg, ' ' + suffix, color='0F172A', size=10)
+
+
+def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
+    alerta = esocial_comp.get("movimentacao_sem_funcionario_alerta")
+    if not alerta:
+        return
+
+    valor_txt = _format_decimal_pt(float(alerta.get("valor_pfpb_ultimo_mes") or 0.0), 2)
+    periodo_txt = alerta.get("ultimo_periodo_movimentacao_txt") or "período não identificado"
+    qtd_autorizacoes = int(alerta.get("qtd_autorizacoes_ultimo_mes") or 0)
+    dt_rescisao_txt = alerta.get("dt_ultima_rescisao_antes_ultima_movimentacao_txt") or "—"
+    ano_ultima_mov = int(alerta.get("ano_ultima_movimentacao") or 0)
+    ano_ref_esocial = int(alerta.get("ano_esocial_referencia_ultima_movimentacao") or 0)
+    sem_esocial_no_ano = bool(alerta.get("is_sem_esocial_no_ano_ultima_movimentacao"))
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    _run(
+        p,
+        f'Observa-se, adicionalmente, que o último mês com movimentação PFPB identificado para o estabelecimento foi {periodo_txt}, com valor total de R$ {valor_txt} e {qtd_autorizacoes} {_plural(qtd_autorizacoes, "autorização", "autorizações")}. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p,
+        'Nessa competência, não foi identificado trabalhador ativo vinculado ao estabelecimento na base do eSocial.',
+        color='0F172A',
+        size=10,
+    )
+    if sem_esocial_no_ano and ano_ultima_mov and ano_ref_esocial:
+        _run(
+            p,
+            f' Não foram identificados vínculos no eSocial para {ano_ultima_mov}; por isso, a verificação considerou o último ano trabalhista disponível, {ano_ref_esocial}.',
+            color='0F172A',
+            size=10,
+        )
+    if dt_rescisao_txt != "—":
+        _run(
+            p,
+            f' A última rescisão registrada antes dessa movimentação ocorreu em {dt_rescisao_txt}.',
+            color='0F172A',
+            size=10,
+        )
+    _run(
+        p,
+        ' A situação deve ser confrontada com a documentação operacional, de funcionamento e de responsabilidade técnica da farmácia no período.',
+        color='0F172A',
+        size=10,
+    )
 
 
 def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
@@ -196,3 +245,4 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
 
     _add_quadro_esocial(doc, razao_social, cnpj_fmt, esocial_comp)
     _add_quadro_esocial_trabalhadores(doc, razao_social, cnpj_fmt, esocial_comp)
+    _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp)

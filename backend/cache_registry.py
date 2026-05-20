@@ -35,6 +35,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("esocial_cnpj_ano", cache_files.ESOCIAL_CNPJ_ANO_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_trabalhador_ano", cache_files.ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_movimentacao_ano", cache_files.ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET, "global"),
+    CacheDefinition("esocial_cnpj_ultima_movimentacao", cache_files.ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET, "global"),
     CacheDefinition("sentinela_metadados_base", cache_files.SENTINELA_METADADOS_BASE_PARQUET, "global"),
     CacheDefinition("dados_par", cache_files.DADOS_PAR_PARQUET, "global"),
     CacheDefinition("par_teia_alvos", cache_files.PAR_TEIA_ALVOS_PARQUET, "global"),

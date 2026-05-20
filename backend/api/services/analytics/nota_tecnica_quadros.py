@@ -522,21 +522,20 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 01-A - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        f'Quadro 01-A - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='0F172A',
         size=9,
         bold=True,
     )
 
-    table = doc.add_table(rows=len(rows_data) + 1, cols=4)
+    table = doc.add_table(rows=len(rows_data) + 1, cols=3)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.0), Inches(1.4), Inches(2.35), Inches(2.35)])
+    _set_table_fixed_widths(table, [Inches(1.2), Inches(2.95), Inches(2.95)])
 
     headers = [
         'Ano',
-        'Competência',
-        'Trabalhadores com vínculo',
         'Farmacêuticos com vínculo',
+        'Outros trabalhadores com vínculo',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -546,11 +545,13 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
 
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
+        qtd_trabalhadores_vinculo = int(item.get("qtd_trabalhadores_vinculo_ano") or 0)
+        qtd_farmaceuticos_vinculo = int(item.get("qtd_farmaceuticos_vinculo_ano") or 0)
+        qtd_outros_vinculo = max(qtd_trabalhadores_vinculo - qtd_farmaceuticos_vinculo, 0)
         values = [
             str(item.get("ano_base") or "—"),
-            item.get("competencia_txt") or "—",
-            str(item.get("qtd_trabalhadores_vinculo_ano") or 0),
-            str(item.get("qtd_farmaceuticos_vinculo_ano") or 0),
+            str(qtd_farmaceuticos_vinculo),
+            str(qtd_outros_vinculo),
         ]
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]

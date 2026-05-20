@@ -260,7 +260,7 @@ BEGIN
         WHERE dt_admissao IS NULL
     );
     SET @msg_esocial = CONCAT(
-        '[eSocial] aviso - vinculos sem data de admissao descartados da apuracao de ativos | registros=',
+        '[eSocial] aviso - vinculos sem data de admissao considerados na apuracao de ativos quando compativeis com a competencia-base | registros=',
         @linhas_esocial
     );
     RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
@@ -373,6 +373,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_ano_unico_trabalhador;
 DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_resumo;
 DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_trabalhador_ano;
 DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_movimentacao_ano;
+DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao;
 
 SET @msg_esocial = CONCAT(
     '[eSocial] 07 - drop tabelas antigas e trabalhador_ano concluido | etapa_ms=',
@@ -619,6 +620,29 @@ BEGIN
     RETURN;
 END;
 
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.movimentacao_mensal_cnpj AS M
+    INNER JOIN temp_CGUSC.fp.dados_farmacia AS F
+        ON F.cnpj = M.cnpj
+    INNER JOIN temp_CGUSC.fp.esocial_cnpj_ano AS E
+        ON E.id_cnpj = F.id
+    WHERE M.total_vendas > 0
+      AND M.periodo = (
+          SELECT MAX(M2.periodo)
+          FROM temp_CGUSC.fp.movimentacao_mensal_cnpj AS M2
+          INNER JOIN temp_CGUSC.fp.dados_farmacia AS F2
+              ON F2.cnpj = M2.cnpj
+          WHERE F2.id = F.id
+            AND M2.total_vendas > 0
+      )
+      AND M.total_num_autorizacoes IS NULL
+)
+BEGIN
+    RAISERROR('Ultima movimentacao mensal com valores obrigatorios nulos para CNPJs do contexto eSocial.', 16, 1);
+    RETURN;
+END;
+
 DROP TABLE IF EXISTS #movimentacao_esocial_ano;
 
 SELECT
@@ -654,6 +678,204 @@ END;
 
 CREATE UNIQUE CLUSTERED INDEX IX_tmp_mov_esocial_ano
 ON #movimentacao_esocial_ano (id_cnpj, ano_base);
+
+DROP TABLE IF EXISTS #ultima_movimentacao_esocial;
+
+SELECT
+    CAST(F.id AS INT) AS id_cnpj,
+    MAX(CAST(M.periodo AS DATE)) AS ultimo_periodo_movimentacao
+INTO #ultima_movimentacao_esocial
+FROM temp_CGUSC.fp.movimentacao_mensal_cnpj AS M
+INNER JOIN temp_CGUSC.fp.dados_farmacia AS F
+    ON F.cnpj = M.cnpj
+WHERE M.total_vendas > 0
+GROUP BY F.id;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_ultima_mov_esocial
+ON #ultima_movimentacao_esocial (id_cnpj);
+
+DROP TABLE IF EXISTS #ultima_movimentacao_esocial_valores;
+
+SELECT
+    U.id_cnpj,
+    CAST(YEAR(U.ultimo_periodo_movimentacao) AS SMALLINT) AS ano_base,
+    U.ultimo_periodo_movimentacao,
+    CAST(DATEFROMPARTS(YEAR(U.ultimo_periodo_movimentacao), MONTH(U.ultimo_periodo_movimentacao), 1) AS DATE) AS dt_inicio_ultimo_mes_movimentacao,
+    EOMONTH(U.ultimo_periodo_movimentacao) AS dt_referencia_ultima_movimentacao,
+    CAST(SUM(M.total_vendas) AS DECIMAL(19,2)) AS valor_pfpb_ultimo_mes,
+    SUM(CAST(M.total_num_autorizacoes AS BIGINT)) AS qtd_autorizacoes_ultimo_mes
+INTO #ultima_movimentacao_esocial_valores
+FROM #ultima_movimentacao_esocial AS U
+INNER JOIN temp_CGUSC.fp.dados_farmacia AS F
+    ON F.id = U.id_cnpj
+INNER JOIN temp_CGUSC.fp.movimentacao_mensal_cnpj AS M
+    ON M.cnpj = F.cnpj
+   AND CAST(M.periodo AS DATE) = U.ultimo_periodo_movimentacao
+GROUP BY
+    U.id_cnpj,
+    U.ultimo_periodo_movimentacao;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_ultima_mov_esocial_valores
+ON #ultima_movimentacao_esocial_valores (id_cnpj, ano_base);
+
+DROP TABLE IF EXISTS #ultima_movimentacao_esocial_referencia;
+
+SELECT
+    U.id_cnpj,
+    U.ano_base AS ano_ultima_movimentacao,
+    R.ano_base AS ano_esocial_referencia_ultima_movimentacao,
+    CAST(CASE WHEN R.ano_base = U.ano_base THEN 0 ELSE 1 END AS BIT) AS is_sem_esocial_no_ano_ultima_movimentacao,
+    U.ultimo_periodo_movimentacao,
+    U.dt_inicio_ultimo_mes_movimentacao,
+    U.dt_referencia_ultima_movimentacao,
+    U.valor_pfpb_ultimo_mes,
+    U.qtd_autorizacoes_ultimo_mes
+INTO #ultima_movimentacao_esocial_referencia
+FROM #ultima_movimentacao_esocial_valores AS U
+OUTER APPLY (
+    SELECT MAX(C.ano_base) AS ano_base
+    FROM #competencias_esocial_ano AS C
+    WHERE C.id_cnpj = U.id_cnpj
+      AND C.ano_base <= U.ano_base
+) AS R
+WHERE R.ano_base IS NOT NULL;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_ultima_mov_esocial_ref
+ON #ultima_movimentacao_esocial_referencia (id_cnpj, ano_esocial_referencia_ultima_movimentacao);
+
+DROP TABLE IF EXISTS #ultima_movimentacao_esocial_ativos;
+
+SELECT
+    U.id_cnpj,
+    U.ano_ultima_movimentacao,
+    U.ano_esocial_referencia_ultima_movimentacao,
+    U.is_sem_esocial_no_ano_ultima_movimentacao,
+    COUNT(DISTINCT CASE
+        WHEN (
+              T.dt_admissao IS NULL
+              OR T.dt_admissao <= U.dt_referencia_ultima_movimentacao
+          )
+          AND (
+              T.dt_rescisao IS NULL
+              OR T.dt_rescisao >= U.dt_inicio_ultimo_mes_movimentacao
+          )
+            THEN T.cpf_trabalhador
+    END) AS qtd_trabalhadores_ativos_ultima_movimentacao,
+    COUNT(DISTINCT CASE
+        WHEN T.is_farmaceutico = 1
+          AND (
+              T.dt_admissao IS NULL
+              OR T.dt_admissao <= U.dt_referencia_ultima_movimentacao
+          )
+          AND (
+              T.dt_rescisao IS NULL
+              OR T.dt_rescisao >= U.dt_inicio_ultimo_mes_movimentacao
+          )
+            THEN T.cpf_trabalhador
+    END) AS qtd_farmaceuticos_ativos_ultima_movimentacao,
+    MAX(CASE
+        WHEN T.dt_rescisao < U.dt_inicio_ultimo_mes_movimentacao
+            THEN T.dt_rescisao
+    END) AS dt_ultima_rescisao_antes_ultima_movimentacao
+INTO #ultima_movimentacao_esocial_ativos
+FROM #ultima_movimentacao_esocial_referencia AS U
+LEFT JOIN #trabalhadores_esocial_ano AS T
+    ON T.id_cnpj = U.id_cnpj
+   AND T.ano_base = U.ano_esocial_referencia_ultima_movimentacao
+GROUP BY
+    U.id_cnpj,
+    U.ano_ultima_movimentacao,
+    U.ano_esocial_referencia_ultima_movimentacao,
+    U.is_sem_esocial_no_ano_ultima_movimentacao;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_ultima_mov_esocial_ativos
+ON #ultima_movimentacao_esocial_ativos (id_cnpj, ano_esocial_referencia_ultima_movimentacao);
+
+SET @linhas_esocial = (SELECT COUNT_BIG(*) FROM #ultima_movimentacao_esocial_referencia);
+SET @msg_esocial = CONCAT(
+    '[eSocial] 12a - ultima movimentacao PFPB por CNPJ com referencia eSocial apurada | linhas=',
+    @linhas_esocial,
+    ' | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
+
+DROP TABLE IF EXISTS temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao;
+
+SELECT
+    U.id_cnpj,
+    U.ano_ultima_movimentacao,
+    U.ano_esocial_referencia_ultima_movimentacao,
+    U.is_sem_esocial_no_ano_ultima_movimentacao,
+    U.ultimo_periodo_movimentacao,
+    U.dt_inicio_ultimo_mes_movimentacao,
+    U.dt_referencia_ultima_movimentacao,
+    U.valor_pfpb_ultimo_mes,
+    U.qtd_autorizacoes_ultimo_mes,
+    COALESCE(A.qtd_trabalhadores_ativos_ultima_movimentacao, 0) AS qtd_trabalhadores_ativos_ultima_movimentacao,
+    COALESCE(A.qtd_farmaceuticos_ativos_ultima_movimentacao, 0) AS qtd_farmaceuticos_ativos_ultima_movimentacao,
+    A.dt_ultima_rescisao_antes_ultima_movimentacao,
+    CAST(
+        CASE
+            WHEN U.valor_pfpb_ultimo_mes > 0
+                 AND COALESCE(A.qtd_trabalhadores_ativos_ultima_movimentacao, 0) = 0
+                THEN 1
+            ELSE 0
+        END AS BIT
+    ) AS has_movimentacao_sem_funcionario_ativo,
+    CAST(
+        CASE
+            WHEN U.valor_pfpb_ultimo_mes > 0
+                 AND COALESCE(A.qtd_trabalhadores_ativos_ultima_movimentacao, 0) = 0
+                THEN 'forte'
+            ELSE 'sem_alerta'
+        END AS VARCHAR(20)
+    ) AS classificacao_mov_sem_funcionario,
+    CAST(
+        CASE
+            WHEN U.valor_pfpb_ultimo_mes > 0
+                 AND COALESCE(A.qtd_trabalhadores_ativos_ultima_movimentacao, 0) = 0
+                THEN 'Ultimo mes com movimentacao PFPB sem trabalhador ativo identificado no eSocial para a competencia.'
+            ELSE 'Ultimo mes com movimentacao PFPB possui trabalhador ativo identificado no eSocial para a competencia.'
+        END AS NVARCHAR(300)
+    ) AS motivo_mov_sem_funcionario,
+    GETDATE() AS dt_processamento
+INTO temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao
+FROM #ultima_movimentacao_esocial_referencia AS U
+LEFT JOIN #ultima_movimentacao_esocial_ativos AS A
+    ON A.id_cnpj = U.id_cnpj
+   AND A.ano_esocial_referencia_ultima_movimentacao = U.ano_esocial_referencia_ultima_movimentacao;
+
+SET @linhas_esocial = (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao);
+SET @msg_esocial = CONCAT(
+    '[eSocial] 12b - tabela esocial_cnpj_ultima_movimentacao persistida | linhas=',
+    @linhas_esocial,
+    ' | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
+
+CREATE UNIQUE CLUSTERED INDEX IX_esocial_cnpj_ultima_movimentacao
+ON temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao (id_cnpj);
+
+CREATE NONCLUSTERED INDEX IX_esocial_cnpj_ultima_movimentacao_alerta
+ON temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao (has_movimentacao_sem_funcionario_ativo, ano_ultima_movimentacao)
+INCLUDE (ultimo_periodo_movimentacao, valor_pfpb_ultimo_mes, qtd_autorizacoes_ultimo_mes);
+
+SET @msg_esocial = CONCAT(
+    '[eSocial] 12c - indices esocial_cnpj_ultima_movimentacao criados | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
 
 DROP TABLE IF EXISTS #movimentacao_esocial_metricas;
 
@@ -947,7 +1169,8 @@ WHERE nome_base = N'esocial'
   AND nome_artefato IN (
       N'esocial_cnpj_trabalhador_ano',
       N'esocial_cnpj_ano',
-      N'esocial_cnpj_movimentacao_ano'
+      N'esocial_cnpj_movimentacao_ano',
+      N'esocial_cnpj_ultima_movimentacao'
   );
 
 INSERT INTO temp_CGUSC.fp.sentinela_metadados_base (
@@ -1020,7 +1243,26 @@ SELECT
         N'qtd_alertas_movimentacao_trabalhista=',
         SUM(CASE WHEN classificacao_mov_trabalhista <> N'sem_alerta' THEN 1 ELSE 0 END)
     ) AS observacao
-FROM temp_CGUSC.fp.esocial_cnpj_movimentacao_ano;
+FROM temp_CGUSC.fp.esocial_cnpj_movimentacao_ano
+UNION ALL
+SELECT
+    N'esocial' AS nome_base,
+    N'esocial_cnpj_ultima_movimentacao' AS nome_artefato,
+    N'temp_CGUSC.fp.movimentacao_mensal_cnpj + temp_CGUSC.fp.esocial_cnpj_trabalhador_ano' AS fonte_origem,
+    MIN(CAST(ultimo_periodo_movimentacao AS DATETIME2(7))) AS dt_referencia_min,
+    MAX(CAST(ultimo_periodo_movimentacao AS DATETIME2(7))) AS dt_referencia_max,
+    MIN((YEAR(ultimo_periodo_movimentacao) * 100) + MONTH(ultimo_periodo_movimentacao)) AS competencia_min,
+    MAX((YEAR(ultimo_periodo_movimentacao) * 100) + MONTH(ultimo_periodo_movimentacao)) AS competencia_max,
+    COUNT_BIG(*) AS qtd_registros,
+    COUNT_BIG(DISTINCT id_cnpj) AS qtd_chaves,
+    1 AS schema_versao,
+    @tempo_total_esocial AS dt_processamento_inicio,
+    @tempo_fim_esocial AS dt_processamento_fim,
+    CONCAT(
+        N'qtd_alertas_ultimo_mes_sem_funcionario=',
+        SUM(CASE WHEN has_movimentacao_sem_funcionario_ativo = 1 THEN 1 ELSE 0 END)
+    ) AS observacao
+FROM temp_CGUSC.fp.esocial_cnpj_ultima_movimentacao;
 
 SET @linhas_esocial = (
     SELECT COUNT_BIG(*)
@@ -1029,7 +1271,8 @@ SET @linhas_esocial = (
       AND nome_artefato IN (
           N'esocial_cnpj_trabalhador_ano',
           N'esocial_cnpj_ano',
-          N'esocial_cnpj_movimentacao_ano'
+          N'esocial_cnpj_movimentacao_ano',
+          N'esocial_cnpj_ultima_movimentacao'
       )
 );
 SET @msg_esocial = CONCAT(

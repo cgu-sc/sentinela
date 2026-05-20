@@ -10,6 +10,7 @@ from data_cache import (
     get_df,
     get_df_esocial_cnpj_ano,
     get_df_esocial_cnpj_trabalhador_ano,
+    get_df_esocial_cnpj_ultima_movimentacao,
     get_df_perfil_estabelecimento,
     get_df_sentinela_metadados_base,
     get_localidades_df,
@@ -648,6 +649,7 @@ def _build_esocial_context(
 
     df_ano = get_df_esocial_cnpj_ano()
     df_trabalhador = get_df_esocial_cnpj_trabalhador_ano()
+    df_ultima_movimentacao = get_df_esocial_cnpj_ultima_movimentacao()
     df_metadados = get_df_sentinela_metadados_base()
     ano_required = {
         "id_cnpj",
@@ -682,15 +684,35 @@ def _build_esocial_context(
         "nome_artefato",
         "dt_referencia_max",
     }
+    ultima_movimentacao_required = {
+        "id_cnpj",
+        "ano_ultima_movimentacao",
+        "ano_esocial_referencia_ultima_movimentacao",
+        "is_sem_esocial_no_ano_ultima_movimentacao",
+        "ultimo_periodo_movimentacao",
+        "dt_referencia_ultima_movimentacao",
+        "valor_pfpb_ultimo_mes",
+        "qtd_autorizacoes_ultimo_mes",
+        "qtd_trabalhadores_ativos_ultima_movimentacao",
+        "qtd_farmaceuticos_ativos_ultima_movimentacao",
+        "dt_ultima_rescisao_antes_ultima_movimentacao",
+        "has_movimentacao_sem_funcionario_ativo",
+    }
     missing_ano = ano_required - set(df_ano.columns)
     missing_trabalhador = trabalhador_required - set(df_trabalhador.columns)
     missing_metadados = metadados_required - set(df_metadados.columns)
+    missing_ultima_movimentacao = ultima_movimentacao_required - set(df_ultima_movimentacao.columns)
     if missing_ano:
         raise RuntimeError("Cache eSocial CNPJ/ano sem colunas obrigatorias: " + ", ".join(sorted(missing_ano)))
     if missing_trabalhador:
         raise RuntimeError("Cache eSocial trabalhador/ano sem colunas obrigatorias: " + ", ".join(sorted(missing_trabalhador)))
     if missing_metadados:
         raise RuntimeError("Cache de metadados das bases sem colunas obrigatorias: " + ", ".join(sorted(missing_metadados)))
+    if missing_ultima_movimentacao:
+        raise RuntimeError(
+            "Cache eSocial ultima movimentacao sem colunas obrigatorias: "
+            + ", ".join(sorted(missing_ultima_movimentacao))
+        )
 
     metadados_esocial = df_metadados.filter(
         (pl.col("nome_base") == "esocial")
@@ -705,12 +727,16 @@ def _build_esocial_context(
 
     anos = df_ano.filter(pl.col("id_cnpj") == id_cnpj)
     trabalhadores = df_trabalhador.filter(pl.col("id_cnpj") == id_cnpj)
+    ultima_movimentacao = df_ultima_movimentacao.filter(pl.col("id_cnpj") == id_cnpj)
 
     if data_inicio or data_fim:
         ano_inicio = data_inicio.year if data_inicio else int(anos.select(pl.col("ano_base").min()).item() or 0)
         ano_fim = data_fim.year if data_fim else int(anos.select(pl.col("ano_base").max()).item() or 9999)
         anos = anos.filter(pl.col("ano_base").is_between(ano_inicio, ano_fim))
         trabalhadores = trabalhadores.filter(pl.col("ano_base").is_between(ano_inicio, ano_fim))
+        ultima_movimentacao = ultima_movimentacao.filter(
+            pl.col("ano_ultima_movimentacao").is_between(ano_inicio, ano_fim)
+        )
 
     if anos.is_empty():
         return {
@@ -725,6 +751,7 @@ def _build_esocial_context(
             "trabalhador_detalhe_rows": [],
             "trabalhador_detalhe_total_cpfs": 0,
             "trabalhador_detalhe_modo": "sem_dados",
+            "movimentacao_sem_funcionario_alerta": None,
         }
 
     trabalhador_rows_by_year: dict[int, list[dict[str, Any]]] = {}
@@ -820,6 +847,66 @@ def _build_esocial_context(
             "dt_rescisao_txt": _format_date_iso(row.get("dt_rescisao")),
         })
 
+    movimentacao_sem_funcionario_alerta = None
+    movimentacao_alerta = ultima_movimentacao.filter(pl.col("has_movimentacao_sem_funcionario_ativo") == True)
+    if not movimentacao_alerta.is_empty():
+        alert_row = (
+            movimentacao_alerta
+            .sort("ultimo_periodo_movimentacao", descending=True)
+            .row(0, named=True)
+        )
+        campos_alerta_obrigatorios = {
+            "ultimo_periodo_movimentacao",
+            "dt_referencia_ultima_movimentacao",
+            "valor_pfpb_ultimo_mes",
+            "qtd_autorizacoes_ultimo_mes",
+            "qtd_trabalhadores_ativos_ultima_movimentacao",
+            "qtd_farmaceuticos_ativos_ultima_movimentacao",
+        }
+        missing_alerta = [
+            campo for campo in campos_alerta_obrigatorios
+            if alert_row.get(campo) is None
+        ]
+        if missing_alerta:
+            raise RuntimeError(
+                "Alerta de movimentacao sem funcionario ativo sem campos obrigatorios: "
+                + ", ".join(sorted(missing_alerta))
+            )
+        ultimo_periodo = alert_row["ultimo_periodo_movimentacao"]
+        movimentacao_sem_funcionario_alerta = {
+            "ano_ultima_movimentacao": int(alert_row.get("ano_ultima_movimentacao") or 0),
+            "ano_esocial_referencia_ultima_movimentacao": int(
+                alert_row.get("ano_esocial_referencia_ultima_movimentacao") or 0
+            ),
+            "is_sem_esocial_no_ano_ultima_movimentacao": bool(
+                alert_row.get("is_sem_esocial_no_ano_ultima_movimentacao")
+            ),
+            "ultimo_periodo_movimentacao": ultimo_periodo,
+            "ultimo_periodo_movimentacao_txt": (
+                _format_date_month_year_long_pt(ultimo_periodo)
+                if hasattr(ultimo_periodo, "year")
+                else str(ultimo_periodo)
+            ),
+            "dt_referencia_ultima_movimentacao": alert_row.get("dt_referencia_ultima_movimentacao"),
+            "dt_referencia_ultima_movimentacao_txt": _format_date_iso(
+                alert_row.get("dt_referencia_ultima_movimentacao")
+            ),
+            "valor_pfpb_ultimo_mes": float(alert_row.get("valor_pfpb_ultimo_mes") or 0.0),
+            "qtd_autorizacoes_ultimo_mes": int(alert_row.get("qtd_autorizacoes_ultimo_mes") or 0),
+            "qtd_trabalhadores_ativos_ultima_movimentacao": int(
+                alert_row.get("qtd_trabalhadores_ativos_ultima_movimentacao") or 0
+            ),
+            "qtd_farmaceuticos_ativos_ultima_movimentacao": int(
+                alert_row.get("qtd_farmaceuticos_ativos_ultima_movimentacao") or 0
+            ),
+            "dt_ultima_rescisao_antes_ultima_movimentacao": alert_row.get(
+                "dt_ultima_rescisao_antes_ultima_movimentacao"
+            ),
+            "dt_ultima_rescisao_antes_ultima_movimentacao_txt": _format_date_iso(
+                alert_row.get("dt_ultima_rescisao_antes_ultima_movimentacao")
+            ),
+        }
+
     return {
         "id_cnpj": id_cnpj,
         "has_data": True,
@@ -834,6 +921,7 @@ def _build_esocial_context(
         "trabalhador_detalhe_rows": trabalhador_detalhe_rows,
         "trabalhador_detalhe_total_cpfs": total_cpfs_periodo,
         "trabalhador_detalhe_modo": detalhe_modo,
+        "movimentacao_sem_funcionario_alerta": movimentacao_sem_funcionario_alerta,
     }
 
 

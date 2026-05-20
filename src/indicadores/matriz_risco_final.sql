@@ -181,7 +181,7 @@ IndicadoresPresenca AS (
         I12.municipio_mediana AS med_alto_custo_mun, I12.estado_mediana AS med_alto_custo_uf, I12.pais_mediana AS med_alto_custo_br, I12.regiao_saude_mediana AS med_alto_custo_reg,
         I12.risco_relativo_mun_mediana AS risco_alto_custo_mun, I12.risco_relativo_uf_mediana AS risco_alto_custo_uf, I12.risco_relativo_br_mediana AS risco_alto_custo_br, I12.risco_relativo_reg_mediana AS risco_alto_custo_reg,
 
-        I13.media_concentracao AS pct_pico,
+        I13.mediana_concentracao AS pct_pico,
         I13.municipio_mediana AS med_pico_mun, I13.estado_mediana AS med_pico_uf, I13.pais_mediana AS med_pico_br, I13.regiao_saude_mediana AS med_pico_reg,
         I13.risco_relativo_mun_mediana AS risco_pico_mun, I13.risco_relativo_uf_mediana AS risco_pico_uf, I13.risco_relativo_br_mediana AS risco_pico_br, I13.risco_relativo_reg_mediana AS risco_pico_reg,
 

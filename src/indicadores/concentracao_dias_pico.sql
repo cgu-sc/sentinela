@@ -10,7 +10,7 @@ GO
 --
 -- METRICA PRINCIPAL: pct_concentracao_top3_dias
 --   Percentual do faturamento mensal concentrado nos 3 dias de maior venda.
---   Calculado mensalmente e sumarizado por farmacia via media e mediana.
+--   Calculado mensalmente e sumarizado por farmacia via mediana.
 --
 -- INTERPRETACAO DA mediana_concentracao:
 --   - >= 80%: CRITICO  - Quase todo o faturamento concentrado em 3 dias
@@ -20,6 +20,7 @@ GO
 --
 -- FONTE DE DADOS:
 --   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 (periodo completo)
+--   - temp_CGUSC.fp.medicamentos_patologia (universo de medicamentos auditados)
 -- ============================================================================
 
 -- ============================================================================
@@ -30,8 +31,42 @@ DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
+-- PASSO 0: UNIVERSO DE GTINS AUDITADOS
+-- Garante uma linha por codigo_barra antes do join com movimentacao.
+-- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
+
+SELECT DISTINCT
+    C.codigo_barra
+INTO #medicamentos_patologia_gtin
+FROM temp_CGUSC.fp.medicamentos_patologia C
+WHERE C.codigo_barra IS NOT NULL;
+
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem codigo_barra valido.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_patologia_gtin
+ON #medicamentos_patologia_gtin(codigo_barra);
+
+
+-- ============================================================================
 -- PASSO 1: VENDAS DIARIAS POR FARMACIA
--- UNION ALL entre a base historica e a recente para cobrir todo o periodo.
+-- Filtrado pelo universo de medicamentos auditados.
 -- ============================================================================
 DROP TABLE IF EXISTS #VendasDiarias;
 
@@ -42,6 +77,8 @@ SELECT
     SUM(A.valor_pago)              AS valor_dia
 INTO #VendasDiarias
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+INNER JOIN #medicamentos_patologia_gtin C
+    ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora <= @DataFim
 GROUP BY A.cnpj, FORMAT(A.data_hora, 'yyyy-MM'), CAST(A.data_hora AS DATE);
@@ -84,10 +121,11 @@ GROUP BY cnpj, ano_mes
 HAVING MAX(total_mes) > 0;
 
 DROP TABLE IF EXISTS #RankingDias;
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 
 -- ============================================================================
--- PASSO 4: CALCULO BASE POR FARMACIA (MEDIA E MEDIANA DO PERIODO)
+-- PASSO 4: CALCULO BASE POR FARMACIA (MEDIANA DO PERIODO)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico;
 
@@ -99,13 +137,7 @@ SELECT DISTINCT
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY pct_concentracao_top3_dias)
         OVER (PARTITION BY cnpj)
-    AS DECIMAL(18,4)) AS mediana_concentracao,
-
-    -- Media: impacto dos picos no periodo
-    CAST(
-        AVG(pct_concentracao_top3_dias)
-        OVER (PARTITION BY cnpj)
-    AS DECIMAL(18,4)) AS media_concentracao
+    AS DECIMAL(18,4)) AS mediana_concentracao
 
 INTO temp_CGUSC.fp.indicador_concentracao_pico
 FROM #ConcentracaoMensal;
@@ -116,7 +148,7 @@ DROP TABLE IF EXISTS #ConcentracaoMensal;
 
 
 -- ============================================================================
--- PASSO 5: METRICAS POR MUNICIPIO (MEDIANA E MEDIA)
+-- PASSO 5: METRICAS POR MUNICIPIO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_mun;
 
@@ -126,11 +158,7 @@ SELECT DISTINCT
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
         OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(I.media_concentracao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)), CAST(F.municipio AS VARCHAR(255)))
-    AS DECIMAL(18,4)) AS media_municipio
+    AS DECIMAL(18,4)) AS mediana_municipio
 INTO temp_CGUSC.fp.indicador_concentracao_pico_mun
 FROM temp_CGUSC.fp.indicador_concentracao_pico I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
@@ -139,7 +167,7 @@ CREATE CLUSTERED INDEX IDX_IndPicoMun ON temp_CGUSC.fp.indicador_concentracao_pi
 
 
 -- ============================================================================
--- PASSO 6: METRICAS POR ESTADO (MEDIANA E MEDIA)
+-- PASSO 6: METRICAS POR ESTADO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_uf;
 
@@ -148,11 +176,7 @@ SELECT DISTINCT
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
         OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(I.media_concentracao)
-        OVER (PARTITION BY CAST(F.uf AS VARCHAR(2)))
-    AS DECIMAL(18,4)) AS media_estado
+    AS DECIMAL(18,4)) AS mediana_estado
 INTO temp_CGUSC.fp.indicador_concentracao_pico_uf
 FROM temp_CGUSC.fp.indicador_concentracao_pico I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj;
@@ -161,7 +185,7 @@ CREATE CLUSTERED INDEX IDX_IndPicoUF ON temp_CGUSC.fp.indicador_concentracao_pic
 
 
 -- ============================================================================
--- PASSO 6B: METRICAS POR REGIAO DE SAUDE (MEDIANA E MEDIA)
+-- PASSO 6B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_regiao;
 
@@ -170,11 +194,7 @@ SELECT DISTINCT
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
         OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(I.media_concentracao)
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
+    AS DECIMAL(18,4)) AS mediana_regiao
 INTO temp_CGUSC.fp.indicador_concentracao_pico_regiao
 FROM temp_CGUSC.fp.indicador_concentracao_pico I
 INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.cnpj = I.cnpj
@@ -184,7 +204,7 @@ CREATE CLUSTERED INDEX IDX_IndPicoReg ON temp_CGUSC.fp.indicador_concentracao_pi
 
 
 -- ============================================================================
--- PASSO 7: METRICAS NACIONAIS (MEDIANA E MEDIA)
+-- PASSO 7: METRICAS NACIONAIS (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
 
@@ -192,10 +212,7 @@ SELECT DISTINCT
     'BR' AS pais,
     CAST(
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY mediana_concentracao) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(media_concentracao) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
+    AS DECIMAL(18,4)) AS mediana_pais
 INTO temp_CGUSC.fp.indicador_concentracao_pico_br
 FROM temp_CGUSC.fp.indicador_concentracao_pico;
 
@@ -216,7 +233,6 @@ SELECT
     -- Indicadores base
     I.meses_analisados,
     I.mediana_concentracao,
-    I.media_concentracao,
 
     -- Rankings (pior risco = posicao 1)
     RANK() OVER (
@@ -237,27 +253,19 @@ SELECT
 
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
     CAST((I.mediana_concentracao + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((I.media_concentracao   + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
 
     -- Benchmarks estaduais
     ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
     CAST((I.mediana_concentracao + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((I.media_concentracao   + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
 
     -- Benchmarks Regionais (Regiao de Saude)
     ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
     CAST((I.mediana_concentracao + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((I.media_concentracao   + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
 
     -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
     CAST((I.mediana_concentracao + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((I.media_concentracao   + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media,
 
     -- Classificacao de Risco (baseada na mediana do comportamento da farmacia)
     CASE
@@ -295,7 +303,3 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
 GO
 
--- Verificacao rapida
-SELECT TOP 100 *
-FROM temp_CGUSC.fp.indicador_concentracao_pico_detalhado
-ORDER BY ranking_br;

@@ -614,6 +614,14 @@ def _format_cbo_label(cbo: Any, titulo: Any) -> str:
     return f"CBO {cbo_int:06d} sem título válido"
 
 
+def _format_date_iso(value: Any) -> str:
+    if value in (None, "", "None"):
+        return "—"
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 def _build_esocial_context(
     cnpj: str,
     data_inicio: Optional[date],
@@ -647,6 +655,7 @@ def _build_esocial_context(
         "competencia_base",
         "qtd_trabalhadores",
         "qtd_farmaceuticos",
+        "has_cbo_sem_titulo",
         "is_um_trabalhador",
         "is_um_trabalhador_sem_farmaceutico",
         "is_um_trabalhador_cbo_sem_titulo",
@@ -662,6 +671,7 @@ def _build_esocial_context(
         "titulo_cbo",
         "dt_admissao",
         "dt_rescisao",
+        "is_cbo_sem_titulo",
     }
     metadados_required = {
         "nome_base",
@@ -708,6 +718,9 @@ def _build_esocial_context(
             "dt_carga_fonte_txt": dt_carga_base_txt,
             "anos_sem_farmaceutico": [],
             "anos_um_trabalhador": [],
+            "trabalhador_detalhe_rows": [],
+            "trabalhador_detalhe_total_cpfs": 0,
+            "trabalhador_detalhe_modo": "sem_dados",
         }
 
     trabalhador_rows_by_year: dict[int, list[dict[str, Any]]] = {}
@@ -739,6 +752,7 @@ def _build_esocial_context(
             "competencia_txt": _format_competencia_esocial(row.get("competencia_base")),
             "qtd_trabalhadores": qtd_trabalhadores,
             "qtd_farmaceuticos": qtd_farmaceuticos,
+            "has_cbo_sem_titulo": bool(row.get("has_cbo_sem_titulo")),
             "is_um_trabalhador": bool(row.get("is_um_trabalhador")),
             "is_um_trabalhador_sem_farmaceutico": bool(row.get("is_um_trabalhador_sem_farmaceutico")),
             "is_um_trabalhador_cbo_sem_titulo": bool(row.get("is_um_trabalhador_cbo_sem_titulo")),
@@ -756,6 +770,37 @@ def _build_esocial_context(
         if row["qtd_trabalhadores"] > 0 and row["qtd_farmaceuticos"] == 0
     ]
     anos_um_trabalhador = [row for row in rows if row["is_um_trabalhador"]]
+    anos_criticos = [
+        row["ano_base"] for row in rows
+        if row["qtd_trabalhadores"] > 0
+        and (
+            row["qtd_farmaceuticos"] == 0
+            or row["has_cbo_sem_titulo"]
+            or row["is_um_trabalhador_sem_farmaceutico"]
+            or row["is_um_trabalhador_cbo_sem_titulo"]
+        )
+    ]
+    total_cpfs_periodo = int(trabalhadores.select(pl.col("cpf_trabalhador").n_unique()).item() or 0)
+    if total_cpfs_periodo <= 15:
+        trabalhadores_detalhe = trabalhadores
+        detalhe_modo = "lista_completa"
+    elif anos_criticos:
+        trabalhadores_detalhe = trabalhadores.filter(pl.col("ano_base").is_in(anos_criticos))
+        detalhe_modo = "anos_criticos"
+    else:
+        trabalhadores_detalhe = trabalhadores.head(0)
+        detalhe_modo = "omitido"
+
+    trabalhador_detalhe_rows = []
+    for row in trabalhadores_detalhe.sort(["ano_base", "cpf_trabalhador", "cbo"]).to_dicts():
+        trabalhador_detalhe_rows.append({
+            "ano_base": int(row.get("ano_base") or 0),
+            "cpf_trabalhador": str(row.get("cpf_trabalhador") or ""),
+            "cbo": int(row["cbo"]) if row.get("cbo") is not None else None,
+            "titulo_cbo": str(row.get("titulo_cbo") or "").strip() or "—",
+            "dt_admissao_txt": _format_date_iso(row.get("dt_admissao")),
+            "dt_rescisao_txt": _format_date_iso(row.get("dt_rescisao")),
+        })
 
     return {
         "id_cnpj": id_cnpj,
@@ -768,6 +813,9 @@ def _build_esocial_context(
         "dt_carga_fonte_txt": dt_carga_base_txt,
         "anos_sem_farmaceutico": anos_sem_farmaceutico,
         "anos_um_trabalhador": anos_um_trabalhador,
+        "trabalhador_detalhe_rows": trabalhador_detalhe_rows,
+        "trabalhador_detalhe_total_cpfs": total_cpfs_periodo,
+        "trabalhador_detalhe_modo": detalhe_modo,
     }
 
 

@@ -52,6 +52,7 @@ _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
 _ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
 _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_trabalhador_ano")
+_ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_movimentacao_ano")
 _SENTINELA_METADADOS_BASE_PARQUET_PATH = _global_cache_path("sentinela_metadados_base")
 _DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
 _PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
@@ -77,6 +78,7 @@ _df_medicamentos:   pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
 _df_esocial_cnpj_ano: pl.DataFrame | None = None
 _df_esocial_cnpj_trabalhador_ano: pl.DataFrame | None = None
+_df_esocial_cnpj_movimentacao_ano: pl.DataFrame | None = None
 _df_sentinela_metadados_base: pl.DataFrame | None = None
 _df_dados_par: pl.DataFrame | None = None
 _df_par_teia_alvos: pl.DataFrame | None = None
@@ -311,7 +313,7 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
 
 def _sync_esocial(engine, progress_callback=None):
     """Sincroniza o contexto trabalhista anual do eSocial para uso analitico."""
-    global _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano
+    global _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano
     print("Sincronizando contexto trabalhista eSocial...")
 
     trabalhador_required = {
@@ -351,6 +353,32 @@ def _sync_esocial(engine, progress_callback=None):
         "dt_carga_fonte",
         "dt_processamento",
     }
+    movimentacao_required = {
+        "id_cnpj",
+        "ano_base",
+        "id_regiao_saude",
+        "uf",
+        "periodo_min",
+        "periodo_max",
+        "valor_pfpb_ano",
+        "valor_sem_comprovacao_ano",
+        "qtd_autorizacoes_ano",
+        "qtd_caixas_ano",
+        "qtd_caixas_sem_comprovacao_ano",
+        "qtd_trabalhadores",
+        "qtd_farmaceuticos",
+        "valor_pfpb_por_trabalhador",
+        "valor_sem_comprovacao_por_trabalhador",
+        "autorizacoes_por_trabalhador",
+        "caixas_por_trabalhador",
+        "p90_referencia_valor_pfpb_ano",
+        "p95_referencia_valor_por_trabalhador",
+        "qtd_cnpjs_referencia",
+        "escopo_referencia",
+        "classificacao_mov_trabalhista",
+        "motivo_classificacao",
+        "dt_processamento",
+    }
 
     def _assert_source_table(table_name: str, required: set[str]) -> int:
         with engine.connect() as conn:
@@ -387,6 +415,10 @@ def _sync_esocial(engine, progress_callback=None):
     total_ano = _assert_source_table(
         "temp_CGUSC.fp.esocial_cnpj_ano",
         ano_required,
+    )
+    total_movimentacao = _assert_source_table(
+        "temp_CGUSC.fp.esocial_cnpj_movimentacao_ano",
+        movimentacao_required,
     )
 
     print(f"   -> Registros trabalhador/ano: {total_trabalhador:,}")
@@ -490,6 +522,67 @@ def _sync_esocial(engine, progress_callback=None):
     ]).sort(["id_cnpj", "ano_base"])
     _df_esocial_cnpj_ano.write_parquet(
         _ESOCIAL_CNPJ_ANO_PARQUET_PATH,
+        compression="zstd",
+    )
+
+    print(f"   -> Registros movimentacao/trabalho: {total_movimentacao:,}")
+    movimentacao_sql = """
+        SELECT
+            id_cnpj,
+            ano_base,
+            id_regiao_saude,
+            uf,
+            periodo_min,
+            periodo_max,
+            valor_pfpb_ano,
+            valor_sem_comprovacao_ano,
+            qtd_autorizacoes_ano,
+            qtd_caixas_ano,
+            qtd_caixas_sem_comprovacao_ano,
+            qtd_trabalhadores,
+            qtd_farmaceuticos,
+            valor_pfpb_por_trabalhador,
+            valor_sem_comprovacao_por_trabalhador,
+            autorizacoes_por_trabalhador,
+            caixas_por_trabalhador,
+            p90_referencia_valor_pfpb_ano,
+            p95_referencia_valor_por_trabalhador,
+            qtd_cnpjs_referencia,
+            escopo_referencia,
+            classificacao_mov_trabalhista,
+            motivo_classificacao,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[esocial_cnpj_movimentacao_ano]
+    """
+    pdf_movimentacao = pd.read_sql(movimentacao_sql, engine)
+    _df_esocial_cnpj_movimentacao_ano = pl.from_pandas(pdf_movimentacao).with_columns([
+        pl.col("id_cnpj").cast(pl.Int32),
+        pl.col("ano_base").cast(pl.Int16),
+        pl.col("id_regiao_saude").cast(pl.Int32),
+        pl.col("uf").cast(pl.String),
+        pl.col("periodo_min").cast(pl.Date, strict=False),
+        pl.col("periodo_max").cast(pl.Date, strict=False),
+        pl.col("valor_pfpb_ano").cast(pl.Float64),
+        pl.col("valor_sem_comprovacao_ano").cast(pl.Float64),
+        pl.col("qtd_autorizacoes_ano").cast(pl.Int64),
+        pl.col("qtd_caixas_ano").cast(pl.Int64),
+        pl.col("qtd_caixas_sem_comprovacao_ano").cast(pl.Int64),
+        pl.col("qtd_trabalhadores").cast(pl.Int64),
+        pl.col("qtd_farmaceuticos").cast(pl.Int64),
+        pl.col("valor_pfpb_por_trabalhador").cast(pl.Float64, strict=False),
+        pl.col("valor_sem_comprovacao_por_trabalhador").cast(pl.Float64, strict=False),
+        pl.col("autorizacoes_por_trabalhador").cast(pl.Float64, strict=False),
+        pl.col("caixas_por_trabalhador").cast(pl.Float64, strict=False),
+        pl.col("p90_referencia_valor_pfpb_ano").cast(pl.Float64),
+        pl.col("p95_referencia_valor_por_trabalhador").cast(pl.Float64),
+        pl.col("qtd_cnpjs_referencia").cast(pl.Int64),
+        pl.col("escopo_referencia").cast(pl.String),
+        pl.col("classificacao_mov_trabalhista").cast(pl.String),
+        pl.col("motivo_classificacao").cast(pl.String),
+        pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+    ]).sort(["id_cnpj", "ano_base"])
+    _df_esocial_cnpj_movimentacao_ano.write_parquet(
+        _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH,
         compression="zstd",
     )
 
@@ -1332,7 +1425,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1423,6 +1516,32 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "dt_carga_fonte",
                 "dt_processamento",
             },
+            "esocial_cnpj_movimentacao_ano": {
+                "id_cnpj",
+                "ano_base",
+                "id_regiao_saude",
+                "uf",
+                "periodo_min",
+                "periodo_max",
+                "valor_pfpb_ano",
+                "valor_sem_comprovacao_ano",
+                "qtd_autorizacoes_ano",
+                "qtd_caixas_ano",
+                "qtd_caixas_sem_comprovacao_ano",
+                "qtd_trabalhadores",
+                "qtd_farmaceuticos",
+                "valor_pfpb_por_trabalhador",
+                "valor_sem_comprovacao_por_trabalhador",
+                "autorizacoes_por_trabalhador",
+                "caixas_por_trabalhador",
+                "p90_referencia_valor_pfpb_ano",
+                "p95_referencia_valor_por_trabalhador",
+                "qtd_cnpjs_referencia",
+                "escopo_referencia",
+                "classificacao_mov_trabalhista",
+                "motivo_classificacao",
+                "dt_processamento",
+            },
             "sentinela_metadados_base": {
                 "nome_base",
                 "nome_artefato",
@@ -1493,6 +1612,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
         _df_esocial_cnpj_trabalhador_ano = _try_load("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)
+        _df_esocial_cnpj_movimentacao_ano = _try_load("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)
         _df_sentinela_metadados_base = _try_load("sentinela_metadados_base", _SENTINELA_METADADOS_BASE_PARQUET_PATH)
         dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
         _df_dados_par = dados_par_loaded
@@ -1524,7 +1644,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
-        {"name": "Contexto eSocial",      "weight": 2,  "func": lambda cb: _sync_esocial(engine, cb)},
+        {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Metadados das Bases",   "weight": 1,  "func": lambda cb: _sync_sentinela_metadados_base(engine, cb)},
         {"name": "Indicadores PAR",       "weight": 1,  "func": lambda cb: _sync_dados_par(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
@@ -1668,6 +1788,11 @@ def get_df_esocial_cnpj_trabalhador_ano() -> pl.DataFrame:
         raise RuntimeError("Cache de trabalhadores eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
     return _df_esocial_cnpj_trabalhador_ano
 
+def get_df_esocial_cnpj_movimentacao_ano() -> pl.DataFrame:
+    if _df_esocial_cnpj_movimentacao_ano is None:
+        raise RuntimeError("Cache de movimentacao/trabalho eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
+    return _df_esocial_cnpj_movimentacao_ano
+
 def get_df_sentinela_metadados_base() -> pl.DataFrame:
     if _df_sentinela_metadados_base is None:
         raise RuntimeError("Cache de metadados das bases Sentinela nao carregado. Execute uma sincronizacao.")
@@ -1703,6 +1828,7 @@ def get_cache_status() -> dict:
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
         "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},
         "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_trabalhador_ano is not None},
+        "esocial_cnpj_movimentacao_ano": {"label": "eSocial Movimentacao/Ano", "path": _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_movimentacao_ano is not None},
         "sentinela_metadados_base": {"label": "Metadados das Bases", "path": _SENTINELA_METADADOS_BASE_PARQUET_PATH, "loaded": _df_sentinela_metadados_base is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
         "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},

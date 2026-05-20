@@ -528,16 +528,15 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         bold=True,
     )
 
-    table = doc.add_table(rows=len(rows_data) + 1, cols=5)
+    table = doc.add_table(rows=len(rows_data) + 1, cols=4)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(0.75), Inches(1.05), Inches(1.05), Inches(1.05), Inches(3.2)])
+    _set_table_fixed_widths(table, [Inches(1.3), Inches(1.8), Inches(2.0), Inches(2.0)])
 
     headers = [
         'Ano',
         'Competência',
         'Trabalhadores',
         'Farmacêuticos',
-        'Trabalhador único, quando aplicável',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -552,11 +551,10 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
             item.get("competencia_txt") or "—",
             str(item.get("qtd_trabalhadores") or 0),
             str(item.get("qtd_farmaceuticos") or 0),
-            item.get("trabalhador_unico_cbo_txt") or "Não se aplica",
         ]
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx < 4 else WD_ALIGN_PARAGRAPH.LEFT
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             _run(para, value, color='0F172A', size=8)
 
     for row in table.rows:
@@ -569,7 +567,75 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. Data de carga mais recente considerada: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
+        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. Data de carga mais recente da base eSocial disponível: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
+        color='64748B',
+        size=8,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
+    """Adiciona quadro detalhado de trabalhadores e CBOs identificados no eSocial."""
+    rows_data = esocial_comp.get("trabalhador_detalhe_rows") or []
+    if not rows_data:
+        return
+
+    p_title = doc.add_paragraph()
+    _format_quadro_title(p_title)
+    _run(
+        p_title,
+        f'Quadro 01-B - Trabalhadores identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        color='0F172A',
+        size=9,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(rows_data) + 1, cols=6)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(0.55), Inches(1.25), Inches(0.75), Inches(2.60), Inches(0.95), Inches(1.00)])
+
+    headers = ['Ano', 'CPF', 'CBO', 'Título CBO', 'Admissão', 'Rescisão']
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        cbo = item.get("cbo")
+        values = [
+            str(item.get("ano_base") or "—"),
+            item.get("cpf_trabalhador") or "—",
+            f"{int(cbo):06d}" if cbo is not None else "—",
+            item.get("titulo_cbo") or "—",
+            item.get("dt_admissao_txt") or "—",
+            item.get("dt_rescisao_txt") or "—",
+        ]
+        for col_idx, value in enumerate(values):
+            para = cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 3 else WD_ALIGN_PARAGRAPH.CENTER
+            _run(para, value, color='0F172A', size=8)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
+    detalhe_modo = esocial_comp.get("trabalhador_detalhe_modo")
+    if detalhe_modo == "anos_criticos":
+        escopo = (
+            "Como o período analisado possui mais de 15 trabalhadores distintos, "
+            "o quadro apresenta apenas os vínculos dos anos com condição crítica identificada."
+        )
+    else:
+        escopo = "O quadro apresenta a lista completa de trabalhadores identificados no período analisado."
+    _run(
+        p_foot,
+        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. {escopo}',
         color='64748B',
         size=8,
     )

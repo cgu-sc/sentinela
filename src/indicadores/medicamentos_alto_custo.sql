@@ -9,22 +9,128 @@ DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 0: CALCULAR O PRECO DE CORTE (90 PERCENTIL GLOBAL)
--- Calcula uma unica vez o valor que define o que e "Alto Custo".
+-- PASSO 0: CALCULAR E PERSISTIR O PRECO DE CORTE (90 PERCENTIL REGIONAL)
+-- Calcula uma unica vez o valor que define o que e "Alto Custo" em cada
+-- id_regiao_saude para o periodo processado, mantendo o resultado disponivel
+-- para consultas detalhadas por CNPJ sem recalcular o percentil regional.
 -- Filtrado por medicamentos_patologia para consistencia com o escopo auditado.
 -- ============================================================================
-DROP TABLE IF EXISTS #LimiteAltoCusto;
+IF OBJECT_ID('temp_CGUSC.fp.indicador_alto_custo_limite', 'U') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.indicador_alto_custo_limite (
+        data_inicio               DATE          NOT NULL,
+        data_fim                  DATE          NOT NULL,
+        percentil                 DECIMAL(5,4)  NOT NULL,
+        id_regiao_saude           INT           NOT NULL,
+        valor_limite_alto_custo   DECIMAL(18,2) NOT NULL,
+        qtd_registros_base        BIGINT        NOT NULL,
+        dt_processamento          DATETIME2(0)  NOT NULL
+            CONSTRAINT DF_indicador_alto_custo_limite_dt DEFAULT SYSDATETIME()
+    );
+END;
 
-SELECT DISTINCT
-    PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY A.valor_pago) OVER () AS valor_limite
-INTO #LimiteAltoCusto
+IF COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'data_inicio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'data_fim') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'percentil') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'id_regiao_saude') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'valor_limite_alto_custo') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'qtd_registros_base') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.indicador_alto_custo_limite', 'dt_processamento') IS NULL
+BEGIN
+    RAISERROR('Schema invalido em temp_CGUSC.fp.indicador_alto_custo_limite.', 16, 1);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.indicador_alto_custo_limite')
+      AND name = 'CX_indicador_alto_custo_limite_periodo'
+)
+BEGIN
+    CREATE UNIQUE CLUSTERED INDEX CX_indicador_alto_custo_limite_periodo
+        ON temp_CGUSC.fp.indicador_alto_custo_limite(data_inicio, data_fim, percentil, id_regiao_saude);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.indicador_alto_custo_limite')
+      AND name = 'IX_indicador_alto_custo_limite_regiao'
+)
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_indicador_alto_custo_limite_regiao
+        ON temp_CGUSC.fp.indicador_alto_custo_limite(id_regiao_saude, data_inicio, data_fim, percentil)
+        INCLUDE (valor_limite_alto_custo, qtd_registros_base, dt_processamento);
+END;
+
+DELETE FROM temp_CGUSC.fp.indicador_alto_custo_limite
+WHERE data_inicio = @DataInicio
+  AND data_fim = @DataFim
+  AND percentil = CAST(0.90 AS DECIMAL(5,4));
+
+DROP TABLE IF EXISTS #BaseAltoCustoRegional;
+
+SELECT
+    F.id_regiao_saude,
+    CAST(A.valor_pago AS DECIMAL(18,2)) AS valor_pago
+INTO #BaseAltoCustoRegional
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
     ON C.codigo_barra = A.codigo_barra
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.cnpj = A.cnpj
 WHERE A.data_hora >= @DataInicio
-  AND A.data_hora <= @DataFim;
+  AND A.data_hora <= @DataFim
+  AND F.id_regiao_saude IS NOT NULL;
 
-CREATE CLUSTERED INDEX IDX_Limite ON #LimiteAltoCusto(valor_limite);
+CREATE CLUSTERED INDEX CX_BaseAltoCustoRegional
+    ON #BaseAltoCustoRegional(id_regiao_saude, valor_pago);
+
+DROP TABLE IF EXISTS #LimiteAltoCustoRegional;
+
+SELECT DISTINCT
+    id_regiao_saude,
+    CAST(
+        PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY valor_pago)
+            OVER (PARTITION BY id_regiao_saude)
+        AS DECIMAL(18,2)
+    ) AS valor_limite_alto_custo,
+    COUNT_BIG(*) OVER (PARTITION BY id_regiao_saude) AS qtd_registros_base
+INTO #LimiteAltoCustoRegional
+FROM #BaseAltoCustoRegional;
+
+CREATE UNIQUE CLUSTERED INDEX CX_LimiteAltoCustoRegional
+    ON #LimiteAltoCustoRegional(id_regiao_saude);
+
+INSERT INTO temp_CGUSC.fp.indicador_alto_custo_limite (
+    data_inicio,
+    data_fim,
+    percentil,
+    id_regiao_saude,
+    valor_limite_alto_custo,
+    qtd_registros_base,
+    dt_processamento
+)
+SELECT
+    @DataInicio,
+    @DataFim,
+    CAST(0.90 AS DECIMAL(5,4)),
+    id_regiao_saude,
+    valor_limite_alto_custo,
+    qtd_registros_base,
+    SYSDATETIME()
+FROM #LimiteAltoCustoRegional;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.indicador_alto_custo_limite
+    WHERE data_inicio = @DataInicio
+      AND data_fim = @DataFim
+      AND percentil = CAST(0.90 AS DECIMAL(5,4))
+)
+BEGIN
+    RAISERROR('Limite de alto custo nao calculado para o periodo informado.', 16, 1);
+END;
 
 
 -- ============================================================================
@@ -37,11 +143,11 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo;
 SELECT
     A.cnpj,
     SUM(A.valor_pago)                                                        AS valor_total_vendido,
-    SUM(CASE WHEN A.valor_pago >= L.valor_limite THEN A.valor_pago ELSE 0 END) AS valor_vendas_alto_custo,
+    SUM(CASE WHEN A.valor_pago >= L.valor_limite_alto_custo THEN A.valor_pago ELSE 0 END) AS valor_vendas_alto_custo,
     CAST(
         CASE
             WHEN SUM(A.valor_pago) > 0 THEN
-                (SUM(CASE WHEN A.valor_pago >= L.valor_limite THEN A.valor_pago ELSE 0 END) /
+                (SUM(CASE WHEN A.valor_pago >= L.valor_limite_alto_custo THEN A.valor_pago ELSE 0 END) /
                  SUM(A.valor_pago)) * 100.0
             ELSE 0
         END
@@ -51,16 +157,21 @@ INTO temp_CGUSC.fp.indicador_alto_custo
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
     ON C.codigo_barra = A.codigo_barra
-CROSS JOIN #LimiteAltoCusto L
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.cnpj = A.cnpj
+INNER JOIN temp_CGUSC.fp.indicador_alto_custo_limite L
+    ON L.data_inicio = @DataInicio
+   AND L.data_fim = @DataFim
+   AND L.percentil = CAST(0.90 AS DECIMAL(5,4))
+   AND L.id_regiao_saude = F.id_regiao_saude
 WHERE
     A.data_hora >= @DataInicio
     AND A.data_hora <= @DataFim
+    AND F.id_regiao_saude IS NOT NULL
 GROUP BY A.cnpj
 HAVING SUM(A.valor_pago) > 5000; -- Filtro de corte minimo de atividade
 
 CREATE CLUSTERED INDEX IDX_IndAltoCusto_CNPJ ON temp_CGUSC.fp.indicador_alto_custo(cnpj);
-
-DROP TABLE #LimiteAltoCusto;
 
 
 -- ============================================================================

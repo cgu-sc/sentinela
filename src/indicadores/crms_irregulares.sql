@@ -14,11 +14,22 @@ GO
 --
 -- FONTE DE DADOS:
 --   - db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
---   - db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
+--   - db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
 --   - temp_CFM.dbo.medicos_jul_2025_mod
 --   - temp_CGUSC.fp.medicamentos_patologia (universo de medicamentos auditados)
 --   - temp_CGUSC.fp.dados_farmacia (id_cnpj e contexto territorial)
 -- ============================================================================
+
+-- ============================================================================
+-- LIMPEZA PREVIA DE TABELAS (Para evitar conflitos de schema na compilacao)
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_crms_irregulares_detalhado;
+GO
 
 -- ============================================================================
 -- DEFINICAO DE VARIAVEIS
@@ -112,21 +123,21 @@ BEGIN
     RETURN;
 END;
 
-IF OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'U') IS NULL
+IF OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'U') IS NULL
 BEGIN
-    RAISERROR('Tabela db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024 nao encontrada.', 16, 1);
+    RAISERROR('Tabela db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 nao encontrada.', 16, 1);
     RETURN;
 END;
 
-IF COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'cnpj') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'crm') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'crm_uf') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'num_autorizacao') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'valor_pago') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'data_hora') IS NULL
-   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024', 'codigo_barra') IS NULL
+IF COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'crm') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'crm_uf') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'num_autorizacao') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'codigo_barra') IS NULL
 BEGIN
-    RAISERROR('Tabela db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024 sem colunas obrigatorias para CRMs irregulares.', 16, 1);
+    RAISERROR('Tabela db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 sem colunas obrigatorias para CRMs irregulares.', 16, 1);
     RETURN;
 END;
 
@@ -254,7 +265,7 @@ FROM (
         valor_pago,
         data_hora,
         codigo_barra
-    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacao_2021_2024
+    FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
     WHERE data_hora >= @DataInicio
       AND data_hora < DATEADD(DAY, 1, @DataFim)
       AND crm IS NOT NULL

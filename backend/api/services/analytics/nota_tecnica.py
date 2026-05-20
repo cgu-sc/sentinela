@@ -25,6 +25,7 @@ from .nota_tecnica_charts import (
 from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
 from .nota_tecnica_anexos import _add_anexo_iii_falecidos
 from .nota_tecnica_contexts import (
+    _build_esocial_context,
     _build_evolucao_financeira_context,
     _build_gtin_sem_comprovacao_context,
     _build_percentil_risco_context,
@@ -80,6 +81,7 @@ from .nota_tecnica_crm import (
     _build_exclusividade_crm_context,
     _build_hhi_crm_context,
 )
+from .nota_tecnica_esocial import _add_esocial_context_text
 from .nota_tecnica_formatters import (
     _format_decimal_pt,
     _format_list_pt,
@@ -469,6 +471,7 @@ def _build_sumario(
 
     _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
+    _add_toc_entry(doc, '  5.2', 'Contexto trabalhista e assistência técnica farmacêutica', page='6')
     _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='6')
     _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
@@ -779,7 +782,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         )
     doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
-    fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Relação Anual de Informações Sociais (RAIS) do Ministério do Trabalho e Emprego', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
+    fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if falecidos_comp: fontes.append('SIRC e SISOBI')
     if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
@@ -901,6 +904,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     # 5. SOBRE A FARMACIA
     _format_main_heading(doc.add_heading(f'5. SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', level=1))
+    doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)
     ultimo_mes_sav = _build_ultimo_mes_sav_context(cnpj, data_inicio, data_fim)
     situacao_pfpb = "ATIVA" if cnpj_data.get("is_conexao_ativa") else "INATIVA"
     p_sav_5 = doc.add_paragraph(
@@ -978,6 +982,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Inicia numeração de footnotes reais a partir de 8 (notas 1-7 estão nos rodapés de seção)
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
     timing.mark("secao 5 identificacao e quadro cadastral")
+
+    esocial_comp = _build_esocial_context(cnpj, data_inicio, data_fim)
+    timing.mark("contexto esocial")
+    _add_esocial_context_text(doc, razao_social, cnpj_fmt, esocial_comp)
+    timing.mark("secao 5 contexto esocial")
 
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc)

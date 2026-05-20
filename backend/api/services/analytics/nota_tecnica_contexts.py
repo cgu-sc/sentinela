@@ -6,7 +6,15 @@ from typing import Any, Optional
 import polars as pl
 
 from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
-from data_cache import get_df, get_df_perfil_estabelecimento, get_localidades_df, get_medicamentos_df
+from data_cache import (
+    get_df,
+    get_df_esocial_cnpj_ano,
+    get_df_esocial_cnpj_trabalhador_ano,
+    get_df_perfil_estabelecimento,
+    get_df_sentinela_metadados_base,
+    get_localidades_df,
+    get_medicamentos_df,
+)
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
 from .nota_tecnica_formatters import (
@@ -577,6 +585,190 @@ def _build_medicamentos_aumento_atipico_context(
             })
 
     return resultado
+
+
+def _format_competencia_esocial(value: Any) -> str:
+    if value in (None, "", "None"):
+        return "—"
+    try:
+        competencia = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+    ano = competencia // 100
+    mes = competencia % 100
+    if ano <= 0 or not 1 <= mes <= 12:
+        return str(value)
+    return f"{mes:02d}/{ano:04d}"
+
+
+def _format_cbo_label(cbo: Any, titulo: Any) -> str:
+    titulo_txt = str(titulo or "").strip()
+    try:
+        cbo_int = int(cbo) if cbo is not None else None
+    except (TypeError, ValueError):
+        cbo_int = None
+    if cbo_int is None:
+        return "CBO não informado"
+    if titulo_txt:
+        return f"{titulo_txt} (CBO {cbo_int:06d})"
+    return f"CBO {cbo_int:06d} sem título válido"
+
+
+def _build_esocial_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """Monta o contexto trabalhista anual do eSocial para a Nota Tecnica."""
+    cnpj_norm = "".join(ch for ch in str(cnpj or "") if ch.isdigit())
+    if len(cnpj_norm) != 14:
+        raise RuntimeError("CNPJ invalido para montar contexto eSocial da Nota Tecnica.")
+
+    perfil = get_df_perfil_estabelecimento()
+    perfil_required = {"id_cnpj", "cnpj"}
+    missing_perfil = perfil_required - set(perfil.columns)
+    if missing_perfil:
+        raise RuntimeError(
+            "Cache de perfil_estabelecimento sem colunas obrigatorias para contexto eSocial: "
+            + ", ".join(sorted(missing_perfil))
+        )
+
+    perfil_rows = perfil.filter(pl.col("cnpj").cast(pl.String).str.replace_all(r"\D", "") == cnpj_norm)
+    if perfil_rows.is_empty():
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado no cache de perfil_estabelecimento para contexto eSocial.")
+    id_cnpj = int(perfil_rows.row(0, named=True)["id_cnpj"])
+
+    df_ano = get_df_esocial_cnpj_ano()
+    df_trabalhador = get_df_esocial_cnpj_trabalhador_ano()
+    df_metadados = get_df_sentinela_metadados_base()
+    ano_required = {
+        "id_cnpj",
+        "ano_base",
+        "competencia_base",
+        "qtd_trabalhadores",
+        "qtd_farmaceuticos",
+        "is_um_trabalhador",
+        "is_um_trabalhador_sem_farmaceutico",
+        "is_um_trabalhador_cbo_sem_titulo",
+        "cbo_unico_trabalhador",
+        "titulo_cbo_unico_trabalhador",
+        "dt_carga_fonte",
+    }
+    trabalhador_required = {
+        "id_cnpj",
+        "ano_base",
+        "cpf_trabalhador",
+        "cbo",
+        "titulo_cbo",
+        "dt_admissao",
+        "dt_rescisao",
+    }
+    metadados_required = {
+        "nome_base",
+        "nome_artefato",
+        "dt_referencia_max",
+    }
+    missing_ano = ano_required - set(df_ano.columns)
+    missing_trabalhador = trabalhador_required - set(df_trabalhador.columns)
+    missing_metadados = metadados_required - set(df_metadados.columns)
+    if missing_ano:
+        raise RuntimeError("Cache eSocial CNPJ/ano sem colunas obrigatorias: " + ", ".join(sorted(missing_ano)))
+    if missing_trabalhador:
+        raise RuntimeError("Cache eSocial trabalhador/ano sem colunas obrigatorias: " + ", ".join(sorted(missing_trabalhador)))
+    if missing_metadados:
+        raise RuntimeError("Cache de metadados das bases sem colunas obrigatorias: " + ", ".join(sorted(missing_metadados)))
+
+    metadados_esocial = df_metadados.filter(
+        (pl.col("nome_base") == "esocial")
+        & (pl.col("nome_artefato") == "esocial_cnpj_ano")
+    )
+    if metadados_esocial.is_empty():
+        raise RuntimeError("Cache de metadados sem registro para esocial_cnpj_ano.")
+    dt_carga_base = metadados_esocial.select(pl.col("dt_referencia_max").max()).item()
+    if dt_carga_base is None:
+        raise RuntimeError("Metadado esocial_cnpj_ano sem dt_referencia_max.")
+    dt_carga_base_txt = _format_date_month_year_long_pt(dt_carga_base)
+
+    anos = df_ano.filter(pl.col("id_cnpj") == id_cnpj)
+    trabalhadores = df_trabalhador.filter(pl.col("id_cnpj") == id_cnpj)
+
+    if data_inicio or data_fim:
+        ano_inicio = data_inicio.year if data_inicio else int(anos.select(pl.col("ano_base").min()).item() or 0)
+        ano_fim = data_fim.year if data_fim else int(anos.select(pl.col("ano_base").max()).item() or 9999)
+        anos = anos.filter(pl.col("ano_base").is_between(ano_inicio, ano_fim))
+        trabalhadores = trabalhadores.filter(pl.col("ano_base").is_between(ano_inicio, ano_fim))
+
+    if anos.is_empty():
+        return {
+            "id_cnpj": id_cnpj,
+            "has_data": False,
+            "rows": [],
+            "periodo_anos_txt": "",
+            "dt_carga_fonte": dt_carga_base,
+            "dt_carga_fonte_txt": dt_carga_base_txt,
+            "anos_sem_farmaceutico": [],
+            "anos_um_trabalhador": [],
+        }
+
+    trabalhador_rows_by_year: dict[int, list[dict[str, Any]]] = {}
+    for row in trabalhadores.sort(["ano_base", "cpf_trabalhador"]).to_dicts():
+        trabalhador_rows_by_year.setdefault(int(row["ano_base"]), []).append(row)
+
+    rows: list[dict[str, Any]] = []
+    for row in anos.sort("ano_base").to_dicts():
+        ano_base = int(row["ano_base"])
+        qtd_trabalhadores = int(row.get("qtd_trabalhadores") or 0)
+        qtd_farmaceuticos = int(row.get("qtd_farmaceuticos") or 0)
+        trabalhador_unico = None
+        if bool(row.get("is_um_trabalhador")):
+            candidatos = trabalhador_rows_by_year.get(ano_base) or []
+            trabalhador_unico = candidatos[0] if candidatos else None
+        cbo_unico = (
+            _format_cbo_label(trabalhador_unico.get("cbo"), trabalhador_unico.get("titulo_cbo"))
+            if trabalhador_unico
+            else (
+                _format_cbo_label(row.get("cbo_unico_trabalhador"), row.get("titulo_cbo_unico_trabalhador"))
+                if row.get("is_um_trabalhador")
+                else "Não se aplica"
+            )
+        )
+        dt_admissao = trabalhador_unico.get("dt_admissao") if trabalhador_unico else None
+        rows.append({
+            "ano_base": ano_base,
+            "competencia_base": row.get("competencia_base"),
+            "competencia_txt": _format_competencia_esocial(row.get("competencia_base")),
+            "qtd_trabalhadores": qtd_trabalhadores,
+            "qtd_farmaceuticos": qtd_farmaceuticos,
+            "is_um_trabalhador": bool(row.get("is_um_trabalhador")),
+            "is_um_trabalhador_sem_farmaceutico": bool(row.get("is_um_trabalhador_sem_farmaceutico")),
+            "is_um_trabalhador_cbo_sem_titulo": bool(row.get("is_um_trabalhador_cbo_sem_titulo")),
+            "cbo_unico_trabalhador": row.get("cbo_unico_trabalhador"),
+            "titulo_cbo_unico_trabalhador": row.get("titulo_cbo_unico_trabalhador"),
+            "trabalhador_unico_cbo_txt": cbo_unico,
+            "trabalhador_unico_dt_admissao": dt_admissao,
+            "trabalhador_unico_dt_admissao_txt": _format_date_month_year_long_pt(dt_admissao) if dt_admissao else "—",
+            "dt_carga_fonte": row.get("dt_carga_fonte"),
+        })
+
+    anos_lista = [row["ano_base"] for row in rows]
+    anos_sem_farmaceutico = [
+        row for row in rows
+        if row["qtd_trabalhadores"] > 0 and row["qtd_farmaceuticos"] == 0
+    ]
+    anos_um_trabalhador = [row for row in rows if row["is_um_trabalhador"]]
+
+    return {
+        "id_cnpj": id_cnpj,
+        "has_data": True,
+        "rows": rows,
+        "periodo_anos_txt": (
+            str(anos_lista[0]) if len(anos_lista) == 1 else f"{anos_lista[0]} a {anos_lista[-1]}"
+        ),
+        "dt_carga_fonte": dt_carga_base,
+        "dt_carga_fonte_txt": dt_carga_base_txt,
+        "anos_sem_farmaceutico": anos_sem_farmaceutico,
+        "anos_um_trabalhador": anos_um_trabalhador,
+    }
 
 
 def _build_ultimo_mes_sav_context(

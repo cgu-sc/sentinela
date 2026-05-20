@@ -369,6 +369,130 @@ SET @msg_esocial = CONCAT(
 RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
 SET @tempo_etapa_esocial = SYSDATETIME();
 
+IF OBJECT_ID('temp_CGUSC.fp.sentinela_metadados_base', 'U') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.sentinela_metadados_base (
+        nome_base NVARCHAR(80) NOT NULL,
+        nome_artefato NVARCHAR(160) NOT NULL,
+        fonte_origem NVARCHAR(300) NOT NULL,
+        dt_referencia_min DATETIME2(7) NULL,
+        dt_referencia_max DATETIME2(7) NULL,
+        competencia_min INT NULL,
+        competencia_max INT NULL,
+        qtd_registros BIGINT NOT NULL,
+        qtd_chaves BIGINT NULL,
+        schema_versao INT NOT NULL,
+        dt_processamento_inicio DATETIME2(7) NOT NULL,
+        dt_processamento_fim DATETIME2(7) NOT NULL,
+        observacao NVARCHAR(1000) NULL
+    );
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'nome_base') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'nome_artefato') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'fonte_origem') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'dt_referencia_min') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'dt_referencia_max') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'competencia_min') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'competencia_max') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'qtd_registros') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'qtd_chaves') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'schema_versao') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'dt_processamento_inicio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'dt_processamento_fim') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.sentinela_metadados_base', 'observacao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.sentinela_metadados_base sem colunas obrigatorias.', 16, 1);
+    RETURN;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.sys.indexes
+    WHERE object_id = OBJECT_ID('temp_CGUSC.fp.sentinela_metadados_base')
+      AND name = 'UX_sentinela_metadados_base'
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_sentinela_metadados_base
+    ON temp_CGUSC.fp.sentinela_metadados_base (nome_base, nome_artefato);
+END;
+
+DECLARE @tempo_fim_esocial DATETIME2(7) = SYSDATETIME();
+
+DELETE FROM temp_CGUSC.fp.sentinela_metadados_base
+WHERE nome_base = N'esocial'
+  AND nome_artefato IN (N'esocial_cnpj_trabalhador_ano', N'esocial_cnpj_ano');
+
+INSERT INTO temp_CGUSC.fp.sentinela_metadados_base (
+    nome_base,
+    nome_artefato,
+    fonte_origem,
+    dt_referencia_min,
+    dt_referencia_max,
+    competencia_min,
+    competencia_max,
+    qtd_registros,
+    qtd_chaves,
+    schema_versao,
+    dt_processamento_inicio,
+    dt_processamento_fim,
+    observacao
+)
+SELECT
+    N'esocial' AS nome_base,
+    N'esocial_cnpj_trabalhador_ano' AS nome_artefato,
+    N'db_eSocial.dbo.trabalhadores' AS fonte_origem,
+    MIN(CAST(dt_carga_fonte AS DATETIME2(7))) AS dt_referencia_min,
+    MAX(CAST(dt_carga_fonte AS DATETIME2(7))) AS dt_referencia_max,
+    MIN(competencia_base) AS competencia_min,
+    MAX(competencia_base) AS competencia_max,
+    COUNT_BIG(*) AS qtd_registros,
+    COUNT_BIG(DISTINCT id_cnpj) AS qtd_chaves,
+    1 AS schema_versao,
+    @tempo_total_esocial AS dt_processamento_inicio,
+    @tempo_fim_esocial AS dt_processamento_fim,
+    CONCAT(
+        N'qtd_registros_cbo_sem_titulo=',
+        SUM(CASE WHEN is_cbo_sem_titulo = 1 THEN 1 ELSE 0 END)
+    ) AS observacao
+FROM temp_CGUSC.fp.esocial_cnpj_trabalhador_ano
+UNION ALL
+SELECT
+    N'esocial' AS nome_base,
+    N'esocial_cnpj_ano' AS nome_artefato,
+    N'temp_CGUSC.fp.esocial_cnpj_trabalhador_ano' AS fonte_origem,
+    MIN(CAST(dt_carga_fonte AS DATETIME2(7))) AS dt_referencia_min,
+    MAX(CAST(dt_carga_fonte AS DATETIME2(7))) AS dt_referencia_max,
+    MIN(competencia_base) AS competencia_min,
+    MAX(competencia_base) AS competencia_max,
+    COUNT_BIG(*) AS qtd_registros,
+    COUNT_BIG(DISTINCT id_cnpj) AS qtd_chaves,
+    1 AS schema_versao,
+    @tempo_total_esocial AS dt_processamento_inicio,
+    @tempo_fim_esocial AS dt_processamento_fim,
+    CONCAT(
+        N'qtd_cnpjs_ano_com_cbo_sem_titulo=',
+        SUM(CASE WHEN has_cbo_sem_titulo = 1 THEN 1 ELSE 0 END)
+    ) AS observacao
+FROM temp_CGUSC.fp.esocial_cnpj_ano;
+
+SET @linhas_esocial = (
+    SELECT COUNT_BIG(*)
+    FROM temp_CGUSC.fp.sentinela_metadados_base
+    WHERE nome_base = N'esocial'
+      AND nome_artefato IN (N'esocial_cnpj_trabalhador_ano', N'esocial_cnpj_ano')
+);
+SET @msg_esocial = CONCAT(
+    '[eSocial] 13 - metadados de base atualizados | linhas=',
+    @linhas_esocial,
+    ' | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
+
 SET @msg_esocial = CONCAT(
     '[eSocial] fim - processamento concluido | total_ms=',
     DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())

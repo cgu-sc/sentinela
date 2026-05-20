@@ -17,6 +17,7 @@ MEDICAMENTOS_PARQUET = "medicamentos.parquet"
 VOLUME_ATIPICO_SEMESTRAL_PARQUET = "volume_atipico_semestral.parquet"
 ESOCIAL_CNPJ_ANO_PARQUET = "esocial_cnpj_ano.parquet"
 ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET = "esocial_cnpj_trabalhador_ano.parquet"
+SENTINELA_METADADOS_BASE_PARQUET = "sentinela_metadados_base.parquet"
 DADOS_PAR_PARQUET = "dados_par.parquet"
 PAR_TEIA_ALVOS_PARQUET = "par_teia_alvos.parquet"
 

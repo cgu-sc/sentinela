@@ -35,6 +35,7 @@ from data_cache import (
     _sync_par_teia_alvos,
     _sync_perfil_estabelecimento,
     _sync_rede,
+    _sync_sentinela_metadados_base,
     _sync_teia_expansao_completa,
     _sync_volume_atipico_semestral,
 )
@@ -42,6 +43,7 @@ from data_cache import (
 MODULOS = [
     {"id": 12, "name": "Volume Atipico Semestral", "func": _sync_volume_atipico_semestral, "peso": "~medio"},
     {"id": 16, "name": "Contexto eSocial", "func": _sync_esocial, "peso": "~rapido"},
+    {"id": 17, "name": "Metadados das Bases", "func": _sync_sentinela_metadados_base, "peso": "~rapido"},
     {"id": 14, "name": "Indicadores PAR", "func": _sync_dados_par, "peso": "~rapido"},
     {"id": 1, "name": "Localidades (IBGE)", "func": _sync_localidades, "peso": "~rapido"},
     {"id": 2, "name": "Rede de Estabelecimentos", "func": _sync_rede, "peso": "~rapido"},

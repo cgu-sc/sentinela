@@ -7,7 +7,6 @@ from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import (
     _cell_bg,
-    _footnote_ref,
     _format_block_footnote,
     _format_block_title,
     _keep_small_table_together,
@@ -510,48 +509,71 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         p_s = doc.add_paragraph(style='List Bullet')
         _run(p_s, "Informação de sócios não disponível ou nenhum sócio ativo identificado.", color='475569', size=10, italic=True)
 
-    # Disclaimer de Operações Especiais (Transição)
-    p_ops = doc.add_paragraph()
-    p_ops.paragraph_format.space_before = Pt(12)
-    _run(p_ops, 'Os parágrafos, a seguir, trazem problemas identificados em trabalhos de Operações Especiais sobre o programa.', color='0F172A', size=10)
+    # Contexto trabalhista/eSocial é renderizado fora do quadro cadastral.
 
-    # Seção de Mão de Obra e RT (Placeholders em vermelho)
-    nota_rais_8 = 'Relação Anual de Informações Sociais, atualização em XXX de XXX. Consulta realizada em xx.xx.xxxx.'
-    nota_farmaceutica_9 = 'Art. 5º da Lei nº 13.021, de 08.08.2014.'
-    nota_esocial_10 = (
-        'eSocial é o sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas '
-        'do governo federal.'
+
+def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
+    """Adiciona quadro de vínculos trabalhistas anuais do eSocial."""
+    rows_data = esocial_comp.get("rows") or []
+    if not rows_data:
+        return
+
+    p_title = doc.add_paragraph()
+    _format_quadro_title(p_title)
+    _run(
+        p_title,
+        f'Quadro 01-A - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        color='0F172A',
+        size=9,
+        bold=True,
     )
 
-    doc.add_paragraph()
-    p_rais = doc.add_paragraph()
-    _run(p_rais, 'Segundo dados da Relação Anual de Informações Sociais (RAIS)', color='0F172A', size=10)
-    _footnote_ref(doc, p_rais, 8, nota_rais_8)
-    _run(p_rais, f' do Ministério do Trabalho e Emprego, a Farmácia {data.get("razao_social") or ""} possuía ', color='0F172A', size=10)
-    _run(p_rais, 'yy', color='334155', size=10, bold=True)
-    _run(p_rais, ' funcionários registrados em ', color='0F172A', size=10)
-    _run(p_rais, 'XXXX', color='334155', size=10, bold=True)
-    _run(p_rais, '. Contudo, há registro de apenas ', color='0F172A', size=10)
-    _run(p_rais, 'x', color='334155', size=10, bold=True)
-    _run(p_rais, ' funcionário(s) nos anos de ', color='0F172A', size=10)
-    _run(p_rais, '20XX, 20YY e 20ZZ', color='334155', size=10, bold=True)
-    _run(p_rais, ', período em que, conforme será visto mais adiante, a transferência de recursos aumentou de forma relevante.', color='0F172A', size=10)
+    table = doc.add_table(rows=len(rows_data) + 1, cols=5)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(0.75), Inches(1.05), Inches(1.05), Inches(1.05), Inches(3.2)])
 
-    p_esocial = doc.add_paragraph()
-    p_esocial.paragraph_format.space_before = Pt(6)
-    _run(p_esocial, 'Destaca-se, também, o fato de que a legislação', color='0F172A', size=10)
-    _footnote_ref(doc, p_esocial, 9, nota_farmaceutica_9)
-    _run(p_esocial, ' sobre o exercício e a fiscalização das atividades farmacêuticas dispõe que a farmácia e a drogaria terão, obrigatoriamente, a responsabilidade e a assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento. Assim sendo, fica evidenciada mais uma possível irregularidade, pois em consulta ao eSocial', color='0F172A', size=10)
-    _footnote_ref(doc, p_esocial, 10, nota_esocial_10)
-    _run(p_esocial, ' (atualizado até ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXXX', color='334155', size=10, bold=True)
-    _run(p_esocial, ') foi identificado que, no período de ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXX a YYYY', color='334155', size=10, bold=True)
-    _run(p_esocial, ', a única empregada registrada era ', color='0F172A', size=10)
-    _run(p_esocial, 'XXXX', color='334155', size=10, bold=True)
-    _run(p_esocial, ', que havia sido admitida em ', color='0F172A', size=10)
-    _run(p_esocial, 'XXX', color='334155', size=10, bold=True)
-    _run(p_esocial, '.', color='0F172A', size=10)
+    headers = [
+        'Ano',
+        'Competência',
+        'Trabalhadores',
+        'Farmacêuticos',
+        'Trabalhador único, quando aplicável',
+    ]
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        values = [
+            str(item.get("ano_base") or "—"),
+            item.get("competencia_txt") or "—",
+            str(item.get("qtd_trabalhadores") or 0),
+            str(item.get("qtd_farmaceuticos") or 0),
+            item.get("trabalhador_unico_cbo_txt") or "Não se aplica",
+        ]
+        for col_idx, value in enumerate(values):
+            para = cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx < 4 else WD_ALIGN_PARAGRAPH.LEFT
+            _run(para, value, color='0F172A', size=8)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
+    _run(
+        p_foot,
+        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. Data de carga mais recente considerada: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
+        color='64748B',
+        size=8,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):

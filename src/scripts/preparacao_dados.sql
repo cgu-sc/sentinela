@@ -1,7 +1,56 @@
+--**************************************************************************************************************************************
+-- Configuracao e versao minima do sistema
+--**************************************************************************************************************************************
+
+IF OBJECT_ID('temp_CGUSC.fp.config_sistema', 'U') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.config_sistema (
+        id INT IDENTITY(1,1) NOT NULL,
+        chave VARCHAR(50) NOT NULL,
+        valor VARCHAR(MAX) NOT NULL,
+        descricao VARCHAR(255) NULL,
+        dt_atualizacao DATETIME NOT NULL
+            CONSTRAINT DF_config_sistema_dt_atualizacao DEFAULT GETDATE(),
+        CONSTRAINT PK_config_sistema PRIMARY KEY CLUSTERED (id),
+        CONSTRAINT UQ_config_sistema_chave UNIQUE (chave)
+    );
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.config_sistema', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.config_sistema', 'chave') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.config_sistema', 'valor') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.config_sistema', 'descricao') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.config_sistema', 'dt_atualizacao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.config_sistema sem colunas obrigatorias.', 16, 1);
+    RETURN;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.config_sistema
+    WHERE chave = 'versao_minima_obrigatoria'
+)
+BEGIN
+    INSERT INTO temp_CGUSC.fp.config_sistema (chave, valor, descricao)
+    VALUES (
+        'versao_minima_obrigatoria',
+        '3.1.0',
+        'Define a versao minima do executavel permitida para rodar.'
+    );
+END
+ELSE
+BEGIN
+    UPDATE temp_CGUSC.fp.config_sistema
+    SET valor = '3.1.0',
+        descricao = 'Define a versao minima do executavel permitida para rodar.',
+        dt_atualizacao = GETDATE()
+    WHERE chave = 'versao_minima_obrigatoria';
+END;
 
 
 --**************************************************************************************************************************************
--- Criar lista de CNPJs que serão analisados
+-- Criar lista de CNPJs que serao analisados
 --**************************************************************************************************************************************
 
 DROP TABLE IF EXISTS temp_CGUSC.fp.lista_cnpjs

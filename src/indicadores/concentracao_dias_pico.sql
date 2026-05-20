@@ -343,27 +343,6 @@ SELECT
     I.meses_analisados,
     I.mediana_concentracao,
 
-    -- Rankings (pior risco = posicao 1)
-    CAST(RANK() OVER (
-        PARTITION BY I.ano_base
-        ORDER BY I.mediana_concentracao DESC
-    ) AS INT) AS ranking_br,
-    CAST(RANK() OVER (
-        PARTITION BY I.ano_base, CAST(F.uf AS VARCHAR(2))
-        ORDER BY I.mediana_concentracao DESC
-    ) AS INT) AS ranking_uf,
-    CAST(RANK() OVER (
-        PARTITION BY I.ano_base, F.id_regiao_saude
-        ORDER BY I.mediana_concentracao DESC
-    ) AS INT) AS ranking_regiao_saude,
-    CAST(RANK() OVER (
-        PARTITION BY
-            I.ano_base,
-            CAST(F.uf AS VARCHAR(2)),
-            CAST(F.municipio AS VARCHAR(255))
-        ORDER BY I.mediana_concentracao DESC
-    ) AS INT) AS ranking_municipio,
-
     -- Benchmarks municipais
     ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
     CAST((I.mediana_concentracao + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
@@ -402,9 +381,6 @@ ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(id_cnpj, ano_base);
 
 CREATE NONCLUSTERED INDEX IDX_FinalPico_Risco
 ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(ano_base, risco_relativo_mun_mediana DESC);
-
-CREATE NONCLUSTERED INDEX IDX_FinalPico_Rank
-ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(ano_base, ranking_br);
 GO
 
 -- ============================================================================

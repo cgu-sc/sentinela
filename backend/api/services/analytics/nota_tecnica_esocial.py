@@ -14,11 +14,11 @@ def _plural(value: int, singular: str, plural: str) -> str:
 def _format_annual_summary(rows: list[dict[str, Any]]) -> str:
     partes: list[str] = []
     for row in rows:
-        qtd_trab = int(row.get("qtd_trabalhadores") or 0)
-        qtd_farm = int(row.get("qtd_farmaceuticos") or 0)
+        qtd_trab = int(row.get("qtd_trabalhadores_vinculo_ano") or 0)
+        qtd_farm = int(row.get("qtd_farmaceuticos_vinculo_ano") or 0)
         partes.append(
-            f'{row["ano_base"]} ({qtd_trab} {_plural(qtd_trab, "trabalhador", "trabalhadores")}, '
-            f'{qtd_farm} {_plural(qtd_farm, "farmacêutico", "farmacêuticos")})'
+            f'{row["ano_base"]} ({qtd_trab} {_plural(qtd_trab, "trabalhador com vínculo", "trabalhadores com vínculo")}, '
+            f'{qtd_farm} {_plural(qtd_farm, "farmacêutico com vínculo", "farmacêuticos com vínculo")})'
         )
     return _format_list_pt(partes)
 
@@ -74,31 +74,52 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
     if qtd_anos == 1:
         row = rows[0]
         ano = row["ano_base"]
-        qtd_trab = int(row.get("qtd_trabalhadores") or 0)
-        qtd_farm = int(row.get("qtd_farmaceuticos") or 0)
+        qtd_trab_vinculo = int(row.get("qtd_trabalhadores_vinculo_ano") or 0)
+        qtd_farm_vinculo = int(row.get("qtd_farmaceuticos_vinculo_ano") or 0)
+        qtd_trab_ativo = int(row.get("qtd_trabalhadores_ativos_competencia") or 0)
+        qtd_farm_ativo = int(row.get("qtd_farmaceuticos_ativos_competencia") or 0)
+        competencia_txt = row.get("competencia_txt") or "competência-base"
         _run(
             p_intro,
             f'Em consulta à base do eSocial disponível no Sistema Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente no ano de {ano}. ',
             color='0F172A',
             size=10,
         )
-        if qtd_farm > 0:
+        if qtd_farm_vinculo > 0:
             _run(
                 p_intro,
-                f'Para esse exercício, foram apurados {qtd_trab} {_plural(qtd_trab, "trabalhador registrado", "trabalhadores registrados")}, com identificação de {qtd_farm} {_plural(qtd_farm, "trabalhador", "trabalhadores")} com CBO de farmacêutico (223405).',
+                f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, com identificação de {qtd_farm_vinculo} {_plural(qtd_farm_vinculo, "trabalhador", "trabalhadores")} com CBO de farmacêutico (223405).',
                 color='0F172A',
                 size=10,
             )
         else:
             _run(
                 p_intro,
-                f'Para esse exercício, foram apurados {qtd_trab} {_plural(qtd_trab, "trabalhador registrado", "trabalhadores registrados")}, nenhum deles com CBO de farmacêutico (223405).',
+                f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, nenhum deles com CBO de farmacêutico (223405).',
                 color='0F172A',
                 size=10,
             )
             _add_legal_context(
                 doc,
-                'Assim, a ausência de trabalhador com CBO de farmacêutico nos registros considerados deve ser confrontada com a documentação de responsabilidade técnica e de funcionamento da farmácia.',
+                'Assim, a ausência de trabalhador com CBO de farmacêutico entre os vínculos identificados deve ser confrontada com a documentação de responsabilidade técnica e de funcionamento da farmácia.',
+            )
+        if qtd_trab_ativo == 0 and qtd_trab_vinculo > 0:
+            p_ativos = doc.add_paragraph()
+            p_ativos.paragraph_format.space_before = Pt(6)
+            _run(
+                p_ativos,
+                f'Na competência-base de {competencia_txt}, contudo, não havia trabalhadores ativos vinculados ao estabelecimento, pois os vínculos localizados possuíam data de rescisão anterior ao encerramento da competência.',
+                color='0F172A',
+                size=10,
+            )
+        elif qtd_trab_ativo != qtd_trab_vinculo or qtd_farm_ativo != qtd_farm_vinculo:
+            p_ativos = doc.add_paragraph()
+            p_ativos.paragraph_format.space_before = Pt(6)
+            _run(
+                p_ativos,
+                f'Na competência-base de {competencia_txt}, permaneciam ativos {qtd_trab_ativo} {_plural(qtd_trab_ativo, "trabalhador", "trabalhadores")}, sendo {qtd_farm_ativo} com CBO de farmacêutico (223405).',
+                color='0F172A',
+                size=10,
             )
     else:
         periodo_anos_txt = esocial_comp.get("periodo_anos_txt") or "período analisado"

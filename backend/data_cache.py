@@ -350,6 +350,10 @@ def _sync_esocial(engine, progress_callback=None):
         "is_um_trabalhador_cbo_sem_titulo",
         "cbo_unico_trabalhador",
         "titulo_cbo_unico_trabalhador",
+        "qtd_registros_vinculo_ano",
+        "qtd_trabalhadores_vinculo_ano",
+        "qtd_farmaceuticos_vinculo_ano",
+        "qtd_trabalhadores_cbo_sem_titulo_vinculo_ano",
         "dt_carga_fonte",
         "dt_processamento",
     }
@@ -494,6 +498,10 @@ def _sync_esocial(engine, progress_callback=None):
             is_um_trabalhador_cbo_sem_titulo,
             cbo_unico_trabalhador,
             titulo_cbo_unico_trabalhador,
+            qtd_registros_vinculo_ano,
+            qtd_trabalhadores_vinculo_ano,
+            qtd_farmaceuticos_vinculo_ano,
+            qtd_trabalhadores_cbo_sem_titulo_vinculo_ano,
             dt_carga_fonte,
             dt_processamento
         FROM [temp_CGUSC].[fp].[esocial_cnpj_ano]
@@ -517,6 +525,10 @@ def _sync_esocial(engine, progress_callback=None):
         pl.col("is_um_trabalhador_cbo_sem_titulo").cast(pl.Boolean),
         pl.col("cbo_unico_trabalhador").cast(pl.Int32, strict=False),
         pl.col("titulo_cbo_unico_trabalhador").cast(pl.String),
+        pl.col("qtd_registros_vinculo_ano").cast(pl.Int64),
+        pl.col("qtd_trabalhadores_vinculo_ano").cast(pl.Int64),
+        pl.col("qtd_farmaceuticos_vinculo_ano").cast(pl.Int64),
+        pl.col("qtd_trabalhadores_cbo_sem_titulo_vinculo_ano").cast(pl.Int64),
         pl.col("dt_carga_fonte").cast(pl.Date, strict=False),
         pl.col("dt_processamento").cast(pl.Datetime, strict=False),
     ]).sort(["id_cnpj", "ano_base"])
@@ -1497,6 +1509,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "is_um_trabalhador_cbo_sem_titulo",
                 "cbo_unico_trabalhador",
                 "titulo_cbo_unico_trabalhador",
+                "qtd_registros_vinculo_ano",
+                "qtd_trabalhadores_vinculo_ano",
+                "qtd_farmaceuticos_vinculo_ano",
+                "qtd_trabalhadores_cbo_sem_titulo_vinculo_ano",
                 "dt_carga_fonte",
                 "dt_processamento",
             },

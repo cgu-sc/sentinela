@@ -304,10 +304,13 @@ FROM #trabalhadores_esocial_ano AS T
 INNER JOIN #competencias_esocial_ano AS C
     ON C.id_cnpj = T.id_cnpj
    AND C.ano_base = T.ano_base
-WHERE T.dt_admissao <= C.dt_referencia_competencia
+WHERE (
+      T.dt_admissao IS NULL
+      OR T.dt_admissao <= C.dt_referencia_competencia
+  )
   AND (
       T.dt_rescisao IS NULL
-      OR T.dt_rescisao > C.dt_referencia_competencia
+      OR T.dt_rescisao >= C.dt_referencia_competencia
   );
 
 CREATE CLUSTERED INDEX IX_tmp_trab_esocial_ativos_comp
@@ -437,37 +440,103 @@ SET @msg_esocial = CONCAT(
 RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
 SET @tempo_etapa_esocial = SYSDATETIME();
 
+DROP TABLE IF EXISTS #ativos_esocial_agg;
+
+SELECT
+    id_cnpj,
+    ano_base,
+    COUNT_BIG(cpf_trabalhador) AS qtd_registros,
+    COUNT(DISTINCT cpf_trabalhador) AS qtd_trabalhadores,
+    COUNT(DISTINCT CASE WHEN is_farmaceutico = 1 THEN cpf_trabalhador END) AS qtd_farmaceuticos,
+    COUNT(DISTINCT CASE WHEN is_cbo_sem_titulo = 1 THEN cpf_trabalhador END) AS qtd_trabalhadores_cbo_sem_titulo,
+    SUM(CASE WHEN is_farmaceutico = 1 THEN 1 ELSE 0 END) AS qtd_registros_farmaceuticos,
+    SUM(CASE WHEN is_cbo_sem_titulo = 1 THEN 1 ELSE 0 END) AS qtd_registros_cbo_sem_titulo,
+    CAST(MAX(CASE WHEN is_farmaceutico = 1 THEN 1 ELSE 0 END) AS BIT) AS has_farmaceutico,
+    CAST(MAX(CASE WHEN is_cbo_sem_titulo = 1 THEN 1 ELSE 0 END) AS BIT) AS has_cbo_sem_titulo,
+    CAST(CASE WHEN COUNT(DISTINCT cpf_trabalhador) = 1 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador,
+    CAST(CASE WHEN COUNT(DISTINCT cpf_trabalhador) = 1 AND COUNT(DISTINCT CASE WHEN is_farmaceutico = 1 THEN cpf_trabalhador END) = 0 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador_sem_farmaceutico,
+    CAST(CASE WHEN COUNT(DISTINCT cpf_trabalhador) = 1 AND COUNT(DISTINCT CASE WHEN is_cbo_sem_titulo = 1 THEN cpf_trabalhador END) > 0 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador_cbo_sem_titulo,
+    CASE WHEN COUNT(DISTINCT cpf_trabalhador) = 1 THEN MAX(cbo) END AS cbo_unico_trabalhador,
+    CASE WHEN COUNT(DISTINCT cpf_trabalhador) = 1 THEN MAX(titulo_cbo) END AS titulo_cbo_unico_trabalhador
+INTO #ativos_esocial_agg
+FROM #trabalhadores_esocial_ativos_unicos
+GROUP BY id_cnpj, ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_ativos_esocial_agg
+ON #ativos_esocial_agg (id_cnpj, ano_base);
+
+SET @linhas_esocial = (SELECT COUNT_BIG(*) FROM #ativos_esocial_agg);
+SET @msg_esocial = CONCAT(
+    '[eSocial] 10a - agregacao de ativos por ano criada | linhas=',
+    @linhas_esocial,
+    ' | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
+
+DROP TABLE IF EXISTS #vinculos_esocial_agg;
+
+SELECT
+    id_cnpj,
+    ano_base,
+    COUNT_BIG(*) AS qtd_registros_vinculo_ano,
+    COUNT(DISTINCT cpf_trabalhador) AS qtd_trabalhadores_vinculo_ano,
+    COUNT(DISTINCT CASE WHEN is_farmaceutico = 1 THEN cpf_trabalhador END) AS qtd_farmaceuticos_vinculo_ano,
+    COUNT(DISTINCT CASE WHEN is_cbo_sem_titulo = 1 THEN cpf_trabalhador END) AS qtd_trabalhadores_cbo_sem_titulo_vinculo_ano
+INTO #vinculos_esocial_agg
+FROM #trabalhadores_esocial_ano
+GROUP BY id_cnpj, ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IX_tmp_vinculos_esocial_agg
+ON #vinculos_esocial_agg (id_cnpj, ano_base);
+
+SET @linhas_esocial = (SELECT COUNT_BIG(*) FROM #vinculos_esocial_agg);
+SET @msg_esocial = CONCAT(
+    '[eSocial] 10b - agregacao de vinculos por ano criada | linhas=',
+    @linhas_esocial,
+    ' | etapa_ms=',
+    DATEDIFF(MILLISECOND, @tempo_etapa_esocial, SYSDATETIME()),
+    ' | total_ms=',
+    DATEDIFF(MILLISECOND, @tempo_total_esocial, SYSDATETIME())
+);
+RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
+SET @tempo_etapa_esocial = SYSDATETIME();
+
 SELECT
     C.id_cnpj,
     C.ano_base,
     C.mes_base,
     C.competencia_base,
-    COUNT_BIG(A.cpf_trabalhador) AS qtd_registros,
-    COUNT(DISTINCT A.cpf_trabalhador) AS qtd_trabalhadores,
-    COUNT(DISTINCT CASE WHEN A.is_farmaceutico = 1 THEN A.cpf_trabalhador END) AS qtd_farmaceuticos,
-    COUNT(DISTINCT CASE WHEN A.is_cbo_sem_titulo = 1 THEN A.cpf_trabalhador END) AS qtd_trabalhadores_cbo_sem_titulo,
-    SUM(CASE WHEN A.is_farmaceutico = 1 THEN 1 ELSE 0 END) AS qtd_registros_farmaceuticos,
-    SUM(CASE WHEN A.is_cbo_sem_titulo = 1 THEN 1 ELSE 0 END) AS qtd_registros_cbo_sem_titulo,
-    CAST(MAX(CASE WHEN A.is_farmaceutico = 1 THEN 1 ELSE 0 END) AS BIT) AS has_farmaceutico,
-    CAST(MAX(CASE WHEN A.is_cbo_sem_titulo = 1 THEN 1 ELSE 0 END) AS BIT) AS has_cbo_sem_titulo,
-    CAST(CASE WHEN COUNT(DISTINCT A.cpf_trabalhador) = 1 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador,
-    CAST(CASE WHEN COUNT(DISTINCT A.cpf_trabalhador) = 1 AND COUNT(DISTINCT CASE WHEN A.is_farmaceutico = 1 THEN A.cpf_trabalhador END) = 0 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador_sem_farmaceutico,
-    CAST(CASE WHEN COUNT(DISTINCT A.cpf_trabalhador) = 1 AND COUNT(DISTINCT CASE WHEN A.is_cbo_sem_titulo = 1 THEN A.cpf_trabalhador END) > 0 THEN 1 ELSE 0 END AS BIT) AS is_um_trabalhador_cbo_sem_titulo,
-    CASE WHEN COUNT(DISTINCT A.cpf_trabalhador) = 1 THEN MAX(A.cbo) END AS cbo_unico_trabalhador,
-    CASE WHEN COUNT(DISTINCT A.cpf_trabalhador) = 1 THEN MAX(A.titulo_cbo) END AS titulo_cbo_unico_trabalhador,
+    COALESCE(A.qtd_registros, 0) AS qtd_registros,
+    COALESCE(A.qtd_trabalhadores, 0) AS qtd_trabalhadores,
+    COALESCE(A.qtd_farmaceuticos, 0) AS qtd_farmaceuticos,
+    COALESCE(A.qtd_trabalhadores_cbo_sem_titulo, 0) AS qtd_trabalhadores_cbo_sem_titulo,
+    COALESCE(A.qtd_registros_farmaceuticos, 0) AS qtd_registros_farmaceuticos,
+    COALESCE(A.qtd_registros_cbo_sem_titulo, 0) AS qtd_registros_cbo_sem_titulo,
+    CAST(COALESCE(A.has_farmaceutico, 0) AS BIT) AS has_farmaceutico,
+    CAST(COALESCE(A.has_cbo_sem_titulo, 0) AS BIT) AS has_cbo_sem_titulo,
+    CAST(COALESCE(A.is_um_trabalhador, 0) AS BIT) AS is_um_trabalhador,
+    CAST(COALESCE(A.is_um_trabalhador_sem_farmaceutico, 0) AS BIT) AS is_um_trabalhador_sem_farmaceutico,
+    CAST(COALESCE(A.is_um_trabalhador_cbo_sem_titulo, 0) AS BIT) AS is_um_trabalhador_cbo_sem_titulo,
+    A.cbo_unico_trabalhador,
+    A.titulo_cbo_unico_trabalhador,
+    COALESCE(V.qtd_registros_vinculo_ano, 0) AS qtd_registros_vinculo_ano,
+    COALESCE(V.qtd_trabalhadores_vinculo_ano, 0) AS qtd_trabalhadores_vinculo_ano,
+    COALESCE(V.qtd_farmaceuticos_vinculo_ano, 0) AS qtd_farmaceuticos_vinculo_ano,
+    COALESCE(V.qtd_trabalhadores_cbo_sem_titulo_vinculo_ano, 0) AS qtd_trabalhadores_cbo_sem_titulo_vinculo_ano,
     C.dt_carga_fonte,
     GETDATE() AS dt_processamento
 INTO temp_CGUSC.fp.esocial_cnpj_ano
 FROM #competencias_esocial_ano AS C
-LEFT JOIN #trabalhadores_esocial_ativos_unicos AS A
+LEFT JOIN #ativos_esocial_agg AS A
     ON A.id_cnpj = C.id_cnpj
    AND A.ano_base = C.ano_base
-GROUP BY
-    C.id_cnpj,
-    C.ano_base,
-    C.mes_base,
-    C.competencia_base,
-    C.dt_carga_fonte;
+LEFT JOIN #vinculos_esocial_agg AS V
+    ON V.id_cnpj = C.id_cnpj
+   AND V.ano_base = C.ano_base;
 
 SET @linhas_esocial = (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.esocial_cnpj_ano);
 SET @msg_esocial = CONCAT(

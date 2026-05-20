@@ -655,6 +655,10 @@ def _build_esocial_context(
         "competencia_base",
         "qtd_trabalhadores",
         "qtd_farmaceuticos",
+        "qtd_registros_vinculo_ano",
+        "qtd_trabalhadores_vinculo_ano",
+        "qtd_farmaceuticos_vinculo_ano",
+        "qtd_trabalhadores_cbo_sem_titulo_vinculo_ano",
         "has_cbo_sem_titulo",
         "is_um_trabalhador",
         "is_um_trabalhador_sem_farmaceutico",
@@ -732,6 +736,12 @@ def _build_esocial_context(
         ano_base = int(row["ano_base"])
         qtd_trabalhadores = int(row.get("qtd_trabalhadores") or 0)
         qtd_farmaceuticos = int(row.get("qtd_farmaceuticos") or 0)
+        qtd_registros_vinculo_ano = int(row.get("qtd_registros_vinculo_ano") or 0)
+        qtd_trabalhadores_vinculo_ano = int(row.get("qtd_trabalhadores_vinculo_ano") or 0)
+        qtd_farmaceuticos_vinculo_ano = int(row.get("qtd_farmaceuticos_vinculo_ano") or 0)
+        qtd_trabalhadores_cbo_sem_titulo_vinculo_ano = int(
+            row.get("qtd_trabalhadores_cbo_sem_titulo_vinculo_ano") or 0
+        )
         trabalhador_unico = None
         if bool(row.get("is_um_trabalhador")):
             candidatos = trabalhador_rows_by_year.get(ano_base) or []
@@ -752,6 +762,12 @@ def _build_esocial_context(
             "competencia_txt": _format_competencia_esocial(row.get("competencia_base")),
             "qtd_trabalhadores": qtd_trabalhadores,
             "qtd_farmaceuticos": qtd_farmaceuticos,
+            "qtd_trabalhadores_ativos_competencia": qtd_trabalhadores,
+            "qtd_farmaceuticos_ativos_competencia": qtd_farmaceuticos,
+            "qtd_registros_vinculo_ano": qtd_registros_vinculo_ano,
+            "qtd_trabalhadores_vinculo_ano": qtd_trabalhadores_vinculo_ano,
+            "qtd_farmaceuticos_vinculo_ano": qtd_farmaceuticos_vinculo_ano,
+            "qtd_trabalhadores_cbo_sem_titulo_vinculo_ano": qtd_trabalhadores_cbo_sem_titulo_vinculo_ano,
             "has_cbo_sem_titulo": bool(row.get("has_cbo_sem_titulo")),
             "is_um_trabalhador": bool(row.get("is_um_trabalhador")),
             "is_um_trabalhador_sem_farmaceutico": bool(row.get("is_um_trabalhador_sem_farmaceutico")),
@@ -767,15 +783,17 @@ def _build_esocial_context(
     anos_lista = [row["ano_base"] for row in rows]
     anos_sem_farmaceutico = [
         row for row in rows
-        if row["qtd_trabalhadores"] > 0 and row["qtd_farmaceuticos"] == 0
+        if row["qtd_trabalhadores_vinculo_ano"] > 0 and row["qtd_farmaceuticos_vinculo_ano"] == 0
     ]
     anos_um_trabalhador = [row for row in rows if row["is_um_trabalhador"]]
     anos_criticos = [
         row["ano_base"] for row in rows
-        if row["qtd_trabalhadores"] > 0
+        if row["qtd_trabalhadores_vinculo_ano"] > 0
         and (
-            row["qtd_farmaceuticos"] == 0
+            row["qtd_farmaceuticos_vinculo_ano"] == 0
+            or row["qtd_farmaceuticos_ativos_competencia"] == 0
             or row["has_cbo_sem_titulo"]
+            or row["qtd_trabalhadores_cbo_sem_titulo_vinculo_ano"] > 0
             or row["is_um_trabalhador_sem_farmaceutico"]
             or row["is_um_trabalhador_cbo_sem_titulo"]
         )

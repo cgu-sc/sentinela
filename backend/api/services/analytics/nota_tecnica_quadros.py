@@ -530,13 +530,13 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
 
     table = doc.add_table(rows=len(rows_data) + 1, cols=4)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.3), Inches(1.8), Inches(2.0), Inches(2.0)])
+    _set_table_fixed_widths(table, [Inches(1.0), Inches(1.4), Inches(2.35), Inches(2.35)])
 
     headers = [
         'Ano',
         'Competência',
-        'Trabalhadores',
-        'Farmacêuticos',
+        'Trabalhadores com vínculo',
+        'Farmacêuticos com vínculo',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -549,8 +549,8 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         values = [
             str(item.get("ano_base") or "—"),
             item.get("competencia_txt") or "—",
-            str(item.get("qtd_trabalhadores") or 0),
-            str(item.get("qtd_farmaceuticos") or 0),
+            str(item.get("qtd_trabalhadores_vinculo_ano") or 0),
+            str(item.get("qtd_farmaceuticos_vinculo_ano") or 0),
         ]
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
@@ -584,7 +584,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 01-B - Trabalhadores identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        f'Quadro 01-B - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='0F172A',
         size=9,
         bold=True,
@@ -632,7 +632,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
             "o quadro apresenta apenas os vínculos dos anos com condição crítica identificada."
         )
     else:
-        escopo = "O quadro apresenta a lista completa de trabalhadores identificados no período analisado."
+        escopo = "O quadro apresenta a lista completa de vínculos trabalhistas identificados no período analisado."
     _run(
         p_foot,
         f'Fonte: Sistema Sentinela, a partir de dados do eSocial. {escopo}',

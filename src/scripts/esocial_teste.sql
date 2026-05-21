@@ -168,11 +168,28 @@ IF EXISTS (
        OR MES_BASE IS NULL
        OR MES_BASE NOT BETWEEN 1 AND 12
        OR NULLIF(LTRIM(RTRIM(cpf_trabalhador)), '') IS NULL
-       OR cbo IS NULL
 )
 BEGIN
     RAISERROR('Dados obrigatorios ausentes ou invalidos em db_eSocial.dbo.trabalhadores para CNPJs analisados.', 16, 1);
     RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM #trabalhadores_esocial_base
+    WHERE cbo IS NULL
+)
+BEGIN
+    SET @linhas_esocial = (
+        SELECT COUNT_BIG(*)
+        FROM #trabalhadores_esocial_base
+        WHERE cbo IS NULL
+    );
+    SET @msg_esocial = CONCAT(
+        '[eSocial] aviso - registros com CBO nulo ou invalido na fonte | registros=',
+        @linhas_esocial
+    );
+    RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
 END;
 
 SET @msg_esocial = CONCAT(

@@ -51,7 +51,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
 
     table = doc.add_table(rows=len(socios_volume_atipico) + 1, cols=5)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.9), Inches(1.25), Inches(1.25), Inches(1.0), Inches(1.7)])
+    _set_table_fixed_widths(table, [Inches(1.87), Inches(1.23), Inches(1.23), Inches(0.99), Inches(1.68)])
 
     headers = [
         'Sócio',
@@ -125,7 +125,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     table = doc.add_table(rows=5, cols=2)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(4.7), Inches(2.4)])
+    _set_table_fixed_widths(table, [Inches(4.63), Inches(2.37)])
 
     hdr_cells = table.rows[0].cells
     _run(hdr_cells[0].paragraphs[0], 'Métrica', bold=True)
@@ -175,7 +175,7 @@ def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     rows_data = gtin_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=4)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.05), Inches(3.65), Inches(1.1), Inches(1.3)])
+    _set_table_fixed_widths(table, [Inches(1.04), Inches(3.60), Inches(1.08), Inches(1.28)])
 
     headers = [
         'GTIN',
@@ -245,7 +245,7 @@ def _add_quadro_evolucao_financeira(
     rows_data = evolucao_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.05), Inches(1.2), Inches(1.2), Inches(1.3), Inches(1.05), Inches(1.3)])
+    _set_table_fixed_widths(table, [Inches(1.04), Inches(1.18), Inches(1.18), Inches(1.28), Inches(1.04), Inches(1.28)])
 
     headers = [
         'Semestre',
@@ -343,7 +343,7 @@ def _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
 
     table = doc.add_table(rows=len(medicamentos_aumento_atipico) + 1, cols=7)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(0.95), Inches(0.85), Inches(2.0), Inches(0.7), Inches(0.85), Inches(1.0), Inches(0.75)])
+    _set_table_fixed_widths(table, [Inches(0.94), Inches(0.84), Inches(1.97), Inches(0.69), Inches(0.84), Inches(0.99), Inches(0.73)])
 
     headers = [
         'Semestre',
@@ -427,8 +427,8 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     tbl.autofit = False
     
     # Configura larguras (Total ~7.1 inches)
-    col_label_w = Inches(2.2)
-    col_value_w = Inches(4.9)
+    col_label_w = Inches(2.17)
+    col_value_w = Inches(4.83)
     _set_table_fixed_widths(tbl, [col_label_w, col_value_w])
 
     rows_to_add = [
@@ -530,7 +530,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
 
     table = doc.add_table(rows=len(rows_data) + 1, cols=3)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.2), Inches(2.95), Inches(2.95)])
+    _set_table_fixed_widths(table, [Inches(1.18), Inches(2.91), Inches(2.91)])
 
     headers = [
         'Ano',
@@ -593,7 +593,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
 
     table = doc.add_table(rows=len(rows_data) + 1, cols=6)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(0.55), Inches(1.25), Inches(0.75), Inches(2.60), Inches(0.95), Inches(1.00)])
+    _set_table_fixed_widths(table, [Inches(0.54), Inches(1.23), Inches(0.74), Inches(2.56), Inches(0.94), Inches(0.99)])
 
     headers = ['Ano', 'CPF', 'CBO', 'Título CBO', 'Admissão', 'Rescisão']
     for idx, header in enumerate(headers):
@@ -650,7 +650,7 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(3.4), Inches(1.85), Inches(1.85)])
+    _set_table_fixed_widths(table, [Inches(3.35), Inches(1.82), Inches(1.83)])
     
     hdr_cells = table.rows[0].cells
     _run(hdr_cells[0].paragraphs[0], 'Situação', bold=True)

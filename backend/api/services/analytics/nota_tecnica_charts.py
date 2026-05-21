@@ -438,7 +438,7 @@ def _build_percentil_risco_chart(percentil_comp: dict[str, Any]) -> io.BytesIO:
     ax.scatter([percentile_rank], [marker_y], s=28, color=line_color, zorder=6)
 
     current_txt = f"{_format_decimal_pt(current_value, 1)}%"
-    badge_txt = f"Estabelecimento\nPercentil {percentile_rank} - {current_txt}"
+    badge_txt = f"Estabelecimento\nPercentil {percentile_rank} - {current_txt} sem comprovação"
     ax.annotate(
         badge_txt,
         xy=(percentile_rank, marker_y),
@@ -573,7 +573,7 @@ def _build_posicionamento_regional_chart(posicionamento_comp: dict[str, Any]) ->
         color="#B45309",
     )
 
-    label = f"Estabelecimento\n{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}%"
+    label = f"Estabelecimento\n{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}% sem comprovação"
     label_dx = -22 if current_x > x_max * 0.72 else 20
     label_dy = -26 if current_y > y_max * 0.76 else 22
     ax.annotate(
@@ -733,10 +733,10 @@ def _build_percentil_risco_chart_svg(percentil_comp: dict[str, Any]) -> str:
     area_path = f"{curve_path} L {curve[-1][0]:.2f} {plot_bottom:.2f} L {curve[0][0]:.2f} {plot_bottom:.2f} Z" if curve else ""
     marker_x = sx(float(percentile_rank))
     marker_y = sy(current_value)
-    badge_w, badge_h = 260, 64
+    badge_w, badge_h = 330, 64
     badge_x = width - right - badge_w
     badge_y = 70
-    current_txt = _svg_escape(f"{_format_decimal_pt(current_value, 1)}%")
+    current_txt = _svg_escape(f"{_format_decimal_pt(current_value, 1)}% sem comprovação")
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -816,7 +816,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
 
     marker_x = sx(current_x)
     marker_y = sy(current_y)
-    badge_w, badge_h = 280, 64
+    badge_w, badge_h = 330, 64
     badge_x = width - right - badge_w
     badge_y = 92
 
@@ -846,7 +846,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
         y = sy(float(row.get("pct_sem_comprovacao") or 0.0))
         parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="{other_color}" opacity="0.58" stroke="#FFFFFF" stroke-width="1.4"/>')
 
-    current_label = f"{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}%"
+    current_label = f"{_axis_currency_label(current_x)} | {_format_decimal_pt(current_y, 1)}% sem comprovação"
     parts.extend([
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="19" fill="none" stroke="{current_color}" stroke-width="2" opacity="0.28"/>',
         f'<circle cx="{marker_x:.2f}" cy="{marker_y:.2f}" r="13" fill="{current_color}" opacity="0.96" stroke="#FFFFFF" stroke-width="3"/>',

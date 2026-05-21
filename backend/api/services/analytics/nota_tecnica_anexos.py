@@ -132,7 +132,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
         'Dias após óbito',
     ]
     widths = [
-        Inches(2.95), Inches(1.48), Inches(1.0), Inches(1.12), Inches(0.6), Inches(0.45),
+        Inches(2.72), Inches(1.36), Inches(0.92), Inches(1.03), Inches(0.55), Inches(0.42),
     ]
 
     table = doc.add_table(rows=1, cols=len(headers))

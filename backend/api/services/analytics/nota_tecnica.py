@@ -635,7 +635,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 6. Resumo Executivo da Auditoria (Capa) ──────────────────────────
     tbl_resumo = doc.add_table(rows=1, cols=2)
     tbl_resumo.autofit = False
-    _set_table_fixed_widths(tbl_resumo, [Inches(4.5), Inches(2.6)])
+    _set_table_fixed_widths(tbl_resumo, [Inches(4.44), Inches(2.56)])
     _tbl_no_borders(tbl_resumo)
     
     # Coluna 1: Dados do Estabelecimento

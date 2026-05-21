@@ -1141,7 +1141,7 @@ def _add_crm_distancia_complementar_text(
 
     headers = ["CRM/UF", "Nome", "Estabelecimento A", "Estabelecimento B", "Valor total", "Distância", "Compet."]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.68), Inches(1.35), Inches(1.65), Inches(1.65), Inches(0.85), Inches(0.52), Inches(0.4)]
+    widths = [Inches(0.67), Inches(1.33), Inches(1.63), Inches(1.63), Inches(0.84), Inches(0.51), Inches(0.39)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1224,7 +1224,7 @@ def _add_crm_intensiva_complementar_text(
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(0.75), Inches(1.75), Inches(0.75), Inches(0.85), Inches(0.85), Inches(0.9), Inches(1.25)]
+    widths = [Inches(0.74), Inches(1.72), Inches(0.74), Inches(0.84), Inches(0.84), Inches(0.89), Inches(1.23)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1303,7 +1303,7 @@ def _add_crm_unico_complementar_text(
 
     headers = ["Início", "Fim", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(1.08), Inches(1.08), Inches(0.65), Inches(2.37), Inches(0.42), Inches(0.45), Inches(0.45), Inches(0.6)]
+    widths = [Inches(1.06), Inches(1.06), Inches(0.64), Inches(2.34), Inches(0.41), Inches(0.44), Inches(0.44), Inches(0.61)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1387,7 +1387,7 @@ def _add_crms_multiplos_complementar_text(
 
         headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(1.0), Inches(1.0), Inches(0.48), Inches(1.0), Inches(0.68), Inches(0.66), Inches(0.9), Inches(1.38)]
+        widths = [Inches(0.99), Inches(0.99), Inches(0.47), Inches(0.99), Inches(0.67), Inches(0.65), Inches(0.89), Inches(1.35)]
         _crm_table_header(table, headers, widths)
         for evento in eventos:
             cells = table.add_row().cells
@@ -1457,13 +1457,13 @@ def _add_principais_crms_contexto_text(
     ]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [
-        Inches(0.7),
-        Inches(1.45),
-        Inches(1.35),
-        Inches(0.68),
-        Inches(1.0),
-        Inches(0.62),
-        Inches(1.3),
+        Inches(0.69),
+        Inches(1.43),
+        Inches(1.33),
+        Inches(0.67),
+        Inches(0.99),
+        Inches(0.61),
+        Inches(1.28),
     ]
     _crm_table_header(table, headers, widths)
 
@@ -1573,7 +1573,7 @@ def _add_crm_volume_horario_complementar_text(
 
     headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Excesso"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(1.0), Inches(0.75), Inches(1.25), Inches(0.75), Inches(1.35), Inches(2.0)]
+    widths = [Inches(0.99), Inches(0.74), Inches(1.23), Inches(0.74), Inches(1.33), Inches(1.97)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1700,7 +1700,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.8), Inches(1.8), Inches(0.75), Inches(0.95), Inches(0.85), Inches(0.85), Inches(1.1)]
+    widths = [Inches(0.79), Inches(1.77), Inches(0.74), Inches(0.94), Inches(0.84), Inches(0.84), Inches(1.08)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -1852,7 +1852,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.75), Inches(1.65), Inches(0.75), Inches(1.1), Inches(0.9), Inches(0.8), Inches(1.15)]
+    widths = [Inches(0.74), Inches(1.63), Inches(0.74), Inches(1.08), Inches(0.89), Inches(0.79), Inches(1.13)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):
@@ -1992,7 +1992,7 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    widths = [Inches(0.8), Inches(2.25), Inches(0.9), Inches(1.0), Inches(1.25), Inches(0.9)]
+    widths = [Inches(0.79), Inches(2.22), Inches(0.89), Inches(0.99), Inches(1.23), Inches(0.88)]
     _set_table_fixed_widths(table, widths)
 
     for idx, header in enumerate(headers):

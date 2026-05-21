@@ -1,14 +1,33 @@
 from typing import Any
 
-from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 
-from .nota_tecnica_docx_utils import _run
+from .nota_tecnica_docx_utils import _cell_bg, _keep_small_table_together, _run, _set_table_fixed_widths
 from .nota_tecnica_formatters import _format_decimal_pt, _format_list_pt
 from .nota_tecnica_quadros import _add_quadro_esocial, _add_quadro_esocial_trabalhadores
 
 
 def _plural(value: int, singular: str, plural: str) -> str:
     return singular if value == 1 else plural
+
+
+def _month_distance(start_period: Any, end_period: Any) -> int:
+    if not hasattr(start_period, "year") or not hasattr(start_period, "month"):
+        raise RuntimeError("Periodo inicial sem ano/mes para calcular alerta eSocial.")
+    if not hasattr(end_period, "year") or not hasattr(end_period, "month"):
+        raise RuntimeError("Periodo final sem ano/mes para calcular alerta eSocial.")
+
+    distance = (int(end_period.year) - int(start_period.year)) * 12 + int(end_period.month) - int(start_period.month)
+    if distance < 0:
+        raise RuntimeError("Periodo final anterior ao periodo inicial no alerta eSocial.")
+    return distance
+
+
+def _capitalize_first(text: str) -> str:
+    if not text:
+        return text
+    return text[:1].upper() + text[1:]
 
 
 def _format_annual_summary(rows: list[dict[str, Any]]) -> str:
@@ -35,17 +54,82 @@ def _format_single_worker_summary(rows: list[dict[str, Any]]) -> str:
     return _format_list_pt(partes)
 
 
-def _add_legal_context(doc, suffix: str | None = None):
+def _add_movimentacao_sem_funcionario_table(
+    doc,
+    *,
+    ultimo_mes_ativo_txt: str,
+    periodo_txt: str,
+    qtd_meses_txt: str,
+    qtd_meses_sem_funcionario: int,
+    valor_periodo_txt: str,
+    qtd_autorizacoes_periodo_txt: str,
+):
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.space_before = Pt(6)
+    p_title.paragraph_format.space_after = Pt(3)
+    p_title.paragraph_format.keep_with_next = True
+    _run(
+        p_title,
+        'Síntese da movimentação após o último mês com trabalhador ativo',
+        color='334155',
+        size=8.5,
+    )
+
+    rows = [
+        ("Último mês com trabalhador ativo no eSocial", _capitalize_first(ultimo_mes_ativo_txt)),
+        ("Último mês com movimentação de venda no PFPB", _capitalize_first(periodo_txt)),
+        (
+            "Período sem trabalhador ativo até a última movimentação",
+            f'{qtd_meses_txt} {_plural(qtd_meses_sem_funcionario, "mês", "meses")}',
+        ),
+        ("Faturamento PFPB no período sem trabalhador ativo", f"R$ {valor_periodo_txt}"),
+        ("Autorizações PFPB no período sem trabalhador ativo", qtd_autorizacoes_periodo_txt),
+    ]
+
+    table = doc.add_table(rows=len(rows) + 1, cols=2)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(4.29), Inches(2.71)])
+
+    headers = ("Item verificado", "Resultado")
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        _cell_bg(cell, 'E2E8F0')
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=8.5)
+
+    for row_idx, (label, value) in enumerate(rows, start=1):
+        label_para = table.rows[row_idx].cells[0].paragraphs[0]
+        label_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        _run(label_para, label, color='0F172A', size=8.5)
+
+        value_para = table.rows[row_idx].cells[1].paragraphs[0]
+        value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(value_para, value, color='0F172A', size=8.5)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                para.paragraph_format.space_before = Pt(1)
+                para.paragraph_format.space_after = Pt(1)
+
+    _keep_small_table_together(p_title, table)
+
+    spacer = doc.add_paragraph()
+    spacer.paragraph_format.space_before = Pt(0)
+    spacer.paragraph_format.space_after = Pt(10)
+
+
+def _add_legal_context(doc):
     p_leg = doc.add_paragraph()
     p_leg.paragraph_format.space_before = Pt(6)
     _run(
         p_leg,
-        'Esse achado deve ser analisado à luz da legislação aplicável às atividades farmacêuticas, que exige responsabilidade e assistência técnica de farmacêutico habilitado durante todo o horário de funcionamento do estabelecimento.',
+        'A ausência de vínculo identificado no eSocial para trabalhador com CBO de farmacêutico indica possível fragilidade na regularidade técnico-operacional do estabelecimento, uma vez que a atividade farmacêutica exige responsabilidade e assistência técnica de profissional habilitado durante o horário de funcionamento. Assim, a farmácia deve comprovar, por meio de documentação idônea, a existência de farmacêutico responsável e a regularidade das dispensações realizadas no período analisado.',
         color='0F172A',
         size=10,
     )
-    if suffix:
-        _run(p_leg, ' ' + suffix, color='0F172A', size=10)
 
 
 def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
@@ -54,9 +138,10 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
         return
 
     campos_obrigatorios = {
+        "ultimo_periodo_movimentacao",
         "ultimo_periodo_movimentacao_txt",
+        "ultimo_mes_trabalhador_ativo",
         "ultimo_mes_trabalhador_ativo_txt",
-        "qtd_dias_sem_funcionario_ate_ultima_movimentacao",
         "valor_pfpb_periodo_sem_funcionario",
         "qtd_autorizacoes_periodo_sem_funcionario",
     }
@@ -69,8 +154,11 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
 
     periodo_txt = str(alerta["ultimo_periodo_movimentacao_txt"])
     ultimo_mes_ativo_txt = str(alerta["ultimo_mes_trabalhador_ativo_txt"])
-    qtd_dias_sem_funcionario = int(alerta["qtd_dias_sem_funcionario_ate_ultima_movimentacao"])
-    qtd_dias_txt = _format_decimal_pt(float(qtd_dias_sem_funcionario), 0)
+    qtd_meses_sem_funcionario = _month_distance(
+        alerta["ultimo_mes_trabalhador_ativo"],
+        alerta["ultimo_periodo_movimentacao"],
+    )
+    qtd_meses_txt = _format_decimal_pt(float(qtd_meses_sem_funcionario), 0)
     valor_periodo_txt = _format_decimal_pt(float(alerta["valor_pfpb_periodo_sem_funcionario"]), 2)
     qtd_autorizacoes_periodo = int(alerta["qtd_autorizacoes_periodo_sem_funcionario"])
     qtd_autorizacoes_periodo_txt = _format_decimal_pt(float(qtd_autorizacoes_periodo), 0)
@@ -88,7 +176,7 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
     )
     _run(
         p,
-        f'Assim, foram identificados {qtd_dias_txt} {_plural(qtd_dias_sem_funcionario, "dia", "dias")} sem trabalhador ativo no estabelecimento até a última movimentação registrada. Nesse período, a farmácia apresentou faturamento de R$ {valor_periodo_txt} e {qtd_autorizacoes_periodo_txt} {_plural(qtd_autorizacoes_periodo, "autorização", "autorizações")} no PFPB.',
+        f'Assim, foram identificados {qtd_meses_txt} {_plural(qtd_meses_sem_funcionario, "mês", "meses")} sem trabalhador ativo no estabelecimento até a última movimentação registrada. Nesse período, a farmácia apresentou faturamento de R$ {valor_periodo_txt} e {qtd_autorizacoes_periodo_txt} {_plural(qtd_autorizacoes_periodo, "autorização", "autorizações")} no PFPB.',
         color='0F172A',
         size=10,
     )
@@ -99,11 +187,14 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
             color='0F172A',
             size=10,
         )
-    _run(
-        p,
-        ' A situação deve ser confrontada com a documentação operacional, de funcionamento e de responsabilidade técnica da farmácia no período.',
-        color='0F172A',
-        size=10,
+    _add_movimentacao_sem_funcionario_table(
+        doc,
+        ultimo_mes_ativo_txt=ultimo_mes_ativo_txt,
+        periodo_txt=periodo_txt,
+        qtd_meses_txt=qtd_meses_txt,
+        qtd_meses_sem_funcionario=qtd_meses_sem_funcionario,
+        valor_periodo_txt=valor_periodo_txt,
+        qtd_autorizacoes_periodo_txt=qtd_autorizacoes_periodo_txt,
     )
 
 
@@ -140,7 +231,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         competencia_txt = row.get("competencia_txt") or "competência-base"
         _run(
             p_intro,
-            f'Em consulta à base do eSocial disponível no Sistema Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente no ano de {ano}. ',
+            f'Em consulta à base do eSocial disponível no Sistema Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
             color='0F172A',
             size=10,
         )
@@ -154,24 +245,25 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         else:
             _run(
                 p_intro,
-                f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, nenhum deles com CBO de farmacêutico (223405).',
+                f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, ',
                 color='0F172A',
                 size=10,
             )
-            _add_legal_context(
-                doc,
-                'Assim, a ausência de trabalhador com CBO de farmacêutico entre os vínculos identificados deve ser confrontada com a documentação de responsabilidade técnica e de funcionamento da farmácia.',
-            )
-        if qtd_trab_ativo == 0 and qtd_trab_vinculo > 0:
-            p_ativos = doc.add_paragraph()
-            p_ativos.paragraph_format.space_before = Pt(6)
             _run(
-                p_ativos,
-                f'Na competência-base de {competencia_txt}, contudo, não havia trabalhadores ativos vinculados ao estabelecimento, pois os vínculos localizados possuíam data de rescisão anterior ao encerramento da competência.',
+                p_intro,
+                'nenhum deles com CBO de farmacêutico',
+                color='0F172A',
+                size=10,
+                underline=True,
+            )
+            _run(
+                p_intro,
+                ' (223405).',
                 color='0F172A',
                 size=10,
             )
-        elif qtd_trab_ativo != qtd_trab_vinculo or qtd_farm_ativo != qtd_farm_vinculo:
+            _add_legal_context(doc)
+        if qtd_trab_ativo > 0 and (qtd_trab_ativo != qtd_trab_vinculo or qtd_farm_ativo != qtd_farm_vinculo):
             p_ativos = doc.add_paragraph()
             p_ativos.paragraph_format.space_before = Pt(6)
             _run(
@@ -201,10 +293,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 color='0F172A',
                 size=10,
             )
-            _add_legal_context(
-                doc,
-                'A ausência desse CBO nos registros considerados deve ser confrontada com a documentação de responsabilidade técnica e de funcionamento da farmácia.',
-            )
+            _add_legal_context(doc)
         elif anos_sem_farm:
             anos_txt = _format_list_pt([str(row["ano_base"]) for row in anos_sem_farm])
             p_status = doc.add_paragraph()
@@ -215,10 +304,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 color='0F172A',
                 size=10,
             )
-            _add_legal_context(
-                doc,
-                'A ausência desse CBO nos anos indicados deve ser confrontada com a documentação de responsabilidade técnica e de funcionamento da farmácia.',
-            )
+            _add_legal_context(doc)
         else:
             p_status = doc.add_paragraph()
             p_status.paragraph_format.space_before = Pt(6)

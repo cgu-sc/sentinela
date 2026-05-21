@@ -318,9 +318,6 @@ INNER JOIN temp_CGUSC.fp.indicador_compra_unica_br BR
 CREATE UNIQUE CLUSTERED INDEX IDX_FinalCompraUnica_CNPJ
 ON temp_CGUSC.fp.indicador_compra_unica_detalhado(id_cnpj, ano_base);
 
-CREATE NONCLUSTERED INDEX IDX_FinalCompraUnica_Risco
-ON temp_CGUSC.fp.indicador_compra_unica_detalhado(ano_base, risco_relativo_mun_mediana DESC);
-
 
 -- ============================================================================
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS

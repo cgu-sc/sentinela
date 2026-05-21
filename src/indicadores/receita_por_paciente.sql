@@ -2,158 +2,302 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- DEFINICAO DE VARIAVEIS DO PERIODO
+-- INDICADOR DE RECEITA POR PACIENTE
+-- ============================================================================
+-- OBJETIVO: Identificar farmacias com faturamento medio mensal por paciente
+--           muito superior ao observado em estabelecimentos comparaveis.
+--
+-- METRICA PRINCIPAL:
+--   receita_por_paciente_mensal representa o valor medio mensal pago por
+--   paciente distinto em cada farmacia/ano.
+--
+-- FONTE DE DADOS:
+--   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
+--   - temp_CGUSC.fp.medicamentos_patologia (universo de medicamentos auditados)
+--   - temp_CGUSC.fp.dados_farmacia (id_cnpj e contexto territorial)
+-- ============================================================================
+
+-- ============================================================================
+-- LIMPEZA PREVIA DE TABELAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_detalhado;
+GO
+
+-- ============================================================================
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 1: PRE-CALCULO - CONSOLIDADO POR FARMACIA E PACIENTE
--- Conta pacientes distintos, valor total e meses de atividade.
--- Considera apenas medicamentos do escopo auditado.
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
+-- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para receita por paciente.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #farmacias_dim;
+
+SELECT
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
+
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
+
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
+
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
+
+SELECT DISTINCT
+    C.codigo_barra
+INTO #medicamentos_patologia_gtin
+FROM temp_CGUSC.fp.medicamentos_patologia C
+WHERE C.codigo_barra IS NOT NULL;
+
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem codigo_barra valido.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_patologia_gtin
+ON #medicamentos_patologia_gtin(codigo_barra);
+
+
+-- ============================================================================
+-- PASSO 1: CONSOLIDADO POR FARMACIA/PACIENTE/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS #ConsolidadoPacientes;
 
 SELECT
-    A.cnpj,
-    COUNT(DISTINCT A.cpf)                            AS qtd_pacientes_distintos,
-    SUM(A.valor_pago)                                AS valor_total_periodo,
-    COUNT(DISTINCT FORMAT(A.data_hora, 'yyyyMM'))    AS qtd_meses_ativos
+    F.id_cnpj,
+    CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
+    CAST(COUNT(DISTINCT CAST(A.cpf AS VARCHAR(20))) AS INT) AS qtd_pacientes_distintos,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_periodo,
+    CAST(COUNT(DISTINCT DATEFROMPARTS(YEAR(A.data_hora), MONTH(A.data_hora), 1)) AS TINYINT) AS qtd_meses_ativos
 INTO #ConsolidadoPacientes
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
+INNER JOIN #farmacias_dim F
+    ON F.cnpj = A.cnpj
+INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
-WHERE
-    A.data_hora >= @DataInicio
-    AND A.data_hora <= @DataFim
-GROUP BY A.cnpj;
+WHERE A.data_hora >= @DataInicio
+  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+  AND NULLIF(LTRIM(RTRIM(CAST(A.cpf AS VARCHAR(20)))), '') IS NOT NULL
+  AND A.valor_pago IS NOT NULL
+  AND A.codigo_barra IS NOT NULL
+GROUP BY
+    F.id_cnpj,
+    YEAR(A.data_hora)
+HAVING COUNT(DISTINCT CAST(A.cpf AS VARCHAR(20))) > 0
+   AND COUNT(DISTINCT DATEFROMPARTS(YEAR(A.data_hora), MONTH(A.data_hora), 1)) > 0;
 
-CREATE CLUSTERED INDEX IDX_TempPacientes_CNPJ ON #ConsolidadoPacientes(cnpj);
+CREATE CLUSTERED INDEX IDX_ConsolidadoPacientes_CNPJ_Ano
+ON #ConsolidadoPacientes(id_cnpj, ano_base);
+
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 
 -- ============================================================================
--- PASSO 2: CALCULO BASE POR FARMACIA
--- Gera as duas metricas: receita total por paciente e receita mensal por paciente.
+-- PASSO 2: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente;
 
 SELECT
-    cnpj,
+    id_cnpj,
+    ano_base,
     valor_total_periodo,
     qtd_pacientes_distintos,
     qtd_meses_ativos,
-
-    -- Metrica 1: Receita total acumulada por paciente (periodo completo)
     CAST(
-        CASE
-            WHEN qtd_pacientes_distintos > 0
-                THEN valor_total_periodo / qtd_pacientes_distintos
-            ELSE 0
-        END
-    AS DECIMAL(18,2)) AS receita_por_paciente,
-
-    -- Metrica 2: Receita mensal media por paciente (base para riscos relativos)
+        CAST(valor_total_periodo AS DECIMAL(19,4)) /
+        CAST(qtd_pacientes_distintos AS DECIMAL(19,4))
+    AS DECIMAL(19,2)) AS receita_por_paciente,
     CAST(
-        CASE
-            WHEN qtd_pacientes_distintos > 0 AND qtd_meses_ativos > 0
-                THEN (valor_total_periodo / qtd_pacientes_distintos) / qtd_meses_ativos
-            ELSE 0
-        END
-    AS DECIMAL(18,2)) AS receita_por_paciente_mensal
-
+        CAST(valor_total_periodo AS DECIMAL(19,4)) /
+        (
+            CAST(qtd_pacientes_distintos AS DECIMAL(19,4)) *
+            CAST(qtd_meses_ativos AS DECIMAL(19,4))
+        )
+    AS DECIMAL(19,2)) AS receita_por_paciente_mensal
 INTO temp_CGUSC.fp.indicador_receita_por_paciente
 FROM #ConsolidadoPacientes;
 
-CREATE CLUSTERED INDEX IDX_IndRecPac_CNPJ ON temp_CGUSC.fp.indicador_receita_por_paciente(cnpj);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndRecPac_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_receita_por_paciente(id_cnpj, ano_base);
 
-DROP TABLE #ConsolidadoPacientes;
+DROP TABLE IF EXISTS #ConsolidadoPacientes;
 
 
 -- ============================================================================
--- PASSO 3: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+-- PASSO 3: METRICAS POR MUNICIPIO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_mun;
 
 SELECT DISTINCT
+    I.ano_base,
     F.uf,
     F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.receita_por_paciente_mensal)
+        OVER (PARTITION BY I.ano_base, F.uf, F.municipio)
+    AS DECIMAL(19,4)) AS mediana_municipio
 INTO temp_CGUSC.fp.indicador_receita_por_paciente_mun
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_receita_por_paciente I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndRecPacMun ON temp_CGUSC.fp.indicador_receita_por_paciente_mun(uf, municipio);
+CREATE CLUSTERED INDEX IDX_IndRecPacMun
+ON temp_CGUSC.fp.indicador_receita_por_paciente_mun(ano_base, uf, municipio);
 
 
 -- ============================================================================
--- PASSO 4: METRICAS POR ESTADO (MEDIA E MEDIANA)
+-- PASSO 4: METRICAS POR ESTADO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_uf;
 
 SELECT DISTINCT
+    I.ano_base,
     F.uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.receita_por_paciente_mensal)
+        OVER (PARTITION BY I.ano_base, F.uf)
+    AS DECIMAL(19,4)) AS mediana_estado
 INTO temp_CGUSC.fp.indicador_receita_por_paciente_uf
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_receita_por_paciente I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndRecPacUF ON temp_CGUSC.fp.indicador_receita_por_paciente_uf(uf);
+CREATE CLUSTERED INDEX IDX_IndRecPacUF
+ON temp_CGUSC.fp.indicador_receita_por_paciente_uf(ano_base, uf);
 
 
 -- ============================================================================
--- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_regiao;
 
 SELECT DISTINCT
+    I.ano_base,
     F.id_regiao_saude,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(ISNULL(I.receita_por_paciente_mensal, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.receita_por_paciente_mensal)
+        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
+    AS DECIMAL(19,4)) AS mediana_regiao
 INTO temp_CGUSC.fp.indicador_receita_por_paciente_regiao
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I ON I.cnpj = F.cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
+FROM temp_CGUSC.fp.indicador_receita_por_paciente I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndRecPacReg ON temp_CGUSC.fp.indicador_receita_por_paciente_regiao(id_regiao_saude);
+CREATE CLUSTERED INDEX IDX_IndRecPacReg
+ON temp_CGUSC.fp.indicador_receita_por_paciente_regiao(ano_base, id_regiao_saude);
 
 
 -- ============================================================================
--- PASSO 5: METRICAS NACIONAIS (MEDIA E MEDIANA)
+-- PASSO 5: METRICAS NACIONAIS (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_br;
 
 SELECT DISTINCT
-    'BR' AS pais,
+    ano_base,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(receita_por_paciente_mensal, 0)) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(ISNULL(receita_por_paciente_mensal, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY receita_por_paciente_mensal)
+        OVER (PARTITION BY ano_base)
+    AS DECIMAL(19,4)) AS mediana_pais
 INTO temp_CGUSC.fp.indicador_receita_por_paciente_br
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_receita_por_paciente;
+
+CREATE CLUSTERED INDEX IDX_IndRecPacBR
+ON temp_CGUSC.fp.indicador_receita_por_paciente_br(ano_base);
 
 
 -- ============================================================================
@@ -162,78 +306,46 @@ LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I ON I.cnpj = F.cnpj;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_detalhado;
 
 SELECT
-    F.cnpj,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.no_regiao_saude,
-    F.id_regiao_saude,
+    I.id_cnpj,
+    I.ano_base,
+    I.valor_total_periodo,
+    I.qtd_pacientes_distintos,
+    I.qtd_meses_ativos,
+    I.receita_por_paciente,
+    I.receita_por_paciente_mensal,
 
-    -- Indicadores base
-    ISNULL(I.valor_total_periodo, 0)         AS valor_total_periodo,
-    ISNULL(I.qtd_pacientes_distintos, 0)    AS qtd_pacientes_distintos,
-    ISNULL(I.qtd_meses_ativos, 0)            AS qtd_meses_ativos,
-    ISNULL(I.receita_por_paciente, 0)        AS receita_por_paciente,
-    ISNULL(I.receita_por_paciente_mensal, 0) AS receita_por_paciente_mensal,
+    MUN.mediana_municipio AS municipio_mediana,
+    CAST((I.receita_por_paciente_mensal + 0.01) / (MUN.mediana_municipio + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
 
-    -- Rankings baseados na receita mensal por paciente (pior risco = posicao 1)
-    RANK() OVER (
-        ORDER BY ISNULL(I.receita_por_paciente_mensal, 0) DESC
-    ) AS ranking_br,
-    RANK() OVER (
-        PARTITION BY F.uf
-        ORDER BY ISNULL(I.receita_por_paciente_mensal, 0) DESC
-    ) AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY F.id_regiao_saude
-        ORDER BY ISNULL(I.receita_por_paciente_mensal, 0) DESC
-    ) AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY F.uf, F.municipio
-        ORDER BY ISNULL(I.receita_por_paciente_mensal, 0) DESC
-    ) AS ranking_municipio,
+    UF.mediana_estado AS estado_mediana,
+    CAST((I.receita_por_paciente_mensal + 0.01) / (UF.mediana_estado + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
 
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    REG.mediana_regiao AS regiao_saude_mediana,
+    CAST((I.receita_por_paciente_mensal + 0.01) / (REG.mediana_regiao + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
 
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
-
-    -- Benchmarks Regionais (Regiao de Saude)
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
-
-    -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.receita_por_paciente_mensal, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
-
+    CAST((I.receita_por_paciente_mensal + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
 INTO temp_CGUSC.fp.indicador_receita_por_paciente_detalhado
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente I
-    ON I.cnpj = F.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_mun MUN
-    ON F.uf        = MUN.uf
+FROM temp_CGUSC.fp.indicador_receita_por_paciente I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+INNER JOIN temp_CGUSC.fp.indicador_receita_por_paciente_mun MUN
+    ON I.ano_base = MUN.ano_base
+   AND F.uf = MUN.uf
    AND F.municipio = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_uf UF
-    ON F.uf = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_receita_por_paciente_regiao REG
-    ON F.id_regiao_saude = REG.id_regiao_saude
-CROSS JOIN temp_CGUSC.fp.indicador_receita_por_paciente_br BR;
+INNER JOIN temp_CGUSC.fp.indicador_receita_por_paciente_uf UF
+    ON I.ano_base = UF.ano_base
+   AND F.uf = UF.uf
+INNER JOIN temp_CGUSC.fp.indicador_receita_por_paciente_regiao REG
+    ON I.ano_base = REG.ano_base
+   AND F.id_regiao_saude = REG.id_regiao_saude
+INNER JOIN temp_CGUSC.fp.indicador_receita_por_paciente_br BR
+    ON I.ano_base = BR.ano_base;
 
-CREATE CLUSTERED INDEX    IDX_FinalRecPac_CNPJ  ON temp_CGUSC.fp.indicador_receita_por_paciente_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalRecPac_Risco ON temp_CGUSC.fp.indicador_receita_por_paciente_detalhado(risco_relativo_mun_mediana DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalRecPac_Rank  ON temp_CGUSC.fp.indicador_receita_por_paciente_detalhado(ranking_br);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalRecPac_CNPJ
+ON temp_CGUSC.fp.indicador_receita_por_paciente_detalhado(id_cnpj, ano_base);
 GO
+
 
 -- ============================================================================
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
@@ -243,9 +355,5 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_mun;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_receita_por_paciente_br;
+DROP TABLE IF EXISTS #farmacias_dim;
 GO
-
--- Verificacao rapida
-SELECT TOP 100 *
-FROM temp_CGUSC.fp.indicador_receita_por_paciente_detalhado
-ORDER BY ranking_br;

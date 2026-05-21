@@ -7,6 +7,7 @@ import { useStableTabState } from '@/composables/useStableTabState';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { RISK_THRESHOLDS } from '@/config/riskConfig';
+import { useFilterStore } from '@/stores/filters';
 
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
@@ -28,7 +29,14 @@ use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomCompone
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 
-const { formatCurrencyFull } = useFormatting();
+const { formatCurrencyFull, formatarData, toLocalISO } = useFormatting();
+const filterStore = useFilterStore();
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
 const { chartTheme, chartDataColors } = useChartTheme();
 
 const cnpjDetailStore = useCnpjDetailStore();
@@ -593,11 +601,14 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
     <TabPlaceholder
       v-else-if="evolucaoLoaded && !cachedEvolucaoData?.semestres?.length"
-      variant="error"
-      icon="pi-exclamation-circle"
-      title="Erro ao carregar"
-      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
-    />
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
 
     <template v-else-if="cachedEvolucaoData">
       <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">

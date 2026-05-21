@@ -177,7 +177,7 @@ async function gerarRelatorio(item) {
       qtdMunicipiosRegiao: null,
       financialMovementTabRef: { value: null },
       indicatorsTabRef: { value: null },
-      crmsTabRef: { value: null },
+      authTabRef: { value: null },
       falecidosTabRef: { value: null },
       cnpjNavStore: { activeTabIndex: 0 },
       geoStore,

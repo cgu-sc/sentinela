@@ -11,14 +11,20 @@ import CRMPrescritoresTable from './CRMPrescritoresTable.vue';
 import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
 
-const { formatarData } = useFormatting();
+const { formatarData, toLocalISO } = useFormatting();
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
 
 const props = defineProps({
   cnpj: { type: String, required: true },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode } = storeToRefs(cnpjDetailStore);
+const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode, evolucaoFinanceira } = storeToRefs(cnpjDetailStore);
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const filterStore = useFilterStore();
 const {
@@ -159,20 +165,24 @@ defineExpose({
     />
 
     <TabPlaceholder
-      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0"
-      :variant="cachedPrescritoresData?.tem_historico ? 'info' : 'success'"
-      icon="pi-id-card"
-      :title="cachedPrescritoresData?.tem_historico ? 'Sem prescrições no período' : 'CNPJ livre de ocorrências'"
+      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0 && !evolucaoFinanceira?.semestres?.length"
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
     >
       <template #description>
-        <template v-if="cachedPrescritoresData?.tem_historico">
-          Não foram encontradas prescrições vinculadas a este CNPJ no período de 
-          <span class="underline">{{ formatarData(filterStore.dataInicio) }}</span> até 
-          <span class="underline">{{ formatarData(filterStore.dataFim) }}</span>.
-        </template>
-        <template v-else>
-          Este estabelecimento não possui registros de prescrições farmacêuticas em nossa base de dados histórica.
-        </template>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
+
+    <TabPlaceholder
+      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0"
+      variant="info"
+      icon="pi-id-card"
+      title="Sem prescrições no período"
+    >
+      <template #description>
+        Não foram encontradas prescrições vinculadas a este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
       </template>
     </TabPlaceholder>
 

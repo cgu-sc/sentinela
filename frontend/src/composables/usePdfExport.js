@@ -281,7 +281,7 @@ export function usePdfExport() {
 
   async function exportCnpjPdf({
     cnpjData, geoData, cadastro, cnpj, qtdMunicipiosRegiao,
-    financialMovementTabRef, indicatorsTabRef, crmsTabRef, falecidosTabRef,
+    financialMovementTabRef, indicatorsTabRef, authTabRef, falecidosTabRef,
     cnpjNavStore, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
     isExporting.value = true;
@@ -919,13 +919,13 @@ export function usePdfExport() {
       });
 
       // ── PÁGINA 4 — Prescritores ────────────────────────────
-      if (crmsTabRef?.value) {
+      if (authTabRef?.value) {
         cnpjNavStore.activeTabIndex = 4;
         await sleep(500);
 
-        const summary = crmsTabRef.value.getSummary() || {};
-        const top20 = (crmsTabRef.value.getCrmsInteresse?.() || []).slice(0, 20);
-        const kpis = crmsTabRef.value.getKpis?.() || {};
+        const summary = authTabRef.value.getSummary() || {};
+        const top20 = (authTabRef.value.getCrmsInteresse?.() || []).slice(0, 20);
+        const kpis = authTabRef.value.getKpis?.() || {};
 
         if (top20.length > 0) {
           pdf.addPage();
@@ -941,7 +941,7 @@ export function usePdfExport() {
           const red    = [239, 68,  68 ];
           const orange = [249, 115, 22 ];
           const green  = [16,  185, 129];
-          const summary2 = crmsTabRef.value.getSummary() || {};
+          const summary2 = authTabRef.value.getSummary() || {};
           const crmCards = [
             { label: 'TOP 1 CRM - VOLUME R$',         val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop1        > 40 ? red : kpis.concentracaoTop1 > 20 ? red : green,    subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
             { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },

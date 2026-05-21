@@ -15,7 +15,7 @@ import FinancialMovementTab from "./components/cnpj/FinancialMovementTab.vue";
 import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
 import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
-import CRMTab from "./components/cnpj/CRMTab.vue";
+import AuthTab from "./components/cnpj/AuthTab.vue";
 import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
 import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import SociosTab from "./components/cnpj/SociosTab.vue";
@@ -107,7 +107,7 @@ const { isExporting, exportCnpjPdf } = usePdfExport();
 
 const financialMovementTabRef = ref(null);
 const indicatorsTabRef = ref(null);
-const crmsTabRef = ref(null);
+const authTabRef = ref(null);
 const falecidosTabRef = ref(null);
 
 const qtdMunicipiosRegiao = computed(
@@ -136,7 +136,7 @@ const handleExport = async () => {
     qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
     financialMovementTabRef,
     indicatorsTabRef,
-    crmsTabRef,
+    authTabRef,
     falecidosTabRef,
     cnpjNavStore: cnpjNav,
     geoStore,
@@ -506,7 +506,7 @@ const isInitialLoading = computed(() => {
             >Análise de Autorizações</span
           ></template
         >
-        <CRMTab ref="crmsTabRef" :cnpj="cnpj" class="tab-content" />
+        <AuthTab ref="authTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>

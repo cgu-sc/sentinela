@@ -20,7 +20,7 @@ const props = defineProps({
 });
 
 const filterStore = useFilterStore();
-const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
+const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError, evolucaoFinanceira } = storeToRefs(useCnpjDetailStore());
 
 // Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
 const {
@@ -186,18 +186,24 @@ const falecidosAgrupadosFiltrados = computed(() => {
     />
 
     <TabPlaceholder
+      v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length && !evolucaoFinanceira?.semestres?.length"
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
+
+    <TabPlaceholder
       v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length"
       variant="success"
       icon="pi-check-circle"
-      :title="cachedFalecidosData?.tem_historico ? 'Sem ocorrências no período' : 'CNPJ livre de ocorrências'"
+      title="Sem ocorrências no período"
     >
       <template #description>
-        <span v-if="cachedFalecidosData?.tem_historico">
-          O estabelecimento possui histórico na base de óbitos, mas nenhuma venda foi identificada no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
-        </span>
-        <span v-else>
-          Não foram encontradas transações vinculadas a CPFs de pessoas falecidas para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
-        </span>
+        Não foram encontradas transações vinculadas a CPFs de pessoas falecidas no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
       </template>
     </TabPlaceholder>
 

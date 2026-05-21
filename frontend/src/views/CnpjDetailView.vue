@@ -85,7 +85,7 @@ const getTabIndexFromRoute = () => {
 const analyticsStore = useAnalyticsStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { resultadoCnpjs } = storeToRefs(analyticsStore);
-const { dadosCadastro, evolucaoFinanceira, evolucaoLoading } =
+const { dadosCadastro, evolucaoFinanceira, evolucaoLoading, evolucaoLoaded } =
   storeToRefs(cnpjDetailStore);
 
 const geoStore = useGeoStore();
@@ -217,7 +217,9 @@ const cnpjData = computed(
 // Substitui valSemComp/totalMov do cnpjData quando disponível.
 const periodSummary = computed(() => {
   const semestres = evolucaoFinanceira.value?.semestres;
-  if (!semestres?.length) return null;
+  if (!semestres?.length) {
+    return evolucaoLoaded.value ? { totalMov: 0, valSemComp: 0, percValSemComp: 0 } : null;
+  }
   const totalMov = semestres.reduce((a, s) => a + s.total, 0);
   const valSemComp = semestres.reduce((a, s) => a + s.irregular, 0);
   const percValSemComp = totalMov > 0 ? (valSemComp / totalMov) * 100 : 0;
@@ -302,8 +304,7 @@ watch(
       cnpjDetailStore.fetchSocios(newCnpj);
       cnpjDetailStore.fetchNetwork(newCnpj);
       if (!cnpjData.value) {
-        const p = getApiParams();
-        await cnpjDetailStore.fetchCnpjAvulso(newCnpj, p.inicio, p.fim);
+        await cnpjDetailStore.fetchCnpjAvulso(newCnpj);
       }
     }
   },

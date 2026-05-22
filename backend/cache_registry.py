@@ -31,6 +31,8 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("teia_fonte_nivel3", cache_files.TEIA_FONTE_NIVEL3_PARQUET, "global"),
     CacheDefinition("teia_fonte_nivel4", cache_files.TEIA_FONTE_NIVEL4_PARQUET, "global"),
     CacheDefinition("medicamentos", cache_files.MEDICAMENTOS_PARQUET, "global"),
+    CacheDefinition("analise_gtin_inconsistencia_clinica", cache_files.ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET, "global"),
+    CacheDefinition("dados_ibge_demografia", cache_files.DADOS_IBGE_DEMOGRAFIA_PARQUET, "global"),
     CacheDefinition("volume_atipico_semestral", cache_files.VOLUME_ATIPICO_SEMESTRAL_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_ano", cache_files.ESOCIAL_CNPJ_ANO_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_trabalhador_ano", cache_files.ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET, "global"),

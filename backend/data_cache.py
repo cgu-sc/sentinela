@@ -49,6 +49,8 @@ _TEIA_FONTE_NIVEL2_PARQUET_PATH = _global_cache_path("teia_fonte_nivel2")
 _TEIA_FONTE_NIVEL3_PARQUET_PATH = _global_cache_path("teia_fonte_nivel3")
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
 _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
+_ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica")
+_DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH = _global_cache_path("dados_ibge_demografia")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
 _ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
 _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_trabalhador_ano")
@@ -76,6 +78,8 @@ _df_teia_fonte_nivel2: pl.DataFrame | None = None
 _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
+_df_analise_gtin_inconsistencia_clinica: pl.DataFrame | None = None
+_df_dados_ibge_demografia: pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
 _df_esocial_cnpj_ano: pl.DataFrame | None = None
 _df_esocial_cnpj_trabalhador_ano: pl.DataFrame | None = None
@@ -133,6 +137,40 @@ def _buscar_cnpjs_matriz(engine) -> list[str]:
 
 
 # --- MOTOR DE SINCRONIZAÇÃO (SYNC ENGINE) ---
+
+def _assert_fp_source_table(engine, table_name: str, required_columns: set[str]) -> int:
+    """Valida contrato minimo de uma tabela fonte em temp_CGUSC.fp."""
+    full_name = f"temp_CGUSC.fp.{table_name}"
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT OBJECT_ID(:full_name, 'U')"),
+            {"full_name": full_name},
+        ).scalar()
+        if exists is None:
+            raise RuntimeError(f"Tabela fonte {full_name} nao encontrada para sincronizacao de cache.")
+
+        rows = conn.execute(text(f"SELECT COUNT_BIG(*) FROM [temp_CGUSC].[fp].[{table_name}]")).scalar()
+        if rows == 0:
+            raise RuntimeError(f"Tabela fonte {full_name} esta vazia para sincronizacao de cache.")
+
+        cols = {
+            row[0]
+            for row in conn.execute(text("""
+                SELECT COLUMN_NAME
+                FROM temp_CGUSC.INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = 'fp'
+                  AND TABLE_NAME = :table_name
+            """), {"table_name": table_name})
+        }
+
+    missing_cols = required_columns - cols
+    if missing_cols:
+        raise RuntimeError(
+            f"Tabela fonte {full_name} sem colunas obrigatorias: "
+            + ", ".join(sorted(missing_cols))
+        )
+    return int(rows)
+
 
 def _sync_falecidos(engine, progress_callback=None):
     """Gera os parquets de falecidos por CNPJ usando a rotina atual da API."""
@@ -1373,6 +1411,131 @@ def _sync_medicamentos(engine, progress_callback=None):
     _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="zstd")
 
 
+def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
+    """Sincroniza a evolucao anual por farmacia e patologia da inconsistencia clinica."""
+    global _df_analise_gtin_inconsistencia_clinica
+    print("Sincronizando Analise GTIN x Inconsistencia Clinica...")
+    required = {
+        "id_cnpj",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cpfs_distintos",
+        "qtd_cpfs_incompativeis",
+        "qtd_autorizacoes",
+        "qtd_autorizacoes_incompativeis",
+        "valor_total_pago",
+        "valor_incompativel_pago",
+        "dt_processamento",
+    }
+    total_rows = _assert_fp_source_table(engine, "analise_gtin_inconsistencia_clinica", required)
+    sql = """
+        SELECT
+            id_cnpj,
+            patologia,
+            regra_clinica,
+            ano_base,
+            qtd_cpfs_distintos,
+            qtd_cpfs_incompativeis,
+            qtd_autorizacoes,
+            qtd_autorizacoes_incompativeis,
+            CAST(valor_total_pago AS FLOAT) AS valor_total_pago,
+            CAST(valor_incompativel_pago AS FLOAT) AS valor_incompativel_pago,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[analise_gtin_inconsistencia_clinica]
+    """
+    print(f"   -> Registros clinicos anuais: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 50_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("patologia").cast(pl.Categorical),
+            pl.col("regra_clinica").cast(pl.Categorical),
+            pl.col("ano_base").cast(pl.Int16),
+            pl.col("qtd_cpfs_distintos").cast(pl.Int32),
+            pl.col("qtd_cpfs_incompativeis").cast(pl.Int32),
+            pl.col("qtd_autorizacoes").cast(pl.Int32),
+            pl.col("qtd_autorizacoes_incompativeis").cast(pl.Int32),
+            pl.col("valor_total_pago").cast(pl.Float64),
+            pl.col("valor_incompativel_pago").cast(pl.Float64),
+            pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        if progress_callback:
+            progress_callback(p)
+
+    _df_analise_gtin_inconsistencia_clinica = (
+        pl.concat(chunk_list).sort(["id_cnpj", "patologia", "ano_base"])
+    )
+    _df_analise_gtin_inconsistencia_clinica.write_parquet(
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
+        compression="zstd",
+    )
+
+
+def _sync_dados_ibge_demografia(engine, progress_callback=None):
+    """Sincroniza os dados demograficos do Censo IBGE por municipio, idade e sexo."""
+    global _df_dados_ibge_demografia
+    print("Sincronizando Demografia IBGE...")
+    required = {
+        "id_ibge7",
+        "grupo_idade",
+        "sexo",
+        "nu_populacao",
+        "ano_censo",
+        "idade_min",
+        "idade_max",
+        "ordem",
+    }
+    total_rows = _assert_fp_source_table(engine, "dados_ibge_demografia", required)
+    sql = """
+        SELECT
+            id_ibge7,
+            grupo_idade,
+            sexo,
+            nu_populacao,
+            ano_censo,
+            idade_min,
+            idade_max,
+            ordem
+        FROM [temp_CGUSC].[fp].[dados_ibge_demografia]
+    """
+    print(f"   -> Registros demograficos: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 100_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_ibge7").cast(pl.String),
+            pl.col("grupo_idade").cast(pl.Categorical),
+            pl.col("sexo").cast(pl.Categorical),
+            pl.col("nu_populacao").cast(pl.Int32, strict=False),
+            pl.col("ano_censo").cast(pl.Int16),
+            pl.col("idade_min").cast(pl.Int16, strict=False),
+            pl.col("idade_max").cast(pl.Int16, strict=False),
+            pl.col("ordem").cast(pl.Int16, strict=False),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        if progress_callback:
+            progress_callback(p)
+
+    _df_dados_ibge_demografia = (
+        pl.concat(chunk_list).sort(["id_ibge7", "ano_censo", "ordem", "sexo"])
+    )
+    _df_dados_ibge_demografia.write_parquet(
+        _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH,
+        compression="zstd",
+    )
+
+
 def _sync_movimentacao(engine, progress_callback):
     """Tarefa 2: Sincroniza a movimentação mensal (Tabela Grande)."""
     global _df_movimentacao
@@ -1524,7 +1687,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1569,6 +1732,29 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             "teia_fonte_nivel2": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel3": {"is_cadunico", "is_falecido"},
             "teia_fonte_nivel4": {"is_cadunico", "is_falecido"},
+            "analise_gtin_inconsistencia_clinica": {
+                "id_cnpj",
+                "patologia",
+                "regra_clinica",
+                "ano_base",
+                "qtd_cpfs_distintos",
+                "qtd_cpfs_incompativeis",
+                "qtd_autorizacoes",
+                "qtd_autorizacoes_incompativeis",
+                "valor_total_pago",
+                "valor_incompativel_pago",
+                "dt_processamento",
+            },
+            "dados_ibge_demografia": {
+                "id_ibge7",
+                "grupo_idade",
+                "sexo",
+                "nu_populacao",
+                "ano_censo",
+                "idade_min",
+                "idade_max",
+                "ordem",
+            },
             "volume_atipico_semestral": {
                 "id_cnpj",
                 "chave_semestre",
@@ -1736,6 +1922,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel3 = _try_load("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
         _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
+        _df_analise_gtin_inconsistencia_clinica = _try_load("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)
+        _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
         _df_esocial_cnpj_trabalhador_ano = _try_load("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)
@@ -1771,6 +1959,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Localidades",           "weight": 2,  "func": lambda cb: _sync_localidades(engine, cb)},
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
+        {"name": "Analise Clinica por Patologia", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica(engine, cb)},
+        {"name": "Demografia IBGE",       "weight": 2,  "func": lambda cb: _sync_dados_ibge_demografia(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Metadados das Bases",   "weight": 1,  "func": lambda cb: _sync_sentinela_metadados_base(engine, cb)},
@@ -1901,6 +2091,16 @@ def get_medicamentos_df() -> pl.DataFrame:
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 
+def get_df_analise_gtin_inconsistencia_clinica() -> pl.DataFrame:
+    if _df_analise_gtin_inconsistencia_clinica is None:
+        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica nao carregado. Execute uma sincronizacao.")
+    return _df_analise_gtin_inconsistencia_clinica
+
+def get_df_dados_ibge_demografia() -> pl.DataFrame:
+    if _df_dados_ibge_demografia is None:
+        raise RuntimeError("Cache de Demografia IBGE nao carregado. Execute uma sincronizacao.")
+    return _df_dados_ibge_demografia
+
 def get_df_volume_atipico_semestral() -> pl.DataFrame:
     if _df_volume_atipico_semestral is None:
         raise RuntimeError("Cache de Volume Atipico Semestral nao carregado. Execute uma sincronizacao.")
@@ -1958,6 +2158,8 @@ def get_cache_status() -> dict:
         "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
         "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
+        "analise_gtin_inconsistencia_clinica": {"label": "Analise Clinica por Patologia", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica is not None},
+        "dados_ibge_demografia": {"label": "Demografia IBGE", "path": _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH, "loaded": _df_dados_ibge_demografia is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
         "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},
         "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_trabalhador_ano is not None},

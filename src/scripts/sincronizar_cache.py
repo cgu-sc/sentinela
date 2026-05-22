@@ -21,9 +21,11 @@ sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
 
 from database import engine
 from data_cache import (
+    _sync_analise_gtin_inconsistencia_clinica,
     _sync_cnpj_parquets,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
+    _sync_dados_ibge_demografia,
     _sync_dados_par,
     _sync_dados_socios,
     _sync_esocial,
@@ -40,36 +42,38 @@ from data_cache import (
     _sync_volume_atipico_semestral,
 )
 
-MODULOS = [
-    {"id": 12, "name": "Volume Atipico Semestral", "func": _sync_volume_atipico_semestral, "peso": "~medio"},
-    {"id": 16, "name": "Contexto eSocial, Ultima Mov. e Periodo Sem Func.", "func": _sync_esocial, "peso": "~rapido"},
-    {"id": 17, "name": "Metadados das Bases", "func": _sync_sentinela_metadados_base, "peso": "~rapido"},
-    {"id": 14, "name": "Indicadores PAR", "func": _sync_dados_par, "peso": "~rapido"},
-    {"id": 1, "name": "Localidades (IBGE)", "func": _sync_localidades, "peso": "~rapido"},
-    {"id": 2, "name": "Rede de Estabelecimentos", "func": _sync_rede, "peso": "~rapido"},
-    {"id": 3, "name": "Matriz de Risco", "func": _sync_matriz_risco, "peso": "~medio"},
-    {"id": 4, "name": "Falecidos por Farmacia", "func": _sync_falecidos, "peso": "~medio"},
-    {"id": 5, "name": "Benchmarks CRM", "func": _sync_crm_benchmarks, "peso": "~rapido"},
-    {"id": 7, "name": "Dados das Farmacias", "func": _sync_dados_farmacia, "peso": "~medio"},
-    {"id": 13, "name": "Perfil Estabelecimentos", "func": _sync_perfil_estabelecimento, "peso": "~medio"},
-    {"id": 8, "name": "Movimentacao Mensal", "func": _sync_movimentacao, "peso": "~muito pesado"},
-    {"id": 9, "name": "Cadastro de Medicamentos", "func": _sync_medicamentos, "peso": "~rapido"},
-    {"id": 10, "name": "Dados dos Socios", "func": _sync_dados_socios, "peso": "~medio"},
-    {"id": 11, "name": "Teia (Expansao Grau 2, 3 e 4)", "func": _sync_teia_expansao_completa, "peso": "~pesado"},
-    {"id": 15, "name": "PAR na Teia dos Alvos", "func": _sync_par_teia_alvos, "peso": "~rapido"},
-    {"id": 6, "name": "Todos por CNPJ (parquets)", "func": _sync_cnpj_parquets, "peso": "~muito pesado"},
-]
+MODULOS = sorted([
+    {"id": 1, "name": "Localidades", "func": _sync_localidades, "peso": "rapido"},
+    {"id": 2, "name": "Rede", "func": _sync_rede, "peso": "rapido"},
+    {"id": 3, "name": "Matriz risco", "func": _sync_matriz_risco, "peso": "medio"},
+    {"id": 18, "name": "Clinica anual", "func": _sync_analise_gtin_inconsistencia_clinica, "peso": "rapido"},
+    {"id": 19, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido"},
+    {"id": 12, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio"},
+    {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido"},
+    {"id": 17, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido"},
+    {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido"},
+    {"id": 7, "name": "Farmacias", "func": _sync_dados_farmacia, "peso": "medio"},
+    {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio"},
+    {"id": 4, "name": "Falecidos", "func": _sync_falecidos, "peso": "medio"},
+    {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido"},
+    {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado"},
+    {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido"},
+    {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
+    {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado"},
+    {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido"},
+    {"id": 6, "name": "CNPJ parquets", "func": _sync_cnpj_parquets, "peso": "muito pesado"},
+], key=lambda modulo: modulo["id"])
 
 
 def exibir_menu():
-    print("\n" + "=" * 55)
-    print("   SENTINELA - SINCRONIZACAO SELETIVA DE CACHE")
-    print("=" * 55)
+    print("\n" + "=" * 46)
+    print(" SENTINELA - SYNC CACHE")
+    print("=" * 46)
     for m in MODULOS:
-        print(f"  [{m['id']}] {m['name']:<35} {m['peso']}")
-    print("-" * 55)
+        print(f" [{m['id']:>2}] {m['name']:<18} {m['peso']}")
+    print("-" * 46)
     print("  [0] Sincronizar TODOS os modulos")
-    print("=" * 55)
+    print("=" * 46)
 
 
 def selecionar_modulos() -> list[dict]:
@@ -99,8 +103,7 @@ def selecionar_modulos() -> list[dict]:
     if erros:
         print(f"\nAviso: opcoes ignoradas (invalidas): {', '.join(erros)}")
 
-    ordem = {m["id"]: i for i, m in enumerate(MODULOS)}
-    return sorted(selecionados, key=lambda m: ordem[m["id"]])
+    return sorted(selecionados, key=lambda m: m["id"])
 
 
 def perguntar_params(selecionados: list[dict]) -> None:

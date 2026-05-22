@@ -39,6 +39,13 @@ def _as_optional_float(value: Any) -> float | None:
         return None
 
 
+def _required_positive_float(value: Any, field_name: str, context: str) -> float:
+    number = _as_optional_float(value)
+    if number is None or number <= 0:
+        raise ValueError(f"Campo obrigatorio {field_name} ausente ou invalido em {context}.")
+    return number
+
+
 def _format_optional_decimal_pt(value: Any, decimals: int = 1, empty: str = "n.c.") -> str:
     number = _as_optional_float(value)
     if number is None:
@@ -72,6 +79,14 @@ def _as_int(value: Any) -> int:
 
 def _select_crm_concentracao_table_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in rows if _as_float(row.get("taxa_hora")) > 30]
+
+
+def _select_crm_unico_concentracao_table_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if _required_positive_float(row.get("taxa_hora"), "taxa_hora", "alerta de CRM unico") > 30
+    ]
 
 
 def _crm_event_key(row: dict[str, Any]) -> tuple[str, int]:
@@ -786,6 +801,7 @@ def _build_crm_evidencias_complementares_context(
             if nu_prescricoes <= 0:
                 continue
             nu_minutos_intervalo_raw = alerta.get("nu_minutos_intervalo")
+            taxa_hora = _required_positive_float(alerta.get("taxa_hora"), "taxa_hora", "alerta de CRM unico")
             if id_medico:
                 crm_unico_medicos.add(id_medico)
             crm_unico_rows.append({
@@ -799,7 +815,7 @@ def _build_crm_evidencias_complementares_context(
                     if nu_minutos_intervalo_raw is not None
                     else None
                 ),
-                "taxa_hora": _as_float(alerta.get("taxa_hora")),
+                "taxa_hora": taxa_hora,
                 "id_severidade": _as_int(alerta.get("id_severidade")),
                 "dt_ini_hora": alerta.get("dt_ini_hora"),
                 "dt_fim_hora": alerta.get("dt_fim_hora"),
@@ -865,7 +881,7 @@ def _build_crm_evidencias_complementares_context(
         reverse=True,
     )
     crm_unico_rows.sort(
-        key=lambda item: (item["taxa_hora"], item["nu_prescricoes"], item["id_severidade"]),
+        key=lambda item: (_as_float(item.get("taxa_hora")), item["nu_prescricoes"], item["id_severidade"]),
         reverse=True,
     )
     crms_multiplos_rows.sort(
@@ -987,7 +1003,7 @@ def _build_crm_evidencias_complementares_context(
     surtos_multiplos_top = _select_crm_concentracao_table_rows(surtos_multiplos)
     if surtos_multiplos_top:
         _enrich_crm_multiplo_valores(cnpj, surtos_multiplos_top)
-    crm_unico_top_rows = _select_crm_concentracao_table_rows(crm_unico_rows)
+    crm_unico_top_rows = _select_crm_unico_concentracao_table_rows(crm_unico_rows)
     if crm_unico_top_rows:
         _enrich_crm_unico_valores(cnpj, crm_unico_top_rows)
     crm_unico_top_medicos = {
@@ -1283,7 +1299,11 @@ def _add_crm_unico_complementar_text(
     )
     _run(p, "O episódio de maior ritmo observado concentrou ", color="0F172A", size=10)
     _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
-    ritmo_principal = _as_float(principal.get("taxa_hora"))
+    ritmo_principal = (
+        _required_positive_float(principal.get("taxa_hora"), "taxa_hora", "principal alerta de CRM unico")
+        if principal
+        else 0.0
+    )
     _run(
         p,
         (
@@ -1311,6 +1331,7 @@ def _add_crm_unico_complementar_text(
         crm_row, uf_row = _crm_num_uf(row.get("id_medico"))
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         intervalo = row.get("nu_minutos_intervalo")
+        taxa_hora = _required_positive_float(row.get("taxa_hora"), "taxa_hora", "alerta de CRM unico")
         values = [
             _format_datetime_br_minute(row.get("dt_ini_hora") or row.get("dt")),
             _format_datetime_br_minute(row.get("dt_fim_hora") or row.get("dt")),
@@ -1318,7 +1339,7 @@ def _add_crm_unico_complementar_text(
             str(row.get("no_medico") or "Não localizado"),
             str(_as_int(row.get("nu_prescricoes"))),
             _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
-            f'{_format_decimal_pt(_as_float(row.get("taxa_hora")), 1)}/h',
+            f'{_format_decimal_pt(taxa_hora, 1)}/h',
             f'R$ {_format_decimal_pt(_as_float(row.get("valor_alerta")), 2)}'
             if row.get("valor_alerta_disponivel")
             else "N/d",

@@ -566,10 +566,12 @@ def get_crm_data(
         for r in _cm.iter_rows(named=True):
             nu_prescricoes = _to_int(r.get("nu_prescricoes"))
             nu_minutos = _to_int(r.get("nu_minutos_intervalo") or r.get("nu_minutos_span"))
-            nu_minutos_ritmo = _to_int(r.get("nu_minutos_span"))
             taxa_hora = _to_float(r.get("taxa_hora"))
-            if taxa_hora <= 0 and nu_minutos_ritmo > 0:
-                taxa_hora = nu_prescricoes * 60.0 / nu_minutos_ritmo
+            if taxa_hora <= 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Campo obrigatorio taxa_hora ausente ou invalido em alerta de concentracao CRM multiplo.",
+                )
             cnpj_alerts_list.append({
                 "tipo": "MULTIPLO",
                 "dt": str(r["dt_alerta"]),

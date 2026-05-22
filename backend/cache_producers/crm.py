@@ -20,7 +20,7 @@ from cache_files import (
 )
 from cache_producers.types import CacheLoadResult
 
-_CRM_ALERTS_CACHE_VERSION = 3
+_CRM_ALERTS_CACHE_VERSION = 4
 _CRM_SEVERITY_CACHE_VERSION = 2
 _CRM_RAIOX_TX_CACHE_VERSION = 3
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)

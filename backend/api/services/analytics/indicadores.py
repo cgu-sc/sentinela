@@ -479,6 +479,10 @@ def _build_indicador_cnpj_rows(
 ) -> list[IndicadorCnpjRowSchema]:
     rows: list[IndicadorCnpjRowSchema] = []
     for row in df.iter_rows(named=True):
+        is_matriz = row["is_matriz"]
+        if is_matriz is None:
+            raise ValueError("Campo obrigatorio is_matriz ausente para CNPJ em indicadores.")
+
         rows.append(IndicadorCnpjRowSchema(
             cnpj=str(row["cnpj"]),
             razao_social=row.get("razao_social"),
@@ -489,6 +493,7 @@ def _build_indicador_cnpj_rows(
             med_reg=_optional_float(row.get(c_mr)),
             risco_reg=_optional_float(row.get(rr_col)) if rr_col else None,
             status=row.get("status", "SEM DADOS"),
+            is_matriz=bool(is_matriz),
             is_grande_rede=bool(row.get("is_grande_rede", False)),
             qtd_estabelecimentos_rede=int(row["qtd_estabelecimentos_rede"]),
             situacao_rf=row.get("situacao_rf"),
@@ -799,6 +804,7 @@ def get_indicadores_analise_cnpjs(
             "med_reg": c_mr,
             "risco_reg": rr_col,
             "status": "status",
+            "is_matriz": "is_matriz",
             "is_conexao_ativa": "is_conexao_ativa",
             "situacao_rf": "situacao_rf",
             "score_risco_final": score_col,

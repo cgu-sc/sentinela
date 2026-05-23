@@ -600,6 +600,7 @@ class IndicadorCnpjRowSchema(BaseModel):
     med_reg: Optional[float] = None
     risco_reg: Optional[float] = None
     status: str = "SEM DADOS"          # "CRÍTICO" | "ATENÇÃO" | "NORMAL" | "SEM DADOS"
+    is_matriz: bool
     is_grande_rede: Optional[bool] = False
     qtd_estabelecimentos_rede: int
     situacao_rf: Optional[str] = None

@@ -192,6 +192,12 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
               v-tooltip.top="data.razao_social"
             >{{ data.razao_social ?? '—' }}</span>
             <span class="cnpj-row">
+              <span
+                v-tooltip.top="data.is_matriz ? 'Matriz' : 'Filial'"
+                :class="data.is_matriz ? 'tipo-badge matriz' : 'tipo-badge filial'"
+              >
+                <i :class="data.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
+              </span>
               <span class="cnpj-text">{{ data.cnpj }}</span>
               <i
                 :class="['pi', copiedKey === data.cnpj + '-cnpj' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']"
@@ -532,6 +538,31 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  flex-shrink: 0;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.tipo-badge.matriz {
+  background: color-mix(in srgb, var(--accent-indigo) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-indigo) 35%, transparent);
+  color: var(--accent-indigo);
+}
+
+.tipo-badge.filial {
+  background: color-mix(in srgb, var(--status-secondary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-secondary) 20%, transparent);
+  color: var(--status-secondary);
 }
 
 .cnpj-text {

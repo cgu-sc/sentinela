@@ -38,7 +38,6 @@ const tabs = computed(() => {
       { label: 'Nacional',             path: '/nacional' },
       { label: 'Municípios',           path: '/municipios' },
       { label: 'Estabelecimentos',     path: '/estabelecimentos' },
-      { label: 'Indicadores',          path: '/indicadores' },
 
     ];
   } else {
@@ -62,7 +61,7 @@ onMounted(() => {
 watch(activeModule, (newVal) => {
   if (
     newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:nacional|municipios|empresa|estabelecimentos|indicadores|regional|listas|$)/)
+    !route.path.match(/^\/(?:nacional|municipios|empresa|estabelecimentos|regional|listas|$)/)
   ) {
     router.push('/');
   } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {

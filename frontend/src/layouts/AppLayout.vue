@@ -15,7 +15,7 @@ const activeModule = ref("consolidado");
 
 // Lógica Profissional: Esconde a sidebar se a rota atual pedir via meta: { hideSidebar: true }
 const isSidebarHidden = computed(() => !!route.meta?.hideSidebar);
-const isIndicadoresRoute = computed(() => route.path.startsWith("/indicadores"));
+const isAnalysisRoute = computed(() => route.path === "/estabelecimentos");
 
 onMounted(() => {});
 </script>
@@ -26,7 +26,7 @@ onMounted(() => {});
     :class="{ 
       collapsed: filterStore.sidebarCollapsed,
       'no-sidebar': isSidebarHidden,
-      'indicadores-route': isIndicadoresRoute
+      'analysis-route': isAnalysisRoute
     }"
   >
     <AppNavbar v-model="activeModule" />
@@ -108,7 +108,7 @@ onMounted(() => {});
   background: transparent !important;
 }
 
-.admin-layout.indicadores-route .page-content {
+.admin-layout.analysis-route .page-content {
   padding-bottom: 0;
 }
 

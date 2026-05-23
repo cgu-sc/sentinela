@@ -789,7 +789,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   opacity: 0.45;
 }
 
-/* ── Deep overrides (padrão CnpjTable) ── */
+/* ── Deep overrides da tabela de estabelecimentos por indicador ── */
 :deep(.clickable-rows .p-datatable-tbody > tr) {
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -980,7 +980,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   letter-spacing: 0.03em;
 }
 
-/* DESTAQUE DE ALTO VALOR (Sincronizado com CnpjTable) */
+/* DESTAQUE DE ALTO VALOR */
 .high-value-audit {
   color: var(--risk-high);
   font-weight: 600;

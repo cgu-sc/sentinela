@@ -372,9 +372,6 @@ const isFilterActive = (field) => {
   return value !== defaultValue;
 };
 
-const isIndicadoresRoute = computed(() =>
-  route.path.startsWith("/indicadores"),
-);
 const periodFilterLocked = computed(
   () => filtersLocked.value && !isPeriodOnlyRoute.value,
 );

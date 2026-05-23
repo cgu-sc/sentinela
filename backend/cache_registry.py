@@ -33,6 +33,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("medicamentos", cache_files.MEDICAMENTOS_PARQUET, "global"),
     CacheDefinition("analise_gtin_inconsistencia_clinica", cache_files.ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET, "global"),
     CacheDefinition("analise_gtin_inconsistencia_clinica_municipio", cache_files.ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET, "global"),
+    CacheDefinition("analise_gtin_inconsistencia_clinica_regiao", cache_files.ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET, "global"),
     CacheDefinition("dados_ibge_demografia", cache_files.DADOS_IBGE_DEMOGRAFIA_PARQUET, "global"),
     CacheDefinition("volume_atipico_semestral", cache_files.VOLUME_ATIPICO_SEMESTRAL_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_ano", cache_files.ESOCIAL_CNPJ_ANO_PARQUET, "global"),

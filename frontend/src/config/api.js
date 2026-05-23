@@ -58,6 +58,19 @@ export const API_ENDPOINTS = {
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
   analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
   analyticsIndicadoresAnaliseCnpjs: `${BASE_URL}/api/v1/analytics/indicadores-analise/cnpjs`,
+  analyticsMunicipioPatologias: (idIbge7, patologia = null, anoBase = null) => {
+    const params = new URLSearchParams();
+    if (patologia) params.set('patologia', patologia);
+    if (anoBase) params.set('ano_base', String(anoBase));
+    const query = params.toString();
+    return `${BASE_URL}/api/v1/analytics/municipio/${idIbge7}/patologias${query ? `?${query}` : ''}`;
+  },
+  analyticsMunicipioParkinson: (idIbge7, anoBase = null) => {
+    const params = new URLSearchParams();
+    if (anoBase) params.set('ano_base', String(anoBase));
+    const query = params.toString();
+    return `${BASE_URL}/api/v1/analytics/municipio/${idIbge7}/parkinson${query ? `?${query}` : ''}`;
+  },
   analyticsConfigThresholds: `${BASE_URL}/api/v1/analytics/config/thresholds`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,

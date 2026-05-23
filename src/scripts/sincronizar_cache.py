@@ -23,6 +23,7 @@ from database import engine
 from data_cache import (
     _sync_analise_gtin_inconsistencia_clinica,
     _sync_analise_gtin_inconsistencia_clinica_municipio,
+    _sync_analise_gtin_inconsistencia_clinica_regiao,
     _sync_cnpj_parquets,
     _sync_crm_benchmarks,
     _sync_dados_farmacia,
@@ -45,17 +46,22 @@ from data_cache import (
 
 
 def _sync_clinica_anual_completa(engine, progress_callback=None):
-    """Sincroniza os parquets clinicos anual por CNPJ e por municipio."""
+    """Sincroniza os parquets clinicos anual por CNPJ, municipio e regiao."""
     def progress_cnpj(p: int):
         if progress_callback:
-            progress_callback(int(p * 0.5))
+            progress_callback(int(p / 3))
 
     def progress_municipio(p: int):
         if progress_callback:
-            progress_callback(50 + int(p * 0.5))
+            progress_callback(33 + int(p / 3))
+
+    def progress_regiao(p: int):
+        if progress_callback:
+            progress_callback(66 + int(p / 3))
 
     _sync_analise_gtin_inconsistencia_clinica(engine, progress_cnpj)
     _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_municipio)
+    _sync_analise_gtin_inconsistencia_clinica_regiao(engine, progress_regiao)
 
     if progress_callback:
         progress_callback(100)
@@ -67,6 +73,7 @@ MODULOS = sorted([
     {"id": 3, "name": "Matriz risco", "func": _sync_matriz_risco, "peso": "medio"},
     {"id": 18, "name": "Clinica anual completa", "func": _sync_clinica_anual_completa, "peso": "rapido"},
     {"id": 20, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido"},
+    {"id": 21, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido"},
     {"id": 19, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido"},
     {"id": 12, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio"},
     {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido"},

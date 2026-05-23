@@ -51,6 +51,7 @@ _TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
 _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_municipio")
+_ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_regiao")
 _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH = _global_cache_path("dados_ibge_demografia")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
 _ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
@@ -81,6 +82,7 @@ _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica: pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica_municipio: pl.DataFrame | None = None
+_df_analise_gtin_inconsistencia_clinica_regiao: pl.DataFrame | None = None
 _df_dados_ibge_demografia: pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
 _df_esocial_cnpj_ano: pl.DataFrame | None = None
@@ -1414,11 +1416,13 @@ def _sync_medicamentos(engine, progress_callback=None):
 
 
 def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
-    """Sincroniza a evolucao anual por farmacia e patologia da inconsistencia clinica."""
+    """Sincroniza o agregado CNPJ com contexto regional da inconsistencia clinica."""
     global _df_analise_gtin_inconsistencia_clinica
     print("Sincronizando Analise GTIN x Inconsistencia Clinica...")
     required = {
         "id_cnpj",
+        "id_regiao_saude",
+        "id_ibge7",
         "patologia",
         "regra_clinica",
         "ano_base",
@@ -1428,12 +1432,25 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
         "qtd_autorizacoes_incompativeis",
         "valor_total_pago",
         "valor_incompativel_pago",
+        "percentual_cpfs_incompativeis",
+        "rank_regional_qtd_cpfs_incompativeis",
+        "rank_regional_valor_incompativel_pago",
+        "percentil_regional_qtd_cpfs_incompativeis",
+        "percentil_regional_valor_incompativel_pago",
+        "participacao_cpfs_incompativeis_regiao",
+        "participacao_valor_incompativel_regiao",
+        "percentual_regional_cpfs_incompativeis",
+        "razao_percentual_vs_regiao",
+        "cpfs_incompativeis_esperados_regiao",
+        "excesso_cpfs_incompativeis_vs_regiao",
         "dt_processamento",
     }
     total_rows = _assert_fp_source_table(engine, "analise_gtin_inconsistencia_clinica", required)
     sql = """
         SELECT
             id_cnpj,
+            id_regiao_saude,
+            id_ibge7,
             patologia,
             regra_clinica,
             ano_base,
@@ -1443,6 +1460,17 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
             qtd_autorizacoes_incompativeis,
             CAST(valor_total_pago AS FLOAT) AS valor_total_pago,
             CAST(valor_incompativel_pago AS FLOAT) AS valor_incompativel_pago,
+            CAST(percentual_cpfs_incompativeis AS FLOAT) AS percentual_cpfs_incompativeis,
+            rank_regional_qtd_cpfs_incompativeis,
+            rank_regional_valor_incompativel_pago,
+            CAST(percentil_regional_qtd_cpfs_incompativeis AS FLOAT) AS percentil_regional_qtd_cpfs_incompativeis,
+            CAST(percentil_regional_valor_incompativel_pago AS FLOAT) AS percentil_regional_valor_incompativel_pago,
+            CAST(participacao_cpfs_incompativeis_regiao AS FLOAT) AS participacao_cpfs_incompativeis_regiao,
+            CAST(participacao_valor_incompativel_regiao AS FLOAT) AS participacao_valor_incompativel_regiao,
+            CAST(percentual_regional_cpfs_incompativeis AS FLOAT) AS percentual_regional_cpfs_incompativeis,
+            CAST(razao_percentual_vs_regiao AS FLOAT) AS razao_percentual_vs_regiao,
+            CAST(cpfs_incompativeis_esperados_regiao AS FLOAT) AS cpfs_incompativeis_esperados_regiao,
+            CAST(excesso_cpfs_incompativeis_vs_regiao AS FLOAT) AS excesso_cpfs_incompativeis_vs_regiao,
             dt_processamento
         FROM [temp_CGUSC].[fp].[analise_gtin_inconsistencia_clinica]
     """
@@ -1454,6 +1482,8 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
     for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
         chunk_df = pl.from_pandas(chunk).with_columns([
             pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("id_regiao_saude").cast(pl.Int64, strict=False),
+            pl.col("id_ibge7").cast(pl.String),
             pl.col("patologia").cast(pl.Categorical),
             pl.col("regra_clinica").cast(pl.Categorical),
             pl.col("ano_base").cast(pl.Int16),
@@ -1463,6 +1493,17 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
             pl.col("qtd_autorizacoes_incompativeis").cast(pl.Int32),
             pl.col("valor_total_pago").cast(pl.Float64),
             pl.col("valor_incompativel_pago").cast(pl.Float64),
+            pl.col("percentual_cpfs_incompativeis").cast(pl.Float64),
+            pl.col("rank_regional_qtd_cpfs_incompativeis").cast(pl.Int32, strict=False),
+            pl.col("rank_regional_valor_incompativel_pago").cast(pl.Int32, strict=False),
+            pl.col("percentil_regional_qtd_cpfs_incompativeis").cast(pl.Float64),
+            pl.col("percentil_regional_valor_incompativel_pago").cast(pl.Float64),
+            pl.col("participacao_cpfs_incompativeis_regiao").cast(pl.Float64),
+            pl.col("participacao_valor_incompativel_regiao").cast(pl.Float64),
+            pl.col("percentual_regional_cpfs_incompativeis").cast(pl.Float64),
+            pl.col("razao_percentual_vs_regiao").cast(pl.Float64),
+            pl.col("cpfs_incompativeis_esperados_regiao").cast(pl.Float64),
+            pl.col("excesso_cpfs_incompativeis_vs_regiao").cast(pl.Float64),
             pl.col("dt_processamento").cast(pl.Datetime, strict=False),
         ])
         chunk_list.append(chunk_df)
@@ -1472,7 +1513,7 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
             progress_callback(p)
 
     _df_analise_gtin_inconsistencia_clinica = (
-        pl.concat(chunk_list).sort(["id_cnpj", "patologia", "ano_base"])
+        pl.concat(chunk_list).sort(["id_regiao_saude", "patologia", "regra_clinica", "ano_base", "id_cnpj"])
     )
     _df_analise_gtin_inconsistencia_clinica.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
@@ -1543,6 +1584,82 @@ def _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_callbac
     )
     _df_analise_gtin_inconsistencia_clinica_municipio.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
+        compression="zstd",
+    )
+
+
+def _sync_analise_gtin_inconsistencia_clinica_regiao(engine, progress_callback=None):
+    """Sincroniza o agregado por regiao de saude da inconsistencia clinica."""
+    global _df_analise_gtin_inconsistencia_clinica_regiao
+    print("Sincronizando Analise GTIN x Inconsistencia Clinica Regional...")
+    required = {
+        "id_regiao_saude",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cnpjs_regiao",
+        "qtd_municipios_regiao",
+        "qtd_cpfs_distintos_regiao",
+        "qtd_cpfs_incompativeis_regiao",
+        "qtd_autorizacoes_regiao",
+        "qtd_autorizacoes_incompativeis_regiao",
+        "valor_total_pago_regiao",
+        "valor_incompativel_pago_regiao",
+        "percentual_cpfs_incompativeis_regiao",
+        "dt_processamento",
+    }
+    total_rows = _assert_fp_source_table(engine, "analise_gtin_inconsistencia_clinica_regiao", required)
+    sql = """
+        SELECT
+            id_regiao_saude,
+            patologia,
+            regra_clinica,
+            ano_base,
+            qtd_cnpjs_regiao,
+            qtd_municipios_regiao,
+            qtd_cpfs_distintos_regiao,
+            qtd_cpfs_incompativeis_regiao,
+            qtd_autorizacoes_regiao,
+            qtd_autorizacoes_incompativeis_regiao,
+            CAST(valor_total_pago_regiao AS FLOAT) AS valor_total_pago_regiao,
+            CAST(valor_incompativel_pago_regiao AS FLOAT) AS valor_incompativel_pago_regiao,
+            CAST(percentual_cpfs_incompativeis_regiao AS FLOAT) AS percentual_cpfs_incompativeis_regiao,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[analise_gtin_inconsistencia_clinica_regiao]
+    """
+    print(f"   -> Registros clinicos por regiao anuais: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 50_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_regiao_saude").cast(pl.Int64, strict=False),
+            pl.col("patologia").cast(pl.Categorical),
+            pl.col("regra_clinica").cast(pl.Categorical),
+            pl.col("ano_base").cast(pl.Int16),
+            pl.col("qtd_cnpjs_regiao").cast(pl.Int32),
+            pl.col("qtd_municipios_regiao").cast(pl.Int32),
+            pl.col("qtd_cpfs_distintos_regiao").cast(pl.Int32),
+            pl.col("qtd_cpfs_incompativeis_regiao").cast(pl.Int32),
+            pl.col("qtd_autorizacoes_regiao").cast(pl.Int32),
+            pl.col("qtd_autorizacoes_incompativeis_regiao").cast(pl.Int32),
+            pl.col("valor_total_pago_regiao").cast(pl.Float64),
+            pl.col("valor_incompativel_pago_regiao").cast(pl.Float64),
+            pl.col("percentual_cpfs_incompativeis_regiao").cast(pl.Float64),
+            pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        if progress_callback:
+            progress_callback(p)
+
+    _df_analise_gtin_inconsistencia_clinica_regiao = (
+        pl.concat(chunk_list).sort(["id_regiao_saude", "patologia", "regra_clinica", "ano_base"])
+    )
+    _df_analise_gtin_inconsistencia_clinica_regiao.write_parquet(
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
         compression="zstd",
     )
 
@@ -1756,7 +1873,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1803,6 +1920,8 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             "teia_fonte_nivel4": {"is_cadunico", "is_falecido"},
             "analise_gtin_inconsistencia_clinica": {
                 "id_cnpj",
+                "id_regiao_saude",
+                "id_ibge7",
                 "patologia",
                 "regra_clinica",
                 "ano_base",
@@ -1812,6 +1931,17 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "qtd_autorizacoes_incompativeis",
                 "valor_total_pago",
                 "valor_incompativel_pago",
+                "percentual_cpfs_incompativeis",
+                "rank_regional_qtd_cpfs_incompativeis",
+                "rank_regional_valor_incompativel_pago",
+                "percentil_regional_qtd_cpfs_incompativeis",
+                "percentil_regional_valor_incompativel_pago",
+                "participacao_cpfs_incompativeis_regiao",
+                "participacao_valor_incompativel_regiao",
+                "percentual_regional_cpfs_incompativeis",
+                "razao_percentual_vs_regiao",
+                "cpfs_incompativeis_esperados_regiao",
+                "excesso_cpfs_incompativeis_vs_regiao",
                 "dt_processamento",
             },
             "analise_gtin_inconsistencia_clinica_municipio": {
@@ -1825,6 +1955,22 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "qtd_autorizacoes_incompativeis_municipio",
                 "valor_total_pago_municipio",
                 "valor_incompativel_pago_municipio",
+                "dt_processamento",
+            },
+            "analise_gtin_inconsistencia_clinica_regiao": {
+                "id_regiao_saude",
+                "patologia",
+                "regra_clinica",
+                "ano_base",
+                "qtd_cnpjs_regiao",
+                "qtd_municipios_regiao",
+                "qtd_cpfs_distintos_regiao",
+                "qtd_cpfs_incompativeis_regiao",
+                "qtd_autorizacoes_regiao",
+                "qtd_autorizacoes_incompativeis_regiao",
+                "valor_total_pago_regiao",
+                "valor_incompativel_pago_regiao",
+                "percentual_cpfs_incompativeis_regiao",
                 "dt_processamento",
             },
             "dados_ibge_demografia": {
@@ -2006,6 +2152,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
         _df_analise_gtin_inconsistencia_clinica = _try_load("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)
         _df_analise_gtin_inconsistencia_clinica_municipio = _try_load("analise_gtin_inconsistencia_clinica_municipio", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH)
+        _df_analise_gtin_inconsistencia_clinica_regiao = _try_load("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
@@ -2044,6 +2191,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Analise Clinica por Patologia", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica(engine, cb)},
         {"name": "Analise Clinica Municipal", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica_municipio(engine, cb)},
+        {"name": "Analise Clinica Regiao", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica_regiao(engine, cb)},
         {"name": "Demografia IBGE",       "weight": 2,  "func": lambda cb: _sync_dados_ibge_demografia(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
@@ -2185,6 +2333,11 @@ def get_df_analise_gtin_inconsistencia_clinica_municipio() -> pl.DataFrame:
         raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica Municipal nao carregado. Execute uma sincronizacao.")
     return _df_analise_gtin_inconsistencia_clinica_municipio
 
+def get_df_analise_gtin_inconsistencia_clinica_regiao() -> pl.DataFrame:
+    if _df_analise_gtin_inconsistencia_clinica_regiao is None:
+        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica Regiao nao carregado. Execute uma sincronizacao.")
+    return _df_analise_gtin_inconsistencia_clinica_regiao
+
 def get_df_dados_ibge_demografia() -> pl.DataFrame:
     if _df_dados_ibge_demografia is None:
         raise RuntimeError("Cache de Demografia IBGE nao carregado. Execute uma sincronizacao.")
@@ -2249,6 +2402,7 @@ def get_cache_status() -> dict:
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
         "analise_gtin_inconsistencia_clinica": {"label": "Analise Clinica por Patologia", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica is not None},
         "analise_gtin_inconsistencia_clinica_municipio": {"label": "Analise Clinica Municipal", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica_municipio is not None},
+        "analise_gtin_inconsistencia_clinica_regiao": {"label": "Analise Clinica Regiao", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica_regiao is not None},
         "dados_ibge_demografia": {"label": "Demografia IBGE", "path": _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH, "loaded": _df_dados_ibge_demografia is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
         "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},

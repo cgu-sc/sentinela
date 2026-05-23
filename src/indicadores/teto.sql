@@ -2,153 +2,364 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- DEFINICAO DE VARIAVEIS DO PERIODO
+-- INDICADOR DE TETO MAXIMO POR ITEM
+-- ============================================================================
+-- OBJETIVO: Identificar farmacias com proporcao atipica de itens dispensados
+--           na quantidade maxima permitida para o principio ativo.
+--
+-- METRICA PRINCIPAL:
+--   percentual_teto representa o percentual anual de itens monitorados cuja
+--   quantidade autorizada atingiu o teto maximo parametrizado.
+--
+-- FONTE DE DADOS:
+--   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
+--   - temp_CGUSC.fp.medicamentos_patologia (GTIN e principio ativo)
+--   - temp_CGUSC.fp.posologia_tempo_bloqueio (teto por principio ativo)
+--   - temp_CGUSC.fp.dados_farmacia (id_cnpj e contexto territorial)
+-- ============================================================================
+
+-- ============================================================================
+-- LIMPEZA PREVIA DE TABELAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_detalhado;
+GO
+
+-- ============================================================================
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 1: CALCULO BASE POR FARMACIA (INDICADOR TETO MAXIMO)
--- Verifica se qualquer item da autorizacao atingiu a quantidade maxima
--- permitida para o principio ativo (posto na posologia_tempo_bloqueio).
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
 -- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'principio_ativo') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/principio_ativo.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.posologia_tempo_bloqueio', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.posologia_tempo_bloqueio nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.posologia_tempo_bloqueio', 'PRINCIPIO_ATIVO') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.posologia_tempo_bloqueio', 'QUANTIDADE_MAXIMA') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.posologia_tempo_bloqueio sem colunas obrigatorias PRINCIPIO_ATIVO/QUANTIDADE_MAXIMA.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.posologia_tempo_bloqueio
+    WHERE QUANTIDADE_MAXIMA > 0
+    GROUP BY PRINCIPIO_ATIVO
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.posologia_tempo_bloqueio possui PRINCIPIO_ATIVO duplicado com QUANTIDADE_MAXIMA valida.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'qnt_autorizada') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para teto.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #farmacias_dim;
+
+SELECT
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
+
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
+
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
+
+DROP TABLE IF EXISTS #medicamentos_teto;
+
+SELECT DISTINCT
+    C.codigo_barra,
+    CAST(P.QUANTIDADE_MAXIMA AS DECIMAL(18,4)) AS quantidade_maxima
+INTO #medicamentos_teto
+FROM temp_CGUSC.fp.medicamentos_patologia C
+INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P
+    ON P.PRINCIPIO_ATIVO = C.principio_ativo
+WHERE C.codigo_barra IS NOT NULL
+  AND C.principio_ativo IS NOT NULL
+  AND P.QUANTIDADE_MAXIMA > 0;
+
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_teto)
+BEGIN
+    RAISERROR('Nao ha medicamentos com teto maximo valido para monitoramento.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM #medicamentos_teto
+    GROUP BY codigo_barra
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Um mesmo codigo_barra esta associado a mais de um teto maximo. Corrija o mapeamento antes de executar.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_teto_gtin
+ON #medicamentos_teto(codigo_barra);
+
+
+-- ============================================================================
+-- PASSO 1: CALCULO BASE POR ITEM/FARMACIA/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS #ItensTetoAgregado;
+
+SELECT
+    F.id_cnpj,
+    CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
+    COUNT_BIG(*) AS total_itens_monitorados,
+    COUNT_BIG(A.qnt_autorizada) AS total_itens_com_qnt_autorizada,
+    COUNT_BIG(A.valor_pago) AS total_itens_com_valor_pago,
+    SUM(CAST(
+        CASE
+            WHEN CAST(A.qnt_autorizada AS DECIMAL(18,4)) >= M.quantidade_maxima
+                THEN 1
+            ELSE 0
+        END AS BIGINT
+    )) AS qtd_itens_teto_maximo,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_monitorado,
+    CAST(SUM(CAST(
+        CASE
+            WHEN CAST(A.qnt_autorizada AS DECIMAL(18,4)) >= M.quantidade_maxima
+                THEN A.valor_pago
+            ELSE 0
+        END AS DECIMAL(19,2)
+    )) AS DECIMAL(19,2)) AS valor_itens_teto_maximo
+INTO #ItensTetoAgregado
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+INNER JOIN #farmacias_dim F
+    ON F.cnpj = A.cnpj
+INNER JOIN #medicamentos_teto M
+    ON M.codigo_barra = A.codigo_barra
+WHERE A.data_hora >= @DataInicio
+  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+  AND A.codigo_barra IS NOT NULL
+GROUP BY
+    F.id_cnpj,
+    YEAR(A.data_hora);
+
+IF NOT EXISTS (SELECT 1 FROM #ItensTetoAgregado)
+BEGIN
+    RAISERROR('Nao ha itens monitorados para calcular o indicador de teto.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM #ItensTetoAgregado
+    WHERE total_itens_monitorados <> total_itens_com_qnt_autorizada
+       OR total_itens_monitorados <> total_itens_com_valor_pago
+)
+BEGIN
+    RAISERROR('Existem itens monitorados com qnt_autorizada ou valor_pago nulo.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_ItensTetoAgregado_CNPJ_Ano
+ON #ItensTetoAgregado(id_cnpj, ano_base);
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto;
 
-WITH VendasComTeto AS (
-    SELECT
-        A.cnpj,
-        A.num_autorizacao,
-        MAX(CASE
-            WHEN A.qnt_autorizada >= P.QUANTIDADE_MAXIMA THEN 1
-            ELSE 0
-        END) AS flag_venda_atingiu_teto
-
-    FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-    INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
-        ON C.codigo_barra = A.codigo_barra
-    INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P
-        ON P.PRINCIPIO_ATIVO = C.principio_ativo
-
-    WHERE
-        A.data_hora >= @DataInicio
-        AND A.data_hora <= @DataFim
-        AND P.QUANTIDADE_MAXIMA > 0
-
-    GROUP BY A.cnpj, A.num_autorizacao
-),
-AgregadoPorFarmacia AS (
-    SELECT
-        cnpj,
-        COUNT(*)                      AS total_vendas_monitoradas,
-        SUM(flag_venda_atingiu_teto)  AS qtd_vendas_teto_maximo
-    FROM VendasComTeto
-    GROUP BY cnpj
-)
 SELECT
-    cnpj,
-    total_vendas_monitoradas,
-    qtd_vendas_teto_maximo,
+    id_cnpj,
+    ano_base,
+    total_itens_monitorados,
+    qtd_itens_teto_maximo,
     CAST(
-        CASE
-            WHEN total_vendas_monitoradas > 0 THEN
-                (CAST(qtd_vendas_teto_maximo AS DECIMAL(18,2)) /
-                 CAST(total_vendas_monitoradas AS DECIMAL(18,2))) * 100.0
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS percentual_teto
-
+        (
+            CAST(qtd_itens_teto_maximo AS DECIMAL(19,4)) /
+            CAST(total_itens_monitorados AS DECIMAL(19,4))
+        ) * 100.0
+    AS DECIMAL(7,4)) AS percentual_teto,
+    valor_total_monitorado,
+    valor_itens_teto_maximo
 INTO temp_CGUSC.fp.indicador_teto
-FROM AgregadoPorFarmacia
-WHERE total_vendas_monitoradas > 0;
+FROM #ItensTetoAgregado;
 
-CREATE CLUSTERED INDEX IDX_IndTeto_CNPJ ON temp_CGUSC.fp.indicador_teto(cnpj);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTeto_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_teto(id_cnpj, ano_base);
+
+DROP TABLE IF EXISTS #ItensTetoAgregado;
+DROP TABLE IF EXISTS #medicamentos_teto;
 
 
 -- ============================================================================
--- PASSO 2: METRICAS POR MUNICIPIO (MEDIA E MEDIANA)
+-- PASSO 2: METRICAS POR MUNICIPIO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_mun;
 
 SELECT DISTINCT
+    I.ano_base,
     F.uf,
     F.municipio,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
+        OVER (PARTITION BY I.ano_base, F.uf, F.municipio)
+    AS DECIMAL(7,4)) AS mediana_municipio
 INTO temp_CGUSC.fp.indicador_teto_mun
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_teto I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndTetoMun ON temp_CGUSC.fp.indicador_teto_mun(uf, municipio);
+CREATE CLUSTERED INDEX IDX_IndTetoMun
+ON temp_CGUSC.fp.indicador_teto_mun(ano_base, uf, municipio);
 
 
 -- ============================================================================
--- PASSO 3: METRICAS POR ESTADO (MEDIA E MEDIANA)
+-- PASSO 3: METRICAS POR ESTADO (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
 
 SELECT DISTINCT
+    I.ano_base,
     F.uf,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
+        OVER (PARTITION BY I.ano_base, F.uf)
+    AS DECIMAL(7,4)) AS mediana_estado
 INTO temp_CGUSC.fp.indicador_teto_uf
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_teto I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndTetoUF ON temp_CGUSC.fp.indicador_teto_uf(uf);
+CREATE CLUSTERED INDEX IDX_IndTetoUF
+ON temp_CGUSC.fp.indicador_teto_uf(ano_base, uf);
 
 
 -- ============================================================================
--- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
+-- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
 
 SELECT DISTINCT
+    I.ano_base,
     F.id_regiao_saude,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(ISNULL(I.percentual_teto, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
+        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
+    AS DECIMAL(7,4)) AS mediana_regiao
 INTO temp_CGUSC.fp.indicador_teto_regiao
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_teto I ON I.cnpj = F.cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj;
 
-CREATE CLUSTERED INDEX IDX_IndTetoReg ON temp_CGUSC.fp.indicador_teto_regiao(id_regiao_saude);
+CREATE CLUSTERED INDEX IDX_IndTetoReg
+ON temp_CGUSC.fp.indicador_teto_regiao(ano_base, id_regiao_saude);
 
 
 -- ============================================================================
--- PASSO 4: METRICAS NACIONAIS (MEDIA E MEDIANA)
+-- PASSO 4: METRICAS NACIONAIS (MEDIANA)
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
 
 SELECT DISTINCT
-    'BR' AS pais,
+    ano_base,
     CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_teto, 0)) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(ISNULL(percentual_teto, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_teto)
+        OVER (PARTITION BY ano_base)
+    AS DECIMAL(7,4)) AS mediana_pais
 INTO temp_CGUSC.fp.indicador_teto_br
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_teto I ON I.cnpj = F.cnpj;
+FROM temp_CGUSC.fp.indicador_teto;
+
+CREATE CLUSTERED INDEX IDX_IndTetoBR
+ON temp_CGUSC.fp.indicador_teto_br(ano_base);
 
 
 -- ============================================================================
@@ -157,76 +368,46 @@ LEFT JOIN temp_CGUSC.fp.indicador_teto I ON I.cnpj = F.cnpj;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_detalhado;
 
 SELECT
-    F.cnpj,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.no_regiao_saude,
-    F.id_regiao_saude,
+    I.id_cnpj,
+    I.ano_base,
+    I.total_itens_monitorados,
+    I.qtd_itens_teto_maximo,
+    I.percentual_teto,
+    I.valor_total_monitorado,
+    I.valor_itens_teto_maximo,
 
-    -- Indicadores base
-    ISNULL(I.total_vendas_monitoradas, 0) AS total_vendas_monitoradas,
-    ISNULL(I.qtd_vendas_teto_maximo,   0) AS qtd_vendas_teto_maximo,
-    ISNULL(I.percentual_teto,         0) AS percentual_teto,
+    MUN.mediana_municipio AS municipio_mediana,
+    CAST((I.percentual_teto + 0.01) / (MUN.mediana_municipio + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
 
-    -- Rankings (pior risco = posicao 1)
-    RANK() OVER (
-        ORDER BY ISNULL(I.percentual_teto, 0) DESC
-    ) AS ranking_br,
-    RANK() OVER (
-        PARTITION BY F.uf
-        ORDER BY ISNULL(I.percentual_teto, 0) DESC
-    ) AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY F.id_regiao_saude
-        ORDER BY ISNULL(I.percentual_teto, 0) DESC
-    ) AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY F.uf, F.municipio
-        ORDER BY ISNULL(I.percentual_teto, 0) DESC
-    ) AS ranking_municipio,
+    UF.mediana_estado AS estado_mediana,
+    CAST((I.percentual_teto + 0.01) / (UF.mediana_estado + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
 
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+    REG.mediana_regiao AS regiao_saude_mediana,
+    CAST((I.percentual_teto + 0.01) / (REG.mediana_regiao + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
 
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
-
-    -- Benchmarks Regionais (Regiao de Saude)
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
-
-    -- Benchmarks nacionais
     BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_teto, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
-
+    CAST((I.percentual_teto + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
 INTO temp_CGUSC.fp.indicador_teto_detalhado
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_teto I
-    ON I.cnpj = F.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_teto_mun MUN
-    ON F.uf        = MUN.uf
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+INNER JOIN temp_CGUSC.fp.indicador_teto_mun MUN
+    ON I.ano_base = MUN.ano_base
+   AND F.uf = MUN.uf
    AND F.municipio = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_teto_uf UF
-    ON F.uf = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_teto_regiao REG
-    ON F.id_regiao_saude = REG.id_regiao_saude
-CROSS JOIN temp_CGUSC.fp.indicador_teto_br BR;
+INNER JOIN temp_CGUSC.fp.indicador_teto_uf UF
+    ON I.ano_base = UF.ano_base
+   AND F.uf = UF.uf
+INNER JOIN temp_CGUSC.fp.indicador_teto_regiao REG
+    ON I.ano_base = REG.ano_base
+   AND F.id_regiao_saude = REG.id_regiao_saude
+INNER JOIN temp_CGUSC.fp.indicador_teto_br BR
+    ON I.ano_base = BR.ano_base;
 
-CREATE CLUSTERED INDEX    IDX_FinalTeto_CNPJ  ON temp_CGUSC.fp.indicador_teto_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalTeto_Risco ON temp_CGUSC.fp.indicador_teto_detalhado(risco_relativo_mun_mediana DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalTeto_Rank  ON temp_CGUSC.fp.indicador_teto_detalhado(ranking_br);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalTeto_CNPJ
+ON temp_CGUSC.fp.indicador_teto_detalhado(id_cnpj, ano_base);
 GO
+
 
 -- ============================================================================
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
@@ -236,9 +417,5 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_mun;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
+DROP TABLE IF EXISTS #farmacias_dim;
 GO
-
--- Verificacao rapida
-SELECT TOP 100 *
-FROM temp_CGUSC.fp.indicador_teto_detalhado
-ORDER BY ranking_br;

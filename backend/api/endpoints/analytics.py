@@ -13,7 +13,8 @@ from ..schemas.analytics import (
     PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
-    SociosResponse, NetworkResponse
+    SociosResponse, NetworkResponse,
+    MunicipioParkinsonResponse, MunicipioPatologiaResponse
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -286,6 +287,25 @@ def get_regional_benchmarking_animation(
         data_fim=data_fim, 
         regiao_id=regiao_id
     )
+
+
+@router.get("/municipio/{id_ibge7}/patologias", response_model=MunicipioPatologiaResponse)
+def get_municipio_patologias(
+    id_ibge7: int,
+    patologia: Optional[str] = Query(None),
+    ano_base: Optional[int] = Query(None),
+):
+    """Retorna agregados anuais municipais de incompatibilidade clinica por patologia."""
+    return AnalyticsService.get_municipio_patologias(id_ibge7, patologia=patologia, ano_base=ano_base)
+
+
+@router.get("/municipio/{id_ibge7}/parkinson", response_model=MunicipioParkinsonResponse)
+def get_municipio_parkinson(
+    id_ibge7: int,
+    ano_base: Optional[int] = Query(None),
+):
+    """Retorna contexto municipal de Parkinson com referencia epidemiologica para populacao 50+."""
+    return AnalyticsService.get_municipio_parkinson(id_ibge7, ano_base=ano_base)
 
 
 @router.get("/cnpj/{cnpj}/crm-data", response_model=PrescritoresResponse)

@@ -178,6 +178,45 @@ class PercentilesAnimationResponse(BaseModel):
     """Payload completo de percentis por período — todos os períodos em uma única chamada."""
     quarters: List[PercentilesQuarterSchema]
 
+class MunicipioPatologiaRowSchema(BaseModel):
+    id_ibge7: int
+    patologia: str
+    regra_clinica: str
+    ano_base: int
+    qtd_cpfs_distintos_municipio: int
+    qtd_cpfs_incompativeis_municipio: int
+    qtd_autorizacoes_municipio: int
+    qtd_autorizacoes_incompativeis_municipio: int
+    valor_total_pago_municipio: float
+    valor_incompativel_pago_municipio: float
+    dt_processamento: datetime
+
+
+class MunicipioPatologiaResponse(BaseModel):
+    id_ibge7: int
+    patologia: Optional[str] = None
+    ano_base: Optional[int] = None
+    rows: List[MunicipioPatologiaRowSchema]
+
+
+class MunicipioParkinsonRowSchema(MunicipioPatologiaRowSchema):
+    ano_censo_populacao: int
+    populacao_50_mais: int
+    prevalencia_referencia: float
+    casos_esperados_50_mais: float
+    razao_cpfs_distintos_sobre_esperado: float
+
+
+class MunicipioParkinsonResponse(BaseModel):
+    id_ibge7: int
+    ano_base: Optional[int] = None
+    ano_censo_populacao: int
+    populacao_50_mais: int
+    prevalencia_referencia: float
+    casos_esperados_50_mais: float
+    rows: List[MunicipioParkinsonRowSchema]
+
+
 class EvolucaoMesSchema(BaseModel):
     mes: str
     total: float

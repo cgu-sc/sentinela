@@ -50,6 +50,7 @@ _TEIA_FONTE_NIVEL3_PARQUET_PATH = _global_cache_path("teia_fonte_nivel3")
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
 _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica")
+_ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_municipio")
 _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH = _global_cache_path("dados_ibge_demografia")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
 _ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
@@ -79,6 +80,7 @@ _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica: pl.DataFrame | None = None
+_df_analise_gtin_inconsistencia_clinica_municipio: pl.DataFrame | None = None
 _df_dados_ibge_demografia: pl.DataFrame | None = None
 _df_volume_atipico_semestral: pl.DataFrame | None = None
 _df_esocial_cnpj_ano: pl.DataFrame | None = None
@@ -1478,6 +1480,73 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
     )
 
 
+def _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_callback=None):
+    """Sincroniza a evolucao anual por municipio e patologia da inconsistencia clinica."""
+    global _df_analise_gtin_inconsistencia_clinica_municipio
+    print("Sincronizando Analise GTIN x Inconsistencia Clinica Municipal...")
+    required = {
+        "id_ibge7",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cpfs_distintos_municipio",
+        "qtd_cpfs_incompativeis_municipio",
+        "qtd_autorizacoes_municipio",
+        "qtd_autorizacoes_incompativeis_municipio",
+        "valor_total_pago_municipio",
+        "valor_incompativel_pago_municipio",
+        "dt_processamento",
+    }
+    total_rows = _assert_fp_source_table(engine, "analise_gtin_inconsistencia_clinica_municipio", required)
+    sql = """
+        SELECT
+            id_ibge7,
+            patologia,
+            regra_clinica,
+            ano_base,
+            qtd_cpfs_distintos_municipio,
+            qtd_cpfs_incompativeis_municipio,
+            qtd_autorizacoes_municipio,
+            qtd_autorizacoes_incompativeis_municipio,
+            CAST(valor_total_pago_municipio AS FLOAT) AS valor_total_pago_municipio,
+            CAST(valor_incompativel_pago_municipio AS FLOAT) AS valor_incompativel_pago_municipio,
+            dt_processamento
+        FROM [temp_CGUSC].[fp].[analise_gtin_inconsistencia_clinica_municipio]
+    """
+    print(f"   -> Registros clinicos municipais anuais: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    CHUNK_SIZE = 50_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=CHUNK_SIZE):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_ibge7").cast(pl.Int64, strict=False),
+            pl.col("patologia").cast(pl.Categorical),
+            pl.col("regra_clinica").cast(pl.Categorical),
+            pl.col("ano_base").cast(pl.Int16),
+            pl.col("qtd_cpfs_distintos_municipio").cast(pl.Int32),
+            pl.col("qtd_cpfs_incompativeis_municipio").cast(pl.Int32),
+            pl.col("qtd_autorizacoes_municipio").cast(pl.Int32),
+            pl.col("qtd_autorizacoes_incompativeis_municipio").cast(pl.Int32),
+            pl.col("valor_total_pago_municipio").cast(pl.Float64),
+            pl.col("valor_incompativel_pago_municipio").cast(pl.Float64),
+            pl.col("dt_processamento").cast(pl.Datetime, strict=False),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
+        if progress_callback:
+            progress_callback(p)
+
+    _df_analise_gtin_inconsistencia_clinica_municipio = (
+        pl.concat(chunk_list).sort(["id_ibge7", "patologia", "ano_base"])
+    )
+    _df_analise_gtin_inconsistencia_clinica_municipio.write_parquet(
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
+        compression="zstd",
+    )
+
+
 def _sync_dados_ibge_demografia(engine, progress_callback=None):
     """Sincroniza os dados demograficos do Censo IBGE por municipio, idade e sexo."""
     global _df_dados_ibge_demografia
@@ -1687,7 +1756,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -1743,6 +1812,19 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "qtd_autorizacoes_incompativeis",
                 "valor_total_pago",
                 "valor_incompativel_pago",
+                "dt_processamento",
+            },
+            "analise_gtin_inconsistencia_clinica_municipio": {
+                "id_ibge7",
+                "patologia",
+                "regra_clinica",
+                "ano_base",
+                "qtd_cpfs_distintos_municipio",
+                "qtd_cpfs_incompativeis_municipio",
+                "qtd_autorizacoes_municipio",
+                "qtd_autorizacoes_incompativeis_municipio",
+                "valor_total_pago_municipio",
+                "valor_incompativel_pago_municipio",
                 "dt_processamento",
             },
             "dados_ibge_demografia": {
@@ -1923,6 +2005,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
         _df_analise_gtin_inconsistencia_clinica = _try_load("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)
+        _df_analise_gtin_inconsistencia_clinica_municipio = _try_load("analise_gtin_inconsistencia_clinica_municipio", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH)
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
@@ -1960,6 +2043,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Rede Estabelecimentos", "weight": 3,  "func": lambda cb: _sync_rede(engine, cb)},
         {"name": "Matriz de Risco",       "weight": 11, "func": lambda cb: _sync_matriz_risco(engine, cb)},
         {"name": "Analise Clinica por Patologia", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica(engine, cb)},
+        {"name": "Analise Clinica Municipal", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica_municipio(engine, cb)},
         {"name": "Demografia IBGE",       "weight": 2,  "func": lambda cb: _sync_dados_ibge_demografia(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
@@ -2096,6 +2180,11 @@ def get_df_analise_gtin_inconsistencia_clinica() -> pl.DataFrame:
         raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica nao carregado. Execute uma sincronizacao.")
     return _df_analise_gtin_inconsistencia_clinica
 
+def get_df_analise_gtin_inconsistencia_clinica_municipio() -> pl.DataFrame:
+    if _df_analise_gtin_inconsistencia_clinica_municipio is None:
+        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica Municipal nao carregado. Execute uma sincronizacao.")
+    return _df_analise_gtin_inconsistencia_clinica_municipio
+
 def get_df_dados_ibge_demografia() -> pl.DataFrame:
     if _df_dados_ibge_demografia is None:
         raise RuntimeError("Cache de Demografia IBGE nao carregado. Execute uma sincronizacao.")
@@ -2159,6 +2248,7 @@ def get_cache_status() -> dict:
         "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
         "analise_gtin_inconsistencia_clinica": {"label": "Analise Clinica por Patologia", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica is not None},
+        "analise_gtin_inconsistencia_clinica_municipio": {"label": "Analise Clinica Municipal", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica_municipio is not None},
         "dados_ibge_demografia": {"label": "Demografia IBGE", "path": _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH, "loaded": _df_dados_ibge_demografia is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
         "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},

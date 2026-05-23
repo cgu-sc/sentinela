@@ -52,6 +52,10 @@ from .regional import (
     get_regional_benchmarking,
     get_regional_benchmarking_animation,
 )
+from .patologias import (
+    get_municipio_parkinson,
+    get_municipio_patologias,
+)
 from .nota_tecnica import generate_nota_tecnica
 from .volume_atipico import (
     get_volume_atipico_id_cnpjs_df,
@@ -99,6 +103,8 @@ class AnalyticsService:
     get_metric_percentiles = staticmethod(get_metric_percentiles)
     get_metric_percentiles_animation = staticmethod(get_metric_percentiles_animation)
     get_cnpj_lookup = staticmethod(get_cnpj_lookup)
+    get_municipio_patologias = staticmethod(get_municipio_patologias)
+    get_municipio_parkinson = staticmethod(get_municipio_parkinson)
     generate_nota_tecnica = staticmethod(generate_nota_tecnica)
     get_volume_atipico_id_cnpjs_df = staticmethod(get_volume_atipico_id_cnpjs_df)
     get_volume_atipico_period_metrics = staticmethod(get_volume_atipico_period_metrics)

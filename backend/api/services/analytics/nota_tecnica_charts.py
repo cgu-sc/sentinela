@@ -867,6 +867,158 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
     return "".join(parts)
 
 
+def _svg_int_label(value: Any) -> str:
+    return _svg_escape(f"{int(round(float(value or 0))):,}".replace(",", "."))
+
+
+_PARKINSON_CHART_TITLE_SIZE = 20
+_PARKINSON_CHART_SUBTITLE_SIZE = 15
+_PARKINSON_CHART_CATEGORY_SIZE = 15
+_PARKINSON_CHART_VALUE_SIZE = 16
+_PARKINSON_CHART_NOTE_SIZE = 13
+
+
+def _build_parkinson_demografia_chart_svg(demografia: dict[str, Any]) -> str:
+    """Gera SVG comparando casos epidemiologicamente esperados e CPFs observados."""
+    width, height = 1326, 540
+    left, right, top = 310, 86, 145
+    bar_h = 74
+    gap = 58
+    plot_w = width - left - right
+    text_color = "#334155"
+    muted = "#64748B"
+    grid = "#CBD5E1"
+    expected_color = "#2563EB"
+    observed_color = "#E11D48"
+
+    casos_esperados = max(float(demografia.get("casos_esperados") or 0.0), 0.0)
+    cpfs_observados = max(float(demografia.get("qtd_cpfs_distintos_observado") or 0.0), 0.0)
+    axis_max = _nice_axis_max(max(casos_esperados, cpfs_observados, 1.0) * 1.12)
+    ano = _svg_escape(demografia.get("ano_observado") or "")
+    municipio = _svg_escape(demografia.get("municipio") or "")
+    uf = _svg_escape(demografia.get("uf") or "")
+    razao = _svg_escape(_format_decimal_pt(float(demografia.get("razao_observado_esperado") or 0.0), 2))
+    titulo = f"{municipio}/{uf}"
+    subtitulo = f"Ano observado: {ano}"
+
+    rows = [
+        ("Casos esperados no município", casos_esperados, expected_color),
+        ("CPFs observados na farmácia", cpfs_observados, observed_color),
+    ]
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<defs>",
+        '<linearGradient id="expectedBar" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#93C5FD"/><stop offset="100%" stop-color="#2563EB"/></linearGradient>',
+        '<linearGradient id="observedBar" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FDA4AF"/><stop offset="100%" stop-color="#E11D48"/></linearGradient>',
+        "</defs>",
+        '<rect width="100%" height="100%" fill="#FFFFFF"/>',
+        f'<text x="{width / 2:.0f}" y="40" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_TITLE_SIZE}" font-weight="700" fill="{text_color}">{titulo}</text>',
+        f'<text x="{width / 2:.0f}" y="66" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_SUBTITLE_SIZE}" fill="{muted}">{subtitulo}</text>',
+        f'<rect x="{width - right - 300}" y="90" width="300" height="42" rx="8" fill="#FFF1F2" stroke="#FDA4AF" stroke-width="1"/>',
+        f'<text x="{width - right - 150}" y="117" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_VALUE_SIZE}" font-weight="700" fill="{observed_color}">{razao} vezes o esperado</text>',
+    ]
+
+    for tick_idx in range(6):
+        value = axis_max * tick_idx / 5
+        x = left + (value / axis_max) * plot_w
+        parts.append(f'<line x1="{x:.2f}" y1="{top - 12}" x2="{x:.2f}" y2="{top + bar_h * 2 + gap + 16}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.7"/>')
+        parts.append(f'<text x="{x:.2f}" y="{top + bar_h * 2 + gap + 46}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_NOTE_SIZE}" fill="{muted}">{_svg_int_label(value)}</text>')
+
+    for idx, (label, value, color) in enumerate(rows):
+        y = top + idx * (bar_h + gap)
+        bar_w = max(2.0, (value / axis_max) * plot_w) if value > 0 else 0.0
+        gradient_id = "expectedBar" if idx == 0 else "observedBar"
+        parts.append(f'<text x="{left - 18}" y="{y + bar_h / 2 + 6:.2f}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_CATEGORY_SIZE}" font-weight="700" fill="{text_color}">{_svg_escape(label)}</text>')
+        parts.append(f'<rect x="{left}" y="{y}" width="{bar_w:.2f}" height="{bar_h}" rx="10" fill="url(#{gradient_id})"/>')
+        label_x = min(left + bar_w + 18, width - right - 90)
+        parts.append(f'<text x="{label_x:.2f}" y="{y + bar_h / 2 + 7:.2f}" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_VALUE_SIZE}" font-weight="700" fill="{color}">{_svg_int_label(value)}</text>')
+
+    parts.extend([
+        f'<line x1="{left}" y1="{top + bar_h * 2 + gap + 16}" x2="{width - right}" y2="{top + bar_h * 2 + gap + 16}" stroke="#E2E8F0" stroke-width="1"/>',
+        f'<text x="{left + plot_w / 2:.0f}" y="{height - 22}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_NOTE_SIZE}" fill="{muted}">Casos esperados calculados sobre a população municipal de 50 anos ou mais; CPFs observados correspondem às dispensações de medicamentos para Parkinson na farmácia.</text>',
+        "</svg>",
+    ])
+    return "".join(parts)
+
+
+def _build_parkinson_demografia_chart_svg_png(demografia: dict[str, Any]) -> io.BytesIO:
+    return _svg_to_png_stream(_build_parkinson_demografia_chart_svg(demografia))
+
+
+def _build_parkinson_faixas_etarias_chart_svg(demografia: dict[str, Any]) -> str:
+    """Gera SVG da composicao etaria municipal, destacando a populacao 50+."""
+    faixas = list(demografia.get("faixas_etarias") or [])
+    if not faixas:
+        raise RuntimeError("Faixas etarias obrigatorias ausentes para figura demografica de Parkinson.")
+
+    width = 1326
+    row_h = 38
+    top = 126
+    left = 170
+    right = 96
+    bottom = 86
+    height = top + len(faixas) * row_h + bottom
+    plot_w = width - left - right
+    max_pop = max(float(item.get("populacao") or 0.0) for item in faixas)
+    if max_pop <= 0:
+        raise RuntimeError("Populacao por faixa etaria invalida para figura demografica de Parkinson.")
+
+    text_color = "#334155"
+    muted = "#64748B"
+    grid = "#CBD5E1"
+    base_color = "#CBD5E1"
+    highlight_color = "#2563EB"
+    municipio = _svg_escape(demografia.get("municipio") or "")
+    uf = _svg_escape(demografia.get("uf") or "")
+    ano_censo = _svg_escape(demografia.get("ano_censo") or "")
+    titulo = f"{municipio}/{uf}"
+    subtitulo = f"IBGE/Censo {ano_censo}"
+    pop_50 = _svg_int_label(demografia.get("populacao_50_mais"))
+    pct_50 = _svg_escape(_format_decimal_pt(float(demografia.get("percentual_50_mais") or 0.0) * 100, 2))
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<defs>",
+        '<linearGradient id="ageBase" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#E2E8F0"/><stop offset="100%" stop-color="#94A3B8"/></linearGradient>',
+        '<linearGradient id="age50" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#93C5FD"/><stop offset="100%" stop-color="#2563EB"/></linearGradient>',
+        "</defs>",
+        '<rect width="100%" height="100%" fill="#FFFFFF"/>',
+        f'<text x="{width / 2:.0f}" y="40" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_TITLE_SIZE}" font-weight="700" fill="{text_color}">{titulo}</text>',
+        f'<text x="{width / 2:.0f}" y="66" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_SUBTITLE_SIZE}" fill="{muted}">{subtitulo}</text>',
+        f'<rect x="{width - right - 360}" y="84" width="360" height="40" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1"/>',
+        f'<text x="{width - right - 180}" y="109" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_VALUE_SIZE}" font-weight="700" fill="{highlight_color}">50+: {pop_50} pessoas ({pct_50}%)</text>',
+    ]
+
+    for tick_idx in range(5):
+        value = max_pop * tick_idx / 4
+        x = left + (value / max_pop) * plot_w
+        parts.append(f'<line x1="{x:.2f}" y1="{top - 14}" x2="{x:.2f}" y2="{top + len(faixas) * row_h}" stroke="{grid}" stroke-width="1" stroke-dasharray="6 8" opacity="0.6"/>')
+        parts.append(f'<text x="{x:.2f}" y="{top + len(faixas) * row_h + 28}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_NOTE_SIZE}" fill="{muted}">{_svg_int_label(value)}</text>')
+
+    for idx, item in enumerate(faixas):
+        y = top + idx * row_h
+        pop = float(item.get("populacao") or 0.0)
+        bar_w = max(2.0, (pop / max_pop) * plot_w)
+        highlight = bool(item.get("destacar_50_mais"))
+        fill = "url(#age50)" if highlight else "url(#ageBase)"
+        value_color = highlight_color if highlight else muted
+        label = _svg_escape(item.get("faixa") or "")
+        parts.append(f'<text x="{left - 18}" y="{y + 23}" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_CATEGORY_SIZE}" font-weight="700" fill="{text_color}">{label}</text>')
+        parts.append(f'<rect x="{left}" y="{y + 7}" width="{bar_w:.2f}" height="23" rx="6" fill="{fill}"/>')
+        parts.append(f'<text x="{min(left + bar_w + 12, width - right - 82):.2f}" y="{y + 24}" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_VALUE_SIZE}" font-weight="700" fill="{value_color}">{_svg_int_label(pop)}</text>')
+
+    parts.extend([
+        f'<text x="{left + plot_w / 2:.0f}" y="{height - 22}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="{_PARKINSON_CHART_NOTE_SIZE}" fill="{muted}">Faixas em azul compõem a população de 50 anos ou mais, denominador usado para estimar os casos esperados de Parkinson.</text>',
+        "</svg>",
+    ])
+    return "".join(parts)
+
+
+def _build_parkinson_faixas_etarias_chart_svg_png(demografia: dict[str, Any]) -> io.BytesIO:
+    return _svg_to_png_stream(_build_parkinson_faixas_etarias_chart_svg(demografia))
+
+
 def _build_evolucao_financeira_chart_svg_png(evolucao_comp: dict[str, Any]) -> io.BytesIO:
     return _svg_to_png_stream(_build_evolucao_financeira_chart_svg(evolucao_comp))
 
@@ -898,6 +1050,14 @@ def _build_posicionamento_regional_chart_prefer_svg(posicionamento_comp: dict[st
         return _build_posicionamento_regional_chart_svg_png(posicionamento_comp)
     except Exception:
         return _build_posicionamento_regional_chart(posicionamento_comp)
+
+
+def _build_parkinson_demografia_chart_prefer_svg(demografia: dict[str, Any]) -> io.BytesIO:
+    return _build_parkinson_demografia_chart_svg_png(demografia)
+
+
+def _build_parkinson_faixas_etarias_chart_prefer_svg(demografia: dict[str, Any]) -> io.BytesIO:
+    return _build_parkinson_faixas_etarias_chart_svg_png(demografia)
 
 
 def _format_figure_title(paragraph):
@@ -983,6 +1143,62 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     _run(
         p_foot,
         'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
+
+
+def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_number: int = 5):
+    """Insere figura comparativa de Parkinson no documento."""
+    p_title = doc.add_paragraph()
+    _format_figure_title(p_title)
+    _run(
+        p_title,
+        f'Figura {figure_number:02d} - Comparação entre casos esperados de doença de Parkinson no município e CPFs observados com dispensação na farmácia.',
+        color='0F172A',
+        size=9,
+        bold=True,
+    )
+
+    chart_stream = _build_parkinson_demografia_chart_prefer_svg(demografia)
+    p_img = doc.add_paragraph()
+    _format_picture_paragraph(p_img)
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    _format_figure_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, IBGE/Censo 2022 e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
+        color='64748B',
+        size=8,
+    )
+
+
+def _add_figura_parkinson_faixas_etarias(doc, demografia: dict[str, Any], figure_number: int = 4):
+    """Insere figura da composicao etaria municipal no documento."""
+    p_title = doc.add_paragraph()
+    _format_figure_title(p_title)
+    _run(
+        p_title,
+        f'Figura {figure_number:02d} - Distribuição etária da população municipal utilizada como base para estimativa epidemiológica de doença de Parkinson.',
+        color='0F172A',
+        size=9,
+        bold=True,
+    )
+
+    chart_stream = _build_parkinson_faixas_etarias_chart_prefer_svg(demografia)
+    p_img = doc.add_paragraph()
+    _format_picture_paragraph(p_img)
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    _format_figure_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: IBGE/Censo 2022.',
         color='64748B',
         size=8,
     )

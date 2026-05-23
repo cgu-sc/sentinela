@@ -38,10 +38,10 @@ from .nota_tecnica_quadros import (
     _add_quadro_53,
     _add_quadro_comparativo_regional,
     _add_quadro_evolucao_financeira,
-    _add_quadro_gtins_sem_comprovacao,
     _add_quadro_identificacao,
-    _add_quadro_medicamentos_aumento_atipico,
     _add_quadro_socios_volume_atipico,
+    _add_tabela_gtins_sem_comprovacao,
+    _add_tabela_medicamentos_aumento_atipico,
 )
 from .nota_tecnica_criticidades import (
     _SECAO5_MAP,
@@ -350,10 +350,31 @@ def _build_resumo_falecidos(num: str, falecidos_comp: dict[str, Any]) -> str:
 def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mov: float) -> str | None:
     percentual = float(comp.get("percentual") or 0.0)
     multiplicador = float(comp.get("multiplicador_regiao") or 0.0)
-    valor_estimado = _valor_estimado_por_percentual(total_mov, percentual)
+
+    if key == "incompatibilidade_patologica":
+        ranking_patologias = comp.get("ranking_patologias")
+        if not ranking_patologias:
+            raise RuntimeError("Ranking clinico obrigatorio ausente para resumo da Nota Tecnica.")
+
+        valor_identificado = 0.0
+        for item in ranking_patologias:
+            if "valor_incompativel_pago" not in item or item["valor_incompativel_pago"] is None:
+                raise RuntimeError("Valor clinico identificado obrigatorio ausente para resumo da Nota Tecnica.")
+            try:
+                valor_identificado += float(item["valor_incompativel_pago"])
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Valor clinico identificado invalido para resumo da Nota Tecnica: {item['valor_incompativel_pago']}"
+                ) from exc
+
+        return (
+            f'[Subitem {num}]: Vendas de medicamentos com incompatibilidade patológica com percentual de '
+            f'{_format_decimal_pt(percentual, 2)}% das vendas monitoradas pelo indicador, superior em '
+            f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região. '
+            f'Estas vendas representaram um valor total identificado de R$ {_format_decimal_pt(valor_identificado, 2)};'
+        )
 
     percentuais_templates = {
-        "incompatibilidade_patologica": "Vendas de medicamentos com incompatibilidade patológica",
         "teto": "Vendas correspondentes ao limite máximo de retirada mensal de medicamento por cliente",
         "polimedicamento": "Vendas correspondentes a quatro ou mais itens de medicamentos por cupom",
         "alto_custo": "Vendas de medicamentos de alto custo",
@@ -363,6 +384,7 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
         "dispersao_geografica": "Vendas para pessoas residentes em outros Estados",
     }
     if key in percentuais_templates:
+        valor_estimado = _valor_estimado_por_percentual(total_mov, percentual)
         return (
             f'[Subitem {num}]: {percentuais_templates[key]} com percentual de '
             f'{_format_decimal_pt(percentual, 2)}% de suas vendas totais, superior em '
@@ -1083,18 +1105,22 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _add_figura_percentil_risco(doc, razao_social, cnpj_fmt, percentil_risco_comp, figure_number=2)
     timing.mark("figura percentil de risco")
 
+    tabela_num = 0
+
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     timing.mark("contexto GTIN sem comprovacao")
     p_gtin_intro = doc.add_paragraph()
     _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoque amparado em notas fiscais de aquisição, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=10)
 
-    _add_quadro_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt)
-    timing.mark("quadro GTIN sem comprovacao")
+    tabela_num += 1
+    tabela_gtins_num = tabela_num
+    _add_tabela_gtins_sem_comprovacao(doc, razao_social, cnpj_fmt, gtin_comp, periodo_txt, tabela_gtins_num)
+    timing.mark("tabela GTIN sem comprovacao")
 
     p_gtin_conclusao = doc.add_paragraph()
     gtins_txt = "GTIN" if gtin_comp["total_gtins"] == 1 else "GTINs"
     representativos_txt = "GTIN" if gtin_comp["representativos_count"] == 1 else "GTINs"
-    _run(p_gtin_conclusao, f'Conforme o Quadro 04, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=10)
+    _run(p_gtin_conclusao, f'Conforme a Tabela {tabela_gtins_num}, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='334155', size=10, bold=True)
     _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=10)
     _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='334155', size=10, bold=True)
@@ -1143,20 +1169,22 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             _run(p_54_analise, top_labels, color='334155', size=10)
             _run(p_54_analise, ', que somam ', color='0F172A', size=10)
             _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='334155', size=10, bold=True)
-            _run(p_54_analise, ', conforme quadro e figura a seguir.', color='0F172A', size=10)
+            _run(p_54_analise, ', conforme tabela e figura a seguir.', color='0F172A', size=10)
 
-    _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp)
+    tabela_num += 1
+    _add_quadro_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, tabela_num)
     medicamentos_aumento_atipico = evolucao_comp.get("medicamentos_aumento_atipico") or []
     if medicamentos_aumento_atipico:
         p_medicamentos_volume = doc.add_paragraph()
         p_medicamentos_volume.paragraph_format.space_before = Pt(6)
         _run(
             p_medicamentos_volume,
-            'Para qualificar os semestres destacados como atípicos, o quadro complementar a seguir decompõe o aumento financeiro por GTIN, comparando o semestre atípico com o semestre anterior utilizado no cálculo do alerta.',
+            'Para qualificar os semestres destacados como atípicos, a tabela complementar a seguir decompõe o aumento financeiro por GTIN, comparando o semestre atípico com o semestre anterior utilizado no cálculo do alerta.',
             color='0F172A',
             size=10,
         )
-    _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico)
+        tabela_num += 1
+        _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico, tabela_num)
     if socios_volume_atipico:
         p_socios_volume = doc.add_paragraph()
         p_socios_volume.paragraph_format.space_before = Pt(6)
@@ -1183,7 +1211,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'incompatibilidade_patologica':
                 clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
                 if clinico_comp:
-                    _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp)
+                    tabela_inicio_clinica = tabela_num + 1
+                    _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp, tabela_inicio_clinica)
+                    tabela_num += len(clinico_comp.get("ranking_patologias") or [])
                     resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1282,7 +1312,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'hhi_crm':
                 hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
                 if hhi_crm_comp:
-                    _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp)
+                    tabela_num += 1
+                    _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp, tabela_num)
                     resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1297,7 +1328,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     crm_data=crm_data_comp,
                 )
                 if crms_irregulares_comp:
-                    _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp)
+                    tabela_num += 1
+                    _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp, tabela_num)
                     resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1312,7 +1344,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     crm_data=crm_data_comp,
                 )
                 if exclusividade_comp:
-                    _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp)
+                    tabela_exclusividade_num = None
+                    if exclusividade_comp.get("top_exclusivos"):
+                        tabela_num += 1
+                        tabela_exclusividade_num = tabela_num
+                    _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp, tabela_exclusividade_num)
                     resumo = _build_resumo_criticidade(num, key, exclusividade_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1328,7 +1364,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     if crm_evidencias_comp:
         crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
-        _add_crm_evidencias_complementares_text(doc, crm_evidencias_num, razao_social, crm_evidencias_comp)
+        tabela_num = _add_crm_evidencias_complementares_text(doc, crm_evidencias_num, razao_social, crm_evidencias_comp, tabela_num)
         timing.mark("secao 7 evidencias CRM complementares")
 
     # 8. CONCLUSÃO

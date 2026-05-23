@@ -160,13 +160,13 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
     _keep_small_table_together(p_title, table, [p_foot])
 
 
-def _add_quadro_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gtin_comp: dict[str, Any], periodo_txt: str):
-    """Adiciona quadro com todos os GTINs com vendas sem comprovacao no periodo."""
+def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gtin_comp: dict[str, Any], periodo_txt: str, tabela_num: int):
+    """Adiciona tabela com todos os GTINs com vendas sem comprovacao no periodo."""
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 04 - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
+        f'Tabela {tabela_num} - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
         color='0F172A',
         size=9,
         bold=True,
@@ -225,8 +225,9 @@ def _add_quadro_evolucao_financeira(
     razao_social: str,
     cnpj_fmt: str,
     evolucao_comp: dict[str, Any],
+    tabela_num: int,
 ):
-    """Adiciona quadro semestral de transferencias e vendas sem comprovacao."""
+    """Adiciona tabela semestral de transferencias e vendas sem comprovacao."""
     periodo_semestres = (
         f'no {evolucao_comp["primeiro_semestre_fmt"]}'
         if evolucao_comp["primeiro_semestre"] == evolucao_comp["ultimo_semestre"]
@@ -236,7 +237,7 @@ def _add_quadro_evolucao_financeira(
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 05 - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
+        f'Tabela {tabela_num} - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='0F172A',
         size=9,
         bold=True,
@@ -326,8 +327,8 @@ def _add_quadro_evolucao_financeira(
     _keep_small_table_together(p_title, table, [p_foot])
 
 
-def _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: list[dict[str, Any]]):
-    """Adiciona quadro com medicamentos que mais contribuiram para semestres atipicos."""
+def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: list[dict[str, Any]], tabela_num: int):
+    """Adiciona tabela com medicamentos que mais contribuiram para semestres atipicos."""
     if not medicamentos_aumento_atipico:
         return
 
@@ -335,7 +336,7 @@ def _add_quadro_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
     _format_quadro_title(p_title)
     _run(
         p_title,
-        'Quadro 05-A - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
+        f'Tabela {tabela_num} - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
         color='0F172A',
         size=9,
         bold=True,

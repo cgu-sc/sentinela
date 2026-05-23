@@ -1098,6 +1098,7 @@ def _add_crm_distancia_complementar_text(
     letra: str,
     razao_social: str,
     distancia_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o bloco de evidencias de CRMs com distancia geografica superior a 400 km."""
     qtd_medicos = _as_int(distancia_comp.get("qtd_medicos"))
@@ -1149,7 +1150,7 @@ def _add_crm_distancia_complementar_text(
     _format_crm_table_title(title)
     _run(
         title,
-        "Principais evidências de distância geográfica associadas a CRMs informados no SAV.",
+        f"Tabela {tabela_num} - Principais evidências de distância geográfica associadas a CRMs informados no SAV.",
         color="0F172A",
         size=9,
         bold=True,
@@ -1191,6 +1192,7 @@ def _add_crm_intensiva_complementar_text(
     letra: str,
     razao_social: str,
     intensiva_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o bloco de prescritores com mais de 30 prescricoes por dia."""
     qtd_medicos = _as_int(intensiva_comp.get("qtd_medicos"))
@@ -1236,7 +1238,7 @@ def _add_crm_intensiva_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, "Principais médicos com volume médio diário superior a 30 prescrições.", color="0F172A", size=9, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais médicos com volume médio diário superior a 30 prescrições.", color="0F172A", size=9, bold=True)
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1266,6 +1268,7 @@ def _add_crm_unico_complementar_text(
     letra: str,
     razao_social: str,
     crm_unico_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o bloco de concentracao temporal em um unico CRM."""
     qtd_medicos = _as_int(crm_unico_comp.get("qtd_medicos"))
@@ -1319,7 +1322,7 @@ def _add_crm_unico_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, "Principais episódios de autorizações concentradas para um único CRM.", color="0F172A", size=9, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="0F172A", size=9, bold=True)
 
     headers = ["Início", "Fim", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1354,6 +1357,7 @@ def _add_crms_multiplos_complementar_text(
     letra: str,
     razao_social: str,
     crms_multiplos_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o bloco de concentracao temporal envolvendo multiplos CRMs."""
     qtd_medicos = _as_int(crms_multiplos_comp.get("qtd_medicos"))
@@ -1404,7 +1408,7 @@ def _add_crms_multiplos_complementar_text(
     if eventos:
         title = doc.add_paragraph()
         _format_crm_table_title(title)
-        _run(title, "Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="0F172A", size=9, bold=True)
+        _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="0F172A", size=9, bold=True)
 
         headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
@@ -1440,6 +1444,7 @@ def _add_principais_crms_contexto_text(
     doc,
     razao_social: str,
     principais_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona uma tabela-resumo dos principais CRMs por valor autorizado."""
     rows = list(principais_comp.get("rows") or [])
@@ -1451,7 +1456,7 @@ def _add_principais_crms_contexto_text(
     p = doc.add_paragraph()
     _run(
         p,
-        f"Para contextualizar os achados, o quadro a seguir apresenta os 10 principais CRMs utilizados pela Farmácia {razao_social}, ordenados pelo valor autorizado no SAV.",
+        f"Para contextualizar os achados, a tabela a seguir apresenta os 10 principais CRMs utilizados pela Farmácia {razao_social}, ordenados pelo valor autorizado no SAV.",
         color="0F172A",
         size=10,
     )
@@ -1465,7 +1470,7 @@ def _add_principais_crms_contexto_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, "Principais CRMs do estabelecimento por valor autorizado.", color="0F172A", size=9, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="0F172A", size=9, bold=True)
 
     headers = [
         "CRM/UF",
@@ -1520,6 +1525,7 @@ def _add_crm_volume_horario_complementar_text(
     letra: str,
     razao_social: str,
     volume_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o bloco de volume horario anomalo de autorizacoes."""
     qtd_alertas = _as_int(volume_comp.get("qtd_alertas"))
@@ -1590,7 +1596,7 @@ def _add_crm_volume_horario_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, "Principais horários com volume anômalo de autorizações.", color="0F172A", size=9, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="0F172A", size=9, bold=True)
 
     headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Excesso"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1617,6 +1623,7 @@ def _add_crm_evidencias_complementares_text(
     num: str,
     razao_social: str,
     evidencias_comp: dict[str, Any],
+    tabela_num: int,
 ):
     """Adiciona o esqueleto do subitem de evidencias complementares de CRM."""
     doc.add_heading(f"{num} Evidências complementares relacionadas ao uso de CRMs no SAV", level=2)
@@ -1631,28 +1638,36 @@ def _add_crm_evidencias_complementares_text(
 
     principais_crms_comp = evidencias_comp.get("principais_crms_contexto")
     if principais_crms_comp:
-        _add_principais_crms_contexto_text(doc, razao_social, principais_crms_comp)
+        tabela_num += 1
+        _add_principais_crms_contexto_text(doc, razao_social, principais_crms_comp, tabela_num)
 
     letras = iter("abcdefghijklmnopqrstuvwxyz")
 
     volume_horario_comp = evidencias_comp.get("volume_horario")
     if volume_horario_comp:
-        _add_crm_volume_horario_complementar_text(doc, next(letras), razao_social, volume_horario_comp)
+        tabela_num += 1
+        _add_crm_volume_horario_complementar_text(doc, next(letras), razao_social, volume_horario_comp, tabela_num)
     distancia_comp = evidencias_comp.get("distancia")
     if distancia_comp:
-        _add_crm_distancia_complementar_text(doc, next(letras), razao_social, distancia_comp)
+        tabela_num += 1
+        _add_crm_distancia_complementar_text(doc, next(letras), razao_social, distancia_comp, tabela_num)
     intensiva_comp = evidencias_comp.get("intensiva")
     if intensiva_comp:
-        _add_crm_intensiva_complementar_text(doc, next(letras), razao_social, intensiva_comp)
+        tabela_num += 1
+        _add_crm_intensiva_complementar_text(doc, next(letras), razao_social, intensiva_comp, tabela_num)
     crm_unico_comp = evidencias_comp.get("crm_unico")
     if crm_unico_comp:
-        _add_crm_unico_complementar_text(doc, next(letras), razao_social, crm_unico_comp)
+        tabela_num += 1
+        _add_crm_unico_complementar_text(doc, next(letras), razao_social, crm_unico_comp, tabela_num)
     crms_multiplos_comp = evidencias_comp.get("crms_multiplos")
     if crms_multiplos_comp:
-        _add_crms_multiplos_complementar_text(doc, next(letras), razao_social, crms_multiplos_comp)
+        tabela_num += 1
+        _add_crms_multiplos_complementar_text(doc, next(letras), razao_social, crms_multiplos_comp, tabela_num)
+
+    return tabela_num
 
 
-def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_comp: dict[str, Any]):
+def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_comp: dict[str, Any], tabela_num: int):
     """Adiciona o subitem de concentração atípica de registros do mesmo CRM."""
     periodo_intervalo = hhi_crm_comp["periodo_intervalo"]
     total_medicos = hhi_crm_comp["total_medicos"]
@@ -1694,7 +1709,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
     _run(
         p2,
-        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. O quadro a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual e acumulada de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
+        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. A tabela a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual e acumulada de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
         color="0F172A",
         size=10,
     )
@@ -1703,7 +1718,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     _format_crm_table_title(title)
     _run(
         title,
-        f"Quadro 07 - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
+        f"Tabela {tabela_num} - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,
@@ -1762,7 +1777,7 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     )
 
     p3 = doc.add_paragraph()
-    _run(p3, "Conforme o Quadro 07, observa-se concentração relevante das dispensações no médico ", color="0F172A", size=10)
+    _run(p3, f"Conforme a Tabela {tabela_num}, observa-se concentração relevante das dispensações no médico ", color="0F172A", size=10)
     _run(p3, nome_medico, color="334155", size=10, bold=True)
     _run(p3, ", CRM ", color="0F172A", size=10)
     _run(p3, crm_ident, color="334155", size=10, bold=True)
@@ -1797,12 +1812,12 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
 
     if top_pct_autorizacoes >= 80:
         p5 = doc.add_paragraph()
-        _run(p5, "Ademais, os CRMs listados no Quadro 07 concentram conjuntamente ", color="0F172A", size=10)
+        _run(p5, f"Ademais, os CRMs listados na Tabela {tabela_num} concentram conjuntamente ", color="0F172A", size=10)
         _run(p5, f"{_format_decimal_pt(top_pct_autorizacoes, 2)}%", color="334155", size=10, bold=True)
-        _run(p5, " da produção total da farmácia, alcançando o patamar de concentração definido para a seleção do quadro e indicando que a dispersão esperada entre prescritores não se verificou de forma regular no período analisado.", color="0F172A", size=10)
+        _run(p5, " da produção total da farmácia, alcançando o patamar de concentração definido para a seleção da tabela e indicando que a dispersão esperada entre prescritores não se verificou de forma regular no período analisado.", color="0F172A", size=10)
 
 
-def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, irregulares_comp: dict[str, Any]):
+def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, irregulares_comp: dict[str, Any], tabela_num: int):
     """Adiciona o subitem de vendas vinculadas a CRMs irregulares."""
     periodo_intervalo = irregulares_comp["periodo_intervalo"]
     total_autorizacoes = irregulares_comp["total_autorizacoes"]
@@ -1855,7 +1870,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     _format_crm_table_title(title)
     _run(
         title,
-        f"Quadro 08 - Médicos com CRM irregular ou inválido vinculados a vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
+        f"Tabela {tabela_num} - Médicos com CRM irregular ou inválido vinculados a vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,
@@ -1929,7 +1944,7 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     )
 
 
-def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, exclusividade_comp: dict[str, Any]):
+def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, exclusividade_comp: dict[str, Any], tabela_num: int | None):
     """Adiciona o subitem de CRMs exclusivos."""
     periodo_intervalo = exclusividade_comp["periodo_intervalo"]
     total_medicos = exclusividade_comp["total_medicos"]
@@ -1991,12 +2006,14 @@ def _add_exclusividade_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str,
 
     if not has_detalhe_exclusivos:
         return
+    if tabela_num is None:
+        raise RuntimeError("Numero da tabela de CRMs exclusivos obrigatorio para a Nota Tecnica.")
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
     _run(
         title,
-        f"Quadro 09 - Médicos com CRMs registrados exclusivamente pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
+        f"Tabela {tabela_num} - Médicos com CRMs registrados exclusivamente pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="0F172A",
         size=9,
         bold=True,

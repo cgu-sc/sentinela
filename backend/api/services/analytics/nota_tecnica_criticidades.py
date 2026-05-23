@@ -1,13 +1,31 @@
 from datetime import date
 from typing import Any, Optional
+import unicodedata
 
 import polars as pl
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 
-from data_cache import get_df_matriz_risco
+from data_cache import (
+    get_df_analise_gtin_inconsistencia_clinica,
+    get_df_dados_ibge_demografia,
+    get_df_dados_farmacia,
+    get_df_matriz_risco,
+)
 from .falecidos import get_falecidos_data
 from .indicadores import _INDICATOR_FLAGS
-from .nota_tecnica_docx_utils import _footnote_ref, _run
-from .nota_tecnica_formatters import _format_decimal_pt
+from .nota_tecnica_docx_utils import (
+    _cell_bg,
+    _footnote_ref,
+    _keep_small_table_together,
+    _run,
+    _set_table_fixed_widths,
+)
+from .nota_tecnica_charts import (
+    _add_figura_parkinson_comparacao,
+    _add_figura_parkinson_faixas_etarias,
+)
+from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
 
@@ -29,6 +47,248 @@ _SECAO5_MAP = [
     ('exclusividade_crm',            '5.20', 'Vendas de medicamentos vinculadas a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {farmacia}'),
 ]
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
+_PARKINSON_PREVALENCIA_50_MAIS = 0.0086
+_IBGE_ANO_CENSO_DEMOGRAFIA = 2022
+
+_CLINICA_PATOLOGIA_META = {
+    ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
+        "titulo": "Doença de Parkinson",
+        "objeto": "Parkinson",
+        "criterio": "beneficiários com menos de 50 anos",
+        "descricao": "medicamentos destinados ao tratamento da doença de Parkinson, cuja ocorrência é incomum em pessoas com menos de 50 anos",
+    },
+    ("OSTEOPOROSE", "SEXO_MASCULINO"): {
+        "titulo": "Osteoporose",
+        "objeto": "osteoporose",
+        "criterio": "beneficiários do sexo masculino",
+        "descricao": "medicamentos destinados ao tratamento de osteoporose, cuja utilização é incomum em homens biológicos",
+    },
+    ("DIABETES", "IDADE_MENOR_20"): {
+        "titulo": "Diabetes",
+        "objeto": "diabetes",
+        "criterio": "beneficiários com menos de 20 anos",
+        "descricao": "medicamentos destinados ao tratamento de diabetes, cuja utilização é incomum em pessoas abaixo de 20 anos no recorte monitorado",
+    },
+    ("HIPERTENSAO", "IDADE_MENOR_20"): {
+        "titulo": "Hipertensão",
+        "objeto": "hipertensão",
+        "criterio": "beneficiários com menos de 20 anos",
+        "descricao": "medicamentos destinados ao tratamento de hipertensão, cuja utilização é incomum em pessoas abaixo de 20 anos no recorte monitorado",
+    },
+}
+
+_CLINICA_COLUNAS_OBRIGATORIAS = {
+    "id_cnpj",
+    "patologia",
+    "regra_clinica",
+    "ano_base",
+    "qtd_cpfs_distintos",
+    "qtd_cpfs_incompativeis",
+    "qtd_autorizacoes",
+    "qtd_autorizacoes_incompativeis",
+    "valor_total_pago",
+    "valor_incompativel_pago",
+    "percentual_cpfs_incompativeis",
+    "rank_regional_qtd_cpfs_incompativeis",
+    "percentil_regional_qtd_cpfs_incompativeis",
+    "participacao_cpfs_incompativeis_regiao",
+    "percentual_regional_cpfs_incompativeis",
+    "razao_percentual_vs_regiao",
+    "cpfs_incompativeis_esperados_regiao",
+    "excesso_cpfs_incompativeis_vs_regiao",
+}
+
+
+def _require_columns(df: pl.DataFrame, required: set[str], fonte: str) -> None:
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise RuntimeError(f"{fonte} sem colunas obrigatorias: {', '.join(missing)}")
+
+
+def _normalize_ascii_upper(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return " ".join(text.replace("_", " ").split()).upper()
+
+
+def _clinica_meta_key(patologia: Any, regra_clinica: Any) -> tuple[str, str]:
+    patologia_key = _normalize_ascii_upper(patologia)
+    regra_key = _normalize_ascii_upper(regra_clinica).replace(" ", "_")
+    return patologia_key, regra_key
+
+
+def _cnpj_digits(cnpj: str) -> str:
+    digits = "".join(ch for ch in str(cnpj or "") if ch.isdigit())
+    if len(digits) != 14:
+        raise RuntimeError(f"CNPJ invalido para Nota Tecnica: {cnpj}")
+    return digits
+
+
+def _format_int_pt(value: Any) -> str:
+    try:
+        return f"{int(round(float(value))):,}".replace(",", ".")
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Valor inteiro obrigatorio invalido na Nota Tecnica: {value}")
+
+
+def _format_brl_pt(value: Any) -> str:
+    try:
+        valor = float(value)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Valor financeiro obrigatorio invalido na Nota Tecnica: {value}")
+    return f"R$ {_format_decimal_pt(valor, 2)}"
+
+
+def _format_optional_decimal(value: Any, casas: int = 2) -> str:
+    if value is None:
+        return "não calculado"
+    try:
+        return _format_decimal_pt(float(value), casas)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Valor decimal opcional invalido na Nota Tecnica: {value}")
+
+
+def _format_optional_percent(value: Any, casas: int = 2) -> str:
+    formatted = _format_optional_decimal(value, casas)
+    if formatted == "não calculado":
+        return formatted
+    return f"{formatted}%"
+
+
+def _format_optional_ratio_percent(value: Any, casas: int = 2) -> str:
+    if value is None:
+        return "não calculado"
+    try:
+        return f"{_format_decimal_pt(float(value) * 100.0, casas)}%"
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Valor proporcional opcional invalido na Nota Tecnica: {value}")
+
+
+def _ratio(numerator: Any, denominator: Any) -> float | None:
+    try:
+        den = float(denominator)
+        if den == 0:
+            return None
+        return float(numerator) / den
+    except (TypeError, ValueError):
+        raise RuntimeError(
+            f"Razao obrigatoria invalida na Nota Tecnica: numerador={numerator}; denominador={denominator}"
+        )
+
+
+def _build_parkinson_demografia_context(
+    farmacia_row: dict[str, Any],
+    evolucao_anual: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not evolucao_anual:
+        raise RuntimeError("Evolucao anual de Parkinson obrigatoria ausente para comparacao demografica.")
+
+    id_ibge7 = str(farmacia_row.get("id_ibge7") or "").strip()
+    municipio = str(farmacia_row.get("municipio") or "").strip()
+    uf = str(farmacia_row.get("uf") or "").strip().upper()
+    if not id_ibge7 or not municipio or not uf:
+        raise RuntimeError("Cache de farmacias sem municipio/UF/id_ibge7 obrigatorios para comparacao demografica de Parkinson.")
+
+    observacao = max(
+        evolucao_anual,
+        key=lambda row: (
+            float(row["qtd_cpfs_distintos"]),
+            int(row["ano_base"]),
+        ),
+    )
+    qtd_cpfs_observado = int(observacao["qtd_cpfs_distintos"])
+    ano_observado = int(observacao["ano_base"])
+    if qtd_cpfs_observado <= 0:
+        raise RuntimeError("Quantidade de CPFs distintos de Parkinson invalida para comparacao demografica.")
+
+    demografia = get_df_dados_ibge_demografia()
+    _require_columns(
+        demografia,
+        {"id_ibge7", "ano_censo", "idade_min", "nu_populacao"},
+        "Cache demografico IBGE",
+    )
+    demografia = demografia.with_columns([
+        pl.col("id_ibge7").cast(pl.Utf8),
+        pl.col("ano_censo").cast(pl.Int16, strict=False),
+        pl.col("idade_min").cast(pl.Int16, strict=False),
+        pl.col("nu_populacao").cast(pl.Int64, strict=False),
+    ])
+    demo_municipio = demografia.filter(
+        (pl.col("id_ibge7") == id_ibge7)
+        & (pl.col("ano_censo") == _IBGE_ANO_CENSO_DEMOGRAFIA)
+    )
+    if demo_municipio.is_empty():
+        raise RuntimeError(
+            f"Demografia IBGE {_IBGE_ANO_CENSO_DEMOGRAFIA} obrigatoria ausente para id_ibge7={id_ibge7}."
+        )
+
+    pop_total = demo_municipio.select(pl.sum("nu_populacao")).item()
+    pop_50_mais = (
+        demo_municipio
+        .filter(pl.col("idade_min") >= 50)
+        .select(pl.sum("nu_populacao"))
+        .item()
+    )
+    if pop_total is None or int(pop_total) <= 0:
+        raise RuntimeError(f"Demografia IBGE sem populacao total valida para id_ibge7={id_ibge7}.")
+    if pop_50_mais is None or int(pop_50_mais) <= 0:
+        raise RuntimeError(f"Demografia IBGE sem populacao 50+ valida para id_ibge7={id_ibge7}.")
+    if demo_municipio.filter(pl.col("idade_min").is_null() | pl.col("nu_populacao").is_null()).height > 0:
+        raise RuntimeError(f"Demografia IBGE com idade/populacao nula para id_ibge7={id_ibge7}.")
+
+    pop_total_int = int(pop_total)
+    pop_50_int = int(pop_50_mais)
+    faixas_dict: dict[int, int] = {}
+    for row in demo_municipio.select(["idade_min", "nu_populacao"]).to_dicts():
+        idade_min = int(row["idade_min"])
+        populacao = int(row["nu_populacao"])
+        if idade_min < 0 or populacao < 0:
+            raise RuntimeError(f"Demografia IBGE com idade/populacao invalida para id_ibge7={id_ibge7}.")
+        faixa_inicio = 80 if idade_min >= 80 else (idade_min // 10) * 10
+        faixas_dict[faixa_inicio] = faixas_dict.get(faixa_inicio, 0) + populacao
+    faixas_etarias = [
+        {
+            "faixa": "80+",
+            "faixa_inicio": faixa_inicio,
+            "populacao": populacao,
+            "percentual": populacao / pop_total_int,
+            "destacar_50_mais": True,
+        }
+        if faixa_inicio >= 80
+        else {
+            "faixa": f"{faixa_inicio} a {faixa_inicio + 9}",
+            "faixa_inicio": faixa_inicio,
+            "populacao": populacao,
+            "percentual": populacao / pop_total_int,
+            "destacar_50_mais": faixa_inicio >= 50,
+        }
+        for faixa_inicio, populacao in sorted(faixas_dict.items())
+    ]
+    if sum(item["populacao"] for item in faixas_etarias) != pop_total_int:
+        raise RuntimeError(f"Faixas etarias IBGE nao reconciliam com populacao total para id_ibge7={id_ibge7}.")
+
+    casos_esperados = pop_50_int * _PARKINSON_PREVALENCIA_50_MAIS
+    if casos_esperados <= 0:
+        raise RuntimeError(f"Casos esperados de Parkinson invalidos para id_ibge7={id_ibge7}.")
+
+    razao_observado_esperado = qtd_cpfs_observado / casos_esperados
+
+    return {
+        "id_ibge7": id_ibge7,
+        "municipio": _title_case_pt(municipio),
+        "uf": uf,
+        "ano_censo": _IBGE_ANO_CENSO_DEMOGRAFIA,
+        "populacao_total": pop_total_int,
+        "populacao_50_mais": pop_50_int,
+        "percentual_50_mais": pop_50_int / pop_total_int,
+        "faixas_etarias": faixas_etarias,
+        "prevalencia_referencia": _PARKINSON_PREVALENCIA_50_MAIS,
+        "casos_esperados": casos_esperados,
+        "ano_observado": ano_observado,
+        "qtd_cpfs_distintos_observado": qtd_cpfs_observado,
+        "razao_observado_esperado": razao_observado_esperado,
+        "percentual_superior": (razao_observado_esperado - 1) * 100,
+    }
 
 
 def _vez_ou_vezes(valor_formatado: str) -> str:
@@ -164,7 +424,7 @@ def _build_incompatibilidade_patologica_context(
     data_inicio: Optional[date],
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
-    """Busca os dados atuais da matriz para o texto da incompatibilidade patologica."""
+    """Busca matriz e ranking anual de patologias para o texto clinico."""
     try:
         df = get_df_matriz_risco()
         df = df.rename({c: c.lower() for c in df.columns})
@@ -192,6 +452,106 @@ def _build_incompatibilidade_patologica_context(
     else:
         periodo_desc = 'no período analisado'
 
+    cnpj_limpo = _cnpj_digits(cnpj)
+    farmacias = get_df_dados_farmacia()
+    _require_columns(farmacias, {"id_cnpj", "cnpj", "id_ibge7", "municipio", "uf"}, "Cache de farmacias")
+    farmacias = farmacias.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").alias("_cnpj_limpo")
+    )
+    farmacia_rows = farmacias.filter(pl.col("_cnpj_limpo") == cnpj_limpo)
+    if farmacia_rows.is_empty():
+        raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_cnpj no cache de farmacias.")
+    farmacia_row = farmacia_rows.row(0, named=True)
+    id_cnpj = int(farmacia_row["id_cnpj"])
+
+    clinica = get_df_analise_gtin_inconsistencia_clinica()
+    _require_columns(clinica, _CLINICA_COLUNAS_OBRIGATORIAS, "Cache clinico por CNPJ")
+    clinica = clinica.filter(pl.col("id_cnpj") == id_cnpj)
+    if data_inicio:
+        clinica = clinica.filter(pl.col("ano_base") >= data_inicio.year)
+    if data_fim:
+        clinica = clinica.filter(pl.col("ano_base") <= data_fim.year)
+    clinica_anual = clinica
+    if clinica_anual.is_empty():
+        raise RuntimeError(
+            f"Indicador clinico critico sem detalhamento anual para o CNPJ {cnpj_limpo}."
+        )
+    clinica_incompativel = clinica_anual.filter(pl.col("qtd_cpfs_incompativeis") > 0)
+    if clinica_incompativel.is_empty():
+        raise RuntimeError(
+            f"Indicador clinico critico sem anos com incompatibilidade para o CNPJ {cnpj_limpo}."
+        )
+
+    ranking_df = (
+        clinica_incompativel
+        .group_by(["patologia", "regra_clinica"])
+        .agg(
+            pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
+            pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
+            pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
+            pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
+            pl.sum("valor_total_pago").alias("valor_total_pago"),
+            pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
+            pl.sum("cpfs_incompativeis_esperados_regiao").alias("cpfs_incompativeis_esperados_regiao"),
+            pl.sum("excesso_cpfs_incompativeis_vs_regiao").alias("excesso_cpfs_incompativeis_vs_regiao"),
+            pl.mean("percentual_cpfs_incompativeis").alias("percentual_medio_cpfs_incompativeis"),
+            pl.mean("percentual_regional_cpfs_incompativeis").alias("percentual_medio_regional_cpfs_incompativeis"),
+            pl.mean("razao_percentual_vs_regiao").alias("razao_media_percentual_vs_regiao"),
+            pl.min("rank_regional_qtd_cpfs_incompativeis").alias("melhor_rank_regional_qtd_cpfs_incompativeis"),
+            pl.max("percentil_regional_qtd_cpfs_incompativeis").alias("maior_percentil_regional_qtd_cpfs_incompativeis"),
+            pl.max("participacao_cpfs_incompativeis_regiao").alias("maior_participacao_cpfs_incompativeis_regiao"),
+            pl.min("ano_base").alias("ano_inicio"),
+            pl.max("ano_base").alias("ano_fim"),
+            pl.len().alias("qtd_linhas_anuais"),
+        )
+    )
+
+    ranking = []
+    for item in ranking_df.iter_rows(named=True):
+        key = _clinica_meta_key(item["patologia"], item["regra_clinica"])
+        meta = _CLINICA_PATOLOGIA_META.get(key)
+        if meta is None:
+            raise RuntimeError(
+                "Recorte clinico sem mapeamento textual para a Nota Tecnica: "
+                f"patologia={item['patologia']}; regra_clinica={item['regra_clinica']}."
+            )
+        evolucao_anual = sorted(
+            [
+                row
+                for row in clinica_anual.iter_rows(named=True)
+                if _clinica_meta_key(row["patologia"], row["regra_clinica"]) == key
+            ],
+            key=lambda row: int(row["ano_base"]),
+        )
+        item_context = {
+            **item,
+            "titulo": meta["titulo"],
+            "objeto": meta["objeto"],
+            "criterio": meta["criterio"],
+            "descricao": meta["descricao"],
+            "evolucao_anual": evolucao_anual,
+        }
+        if key == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
+            item_context["demografia_parkinson"] = _build_parkinson_demografia_context(
+                farmacia_row,
+                evolucao_anual,
+            )
+        ranking.append(item_context)
+
+    ranking.sort(
+        key=lambda item: (
+            float(item["excesso_cpfs_incompativeis_vs_regiao"])
+            if item["excesso_cpfs_incompativeis_vs_regiao"] is not None
+            else float("-inf"),
+            float(item["qtd_cpfs_incompativeis"]),
+            float(item["valor_incompativel_pago"]),
+            float(item["percentual_medio_cpfs_incompativeis"])
+            if item["percentual_medio_cpfs_incompativeis"] is not None
+            else float("-inf"),
+        ),
+        reverse=True,
+    )
+
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_clinico"),
@@ -201,16 +561,173 @@ def _build_incompatibilidade_patologica_context(
         "multiplicador_regiao": as_float("risco_clinico_reg"),
         "multiplicador_uf": as_float("risco_clinico_uf"),
         "multiplicador_brasil": as_float("risco_clinico_br"),
+        "id_cnpj": id_cnpj,
+        "ranking_patologias": ranking,
     }
 
 
-def _add_incompatibilidade_patologica_text(doc, num: str, razao_social: str, clinico_comp: dict[str, Any]):
-    """Adiciona texto analitico de incompatibilidade patologica usando a matriz atual."""
+def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int):
+    evolucao_anual = item.get("evolucao_anual") or []
+    if not evolucao_anual:
+        raise RuntimeError("Evolucao anual clinica obrigatoria ausente para a Nota Tecnica.")
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Dispensa\u00e7\u00f5es anuais de medicamentos para {item["objeto"]} no per\u00edodo selecionado',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(evolucao_anual) + 1, cols=8)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(0.55), Inches(0.75), Inches(0.82), Inches(0.70), Inches(0.82), Inches(0.92), Inches(0.75), Inches(1.69)],
+    )
+
+    headers = [
+        'Ano',
+        'CPFs total',
+        'CPFs incompat.',
+        '% CPFs',
+        'Aut. total',
+        'Aut. incompat.',
+        '% aut.',
+        'Valor incompatível',
+    ]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=7, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(evolucao_anual, start=1):
+        pct_cpfs = row.get("percentual_cpfs_incompativeis")
+        if pct_cpfs is None:
+            pct_cpfs = _ratio(row.get("qtd_cpfs_incompativeis"), row.get("qtd_cpfs_distintos"))
+        pct_aut = _ratio(row.get("qtd_autorizacoes_incompativeis"), row.get("qtd_autorizacoes"))
+        values = [
+            str(int(row["ano_base"])),
+            _format_int_pt(row["qtd_cpfs_distintos"]),
+            _format_int_pt(row["qtd_cpfs_incompativeis"]),
+            _format_optional_ratio_percent(pct_cpfs, 2),
+            _format_int_pt(row["qtd_autorizacoes"]),
+            _format_int_pt(row["qtd_autorizacoes_incompativeis"]),
+            _format_optional_ratio_percent(pct_aut, 2),
+            _format_brl_pt(row["valor_incompativel_pago"]),
+        ]
+        for col_idx, value in enumerate(values):
+            para = table.rows[row_idx].cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _run(para, value, color='0F172A', size=7, bold=col_idx in (2, 5, 7))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
+    demografia = item.get("demografia_parkinson")
+    if not demografia:
+        raise RuntimeError("Comparacao demografica de Parkinson obrigatoria ausente para a Nota Tecnica.")
+
+    p_demo = doc.add_paragraph()
+    _run(
+        p_demo,
+        f'Segundo os dados demogr\u00e1ficos do IBGE/Censo {demografia["ano_censo"]}, a popula\u00e7\u00e3o de '
+        f'{demografia["municipio"]}/{demografia["uf"]} era de ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p_demo, _format_int_pt(demografia["populacao_total"]), color='334155', size=10, bold=True)
+    _run(p_demo, ' habitantes, dos quais ', color='0F172A', size=10)
+    _run(p_demo, _format_int_pt(demografia["populacao_50_mais"]), color='334155', size=10, bold=True)
+    _run(p_demo, ' possu\u00edam idade igual ou superior a 50 anos, correspondendo a ', color='0F172A', size=10)
+    _run(p_demo, _format_optional_ratio_percent(demografia["percentual_50_mais"], 2), color='334155', size=10, bold=True)
+    _run(
+        p_demo,
+        ' da popula\u00e7\u00e3o municipal. Estudo divulgado pelo Hospital de Cl\u00ednicas de Porto Alegre, com base na coorte ELSI-Brasil, indica preval\u00eancia nacional ajustada de aproximadamente ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p_demo, _format_optional_ratio_percent(demografia["prevalencia_referencia"], 2), color='334155', size=10, bold=True)
+    _run(
+        p_demo,
+        ' de doen\u00e7a de Parkinson entre pessoas com 50 anos ou mais. Aplicando-se essa preval\u00eancia \u00e0 popula\u00e7\u00e3o municipal nessa faixa et\u00e1ria, seriam esperados aproximadamente ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p_demo, _format_optional_decimal(demografia["casos_esperados"], 0), color='334155', size=10, bold=True)
+    _run(p_demo, ' casos de doen\u00e7a de Parkinson no munic\u00edpio. ', color='0F172A', size=10)
+    _run(
+        p_demo,
+        f'No ano de {demografia["ano_observado"]}, a farm\u00e1cia analisada registrou ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p_demo, _format_int_pt(demografia["qtd_cpfs_distintos_observado"]), color='334155', size=10, bold=True)
+    _run(
+        p_demo,
+        ' CPFs distintos com dispensa\u00e7\u00e3o de medicamentos para Parkinson, volume equivalente a ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p_demo, _format_optional_decimal(demografia["razao_observado_esperado"], 2), color='334155', size=10, bold=True)
+    _run(p_demo, ' vezes a estimativa epidemiol\u00f3gica de casos esperados para todo o munic\u00edpio, ou ', color='0F172A', size=10)
+    _run(p_demo, _format_optional_percent(abs(demografia["percentual_superior"]), 2), color='334155', size=10, bold=True)
+    if demografia["percentual_superior"] >= 0:
+        _run(p_demo, ' acima dessa estimativa, ', color='0F172A', size=10)
+    else:
+        _run(p_demo, ' abaixo dessa estimativa, ', color='0F172A', size=10)
+    _run(
+        p_demo,
+        'refor\u00e7ando a atipicidade do padr\u00e3o observado.',
+        color='0F172A',
+        size=10,
+    )
+    _add_figura_parkinson_faixas_etarias(doc, demografia, figure_number=4)
+    _add_figura_parkinson_comparacao(doc, demografia, figure_number=5)
+
+
+def _add_incompatibilidade_patologica_text(
+    doc,
+    num: str,
+    razao_social: str,
+    clinico_comp: dict[str, Any],
+    tabela_inicio_num: int,
+):
+    """Adiciona texto analitico de incompatibilidade patologica e ranking interno."""
     periodo_desc = clinico_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(clinico_comp["percentual"], 2)
     multiplicador_reg_fmt = _format_decimal_pt(clinico_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
+    ranking_patologias = clinico_comp.get("ranking_patologias") or []
+    if not ranking_patologias:
+        raise RuntimeError("Ranking clinico obrigatorio ausente para a Nota Tecnica.")
 
     doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
 
@@ -239,6 +756,66 @@ def _add_incompatibilidade_patologica_text(doc, num: str, razao_social: str, cli
     _run(p2, ' o das farmácias localizadas em seu Estado e ', color='0F172A', size=10)
     _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+
+    p3 = doc.add_paragraph()
+    _run(
+        p3,
+        'Para identificar a origem clínica do alerta, o detalhamento anual do indicador foi ordenado internamente por excesso de CPFs incompatíveis em relação ao esperado para a região, quantidade de CPFs incompatíveis, valor incompatível pago e percentual de CPFs incompatíveis. ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        p3,
+        'Assim, são descritas abaixo apenas as patologias que apresentaram incompatibilidades efetivas para o CNPJ analisado.',
+        color='0F172A',
+        size=10,
+    )
+
+    for idx, item in enumerate(ranking_patologias, start=1):
+        doc.add_heading(f'{num}.{idx} {item["titulo"]}: {item["criterio"]}', level=3)
+        pct_fmt = _format_optional_ratio_percent(item.get("percentual_medio_cpfs_incompativeis"), 2)
+        percentil_fmt = _format_optional_ratio_percent(item.get("maior_percentil_regional_qtd_cpfs_incompativeis"), 2)
+        participacao_fmt = _format_optional_ratio_percent(item.get("maior_participacao_cpfs_incompativeis_regiao"), 2)
+        excesso_fmt = _format_optional_decimal(item.get("excesso_cpfs_incompativeis_vs_regiao"), 0)
+        rank = item.get("melhor_rank_regional_qtd_cpfs_incompativeis")
+        rank_fmt = _format_int_pt(rank) if rank is not None else "não calculado"
+
+        p_item = doc.add_paragraph()
+        _run(
+            p_item,
+            f'No recorte de {item["titulo"]}, relativo a {item["criterio"]}, foram identificadas vendas de {item["descricao"]}. ',
+            color='0F172A',
+            size=10,
+        )
+        _run(p_item, 'A soma anual do indicador registrou ', color='0F172A', size=10)
+        _run(p_item, _format_int_pt(item["qtd_cpfs_incompativeis"]), color='334155', size=10, bold=True)
+        _run(p_item, ' CPFs incompatíveis, ', color='0F172A', size=10)
+        _run(p_item, _format_int_pt(item["qtd_autorizacoes_incompativeis"]), color='334155', size=10, bold=True)
+        _run(p_item, ' autorizações incompatíveis e ', color='0F172A', size=10)
+        _run(p_item, _format_brl_pt(item["valor_incompativel_pago"]), color='334155', size=10, bold=True)
+        _run(p_item, ' em valores pagos associados a essas operações. ', color='0F172A', size=10)
+        _run(p_item, f'No universo de vendas de medicamentos para {item["objeto"]}, ', color='0F172A', size=10)
+        _run(p_item, pct_fmt, color='334155', size=10, bold=True)
+        _run(p_item, f' dos CPFs enquadraram-se no critério de incompatibilidade clínica ({item["criterio"]}). ', color='0F172A', size=10)
+
+        _add_clinica_evolucao_anual_table(doc, item, tabela_inicio_num + idx - 1)
+        if _clinica_meta_key(item["patologia"], item["regra_clinica"]) == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
+            _add_parkinson_demografia_text(doc, item)
+
+        p_rank = doc.add_paragraph()
+        _run(p_rank, 'No contexto regional, o estabelecimento ocupou a posição ', color='0F172A', size=10)
+        _run(p_rank, rank_fmt, color='334155', size=10, bold=True)
+        _run(p_rank, ' por quantidade de CPFs incompatíveis, situando-se no percentil regional ', color='0F172A', size=10)
+        _run(p_rank, percentil_fmt, color='334155', size=10, bold=True)
+        _run(p_rank, ' e concentrando ', color='0F172A', size=10)
+        _run(p_rank, participacao_fmt, color='334155', size=10, bold=True)
+        _run(p_rank, ' dos CPFs incompatíveis apurados na região para esse recorte', color='0F172A', size=10)
+        if excesso_fmt != "não calculado":
+            _run(p_rank, '. A comparação com o padrão esperado para a região indica excesso estimado de aproximadamente ', color='0F172A', size=10)
+            _run(p_rank, excesso_fmt, color='334155', size=10, bold=True)
+            _run(p_rank, ' CPFs incompatíveis.', color='0F172A', size=10)
+        else:
+            _run(p_rank, '. O excesso de CPFs incompatíveis contra o esperado regional não foi calculável.', color='0F172A', size=10)
 
 
 def _build_teto_context(

@@ -759,7 +759,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
 
             t_query_main = time.time() - t0 # ATUALIZA VARIÁVEL DE PERFORMANCE
-            print(f"  ⏱ Tempo da query: {t_query_main:.4f}s")
+            tqdm.write(f"  ⏱ Tempo da query: {t_query_main:.4f}s")
 
             if results:
                 vendas = [r for r in results if r["compra_venda"] == "V"]
@@ -769,21 +769,21 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
                     data_min_venda = min(v["data_movimentacao"] for v in vendas)
                     data_max_venda = max(v["data_movimentacao"] for v in vendas)
                     total_vendas = len(vendas)
-                    print(
+                    tqdm.write(
                         f"  ✓ Vendas (movimentacao): {total_vendas} registros | Período real: {data_min_venda:%d/%m/%Y} a {data_max_venda:%d/%m/%Y}")
                 else:
-                    print(f"  ⚠ Vendas (movimentacao): 0 registros")
+                    tqdm.write(f"  ⚠ Vendas (movimentacao): 0 registros")
 
                 if compras:
                     data_min_compra = min(c["data_movimentacao"] for c in compras)
                     data_max_compra = max(c["data_movimentacao"] for c in compras)
                     total_compras = len(compras)
-                    print(
+                    tqdm.write(
                         f"  ✓ Aquisições (fazenda): {total_compras} registros | Período real: {data_min_compra:%d/%m/%Y} a {data_max_compra:%d/%m/%Y}")
                 else:
-                    print(f"  ⚠ Aquisições (fazenda): 0 registros")
+                    tqdm.write(f"  ⚠ Aquisições (fazenda): 0 registros")
 
-                print(f"  ✓ Total de registros retornados: {len(results)}")
+                tqdm.write(f"  ✓ Total de registros retornados: {len(results)}")
             else:
                 logging.warning(f"  ⚠ Nenhum registro retornado pela query principal")
 
@@ -791,7 +791,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             if not results:
                 msg = f"CNPJ {cnpj} sem registros retornados na query principal"
-                print(msg)
+                tqdm.write(msg)
                 finalizar_processamento_sem_dados(cursor, conn, id_proc_atual, cnpj, time.time() - t_start_cnpj, msg)
                 continue
 
@@ -1063,7 +1063,7 @@ for i in tqdm(classif_list, desc=f"{'Progresso Geral:':<25}", position=0, ncols=
 
             try:
                 # AQUI MUDOU: Adicionamos ', dados_risco_cnpj' no final
-                print('')
+                tqdm.write('')
                 # if gerarRelatorioMovimentacao(cnpj, d_rel, 1, dados_risco_cnpj) == "SALVO": pass
                 # if gerarRelatorioMovimentacao(cnpj, d_rel, 2, dados_risco_cnpj) == "SALVO": pass
             except Exception as e:

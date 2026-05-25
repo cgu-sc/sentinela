@@ -49,6 +49,7 @@ from .nota_tecnica_criticidades import (
     _add_dias_pico_text,
     _add_dispersao_geografica_text,
     _add_falecidos_criticidade_text,
+    _add_indicadores_criticos_quadro,
     _add_incompatibilidade_patologica_text,
     _add_per_capita_text,
     _add_polimedicamento_text,
@@ -61,6 +62,7 @@ from .nota_tecnica_criticidades import (
     _build_dias_pico_context,
     _build_dispersao_geografica_context,
     _build_falecidos_context,
+    _build_indicadores_criticos_quadro,
     _build_incompatibilidade_patologica_context,
     _build_per_capita_context,
     _build_polimedicamento_context,
@@ -472,7 +474,6 @@ def _build_sumario(
     criticos: set[str],
     razao_social: str,
     cnpj_fmt: str,
-    has_falecidos: bool = False,
     has_crm_evidencias: bool = False,
 ):
     """Constrói a página de sumário dinâmica."""
@@ -495,10 +496,8 @@ def _build_sumario(
     _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
     _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='7')
-    if has_falecidos:
-        _add_toc_entry(doc, '  7.1', 'Vendas de medicamentos para pessoas falecidas', page='7')
-    criticidade_start = 2 if has_falecidos else 1
-    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    criticidade_start = 1
+    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
     for _, num, full_title in criticidade_items:
         _add_toc_entry(doc, f'  {num}', full_title, page='7')
     if has_crm_evidencias:
@@ -565,7 +564,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     else:
         periodo_txt = 'Histórico completo'
 
-    falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim)
+    criticos = _get_criticos(cnpj)
+    timing.mark("criticidades matriz")
+    falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim) if 'falecidos' in criticos else None
+    if 'falecidos' in criticos and not falecidos_comp:
+        raise RuntimeError('Indicador falecidos classificado como critico, mas o detalhamento de falecidos nao foi encontrado para a Nota Tecnica.')
     timing.mark("contexto falecidos")
     anexo_ii_comp = _build_anexo_ii_context(cnpj, db)
     timing.mark("contexto anexo II memoria de calculo")
@@ -708,13 +711,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_sumario.left_margin = Inches(0.7); sec_sumario.right_margin = Inches(0.7)
 
     # SUMÁRIO
-    criticos = _get_criticos(cnpj)
     _build_sumario(
         doc,
         criticos,
         razao_social,
         cnpj_fmt,
-        has_falecidos=bool(falecidos_comp),
         has_crm_evidencias=bool(crm_evidencias_comp),
     )
     timing.mark("capa e sumario")
@@ -775,10 +776,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
-    if falecidos_comp:
-        snippets.append('[Subitem 7.1] vendas de medicamentos para pessoas falecidas')
-        criticidade_start = 2
-    criticidade_items_intro = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    criticidade_items_intro = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
     for _, num, full_title in criticidade_items_intro:
         snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
     crm_evidencias_num_intro = f'7.{criticidade_start + len(criticidade_items_intro)}'
@@ -803,7 +801,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
-    if falecidos_comp: fontes.append('SIRC e SISOBI')
+    if 'falecidos' in criticos: fontes.append('SIRC e SISOBI')
     if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos pelas farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
@@ -1193,18 +1191,24 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
-    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades, a seguir detalhadas, que corroboram o achado principal de “vendas sem comprovação” apurado para ela.')
+    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela a seguir sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela; na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.')
+    indicadores_criticos_quadro = _build_indicadores_criticos_quadro(cnpj)
+    if indicadores_criticos_quadro:
+        tabela_num += 1
+        _add_indicadores_criticos_quadro(doc, indicadores_criticos_quadro, tabela_num)
+        timing.mark("secao 7 quadro indicadores criticos")
     resumos_criticidades: list[str] = []
     criticidade_start = 1
-    if falecidos_comp:
-        _add_falecidos_criticidade_text(doc, '7.1', razao_social, falecidos_comp)
-        resumos_criticidades.append(_build_resumo_falecidos('7.1', falecidos_comp))
-        criticidade_start = 2
-        timing.mark("secao 7 falecidos texto")
-
-    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start, exclude_keys={'falecidos'})
+    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
     if criticidade_items:
         for key, num, full_title in criticidade_items:
+            if key == 'falecidos':
+                if not falecidos_comp:
+                    raise RuntimeError('Indicador falecidos classificado como critico, mas o contexto detalhado esta ausente na Nota Tecnica.')
+                _add_falecidos_criticidade_text(doc, num, razao_social, falecidos_comp)
+                resumos_criticidades.append(_build_resumo_falecidos(num, falecidos_comp))
+                timing.mark(f"secao 7 criticidade {key}")
+                continue
             if key == 'incompatibilidade_patologica':
                 clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
                 if clinico_comp:
@@ -1336,7 +1340,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
             timing.mark(f"secao 7 criticidade {key}")
-    elif not falecidos_comp:
+    else:
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
     timing.mark("secao 7 fechamento criticidades")
 

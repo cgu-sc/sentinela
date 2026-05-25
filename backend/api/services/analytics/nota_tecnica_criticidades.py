@@ -14,7 +14,7 @@ from data_cache import (
     scan_analise_gtin_inconsistencia_clinica,
 )
 from .falecidos import get_falecidos_data
-from .indicadores import _INDICATOR_FLAGS
+from .indicadores import INDICATOR_MAPPING, _INDICATOR_FLAGS
 from .nota_tecnica_docx_utils import (
     _cell_bg,
     _footnote_ref,
@@ -46,10 +46,30 @@ _SECAO5_MAP = [
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
 ]
-_FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
+_FORCAR_TODOS_CRITICOS_NOTA_TECNICA = False
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
 _CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
+
+_INDICADOR_QUADRO_META = {
+    "percentual_nao_comprovacao": ("Percentual não comprovação", "pct"),
+    "falecidos": ("Vendas para falecidos", "pct3"),
+    "incompatibilidade_patologica": ("Incompatibilidade patológica", "pct"),
+    "teto": ("Dispensação em teto máximo", "pct"),
+    "polimedicamento": ("4+ itens por autorização", "pct"),
+    "ticket_medio": ("Ticket médio", "val"),
+    "receita_paciente": ("Receita por paciente", "val"),
+    "per_capita": ("Venda per capita mensal", "val"),
+    "alto_custo": ("Medicamentos de alto custo", "pct"),
+    "vendas_rapidas": ("Vendas rápidas (<60s)", "pct"),
+    "volume_atipico": ("Volume atípico", "dec"),
+    "recorrencia_sistemica": ("Recorrência sistêmica", "pct"),
+    "dias_pico": ("Concentração em dias de pico", "pct"),
+    "dispersao_geografica": ("Dispersão interestadual", "pct"),
+    "compra_unica": ("Compra única", "pct"),
+    "hhi_crm": ("Concentração de CRMs (HHI)", "dec"),
+    "crms_irregulares": ("CRMs irregulares", "pct"),
+}
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -436,6 +456,160 @@ def _get_criticos(cnpj: str) -> set[str]:
         }
     except Exception:
         return set()
+
+
+def _format_indicador_quadro_value(value: Any, formato: str) -> str:
+    if value is None:
+        raise RuntimeError("Indicador critico sem valor calculado para o quadro da Nota Tecnica.")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"Valor de indicador critico invalido para a Nota Tecnica: {value}")
+    if formato == "val":
+        return _format_brl_pt(numeric_value)
+    if formato == "pct3":
+        return f"{_format_decimal_pt(numeric_value, 3)}%"
+    if formato == "pct":
+        return f"{_format_decimal_pt(numeric_value, 2)}%"
+    if formato == "dec":
+        return _format_decimal_pt(numeric_value, 2)
+    raise RuntimeError(f"Formato de indicador critico nao mapeado para a Nota Tecnica: {formato}")
+
+
+def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
+    """Monta linhas do quadro-resumo de indicadores críticos a partir da matriz de risco."""
+    cnpj_norm = _cnpj_digits(cnpj)
+    df = get_df_matriz_risco()
+    df = df.rename({c: c.lower() for c in df.columns})
+    required_columns = {"cnpj"}
+    for key in _INDICATOR_FLAGS:
+        if key not in INDICATOR_MAPPING:
+            raise RuntimeError(f"Indicador sem mapeamento de colunas para a Nota Tecnica: {key}")
+        if key not in _INDICADOR_QUADRO_META:
+            raise RuntimeError(f"Indicador sem metadados de quadro para a Nota Tecnica: {key}")
+        c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        _c_atencao, c_critico = _INDICATOR_FLAGS[key]
+        required_columns.update({c_val, c_med_reg, c_risco_reg, c_critico})
+
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "Matriz de risco sem colunas obrigatorias para o quadro de indicadores criticos da Nota Tecnica: "
+            + ", ".join(missing_columns)
+        )
+
+    rows = df.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
+    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if rows.height == 0:
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para a Nota Tecnica.")
+    if rows.height > 1:
+        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco.")
+
+    matriz_row = rows.row(0, named=True)
+    quadro_rows: list[dict[str, Any]] = []
+    for key, (_c_atencao, c_critico) in _INDICATOR_FLAGS.items():
+        if int(matriz_row.get(c_critico) or 0) != 1:
+            continue
+        c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        label, formato = _INDICADOR_QUADRO_META[key]
+        valor = matriz_row.get(c_val)
+        mediana_reg = matriz_row.get(c_med_reg)
+        risco_reg = matriz_row.get(c_risco_reg)
+        if valor is None or mediana_reg is None or risco_reg is None:
+            raise RuntimeError(f"Indicador critico {key} sem valor, mediana regional ou risco regional na matriz.")
+        quadro_rows.append({
+            "key": key,
+            "indicador": label,
+            "valor": _format_indicador_quadro_value(valor, formato),
+            "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
+            "risco_regional": float(risco_reg),
+            "status": "CRÍTICO",
+        })
+
+    return sorted(
+        quadro_rows,
+        key=lambda item: (
+            0 if item["key"] == "percentual_nao_comprovacao" else 1,
+            -float(item["risco_regional"]),
+            item["indicador"],
+        ),
+    )
+
+
+def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num: int) -> None:
+    """Adiciona tabela sintética com os indicadores críticos da matriz de risco."""
+    if not rows:
+        return
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Indicadores classificados como críticos na matriz de risco do Sistema Sentinela',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(rows) + 1, cols=5)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(2.65), Inches(1.18), Inches(1.18), Inches(0.94), Inches(1.05)])
+
+    headers = ["Indicador", "Farmácia", "Mediana região", "Risco região", "Status"]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='FFFFFF', size=7, bold=True)
+        _cell_bg(cell, '1E293B')
+
+    for row_idx, row in enumerate(rows, start=1):
+        cells = table.rows[row_idx].cells
+        values = [
+            row["indicador"],
+            row["valor"],
+            row["mediana_regional"],
+            f'{_format_decimal_pt(row["risco_regional"], 1)}x',
+            row["status"],
+        ]
+        fill = 'F8FAFC' if row_idx % 2 else 'FFFFFF'
+        for col_idx, value in enumerate(values):
+            cell = cells[col_idx]
+            para = cell.paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+            if col_idx == 4:
+                _cell_bg(cell, 'FEE2E2')
+                _run(para, value, color='991B1B', size=7, bold=True)
+            elif col_idx == 3:
+                _cell_bg(cell, 'FEF2F2')
+                _run(para, value, color='991B1B', size=7, bold=True)
+            else:
+                _cell_bg(cell, fill)
+                _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir da matriz de risco consolidada. O risco regional corresponde ao multiplicador entre o indicador da farmácia e a mediana dos estabelecimentos de sua região de saúde.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _build_falecidos_context(

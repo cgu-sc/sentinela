@@ -116,7 +116,6 @@ export const INDICATOR_THRESHOLDS = {
 
   // 6. Integridade Médica
   hhi_crm:                { atencao: 2.0, critico: 3.0 },
-  exclusividade_crm:      { atencao: 2.0, critico: 3.0 },
   crms_irregulares:       { atencao: 2.0, critico: 3.0 },
 };
 
@@ -195,8 +194,6 @@ export const INDICATOR_GROUPS = [
     indicators: [
       { key: 'hhi_crm', label: 'Concentração de CRMs (HHI)', formato: 'dec', thresholdKey: 'hhi_crm',
         metodologia: 'Índice Herfindahl-Hirschman (HHI) que mede a concentração de prescrições. HHI elevado indica dependência excessiva de poucos CRMs.' },
-      { key: 'exclusividade_crm', label: 'Exclusividade de CRMs', formato: 'pct', thresholdKey: 'exclusividade_crm',
-        metodologia: 'Percentual de médicos que prescrevem EXCLUSIVAMENTE nesta farmácia em todo o Brasil.' },
       { key: 'crms_irregulares', label: 'Faturamento CRMs Irregulares', formato: 'pct', thresholdKey: 'crms_irregulares',
         metodologia: 'Percentual do faturamento vinculado a CRMs inexistentes no CFM ou com prescrições anteriores à data de inscrição do médico.' },
     ],

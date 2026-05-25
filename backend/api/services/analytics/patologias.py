@@ -4,8 +4,8 @@ import polars as pl
 from fastapi import HTTPException
 
 from data_cache import (
-    get_df_analise_gtin_inconsistencia_clinica_municipio,
     get_df_dados_ibge_demografia,
+    scan_analise_gtin_inconsistencia_clinica_municipio,
 )
 from ...schemas.analytics import (
     MunicipioParkinsonResponse,
@@ -19,18 +19,17 @@ _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 
 
 def _municipio_patologia_df(id_ibge7: int, patologia: Optional[str], ano_base: Optional[int]) -> pl.DataFrame:
-    df = get_df_analise_gtin_inconsistencia_clinica_municipio().with_columns([
+    query = scan_analise_gtin_inconsistencia_clinica_municipio().with_columns([
         pl.col("id_ibge7").cast(pl.Int64, strict=False),
         pl.col("patologia").cast(pl.Utf8),
         pl.col("regra_clinica").cast(pl.Utf8),
-    ])
-    filtered = df.filter(pl.col("id_ibge7") == id_ibge7)
+    ]).filter(pl.col("id_ibge7") == id_ibge7)
     if patologia:
         patologia_normalizada = patologia.strip().lower()
-        filtered = filtered.filter(pl.col("patologia").str.to_lowercase() == patologia_normalizada)
+        query = query.filter(pl.col("patologia").str.to_lowercase() == patologia_normalizada)
     if ano_base is not None:
-        filtered = filtered.filter(pl.col("ano_base") == ano_base)
-    return filtered.sort(["patologia", "regra_clinica", "ano_base"])
+        query = query.filter(pl.col("ano_base") == ano_base)
+    return query.collect().sort(["patologia", "regra_clinica", "ano_base"])
 
 
 def _row_to_patologia_schema(row: dict) -> MunicipioPatologiaRowSchema:
@@ -103,18 +102,17 @@ def get_municipio_parkinson(
     id_ibge7: int,
     ano_base: Optional[int] = None,
 ) -> MunicipioParkinsonResponse:
-    df = get_df_analise_gtin_inconsistencia_clinica_municipio().with_columns([
+    query = scan_analise_gtin_inconsistencia_clinica_municipio().with_columns([
         pl.col("id_ibge7").cast(pl.Int64, strict=False),
         pl.col("patologia").cast(pl.Utf8),
         pl.col("regra_clinica").cast(pl.Utf8),
-    ])
-    df = df.filter(
+    ]).filter(
         (pl.col("id_ibge7") == id_ibge7)
         & pl.col("patologia").str.to_lowercase().str.contains("parkinson")
     )
     if ano_base is not None:
-        df = df.filter(pl.col("ano_base") == ano_base)
-    df = df.sort(["ano_base", "regra_clinica"])
+        query = query.filter(pl.col("ano_base") == ano_base)
+    df = query.collect().sort(["ano_base", "regra_clinica"])
 
     ano_censo, pop_50 = _populacao_50_mais(id_ibge7)
     casos_esperados = pop_50 * _PARKINSON_PREVALENCIA_50_MAIS

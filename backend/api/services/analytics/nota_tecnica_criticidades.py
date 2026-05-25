@@ -7,10 +7,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 from data_cache import (
-    get_df_analise_gtin_inconsistencia_clinica,
     get_df_dados_ibge_demografia,
     get_df_dados_farmacia,
     get_df_matriz_risco,
+    get_df_perfil_estabelecimento,
+    scan_analise_gtin_inconsistencia_clinica,
 )
 from .falecidos import get_falecidos_data
 from .indicadores import _INDICATOR_FLAGS
@@ -44,11 +45,11 @@ _SECAO5_MAP = [
     ('dispersao_geografica',         '5.17', 'Vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
-    ('exclusividade_crm',            '5.20', 'Vendas de medicamentos vinculadas a CRMs de médicos cujos registros, no Sistema Autorizador de Vendas do PFPB, foram realizados exclusivamente pela Farmácia {farmacia}'),
 ]
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = True
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
+_CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -124,6 +125,11 @@ def _cnpj_digits(cnpj: str) -> str:
     return digits
 
 
+def _format_cnpj_pt(value: Any) -> str:
+    digits = _cnpj_digits(str(value))
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
+
+
 def _format_int_pt(value: Any) -> str:
     try:
         return f"{int(round(float(value))):,}".replace(",", ".")
@@ -174,6 +180,119 @@ def _ratio(numerator: Any, denominator: Any) -> float | None:
         raise RuntimeError(
             f"Razao obrigatoria invalida na Nota Tecnica: numerador={numerator}; denominador={denominator}"
         )
+
+
+def _sum_numeric(rows: list[dict[str, Any]], key: str) -> float:
+    total = 0.0
+    for row in rows:
+        try:
+            total += float(row.get(key) or 0)
+        except (TypeError, ValueError):
+            raise RuntimeError(f"Valor numerico obrigatorio invalido na Nota Tecnica: campo={key}; valor={row.get(key)}")
+    return total
+
+
+def _build_clinica_municipal_context(
+    item: dict[str, Any],
+    clinica_municipio: pl.DataFrame,
+    perfil_estabelecimento: pl.DataFrame,
+    id_cnpj_alvo: int,
+) -> dict[str, Any]:
+    key = _clinica_meta_key(item["patologia"], item["regra_clinica"])
+    clinica_recorte = clinica_municipio.filter(
+        pl.struct(["patologia", "regra_clinica"]).map_elements(
+            lambda row: _clinica_meta_key(row["patologia"], row["regra_clinica"]) == key,
+            return_dtype=pl.Boolean,
+        )
+    )
+    if clinica_recorte.is_empty():
+        raise RuntimeError(
+            "Comparativo municipal clinico sem linhas para o recorte da Nota Tecnica: "
+            f"patologia={item['patologia']}; regra_clinica={item['regra_clinica']}."
+        )
+
+    agregado_cnpj = (
+        clinica_recorte
+        .group_by("id_cnpj")
+        .agg(
+            pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
+            pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
+            pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
+            pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
+        )
+        .with_columns(pl.col("id_cnpj").cast(pl.Int64))
+    )
+    alvo_rows = agregado_cnpj.filter(pl.col("id_cnpj") == id_cnpj_alvo)
+    if alvo_rows.is_empty():
+        raise RuntimeError(f"Comparativo municipal clinico sem CNPJ alvo id_cnpj={id_cnpj_alvo}.")
+
+    all_rows = agregado_cnpj.to_dicts()
+    alvo = alvo_rows.row(0, named=True)
+    total = {
+        "qtd_farmacias": len(all_rows),
+        "qtd_cpfs_distintos": _sum_numeric(all_rows, "qtd_cpfs_distintos"),
+        "qtd_cpfs_incompativeis": _sum_numeric(all_rows, "qtd_cpfs_incompativeis"),
+        "qtd_autorizacoes_incompativeis": _sum_numeric(all_rows, "qtd_autorizacoes_incompativeis"),
+        "valor_incompativel_pago": _sum_numeric(all_rows, "valor_incompativel_pago"),
+    }
+    demais = {
+        "qtd_farmacias": max(int(total["qtd_farmacias"]) - 1, 0),
+        "qtd_cpfs_distintos": float(total["qtd_cpfs_distintos"]) - float(alvo["qtd_cpfs_distintos"]),
+        "qtd_cpfs_incompativeis": float(total["qtd_cpfs_incompativeis"]) - float(alvo["qtd_cpfs_incompativeis"]),
+        "qtd_autorizacoes_incompativeis": (
+            float(total["qtd_autorizacoes_incompativeis"]) - float(alvo["qtd_autorizacoes_incompativeis"])
+        ),
+        "valor_incompativel_pago": float(total["valor_incompativel_pago"]) - float(alvo["valor_incompativel_pago"]),
+    }
+    resumo = [
+        {"grupo": "Farmácia analisada", "qtd_farmacias": 1, **alvo},
+        {"grupo": "Demais farmácias do município", **demais},
+        {"grupo": "Total do município", **total},
+    ]
+
+    perfil_required = {"id_cnpj", "cnpj", "razao_social"}
+    _require_columns(perfil_estabelecimento, perfil_required, "Cache de perfil dos estabelecimentos")
+    perfil = (
+        perfil_estabelecimento
+        .select(["id_cnpj", "cnpj", "razao_social"])
+        .with_columns([
+            pl.col("id_cnpj").cast(pl.Int64),
+            pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14),
+            pl.col("razao_social").cast(pl.Utf8),
+        ])
+        .unique(subset=["id_cnpj"], keep="first")
+    )
+
+    top = (
+        agregado_cnpj
+        .sort(
+            ["qtd_cpfs_incompativeis", "valor_incompativel_pago", "qtd_cpfs_distintos"],
+            descending=[True, True, True],
+        )
+        .head(20)
+        .join(perfil, on="id_cnpj", how="left")
+        .with_row_index("posicao", offset=1)
+    )
+    if top.filter(pl.col("cnpj").is_null() | pl.col("razao_social").is_null()).height > 0:
+        ids = top.filter(pl.col("cnpj").is_null() | pl.col("razao_social").is_null()).get_column("id_cnpj").to_list()
+        raise RuntimeError(f"Perfil de estabelecimento ausente para Top 20 municipal clinico: id_cnpj={ids}.")
+
+    total_incompativel = float(total["qtd_cpfs_incompativeis"])
+    top_rows = []
+    for row in top.to_dicts():
+        top_rows.append({
+            **row,
+            "is_alvo": int(row["id_cnpj"]) == id_cnpj_alvo,
+            "percentual_cpfs_incompativeis": _ratio(row["qtd_cpfs_incompativeis"], row["qtd_cpfs_distintos"]),
+            "participacao_municipal": _ratio(row["qtd_cpfs_incompativeis"], total_incompativel),
+        })
+
+    return {
+        "resumo": resumo,
+        "top20": top_rows,
+        "qtd_farmacias_municipio": int(total["qtd_farmacias"]),
+        "qtd_cpfs_incompativeis_municipio": total_incompativel,
+    }
 
 
 def _build_parkinson_demografia_context(
@@ -264,7 +383,7 @@ def _build_parkinson_demografia_context(
         }
         for faixa_inicio, populacao in sorted(faixas_dict.items())
     ]
-    if sum(item["populacao"] for item in faixas_etarias) != pop_total_int:
+    if sum(int(item["populacao"]) for item in faixas_etarias) != pop_total_int:
         raise RuntimeError(f"Faixas etarias IBGE nao reconciliam com populacao total para id_ibge7={id_ibge7}.")
 
     casos_esperados = pop_50_int * _PARKINSON_PREVALENCIA_50_MAIS
@@ -424,7 +543,7 @@ def _build_incompatibilidade_patologica_context(
     data_inicio: Optional[date],
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
-    """Busca matriz e ranking anual de patologias para o texto clinico."""
+    """Busca matriz e, quando houver detalhamento, ranking anual de patologias."""
     try:
         df = get_df_matriz_risco()
         df = df.rename({c: c.lower() for c in df.columns})
@@ -463,80 +582,97 @@ def _build_incompatibilidade_patologica_context(
         raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_cnpj no cache de farmacias.")
     farmacia_row = farmacia_rows.row(0, named=True)
     id_cnpj = int(farmacia_row["id_cnpj"])
+    id_ibge7 = str(farmacia_row["id_ibge7"]).strip()
+    if not id_ibge7:
+        raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_ibge7 no cache de farmacias.")
 
-    clinica = get_df_analise_gtin_inconsistencia_clinica()
+    clinica = (
+        scan_analise_gtin_inconsistencia_clinica()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .collect()
+    )
     _require_columns(clinica, _CLINICA_COLUNAS_OBRIGATORIAS, "Cache clinico por CNPJ")
-    clinica = clinica.filter(pl.col("id_cnpj") == id_cnpj)
+    clinica_municipio = (
+        scan_analise_gtin_inconsistencia_clinica()
+        .filter(pl.col("id_ibge7").cast(pl.Utf8) == id_ibge7)
+        .collect()
+    )
+    _require_columns(clinica_municipio, _CLINICA_COLUNAS_OBRIGATORIAS, "Cache clinico municipal")
     if data_inicio:
         clinica = clinica.filter(pl.col("ano_base") >= data_inicio.year)
+        clinica_municipio = clinica_municipio.filter(pl.col("ano_base") >= data_inicio.year)
     if data_fim:
         clinica = clinica.filter(pl.col("ano_base") <= data_fim.year)
-    clinica_anual = clinica
-    if clinica_anual.is_empty():
-        raise RuntimeError(
-            f"Indicador clinico critico sem detalhamento anual para o CNPJ {cnpj_limpo}."
-        )
-    clinica_incompativel = clinica_anual.filter(pl.col("qtd_cpfs_incompativeis") > 0)
-    if clinica_incompativel.is_empty():
-        raise RuntimeError(
-            f"Indicador clinico critico sem anos com incompatibilidade para o CNPJ {cnpj_limpo}."
-        )
-
-    ranking_df = (
-        clinica_incompativel
-        .group_by(["patologia", "regra_clinica"])
-        .agg(
-            pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
-            pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
-            pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
-            pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
-            pl.sum("valor_total_pago").alias("valor_total_pago"),
-            pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
-            pl.sum("cpfs_incompativeis_esperados_regiao").alias("cpfs_incompativeis_esperados_regiao"),
-            pl.sum("excesso_cpfs_incompativeis_vs_regiao").alias("excesso_cpfs_incompativeis_vs_regiao"),
-            pl.mean("percentual_cpfs_incompativeis").alias("percentual_medio_cpfs_incompativeis"),
-            pl.mean("percentual_regional_cpfs_incompativeis").alias("percentual_medio_regional_cpfs_incompativeis"),
-            pl.mean("razao_percentual_vs_regiao").alias("razao_media_percentual_vs_regiao"),
-            pl.min("rank_regional_qtd_cpfs_incompativeis").alias("melhor_rank_regional_qtd_cpfs_incompativeis"),
-            pl.max("percentil_regional_qtd_cpfs_incompativeis").alias("maior_percentil_regional_qtd_cpfs_incompativeis"),
-            pl.max("participacao_cpfs_incompativeis_regiao").alias("maior_participacao_cpfs_incompativeis_regiao"),
-            pl.min("ano_base").alias("ano_inicio"),
-            pl.max("ano_base").alias("ano_fim"),
-            pl.len().alias("qtd_linhas_anuais"),
-        )
-    )
-
+        clinica_municipio = clinica_municipio.filter(pl.col("ano_base") <= data_fim.year)
+    perfil_estabelecimento = get_df_perfil_estabelecimento()
     ranking = []
-    for item in ranking_df.iter_rows(named=True):
-        key = _clinica_meta_key(item["patologia"], item["regra_clinica"])
-        meta = _CLINICA_PATOLOGIA_META.get(key)
-        if meta is None:
-            raise RuntimeError(
-                "Recorte clinico sem mapeamento textual para a Nota Tecnica: "
-                f"patologia={item['patologia']}; regra_clinica={item['regra_clinica']}."
+    clinica_anual = clinica
+    if not clinica_anual.is_empty():
+        clinica_incompativel = clinica_anual.filter(pl.col("qtd_cpfs_incompativeis") > 0)
+        if not clinica_incompativel.is_empty():
+            ranking_df = (
+                clinica_incompativel
+                .group_by(["patologia", "regra_clinica"])
+                .agg(
+                    pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
+                    pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
+                    pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
+                    pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
+                    pl.sum("valor_total_pago").alias("valor_total_pago"),
+                    pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
+                    pl.sum("cpfs_incompativeis_esperados_regiao").alias("cpfs_incompativeis_esperados_regiao"),
+                    pl.sum("excesso_cpfs_incompativeis_vs_regiao").alias("excesso_cpfs_incompativeis_vs_regiao"),
+                    pl.mean("percentual_cpfs_incompativeis").alias("percentual_medio_cpfs_incompativeis"),
+                    pl.mean("percentual_regional_cpfs_incompativeis").alias("percentual_medio_regional_cpfs_incompativeis"),
+                    pl.mean("razao_percentual_vs_regiao").alias("razao_media_percentual_vs_regiao"),
+                    pl.min("rank_regional_qtd_cpfs_incompativeis").alias("melhor_rank_regional_qtd_cpfs_incompativeis"),
+                    pl.max("percentil_regional_qtd_cpfs_incompativeis").alias("maior_percentil_regional_qtd_cpfs_incompativeis"),
+                    pl.max("participacao_cpfs_incompativeis_regiao").alias("maior_participacao_cpfs_incompativeis_regiao"),
+                    pl.min("ano_base").alias("ano_inicio"),
+                    pl.max("ano_base").alias("ano_fim"),
+                    pl.len().alias("qtd_linhas_anuais"),
+                )
+                .filter(
+                    (pl.col("valor_incompativel_pago") >= _CLINICA_VALOR_MINIMO_DETALHAMENTO)
+                )
             )
-        evolucao_anual = sorted(
-            [
-                row
-                for row in clinica_anual.iter_rows(named=True)
-                if _clinica_meta_key(row["patologia"], row["regra_clinica"]) == key
-            ],
-            key=lambda row: int(row["ano_base"]),
-        )
-        item_context = {
-            **item,
-            "titulo": meta["titulo"],
-            "objeto": meta["objeto"],
-            "criterio": meta["criterio"],
-            "descricao": meta["descricao"],
-            "evolucao_anual": evolucao_anual,
-        }
-        if key == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
-            item_context["demografia_parkinson"] = _build_parkinson_demografia_context(
-                farmacia_row,
-                evolucao_anual,
-            )
-        ranking.append(item_context)
+
+            for item in ranking_df.iter_rows(named=True):
+                key = _clinica_meta_key(item["patologia"], item["regra_clinica"])
+                meta = _CLINICA_PATOLOGIA_META.get(key)
+                if meta is None:
+                    raise RuntimeError(
+                        "Recorte clinico sem mapeamento textual para a Nota Tecnica: "
+                        f"patologia={item['patologia']}; regra_clinica={item['regra_clinica']}."
+                    )
+                evolucao_anual = sorted(
+                    [
+                        row
+                        for row in clinica_anual.iter_rows(named=True)
+                        if _clinica_meta_key(row["patologia"], row["regra_clinica"]) == key
+                    ],
+                    key=lambda row: int(row["ano_base"]),
+                )
+                item_context = {
+                    **item,
+                    "titulo": meta["titulo"],
+                    "objeto": meta["objeto"],
+                    "criterio": meta["criterio"],
+                    "descricao": meta["descricao"],
+                    "evolucao_anual": evolucao_anual,
+                    "municipal": _build_clinica_municipal_context(
+                        item,
+                        clinica_municipio,
+                        perfil_estabelecimento,
+                        id_cnpj,
+                    ),
+                }
+                if key == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
+                    item_context["demografia_parkinson"] = _build_parkinson_demografia_context(
+                        farmacia_row,
+                        evolucao_anual,
+                    )
+                ranking.append(item_context)
 
     ranking.sort(
         key=lambda item: (
@@ -649,7 +785,253 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
     _keep_small_table_together(p_title, table, [p_foot])
 
 
-def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
+def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: int) -> None:
+    municipal = item.get("municipal")
+    if not municipal:
+        raise RuntimeError("Comparativo municipal clinico obrigatorio ausente para a Nota Tecnica.")
+    resumo = municipal.get("resumo") or []
+    if len(resumo) != 3:
+        raise RuntimeError("Resumo municipal clinico deve conter farmacia analisada, demais farmacias e total municipal.")
+    total_incompativel = resumo[-1]["qtd_cpfs_incompativeis"]
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Comparativo municipal de CPFs incompatíveis no recorte de {item["titulo"]}',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(resumo) + 1, cols=8)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(1.63), Inches(0.52), Inches(0.72), Inches(0.82), Inches(0.61), Inches(0.82), Inches(1.10), Inches(0.78)],
+    )
+
+    headers = ["Grupo", "Farm.", "CPFs total", "CPFs incompat.", "% incompat.", "Aut. incompat.", "Valor incompat.", "Part. incompat. mun."]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=6, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(resumo, start=1):
+        is_total_municipio = row["grupo"] == "Total do município"
+        values = [
+            row["grupo"],
+            _format_int_pt(row["qtd_farmacias"]),
+            _format_int_pt(row["qtd_cpfs_distintos"]),
+            _format_int_pt(row["qtd_cpfs_incompativeis"]),
+            "—" if is_total_municipio else _format_optional_ratio_percent(_ratio(row["qtd_cpfs_incompativeis"], row["qtd_cpfs_distintos"]), 2),
+            _format_int_pt(row["qtd_autorizacoes_incompativeis"]),
+            _format_brl_pt(row["valor_incompativel_pago"]),
+            _format_optional_ratio_percent(_ratio(row["qtd_cpfs_incompativeis"], total_incompativel), 2),
+        ]
+        for col_idx, value in enumerate(values):
+            para = table.rows[row_idx].cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+            _run(para, value, color='0F172A', size=6, bold=row_idx == 1 or col_idx in (3, 6, 7))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: int) -> None:
+    municipal = item.get("municipal")
+    if not municipal:
+        raise RuntimeError("Ranking municipal clinico obrigatorio ausente para a Nota Tecnica.")
+    top20 = municipal.get("top20") or []
+    if not top20:
+        raise RuntimeError("Top 20 municipal clinico sem farmacias para a Nota Tecnica.")
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Farmácias do município com maior quantidade de CPFs incompatíveis no recorte de {item["titulo"]}',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(top20) + 1, cols=9)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(0.36), Inches(0.96), Inches(1.60), Inches(0.58), Inches(0.72), Inches(0.55), Inches(0.74), Inches(0.93), Inches(0.56)],
+    )
+
+    headers = ["Pos.", "CNPJ", "Razão social", "CPFs total", "CPFs incompat.", "% incompat.", "Aut. incompat.", "Valor incompat.", "Part. incompat. mun."]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=6, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(top20, start=1):
+        values = [
+            _format_int_pt(row["posicao"]),
+            _format_cnpj_pt(row["cnpj"]),
+            str(row["razao_social"]),
+            _format_int_pt(row["qtd_cpfs_distintos"]),
+            _format_int_pt(row["qtd_cpfs_incompativeis"]),
+            _format_optional_ratio_percent(row["percentual_cpfs_incompativeis"], 2),
+            _format_int_pt(row["qtd_autorizacoes_incompativeis"]),
+            _format_brl_pt(row["valor_incompativel_pago"]),
+            _format_optional_ratio_percent(row["participacao_municipal"], 2),
+        ]
+        for col_idx, value in enumerate(values):
+            para = table.rows[row_idx].cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 2 else WD_ALIGN_PARAGRAPH.CENTER
+            _run(para, value, color='0F172A', size=6, bold=bool(row["is_alvo"]) or col_idx in (4, 7, 8))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _is_parkinson_menor_50_item(item: dict[str, Any]) -> bool:
+    return _clinica_meta_key(item["patologia"], item["regra_clinica"]) == ("DOENCA DE PARKINSON", "IDADE_MENOR_50")
+
+
+def _count_incompatibilidade_patologica_tables(clinico_comp: dict[str, Any]) -> int:
+    ranking_patologias = clinico_comp.get("ranking_patologias") or []
+    total = len(ranking_patologias) * 3
+    total += sum(1 for item in ranking_patologias if _is_parkinson_menor_50_item(item))
+    return total
+
+
+def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num: int) -> None:
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Memória de cálculo da comparação epidemiológica de doença de Parkinson',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    rows = [
+        (
+            "População municipal total",
+            _format_int_pt(demografia["populacao_total"]),
+            'IBGE/Censo',
+        ),
+        (
+            "População municipal com 50 anos ou mais",
+            _format_int_pt(demografia["populacao_50_mais"]),
+            "Denominador usado na estimativa epidemiológica",
+        ),
+        (
+            "Prevalência de referência para Parkinson em 50+",
+            _format_optional_ratio_percent(demografia["prevalencia_referencia"], 2),
+            "Parâmetro aplicado à população municipal com 50 anos ou mais",
+        ),
+        (
+            "Casos esperados no município",
+            _format_optional_decimal(demografia["casos_esperados"], 0),
+            "População 50+ multiplicada pela prevalência de referência",
+        ),
+        (
+            "CPFs observados na farmácia",
+            _format_int_pt(demografia["qtd_cpfs_distintos_observado"]),
+            f'CPFs com dispensação de medicamentos para Parkinson em {demografia["ano_observado"]}',
+        ),
+        (
+            "Razão observado/esperado",
+            f'{_format_optional_decimal(demografia["razao_observado_esperado"], 2)}x',
+            "CPFs observados divididos pelos casos esperados no município",
+        ),
+    ]
+
+    table = doc.add_table(rows=len(rows) + 1, cols=3)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(table, [Inches(2.45), Inches(1.25), Inches(3.35)])
+
+    headers = ["Métrica", "Valor", "Observação"]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=7, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(rows, start=1):
+        for col_idx, value in enumerate(row):
+            para = table.rows[row_idx].cells[col_idx].paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx == 1 else WD_ALIGN_PARAGRAPH.LEFT
+            _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sistema Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_parkinson_demografia_text(doc, item: dict[str, Any], tabela_num: int) -> None:
     demografia = item.get("demografia_parkinson")
     if not demografia:
         raise RuntimeError("Comparacao demografica de Parkinson obrigatoria ausente para a Nota Tecnica.")
@@ -657,15 +1039,15 @@ def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
     p_demo = doc.add_paragraph()
     _run(
         p_demo,
-        f'Segundo os dados demogr\u00e1ficos do IBGE/Censo {demografia["ano_censo"]}, a popula\u00e7\u00e3o de '
-        f'{demografia["municipio"]}/{demografia["uf"]} era de ',
+        'Segundo os dados demogr\u00e1ficos do IBGE/Censo, a popula\u00e7\u00e3o de '
+        f'{demografia["municipio"]}/{demografia["uf"]} é de ',
         color='0F172A',
         size=10,
     )
     _run(p_demo, _format_int_pt(demografia["populacao_total"]), color='334155', size=10, bold=True)
     _run(p_demo, ' habitantes, dos quais ', color='0F172A', size=10)
     _run(p_demo, _format_int_pt(demografia["populacao_50_mais"]), color='334155', size=10, bold=True)
-    _run(p_demo, ' possu\u00edam idade igual ou superior a 50 anos, correspondendo a ', color='0F172A', size=10)
+    _run(p_demo, ' possuem idade igual ou superior a 50 anos, correspondendo a ', color='0F172A', size=10)
     _run(p_demo, _format_optional_ratio_percent(demografia["percentual_50_mais"], 2), color='334155', size=10, bold=True)
     _run(
         p_demo,
@@ -676,7 +1058,7 @@ def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
     _run(p_demo, _format_optional_ratio_percent(demografia["prevalencia_referencia"], 2), color='334155', size=10, bold=True)
     _run(
         p_demo,
-        ' de doen\u00e7a de Parkinson entre pessoas com 50 anos ou mais. Aplicando-se essa preval\u00eancia \u00e0 popula\u00e7\u00e3o municipal nessa faixa et\u00e1ria, seriam esperados aproximadamente ',
+        ' de doen\u00e7a de Parkinson entre pessoas com 50 anos ou mais. Aplicando-se essa preval\u00eancia \u00e0 popula\u00e7\u00e3o municipal nessa faixa et\u00e1ria, são esperados aproximadamente ',
         color='0F172A',
         size=10,
     )
@@ -684,7 +1066,7 @@ def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
     _run(p_demo, ' casos de doen\u00e7a de Parkinson no munic\u00edpio. ', color='0F172A', size=10)
     _run(
         p_demo,
-        f'No ano de {demografia["ano_observado"]}, a farm\u00e1cia analisada registrou ',
+        f'No ano de {demografia["ano_observado"]}, a farm\u00e1cia analisada registra ',
         color='0F172A',
         size=10,
     )
@@ -708,6 +1090,21 @@ def _add_parkinson_demografia_text(doc, item: dict[str, Any]) -> None:
         color='0F172A',
         size=10,
     )
+    p_memoria = doc.add_paragraph()
+    _run(
+        p_memoria,
+        'Para explicitar a memória de cálculo da comparação demográfica, apresenta-se a seguir a população municipal utilizada, a prevalência epidemiológica de referência, a estimativa de casos esperados no município e o volume de CPFs observados na farmácia.',
+        color='0F172A',
+        size=10,
+    )
+    _add_parkinson_demografia_table(doc, demografia, tabela_num)
+    p_figuras = doc.add_paragraph()
+    _run(
+        p_figuras,
+        'As figuras seguintes apresentam, de forma visual, os dois componentes dessa comparação: primeiro, a composição etária da população municipal utilizada como base da estimativa; em seguida, o confronto entre os casos esperados no município e os CPFs observados na farmácia.',
+        color='0F172A',
+        size=10,
+    )
     _add_figura_parkinson_faixas_etarias(doc, demografia, figure_number=4)
     _add_figura_parkinson_comparacao(doc, demografia, figure_number=5)
 
@@ -726,9 +1123,6 @@ def _add_incompatibilidade_patologica_text(
     multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
     ranking_patologias = clinico_comp.get("ranking_patologias") or []
-    if not ranking_patologias:
-        raise RuntimeError("Ranking clinico obrigatorio ausente para a Nota Tecnica.")
-
     doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
 
     p1 = doc.add_paragraph()
@@ -757,6 +1151,9 @@ def _add_incompatibilidade_patologica_text(
     _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
     _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
 
+    if not ranking_patologias:
+        return
+
     p3 = doc.add_paragraph()
     _run(
         p3,
@@ -771,51 +1168,107 @@ def _add_incompatibilidade_patologica_text(
         size=10,
     )
 
+    tabela_atual_num = tabela_inicio_num
     for idx, item in enumerate(ranking_patologias, start=1):
         doc.add_heading(f'{num}.{idx} {item["titulo"]}: {item["criterio"]}', level=3)
-        pct_fmt = _format_optional_ratio_percent(item.get("percentual_medio_cpfs_incompativeis"), 2)
+        pct_agregado_fmt = _format_optional_ratio_percent(
+            _ratio(item.get("qtd_cpfs_incompativeis"), item.get("qtd_cpfs_distintos")),
+            2,
+        )
         percentil_fmt = _format_optional_ratio_percent(item.get("maior_percentil_regional_qtd_cpfs_incompativeis"), 2)
         participacao_fmt = _format_optional_ratio_percent(item.get("maior_participacao_cpfs_incompativeis_regiao"), 2)
-        excesso_fmt = _format_optional_decimal(item.get("excesso_cpfs_incompativeis_vs_regiao"), 0)
         rank = item.get("melhor_rank_regional_qtd_cpfs_incompativeis")
         rank_fmt = _format_int_pt(rank) if rank is not None else "não calculado"
 
         p_item = doc.add_paragraph()
+        is_parkinson_menor_50 = _is_parkinson_menor_50_item(item)
+        if is_parkinson_menor_50:
+            _run(
+                p_item,
+                'No período analisado, as apurações anuais registram dispensações de medicamentos para doença de Parkinson a ',
+                color='0F172A',
+                size=10,
+            )
+            _run(p_item, _format_int_pt(item["qtd_cpfs_distintos"]), color='334155', size=10, bold=True)
+            _run(
+                p_item,
+                ' CPFs distintos. Embora a doença seja predominantemente associada a faixas etárias mais elevadas, ',
+                color='0F172A',
+                size=10,
+            )
+            _run(p_item, _format_int_pt(item["qtd_cpfs_incompativeis"]), color='334155', size=10, bold=True)
+            _run(p_item, ' desses beneficiários, equivalentes a ', color='0F172A', size=10)
+            _run(p_item, pct_agregado_fmt, color='334155', size=10, bold=True)
+            _run(
+                p_item,
+                ', têm menos de 50 anos na data da dispensação. As operações associadas a esse grupo somam ',
+                color='0F172A',
+                size=10,
+            )
+            _run(p_item, _format_int_pt(item["qtd_autorizacoes_incompativeis"]), color='334155', size=10, bold=True)
+            _run(p_item, ' autorizações e ', color='0F172A', size=10)
+            _run(p_item, _format_brl_pt(item["valor_incompativel_pago"]), color='334155', size=10, bold=True)
+            _run(p_item, ' em valores pagos pelo programa.', color='0F172A', size=10)
+        else:
+            _run(
+                p_item,
+                f'No período analisado, as apurações anuais registraram dispensações de medicamentos para {item["objeto"]} a ',
+                color='0F172A',
+                size=10,
+            )
+            _run(p_item, _format_int_pt(item["qtd_cpfs_distintos"]), color='334155', size=10, bold=True)
+            _run(p_item, ' CPFs distintos. Desse universo, ', color='0F172A', size=10)
+            _run(p_item, _format_int_pt(item["qtd_cpfs_incompativeis"]), color='334155', size=10, bold=True)
+            _run(p_item, ' CPFs, equivalentes a ', color='0F172A', size=10)
+            _run(p_item, pct_agregado_fmt, color='334155', size=10, bold=True)
+            _run(
+                p_item,
+                f', enquadraram-se no critério de incompatibilidade clínica ({item["criterio"]}). As operações associadas a esse grupo somaram ',
+                color='0F172A',
+                size=10,
+            )
+            _run(p_item, _format_int_pt(item["qtd_autorizacoes_incompativeis"]), color='334155', size=10, bold=True)
+            _run(p_item, ' autorizações e ', color='0F172A', size=10)
+            _run(p_item, _format_brl_pt(item["valor_incompativel_pago"]), color='334155', size=10, bold=True)
+            _run(p_item, ' em valores pagos pelo programa.', color='0F172A', size=10)
+
+        _add_clinica_evolucao_anual_table(doc, item, tabela_atual_num)
+        tabela_atual_num += 1
+        if is_parkinson_menor_50:
+            _add_parkinson_demografia_text(doc, item, tabela_atual_num)
+            tabela_atual_num += 1
+
+        p_municipio = doc.add_paragraph()
         _run(
-            p_item,
-            f'No recorte de {item["titulo"]}, relativo a {item["criterio"]}, foram identificadas vendas de {item["descricao"]}. ',
+            p_municipio,
+            'A comparação territorial mais próxima permite avaliar se o achado se distribui entre os estabelecimentos do município ou se está concentrado na farmácia analisada. ',
             color='0F172A',
             size=10,
         )
-        _run(p_item, 'A soma anual do indicador registrou ', color='0F172A', size=10)
-        _run(p_item, _format_int_pt(item["qtd_cpfs_incompativeis"]), color='334155', size=10, bold=True)
-        _run(p_item, ' CPFs incompatíveis, ', color='0F172A', size=10)
-        _run(p_item, _format_int_pt(item["qtd_autorizacoes_incompativeis"]), color='334155', size=10, bold=True)
-        _run(p_item, ' autorizações incompatíveis e ', color='0F172A', size=10)
-        _run(p_item, _format_brl_pt(item["valor_incompativel_pago"]), color='334155', size=10, bold=True)
-        _run(p_item, ' em valores pagos associados a essas operações. ', color='0F172A', size=10)
-        _run(p_item, f'No universo de vendas de medicamentos para {item["objeto"]}, ', color='0F172A', size=10)
-        _run(p_item, pct_fmt, color='334155', size=10, bold=True)
-        _run(p_item, f' dos CPFs enquadraram-se no critério de incompatibilidade clínica ({item["criterio"]}). ', color='0F172A', size=10)
-
-        _add_clinica_evolucao_anual_table(doc, item, tabela_inicio_num + idx - 1)
-        if _clinica_meta_key(item["patologia"], item["regra_clinica"]) == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
-            _add_parkinson_demografia_text(doc, item)
+        _run(
+            p_municipio,
+            'As tabelas seguintes resumem o volume observado na farmácia, nos demais estabelecimentos municipais e no conjunto do município, além de listar as farmácias com maior quantidade de CPFs incompatíveis para o mesmo recorte clínico.',
+            color='0F172A',
+            size=10,
+        )
+        _add_clinica_municipio_resumo_table(doc, item, tabela_atual_num)
+        tabela_atual_num += 1
+        _add_clinica_municipio_top20_table(doc, item, tabela_atual_num)
+        tabela_atual_num += 1
 
         p_rank = doc.add_paragraph()
-        _run(p_rank, 'No contexto regional, o estabelecimento ocupou a posição ', color='0F172A', size=10)
+        _run(p_rank, 'No contexto regional, o estabelecimento ocupa a posição ', color='0F172A', size=10)
         _run(p_rank, rank_fmt, color='334155', size=10, bold=True)
-        _run(p_rank, ' por quantidade de CPFs incompatíveis, situando-se no percentil regional ', color='0F172A', size=10)
+        _run(p_rank, ' por quantidade de CPFs incompatíveis e situa-se no percentil regional ', color='0F172A', size=10)
         _run(p_rank, percentil_fmt, color='334155', size=10, bold=True)
-        _run(p_rank, ' e concentrando ', color='0F172A', size=10)
+        _run(p_rank, '. Além disso, concentra ', color='0F172A', size=10)
         _run(p_rank, participacao_fmt, color='334155', size=10, bold=True)
-        _run(p_rank, ' dos CPFs incompatíveis apurados na região para esse recorte', color='0F172A', size=10)
-        if excesso_fmt != "não calculado":
-            _run(p_rank, '. A comparação com o padrão esperado para a região indica excesso estimado de aproximadamente ', color='0F172A', size=10)
-            _run(p_rank, excesso_fmt, color='334155', size=10, bold=True)
-            _run(p_rank, ' CPFs incompatíveis.', color='0F172A', size=10)
-        else:
-            _run(p_rank, '. O excesso de CPFs incompatíveis contra o esperado regional não foi calculável.', color='0F172A', size=10)
+        _run(
+            p_rank,
+            ' dos CPFs incompatíveis apurados na região para esse recorte clínico, indicando que o achado regional está fortemente associado ao estabelecimento analisado.',
+            color='0F172A',
+            size=10,
+        )
 
 
 def _build_teto_context(

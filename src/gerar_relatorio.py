@@ -866,7 +866,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
 
                 "Concentração de CRMs (HHI)": "METODOLOGIA: Utiliza o Índice Herfindahl-Hirschman (HHI) para medir a concentração de prescrições. Calcula a soma dos quadrados das participações de cada médico no faturamento da farmácia. O quadrado penaliza exponencialmente a concentração. Um HHI elevado indica que a farmácia depende excessivamente de poucos CRMs.",
 
-                "Exclusividade de CRMs":"Mede o percentual de médicos que atuam EXCLUSIVAMENTE nesta farmácia em todo o Brasil. Um CRM é considerado 'exclusivo' quando 100% de suas prescrições no programa Farmácia Popular são destinadas a um único estabelecimento.",
 
                 "Irregularidade de CRMs":"Identifica o percentual do faturamento vinculado a CRMs com irregularidades cadastrais. Duas anomalias são detectadas: (1) CRM/UF não localizado na base oficial do Conselho Federal de Medicina (CFM); (2) Prescrições realizadas ANTES da data de inscrição do médico no CFM. Ambas indicam uso de CRMs inexistentes ou fraudulentos."
 
@@ -921,7 +920,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                     "Dispersão Geográfica Interestadual":   (2.0, 3.0),
                     "Compra Única":                         (1.4, 1.7),
                     "Concentração de CRMs (HHI)":           (2.0, 3.0),
-                    "Exclusividade de CRMs":                (2.0, 3.0),
                     "Faturamento Atrelado a CRMs Irregulares": (2.0, 3.0),
                 }
 
@@ -958,7 +956,6 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
                 ]),
                 ("6. Integridade Médica", [
                     ("Concentração de CRMs (HHI)", "val_hhi_crm", "med_hhi_crm_reg", "med_hhi_crm_uf", "med_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br", "dec"),
-                    ("Exclusividade de CRMs", "pct_exclusividade_crm", "med_exclusividade_crm_reg", "med_exclusividade_crm_uf", "med_exclusividade_crm_br", "risco_exclusividade_crm_reg", "risco_exclusividade_crm_uf", "risco_exclusividade_crm_br", "pct"),
                     ("Faturamento Atrelado a CRMs Irregulares", "pct_crms_irregulares", "med_crms_irregulares_reg", "med_crms_irregulares_uf", "med_crms_irregulares_br", "risco_crms_irregulares_reg", "risco_crms_irregulares_uf", "risco_crms_irregulares_br", "pct"),
                 ]),
             ]

@@ -24,8 +24,8 @@ from cache_files import (
 from data_cache import (
     get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
-    get_df_dados_socios, get_df_teia_fonte_nivel2, get_df_teia_fonte_nivel3, 
-    get_df_teia_fonte_nivel4, get_df_dados_par, get_cache_dir
+    get_df_dados_socios, scan_teia_fonte_nivel2, scan_teia_fonte_nivel3,
+    scan_teia_fonte_nivel4, get_df_dados_par, get_cache_dir
 )
 
 from ...schemas.analytics import (
@@ -474,10 +474,14 @@ def sync_network(cnpj: str) -> None:
                 network_level="n1"
             )
 
-        df_ext = get_df_teia_fonte_nivel2()
         cnpjs_externos = []
-        if not df_ext.is_empty() and cpfs_socios:
-            participacoes = df_ext.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_socios)).to_dicts()
+        if cpfs_socios:
+            df_ext_filtered = (
+                scan_teia_fonte_nivel2()
+                .filter(pl.col("cpf_cnpj_socio").is_in(cpfs_socios))
+                .collect()
+            )
+            participacoes = df_ext_filtered.to_dicts()
             print(f"   -> Nivel 2: Encontradas {len(participacoes)} participacoes para {len(cpfs_socios)} socios.")
 
             for p in participacoes:
@@ -532,14 +536,18 @@ def sync_network(cnpj: str) -> None:
 
         # ── 4. Nível 3: Expansão (Sócios das empresas irmãs) ─────────────────
         # Estes dados ficam em arquivos separados para carregamento on-demand no frontend
-        df_exp_source = get_df_teia_fonte_nivel3()
         exp_nodes_dict: dict[str, dict] = {}
         exp_edges: list[dict] = []
+        df_exp_filtered = pl.DataFrame()
         
-        if not df_exp_source.is_empty() and cnpjs_externos:
+        if cnpjs_externos:
             # Filtra sócios de todas as empresas irmãs mapeadas
             cnpjs_externos_unicos = list(set(cnpjs_externos))
-            df_exp_filtered = df_exp_source.filter(pl.col("cnpj_empresa").is_in(cnpjs_externos_unicos))
+            df_exp_filtered = (
+                scan_teia_fonte_nivel3()
+                .filter(pl.col("cnpj_empresa").is_in(cnpjs_externos_unicos))
+                .collect()
+            )
             print(f"   -> Nivel 3: Encontrados {df_exp_filtered.height} vinculos de socios para {len(cnpjs_externos_unicos)} empresas N2.")
             
             for row in df_exp_filtered.iter_rows(named=True):
@@ -650,18 +658,21 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(exp_edges if exp_edges else [], schema=edge_schema).unique(subset=["id"], keep="first").write_parquet(N3_EDGES_PATH, compression="zstd")
 
         # ── 5. Nível 4: Expansão (Outras empresas dos sócios de N3) ─────────
-        df_n4_source = get_df_teia_fonte_nivel4()
         n4_nodes_dict: dict[str, dict] = {}
         n4_edges: list[dict] = []
         
         # CPFs que disparam o Nível 4 (todos os sócios de empresas irmãs)
         cpfs_n3_trigger = []
-        if not df_exp_source.is_empty() and cnpjs_externos:
+        if not df_exp_filtered.is_empty() and cnpjs_externos:
             cpfs_n3_trigger = df_exp_filtered.select("cpf_cnpj_socio").unique().to_series().to_list()
         
         print(f"   -> Nivel 4: Disparando busca para {len(cpfs_n3_trigger)} CPFs do Nivel 3...")
-        if not df_n4_source.is_empty() and cpfs_n3_trigger:
-            df_n4_filtered = df_n4_source.filter(pl.col("cpf_cnpj_socio").is_in(cpfs_n3_trigger))
+        if cpfs_n3_trigger:
+            df_n4_filtered = (
+                scan_teia_fonte_nivel4()
+                .filter(pl.col("cpf_cnpj_socio").is_in(cpfs_n3_trigger))
+                .collect()
+            )
             print(f"   -> Nivel 4: Encontradas {df_n4_filtered.height} empresas de expansao.")
             
             for row in df_n4_filtered.iter_rows(named=True):

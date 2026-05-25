@@ -8,13 +8,13 @@ import polars as pl
 from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
 from data_cache import (
     get_df,
-    get_df_esocial_cnpj_ano,
-    get_df_esocial_cnpj_trabalhador_ano,
-    get_df_esocial_cnpj_ultima_movimentacao,
     get_df_perfil_estabelecimento,
     get_df_sentinela_metadados_base,
     get_localidades_df,
     get_medicamentos_df,
+    scan_esocial_cnpj_ano,
+    scan_esocial_cnpj_trabalhador_ano,
+    scan_esocial_cnpj_ultima_movimentacao,
 )
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
@@ -647,9 +647,17 @@ def _build_esocial_context(
         raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado no cache de perfil_estabelecimento para contexto eSocial.")
     id_cnpj = int(perfil_rows.row(0, named=True)["id_cnpj"])
 
-    df_ano = get_df_esocial_cnpj_ano()
-    df_trabalhador = get_df_esocial_cnpj_trabalhador_ano()
-    df_ultima_movimentacao = get_df_esocial_cnpj_ultima_movimentacao()
+    df_ano = scan_esocial_cnpj_ano().filter(pl.col("id_cnpj") == id_cnpj).collect()
+    df_trabalhador = (
+        scan_esocial_cnpj_trabalhador_ano()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .collect()
+    )
+    df_ultima_movimentacao = (
+        scan_esocial_cnpj_ultima_movimentacao()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .collect()
+    )
     df_metadados = get_df_sentinela_metadados_base()
     ano_required = {
         "id_cnpj",
@@ -731,9 +739,9 @@ def _build_esocial_context(
         raise RuntimeError("Metadado esocial_cnpj_ano sem dt_referencia_max.")
     dt_carga_base_txt = _format_date_month_year_long_pt(dt_carga_base)
 
-    anos = df_ano.filter(pl.col("id_cnpj") == id_cnpj)
-    trabalhadores = df_trabalhador.filter(pl.col("id_cnpj") == id_cnpj)
-    ultima_movimentacao = df_ultima_movimentacao.filter(pl.col("id_cnpj") == id_cnpj)
+    anos = df_ano
+    trabalhadores = df_trabalhador
+    ultima_movimentacao = df_ultima_movimentacao
 
     if data_inicio or data_fim:
         ano_inicio = data_inicio.year if data_inicio else int(anos.select(pl.col("ano_base").min()).item() or 0)

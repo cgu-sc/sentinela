@@ -1007,6 +1007,14 @@ uf_ref AS (
         CAST(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY valor_pfpb_por_trabalhador) OVER (PARTITION BY ano_base, uf) AS DECIMAL(19,2)) AS p95_uf_valor_por_trabalhador,
         COUNT_BIG(*) OVER (PARTITION BY ano_base, uf) AS qtd_cnpjs_referencia_uf
     FROM referencias_base
+),
+br_ref AS (
+    SELECT DISTINCT
+        ano_base,
+        CAST(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY valor_pfpb_ano) OVER (PARTITION BY ano_base) AS DECIMAL(19,2)) AS p90_br_valor_pfpb_ano,
+        CAST(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY valor_pfpb_por_trabalhador) OVER (PARTITION BY ano_base) AS DECIMAL(19,2)) AS p95_br_valor_por_trabalhador,
+        COUNT_BIG(*) OVER (PARTITION BY ano_base) AS qtd_cnpjs_referencia_br
+    FROM referencias_base
 )
 SELECT
     M.ano_base,
@@ -1015,25 +1023,33 @@ SELECT
     CAST(
         CASE WHEN R.qtd_cnpjs_referencia_regional >= 10
             THEN R.p90_regional_valor_pfpb_ano
-            ELSE U.p90_uf_valor_pfpb_ano
+            WHEN U.qtd_cnpjs_referencia_uf >= 10
+            THEN U.p90_uf_valor_pfpb_ano
+            ELSE B.p90_br_valor_pfpb_ano
         END AS DECIMAL(19,2)
     ) AS p90_referencia_valor_pfpb_ano,
     CAST(
         CASE WHEN R.qtd_cnpjs_referencia_regional >= 10
             THEN R.p95_regional_valor_por_trabalhador
-            ELSE U.p95_uf_valor_por_trabalhador
+            WHEN U.qtd_cnpjs_referencia_uf >= 10
+            THEN U.p95_uf_valor_por_trabalhador
+            ELSE B.p95_br_valor_por_trabalhador
         END AS DECIMAL(19,2)
     ) AS p95_referencia_valor_por_trabalhador,
     CAST(
         CASE WHEN R.qtd_cnpjs_referencia_regional >= 10
             THEN R.qtd_cnpjs_referencia_regional
-            ELSE U.qtd_cnpjs_referencia_uf
+            WHEN U.qtd_cnpjs_referencia_uf >= 10
+            THEN U.qtd_cnpjs_referencia_uf
+            ELSE B.qtd_cnpjs_referencia_br
         END AS BIGINT
     ) AS qtd_cnpjs_referencia,
     CAST(
         CASE WHEN R.qtd_cnpjs_referencia_regional >= 10
             THEN 'regional'
-            ELSE 'uf'
+            WHEN U.qtd_cnpjs_referencia_uf >= 10
+            THEN 'uf'
+            ELSE 'brasil'
         END AS VARCHAR(20)
     ) AS escopo_referencia
 INTO #movimentacao_esocial_regional
@@ -1046,7 +1062,9 @@ LEFT JOIN regional_ref AS R
    AND R.id_regiao_saude = M.id_regiao_saude
 LEFT JOIN uf_ref AS U
     ON U.ano_base = M.ano_base
-   AND U.uf = M.uf;
+   AND U.uf = M.uf
+LEFT JOIN br_ref AS B
+    ON B.ano_base = M.ano_base;
 
 IF EXISTS (
     SELECT 1
@@ -1063,12 +1081,26 @@ END;
 IF EXISTS (
     SELECT 1
     FROM #movimentacao_esocial_regional
-    WHERE escopo_referencia = 'uf'
-      AND qtd_cnpjs_referencia < 10
+    WHERE qtd_cnpjs_referencia < 10
 )
 BEGIN
-    RAISERROR('Referencia UF eSocial/movimentacao com menos de 10 CNPJs com trabalhadores ativos.', 16, 1);
+    RAISERROR('Referencia eSocial/movimentacao com menos de 10 CNPJs com trabalhadores ativos mesmo no escopo Brasil.', 16, 1);
     RETURN;
+END;
+
+SET @linhas_esocial = (
+    SELECT COUNT_BIG(*)
+    FROM #movimentacao_esocial_regional
+    WHERE escopo_referencia = 'brasil'
+);
+
+IF @linhas_esocial > 0
+BEGIN
+    SET @msg_esocial = CONCAT(
+        '[eSocial] aviso - referencias eSocial/movimentacao usando escopo Brasil por UF insuficiente | registros=',
+        @linhas_esocial
+    );
+    RAISERROR(@msg_esocial, 0, 1) WITH NOWAIT;
 END;
 
 CREATE UNIQUE CLUSTERED INDEX IX_tmp_mov_esocial_regional

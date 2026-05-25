@@ -69,16 +69,15 @@ from .nota_tecnica_criticidades import (
     _build_teto_context,
     _build_ticket_medio_context,
     _build_vendas_rapidas_context,
+    _count_incompatibilidade_patologica_tables,
     _get_criticos,
 )
 from .nota_tecnica_crm import (
     _add_crm_evidencias_complementares_text,
     _add_crms_irregulares_text,
-    _add_exclusividade_crm_text,
     _add_hhi_crm_text,
     _build_crm_evidencias_complementares_context,
     _build_crms_irregulares_context,
-    _build_exclusividade_crm_context,
     _build_hhi_crm_context,
 )
 from .nota_tecnica_esocial import _add_esocial_context_text
@@ -354,7 +353,11 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
     if key == "incompatibilidade_patologica":
         ranking_patologias = comp.get("ranking_patologias")
         if not ranking_patologias:
-            raise RuntimeError("Ranking clinico obrigatorio ausente para resumo da Nota Tecnica.")
+            return (
+                f'[Subitem {num}]: Vendas de medicamentos com incompatibilidade patológica com percentual de '
+                f'{_format_decimal_pt(percentual, 2)}% das vendas monitoradas pelo indicador, superior em '
+                f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região;'
+            )
 
         valor_identificado = 0.0
         for item in ranking_patologias:
@@ -421,12 +424,6 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
             f'[Subitem {num}]: Vendas de medicamentos prescritos por médicos com CRMs irregulares ou inválidos, equivalentes a '
             f'{_format_decimal_pt(comp.get("pct_irregular") or 0.0, 2)}% das vendas totais. '
             f'Estas vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("valor_irregular") or 0.0, 2)};'
-        )
-    if key == "exclusividade_crm":
-        return (
-            f'[Subitem {num}]: Vendas de medicamentos vinculadas a CRMs cujos registros no SAV foram realizados exclusivamente pela farmácia, equivalentes a '
-            f'{_format_decimal_pt(comp.get("pct_valor_exclusivo") or comp.get("matriz_pct_exclusividade") or 0.0, 2)}% das vendas totais. '
-            f'Estas vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("exclusivos_valor") or 0.0, 2)};'
         )
     return None
 
@@ -807,7 +804,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if falecidos_comp: fontes.append('SIRC e SISOBI')
-    if any(k in criticos for k in ['hhi_crm', 'exclusividade_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
+    if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
     doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos pelas farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
 
@@ -1213,7 +1210,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if clinico_comp:
                     tabela_inicio_clinica = tabela_num + 1
                     _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp, tabela_inicio_clinica)
-                    tabela_num += len(clinico_comp.get("ranking_patologias") or [])
+                    tabela_num += _count_incompatibilidade_patologica_tables(clinico_comp)
                     resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1331,25 +1328,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     tabela_num += 1
                     _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp, tabela_num)
                     resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
-                    if resumo:
-                        resumos_criticidades.append(resumo)
-                timing.mark(f"secao 7 criticidade {key}")
-                continue
-            if key == 'exclusividade_crm':
-                exclusividade_comp = _build_exclusividade_crm_context(
-                    cnpj,
-                    data_inicio,
-                    data_fim,
-                    cnpj_data.get('totalMov'),
-                    crm_data=crm_data_comp,
-                )
-                if exclusividade_comp:
-                    tabela_exclusividade_num = None
-                    if exclusividade_comp.get("top_exclusivos"):
-                        tabela_num += 1
-                        tabela_exclusividade_num = tabela_num
-                    _add_exclusividade_crm_text(doc, num, razao_social, cnpj_fmt, exclusividade_comp, tabela_exclusividade_num)
-                    resumo = _build_resumo_criticidade(num, key, exclusividade_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
                 timing.mark(f"secao 7 criticidade {key}")

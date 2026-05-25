@@ -682,6 +682,11 @@ CREATE NONCLUSTERED INDEX ix_dadosFarmacia_cnpj
 CREATE INDEX ix_dadosFarmacia_uf_municipio
     ON temp_CGUSC.fp.dados_farmacia (uf, municipio);
 
+-- Filtro municipal por codigo IBGE
+CREATE INDEX ix_dadosFarmacia_codibge
+    ON temp_CGUSC.fp.dados_farmacia (codibge)
+    INCLUDE (id, cnpj);
+
 -- Georreferenciamento: suporte a queries espaciais aproximadas
 CREATE INDEX ix_dadosFarmacia_geo
     ON temp_CGUSC.fp.dados_farmacia (latitude, longitude)

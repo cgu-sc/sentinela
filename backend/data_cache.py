@@ -29,10 +29,234 @@ def get_cache_dir() -> str:
 
 _CACHE_DIR = get_cache_dir()
 _GLOBAL_PARQUETS = cache_registry.get_global_parquet_files_by_key()
+_ON_DEMAND_GLOBAL_CACHE_READY: set[str] = set()
+
+_ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
+    "teia_fonte_nivel2": {
+        "cpf_cnpj_socio",
+        "cnpj_empresa",
+        "razao_social",
+        "nome_fantasia",
+        "indicador_socio",
+        "descricao_qualificacao",
+        "cpf_representante",
+        "nome_representante",
+        "data_entrada_sociedade",
+        "data_exclusao_sociedade",
+        "situacao_rf",
+        "municipio",
+        "uf",
+        "is_farmacia_fp",
+        "is_cadunico",
+        "is_falecido",
+    },
+    "teia_fonte_nivel3": {
+        "cnpj_empresa",
+        "cpf_cnpj_socio",
+        "nome_socio",
+        "indicador_socio",
+        "descricao_qualificacao",
+        "cpf_representante",
+        "nome_representante",
+        "data_entrada_sociedade",
+        "data_exclusao_sociedade",
+        "municipio",
+        "uf",
+        "is_cadunico",
+        "is_falecido",
+    },
+    "teia_fonte_nivel4": {
+        "cpf_cnpj_socio",
+        "cnpj_empresa",
+        "razao_social",
+        "nome_fantasia",
+        "indicador_socio",
+        "descricao_qualificacao",
+        "cpf_representante",
+        "nome_representante",
+        "data_entrada_sociedade",
+        "data_exclusao_sociedade",
+        "situacao_rf",
+        "municipio",
+        "uf",
+        "is_farmacia_fp",
+        "is_cadunico",
+        "is_falecido",
+    },
+    "esocial_cnpj_ano": {
+        "id_cnpj",
+        "ano_base",
+        "mes_base",
+        "competencia_base",
+        "qtd_registros",
+        "qtd_trabalhadores",
+        "qtd_farmaceuticos",
+        "qtd_trabalhadores_cbo_sem_titulo",
+        "qtd_registros_farmaceuticos",
+        "qtd_registros_cbo_sem_titulo",
+        "has_farmaceutico",
+        "has_cbo_sem_titulo",
+        "is_um_trabalhador",
+        "is_um_trabalhador_sem_farmaceutico",
+        "is_um_trabalhador_cbo_sem_titulo",
+        "cbo_unico_trabalhador",
+        "titulo_cbo_unico_trabalhador",
+        "qtd_registros_vinculo_ano",
+        "qtd_trabalhadores_vinculo_ano",
+        "qtd_farmaceuticos_vinculo_ano",
+        "qtd_trabalhadores_cbo_sem_titulo_vinculo_ano",
+        "dt_carga_fonte",
+        "dt_processamento",
+    },
+    "esocial_cnpj_trabalhador_ano": {
+        "id_cnpj",
+        "ano_base",
+        "mes_base",
+        "competencia_base",
+        "cpf_trabalhador",
+        "matricula",
+        "cbo",
+        "titulo_cbo",
+        "dt_admissao",
+        "dt_rescisao",
+        "is_farmaceutico",
+        "is_cbo_sem_titulo",
+        "dt_carga_fonte",
+        "dt_processamento",
+    },
+    "esocial_cnpj_movimentacao_ano": {
+        "id_cnpj",
+        "ano_base",
+        "id_regiao_saude",
+        "uf",
+        "periodo_min",
+        "periodo_max",
+        "valor_pfpb_ano",
+        "valor_sem_comprovacao_ano",
+        "qtd_autorizacoes_ano",
+        "qtd_caixas_ano",
+        "qtd_caixas_sem_comprovacao_ano",
+        "qtd_trabalhadores",
+        "qtd_farmaceuticos",
+        "valor_pfpb_por_trabalhador",
+        "valor_sem_comprovacao_por_trabalhador",
+        "autorizacoes_por_trabalhador",
+        "caixas_por_trabalhador",
+        "p90_referencia_valor_pfpb_ano",
+        "p95_referencia_valor_por_trabalhador",
+        "qtd_cnpjs_referencia",
+        "escopo_referencia",
+        "classificacao_mov_trabalhista",
+        "motivo_classificacao",
+        "dt_processamento",
+    },
+    "esocial_cnpj_ultima_movimentacao": {
+        "id_cnpj",
+        "ano_ultima_movimentacao",
+        "ano_esocial_referencia_ultima_movimentacao",
+        "is_sem_esocial_no_ano_ultima_movimentacao",
+        "ultimo_periodo_movimentacao",
+        "dt_inicio_ultimo_mes_movimentacao",
+        "dt_referencia_ultima_movimentacao",
+        "valor_pfpb_ultimo_mes",
+        "qtd_autorizacoes_ultimo_mes",
+        "qtd_trabalhadores_ativos_ultima_movimentacao",
+        "qtd_farmaceuticos_ativos_ultima_movimentacao",
+        "dt_ultima_rescisao_antes_ultima_movimentacao",
+        "dt_ultimo_trabalhador_ativo",
+        "ultimo_mes_trabalhador_ativo",
+        "dt_inicio_periodo_sem_funcionario",
+        "qtd_dias_sem_funcionario_ate_ultima_movimentacao",
+        "valor_pfpb_periodo_sem_funcionario",
+        "qtd_autorizacoes_periodo_sem_funcionario",
+        "has_movimentacao_sem_funcionario_ativo",
+        "classificacao_mov_sem_funcionario",
+        "motivo_mov_sem_funcionario",
+        "dt_processamento",
+    },
+    "analise_gtin_inconsistencia_clinica": {
+        "id_cnpj",
+        "id_regiao_saude",
+        "id_ibge7",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cpfs_distintos",
+        "qtd_cpfs_incompativeis",
+        "qtd_autorizacoes",
+        "qtd_autorizacoes_incompativeis",
+        "valor_total_pago",
+        "valor_incompativel_pago",
+        "percentual_cpfs_incompativeis",
+        "rank_regional_qtd_cpfs_incompativeis",
+        "rank_regional_valor_incompativel_pago",
+        "percentil_regional_qtd_cpfs_incompativeis",
+        "percentil_regional_valor_incompativel_pago",
+        "participacao_cpfs_incompativeis_regiao",
+        "participacao_valor_incompativel_regiao",
+        "percentual_regional_cpfs_incompativeis",
+        "razao_percentual_vs_regiao",
+        "cpfs_incompativeis_esperados_regiao",
+        "excesso_cpfs_incompativeis_vs_regiao",
+        "dt_processamento",
+    },
+    "analise_gtin_inconsistencia_clinica_municipio": {
+        "id_ibge7",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cpfs_distintos_municipio",
+        "qtd_cpfs_incompativeis_municipio",
+        "qtd_autorizacoes_municipio",
+        "qtd_autorizacoes_incompativeis_municipio",
+        "valor_total_pago_municipio",
+        "valor_incompativel_pago_municipio",
+        "dt_processamento",
+    },
+    "analise_gtin_inconsistencia_clinica_regiao": {
+        "id_regiao_saude",
+        "patologia",
+        "regra_clinica",
+        "ano_base",
+        "qtd_cnpjs_regiao",
+        "qtd_municipios_regiao",
+        "qtd_cpfs_distintos_regiao",
+        "qtd_cpfs_incompativeis_regiao",
+        "qtd_autorizacoes_regiao",
+        "qtd_autorizacoes_incompativeis_regiao",
+        "valor_total_pago_regiao",
+        "valor_incompativel_pago_regiao",
+        "percentual_cpfs_incompativeis_regiao",
+        "dt_processamento",
+    },
+}
 
 
 def _global_cache_path(key: str) -> str:
     return os.path.join(_CACHE_DIR, _GLOBAL_PARQUETS[key])
+
+
+def _validate_parquet_schema(name: str, path: str, required: set[str] | None = None) -> None:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Parquet global {name} nao encontrado em {path}.")
+    schema_columns = set(pl.scan_parquet(path).limit(0).collect().columns)
+    if required and not required.issubset(schema_columns):
+        missing_cols = ", ".join(sorted(required - schema_columns))
+        raise ValueError(f"schema antigo sem colunas obrigatorias: {missing_cols}")
+
+
+def _mark_on_demand_global_cache_ready(name: str, path: str) -> None:
+    _validate_parquet_schema(name, path, _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS.get(name))
+    _ON_DEMAND_GLOBAL_CACHE_READY.add(name)
+
+
+def _is_on_demand_global_cache_ready(name: str, path: str) -> bool:
+    return name in _ON_DEMAND_GLOBAL_CACHE_READY and os.path.exists(path)
+
+
+def _scan_on_demand_global_parquet(name: str, path: str) -> pl.LazyFrame:
+    _mark_on_demand_global_cache_ready(name, path)
+    return pl.scan_parquet(path)
 
 
 _PARQUET_PATH = _global_cache_path("movimentacao")
@@ -594,6 +818,11 @@ def _sync_esocial(engine, progress_callback=None):
         _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
         compression="zstd",
     )
+    _df_esocial_cnpj_trabalhador_ano = None
+    _mark_on_demand_global_cache_ready(
+        "esocial_cnpj_trabalhador_ano",
+        _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
+    )
 
     print(f"   -> Registros anuais agregados: {total_ano:,}")
     ano_sql = """
@@ -652,6 +881,11 @@ def _sync_esocial(engine, progress_callback=None):
     _df_esocial_cnpj_ano.write_parquet(
         _ESOCIAL_CNPJ_ANO_PARQUET_PATH,
         compression="zstd",
+    )
+    _df_esocial_cnpj_ano = None
+    _mark_on_demand_global_cache_ready(
+        "esocial_cnpj_ano",
+        _ESOCIAL_CNPJ_ANO_PARQUET_PATH,
     )
 
     print(f"   -> Registros movimentacao/trabalho: {total_movimentacao:,}")
@@ -714,6 +948,11 @@ def _sync_esocial(engine, progress_callback=None):
         _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH,
         compression="zstd",
     )
+    _df_esocial_cnpj_movimentacao_ano = None
+    _mark_on_demand_global_cache_ready(
+        "esocial_cnpj_movimentacao_ano",
+        _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH,
+    )
 
     print(f"   -> Registros ultima movimentacao/trabalho: {total_ultima_movimentacao:,}")
     ultima_movimentacao_sql = """
@@ -770,6 +1009,11 @@ def _sync_esocial(engine, progress_callback=None):
     _df_esocial_cnpj_ultima_movimentacao.write_parquet(
         _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH,
         compression="zstd",
+    )
+    _df_esocial_cnpj_ultima_movimentacao = None
+    _mark_on_demand_global_cache_ready(
+        "esocial_cnpj_ultima_movimentacao",
+        _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH,
     )
 
     if progress_callback:
@@ -1247,7 +1491,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
 
     if total_rows == 0:
         print("   -> Nenhuma participação externa encontrada.")
-        _df_teia_fonte_nivel2 = pl.DataFrame(schema={
+        df_teia_fonte_nivel2 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
             "nome_fantasia": pl.String,
@@ -1261,7 +1505,9 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
             "is_cadunico": pl.Int8,
             "is_falecido": pl.Int8,
         })
-        _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
+        df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
+        _df_teia_fonte_nivel2 = None
+        _mark_on_demand_global_cache_ready("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
         if progress_callback: progress_callback(100)
         return
 
@@ -1285,7 +1531,7 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
 
     df_full = pl.concat(chunk_list)
     
-    _df_teia_fonte_nivel2 = df_full.with_columns([
+    df_teia_fonte_nivel2 = df_full.with_columns([
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
@@ -1304,8 +1550,11 @@ def _sync_teia_fonte_nivel2(engine, progress_callback=None):
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cpf_cnpj_socio")
 
-    _df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
-    print(f"   -> Sincronização de Participações Externas finalizada ({len(_df_teia_fonte_nivel2):,} registros).")
+    row_count = len(df_teia_fonte_nivel2)
+    df_teia_fonte_nivel2.write_parquet(_TEIA_FONTE_NIVEL2_PARQUET_PATH, compression="zstd")
+    _df_teia_fonte_nivel2 = None
+    _mark_on_demand_global_cache_ready("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
+    print(f"   -> Sincronização de Participações Externas finalizada ({row_count:,} registros).")
 
 
 def _sync_teia_fonte_nivel3(engine, progress_callback=None):
@@ -1319,7 +1568,7 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
 
     if total_rows == 0:
         print("   -> Nenhum sócio indireto encontrado.")
-        _df_teia_fonte_nivel3 = pl.DataFrame(schema={
+        df_teia_fonte_nivel3 = pl.DataFrame(schema={
             "cnpj_empresa": pl.String, "cpf_cnpj_socio": pl.String,
             "nome_socio": pl.String, "indicador_socio": pl.Categorical,
             "descricao_qualificacao": pl.Categorical,
@@ -1329,7 +1578,9 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
             "municipio": pl.String, "uf": pl.String,
             "is_cadunico": pl.Int8, "is_falecido": pl.Int8,
         })
-        _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
+        df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
+        _df_teia_fonte_nivel3 = None
+        _mark_on_demand_global_cache_ready("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
         if progress_callback: progress_callback(100)
         return
 
@@ -1351,7 +1602,7 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         if progress_callback: progress_callback(p)
 
-    _df_teia_fonte_nivel3 = pl.concat(chunk_list).with_columns([
+    df_teia_fonte_nivel3 = pl.concat(chunk_list).with_columns([
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("indicador_socio").cast(pl.Categorical),
@@ -1364,7 +1615,9 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
-    _df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
+    df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
+    _df_teia_fonte_nivel3 = None
+    _mark_on_demand_global_cache_ready("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
     print(f"   -> Sincronização de Sócios Indiretos finalizada.")
 
 
@@ -1379,7 +1632,7 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
 
     if total_rows == 0:
         print("   -> Nenhuma participação de 4º grau encontrada.")
-        _df_teia_fonte_nivel4 = pl.DataFrame(schema={
+        df_teia_fonte_nivel4 = pl.DataFrame(schema={
             "cpf_cnpj_socio": pl.String, "cnpj_empresa": pl.String, 
             "razao_social": pl.String,
             "nome_fantasia": pl.String,
@@ -1393,7 +1646,9 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
             "is_cadunico": pl.Int8,
             "is_falecido": pl.Int8
         })
-        _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
+        df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
+        _df_teia_fonte_nivel4 = None
+        _mark_on_demand_global_cache_ready("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         if progress_callback: progress_callback(100)
         return
 
@@ -1417,7 +1672,7 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
 
     df_full = pl.concat(chunk_list)
 
-    _df_teia_fonte_nivel4 = df_full.with_columns([
+    df_teia_fonte_nivel4 = df_full.with_columns([
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("cnpj_empresa").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
@@ -1436,8 +1691,11 @@ def _sync_teia_fonte_nivel4(engine, progress_callback=None):
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cpf_cnpj_socio")
 
-    _df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
-    print(f"   -> Sincronização de 4º Grau finalizada ({len(_df_teia_fonte_nivel4):,} registros).")
+    row_count = len(df_teia_fonte_nivel4)
+    df_teia_fonte_nivel4.write_parquet(_TEIA_FONTE_NIVEL4_PARQUET_PATH, compression="zstd")
+    _df_teia_fonte_nivel4 = None
+    _mark_on_demand_global_cache_ready("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
+    print(f"   -> Sincronização de 4º Grau finalizada ({row_count:,} registros).")
 
 
 def _sync_medicamentos(engine, progress_callback=None):
@@ -1564,6 +1822,11 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
         compression="zstd",
     )
+    _df_analise_gtin_inconsistencia_clinica = None
+    _mark_on_demand_global_cache_ready(
+        "analise_gtin_inconsistencia_clinica",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
+    )
 
 
 def _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_callback=None):
@@ -1630,6 +1893,11 @@ def _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_callbac
     _df_analise_gtin_inconsistencia_clinica_municipio.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
         compression="zstd",
+    )
+    _df_analise_gtin_inconsistencia_clinica_municipio = None
+    _mark_on_demand_global_cache_ready(
+        "analise_gtin_inconsistencia_clinica_municipio",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
     )
 
 
@@ -1706,6 +1974,11 @@ def _sync_analise_gtin_inconsistencia_clinica_regiao(engine, progress_callback=N
     _df_analise_gtin_inconsistencia_clinica_regiao.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
         compression="zstd",
+    )
+    _df_analise_gtin_inconsistencia_clinica_regiao = None
+    _mark_on_demand_global_cache_ready(
+        "analise_gtin_inconsistencia_clinica_regiao",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
     )
 
 
@@ -1920,6 +2193,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 def load_cache(engine, force_refresh: bool = False) -> None:
     global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
+    _ON_DEMAND_GLOBAL_CACHE_READY.clear()
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
     if not force_refresh:
@@ -2195,6 +2469,13 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 missing.append(name)
                 return None
 
+        def _try_mark_on_demand(name, path):
+            try:
+                _mark_on_demand_global_cache_ready(name, path)
+            except Exception as e:
+                print(f"[ CACHE ] GLOBAL ● {name} ● [AVISO] ERRO DE LEITURA ({e})")
+                missing.append(name)
+
         _df_movimentacao    = _try_load("movimentacao",    _PARQUET_PATH)
         _df_localidades     = _try_load("localidades",     _LOCALIDADES_PARQUET_PATH)
         _df_rede            = _try_load("rede",            _REDE_PARQUET_PATH)
@@ -2205,20 +2486,29 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
         _df_perfil_estabelecimento = _try_load("perfil_estabelecimento", _PERFIL_ESTABELECIMENTO_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
-        _df_teia_fonte_nivel2 = _try_load("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
-
-        _df_teia_fonte_nivel3 = _try_load("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
-        _df_teia_fonte_nivel4 = _try_load("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
+        _df_teia_fonte_nivel2 = None
+        _df_teia_fonte_nivel3 = None
+        _df_teia_fonte_nivel4 = None
+        _try_mark_on_demand("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
+        _try_mark_on_demand("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
+        _try_mark_on_demand("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
         _df_medicamentos    = _try_load("medicamentos",    _MEDICAMENTOS_PARQUET_PATH)
-        _df_analise_gtin_inconsistencia_clinica = _try_load("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)
-        _df_analise_gtin_inconsistencia_clinica_municipio = _try_load("analise_gtin_inconsistencia_clinica_municipio", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH)
-        _df_analise_gtin_inconsistencia_clinica_regiao = _try_load("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)
+        _df_analise_gtin_inconsistencia_clinica = None
+        _df_analise_gtin_inconsistencia_clinica_municipio = None
+        _df_analise_gtin_inconsistencia_clinica_regiao = None
+        _try_mark_on_demand("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)
+        _try_mark_on_demand("analise_gtin_inconsistencia_clinica_municipio", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH)
+        _try_mark_on_demand("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
-        _df_esocial_cnpj_ano = _try_load("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
-        _df_esocial_cnpj_trabalhador_ano = _try_load("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)
-        _df_esocial_cnpj_movimentacao_ano = _try_load("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)
-        _df_esocial_cnpj_ultima_movimentacao = _try_load("esocial_cnpj_ultima_movimentacao", _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH)
+        _df_esocial_cnpj_ano = None
+        _df_esocial_cnpj_trabalhador_ano = None
+        _df_esocial_cnpj_movimentacao_ano = None
+        _df_esocial_cnpj_ultima_movimentacao = None
+        _try_mark_on_demand("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
+        _try_mark_on_demand("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)
+        _try_mark_on_demand("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)
+        _try_mark_on_demand("esocial_cnpj_ultima_movimentacao", _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH)
         _df_sentinela_metadados_base = _try_load("sentinela_metadados_base", _SENTINELA_METADADOS_BASE_PARQUET_PATH)
         _df_falecidos = _try_load("falecidos", _FALECIDOS_PARQUET_PATH)
         dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
@@ -2357,20 +2647,23 @@ def get_df_dados_socios() -> pl.DataFrame:
         raise RuntimeError("Cache de Dados dos Sócios não carregado. Execute uma sincronização.")
     return _df_dados_socios
 
+def scan_teia_fonte_nivel2() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)
+
+def scan_teia_fonte_nivel3() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)
+
+def scan_teia_fonte_nivel4() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
+
 def get_df_teia_fonte_nivel2() -> pl.DataFrame:
-    if _df_teia_fonte_nivel2 is None:
-        raise RuntimeError("Cache de Participações Externas dos Sócios não carregado. Execute uma sincronização.")
-    return _df_teia_fonte_nivel2
+    return scan_teia_fonte_nivel2().collect()
 
 def get_df_teia_fonte_nivel3() -> pl.DataFrame:
-    if _df_teia_fonte_nivel3 is None:
-        raise RuntimeError("Cache de Sócios Indiretos não carregado. Execute uma sincronização.")
-    return _df_teia_fonte_nivel3
+    return scan_teia_fonte_nivel3().collect()
 
 def get_df_teia_fonte_nivel4() -> pl.DataFrame:
-    if _df_teia_fonte_nivel4 is None:
-        raise RuntimeError("Cache de Teia Nacional (N4) não carregado. Execute uma sincronização.")
-    return _df_teia_fonte_nivel4
+    return scan_teia_fonte_nivel4().collect()
 
 def get_medicamentos_df() -> pl.DataFrame:
     global _df_medicamentos
@@ -2385,20 +2678,32 @@ def get_medicamentos_df() -> pl.DataFrame:
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 
+def scan_analise_gtin_inconsistencia_clinica() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "analise_gtin_inconsistencia_clinica",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
+    )
+
+def scan_analise_gtin_inconsistencia_clinica_municipio() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "analise_gtin_inconsistencia_clinica_municipio",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
+    )
+
+def scan_analise_gtin_inconsistencia_clinica_regiao() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "analise_gtin_inconsistencia_clinica_regiao",
+        _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
+    )
+
 def get_df_analise_gtin_inconsistencia_clinica() -> pl.DataFrame:
-    if _df_analise_gtin_inconsistencia_clinica is None:
-        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica nao carregado. Execute uma sincronizacao.")
-    return _df_analise_gtin_inconsistencia_clinica
+    return scan_analise_gtin_inconsistencia_clinica().collect()
 
 def get_df_analise_gtin_inconsistencia_clinica_municipio() -> pl.DataFrame:
-    if _df_analise_gtin_inconsistencia_clinica_municipio is None:
-        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica Municipal nao carregado. Execute uma sincronizacao.")
-    return _df_analise_gtin_inconsistencia_clinica_municipio
+    return scan_analise_gtin_inconsistencia_clinica_municipio().collect()
 
 def get_df_analise_gtin_inconsistencia_clinica_regiao() -> pl.DataFrame:
-    if _df_analise_gtin_inconsistencia_clinica_regiao is None:
-        raise RuntimeError("Cache de Analise GTIN x Inconsistencia Clinica Regiao nao carregado. Execute uma sincronizacao.")
-    return _df_analise_gtin_inconsistencia_clinica_regiao
+    return scan_analise_gtin_inconsistencia_clinica_regiao().collect()
 
 def get_df_dados_ibge_demografia() -> pl.DataFrame:
     if _df_dados_ibge_demografia is None:
@@ -2410,25 +2715,38 @@ def get_df_volume_atipico_semestral() -> pl.DataFrame:
         raise RuntimeError("Cache de Volume Atipico Semestral nao carregado. Execute uma sincronizacao.")
     return _df_volume_atipico_semestral
 
+def scan_esocial_cnpj_ano() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)
+
+def scan_esocial_cnpj_trabalhador_ano() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "esocial_cnpj_trabalhador_ano",
+        _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
+    )
+
+def scan_esocial_cnpj_movimentacao_ano() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "esocial_cnpj_movimentacao_ano",
+        _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH,
+    )
+
+def scan_esocial_cnpj_ultima_movimentacao() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "esocial_cnpj_ultima_movimentacao",
+        _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH,
+    )
+
 def get_df_esocial_cnpj_ano() -> pl.DataFrame:
-    if _df_esocial_cnpj_ano is None:
-        raise RuntimeError("Cache de eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
-    return _df_esocial_cnpj_ano
+    return scan_esocial_cnpj_ano().collect()
 
 def get_df_esocial_cnpj_trabalhador_ano() -> pl.DataFrame:
-    if _df_esocial_cnpj_trabalhador_ano is None:
-        raise RuntimeError("Cache de trabalhadores eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
-    return _df_esocial_cnpj_trabalhador_ano
+    return scan_esocial_cnpj_trabalhador_ano().collect()
 
 def get_df_esocial_cnpj_movimentacao_ano() -> pl.DataFrame:
-    if _df_esocial_cnpj_movimentacao_ano is None:
-        raise RuntimeError("Cache de movimentacao/trabalho eSocial por CNPJ/ano nao carregado. Execute uma sincronizacao.")
-    return _df_esocial_cnpj_movimentacao_ano
+    return scan_esocial_cnpj_movimentacao_ano().collect()
 
 def get_df_esocial_cnpj_ultima_movimentacao() -> pl.DataFrame:
-    if _df_esocial_cnpj_ultima_movimentacao is None:
-        raise RuntimeError("Cache de ultima movimentacao/trabalho eSocial por CNPJ nao carregado. Execute uma sincronizacao.")
-    return _df_esocial_cnpj_ultima_movimentacao
+    return scan_esocial_cnpj_ultima_movimentacao().collect()
 
 def get_df_sentinela_metadados_base() -> pl.DataFrame:
     if _df_sentinela_metadados_base is None:
@@ -2463,19 +2781,19 @@ def get_cache_status() -> dict:
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "perfil_estabelecimento": {"label": "Perfil Estabelecimentos", "path": _PERFIL_ESTABELECIMENTO_PARQUET_PATH, "loaded": _df_perfil_estabelecimento is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
-        "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _df_teia_fonte_nivel2 is not None},
-        "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel3 is not None},
-        "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _df_teia_fonte_nivel4 is not None},
+        "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)},
+        "teia_fonte_nivel3":{"label": "Sócios Indiretos",        "path": _TEIA_FONTE_NIVEL3_PARQUET_PATH,   "loaded": _is_on_demand_global_cache_ready("teia_fonte_nivel3", _TEIA_FONTE_NIVEL3_PARQUET_PATH)},
+        "teia_fonte_nivel4":{"label": "Expansão Nacional (N4)",  "path": _TEIA_FONTE_NIVEL4_PARQUET_PATH,   "loaded": _is_on_demand_global_cache_ready("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)},
         "medicamentos":   {"label": "Cadastro Medicamentos",   "path": _MEDICAMENTOS_PARQUET_PATH,    "loaded": _df_medicamentos is not None},
-        "analise_gtin_inconsistencia_clinica": {"label": "Analise Clinica por Patologia", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica is not None},
-        "analise_gtin_inconsistencia_clinica_municipio": {"label": "Analise Clinica Municipal", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica_municipio is not None},
-        "analise_gtin_inconsistencia_clinica_regiao": {"label": "Analise Clinica Regiao", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH, "loaded": _df_analise_gtin_inconsistencia_clinica_regiao is not None},
+        "analise_gtin_inconsistencia_clinica": {"label": "Analise Clinica por Patologia", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("analise_gtin_inconsistencia_clinica", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH)},
+        "analise_gtin_inconsistencia_clinica_municipio": {"label": "Analise Clinica Municipal", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("analise_gtin_inconsistencia_clinica_municipio", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH)},
+        "analise_gtin_inconsistencia_clinica_regiao": {"label": "Analise Clinica Regiao", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)},
         "dados_ibge_demografia": {"label": "Demografia IBGE", "path": _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH, "loaded": _df_dados_ibge_demografia is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
-        "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ano is not None},
-        "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_trabalhador_ano is not None},
-        "esocial_cnpj_movimentacao_ano": {"label": "eSocial Movimentacao/Ano", "path": _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_movimentacao_ano is not None},
-        "esocial_cnpj_ultima_movimentacao": {"label": "eSocial Ultima Movimentacao", "path": _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ultima_movimentacao is not None},
+        "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)},
+        "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)},
+        "esocial_cnpj_movimentacao_ano": {"label": "eSocial Movimentacao/Ano", "path": _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)},
+        "esocial_cnpj_ultima_movimentacao": {"label": "eSocial Ultima Movimentacao", "path": _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_ultima_movimentacao", _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH)},
         "sentinela_metadados_base": {"label": "Metadados das Bases", "path": _SENTINELA_METADADOS_BASE_PARQUET_PATH, "loaded": _df_sentinela_metadados_base is not None},
         "falecidos": {"label": "Falecidos", "path": _FALECIDOS_PARQUET_PATH, "loaded": _df_falecidos is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},

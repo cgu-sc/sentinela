@@ -971,9 +971,8 @@ def _build_parkinson_faixas_etarias_chart_svg(demografia: dict[str, Any]) -> str
     highlight_color = "#2563EB"
     municipio = _svg_escape(demografia.get("municipio") or "")
     uf = _svg_escape(demografia.get("uf") or "")
-    ano_censo = _svg_escape(demografia.get("ano_censo") or "")
     titulo = f"{municipio}/{uf}"
-    subtitulo = f"IBGE/Censo {ano_censo}"
+    subtitulo = "IBGE/Censo"
     pop_50 = _svg_int_label(demografia.get("populacao_50_mais"))
     pct_50 = _svg_escape(_format_decimal_pt(float(demografia.get("percentual_50_mais") or 0.0) * 100, 2))
 
@@ -1170,7 +1169,7 @@ def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_num
     _format_figure_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, IBGE/Censo 2022 e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
+        'Fonte: Sistema Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
         color='64748B',
         size=8,
     )
@@ -1198,7 +1197,7 @@ def _add_figura_parkinson_faixas_etarias(doc, demografia: dict[str, Any], figure
     _format_figure_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: IBGE/Censo 2022.',
+        'Fonte: IBGE/Censo.',
         color='64748B',
         size=8,
     )

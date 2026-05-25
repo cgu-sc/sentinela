@@ -49,6 +49,7 @@ _TEIA_FONTE_NIVEL2_PARQUET_PATH = _global_cache_path("teia_fonte_nivel2")
 _TEIA_FONTE_NIVEL3_PARQUET_PATH = _global_cache_path("teia_fonte_nivel3")
 _TEIA_FONTE_NIVEL4_PARQUET_PATH = _global_cache_path("teia_fonte_nivel4")
 _MEDICAMENTOS_PARQUET_PATH = _global_cache_path("medicamentos")
+_FALECIDOS_PARQUET_PATH = _global_cache_path("falecidos")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_municipio")
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_regiao")
@@ -80,6 +81,7 @@ _df_teia_fonte_nivel2: pl.DataFrame | None = None
 _df_teia_fonte_nivel3: pl.DataFrame | None = None
 _df_teia_fonte_nivel4: pl.DataFrame | None = None
 _df_medicamentos:   pl.DataFrame | None = None
+_df_falecidos: pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica: pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica_municipio: pl.DataFrame | None = None
 _df_analise_gtin_inconsistencia_clinica_regiao: pl.DataFrame | None = None
@@ -177,31 +179,74 @@ def _assert_fp_source_table(engine, table_name: str, required_columns: set[str])
 
 
 def _sync_falecidos(engine, progress_callback=None):
-    """Gera os parquets de falecidos por CNPJ usando a rotina atual da API."""
-    from cache_producers.falecidos import load_or_sync_falecidos
+    """Sincroniza o detalhamento global de vendas para pessoas falecidas."""
+    global _df_falecidos
+    print("Sincronizando Falecidos por Farmacia...")
+    required = {
+        "cnpj",
+        "cpf",
+        "nome_falecido",
+        "municipio_falecido",
+        "uf_falecido",
+        "dt_nascimento",
+        "dt_obito",
+        "fonte_obito",
+        "num_autorizacao",
+        "data_autorizacao",
+        "qtd_itens_na_autorizacao",
+        "valor_total_autorizacao",
+        "dias_apos_obito",
+    }
+    total_rows = _assert_fp_source_table(engine, "falecidos_por_farmacia", required)
+    sql = """
+        SELECT
+            cnpj,
+            cpf,
+            nome_falecido,
+            municipio_falecido,
+            uf_falecido,
+            dt_nascimento,
+            dt_obito,
+            fonte_obito,
+            num_autorizacao,
+            data_autorizacao,
+            qtd_itens_na_autorizacao,
+            CAST(valor_total_autorizacao AS FLOAT) AS valor_total_autorizacao,
+            dias_apos_obito
+        FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]
+    """
 
-    with engine.connect() as conn:
-        res = conn.execute(text("""
-            SELECT DISTINCT cnpj
-            FROM [temp_CGUSC].[fp].[falecidos_por_farmacia]
-            ORDER BY cnpj
-        """))
-        cnpjs = [row[0] for row in res if row[0]]
-
-    total = len(cnpjs)
-    print(f"Sincronizando Falecidos por Farmacia para {total} estabelecimento(s)...")
-
-    if total == 0:
+    print(f"   -> Registros de falecidos: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    chunk_size = 50_000
+    for chunk in pd.read_sql(sql, engine, chunksize=chunk_size):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("cnpj").cast(pl.String).str.replace_all(r"\D", "").str.zfill(14),
+            pl.col("cpf").cast(pl.String).str.replace_all(r"\D", "").str.zfill(11),
+            pl.col("nome_falecido").cast(pl.String),
+            pl.col("municipio_falecido").cast(pl.String),
+            pl.col("uf_falecido").cast(pl.String),
+            pl.col("dt_nascimento").cast(pl.Date, strict=False),
+            pl.col("dt_obito").cast(pl.Date, strict=False),
+            pl.col("fonte_obito").cast(pl.String),
+            pl.col("num_autorizacao").cast(pl.String),
+            pl.col("data_autorizacao").cast(pl.Date, strict=False),
+            pl.col("qtd_itens_na_autorizacao").cast(pl.Int64),
+            pl.col("valor_total_autorizacao").cast(pl.Float64),
+            pl.col("dias_apos_obito").cast(pl.Int64),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100)
         if progress_callback:
-            progress_callback(100)
-        return
+            progress_callback(p)
 
-    for i, cnpj in enumerate(cnpjs, 1):
-        result = load_or_sync_falecidos(str(cnpj), engine)
-        if result.error:
-            raise RuntimeError(f"falecidos {cnpj}: {result.error}")
-        if progress_callback:
-            progress_callback(int((i / total) * 100))
+    if not chunk_list:
+        raise RuntimeError("Tabela fonte temp_CGUSC.fp.falecidos_por_farmacia nao retornou linhas para sincronizacao.")
+
+    _df_falecidos = pl.concat(chunk_list).sort(["cnpj", "cpf", "data_autorizacao"])
+    _df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="zstd")
 
 
 def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
@@ -1873,7 +1918,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
 
     # 1. Boot Rápido (carrega cada Parquet individualmente)
@@ -2098,6 +2143,21 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "dt_processamento_fim",
                 "observacao",
             },
+            "falecidos": {
+                "cnpj",
+                "cpf",
+                "nome_falecido",
+                "municipio_falecido",
+                "uf_falecido",
+                "dt_nascimento",
+                "dt_obito",
+                "fonte_obito",
+                "num_autorizacao",
+                "data_autorizacao",
+                "qtd_itens_na_autorizacao",
+                "valor_total_autorizacao",
+                "dias_apos_obito",
+            },
             "dados_par": {
                 "cnpj",
                 "is_par",
@@ -2160,6 +2220,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_esocial_cnpj_movimentacao_ano = _try_load("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)
         _df_esocial_cnpj_ultima_movimentacao = _try_load("esocial_cnpj_ultima_movimentacao", _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH)
         _df_sentinela_metadados_base = _try_load("sentinela_metadados_base", _SENTINELA_METADADOS_BASE_PARQUET_PATH)
+        _df_falecidos = _try_load("falecidos", _FALECIDOS_PARQUET_PATH)
         dados_par_loaded = _try_load("dados_par", _DADOS_PAR_PARQUET_PATH)
         _df_dados_par = dados_par_loaded
         par_teia_alvos_loaded = _try_load("par_teia_alvos", _PAR_TEIA_ALVOS_PARQUET_PATH)
@@ -2196,6 +2257,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Metadados das Bases",   "weight": 1,  "func": lambda cb: _sync_sentinela_metadados_base(engine, cb)},
+        {"name": "Falecidos",             "weight": 2,  "func": lambda cb: _sync_falecidos(engine, cb)},
         {"name": "Indicadores PAR",       "weight": 1,  "func": lambda cb: _sync_dados_par(engine, cb)},
         {"name": "Dados das Farmácias",   "weight": 5,  "func": lambda cb: _sync_dados_farmacia(engine, cb)},
         {"name": "Perfil Estabelecimentos", "weight": 5, "func": lambda cb: _sync_perfil_estabelecimento(engine, cb)},
@@ -2373,6 +2435,11 @@ def get_df_sentinela_metadados_base() -> pl.DataFrame:
         raise RuntimeError("Cache de metadados das bases Sentinela nao carregado. Execute uma sincronizacao.")
     return _df_sentinela_metadados_base
 
+def get_df_falecidos() -> pl.DataFrame:
+    if _df_falecidos is None:
+        raise RuntimeError("Cache global de falecidos nao carregado. Execute uma sincronizacao.")
+    return _df_falecidos
+
 def get_df_dados_par() -> pl.DataFrame:
     if _df_dados_par is None:
         raise RuntimeError("Cache de Indicadores PAR nao carregado. Execute uma sincronizacao.")
@@ -2410,6 +2477,7 @@ def get_cache_status() -> dict:
         "esocial_cnpj_movimentacao_ano": {"label": "eSocial Movimentacao/Ano", "path": _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH, "loaded": _df_esocial_cnpj_movimentacao_ano is not None},
         "esocial_cnpj_ultima_movimentacao": {"label": "eSocial Ultima Movimentacao", "path": _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH, "loaded": _df_esocial_cnpj_ultima_movimentacao is not None},
         "sentinela_metadados_base": {"label": "Metadados das Bases", "path": _SENTINELA_METADADOS_BASE_PARQUET_PATH, "loaded": _df_sentinela_metadados_base is not None},
+        "falecidos": {"label": "Falecidos", "path": _FALECIDOS_PARQUET_PATH, "loaded": _df_falecidos is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
         "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},
     }

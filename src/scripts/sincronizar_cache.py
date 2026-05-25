@@ -81,7 +81,7 @@ MODULOS = sorted([
     {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido"},
     {"id": 7, "name": "Farmacias", "func": _sync_dados_farmacia, "peso": "medio"},
     {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio"},
-    {"id": 4, "name": "Falecidos", "func": _sync_falecidos, "peso": "medio"},
+    {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio"},
     {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido"},
     {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado"},
     {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido"},

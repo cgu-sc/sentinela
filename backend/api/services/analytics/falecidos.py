@@ -4,13 +4,11 @@ import calendar
 import polars as pl
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-import os
 import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from cache_files import FALECIDOS_PARQUET
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_df_falecidos
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -54,10 +52,6 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-from ._cache import _get_cnpj_cache_dir
-from cache_producers.falecidos import load_or_sync_falecidos
-
-
 def _safe_float(value: object, default: float = 0.0) -> float:
     if value is None:
         return default
@@ -85,28 +79,23 @@ def get_falecidos_data(
     data_inicio: date | None = None,
     data_fim:    date | None = None,
 ) -> FalecidosResponse:
-    """
-    Retorna os dados detalhados de vendas para falecidos de um CNPJ.
-
-    O parquet por CNPJ armazena as transações do próprio estabelecimento e de todos
-    os demais CNPJs onde os mesmos CPFs compraram, permitindo calcular o ranking
-    Multi-CNPJ a partir do cache local sem depender do dataset global.
-    """
-    result = load_or_sync_falecidos(cnpj)
-    if result.error:
+    """Retorna os dados detalhados de vendas para falecidos de um CNPJ."""
+    cnpj_norm = "".join(ch for ch in str(cnpj or "") if ch.isdigit())
+    try:
+        df_global = get_df_falecidos()
+    except RuntimeError as exc:
         raise HTTPException(
             status_code=503,
-            detail=f"Base de obitos indisponivel: {result.error}",
-        )
+            detail=f"Base de obitos indisponivel: {exc}",
+        ) from exc
 
-    df_all = result.df if result.df is not None else pl.DataFrame()
-    from_cache = result.from_cache
-    query_time_ms = result.query_time_ms
-    save_time_ms = result.save_time_ms
-    read_time_ms = result.read_time_ms
-    # ── 1. Tentar carregar do cache local ────────────────────────────────
+    df_all = df_global
+    from_cache = True
+    query_time_ms = None
+    save_time_ms = None
+    read_time_ms = None
     _empty_response = FalecidosResponse(
-        cnpj=cnpj,
+        cnpj=cnpj_norm,
         summary=FalecidosSummarySchema(
             cpfs_distintos=0, total_autorizacoes=0, valor_total=0.0,
             media_dias=0.0, max_dias=0, pct_faturamento=0.0,
@@ -124,11 +113,11 @@ def get_falecidos_data(
     if df_all is None or len(df_all.columns) == 0:
         raise HTTPException(
             status_code=503, 
-            detail="Base de dados de óbitos indisponível no momento (Sem cache local e banco de dados offline)."
+            detail="Base global de obitos indisponivel no momento. Execute a sincronizacao do cache de falecidos."
         )
 
     # Verifica se o estabelecimento tem histórico na base completa (antes dos filtros de data)
-    tem_historico = not df_all.filter(pl.col("cnpj") == cnpj).is_empty()
+    tem_historico = not df_all.filter(pl.col("cnpj") == cnpj_norm).is_empty()
 
     if df_all.is_empty():
         _empty_response.tem_historico = tem_historico
@@ -140,7 +129,7 @@ def get_falecidos_data(
         df_all = df_all.filter(pl.col("data_autorizacao") <= pl.lit(data_fim).cast(pl.Date))
 
     try:
-        df_target = df_all.filter(pl.col("cnpj") == cnpj)
+        df_target = df_all.filter(pl.col("cnpj") == cnpj_norm)
 
         if df_target.is_empty():
             res = _empty_response.model_copy()
@@ -148,6 +137,8 @@ def get_falecidos_data(
             return res
 
         # 1. KPIs Básicos
+        cpfs_alvo = df_target["cpf"].unique()
+        df_all = df_all.filter(pl.col("cpf").is_in(cpfs_alvo))
         cpfs_distintos = df_target["cpf"].n_unique()
         total_autorizacoes = df_target.height
         valor_total = _safe_float(df_target["valor_total_autorizacao"].sum())
@@ -156,8 +147,7 @@ def get_falecidos_data(
 
         # 2. Lógica Multi-CNPJ (Inteligência Cross-Pharmacy)
         # Encontra outros estabelecimentos onde ESSES CPFs compraram
-        cpfs_alvo = df_target["cpf"].unique()
-        df_outros = df_all.filter((pl.col("cpf").is_in(cpfs_alvo)) & (pl.col("cnpj") != cnpj))
+        df_outros = df_all.filter(pl.col("cnpj") != cnpj_norm)
         
         # Mapeia quais CPFs são Multi-CNPJ
         cpfs_multi = df_outros["cpf"].unique().to_list()
@@ -205,7 +195,7 @@ def get_falecidos_data(
         # 4. Cálculo do % de faturamento (usando o faturamento total cacheado)
         pct_faturamento = 0.0
         try:
-            perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
+            perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj_norm).select("id_cnpj")
             if perfil.is_empty():
                 raise RuntimeError(f"CNPJ {cnpj} sem id_cnpj no perfil_estabelecimento.")
             mov_df = get_df().filter(pl.col("id_cnpj") == perfil.item(0, 0))
@@ -250,7 +240,7 @@ def get_falecidos_data(
         ]
 
         return FalecidosResponse(
-            cnpj=cnpj,
+            cnpj=cnpj_norm,
             summary=FalecidosSummarySchema(
                 cpfs_distintos=cpfs_distintos,
                 total_autorizacoes=total_autorizacoes,
@@ -288,16 +278,14 @@ def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineRespons
         cpf: O CPF do paciente falecido a ser pesquisado.
     """
     try:
-        # O parquet por CNPJ contém todas as transações dos CPFs do estabelecimento
-        # (incluindo outras farmácias), suficiente para montar a linha do tempo.
-        PARQUET_PATH = os.path.join(
-            _get_cnpj_cache_dir(cnpj_referencia), FALECIDOS_PARQUET
-        )
-        if not os.path.exists(PARQUET_PATH):
-            return MultiCnpjTimelineResponse(
-                cpf=cpf, nome_falecido=None, dt_obito=None, events=[], cnpjs_envolvidos=[]
-            )
-        df_all = pl.read_parquet(PARQUET_PATH)
+        cnpj_ref_norm = "".join(ch for ch in str(cnpj_referencia or "") if ch.isdigit())
+        try:
+            df_all = get_df_falecidos()
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Base de obitos indisponivel: {exc}",
+            ) from exc
 
         # Normaliza o CPF (remove zeros à esquerda para comparação segura)
         cpf_clean = cpf.strip().lstrip('0').zfill(11)
@@ -336,7 +324,7 @@ def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineRespons
                 data_autorizacao=r.get("data_autorizacao"),
                 valor_total_autorizacao=_safe_float(r.get("valor_total_autorizacao")),
                 num_autorizacao=str(r.get("num_autorizacao") or ""),
-                is_this_cnpj=(str(r["cnpj"]) == cnpj_referencia),
+                is_this_cnpj=(str(r["cnpj"]) == cnpj_ref_norm),
             ))
 
         cnpjs_envolvidos = df_cpf["cnpj"].unique().to_list()

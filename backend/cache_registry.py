@@ -16,6 +16,24 @@ class CacheDefinition:
     producer: str | None = None
 
 
+def _falecidos_schema() -> dict:
+    return {
+        "cpf": pl.Utf8,
+        "cnpj": pl.Utf8,
+        "nome_falecido": pl.Utf8,
+        "municipio_falecido": pl.Utf8,
+        "uf_falecido": pl.Utf8,
+        "dt_nascimento": pl.Date,
+        "dt_obito": pl.Date,
+        "fonte_obito": pl.Utf8,
+        "data_autorizacao": pl.Date,
+        "num_autorizacao": pl.Utf8,
+        "qtd_itens_na_autorizacao": pl.Int64,
+        "valor_total_autorizacao": pl.Float64,
+        "dias_apos_obito": pl.Int64,
+    }
+
+
 GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("movimentacao", cache_files.MOVIMENTACAO_PARQUET, "global"),
     CacheDefinition("localidades", cache_files.LOCALIDADES_PARQUET, "global"),
@@ -43,6 +61,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("sentinela_metadados_base", cache_files.SENTINELA_METADADOS_BASE_PARQUET, "global"),
     CacheDefinition("dados_par", cache_files.DADOS_PAR_PARQUET, "global"),
     CacheDefinition("par_teia_alvos", cache_files.PAR_TEIA_ALVOS_PARQUET, "global"),
+    CacheDefinition("falecidos", cache_files.FALECIDOS_PARQUET, "global", _falecidos_schema()),
 )
 
 
@@ -147,27 +166,6 @@ def _build_cnpj_cache_definitions() -> tuple[CacheDefinition, ...]:
                 "num_autorizacoes": pl.Int64,
                 "valor_vendas": pl.Float64,
                 "valor_sem_comprovacao": pl.Float64,
-            },
-        ),
-        CacheDefinition(
-            key="falecidos",
-            filename=cache_files.FALECIDOS_PARQUET,
-            scope="cnpj",
-            producer="cache_producers.falecidos.load_or_sync_falecidos",
-            schema={
-                "cpf": pl.Utf8,
-                "cnpj": pl.Utf8,
-                "nome_falecido": pl.Utf8,
-                "municipio_falecido": pl.Utf8,
-                "uf_falecido": pl.Utf8,
-                "dt_nascimento": pl.Date,
-                "dt_obito": pl.Date,
-                "fonte_obito": pl.Utf8,
-                "data_autorizacao": pl.Date,
-                "num_autorizacao": pl.Utf8,
-                "qtd_itens_na_autorizacao": pl.Int64,
-                "valor_total_autorizacao": pl.Float64,
-                "dias_apos_obito": pl.Int64,
             },
         ),
         CacheDefinition(

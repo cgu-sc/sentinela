@@ -8,8 +8,12 @@ GO
 --           na quantidade maxima permitida para o principio ativo.
 --
 -- METRICA PRINCIPAL:
---   percentual_teto representa o percentual anual de itens monitorados cuja
---   quantidade autorizada atingiu o teto maximo parametrizado.
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_itens_teto_maximo / valor_total_auditado.
+--
+-- METRICAS AUXILIARES:
+--   total_itens_monitorados e total_itens_teto_maximo permitem recompor o
+--   percentual por contagem quando necessario.
 --
 -- FONTE DE DADOS:
 --   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
@@ -69,7 +73,7 @@ IF EXISTS (
     SELECT 1
     FROM temp_CGUSC.fp.posologia_tempo_bloqueio
     WHERE QUANTIDADE_MAXIMA > 0
-    GROUP BY PRINCIPIO_ATIVO
+    GROUP BY UPPER(LTRIM(RTRIM(CAST(PRINCIPIO_ATIVO AS VARCHAR(255)))))
     HAVING COUNT_BIG(*) > 1
 )
 BEGIN
@@ -170,7 +174,7 @@ SELECT DISTINCT
 INTO #medicamentos_teto
 FROM temp_CGUSC.fp.medicamentos_patologia C
 INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P
-    ON P.PRINCIPIO_ATIVO = C.principio_ativo
+    ON UPPER(LTRIM(RTRIM(CAST(P.PRINCIPIO_ATIVO AS VARCHAR(255))))) = UPPER(LTRIM(RTRIM(CAST(C.principio_ativo AS VARCHAR(255)))))
 WHERE C.codigo_barra IS NOT NULL
   AND C.principio_ativo IS NOT NULL
   AND P.QUANTIDADE_MAXIMA > 0;
@@ -204,24 +208,22 @@ DROP TABLE IF EXISTS #ItensTetoAgregado;
 SELECT
     F.id_cnpj,
     CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
-    COUNT_BIG(*) AS total_itens_monitorados,
-    COUNT_BIG(A.qnt_autorizada) AS total_itens_com_qnt_autorizada,
-    COUNT_BIG(A.valor_pago) AS total_itens_com_valor_pago,
-    SUM(CAST(
+    CAST(COUNT_BIG(*) AS INT) AS total_itens_monitorados,
+    CAST(SUM(CAST(
         CASE
             WHEN CAST(A.qnt_autorizada AS DECIMAL(18,4)) >= M.quantidade_maxima
                 THEN 1
             ELSE 0
-        END AS BIGINT
-    )) AS qtd_itens_teto_maximo,
-    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_monitorado,
+        END AS INT
+    )) AS INT) AS total_itens_teto_maximo,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_auditado,
     CAST(SUM(CAST(
         CASE
             WHEN CAST(A.qnt_autorizada AS DECIMAL(18,4)) >= M.quantidade_maxima
                 THEN A.valor_pago
             ELSE 0
-        END AS DECIMAL(19,2)
-    )) AS DECIMAL(19,2)) AS valor_itens_teto_maximo
+        END AS DECIMAL(9,2)
+    )) AS DECIMAL(9,2)) AS valor_itens_teto_maximo
 INTO #ItensTetoAgregado
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN #farmacias_dim F
@@ -231,24 +233,16 @@ INNER JOIN #medicamentos_teto M
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
   AND A.codigo_barra IS NOT NULL
+  AND A.qnt_autorizada IS NOT NULL
+  AND A.valor_pago IS NOT NULL
 GROUP BY
     F.id_cnpj,
-    YEAR(A.data_hora);
+    YEAR(A.data_hora)
+HAVING SUM(CAST(A.valor_pago AS DECIMAL(19,2))) > 0;
 
 IF NOT EXISTS (SELECT 1 FROM #ItensTetoAgregado)
 BEGIN
     RAISERROR('Nao ha itens monitorados para calcular o indicador de teto.', 16, 1);
-    RETURN;
-END;
-
-IF EXISTS (
-    SELECT 1
-    FROM #ItensTetoAgregado
-    WHERE total_itens_monitorados <> total_itens_com_qnt_autorizada
-       OR total_itens_monitorados <> total_itens_com_valor_pago
-)
-BEGIN
-    RAISERROR('Existem itens monitorados com qnt_autorizada ou valor_pago nulo.', 16, 1);
     RETURN;
 END;
 
@@ -261,14 +255,8 @@ SELECT
     id_cnpj,
     ano_base,
     total_itens_monitorados,
-    qtd_itens_teto_maximo,
-    CAST(
-        (
-            CAST(qtd_itens_teto_maximo AS DECIMAL(19,4)) /
-            CAST(total_itens_monitorados AS DECIMAL(19,4))
-        ) * 100.0
-    AS DECIMAL(7,4)) AS percentual_teto,
-    valor_total_monitorado,
+    total_itens_teto_maximo,
+    valor_total_auditado,
     valor_itens_teto_maximo
 INTO temp_CGUSC.fp.indicador_teto
 FROM #ItensTetoAgregado;
@@ -281,131 +269,93 @@ DROP TABLE IF EXISTS #medicamentos_teto;
 
 
 -- ============================================================================
--- PASSO 2: METRICAS POR MUNICIPIO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_mun;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
-        OVER (PARTITION BY I.ano_base, F.uf, F.municipio)
-    AS DECIMAL(7,4)) AS mediana_municipio
-INTO temp_CGUSC.fp.indicador_teto_mun
-FROM temp_CGUSC.fp.indicador_teto I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndTetoMun
-ON temp_CGUSC.fp.indicador_teto_mun(ano_base, uf, municipio);
-
-
--- ============================================================================
--- PASSO 3: METRICAS POR ESTADO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
-        OVER (PARTITION BY I.ano_base, F.uf)
-    AS DECIMAL(7,4)) AS mediana_estado
-INTO temp_CGUSC.fp.indicador_teto_uf
-FROM temp_CGUSC.fp.indicador_teto I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndTetoUF
-ON temp_CGUSC.fp.indicador_teto_uf(ano_base, uf);
-
-
--- ============================================================================
--- PASSO 3B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_teto)
-        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
-    AS DECIMAL(7,4)) AS mediana_regiao
-INTO temp_CGUSC.fp.indicador_teto_regiao
-FROM temp_CGUSC.fp.indicador_teto I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndTetoReg
-ON temp_CGUSC.fp.indicador_teto_regiao(ano_base, id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 4: METRICAS NACIONAIS (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
-
-SELECT DISTINCT
-    ano_base,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_teto)
-        OVER (PARTITION BY ano_base)
-    AS DECIMAL(7,4)) AS mediana_pais
-INTO temp_CGUSC.fp.indicador_teto_br
-FROM temp_CGUSC.fp.indicador_teto;
-
-CREATE CLUSTERED INDEX IDX_IndTetoBR
-ON temp_CGUSC.fp.indicador_teto_br(ano_base);
-
-
--- ============================================================================
--- PASSO 5: TABELA CONSOLIDADA FINAL
+-- PASSO 2: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_detalhado;
 
 SELECT
     I.id_cnpj,
     I.ano_base,
-    I.total_itens_monitorados,
-    I.qtd_itens_teto_maximo,
-    I.percentual_teto,
-    I.valor_total_monitorado,
-    I.valor_itens_teto_maximo,
-
-    MUN.mediana_municipio AS municipio_mediana,
-    CAST((I.percentual_teto + 0.01) / (MUN.mediana_municipio + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
-
-    UF.mediana_estado AS estado_mediana,
-    CAST((I.percentual_teto + 0.01) / (UF.mediana_estado + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
-
-    REG.mediana_regiao AS regiao_saude_mediana,
-    CAST((I.percentual_teto + 0.01) / (REG.mediana_regiao + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
-
-    BR.mediana_pais AS pais_mediana,
-    CAST((I.percentual_teto + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
+    CAST(I.total_itens_monitorados AS INT) AS total_itens_monitorados,
+    CAST(I.total_itens_teto_maximo AS INT) AS total_itens_teto_maximo,
+    CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
+    CAST(I.valor_itens_teto_maximo AS DECIMAL(9,2)) AS valor_itens_teto_maximo
 INTO temp_CGUSC.fp.indicador_teto_detalhado
-FROM temp_CGUSC.fp.indicador_teto I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj
-INNER JOIN temp_CGUSC.fp.indicador_teto_mun MUN
-    ON I.ano_base = MUN.ano_base
-   AND F.uf = MUN.uf
-   AND F.municipio = MUN.municipio
-INNER JOIN temp_CGUSC.fp.indicador_teto_uf UF
-    ON I.ano_base = UF.ano_base
-   AND F.uf = UF.uf
-INNER JOIN temp_CGUSC.fp.indicador_teto_regiao REG
-    ON I.ano_base = REG.ano_base
-   AND F.id_regiao_saude = REG.id_regiao_saude
-INNER JOIN temp_CGUSC.fp.indicador_teto_br BR
-    ON I.ano_base = BR.ano_base;
+FROM temp_CGUSC.fp.indicador_teto I;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_FinalTeto_CNPJ
 ON temp_CGUSC.fp.indicador_teto_detalhado(id_cnpj, ano_base);
+
+
+-- ============================================================================
+-- PASSO 3: AGREGADO POR REGIAO DE SAUDE/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    SUM(I.total_itens_monitorados) AS total_itens_monitorados,
+    SUM(I.total_itens_teto_maximo) AS total_itens_teto_maximo,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_itens_teto_maximo) AS DECIMAL(19,2)) AS valor_itens_teto_maximo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_teto_regiao
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTetoReg
+ON temp_CGUSC.fp.indicador_teto_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 4: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    SUM(I.total_itens_monitorados) AS total_itens_monitorados,
+    SUM(I.total_itens_teto_maximo) AS total_itens_teto_maximo,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_itens_teto_maximo) AS DECIMAL(19,2)) AS valor_itens_teto_maximo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_teto_uf
+FROM temp_CGUSC.fp.indicador_teto I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTetoUF
+ON temp_CGUSC.fp.indicador_teto_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 5: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
+
+SELECT
+    I.ano_base,
+    SUM(I.total_itens_monitorados) AS total_itens_monitorados,
+    SUM(I.total_itens_teto_maximo) AS total_itens_teto_maximo,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_itens_teto_maximo) AS DECIMAL(19,2)) AS valor_itens_teto_maximo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_teto_br
+FROM temp_CGUSC.fp.indicador_teto I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTetoBR
+ON temp_CGUSC.fp.indicador_teto_br(ano_base);
 GO
 
 
@@ -414,8 +364,5 @@ GO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_teto_br;
 DROP TABLE IF EXISTS #farmacias_dim;
 GO

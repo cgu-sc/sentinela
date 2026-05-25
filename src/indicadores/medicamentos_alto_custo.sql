@@ -8,8 +8,8 @@ GO
 --           concentrada em itens acima do percentil 90 regional do mesmo ano.
 --
 -- METRICA PRINCIPAL:
---   percentual_alto_custo representa o percentual anual do valor vendido que
---   veio de itens com valor_pago >= P90 regional/anual.
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_vendas_alto_custo / valor_total_auditado.
 --
 -- FONTE DE DADOS:
 --   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
@@ -300,7 +300,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo;
 SELECT
     F.id_cnpj,
     CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
-    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_vendido,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_auditado,
     CAST(
         SUM(
             CASE
@@ -309,19 +309,7 @@ SELECT
                 ELSE CAST(0 AS DECIMAL(19,2))
             END
         ) AS DECIMAL(19,2)
-    ) AS valor_vendas_alto_custo,
-    CAST(
-        (
-            SUM(
-                CASE
-                    WHEN CAST(A.valor_pago AS DECIMAL(19,2)) >= L.valor_limite_alto_custo
-                        THEN CAST(A.valor_pago AS DECIMAL(19,2))
-                    ELSE CAST(0 AS DECIMAL(19,2))
-                END
-            ) /
-            SUM(CAST(A.valor_pago AS DECIMAL(19,2)))
-        ) * 100.0 AS DECIMAL(7,4)
-    ) AS percentual_alto_custo
+    ) AS valor_vendas_alto_custo
 INTO temp_CGUSC.fp.indicador_alto_custo
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN #farmacias_dim F
@@ -337,12 +325,11 @@ WHERE A.data_hora >= @DataInicio
   AND A.valor_pago IS NOT NULL
 GROUP BY
     F.id_cnpj,
-    YEAR(A.data_hora)
-HAVING SUM(CAST(A.valor_pago AS DECIMAL(19,2))) > 5000;
+    YEAR(A.data_hora);
 
 IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_alto_custo)
 BEGIN
-    RAISERROR('Nao ha farmacias com valor total vendido acima do corte minimo para alto custo.', 16, 1);
+    RAISERROR('Nao ha farmacias com valor total vendido valido para alto custo.', 16, 1);
     RETURN;
 END;
 
@@ -355,129 +342,85 @@ DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 
 -- ============================================================================
--- PASSO 4: METRICAS POR MUNICIPIO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_mun;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_alto_custo)
-        OVER (PARTITION BY I.ano_base, F.uf, F.municipio)
-    AS DECIMAL(7,4)) AS mediana_municipio
-INTO temp_CGUSC.fp.indicador_alto_custo_mun
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndAltoCustoMun
-ON temp_CGUSC.fp.indicador_alto_custo_mun(ano_base, uf, municipio);
-
-
--- ============================================================================
--- PASSO 5: METRICAS POR ESTADO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_alto_custo)
-        OVER (PARTITION BY I.ano_base, F.uf)
-    AS DECIMAL(7,4)) AS mediana_estado
-INTO temp_CGUSC.fp.indicador_alto_custo_uf
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndAltoCustoUF
-ON temp_CGUSC.fp.indicador_alto_custo_uf(ano_base, uf);
-
-
--- ============================================================================
--- PASSO 5B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_regiao;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_alto_custo)
-        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
-    AS DECIMAL(7,4)) AS mediana_regiao
-INTO temp_CGUSC.fp.indicador_alto_custo_regiao
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndAltoCustoReg
-ON temp_CGUSC.fp.indicador_alto_custo_regiao(ano_base, id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 6: METRICAS NACIONAIS (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
-
-SELECT DISTINCT
-    ano_base,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_alto_custo)
-        OVER (PARTITION BY ano_base)
-    AS DECIMAL(7,4)) AS mediana_pais
-INTO temp_CGUSC.fp.indicador_alto_custo_br
-FROM temp_CGUSC.fp.indicador_alto_custo;
-
-CREATE CLUSTERED INDEX IDX_IndAltoCustoBR
-ON temp_CGUSC.fp.indicador_alto_custo_br(ano_base);
-
-
--- ============================================================================
--- PASSO 7: TABELA CONSOLIDADA FINAL
+-- PASSO 4: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_detalhado;
 
 SELECT
     I.id_cnpj,
     I.ano_base,
-    I.valor_total_vendido,
-    I.valor_vendas_alto_custo,
-    I.percentual_alto_custo,
-
-    MUN.mediana_municipio AS municipio_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (MUN.mediana_municipio + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
-
-    UF.mediana_estado AS estado_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (UF.mediana_estado + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
-
-    REG.mediana_regiao AS regiao_saude_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (REG.mediana_regiao + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
-
-    BR.mediana_pais AS pais_mediana,
-    CAST((I.percentual_alto_custo + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
+    I.valor_total_auditado,
+    I.valor_vendas_alto_custo
 INTO temp_CGUSC.fp.indicador_alto_custo_detalhado
-FROM temp_CGUSC.fp.indicador_alto_custo I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj
-INNER JOIN temp_CGUSC.fp.indicador_alto_custo_mun MUN
-    ON I.ano_base = MUN.ano_base
-   AND F.uf = MUN.uf
-   AND F.municipio = MUN.municipio
-INNER JOIN temp_CGUSC.fp.indicador_alto_custo_uf UF
-    ON I.ano_base = UF.ano_base
-   AND F.uf = UF.uf
-INNER JOIN temp_CGUSC.fp.indicador_alto_custo_regiao REG
-    ON I.ano_base = REG.ano_base
-   AND F.id_regiao_saude = REG.id_regiao_saude
-INNER JOIN temp_CGUSC.fp.indicador_alto_custo_br BR
-    ON I.ano_base = BR.ano_base;
+FROM temp_CGUSC.fp.indicador_alto_custo I;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_FinalAltoCusto_CNPJ
 ON temp_CGUSC.fp.indicador_alto_custo_detalhado(id_cnpj, ano_base);
+
+
+-- ============================================================================
+-- PASSO 5: AGREGADO POR REGIAO DE SAUDE/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_vendas_alto_custo) AS DECIMAL(19,2)) AS valor_vendas_alto_custo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_alto_custo_regiao
+FROM temp_CGUSC.fp.indicador_alto_custo I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndAltoCustoReg
+ON temp_CGUSC.fp.indicador_alto_custo_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 6: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_vendas_alto_custo) AS DECIMAL(19,2)) AS valor_vendas_alto_custo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_alto_custo_uf
+FROM temp_CGUSC.fp.indicador_alto_custo I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndAltoCustoUF
+ON temp_CGUSC.fp.indicador_alto_custo_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 7: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
+
+SELECT
+    I.ano_base,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_vendas_alto_custo) AS DECIMAL(19,2)) AS valor_vendas_alto_custo,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_alto_custo_br
+FROM temp_CGUSC.fp.indicador_alto_custo I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndAltoCustoBR
+ON temp_CGUSC.fp.indicador_alto_custo_br(ano_base);
 GO
 
 
@@ -486,8 +429,5 @@ GO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_alto_custo_br;
 DROP TABLE IF EXISTS #farmacias_dim;
 GO

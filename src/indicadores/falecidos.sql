@@ -2,352 +2,481 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- INDICADOR DE FALECIDOS - VERSÃO 3 (DETALHAMENTO POR AUTORIZAÇÃO)
+-- INDICADOR DE FALECIDOS
 -- ============================================================================
--- OBJETIVO: Identificar dispensações registradas APÓS a data de óbito dos 
---           pacientes e gerar a lista detalhada por AUTORIZAÇÃO.
+-- OBJETIVO: Identificar dispensacoes registradas apos a data de obito dos
+--           beneficiarios, preservando o detalhamento nominal por autorizacao
+--           e gerando indicador anual por farmacia.
 --
--- ALTERAÇÕES APLICADAS:
---   1. Denominador Ajustado: O cálculo de faturamento total agora considera 
---      apenas medicamentos auditados (JOIN com medicamentos_patologia), 
---      garantindo que os números batam com o relatório do Sentinela.
---   2. Detalhamento Máximo: A lista nominal falecidos_por_farmacia agora é 
---      agrupada por autorização (Passo 2), permitindo auditoria direta.
---   3. Novas Métricas: Adicionada contagem de CPFs distintos e 
---      Autozições distintas por CNPJ no indicador final.
---   4. Dados Cadastrais: Nome, município e UF do falecido via db_CPF.
+-- METRICA PRINCIPAL:
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_falecidos / valor_total_auditado.
 --
--- FONTES:
---   Movimentação  : db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
---   Óbitos        : temp_CGUSC.fp.obito_unificada
---   CPF (cadastro): db_CPF.dbo.CPF
---   Medicamentos  : temp_CGUSC.fp.medicamentos_patologia
+-- METRICAS AUXILIARES:
+--   total_autorizacoes e qtd_autorizacoes_falecidos permitem recompor o
+--   percentual por contagem quando necessario.
+--
+-- FONTE DE DADOS:
+--   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
+--   - temp_CGUSC.fp.obito_unificada
+--   - db_CPF.dbo.CPF
+--   - temp_CGUSC.fp.medicamentos_patologia
+--   - temp_CGUSC.fp.dados_farmacia
 -- ============================================================================
 
 -- ============================================================================
--- DEFINIÇÃO DE VARIÁVEIS
+-- LIMPEZA PREVIA DE TABELAS FINAIS/DERIVADAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
+GO
+
+-- ============================================================================
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 1: TOTAIS POR FARMÁCIA (MEDICAMENTOS AUDITADOS NO PERÍODO)
--- Base para o denominador do indicador. Filtrada por medicamentos_patologia
--- para consistência com o cronograma de auditoria da CGU.
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
 -- ============================================================================
-DROP TABLE IF EXISTS #TotaisPorFarmacia;
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'num_autorizacao') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para falecidos.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.obito_unificada', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.obito_unificada nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.obito_unificada', 'cpf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.obito_unificada', 'dt_nascimento') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.obito_unificada', 'dt_obito') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.obito_unificada', 'fonte') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.obito_unificada sem colunas obrigatorias cpf/dt_nascimento/dt_obito/fonte.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_CPF.dbo.CPF', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_CPF.dbo.CPF', 'CPF') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'nome') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'nomeMunicipio') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'unidadeFederacao') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF sem colunas obrigatorias CPF/nome/nomeMunicipio/unidadeFederacao.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #farmacias_dim;
 
 SELECT
-    A.cnpj,
-    COUNT(DISTINCT A.num_autorizacao) AS total_prescricoes_auditadas,
-    SUM(A.valor_pago)                 AS valor_total_vendas_auditadas
-INTO #TotaisPorFarmacia
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
+
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
+
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
+
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
+
+SELECT DISTINCT
+    C.codigo_barra
+INTO #medicamentos_patologia_gtin
+FROM temp_CGUSC.fp.medicamentos_patologia C
+WHERE C.codigo_barra IS NOT NULL;
+
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem codigo_barra valido.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_patologia_gtin
+ON #medicamentos_patologia_gtin(codigo_barra);
+
+
+DROP TABLE IF EXISTS #AutorizacoesAuditadas;
+
+SELECT
+    F.id_cnpj,
+    F.cnpj,
+    CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
+    A.num_autorizacao,
+    A.cpf,
+    MIN(A.data_hora) AS data_autorizacao,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_autorizacao,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_itens_na_autorizacao
+INTO #AutorizacoesAuditadas
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C 
+INNER JOIN #farmacias_dim F
+    ON F.cnpj = A.cnpj
+INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
-  AND A.data_hora <= @DataFim
-GROUP BY A.cnpj;
+  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+  AND A.cpf IS NOT NULL
+  AND A.num_autorizacao IS NOT NULL
+  AND A.valor_pago IS NOT NULL
+  AND A.valor_pago >= 0
+  AND A.codigo_barra IS NOT NULL
+GROUP BY
+    F.id_cnpj,
+    F.cnpj,
+    YEAR(A.data_hora),
+    A.num_autorizacao,
+    A.cpf;
 
-CREATE CLUSTERED INDEX IDX_Totais_CNPJ ON #TotaisPorFarmacia(cnpj);
+IF NOT EXISTS (SELECT 1 FROM #AutorizacoesAuditadas)
+BEGIN
+    RAISERROR('Nao ha autorizacoes auditadas para falecidos no periodo informado.', 16, 1);
+    RETURN;
+END;
+
+CREATE CLUSTERED INDEX IDX_AutorizacoesAuditadas_CNPJ_Ano
+ON #AutorizacoesAuditadas(id_cnpj, ano_base);
+
+CREATE NONCLUSTERED INDEX IDX_AutorizacoesAuditadas_CPF
+ON #AutorizacoesAuditadas(cpf);
+
+DROP TABLE IF EXISTS #obitos_unificados;
+
+SELECT
+    OB.cpf,
+    MIN(OB.dt_nascimento) AS dt_nascimento,
+    MIN(OB.dt_obito) AS dt_obito,
+    MAX(OB.fonte) AS fonte
+INTO #obitos_unificados
+FROM temp_CGUSC.fp.obito_unificada OB
+WHERE OB.dt_obito IS NOT NULL
+GROUP BY OB.cpf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_obitos_unificados
+ON #obitos_unificados(cpf);
 
 
 -- ============================================================================
--- PASSO 2: LISTA DETALHADA DE TRANSACÕES (FALECIDOS POR AUTORIZAÇÃO)
--- Um registro por combinação CNPJ × CPF falecido × num_autorizacao.
--- Permite ver exatamente quais autorizacoes foram geradas apos a morte.
+-- PASSO 2: AUTORIZACOES REALIZADAS APOS OBITO
+-- ============================================================================
+DROP TABLE IF EXISTS #FalecidosAutorizacoes;
+
+SELECT
+    A.id_cnpj,
+    A.cnpj,
+    A.ano_base,
+    A.cpf,
+    OB.dt_nascimento,
+    OB.dt_obito,
+    OB.fonte AS fonte_obito,
+    A.num_autorizacao,
+    A.data_autorizacao,
+    A.qtd_itens_na_autorizacao,
+    A.valor_total_autorizacao,
+    DATEDIFF(DAY, OB.dt_obito, A.data_autorizacao) AS dias_apos_obito
+INTO #FalecidosAutorizacoes
+FROM #AutorizacoesAuditadas A
+INNER JOIN #obitos_unificados OB
+    ON OB.cpf = A.cpf
+WHERE A.data_autorizacao > OB.dt_obito;
+
+CREATE CLUSTERED INDEX IDX_FalecidosAutorizacoes_CNPJ_Ano
+ON #FalecidosAutorizacoes(id_cnpj, ano_base);
+
+CREATE NONCLUSTERED INDEX IDX_FalecidosAutorizacoes_CPF
+ON #FalecidosAutorizacoes(cpf);
+
+DROP TABLE IF EXISTS #cpfs_falecidos;
+
+SELECT DISTINCT cpf
+INTO #cpfs_falecidos
+FROM #FalecidosAutorizacoes;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_cpfs_falecidos
+ON #cpfs_falecidos(cpf);
+
+DROP TABLE IF EXISTS #cpf_info;
+
+SELECT
+    B.CPF AS cpf,
+    MAX(B.nome) AS nome_falecido,
+    MAX(B.nomeMunicipio) AS municipio_falecido,
+    MAX(B.unidadeFederacao) AS uf_falecido
+INTO #cpf_info
+FROM #cpfs_falecidos C
+INNER JOIN db_CPF.dbo.CPF B
+    ON B.CPF = C.cpf
+GROUP BY B.CPF;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_cpf_info
+ON #cpf_info(cpf);
+
+
+-- ============================================================================
+-- PASSO 3: DETALHAMENTO NOMINAL POR AUTORIZACAO
+-- Mantem o contrato historico de colunas consumido pela API/cache.
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.falecidos_por_farmacia;
 
 SELECT
-    -- Identificação da Farmácia
-    A.cnpj,
-
-    -- Identificação do Falecido
-    A.cpf,
-    CPF.nome                                        AS nome_falecido,
-    CPF.nomeMunicipio                               AS municipio_falecido,
-    CPF.unidadeFederacao                            AS uf_falecido,
-    OB.dt_nascimento,
-    OB.dt_obito,
-    OB.fonte                                        AS fonte_obito,
-
-    -- Identificação da Transação
-    A.num_autorizacao,
-    A.data_hora                                     AS data_autorizacao,
-
-    -- Estatísticas da Autorização
-    COUNT(*)                                        AS qtd_itens_na_autorizacao,
-    SUM(A.valor_pago)                               AS valor_total_autorizacao,
-    
-    -- Distância temporal: quanto tempo após o óbito a venda ocorreu
-    DATEDIFF(DAY, OB.dt_obito, A.data_hora)         AS dias_apos_obito
-
+    F.cnpj,
+    F.cpf,
+    I.nome_falecido,
+    I.municipio_falecido,
+    I.uf_falecido,
+    F.dt_nascimento,
+    F.dt_obito,
+    F.fonte_obito,
+    F.num_autorizacao,
+    F.data_autorizacao,
+    CAST(F.qtd_itens_na_autorizacao AS TINYINT) AS qtd_itens_na_autorizacao,
+    CAST(F.valor_total_autorizacao AS DECIMAL(9,2)) AS valor_total_autorizacao,
+    CAST(F.dias_apos_obito AS SMALLINT) AS dias_apos_obito
 INTO temp_CGUSC.fp.falecidos_por_farmacia
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+FROM #FalecidosAutorizacoes F
+LEFT JOIN #cpf_info I
+    ON I.cpf = F.cpf;
 
--- Filtra apenas medicamentos do escopo do programa auditado (igual ao Passo 1)
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
-    ON C.codigo_barra = A.codigo_barra
+CREATE CLUSTERED INDEX IDX_FalecFarm_CNPJ
+ON temp_CGUSC.fp.falecidos_por_farmacia(cnpj);
 
--- Cruza com a base de óbitos (REGRA CENTRAL: dispensação após o óbito)
-INNER JOIN temp_CGUSC.fp.obito_unificada OB
-    ON OB.cpf = A.cpf
+CREATE NONCLUSTERED INDEX IDX_FalecFarm_Auto
+ON temp_CGUSC.fp.falecidos_por_farmacia(num_autorizacao);
 
--- Dados cadastrais do falecido (nome, município e UF de domicílio)
-LEFT JOIN db_CPF.dbo.CPF CPF
-    ON CPF.CPF = A.cpf
-
-WHERE
-    A.data_hora >= @DataInicio
-    AND A.data_hora <= @DataFim
-    AND OB.dt_obito IS NOT NULL
-    AND A.data_hora > OB.dt_obito   -- dispensação ocorreu APÓS a morte
-
-GROUP BY
-    A.cnpj,
-    A.cpf,
-    CPF.nome,
-    CPF.nomeMunicipio,
-    CPF.unidadeFederacao,
-    OB.dt_nascimento,
-    OB.dt_obito,
-    OB.fonte,
-    A.num_autorizacao,
-    A.data_hora;
-
--- Índices para performance
-CREATE CLUSTERED INDEX IDX_FalecFarm_CNPJ ON temp_CGUSC.fp.falecidos_por_farmacia(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FalecFarm_Auto ON temp_CGUSC.fp.falecidos_por_farmacia(num_autorizacao);
-CREATE NONCLUSTERED INDEX IDX_FalecFarm_CPF ON temp_CGUSC.fp.falecidos_por_farmacia(cpf);
+CREATE NONCLUSTERED INDEX IDX_FalecFarm_CPF
+ON temp_CGUSC.fp.falecidos_por_farmacia(cpf);
 
 
 -- ============================================================================
--- PASSO 3: INDICADOR AGREGADO POR FARMÁCIA
--- Agrupa os dados detalhados para o nível de CNPJ.
+-- PASSO 4: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
 
 SELECT
-    T.cnpj,
-    T.valor_total_vendas_auditadas AS valor_total_vendas,
-    T.total_prescricoes_auditadas AS total_prescricoes,
-    
-    ISNULL(I.valor_falecidos, 0) AS valor_falecidos,
-    ISNULL(I.qtd_vendas_falecidos, 0) AS qtd_itens_falecidos,
-    ISNULL(I.qtd_autorizacoes_falecidos, 0) AS qtd_autorizacoes_falecidos,
-    ISNULL(I.qtd_cpfs_falecidos, 0) AS qtd_cpfs_falecidos,
-
+    A.id_cnpj,
+    A.ano_base,
+    CAST(COUNT(DISTINCT A.num_autorizacao) AS INT) AS total_autorizacoes,
+    CAST(COUNT(DISTINCT CASE WHEN F.num_autorizacao IS NOT NULL THEN F.num_autorizacao END) AS INT) AS qtd_autorizacoes_falecidos,
+    CAST(SUM(A.valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
     CAST(
-        CASE
-            WHEN T.valor_total_vendas_auditadas > 0 THEN
-                (CAST(ISNULL(I.valor_falecidos, 0) AS DECIMAL(18,2)) /
-                 CAST(T.valor_total_vendas_auditadas AS DECIMAL(18,2))) * 100.0
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS percentual_falecidos
-
+        SUM(
+            CASE
+                WHEN F.num_autorizacao IS NOT NULL THEN F.valor_total_autorizacao
+                ELSE CAST(0 AS DECIMAL(9,2))
+            END
+        ) AS DECIMAL(9,2)
+    ) AS valor_falecidos
 INTO temp_CGUSC.fp.indicador_falecidos
-FROM #TotaisPorFarmacia T
-LEFT JOIN (
-    -- Agrega os dados transacionais do Passo 2 por CNPJ
-    SELECT
-        cnpj,
-        SUM(valor_total_autorizacao) AS valor_falecidos,
-        SUM(qtd_itens_na_autorizacao) AS qtd_vendas_falecidos,
-        COUNT(DISTINCT num_autorizacao) AS qtd_autorizacoes_falecidos,
-        COUNT(DISTINCT cpf) AS qtd_cpfs_falecidos
-    FROM temp_CGUSC.fp.falecidos_por_farmacia
-    GROUP BY cnpj
-) I ON I.cnpj = T.cnpj
-WHERE T.valor_total_vendas_auditadas > 0;
+FROM #AutorizacoesAuditadas A
+LEFT JOIN #FalecidosAutorizacoes F
+    ON F.id_cnpj = A.id_cnpj
+   AND F.ano_base = A.ano_base
+   AND F.num_autorizacao = A.num_autorizacao
+   AND F.cpf = A.cpf
+GROUP BY
+    A.id_cnpj,
+    A.ano_base
+HAVING SUM(A.valor_total_autorizacao) > 0;
 
-CREATE CLUSTERED INDEX IDX_IndFalecidos_CNPJ ON temp_CGUSC.fp.indicador_falecidos(cnpj);
-
-DROP TABLE IF EXISTS #TotaisPorFarmacia;
-
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidos_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_falecidos(id_cnpj, ano_base);
 
 
 -- ============================================================================
--- PASSO 4: MÉTRICAS GEOGRÁFICAS (MUNICÍPIO, UF, BR)
--- ============================================================================
--- Municipios
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
-SELECT DISTINCT
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
-INTO temp_CGUSC.fp.indicador_falecidos_mun
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndFalecidosMun ON temp_CGUSC.fp.indicador_falecidos_mun(uf, municipio);
-
--- Estados
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
-SELECT DISTINCT
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
-INTO temp_CGUSC.fp.indicador_falecidos_uf
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndFalecidosUF ON temp_CGUSC.fp.indicador_falecidos_uf(uf);
-
-
--- ============================================================================
--- PASSO 4B: MÉTRICAS POR REGIÃO DE SAÚDE (MÉDIA E MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
-
-SELECT DISTINCT
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(ISNULL(I.percentual_falecidos, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
-INTO temp_CGUSC.fp.indicador_falecidos_regiao
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
-
-CREATE CLUSTERED INDEX IDX_IndFalecidosReg ON temp_CGUSC.fp.indicador_falecidos_regiao(id_regiao_saude);
-
--- Brasil
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
-SELECT DISTINCT
-    'BR' AS pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_falecidos, 0)) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(ISNULL(percentual_falecidos, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
-INTO temp_CGUSC.fp.indicador_falecidos_br
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos I ON I.cnpj = F.cnpj;
-
-
--- ============================================================================
--- PASSO 5: TABELA CONSOLIDADA FINAL
+-- PASSO 5: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
+
 SELECT
-    F.cnpj,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.no_regiao_saude,
-    F.id_regiao_saude,
-
-    -- Indicadores base
-    ISNULL(I.valor_total_vendas, 0)         AS valor_total_vendas,
-    ISNULL(I.total_prescricoes, 0)          AS total_prescricoes,
-    ISNULL(I.valor_falecidos, 0)            AS valor_falecidos,
-    ISNULL(I.qtd_itens_falecidos, 0)        AS qtd_itens_falecidos,
-    ISNULL(I.qtd_autorizacoes_falecidos, 0) AS qtd_autorizacoes_falecidos,
-    ISNULL(I.qtd_cpfs_falecidos, 0)         AS qtd_cpfs_falecidos,
-    ISNULL(I.percentual_falecidos, 0)       AS percentual_falecidos,
-
-    -- Rankings (pior risco = posição 1)
-    RANK() OVER (
-        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
-    ) AS ranking_br,
-    RANK() OVER (
-        PARTITION BY F.uf 
-        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
-    ) AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY F.id_regiao_saude
-        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
-    ) AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY F.uf, F.municipio 
-        ORDER BY ISNULL(I.percentual_falecidos, 0) DESC
-    ) AS ranking_municipio,
-
-    -- Comparativos Municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
-
-    -- Comparativos Estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
-
-    -- Comparativos Regionais (Região de Saúde)
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
-
-    -- Comparativos Nacionais
-    BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_falecidos, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
-
+    I.id_cnpj,
+    I.ano_base,
+    I.total_autorizacoes,
+    I.qtd_autorizacoes_falecidos,
+    CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
+    CAST(I.valor_falecidos AS DECIMAL(9,2)) AS valor_falecidos
 INTO temp_CGUSC.fp.indicador_falecidos_detalhado
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos I
-    ON I.cnpj = F.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos_mun MUN
-    ON F.uf        = MUN.uf
-   AND F.municipio = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos_uf UF
-    ON F.uf = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_falecidos_regiao REG
-    ON F.id_regiao_saude = REG.id_regiao_saude
-CROSS JOIN temp_CGUSC.fp.indicador_falecidos_br BR;
+FROM temp_CGUSC.fp.indicador_falecidos I;
 
-CREATE CLUSTERED INDEX    IDX_Final_CNPJ  ON temp_CGUSC.fp.indicador_falecidos_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_Final_Risco ON temp_CGUSC.fp.indicador_falecidos_detalhado(risco_relativo_mun_mediana DESC);
-CREATE NONCLUSTERED INDEX IDX_Final_Rank  ON temp_CGUSC.fp.indicador_falecidos_detalhado(ranking_br);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalFalecidos_CNPJ
+ON temp_CGUSC.fp.indicador_falecidos_detalhado(id_cnpj, ano_base);
+
 
 -- ============================================================================
--- PASSO 6: LIMPEZA DAS TABELAS INTERMEDIÁRIAS
+-- PASSO 6: AGREGADO POR REGIAO DE SAUDE/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    SUM(I.qtd_autorizacoes_falecidos) AS qtd_autorizacoes_falecidos,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_falecidos_regiao
+FROM temp_CGUSC.fp.indicador_falecidos I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosReg
+ON temp_CGUSC.fp.indicador_falecidos_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 7: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    SUM(I.qtd_autorizacoes_falecidos) AS qtd_autorizacoes_falecidos,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_falecidos_uf
+FROM temp_CGUSC.fp.indicador_falecidos I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosUF
+ON temp_CGUSC.fp.indicador_falecidos_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 8: AGREGADO BRASIL/ANO
+-- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
+
+SELECT
+    I.ano_base,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    SUM(I.qtd_autorizacoes_falecidos) AS qtd_autorizacoes_falecidos,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_falecidos_br
+FROM temp_CGUSC.fp.indicador_falecidos I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosBR
+ON temp_CGUSC.fp.indicador_falecidos_br(ano_base);
 GO
 
 
 -- ============================================================================
--- VERIFICAÇÕES
+-- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
-
--- 1. Resumo estratégico (Destaque para o CPF de teste)
-DECLARE @CNPJ_TESTE VARCHAR(14) = '18241834000154';
-SELECT * FROM temp_CGUSC.fp.indicador_falecidos_detalhado WHERE cnpj = @CNPJ_TESTE;
-
--- 2. Destaque dos 10 maiores faturamentos para falecidos
-SELECT TOP 10 * FROM temp_CGUSC.fp.indicador_falecidos_detalhado ORDER BY valor_falecidos DESC;
-
--- 3. Detalhe nominal (Exemplo das primeiras autorizacoes irregulares do CNPJ teste)
-SELECT TOP 50 * FROM temp_CGUSC.fp.falecidos_por_farmacia WHERE cnpj = @CNPJ_TESTE ORDER BY data_autorizacao DESC;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
+DROP TABLE IF EXISTS #AutorizacoesAuditadas;
+DROP TABLE IF EXISTS #obitos_unificados;
+DROP TABLE IF EXISTS #FalecidosAutorizacoes;
+DROP TABLE IF EXISTS #cpfs_falecidos;
+DROP TABLE IF EXISTS #cpf_info;
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
+DROP TABLE IF EXISTS #farmacias_dim;
 GO

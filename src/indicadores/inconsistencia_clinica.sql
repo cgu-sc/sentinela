@@ -2,394 +2,423 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- DEFINICAO DE VARIAVEIS DO PERIODO
+-- INDICADOR DE INCONSISTENCIA CLINICA
 -- ============================================================================
-DECLARE @DataInicio DATE = '2015-07-01';
-DECLARE @DataFim    DATE = '2024-12-10';
-DECLARE @QtdAutorizacoes INT;
-DECLARE @QtdFarmaciasAno INT;
-DECLARE @QtdFinal INT;
-
-
--- ============================================================================
--- INDICADOR DE INCONSISTENCIA CLINICA - SNAPSHOT ANUAL
--- Unidade final de analise: CNPJ x ano_referencia.
+-- OBJETIVO: Identificar farmacias com proporcao atipica de autorizacoes
+--           monitoradas com incompatibilidade clinica/demografica.
 --
--- Identifica vendas com inconsistencia demografica/clinica:
+-- METRICA PRINCIPAL:
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_vendas_suspeitas / valor_vendas_monitoradas.
+--
+-- METRICAS AUXILIARES:
+--   total_vendas_monitoradas e qtd_vendas_suspeitas permitem recompor o
+--   percentual por contagem quando necessario.
+--
+-- REGRAS CLINICAS:
 --   - Osteoporose dispensada para paciente do sexo masculino
 --   - Diabetes dispensado para paciente com idade < 20 anos
 --   - Doenca de Parkinson dispensada para paciente com idade < 50 anos
 --   - Hipertensao dispensada para paciente com idade < 20 anos
 --
--- Observacao: temp_CGUSC.fp.medicamentos_patologia.Patologia deve estar
--- padronizada em maiusculo e sem acentos.
+-- FONTE DE DADOS:
+--   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
+--   - temp_CGUSC.fp.medicamentos_patologia
+--   - temp_CGUSC.fp.dados_farmacia (id_cnpj e contexto territorial)
+--   - db_CPF.dbo.CPF
 -- ============================================================================
-PRINT '=======================================================================';
-PRINT 'INDICADOR INCONSISTENCIA CLINICA - SNAPSHOT ANUAL';
-PRINT '=======================================================================';
+
+-- ============================================================================
+-- LIMPEZA PREVIA DE TABELAS
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado;
+GO
+
+-- ============================================================================
+-- DEFINICAO DE VARIAVEIS
+-- ============================================================================
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim    DATE = '2024-12-10';
 
 
 -- ============================================================================
--- PASSO 0: DIMENSAO TEMPORAL DO PERIODO
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
 -- ============================================================================
-DROP TABLE IF EXISTS #Anos;
-
-CREATE TABLE #Anos (
-    ano_referencia INT NOT NULL PRIMARY KEY
-);
-
-DECLARE @AnoAtual INT = YEAR(@DataInicio);
-DECLARE @AnoFim   INT = YEAR(@DataFim);
-
-WHILE @AnoAtual <= @AnoFim
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
 BEGIN
-    INSERT INTO #Anos (ano_referencia) VALUES (@AnoAtual);
-    SET @AnoAtual += 1;
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
 END;
 
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'Patologia') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/Patologia.', 16, 1);
+    RETURN;
+END;
 
--- ============================================================================
--- PASSO 1: VENDAS POR AUTORIZACAO MATERIALIZADAS EM TEMP TABLE
--- ============================================================================
-PRINT 'PASSO 1: Materializando autorizacoes monitoradas...';
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
 
-DROP TABLE IF EXISTS #CalculoDemografico;
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'num_autorizacao') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para inconsistencia clinica.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_CPF.dbo.CPF', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_CPF.dbo.CPF', 'CPF') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'idSexo') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'dataNascimento') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF sem colunas obrigatorias CPF/idSexo/dataNascimento.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #farmacias_dim;
 
 SELECT
-    A.cnpj,
-    YEAR(A.data_hora) AS ano_referencia,
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
+
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
+
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
+
+DROP TABLE IF EXISTS #medicamentos_clinicos;
+
+SELECT DISTINCT
+    C.codigo_barra,
+    UPPER(LTRIM(RTRIM(C.Patologia))) AS patologia
+INTO #medicamentos_clinicos
+FROM temp_CGUSC.fp.medicamentos_patologia C
+WHERE C.codigo_barra IS NOT NULL
+  AND UPPER(LTRIM(RTRIM(C.Patologia))) IN ('OSTEOPOROSE', 'DIABETES', 'DOENCA DE PARKINSON', 'HIPERTENSAO');
+
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_clinicos)
+BEGIN
+    RAISERROR('Nao ha medicamentos com patologia valida para monitoramento de inconsistencia clinica.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM #medicamentos_clinicos
+    GROUP BY codigo_barra
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Um mesmo codigo_barra esta associado a mais de uma patologia clinica monitorada.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_clinicos_gtin
+ON #medicamentos_clinicos(codigo_barra);
+
+
+-- ============================================================================
+-- PASSO 1: VENDAS POR AUTORIZACAO
+-- ============================================================================
+DROP TABLE IF EXISTS #AutorizacoesClinicas;
+
+SELECT
+    F.id_cnpj,
+    CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
     A.num_autorizacao,
-    MIN(A.data_hora) AS data_hora_venda,
-    SUM(ISNULL(A.valor_pago, 0)) AS valor_total_autorizacao,
-    SUM(CASE
-        WHEN C.Patologia = 'OSTEOPOROSE'        AND B.idSexo = 'M'                                                        THEN ISNULL(A.valor_pago, 0)
-        WHEN C.Patologia = 'DIABETES'            AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20     THEN ISNULL(A.valor_pago, 0)
-        WHEN C.Patologia = 'DOENCA DE PARKINSON' AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50     THEN ISNULL(A.valor_pago, 0)
-        WHEN C.Patologia = 'HIPERTENSAO'         AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20     THEN ISNULL(A.valor_pago, 0)
-        ELSE 0
-    END) AS valor_itens_suspeitos,
-    MAX(CASE
-        WHEN C.Patologia = 'OSTEOPOROSE'        AND B.idSexo = 'M'                                                        THEN 1
-        WHEN C.Patologia = 'DIABETES'            AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20     THEN 1
-        WHEN C.Patologia = 'DOENCA DE PARKINSON' AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50     THEN 1
-        WHEN C.Patologia = 'HIPERTENSAO'         AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20     THEN 1
-        ELSE 0
-    END) AS flag_venda_suspeita
-INTO #CalculoDemografico
+    COUNT_BIG(*) AS qtd_itens_monitorados,
+    SUM(A.valor_pago) AS valor_total_autorizacao_raw,
+    SUM(
+        CASE
+            WHEN M.patologia = 'OSTEOPOROSE'
+                 AND B.idSexo = 'M'
+                THEN A.valor_pago
+            WHEN M.patologia = 'DIABETES'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20
+                THEN A.valor_pago
+            WHEN M.patologia = 'DOENCA DE PARKINSON'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50
+                THEN A.valor_pago
+            WHEN M.patologia = 'HIPERTENSAO'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20
+                THEN A.valor_pago
+            ELSE 0
+        END
+    ) AS valor_itens_suspeitos_raw,
+    MAX(
+        CASE
+            WHEN M.patologia = 'OSTEOPOROSE'
+                 AND B.idSexo = 'M'
+                THEN 1
+            WHEN M.patologia = 'DIABETES'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20
+                THEN 1
+            WHEN M.patologia = 'DOENCA DE PARKINSON'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 50
+                THEN 1
+            WHEN M.patologia = 'HIPERTENSAO'
+                 AND FLOOR(DATEDIFF(DAY, B.dataNascimento, A.data_hora) / 365.25) < 20
+                THEN 1
+            ELSE 0
+        END
+    ) AS flag_venda_suspeita
+INTO #AutorizacoesClinicas
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
-    ON C.codigo_barra = A.codigo_barra
-INNER JOIN db_CPF.dbo.CPF B
+INNER JOIN #farmacias_dim F
+    ON F.cnpj = A.cnpj
+INNER JOIN #medicamentos_clinicos M
+    ON M.codigo_barra = A.codigo_barra
+LEFT JOIN db_CPF.dbo.CPF B
     ON B.CPF = A.cpf
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
-  AND B.dataNascimento IS NOT NULL
-  AND C.Patologia IN ('OSTEOPOROSE', 'DIABETES', 'DOENCA DE PARKINSON', 'HIPERTENSAO')
+  AND A.num_autorizacao IS NOT NULL
+  AND A.cpf IS NOT NULL
+  AND A.codigo_barra IS NOT NULL
 GROUP BY
-    A.cnpj,
+    F.id_cnpj,
     YEAR(A.data_hora),
     A.num_autorizacao;
 
-SET @QtdAutorizacoes = @@ROWCOUNT;
+IF NOT EXISTS (SELECT 1 FROM #AutorizacoesClinicas)
+BEGIN
+    RAISERROR('Nao ha autorizacoes monitoradas para calcular inconsistencia clinica.', 16, 1);
+    RETURN;
+END;
 
-CREATE CLUSTERED INDEX IX_CalcDemo_AnoCnpj
-    ON #CalculoDemografico (ano_referencia, cnpj);
+CREATE CLUSTERED INDEX IDX_AutorizacoesClinicas_CNPJ_Ano
+ON #AutorizacoesClinicas(id_cnpj, ano_base);
 
-CREATE NONCLUSTERED INDEX IX_CalcDemo_CnpjAno
-    ON #CalculoDemografico (cnpj, ano_referencia)
-    INCLUDE (flag_venda_suspeita, valor_total_autorizacao, valor_itens_suspeitos);
-
-PRINT CONCAT('  Autorizacoes monitoradas: ', @QtdAutorizacoes);
+DROP TABLE IF EXISTS #medicamentos_clinicos;
 
 
 -- ============================================================================
--- PASSO 2: AGREGA CNPJ x ANO
+-- PASSO 2: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
-PRINT 'PASSO 2: Agregando indicador por farmacia e ano...';
-
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinica;
+DROP TABLE IF EXISTS #IndicadorClinicaAgregado;
 
 SELECT
-    cnpj,
-    ano_referencia,
-    COUNT(*) AS total_vendas_monitoradas,
-    SUM(flag_venda_suspeita) AS qtd_vendas_suspeitas,
-    CAST(SUM(valor_total_autorizacao) AS DECIMAL(18,2)) AS valor_vendas_monitoradas,
-    CAST(SUM(CASE WHEN flag_venda_suspeita = 1 THEN valor_itens_suspeitos ELSE 0 END) AS DECIMAL(18,2)) AS valor_vendas_suspeitas,
-    CAST(
-        CASE
-            WHEN COUNT(*) > 0
-                THEN (CAST(SUM(flag_venda_suspeita) AS DECIMAL(18,2)) / CAST(COUNT(*) AS DECIMAL(18,2))) * 100.0
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS percentual_inconsistencia,
-    CAST(
-        CASE
-            WHEN SUM(valor_total_autorizacao) > 0
-                THEN (CAST(SUM(CASE WHEN flag_venda_suspeita = 1 THEN valor_itens_suspeitos ELSE 0 END) AS DECIMAL(18,2)) / CAST(SUM(valor_total_autorizacao) AS DECIMAL(18,2))) * 100.0
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS percentual_valor_inconsistencia
-INTO #IndicadorInconsistenciaClinica
-FROM #CalculoDemografico
-GROUP BY cnpj, ano_referencia;
+    id_cnpj,
+    ano_base,
+    CAST(COUNT_BIG(*) AS INT) AS total_vendas_monitoradas,
+    CAST(SUM(flag_venda_suspeita) AS INT) AS qtd_vendas_suspeitas,
+    SUM(valor_total_autorizacao_raw) AS valor_vendas_monitoradas_raw,
+    SUM(valor_itens_suspeitos_raw) AS valor_vendas_suspeitas_raw
+INTO #IndicadorClinicaAgregado
+FROM #AutorizacoesClinicas
+GROUP BY
+    id_cnpj,
+    ano_base;
 
-SET @QtdFarmaciasAno = @@ROWCOUNT;
+IF EXISTS (
+    SELECT 1
+    FROM #IndicadorClinicaAgregado
+    WHERE valor_vendas_monitoradas_raw <= 0
+)
+BEGIN
+    RAISERROR('Existem farmacias/ano com valor monitorado menor ou igual a zero para inconsistencia clinica.', 16, 1);
+    RETURN;
+END;
 
-CREATE CLUSTERED INDEX IX_IndClinico_AnoCnpj
-    ON #IndicadorInconsistenciaClinica (ano_referencia, cnpj);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndicadorClinicaAgregado_CNPJ_Ano
+ON #IndicadorClinicaAgregado(id_cnpj, ano_base);
 
-CREATE NONCLUSTERED INDEX IX_IndClinico_CnpjAno
-    ON #IndicadorInconsistenciaClinica (cnpj, ano_referencia);
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica;
 
-PRINT CONCAT('  Farmacias/ano calculadas: ', @QtdFarmaciasAno);
+SELECT
+    id_cnpj,
+    ano_base,
+    total_vendas_monitoradas,
+    qtd_vendas_suspeitas,
+    CAST(valor_vendas_monitoradas_raw AS DECIMAL(9,2)) AS valor_vendas_monitoradas,
+    CAST(valor_vendas_suspeitas_raw AS DECIMAL(9,2)) AS valor_vendas_suspeitas
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica
+FROM #IndicadorClinicaAgregado;
 
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_inconsistencia_clinica)
+BEGIN
+    RAISERROR('Nao ha farmacias/ano com valor monitorado positivo para inconsistencia clinica.', 16, 1);
+    RETURN;
+END;
 
--- ============================================================================
--- PASSO 3: METRICAS POR MUNICIPIO (MEDIANA)
--- ============================================================================
-PRINT 'PASSO 3: Calculando medianas por municipio...';
+CREATE UNIQUE CLUSTERED INDEX IDX_IndClinica_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_inconsistencia_clinica(id_cnpj, ano_base);
 
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaMun;
-
-SELECT DISTINCT
-    Y.ano_referencia,
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.uf, F.municipio)
-    AS DECIMAL(18,2)) AS mediana_valor_municipio
-INTO #IndicadorInconsistenciaClinicaMun
-FROM temp_CGUSC.fp.dados_farmacia F
-CROSS JOIN #Anos Y
-LEFT JOIN #IndicadorInconsistenciaClinica I
-    ON I.cnpj = F.cnpj
-   AND I.ano_referencia = Y.ano_referencia;
-
-CREATE CLUSTERED INDEX IX_IndClinicoMun_AnoUfMun
-    ON #IndicadorInconsistenciaClinicaMun (ano_referencia, uf, municipio);
+DROP TABLE IF EXISTS #AutorizacoesClinicas;
+DROP TABLE IF EXISTS #IndicadorClinicaAgregado;
 
 
 -- ============================================================================
--- PASSO 4: METRICAS POR ESTADO (MEDIANA)
+-- PASSO 3: TABELA CONSOLIDADA FINAL
 -- ============================================================================
-PRINT 'PASSO 4: Calculando medianas por estado...';
-
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaUf;
-
-SELECT DISTINCT
-    Y.ano_referencia,
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.uf)
-    AS DECIMAL(18,2)) AS mediana_valor_estado
-INTO #IndicadorInconsistenciaClinicaUf
-FROM temp_CGUSC.fp.dados_farmacia F
-CROSS JOIN #Anos Y
-LEFT JOIN #IndicadorInconsistenciaClinica I
-    ON I.cnpj = F.cnpj
-   AND I.ano_referencia = Y.ano_referencia;
-
-CREATE CLUSTERED INDEX IX_IndClinicoUf_AnoUf
-    ON #IndicadorInconsistenciaClinicaUf (ano_referencia, uf);
-
-
--- ============================================================================
--- PASSO 5: METRICAS POR REGIAO DE SAUDE (MEDIANA)
--- ============================================================================
-PRINT 'PASSO 5: Calculando medianas por regiao de saude...';
-
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaRegiao;
-
-SELECT DISTINCT
-    Y.ano_referencia,
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY Y.ano_referencia, F.id_regiao_saude)
-    AS DECIMAL(18,2)) AS mediana_valor_regiao
-INTO #IndicadorInconsistenciaClinicaRegiao
-FROM temp_CGUSC.fp.dados_farmacia F
-CROSS JOIN #Anos Y
-LEFT JOIN #IndicadorInconsistenciaClinica I
-    ON I.cnpj = F.cnpj
-   AND I.ano_referencia = Y.ano_referencia
-WHERE F.id_regiao_saude IS NOT NULL;
-
-CREATE CLUSTERED INDEX IX_IndClinicoReg_AnoRegiao
-    ON #IndicadorInconsistenciaClinicaRegiao (ano_referencia, id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 6: METRICA NACIONAL (MEDIANA)
--- ============================================================================
-PRINT 'PASSO 6: Calculando medianas nacionais...';
-
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaBr;
-
-SELECT DISTINCT
-    Y.ano_referencia,
-    'BR' AS pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_inconsistencia, 0))
-        OVER (PARTITION BY Y.ano_referencia)
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.valor_vendas_suspeitas, 0))
-        OVER (PARTITION BY Y.ano_referencia)
-    AS DECIMAL(18,2)) AS mediana_valor_pais
-INTO #IndicadorInconsistenciaClinicaBr
-FROM temp_CGUSC.fp.dados_farmacia F
-CROSS JOIN #Anos Y
-LEFT JOIN #IndicadorInconsistenciaClinica I
-    ON I.cnpj = F.cnpj
-   AND I.ano_referencia = Y.ano_referencia;
-
-CREATE CLUSTERED INDEX IX_IndClinicoBr_Ano
-    ON #IndicadorInconsistenciaClinicaBr (ano_referencia);
-
-
--- ============================================================================
--- PASSO 7: TABELA CONSOLIDADA FINAL
--- Rankings, benchmarks e riscos relativos por CNPJ x ano.
--- Risco relativo calculado com suavizacao (+0.01) para evitar divisao por zero.
--- ============================================================================
-PRINT 'PASSO 7: Gerando tabela consolidada anual...';
-
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado;
 
 SELECT
-    F.cnpj,
-    Y.ano_referencia,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.id_regiao_saude,
-
-    -- Indicadores base
-    ISNULL(I.total_vendas_monitoradas, 0) AS total_vendas_monitoradas,
-    ISNULL(I.qtd_vendas_suspeitas, 0) AS qtd_vendas_suspeitas,
-    ISNULL(I.valor_vendas_monitoradas, 0) AS valor_vendas_monitoradas,
-    ISNULL(I.valor_vendas_suspeitas, 0) AS valor_vendas_suspeitas,
-    ISNULL(I.percentual_inconsistencia, 0) AS percentual_inconsistencia,
-    ISNULL(I.percentual_valor_inconsistencia, 0) AS percentual_valor_inconsistencia,
-
-    -- Rankings (pior risco = posicao 1)
-    RANK() OVER (
-        PARTITION BY Y.ano_referencia
-        ORDER BY ISNULL(I.percentual_inconsistencia, 0) DESC
-    ) AS ranking_br,
-    RANK() OVER (
-        PARTITION BY Y.ano_referencia, F.uf
-        ORDER BY ISNULL(I.percentual_inconsistencia, 0) DESC
-    ) AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY Y.ano_referencia, F.id_regiao_saude
-        ORDER BY ISNULL(I.percentual_inconsistencia, 0) DESC
-    ) AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY Y.ano_referencia, F.uf, F.municipio
-        ORDER BY ISNULL(I.percentual_inconsistencia, 0) DESC
-    ) AS ranking_municipio,
-
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.mediana_valor_municipio, 0) AS municipio_valor_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(MUN.mediana_valor_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_mun_mediana,
-
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.mediana_valor_estado, 0) AS estado_valor_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(UF.mediana_valor_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_uf_mediana,
-
-    -- Benchmarks regionais por id_regiao_saude
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.mediana_valor_regiao, 0) AS regiao_saude_valor_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (ISNULL(REG.mediana_valor_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_reg_mediana,
-
-    -- Benchmarks nacionais
-    BR.mediana_pais AS pais_mediana,
-    BR.mediana_valor_pais AS pais_valor_mediana,
-    CAST((ISNULL(I.percentual_inconsistencia, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.valor_vendas_suspeitas, 0) + 0.01) / (BR.mediana_valor_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_valor_br_mediana
-
+    I.id_cnpj,
+    I.ano_base,
+    I.total_vendas_monitoradas,
+    I.qtd_vendas_suspeitas,
+    I.valor_vendas_monitoradas,
+    I.valor_vendas_suspeitas
 INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado
-FROM temp_CGUSC.fp.dados_farmacia F
-CROSS JOIN #Anos Y
-LEFT JOIN #IndicadorInconsistenciaClinica I
-    ON I.cnpj = F.cnpj
-   AND I.ano_referencia = Y.ano_referencia
-LEFT JOIN #IndicadorInconsistenciaClinicaMun MUN
-    ON MUN.ano_referencia = Y.ano_referencia
-   AND MUN.uf = F.uf
-   AND MUN.municipio = F.municipio
-LEFT JOIN #IndicadorInconsistenciaClinicaUf UF
-    ON UF.ano_referencia = Y.ano_referencia
-   AND UF.uf = F.uf
-LEFT JOIN #IndicadorInconsistenciaClinicaRegiao REG
-    ON REG.ano_referencia = Y.ano_referencia
-   AND REG.id_regiao_saude = F.id_regiao_saude
-INNER JOIN #IndicadorInconsistenciaClinicaBr BR
-    ON BR.ano_referencia = Y.ano_referencia;
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I;
 
-SET @QtdFinal = @@ROWCOUNT;
-
-CREATE CLUSTERED INDEX IDX_FinalDemo_AnoCNPJ
-    ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(ano_referencia, cnpj);
-
-CREATE NONCLUSTERED INDEX IDX_FinalDemo_CNPJAno
-    ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(cnpj, ano_referencia);
-
-CREATE NONCLUSTERED INDEX IDX_FinalDemo_Risco
-    ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(ano_referencia, percentual_inconsistencia DESC);
-
-CREATE NONCLUSTERED INDEX IDX_FinalDemo_Regiao
-    ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(ano_referencia, id_regiao_saude, percentual_inconsistencia DESC);
-
-PRINT CONCAT('  Tabela consolidada anual criada com ', @QtdFinal, ' registros');
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalClinica_CNPJ
+ON temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado(id_cnpj, ano_base);
 
 
 -- ============================================================================
--- PASSO 8: LIMPEZA EXPLICITA DAS TEMP TABLES
+-- PASSO 4: AGREGADO POR REGIAO DE SAUDE/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS #CalculoDemografico;
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinica;
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaMun;
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaUf;
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaRegiao;
-DROP TABLE IF EXISTS #IndicadorInconsistenciaClinicaBr;
-DROP TABLE IF EXISTS #Anos;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao;
 
-PRINT '=======================================================================';
-PRINT 'PROCESSO COMPLETO FINALIZADO COM SUCESSO!';
-PRINT '';
-PRINT 'Tabela criada:';
-PRINT '  temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado';
-PRINT '  Granularidade: cnpj + ano_referencia';
-PRINT '=======================================================================';
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+    SUM(I.qtd_vendas_suspeitas) AS qtd_vendas_suspeitas,
+    CAST(SUM(I.valor_vendas_monitoradas) AS DECIMAL(19,2)) AS valor_vendas_monitoradas,
+    CAST(SUM(I.valor_vendas_suspeitas) AS DECIMAL(19,2)) AS valor_vendas_suspeitas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndClinicaReg
+ON temp_CGUSC.fp.indicador_inconsistencia_clinica_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 5: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+    SUM(I.qtd_vendas_suspeitas) AS qtd_vendas_suspeitas,
+    CAST(SUM(I.valor_vendas_monitoradas) AS DECIMAL(19,2)) AS valor_vendas_monitoradas,
+    CAST(SUM(I.valor_vendas_suspeitas) AS DECIMAL(19,2)) AS valor_vendas_suspeitas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_uf
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndClinicaUF
+ON temp_CGUSC.fp.indicador_inconsistencia_clinica_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 6: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_br;
+
+SELECT
+    I.ano_base,
+    SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+    SUM(I.qtd_vendas_suspeitas) AS qtd_vendas_suspeitas,
+    CAST(SUM(I.valor_vendas_monitoradas) AS DECIMAL(19,2)) AS valor_vendas_monitoradas,
+    CAST(SUM(I.valor_vendas_suspeitas) AS DECIMAL(19,2)) AS valor_vendas_suspeitas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_inconsistencia_clinica_br
+FROM temp_CGUSC.fp.indicador_inconsistencia_clinica I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndClinicaBR
+ON temp_CGUSC.fp.indicador_inconsistencia_clinica_br(ano_base);
 GO
 
 
 -- ============================================================================
--- VERIFICACAO RAPIDA
+-- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
-SELECT TOP 100 *
-FROM temp_CGUSC.fp.indicador_inconsistencia_clinica_detalhado
-ORDER BY ano_referencia DESC, ranking_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_inconsistencia_clinica_mun;
+DROP TABLE IF EXISTS #farmacias_dim;
+GO

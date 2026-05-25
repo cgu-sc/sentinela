@@ -8,8 +8,13 @@ GO
 --           de uso continuo realizadas exatamente no limite do bloqueio legal.
 --
 -- METRICA PRINCIPAL:
---   percentual_recorrencia_sistemica representa o percentual anual de renovacoes
---   que ocorreram entre PROXIMA_COMPRA e PROXIMA_COMPRA + 1 dia.
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_renovacoes_sistemicas / valor_total_auditado.
+--
+-- METRICAS AUXILIARES:
+--   total_renovacoes_monitoradas e total_renovacoes_sistemicas permitem recompor
+--   o percentual por contagem quando necessario. A regra de volume minimo deve
+--   ser aplicada depois da soma do periodo selecionado.
 --
 -- FONTE DE DADOS:
 --   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
@@ -27,7 +32,6 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_controle_recorrencia_sistemica;
 GO
 
 -- ============================================================================
@@ -137,6 +141,7 @@ IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj')
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
 BEGIN
     RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para recorrencia sistemica.', 16, 1);
     RETURN;
@@ -192,6 +197,17 @@ BEGIN
     RETURN;
 END;
 
+IF EXISTS (
+    SELECT 1
+    FROM #medicamentos_recorrencia
+    GROUP BY codigo_barra
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia possui codigo_barra associado a multiplos principios ativos/bloqueios para recorrencia sistemica.', 16, 1);
+    RETURN;
+END;
+
 CREATE CLUSTERED INDEX IDX_medicamentos_recorrencia_gtin
 ON #medicamentos_recorrencia(codigo_barra);
 
@@ -201,12 +217,13 @@ ON #medicamentos_recorrencia(codigo_barra);
 -- ============================================================================
 DROP TABLE IF EXISTS #ComprasBase;
 
-SELECT DISTINCT
+SELECT
     F.id_cnpj,
     CAST(A.cpf AS VARCHAR(20)) AS cpf,
     M.principio_ativo,
     M.dias_para_bloqueio,
-    CAST(A.data_hora AS DATETIME) AS data_compra
+    CAST(A.data_hora AS DATETIME) AS data_compra,
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_compra
 INTO #ComprasBase
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN #farmacias_dim F
@@ -216,7 +233,14 @@ INNER JOIN #medicamentos_recorrencia M
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
   AND NULLIF(LTRIM(RTRIM(CAST(A.cpf AS VARCHAR(20)))), '') IS NOT NULL
-  AND A.codigo_barra IS NOT NULL;
+  AND A.codigo_barra IS NOT NULL
+  AND A.valor_pago IS NOT NULL
+GROUP BY
+    F.id_cnpj,
+    CAST(A.cpf AS VARCHAR(20)),
+    M.principio_ativo,
+    M.dias_para_bloqueio,
+    CAST(A.data_hora AS DATETIME);
 
 CREATE CLUSTERED INDEX IDX_ComprasBase_CNPJ_CPF
 ON #ComprasBase(id_cnpj, cpf, principio_ativo, data_compra);
@@ -230,6 +254,7 @@ SELECT
     principio_ativo,
     dias_para_bloqueio,
     data_compra AS data_compra_atual,
+    valor_compra AS valor_compra_atual,
     LAG(data_compra) OVER (
         PARTITION BY id_cnpj, cpf, principio_ativo
         ORDER BY data_compra ASC
@@ -252,7 +277,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica;
 SELECT
     id_cnpj,
     ano_base,
-    CAST(COUNT(*) AS INT) AS qtd_renovacoes_totais,
+    CAST(COUNT(*) AS INT) AS total_renovacoes_monitoradas,
     CAST(
         SUM(
             CASE
@@ -262,33 +287,25 @@ SELECT
                 ELSE 0
             END
         ) AS INT
-    ) AS qtd_renovacoes_sistemicas,
+    ) AS total_renovacoes_sistemicas,
+    CAST(SUM(valor_compra_atual) AS DECIMAL(9,2)) AS valor_total_auditado,
     CAST(
-        CASE
-            WHEN COUNT(*) >= 10 THEN
-                (
-                    CAST(
-                        SUM(
-                            CASE
-                                WHEN DATEDIFF(DAY, data_compra_anterior, data_compra_atual)
-                                     BETWEEN dias_para_bloqueio AND (dias_para_bloqueio + 1)
-                                    THEN 1
-                                ELSE 0
-                            END
-                        ) AS DECIMAL(18,4)
-                    ) /
-                    CAST(COUNT(*) AS DECIMAL(18,4))
-                ) * 100.0
-            ELSE 0
-        END AS DECIMAL(7,4)
-    ) AS percentual_recorrencia_sistemica
+        SUM(
+            CASE
+                WHEN DATEDIFF(DAY, data_compra_anterior, data_compra_atual)
+                     BETWEEN dias_para_bloqueio AND (dias_para_bloqueio + 1)
+                    THEN valor_compra_atual
+                ELSE CAST(0 AS DECIMAL(9,2))
+            END
+        ) AS DECIMAL(9,2)
+    ) AS valor_renovacoes_sistemicas
 INTO temp_CGUSC.fp.indicador_recorrencia_sistemica
 FROM #HistoricoCompras
 WHERE data_compra_anterior IS NOT NULL
 GROUP BY
     id_cnpj,
     ano_base
-HAVING COUNT(*) > 0;
+HAVING SUM(valor_compra_atual) > 0;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_IndRecorrencia_CNPJ_Ano
 ON temp_CGUSC.fp.indicador_recorrencia_sistemica(id_cnpj, ano_base);
@@ -297,129 +314,93 @@ DROP TABLE IF EXISTS #HistoricoCompras;
 
 
 -- ============================================================================
--- PASSO 3: METRICAS POR MUNICIPIO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_mun;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_recorrencia_sistemica)
-        OVER (PARTITION BY I.ano_base, F.uf, F.municipio)
-    AS DECIMAL(7,4)) AS mediana_municipio
-INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_mun
-FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndRecorrMun
-ON temp_CGUSC.fp.indicador_recorrencia_sistemica_mun(ano_base, uf, municipio);
-
-
--- ============================================================================
--- PASSO 4: METRICAS POR ESTADO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_recorrencia_sistemica)
-        OVER (PARTITION BY I.ano_base, F.uf)
-    AS DECIMAL(7,4)) AS mediana_estado
-INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_uf
-FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndRecorrUF
-ON temp_CGUSC.fp.indicador_recorrencia_sistemica_uf(ano_base, uf);
-
-
--- ============================================================================
--- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.percentual_recorrencia_sistemica)
-        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
-    AS DECIMAL(7,4)) AS mediana_regiao
-INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao
-FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndRecorrReg
-ON temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao(ano_base, id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 5: METRICAS NACIONAIS (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
-
-SELECT DISTINCT
-    ano_base,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY percentual_recorrencia_sistemica)
-        OVER (PARTITION BY ano_base)
-    AS DECIMAL(7,4)) AS mediana_pais
-INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_br
-FROM temp_CGUSC.fp.indicador_recorrencia_sistemica;
-
-CREATE CLUSTERED INDEX IDX_IndRecorrBR
-ON temp_CGUSC.fp.indicador_recorrencia_sistemica_br(ano_base);
-
-
--- ============================================================================
--- PASSO 6: TABELA CONSOLIDADA FINAL
+-- PASSO 3: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado;
 
 SELECT
     I.id_cnpj,
     I.ano_base,
-    I.qtd_renovacoes_totais,
-    I.qtd_renovacoes_sistemicas,
-    I.percentual_recorrencia_sistemica,
-
-    MUN.mediana_municipio AS municipio_mediana,
-    CAST((I.percentual_recorrencia_sistemica + 0.01) / (MUN.mediana_municipio + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
-
-    UF.mediana_estado AS estado_mediana,
-    CAST((I.percentual_recorrencia_sistemica + 0.01) / (UF.mediana_estado + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
-
-    REG.mediana_regiao AS regiao_saude_mediana,
-    CAST((I.percentual_recorrencia_sistemica + 0.01) / (REG.mediana_regiao + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
-
-    BR.mediana_pais AS pais_mediana,
-    CAST((I.percentual_recorrencia_sistemica + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
+    I.total_renovacoes_monitoradas,
+    I.total_renovacoes_sistemicas,
+    CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
+    CAST(I.valor_renovacoes_sistemicas AS DECIMAL(9,2)) AS valor_renovacoes_sistemicas
 INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado
-FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj
-INNER JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_mun MUN
-    ON I.ano_base = MUN.ano_base
-   AND F.uf = MUN.uf
-   AND F.municipio = MUN.municipio
-INNER JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_uf UF
-    ON I.ano_base = UF.ano_base
-   AND F.uf = UF.uf
-INNER JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao REG
-    ON I.ano_base = REG.ano_base
-   AND F.id_regiao_saude = REG.id_regiao_saude
-INNER JOIN temp_CGUSC.fp.indicador_recorrencia_sistemica_br BR
-    ON I.ano_base = BR.ano_base;
+FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_FinalRecorrencia_CNPJ
 ON temp_CGUSC.fp.indicador_recorrencia_sistemica_detalhado(id_cnpj, ano_base);
+
+
+-- ============================================================================
+-- PASSO 4: AGREGADO POR REGIAO DE SAUDE/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    SUM(I.total_renovacoes_monitoradas) AS total_renovacoes_monitoradas,
+    SUM(I.total_renovacoes_sistemicas) AS total_renovacoes_sistemicas,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_renovacoes_sistemicas) AS DECIMAL(19,2)) AS valor_renovacoes_sistemicas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao
+FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndRecorrReg
+ON temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 5: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    SUM(I.total_renovacoes_monitoradas) AS total_renovacoes_monitoradas,
+    SUM(I.total_renovacoes_sistemicas) AS total_renovacoes_sistemicas,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_renovacoes_sistemicas) AS DECIMAL(19,2)) AS valor_renovacoes_sistemicas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_uf
+FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndRecorrUF
+ON temp_CGUSC.fp.indicador_recorrencia_sistemica_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 6: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
+
+SELECT
+    I.ano_base,
+    SUM(I.total_renovacoes_monitoradas) AS total_renovacoes_monitoradas,
+    SUM(I.total_renovacoes_sistemicas) AS total_renovacoes_sistemicas,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(SUM(I.valor_renovacoes_sistemicas) AS DECIMAL(19,2)) AS valor_renovacoes_sistemicas,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_recorrencia_sistemica_br
+FROM temp_CGUSC.fp.indicador_recorrencia_sistemica I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndRecorrBR
+ON temp_CGUSC.fp.indicador_recorrencia_sistemica_br(ano_base);
 GO
 
 
@@ -428,8 +409,5 @@ GO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_recorrencia_sistemica_br;
 DROP TABLE IF EXISTS #farmacias_dim;
 GO

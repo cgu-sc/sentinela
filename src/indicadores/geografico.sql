@@ -2,318 +2,576 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- DEFINIÇÃO DE VARIÁVEIS
+-- INDICADOR DE DISPERSAO GEOGRAFICA
 -- ============================================================================
-DECLARE @DataInicio DATE = '2015-07-01';
-DECLARE @DataFim DATE = '2024-12-10';
-DECLARE @LoteTamanho INT = 500;
+-- OBJETIVO: Identificar farmacias com proporcao atipica de autorizacoes
+--           realizadas para beneficiarios residentes em UF diferente da UF do
+--           estabelecimento.
+--
+-- METRICA PRINCIPAL:
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   valor_vendas_outra_uf / valor_total_auditado.
+--
+-- FONTE DE DADOS:
+--   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
+--   - db_CPF.dbo.CPF (UF do beneficiario)
+--   - temp_CGUSC.fp.medicamentos_patologia (universo de medicamentos auditados)
+--   - temp_CGUSC.fp.dados_farmacia (id_cnpj e contexto territorial)
+-- ============================================================================
 
 -- ============================================================================
--- PASSO 1: GARANTIR TABELAS DE CONTROLE (Independente se já existem)
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.indicador_geografico'))
+DECLARE @DataInicio  DATE = '2015-07-01';
+DECLARE @DataFim     DATE = '2024-12-10';
+DECLARE @LoteTamanho INT  = 500;
+
+
+-- ============================================================================
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
+-- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.indicador_geografico (
-        cnpj VARCHAR(14) PRIMARY KEY,
-        total_vendas_monitoradas INT,
-        qtd_vendas_outra_uf INT,
-        percentual_geografico DECIMAL(18,4),
-        data_calculo DATETIME DEFAULT GETDATE()
-    );
-END
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
 
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'temp_CGUSC.fp.indicador_controle_geografico'))
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
 BEGIN
-    CREATE TABLE temp_CGUSC.fp.indicador_controle_geografico (
-        cnpj VARCHAR(14) PRIMARY KEY,
-        situacao INT DEFAULT 0, -- 0:Pendente, 1:Processando, 2:Concluído, 3:Erro
-        tentativas INT DEFAULT 0,
-        data_inicio_processamento DATETIME,
-        data_fim_processamento DATETIME,
-        total_vendas INT,
-        total_outra_uf INT,
-        percentual_calculado DECIMAL(18,4),
-        mensagem_erro VARCHAR(MAX)
-    );
-END
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RETURN;
+END;
 
--- POPULAÇÃO (FORA DO IF NOT EXISTS - Garante que novos CNPJs entrem na fila)
-INSERT INTO temp_CGUSC.fp.indicador_controle_geografico (cnpj)
-SELECT DISTINCT A.cnpj 
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-LEFT JOIN temp_CGUSC.fp.indicador_controle_geografico C ON C.cnpj = A.cnpj
-WHERE C.cnpj IS NULL;
-
--- ============================================================================
--- PASSO 2: RECUPERAÇÃO DE PROCESSAMENTOS TRAVADOS
--- ============================================================================
-UPDATE temp_CGUSC.fp.indicador_controle_geografico
-SET situacao = 0, mensagem_erro = 'Reversão para modelo estável'
-WHERE situacao = 1 AND DATEDIFF(MINUTE, data_inicio_processamento, GETDATE()) > 30;
-
--- ============================================================================
--- PASSO 3: O MOTOR (CURSOR POR LOTES) - IDÊNTICO AO ORIGINAL
--- ============================================================================
-DECLARE @CNPJAtual VARCHAR(14);
-DECLARE @PendentesAgua INT;
-
--- Verifica quantos faltam no início do lote
-SELECT @PendentesAgua = COUNT(*) 
-FROM temp_CGUSC.fp.indicador_controle_geografico 
-WHERE situacao IN (0, 3) AND tentativas < 3;
-
-WHILE @PendentesAgua > 0
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
 BEGIN
-    PRINT CONCAT('>>> Iniciando novo lote. Pendentes: ', @PendentesAgua);
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
 
-    DECLARE cursor_cnpjs CURSOR FOR
-        SELECT TOP (@LoteTamanho) cnpj
-        FROM temp_CGUSC.fp.indicador_controle_geografico
-        WHERE situacao IN (0, 3) AND tentativas < 3 ORDER BY cnpj;
-
-    OPEN cursor_cnpjs;
-    FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        BEGIN TRY
-            -- MARCA COMO "PROCESSANDO"
-            UPDATE temp_CGUSC.fp.indicador_controle_geografico 
-            SET situacao = 1, data_inicio_processamento = GETDATE(), tentativas = tentativas + 1 
-            WHERE cnpj = @CNPJAtual;
-
-            -- CÁLCULO DO INDICADOR (APENAS ITENS AUDITADOS E CPF IDENTIFICADO)
-            DROP TABLE IF EXISTS #VendasTemp;
-            SELECT 
-                A.num_autorizacao,
-                MAX(B.unidadeFederacao) AS uf_paciente,
-                MAX(F.uf) AS uf_farmacia
-            INTO #VendasTemp
-            FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A WITH(NOLOCK)
-            INNER JOIN temp_CGUSC.fp.dados_farmacia F WITH(NOLOCK) ON F.cnpj = A.cnpj
-            INNER JOIN db_CPF.dbo.CPF B WITH(NOLOCK) ON B.CPF = A.cpf
-            INNER JOIN temp_CGUSC.fp.medicamentos_patologia Pat ON Pat.codigo_barra = A.codigo_barra
-
-            WHERE A.cnpj = @CNPJAtual AND A.data_hora >= @DataInicio AND A.data_hora <= @DataFim
-            GROUP BY A.num_autorizacao;
-
-            DECLARE @TotalVendas INT, @QtdOutraUF INT, @Pct DECIMAL(18,4);
-            SELECT 
-                @TotalVendas = COUNT(*),
-                @QtdOutraUF = SUM(CASE WHEN uf_paciente IS NOT NULL AND uf_farmacia IS NOT NULL 
-                                       AND CAST(uf_paciente AS VARCHAR(2)) <> CAST(uf_farmacia AS VARCHAR(2)) THEN 1 ELSE 0 END)
-            FROM #VendasTemp;
-
-            SET @Pct = CASE WHEN @TotalVendas > 0 THEN (CAST(@QtdOutraUF AS DECIMAL(18,2)) / @TotalVendas) * 100.0 ELSE 0 END;
-
-            -- Salva Resultados individuais
-            IF EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_geografico WHERE cnpj = @CNPJAtual)
-                UPDATE temp_CGUSC.fp.indicador_geografico SET total_vendas_monitoradas = @TotalVendas, qtd_vendas_outra_uf = @QtdOutraUF, percentual_geografico = @Pct, data_calculo = GETDATE() WHERE cnpj = @CNPJAtual;
-            ELSE
-                INSERT INTO temp_CGUSC.fp.indicador_geografico (cnpj, total_vendas_monitoradas, qtd_vendas_outra_uf, percentual_geografico) VALUES (@CNPJAtual, @TotalVendas, @QtdOutraUF, @Pct);
-
-            -- MARCA COMO "CONCLUÍDO"
-            UPDATE temp_CGUSC.fp.indicador_controle_geografico 
-            SET situacao = 2, data_fim_processamento = GETDATE(), total_vendas = @TotalVendas, total_outra_uf = @QtdOutraUF, percentual_calculado = @Pct, mensagem_erro = NULL 
-            WHERE cnpj = @CNPJAtual;
-
-        END TRY
-        BEGIN CATCH
-            UPDATE temp_CGUSC.fp.indicador_controle_geografico 
-            SET situacao = 3, data_fim_processamento = GETDATE(), mensagem_erro = ERROR_MESSAGE() 
-            WHERE cnpj = @CNPJAtual;
-        END CATCH
-        
-        FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
-    END
-    CLOSE cursor_cnpjs; DEALLOCATE cursor_cnpjs;
-
-    -- Atualiza contagem para o próximo lote
-    SELECT @PendentesAgua = COUNT(*) 
-    FROM temp_CGUSC.fp.indicador_controle_geografico 
-    WHERE situacao IN (0, 3) AND tentativas < 3;
-END
-
--- ============================================================================
--- PASSO 4: CONSOLIDAÇÃO FINAL (APENAS QUANDO TODOS FOREM CONCLUÍDOS)
--- ============================================================================
-IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.indicador_controle_geografico WHERE situacao IN (0, 1, 3))
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
 BEGIN
-PRINT 'PASSO 3: Calculando metricas por municipio...';
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_mun;
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
 
-SELECT DISTINCT
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
-INTO temp_CGUSC.fp.indicador_geografico_mun
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_geografico I ON I.cnpj = F.cnpj;
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
 
-CREATE CLUSTERED INDEX IDX_IndGeoMun_mun ON temp_CGUSC.fp.indicador_geografico_mun(uf, municipio);
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
 
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'num_autorizacao') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para dispersao geografica.', 16, 1);
+    RETURN;
+END;
 
--- ============================================================================
--- PASSO 4: METRICAS POR ESTADO (MEDIA E MEDIANA)
--- ============================================================================
-PRINT 'PASSO 4: Calculando metricas por estado...';
+IF OBJECT_ID('db_CPF.dbo.CPF', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF nao encontrada.', 16, 1);
+    RETURN;
+END;
 
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
+IF COL_LENGTH('db_CPF.dbo.CPF', 'CPF') IS NULL
+   OR COL_LENGTH('db_CPF.dbo.CPF', 'unidadeFederacao') IS NULL
+BEGIN
+    RAISERROR('Tabela db_CPF.dbo.CPF sem colunas obrigatorias CPF/unidadeFederacao.', 16, 1);
+    RETURN;
+END;
 
-SELECT DISTINCT
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
-INTO temp_CGUSC.fp.indicador_geografico_uf
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_geografico I ON I.cnpj = F.cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndGeoUF_uf ON temp_CGUSC.fp.indicador_geografico_uf(uf);
-
-
--- ============================================================================
--- PASSO 4B: METRICAS POR REGIAO DE SAUDE (MEDIA E MEDIANA)
--- ============================================================================
-PRINT 'PASSO 4B: Calculando metricas por regiao de saude...';
-
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_regiao;
-
-SELECT DISTINCT
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(ISNULL(I.percentual_geografico, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
-INTO temp_CGUSC.fp.indicador_geografico_regiao
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_geografico I ON I.cnpj = F.cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
-
-CREATE CLUSTERED INDEX IDX_IndGeoReg ON temp_CGUSC.fp.indicador_geografico_regiao(id_regiao_saude);
-
-PRINT 'PASSO 5: Calculando metricas nacionais...';
-
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
-
-SELECT DISTINCT
-    'BR' AS pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(percentual_geografico, 0)) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(ISNULL(percentual_geografico, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
-INTO temp_CGUSC.fp.indicador_geografico_br
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_geografico I ON I.cnpj = F.cnpj;
-
-PRINT 'PASSO 6: Gerando tabela consolidada com riscos relativos e rankings...';
-
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
+DROP TABLE IF EXISTS #farmacias_dim;
 
 SELECT
-    F.cnpj,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.no_regiao_saude,
-    F.id_regiao_saude,
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
 
-    -- Indicadores base
-    ISNULL(I.total_vendas_monitoradas, 0) AS total_vendas_monitoradas,
-    ISNULL(I.qtd_vendas_outra_uf, 0)       AS qtd_vendas_outra_uf,
-    ISNULL(I.percentual_geografico, 0)    AS percentual_geografico,
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
 
-    -- Rankings (pior risco = posicao 1)
-    RANK() OVER (
-        ORDER BY ISNULL(I.percentual_geografico, 0) DESC
-    ) AS ranking_br,
-    RANK() OVER (
-        PARTITION BY F.uf
-        ORDER BY ISNULL(I.percentual_geografico, 0) DESC
-    ) AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY F.id_regiao_saude
-        ORDER BY ISNULL(I.percentual_geografico, 0) DESC
-    ) AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY F.uf, F.municipio
-        ORDER BY ISNULL(I.percentual_geografico, 0) DESC
-    ) AS ranking_municipio,
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
 
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0) AS municipio_media,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(MUN.media_municipio,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
 
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    ISNULL(UF.media_estado,   0) AS estado_media,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(UF.media_estado,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
-    -- Benchmarks Regionais (Regiao de Saude)
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0) AS regiao_saude_media,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (ISNULL(REG.media_regiao,   0) + 0.01) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
+SELECT DISTINCT
+    C.codigo_barra
+INTO #medicamentos_patologia_gtin
+FROM temp_CGUSC.fp.medicamentos_patologia C
+WHERE C.codigo_barra IS NOT NULL;
 
-    -- Benchmarks nacionais
-    BR.mediana_pais AS pais_mediana,
-    BR.media_pais   AS pais_media,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST((ISNULL(I.percentual_geografico, 0) + 0.01) / (BR.media_pais   + 0.01) AS DECIMAL(18,4)) AS risco_relativo_br_media
+IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem codigo_barra valido.', 16, 1);
+    RETURN;
+END;
 
-INTO temp_CGUSC.fp.indicador_geografico_detalhado
-FROM temp_CGUSC.fp.dados_farmacia F
-LEFT JOIN temp_CGUSC.fp.indicador_geografico I
-    ON I.cnpj = F.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_geografico_mun MUN
-    ON F.uf        = MUN.uf
-   AND F.municipio = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_geografico_uf UF
-    ON F.uf = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_geografico_regiao REG
-    ON F.id_regiao_saude = REG.id_regiao_saude
-CROSS JOIN temp_CGUSC.fp.indicador_geografico_br BR;
+CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_patologia_gtin
+ON #medicamentos_patologia_gtin(codigo_barra);
 
-CREATE CLUSTERED INDEX IDX_FinalGeo_CNPJ     ON temp_CGUSC.fp.indicador_geografico_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalGeo_Risco  ON temp_CGUSC.fp.indicador_geografico_detalhado(percentual_geografico DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalGeo_RankBR ON temp_CGUSC.fp.indicador_geografico_detalhado(ranking_br);
-
--- ============================================================================
--- PASSO 7: LIMPEZA DAS TABELAS INTERMEDIARIAS
--- ============================================================================
+-- Tabelas finais/derivadas antigas nao podem permanecer apos mudanca de schema.
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_mun;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_regiao;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
 
-PRINT 'CONSOLIDAÇÃO FINAL CONCLUÍDA COM SUCESSO!';
+
+-- ============================================================================
+-- PASSO 1: TABELA DE RESULTADOS BASE INCREMENTAL
+-- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.indicador_geografico', 'U') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.indicador_geografico (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        id_cnpj INT NOT NULL,
+        ano_base SMALLINT NOT NULL,
+        total_vendas_monitoradas INT NOT NULL,
+        qtd_vendas_outra_uf INT NOT NULL,
+        valor_total_auditado DECIMAL(9,2) NOT NULL,
+        valor_vendas_outra_uf DECIMAL(9,2) NOT NULL,
+        data_calculo DATETIME NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT UQ_IndGeografico_CNPJ_Ano UNIQUE (id_cnpj, ano_base)
+    );
+
+    CREATE INDEX IDX_IndicadorGeografico_CNPJ_Ano
+    ON temp_CGUSC.fp.indicador_geografico(id_cnpj, ano_base);
+END
+ELSE IF COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'id_cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'ano_base') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'total_vendas_monitoradas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'qtd_vendas_outra_uf') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'valor_vendas_outra_uf') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'data_calculo') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico', 'percentual_geografico') IS NOT NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.indicador_geografico existe com schema incompativel. Recrie a tabela antes de executar.', 16, 1);
+    RETURN;
+END;
+
+ALTER TABLE temp_CGUSC.fp.indicador_geografico
+ALTER COLUMN valor_total_auditado DECIMAL(9,2) NOT NULL;
+
+ALTER TABLE temp_CGUSC.fp.indicador_geografico
+ALTER COLUMN valor_vendas_outra_uf DECIMAL(9,2) NOT NULL;
+
+
+-- ============================================================================
+-- PASSO 2: TABELA DE CONTROLE DE PROCESSAMENTO
+-- ============================================================================
+IF OBJECT_ID('temp_CGUSC.fp.indicador_controle_geografico', 'U') IS NULL
+BEGIN
+    CREATE TABLE temp_CGUSC.fp.indicador_controle_geografico (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        cnpj VARCHAR(14) NOT NULL UNIQUE,
+        data_inicio_processamento DATETIME,
+        data_fim_processamento DATETIME,
+        situacao INT NOT NULL, -- 0=Pendente, 1=Processando, 2=Concluido, 3=Erro
+        total_vendas INT,
+        total_outra_uf INT,
+        valor_total_auditado DECIMAL(19,2),
+        valor_vendas_outra_uf DECIMAL(19,2),
+        mensagem_erro VARCHAR(MAX),
+        tentativas INT NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IDX_ControleGeografico_Situacao
+    ON temp_CGUSC.fp.indicador_controle_geografico(situacao, cnpj);
+END
+ELSE IF COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'id') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'data_inicio_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'data_fim_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'situacao') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'total_vendas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'total_outra_uf') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'valor_vendas_outra_uf') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'mensagem_erro') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'tentativas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_geografico', 'percentual_calculado') IS NOT NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.indicador_controle_geografico existe com schema incompativel. Recrie a tabela antes de executar.', 16, 1);
+    RETURN;
+END;
+
+INSERT INTO temp_CGUSC.fp.indicador_controle_geografico (cnpj, situacao)
+SELECT F.cnpj, 0 AS situacao
+FROM #farmacias_dim F
+LEFT JOIN temp_CGUSC.fp.indicador_controle_geografico C
+    ON C.cnpj = F.cnpj
+WHERE C.cnpj IS NULL;
+
+UPDATE temp_CGUSC.fp.indicador_controle_geografico
+SET situacao = 0,
+    mensagem_erro = 'Reversao para reprocessamento'
+WHERE situacao = 1
+  AND DATEDIFF(MINUTE, data_inicio_processamento, GETDATE()) > 30;
+
+
+-- ============================================================================
+-- PASSO 3: PROCESSAMENTO INCREMENTAL POR LOTE
+-- ============================================================================
+DECLARE @CNPJAtual VARCHAR(14);
+DECLARE @IdCnpjAtual INT;
+DECLARE @Contador INT = 0;
+DECLARE @TotalVendas INT;
+DECLARE @QtdOutraUF INT;
+DECLARE @ValorTotalAuditado DECIMAL(19,2);
+DECLARE @ValorOutraUF DECIMAL(19,2);
+
+DECLARE cursor_cnpjs CURSOR LOCAL FAST_FORWARD FOR
+    SELECT TOP (@LoteTamanho) cnpj
+    FROM temp_CGUSC.fp.indicador_controle_geografico
+    WHERE situacao IN (0, 3)
+      AND tentativas < 3
+    ORDER BY cnpj;
+
+OPEN cursor_cnpjs;
+FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    BEGIN TRY
+        SELECT @IdCnpjAtual = F.id_cnpj
+        FROM #farmacias_dim F
+        WHERE F.cnpj = @CNPJAtual;
+
+        IF @IdCnpjAtual IS NULL
+        BEGIN
+            RAISERROR('CNPJ da fila nao encontrado em temp_CGUSC.fp.dados_farmacia.', 16, 1);
+        END;
+
+        UPDATE temp_CGUSC.fp.indicador_controle_geografico
+        SET situacao = 1,
+            data_inicio_processamento = GETDATE(),
+            data_fim_processamento = NULL,
+            mensagem_erro = NULL,
+            tentativas = tentativas + 1
+        WHERE cnpj = @CNPJAtual;
+
+        DROP TABLE IF EXISTS #AutorizacoesGeograficas;
+
+        SELECT
+            F.id_cnpj,
+            CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
+            A.num_autorizacao,
+            CAST(UPPER(LTRIM(RTRIM(MAX(CAST(B.unidadeFederacao AS VARCHAR(2)))))) AS VARCHAR(2)) AS uf_paciente,
+            MAX(F.uf) AS uf_farmacia,
+            CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_autorizacao
+        INTO #AutorizacoesGeograficas
+        FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+        INNER JOIN #farmacias_dim F
+            ON F.cnpj = A.cnpj
+        INNER JOIN db_CPF.dbo.CPF B
+            ON B.CPF = A.cpf
+        INNER JOIN #medicamentos_patologia_gtin C
+            ON C.codigo_barra = A.codigo_barra
+        WHERE A.cnpj = @CNPJAtual
+          AND A.data_hora >= @DataInicio
+          AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+          AND A.num_autorizacao IS NOT NULL
+          AND A.cpf IS NOT NULL
+          AND A.valor_pago IS NOT NULL
+          AND A.valor_pago >= 0
+          AND A.codigo_barra IS NOT NULL
+        GROUP BY
+            F.id_cnpj,
+            YEAR(A.data_hora),
+            A.num_autorizacao;
+
+        CREATE CLUSTERED INDEX IDX_AutorizacoesGeograficas_CNPJ_Ano
+        ON #AutorizacoesGeograficas(id_cnpj, ano_base);
+
+        DROP TABLE IF EXISTS #ResultadoCNPJ;
+
+        SELECT
+            id_cnpj,
+            ano_base,
+            CAST(COUNT(*) AS INT) AS total_vendas_monitoradas,
+            CAST(
+                SUM(
+                    CASE
+                        WHEN uf_paciente <> uf_farmacia THEN 1
+                        ELSE 0
+                    END
+                ) AS INT
+            ) AS qtd_vendas_outra_uf,
+            CAST(SUM(valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
+            CAST(
+                SUM(
+                    CASE
+                        WHEN uf_paciente <> uf_farmacia THEN valor_total_autorizacao
+                        ELSE CAST(0 AS DECIMAL(9,2))
+                    END
+                ) AS DECIMAL(9,2)
+            ) AS valor_vendas_outra_uf
+        INTO #ResultadoCNPJ
+        FROM #AutorizacoesGeograficas
+        GROUP BY
+            id_cnpj,
+            ano_base
+        HAVING SUM(valor_total_autorizacao) > 0;
+
+        DELETE FROM temp_CGUSC.fp.indicador_geografico
+        WHERE id_cnpj = @IdCnpjAtual;
+
+        INSERT INTO temp_CGUSC.fp.indicador_geografico (
+            id_cnpj,
+            ano_base,
+            total_vendas_monitoradas,
+            qtd_vendas_outra_uf,
+            valor_total_auditado,
+            valor_vendas_outra_uf
+        )
+        SELECT
+            id_cnpj,
+            ano_base,
+            total_vendas_monitoradas,
+            qtd_vendas_outra_uf,
+            valor_total_auditado,
+            valor_vendas_outra_uf
+        FROM #ResultadoCNPJ;
+
+        SELECT
+            @TotalVendas = SUM(total_vendas_monitoradas),
+            @QtdOutraUF = SUM(qtd_vendas_outra_uf),
+            @ValorTotalAuditado = SUM(valor_total_auditado),
+            @ValorOutraUF = SUM(valor_vendas_outra_uf)
+        FROM #ResultadoCNPJ;
+
+        SET @TotalVendas = CASE WHEN @TotalVendas IS NULL THEN 0 ELSE @TotalVendas END;
+        SET @QtdOutraUF = CASE WHEN @QtdOutraUF IS NULL THEN 0 ELSE @QtdOutraUF END;
+        SET @ValorTotalAuditado = CASE WHEN @ValorTotalAuditado IS NULL THEN 0 ELSE @ValorTotalAuditado END;
+        SET @ValorOutraUF = CASE WHEN @ValorOutraUF IS NULL THEN 0 ELSE @ValorOutraUF END;
+
+        UPDATE temp_CGUSC.fp.indicador_controle_geografico
+        SET situacao = 2,
+            data_fim_processamento = GETDATE(),
+            total_vendas = @TotalVendas,
+            total_outra_uf = @QtdOutraUF,
+            valor_total_auditado = @ValorTotalAuditado,
+            valor_vendas_outra_uf = @ValorOutraUF,
+            mensagem_erro = NULL
+        WHERE cnpj = @CNPJAtual;
+
+        SET @Contador = @Contador + 1;
+
+        IF @Contador % 10 = 0
+            PRINT CONCAT('Processados: ', @Contador, ' CNPJs neste lote.');
+    END TRY
+    BEGIN CATCH
+        UPDATE temp_CGUSC.fp.indicador_controle_geografico
+        SET situacao = 3,
+            data_fim_processamento = GETDATE(),
+            mensagem_erro = ERROR_MESSAGE()
+        WHERE cnpj = @CNPJAtual;
+    END CATCH;
+
+    SET @IdCnpjAtual = NULL;
+    SET @TotalVendas = NULL;
+    SET @QtdOutraUF = NULL;
+    SET @ValorTotalAuditado = NULL;
+    SET @ValorOutraUF = NULL;
+
+    FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
+END;
+
+CLOSE cursor_cnpjs;
+DEALLOCATE cursor_cnpjs;
+
+
+-- ============================================================================
+-- PASSO 4: RESUMO E CONTROLE DE CONCLUSAO
+-- ============================================================================
+SELECT
+    situacao,
+    COUNT(*) AS quantidade,
+    CASE situacao
+        WHEN 0 THEN 'Pendente'
+        WHEN 1 THEN 'Processando'
+        WHEN 2 THEN 'Concluido'
+        WHEN 3 THEN 'Erro'
+    END AS status_descricao
+FROM temp_CGUSC.fp.indicador_controle_geografico
+GROUP BY situacao
+ORDER BY situacao;
+
+DECLARE @Pendentes INT;
+DECLARE @ErrosEsgotados INT;
+
+SELECT @Pendentes = COUNT(*)
+FROM temp_CGUSC.fp.indicador_controle_geografico
+WHERE situacao IN (0, 1)
+   OR (situacao = 3 AND tentativas < 3);
+
+SELECT @ErrosEsgotados = COUNT(*)
+FROM temp_CGUSC.fp.indicador_controle_geografico
+WHERE situacao = 3
+  AND tentativas >= 3;
+
+IF @Pendentes > 0
+BEGIN
+    PRINT '=======================================================================';
+    PRINT CONCAT('ATENCAO: Ainda existem ', @Pendentes, ' CNPJs pendentes de processamento.');
+    PRINT 'Execute este script novamente para processar o proximo lote.';
+    PRINT 'A tabela final sera gerada apenas apos 100% de conclusao.';
+    PRINT '=======================================================================';
+END
+ELSE IF @ErrosEsgotados > 0
+BEGIN
+    RAISERROR('Existem CNPJs com erro e tentativas esgotadas em indicador_controle_geografico. Corrija a causa antes de gerar a tabela final.', 16, 1);
+    RETURN;
 END
 ELSE
 BEGIN
-    DECLARE @Faltam INT;
-    SELECT @Faltam = COUNT(*) FROM temp_CGUSC.fp.indicador_controle_geografico WHERE situacao IN (0, 1, 3);
-    PRINT CONCAT('Lote concluído, mas ainda faltam ', @Faltam, ' CNPJs. Execute o script novamente para o próximo lote.');
-END
+    DECLARE @RegistrosFinal INT;
+
+    PRINT '=======================================================================';
+    PRINT 'TODOS OS CNPJs PROCESSADOS. Gerando tabela final...';
+    PRINT '=======================================================================';
+
+    -- ========================================================================
+    -- PASSO 5: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
+    -- ========================================================================
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
+
+    SELECT
+        I.id_cnpj,
+        I.ano_base,
+        I.total_vendas_monitoradas,
+        I.qtd_vendas_outra_uf,
+        CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
+        CAST(I.valor_vendas_outra_uf AS DECIMAL(9,2)) AS valor_vendas_outra_uf
+    INTO temp_CGUSC.fp.indicador_geografico_detalhado
+    FROM temp_CGUSC.fp.indicador_geografico I;
+
+    SET @RegistrosFinal = @@ROWCOUNT;
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_FinalGeo_CNPJ
+    ON temp_CGUSC.fp.indicador_geografico_detalhado(id_cnpj, ano_base);
+
+    -- ========================================================================
+    -- PASSO 6: AGREGADO POR REGIAO DE SAUDE/ANO
+    -- ========================================================================
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_regiao;
+
+    SELECT
+        I.ano_base,
+        F.id_regiao_saude,
+        SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+        SUM(I.qtd_vendas_outra_uf) AS qtd_vendas_outra_uf,
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+        CAST(SUM(I.valor_vendas_outra_uf) AS DECIMAL(19,2)) AS valor_vendas_outra_uf,
+        CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+    INTO temp_CGUSC.fp.indicador_geografico_regiao
+    FROM temp_CGUSC.fp.indicador_geografico I
+    INNER JOIN #farmacias_dim F
+        ON F.id_cnpj = I.id_cnpj
+    GROUP BY
+        I.ano_base,
+        F.id_regiao_saude;
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_IndGeoReg
+    ON temp_CGUSC.fp.indicador_geografico_regiao(ano_base, id_regiao_saude);
+
+    -- ========================================================================
+    -- PASSO 7: AGREGADO POR UF/ANO
+    -- ========================================================================
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
+
+    SELECT
+        I.ano_base,
+        F.uf,
+        SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+        SUM(I.qtd_vendas_outra_uf) AS qtd_vendas_outra_uf,
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+        CAST(SUM(I.valor_vendas_outra_uf) AS DECIMAL(19,2)) AS valor_vendas_outra_uf,
+        CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+    INTO temp_CGUSC.fp.indicador_geografico_uf
+    FROM temp_CGUSC.fp.indicador_geografico I
+    INNER JOIN #farmacias_dim F
+        ON F.id_cnpj = I.id_cnpj
+    GROUP BY
+        I.ano_base,
+        F.uf;
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_IndGeoUF
+    ON temp_CGUSC.fp.indicador_geografico_uf(ano_base, uf);
+
+    -- ========================================================================
+    -- PASSO 8: AGREGADO BRASIL/ANO
+    -- ========================================================================
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
+
+    SELECT
+        I.ano_base,
+        SUM(I.total_vendas_monitoradas) AS total_vendas_monitoradas,
+        SUM(I.qtd_vendas_outra_uf) AS qtd_vendas_outra_uf,
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+        CAST(SUM(I.valor_vendas_outra_uf) AS DECIMAL(19,2)) AS valor_vendas_outra_uf,
+        CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+    INTO temp_CGUSC.fp.indicador_geografico_br
+    FROM temp_CGUSC.fp.indicador_geografico I
+    GROUP BY
+        I.ano_base;
+
+    CREATE UNIQUE CLUSTERED INDEX IDX_IndGeoBR
+    ON temp_CGUSC.fp.indicador_geografico_br(ano_base);
+
+    PRINT CONCAT('Tabela final criada com ', @RegistrosFinal, ' registros.');
+END;
+
+DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
+DROP TABLE IF EXISTS #farmacias_dim;
 GO

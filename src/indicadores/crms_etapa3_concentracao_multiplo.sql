@@ -998,7 +998,7 @@ BEGIN
                 V.nu_autorizacoes_pior_ritmo,
                 V.nu_crms_distintos_ritmo,
                 V.id_severidade_criterio,
-                CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
+                CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(DATEDIFF(MINUTE, Base.janela_inicio, V.dt_fim_real), 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
                 V.criterio_pior_ritmo
             FROM (VALUES
                 (Base.fim_real_5min,  CAST(5 AS TINYINT),  CAST(Base.nu_5min AS SMALLINT),  CAST(Base.nu_crms_5min AS TINYINT),  CAST(4 AS TINYINT), CAST(1 AS TINYINT),  CAST('8_EM_5MIN' AS VARCHAR(30)),    CASE WHEN Base.nu_5min >= 8  AND Base.nu_crms_5min  >= 2 THEN 1 ELSE 0 END),
@@ -1014,13 +1014,24 @@ BEGIN
             ) V(dt_fim_real, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, nu_crms_distintos_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
             WHERE V.atingiu = 1
             ORDER BY
-                V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(V.janela_pior_ritmo_minutos, 0) DESC,
+                V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(DATEDIFF(MINUTE, Base.janela_inicio, V.dt_fim_real), 0) DESC,
                 V.id_severidade_criterio DESC,
                 V.prioridade_criterio ASC
         ) Ritmo
         WHERE Base.id_severidade IS NOT NULL
     ) sub
     WHERE id_severidade IS NOT NULL;
+
+    IF EXISTS (
+        SELECT 1
+        FROM #concentracao_candidatos
+        WHERE nu_minutos_span <= 0
+           OR taxa_hora_pior_ritmo IS NULL
+    )
+    BEGIN
+        RAISERROR('Alerta CRM multiplo com intervalo real invalido para calcular taxa/hora.', 16, 1);
+        RETURN;
+    END;
 
     ;WITH ordenado AS (
         SELECT

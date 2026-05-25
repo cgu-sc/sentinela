@@ -2,485 +2,411 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- INDICADOR: VOLUME ATIPICO DE FATURAMENTO
--- Versao: 2.1 (Penalizacao por Nao Comprovacao)
+-- INDICADOR DE VOLUME ATIPICO DE FATURAMENTO
+-- ============================================================================
+-- OBJETIVO: Consolidar, por ano e territorio, os componentes do crescimento
+--           semestral atipico calculado em temp_CGUSC.fp.volume_atipico_semestral.
 --
--- METODOLOGIA:
---   Detecta explosoes de crescimento semestral atipicas no faturamento.
---   Um semestre e considerado de "risco" quando cresce mais de 50% sobre o
---   semestre valido anterior.
+-- METRICA PRINCIPAL:
+--   O indicador deve ser calculado por periodo a partir dos componentes:
+--   soma_excesso_crescimento_pct / total_semestres_comparaveis.
 --
---   RISCO_MAGNITUDE : Media dos excessos (quanto acima de 50% foi o salto)
---                     nos semestres onde houve risco. Mede a INTENSIDADE.
---   RISCO_FINAL     : Soma de todos os excessos / total de comparacoes feitas.
---                     Equivale a magnitude * frequencia. Mede o IMPACTO GERAL.
---                     Este e o valor exibido no relatorio e usado nos benchmarks.
+-- CRITERIO DE SEMESTRE ATIPICO:
+--   taxa_crescimento_pct > @LimiteCrescimentoPct
+--   AND aumento_valor_semestre >= @LimiteAumentoValor
+--
+-- FONTE DE DADOS:
+--   - temp_CGUSC.fp.volume_atipico_semestral
+--   - temp_CGUSC.fp.dados_farmacia
 -- ============================================================================
 
 -- ============================================================================
--- PARAMETROS DO PERIODO E FILTROS
+-- LIMPEZA PREVIA DE TABELAS FINAIS/DERIVADAS
 -- ============================================================================
-DECLARE @DataInicio     DATE          = '2015-07-01';
-DECLARE @DataFim        DATE          = '2024-09-30'; -- Parando em T3-2024 (completo)
-DECLARE @ValorMinMensal DECIMAL(18,2) = 500.00;       -- Valor minimo mensal para semestre valido
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_detalhado;
+GO
 
 -- ============================================================================
--- PASSO 1: VENDAS MENSAIS POR FARMACIA
--- Agrega o valor pago por farmacia, ano e mes dentro do periodo analisado.
+-- DEFINICAO DE VARIAVEIS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_vendas_mensais;
+DECLARE @DataInicio DATE = '2015-07-01';
+DECLARE @DataFim    DATE = '2024-12-31';
+DECLARE @LimiteCrescimentoPct DECIMAL(9,2) = 50.00;
+DECLARE @LimiteAumentoValor   DECIMAL(9,2) = 5000.00;
 
-SELECT
-    A.cnpj,
-    YEAR(A.data_hora)   AS ano,
-    MONTH(A.data_hora)  AS mes,
-    SUM(A.valor_pago)   AS valor_mes
-INTO temp_CGUSC.fp.vol_vendas_mensais
-FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-INNER JOIN temp_CGUSC.fp.medicamentos_patologia C
-    ON C.codigo_barra = A.codigo_barra
-WHERE A.data_hora >= @DataInicio
-  AND A.data_hora <= @DataFim
-GROUP BY A.cnpj, YEAR(A.data_hora), MONTH(A.data_hora);
+DECLARE @ChaveSemestreInicio INT =
+    (YEAR(@DataInicio) * 100) + CAST(CASE WHEN MONTH(@DataInicio) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS INT);
 
-CREATE CLUSTERED INDEX IDX_VendasMensais_CNPJ ON temp_CGUSC.fp.vol_vendas_mensais(cnpj, ano, mes);
+DECLARE @ChaveSemestreFim INT =
+    (YEAR(@DataFim) * 100) + CAST(CASE WHEN MONTH(@DataFim) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS INT);
 
 
 -- ============================================================================
--- PASSO 2: SEMESTRES VALIDOS POR FARMACIA
--- Um semestre e valido se os 6 meses estao presentes E todos com valor > R$500.
--- Isso evita que meses de abertura/encerramento distorcam os calculos.
+-- PASSO 0: DIMENSOES E FONTES OBRIGATORIAS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos;
+IF OBJECT_ID('temp_CGUSC.fp.volume_atipico_semestral', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral nao encontrada. Execute volume_atipico_semestral.sql antes deste script.', 16, 1);
+    RETURN;
+END;
 
-WITH VendasSemestrais AS (
-    SELECT
-        cnpj,
-        ano,
-        CASE WHEN mes BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS semestre,
-        valor_mes,
-        CASE WHEN valor_mes > @ValorMinMensal THEN 1 ELSE 0 END AS mes_valido
-    FROM temp_CGUSC.fp.vol_vendas_mensais
-),
-AgregadoSemestre AS (
-    SELECT
-        cnpj,
-        ano,
-        semestre,
-        SUM(valor_mes)  AS valor_semestre,
-        COUNT(*)        AS qtd_meses_presentes,
-        SUM(mes_valido) AS qtd_meses_validos
-    FROM VendasSemestrais
-    GROUP BY cnpj, ano, semestre
+IF COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'id_cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'chave_semestre') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'status_semestre') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'qtd_meses_presentes') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'chave_semestre_anterior') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'aumento_valor_semestre') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.volume_atipico_semestral', 'taxa_crescimento_pct') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral sem colunas obrigatorias para volume atipico.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.volume_atipico_semestral
+    GROUP BY id_cnpj, chave_semestre
+    HAVING COUNT_BIG(*) > 1
 )
-SELECT
-    cnpj,
-    ano,
-    semestre,
-    valor_semestre,
-    (ano * 100 + semestre) AS chave_semestre  -- ex: 201901 = S1-2019, 201902 = S2-2019
-INTO temp_CGUSC.fp.vol_semestres_validos
-FROM AgregadoSemestre
-WHERE qtd_meses_presentes = 6   -- todos os 6 meses devem estar presentes na base
-  AND qtd_meses_validos   = 6;  -- todos com faturamento acima de R$500
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral possui duplicidade por id_cnpj/chave_semestre.', 16, 1);
+    RETURN;
+END;
 
-CREATE CLUSTERED INDEX IDX_SemValid_CNPJ ON temp_CGUSC.fp.vol_semestres_validos(cnpj, ano, semestre);
-
-
--- ============================================================================
--- PASSO 2B: CONTAGEM DE SEMESTRES VALIDOS POR FARMACIA
--- Necessario para incluir farmacias com apenas 1 semestre valido no resultado
--- final (via LEFT JOIN no Passo 8), onde elas recebem risco = 0.
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos_contagem;
-
-SELECT
-    cnpj,
-    COUNT(*) AS total_semestres_validos
-INTO temp_CGUSC.fp.vol_semestres_validos_contagem
-FROM temp_CGUSC.fp.vol_semestres_validos
-GROUP BY cnpj;
-
-CREATE CLUSTERED INDEX IDX_SemCount_CNPJ ON temp_CGUSC.fp.vol_semestres_validos_contagem(cnpj);
-
-
--- ============================================================================
--- PASSO 2C: TAXA DE NAO COMPROVACAO POR SEMESTRE (PENALIZADOR)
--- Busca o valor total e o valor sem comprovacao por farmacia e semestre.
--- Tabelas Fonte: movimentacaoMensalCodigoBarraFP (via id_processamento)
--- ============================================================================
-DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
-
-SELECT 
-    CAST(PRO.cnpj AS VARCHAR(14)) AS cnpj,
-    YEAR(MOV.periodo) AS ano,
-    CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS semestre,
-    SUM(MOV.valor_vendas) AS valor_total_vendas,
-    SUM(MOV.valor_sem_comprovacao) AS valor_sem_comprovacao
-INTO #NaoComprovacaoSemestral
-FROM temp_CGUSC.fp.movimentacao_mensal_gtin MOV
-INNER JOIN temp_CGUSC.fp.processamento PRO ON PRO.id = MOV.id_processamento
-GROUP BY PRO.cnpj, YEAR(MOV.periodo), CASE WHEN MONTH(MOV.periodo) BETWEEN 1 AND 6 THEN 1 ELSE 2 END;
-
-CREATE CLUSTERED INDEX IDX_NaoComp_CNPJ ON #NaoComprovacaoSemestral(cnpj, ano, semestre);
-
-
-
--- ============================================================================
--- PASSO 3: CRESCIMENTO SEMESTRAL ENTRE SEMESTRES VALIDOS CONSECUTIVOS
--- Usa LAG para comparar cada semestre valido com o seu anterior.
--- Apenas farmacias com >= 2 semestres validos geram linhas aqui.
---
--- RISCO_SEMESTRAL: Excesso de crescimento alem do limite de 50%.
---   Cresceu 120% => risco_semestral = 120 - 50 = 70
---   Cresceu 30%  => risco_semestral = 0 (dentro do normal)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_crescimento_semestral;
-
-WITH SemComAnterior AS (
-    SELECT
-        S.cnpj,
-        S.ano,
-        S.semestre,
-        S.chave_semestre,
-        S.valor_semestre AS valor_atual,
-        LAG(S.valor_semestre) OVER (PARTITION BY S.cnpj ORDER BY S.chave_semestre) AS valor_anterior,
-        LAG(S.chave_semestre) OVER (PARTITION BY S.cnpj ORDER BY S.chave_semestre) AS chave_anterior
-    FROM temp_CGUSC.fp.vol_semestres_validos S
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.volume_atipico_semestral
+    WHERE id_cnpj IS NULL
+       OR chave_semestre IS NULL
+       OR status_semestre IS NULL
+       OR status_semestre NOT IN (1, 2, 3, 4)
+       OR chave_semestre % 100 NOT IN (1, 2)
 )
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral possui chaves/status invalidos.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.volume_atipico_semestral
+    WHERE status_semestre = 1
+      AND (
+            chave_semestre_anterior IS NULL
+         OR aumento_valor_semestre IS NULL
+         OR taxa_crescimento_pct IS NULL
+      )
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral possui semestre comparavel sem crescimento/aumento calculado.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.dados_farmacia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'municipio') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'uf') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id_regiao_saude') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj/municipio/uf/id_regiao_saude.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY id
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui ids duplicados.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.dados_farmacia
+    GROUP BY cnpj
+    HAVING COUNT_BIG(*) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #farmacias_dim;
+
 SELECT
-    T.*,
+    CAST(F.id AS INT) AS id_cnpj,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
+    CAST(F.municipio AS VARCHAR(255)) AS municipio,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
+INTO #farmacias_dim
+FROM temp_CGUSC.fp.dados_farmacia AS F;
+
+IF EXISTS (
+    SELECT 1
+    FROM #farmacias_dim
+    WHERE id_cnpj IS NULL
+       OR NULLIF(LTRIM(RTRIM(cnpj)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(municipio)), '') IS NULL
+       OR NULLIF(LTRIM(RTRIM(uf)), '') IS NULL
+       OR id_regiao_saude IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui valores obrigatorios nulos para contexto territorial.', 16, 1);
+    RETURN;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_farmacias_dim_cnpj
+ON #farmacias_dim(cnpj);
+
+CREATE UNIQUE NONCLUSTERED INDEX IDX_farmacias_dim_id
+ON #farmacias_dim(id_cnpj);
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.volume_atipico_semestral S
+    LEFT JOIN #farmacias_dim F
+        ON F.id_cnpj = S.id_cnpj
+    WHERE F.id_cnpj IS NULL
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.volume_atipico_semestral possui id_cnpj sem correspondencia em temp_CGUSC.fp.dados_farmacia.', 16, 1);
+    RETURN;
+END;
+
+
+-- ============================================================================
+-- PASSO 0B: LIMITES DE ARMAZENAMENTO DOS COMPONENTES
+-- ============================================================================
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.volume_atipico_semestral
+    WHERE status_semestre = 1
+      AND chave_semestre BETWEEN @ChaveSemestreInicio AND @ChaveSemestreFim
+      AND (
+            aumento_valor_semestre > 9999999.99
+         OR aumento_valor_semestre < -9999999.99
+         OR taxa_crescimento_pct > 9999999.99
+         OR taxa_crescimento_pct < -9999999.99
+      )
+)
+BEGIN
+    RAISERROR('Volume atipico possui componentes semestrais fora do contrato DECIMAL(9,2).', 16, 1);
+    RETURN;
+END;
+
+
+-- ============================================================================
+-- PASSO 1: COMPONENTES SEMESTRAIS COMPARAVEIS
+-- ============================================================================
+DROP TABLE IF EXISTS #volume_componentes_semestrais;
+
+SELECT
+    S.id_cnpj,
+    CAST(S.chave_semestre / 100 AS SMALLINT) AS ano_base,
+    CAST(1 AS TINYINT) AS total_semestres_comparaveis,
     CAST(
         CASE
-            WHEN T.taxa_crescimento > 50 
-                THEN (T.taxa_crescimento - 50) * T.multiplicador_nao_comprovacao
+            WHEN S.taxa_crescimento_pct > @LimiteCrescimentoPct
+             AND S.aumento_valor_semestre >= @LimiteAumentoValor THEN 1
             ELSE 0
         END
-    AS DECIMAL(18,4)) AS risco_semestral
-INTO temp_CGUSC.fp.vol_crescimento_semestral
-FROM (
-    SELECT
-        S.cnpj,
-        S.ano,
-        S.semestre,
-        S.chave_semestre,
-        S.valor_atual,
-        S.valor_anterior,
-        S.chave_anterior,
-        CAST(
-            ((S.valor_atual - S.valor_anterior) / CAST(S.valor_anterior AS DECIMAL(18,2))) * 100.0
-        AS DECIMAL(18,4)) AS taxa_crescimento,
-        
-        -- Calculo do Multiplicador de Penalidade (Taxa de Nao Comprovacao do semestre atual)
-        -- Tabela Rigorosa: >5% (2.0x), >20% (4.0x), >50% (6.0x)
-        CAST(
-            CASE 
-                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.5 THEN 6.0
-                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.2 THEN 4.0
-                WHEN (CAST(ISNULL(NC.valor_sem_comprovacao, 0) AS DECIMAL(18,2)) / (CASE WHEN ISNULL(NC.valor_total_vendas, 0) = 0 THEN 1 ELSE NC.valor_total_vendas END)) > 0.05 THEN 2.0
-                ELSE 1.0
-            END
-        AS DECIMAL(18,2)) AS multiplicador_nao_comprovacao
-        
-    FROM SemComAnterior S
-    LEFT JOIN #NaoComprovacaoSemestral NC 
-        ON NC.cnpj = S.cnpj 
-       AND NC.ano  = S.ano 
-       AND NC.semestre = S.semestre
-    WHERE S.valor_anterior IS NOT NULL
-      AND S.valor_anterior > 0
-) T;
+    AS TINYINT) AS total_semestres_atipicos,
+    CAST(
+        CASE
+            WHEN S.taxa_crescimento_pct > @LimiteCrescimentoPct
+             AND S.aumento_valor_semestre >= @LimiteAumentoValor
+                THEN S.taxa_crescimento_pct - @LimiteCrescimentoPct
+            ELSE 0
+        END
+    AS DECIMAL(9,2)) AS excesso_crescimento_pct,
+    CAST(
+        CASE
+            WHEN S.aumento_valor_semestre > 0 THEN S.aumento_valor_semestre
+            ELSE 0
+        END
+    AS DECIMAL(9,2)) AS valor_aumento,
+    CAST(
+        CASE
+            WHEN S.taxa_crescimento_pct > @LimiteCrescimentoPct
+             AND S.aumento_valor_semestre >= @LimiteAumentoValor
+                THEN S.aumento_valor_semestre
+            ELSE 0
+        END
+    AS DECIMAL(9,2)) AS valor_aumento_atipico,
+    CAST(S.taxa_crescimento_pct AS DECIMAL(9,2)) AS taxa_crescimento_pct
+INTO #volume_componentes_semestrais
+FROM temp_CGUSC.fp.volume_atipico_semestral S
+WHERE S.status_semestre = 1
+  AND S.chave_semestre BETWEEN @ChaveSemestreInicio AND @ChaveSemestreFim;
 
-CREATE CLUSTERED INDEX IDX_Cresc_CNPJ ON temp_CGUSC.fp.vol_crescimento_semestral(cnpj, ano, semestre);
+IF NOT EXISTS (SELECT 1 FROM #volume_componentes_semestrais)
+BEGIN
+    RAISERROR('Nao ha semestres comparaveis em temp_CGUSC.fp.volume_atipico_semestral no periodo informado.', 16, 1);
+    RETURN;
+END;
+
+CREATE CLUSTERED INDEX IDX_VolCompSem_CNPJ_Ano
+ON #volume_componentes_semestrais(id_cnpj, ano_base);
+
+IF EXISTS (
+    SELECT 1
+    FROM #volume_componentes_semestrais C
+    GROUP BY
+        C.id_cnpj,
+        C.ano_base
+    HAVING SUM(C.excesso_crescimento_pct) > 9999999.99
+        OR SUM(C.valor_aumento) > 9999999.99
+        OR SUM(C.valor_aumento_atipico) > 9999999.99
+)
+BEGIN
+    RAISERROR('Volume atipico possui totais anuais fora do contrato DECIMAL(9,2).', 16, 1);
+    RETURN;
+END;
 
 
 -- ============================================================================
--- PASSO 4: AGREGACAO POR CNPJ
---
--- RISCO_MAGNITUDE : Media dos excessos apenas nos semestres com risco (> 0).
---                   Responde: "quando essa farmacia explode, o quao grave e?"
---
--- RISCO_FINAL     : Soma de todos os excessos / total de comparacoes.
---                   Equivale a risco_magnitude * (qtd_semestres_risco / qtd_comparacoes).
---                   Responde: "qual o impacto geral ao longo do historico?"
---                   >>> ESTE E O VALOR EXIBIDO NO RELATORIO E USADO NOS BENCHMARKS. <<<
+-- PASSO 2: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico;
 
 SELECT
-    C_AGG.cnpj,
-    SC.total_semestres_validos                                              AS qtd_semestres_validos,
-    COUNT(*)                                                                AS qtd_comparacoes,
-    SUM(CASE WHEN C_AGG.risco_semestral > 0 THEN 1 ELSE 0 END)            AS qtd_semestres_risco,
-
-    -- Magnitude: intensidade media dos saltos (considera apenas semestres com risco)
-    CAST(
-        CASE
-            WHEN SUM(CASE WHEN C_AGG.risco_semestral > 0 THEN 1 ELSE 0 END) > 0
-                THEN SUM(CASE WHEN C_AGG.risco_semestral > 0 THEN C_AGG.risco_semestral ELSE 0 END)
-                   / CAST(SUM(CASE WHEN C_AGG.risco_semestral > 0 THEN 1 ELSE 0 END) AS DECIMAL(18,2))
-            ELSE 0
-        END
-    AS DECIMAL(18,4)) AS risco_magnitude,
-
-    -- Risco Final: impacto geral ponderado pela frequencia
-    -- Formula simplificada: SUM(risco_semestral) / COUNT(*) comparacoes
-    -- Isso e equivalente a: magnitude * (qtd_semestres_risco / qtd_comparacoes)
-    CAST(
-        SUM(C_AGG.risco_semestral) / CAST(COUNT(*) AS DECIMAL(18,2))
-    AS DECIMAL(18,4)) AS risco_final
-
+    C.id_cnpj,
+    C.ano_base,
+    CAST(SUM(C.total_semestres_comparaveis) AS TINYINT) AS total_semestres_comparaveis,
+    CAST(SUM(C.total_semestres_atipicos) AS TINYINT) AS total_semestres_atipicos,
+    CAST(SUM(C.excesso_crescimento_pct) AS DECIMAL(9,2)) AS soma_excesso_crescimento_pct,
+    CAST(SUM(C.valor_aumento) AS DECIMAL(9,2)) AS valor_aumento_total,
+    CAST(SUM(C.valor_aumento_atipico) AS DECIMAL(9,2)) AS valor_aumento_atipico,
+    CAST(MAX(C.taxa_crescimento_pct) AS DECIMAL(9,2)) AS maior_taxa_crescimento_pct
 INTO temp_CGUSC.fp.indicador_volume_atipico
-FROM temp_CGUSC.fp.vol_crescimento_semestral C_AGG
-INNER JOIN temp_CGUSC.fp.vol_semestres_validos_contagem SC
-    ON SC.cnpj = C_AGG.cnpj
-GROUP BY C_AGG.cnpj, SC.total_semestres_validos;
+FROM #volume_componentes_semestrais C
+GROUP BY
+    C.id_cnpj,
+    C.ano_base;
 
--- Farmacias com apenas 1 semestre valido nao geram comparacoes e ficam de fora.
--- Elas serao incluidas no Passo 8 com risco = 0 via LEFT JOIN.
-
-CREATE CLUSTERED INDEX IDX_IndVol_CNPJ ON temp_CGUSC.fp.indicador_volume_atipico(cnpj);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndVol_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_volume_atipico(id_cnpj, ano_base);
 
 
 -- ============================================================================
--- PASSO 5: BENCHMARKS MUNICIPAIS (sobre risco_final)
--- Base: todas as farmacias com >= 1 semestre valido (inclui risco=0).
--- Usar ISNULL(risco_final, 0) garante que farmácias sem saltos atipicos entram
--- na media, evitando distorcao dos benchmarks para cima.
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
-
-SELECT DISTINCT
-    F.uf,
-    F.municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS mediana_municipio,
-    CAST(
-        AVG(ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.uf, F.municipio)
-    AS DECIMAL(18,4)) AS media_municipio
-INTO temp_CGUSC.fp.indicador_volume_atipico_mun
-FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = SC.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
-    ON I.cnpj = SC.cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndVolMun_mun ON temp_CGUSC.fp.indicador_volume_atipico_mun(uf, municipio);
-
-
--- ============================================================================
--- PASSO 6: BENCHMARKS ESTADUAIS (sobre risco_final)
--- Base: todas as farmacias com >= 1 semestre valido (inclui risco=0).
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
-
-SELECT DISTINCT
-    F.uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS mediana_estado,
-    CAST(
-        AVG(ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.uf)
-    AS DECIMAL(18,4)) AS media_estado
-INTO temp_CGUSC.fp.indicador_volume_atipico_uf
-FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = SC.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
-    ON I.cnpj = SC.cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndVolUF_uf ON temp_CGUSC.fp.indicador_volume_atipico_uf(uf);
-
-
--- ============================================================================
--- PASSO 6B: BENCHMARKS POR REGIAO DE SAUDE (sobre risco_final)
--- Base: todas as farmacias com >= 1 semestre valido (inclui risco=0).
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
-
-SELECT DISTINCT
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS mediana_regiao,
-    CAST(
-        AVG(ISNULL(I.risco_final, 0))
-        OVER (PARTITION BY F.id_regiao_saude)
-    AS DECIMAL(18,4)) AS media_regiao
-INTO temp_CGUSC.fp.indicador_volume_atipico_regiao
-FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = SC.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
-    ON I.cnpj = SC.cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
-
-CREATE CLUSTERED INDEX IDX_IndVolReg_id ON temp_CGUSC.fp.indicador_volume_atipico_regiao(id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 7: BENCHMARKS NACIONAIS (sobre risco_final)
--- Base: todas as farmacias com >= 1 semestre valido (inclui risco=0).
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
-
-SELECT DISTINCT
-    'BR' AS pais,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(I.risco_final, 0)) OVER ()
-    AS DECIMAL(18,4)) AS mediana_pais,
-    CAST(
-        AVG(ISNULL(I.risco_final, 0)) OVER ()
-    AS DECIMAL(18,4)) AS media_pais
-INTO temp_CGUSC.fp.indicador_volume_atipico_br
-FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
-    ON I.cnpj = SC.cnpj;
-
-
--- ============================================================================
--- PASSO 8: TABELA CONSOLIDADA FINAL
---
--- Base: vol_semestres_validos_contagem (inclui todas as farmacias com >= 1 semestre)
--- risco = 0 para farmacias sem comparacoes (LEFT JOIN com indicador_volume_atipico).
--- Risco Relativo: risco_final da farmacia vs media/mediana do grupo de referencia.
+-- PASSO 3: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_detalhado;
 
 SELECT
-    SC.cnpj,
-    F.razaoSocial,
-    F.municipio,
-    F.uf,
-    F.no_regiao_saude,
-    F.id_regiao_saude,
-
-    -- Contagens
-    SC.total_semestres_validos                              AS qtd_semestres_validos,
-    ISNULL(I.qtd_comparacoes, 0)                           AS qtd_comparacoes,
-    ISNULL(I.qtd_semestres_risco, 0)                       AS qtd_semestres_risco,
-
-    -- Scores auxiliares (para analise avancada)
-    ISNULL(I.risco_magnitude, 0)                           AS risco_magnitude,
-    CAST(
-        CASE
-            WHEN ISNULL(I.qtd_comparacoes, 0) = 0 THEN 0
-            ELSE (CAST(ISNULL(I.qtd_semestres_risco, 0) AS DECIMAL(18,2)) / I.qtd_comparacoes) * 100.0
-        END
-    AS DECIMAL(18,4))                                      AS risco_frequencia,
-
-    -- Score principal: ja calculado no Passo 4 e reutilizado aqui
-    ISNULL(I.risco_final, 0)                               AS risco_final,
-
-    -- Rankings (pior risco = posicao 1)
-    RANK() OVER (
-        ORDER BY ISNULL(I.risco_final, 0) DESC
-    )                                                      AS ranking_br,
-    RANK() OVER (
-        PARTITION BY F.uf
-        ORDER BY ISNULL(I.risco_final, 0) DESC
-    )                                                      AS ranking_uf,
-    RANK() OVER (
-        PARTITION BY F.id_regiao_saude
-        ORDER BY ISNULL(I.risco_final, 0) DESC
-    )                                                      AS ranking_regiao_saude,
-    RANK() OVER (
-        PARTITION BY F.uf, F.municipio
-        ORDER BY ISNULL(I.risco_final, 0) DESC
-    )                                                      AS ranking_municipio,
-
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0)                       AS municipio_mediana,
-    ISNULL(MUN.media_municipio,   0)                       AS municipio_media,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(MUN.mediana_municipio, 0) = 0 THEN 1.0 ELSE MUN.mediana_municipio END) AS DECIMAL(18,4)) AS risco_relativo_mun_mediana,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(MUN.media_municipio,   0) = 0 THEN 1.0 ELSE MUN.media_municipio END) AS DECIMAL(18,4)) AS risco_relativo_mun_media,
-
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0)                           AS estado_mediana,
-    ISNULL(UF.media_estado,   0)                           AS estado_media,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(UF.mediana_estado, 0) = 0 THEN 1.0 ELSE UF.mediana_estado END) AS DECIMAL(18,4)) AS risco_relativo_uf_mediana,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(UF.media_estado,   0) = 0 THEN 1.0 ELSE UF.media_estado END) AS DECIMAL(18,4)) AS risco_relativo_uf_media,
-
-    -- Benchmarks Regionais (Regiao de Saude)
-    ISNULL(REG.mediana_regiao, 0)                         AS regiao_saude_mediana,
-    ISNULL(REG.media_regiao,   0)                         AS regiao_saude_media,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(REG.mediana_regiao, 0) = 0 THEN 1.0 ELSE REG.mediana_regiao END) AS DECIMAL(18,4)) AS risco_relativo_reg_mediana,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(REG.media_regiao,   0) = 0 THEN 1.0 ELSE REG.media_regiao END) AS DECIMAL(18,4)) AS risco_relativo_reg_media,
-
-    -- Benchmarks nacionais
-    BR.mediana_pais                                        AS pais_mediana,
-    BR.media_pais                                          AS pais_media,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(BR.mediana_pais, 0) = 0 THEN 1.0 ELSE BR.mediana_pais END) AS DECIMAL(18,4)) AS risco_relativo_br_mediana,
-    CAST(ISNULL(I.risco_final, 0) / (CASE WHEN ISNULL(BR.media_pais,   0) = 0 THEN 1.0 ELSE BR.media_pais END) AS DECIMAL(18,4)) AS risco_relativo_br_media
-
+    I.id_cnpj,
+    I.ano_base,
+    I.total_semestres_comparaveis,
+    I.total_semestres_atipicos,
+    I.soma_excesso_crescimento_pct,
+    I.valor_aumento_total,
+    I.valor_aumento_atipico,
+    I.maior_taxa_crescimento_pct
 INTO temp_CGUSC.fp.indicador_volume_atipico_detalhado
-FROM temp_CGUSC.fp.vol_semestres_validos_contagem SC
-INNER JOIN temp_CGUSC.fp.dados_farmacia F
-    ON F.cnpj = SC.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico I
-    ON I.cnpj = SC.cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_mun MUN
-    ON F.uf        = MUN.uf
-   AND F.municipio = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_uf UF
-    ON F.uf = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_volume_atipico_regiao REG
-    ON F.id_regiao_saude = REG.id_regiao_saude
-CROSS JOIN temp_CGUSC.fp.indicador_volume_atipico_br BR;
+FROM temp_CGUSC.fp.indicador_volume_atipico I;
 
-CREATE CLUSTERED INDEX IDX_FinalVol_CNPJ     ON temp_CGUSC.fp.indicador_volume_atipico_detalhado(cnpj);
-CREATE NONCLUSTERED INDEX IDX_FinalVol_Risco  ON temp_CGUSC.fp.indicador_volume_atipico_detalhado(risco_final DESC);
-CREATE NONCLUSTERED INDEX IDX_FinalVol_RankBR ON temp_CGUSC.fp.indicador_volume_atipico_detalhado(ranking_br);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalVol_CNPJ
+ON temp_CGUSC.fp.indicador_volume_atipico_detalhado(id_cnpj, ano_base);
+
+
+-- ============================================================================
+-- PASSO 4: AGREGADO POR REGIAO DE SAUDE/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    CAST(SUM(I.total_semestres_comparaveis) AS INT) AS total_semestres_comparaveis,
+    CAST(SUM(I.total_semestres_atipicos) AS INT) AS total_semestres_atipicos,
+    CAST(SUM(I.soma_excesso_crescimento_pct) AS DECIMAL(19,2)) AS soma_excesso_crescimento_pct,
+    CAST(SUM(I.valor_aumento_total) AS DECIMAL(19,2)) AS valor_aumento_total,
+    CAST(SUM(I.valor_aumento_atipico) AS DECIMAL(19,2)) AS valor_aumento_atipico,
+    CAST(MAX(I.maior_taxa_crescimento_pct) AS DECIMAL(9,2)) AS maior_taxa_crescimento_pct,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_volume_atipico_regiao
+FROM temp_CGUSC.fp.indicador_volume_atipico I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndVolReg
+ON temp_CGUSC.fp.indicador_volume_atipico_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 5: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    CAST(SUM(I.total_semestres_comparaveis) AS INT) AS total_semestres_comparaveis,
+    CAST(SUM(I.total_semestres_atipicos) AS INT) AS total_semestres_atipicos,
+    CAST(SUM(I.soma_excesso_crescimento_pct) AS DECIMAL(19,2)) AS soma_excesso_crescimento_pct,
+    CAST(SUM(I.valor_aumento_total) AS DECIMAL(19,2)) AS valor_aumento_total,
+    CAST(SUM(I.valor_aumento_atipico) AS DECIMAL(19,2)) AS valor_aumento_atipico,
+    CAST(MAX(I.maior_taxa_crescimento_pct) AS DECIMAL(9,2)) AS maior_taxa_crescimento_pct,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_volume_atipico_uf
+FROM temp_CGUSC.fp.indicador_volume_atipico I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndVolUF
+ON temp_CGUSC.fp.indicador_volume_atipico_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 6: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
+
+SELECT
+    I.ano_base,
+    CAST(SUM(I.total_semestres_comparaveis) AS INT) AS total_semestres_comparaveis,
+    CAST(SUM(I.total_semestres_atipicos) AS INT) AS total_semestres_atipicos,
+    CAST(SUM(I.soma_excesso_crescimento_pct) AS DECIMAL(19,2)) AS soma_excesso_crescimento_pct,
+    CAST(SUM(I.valor_aumento_total) AS DECIMAL(19,2)) AS valor_aumento_total,
+    CAST(SUM(I.valor_aumento_atipico) AS DECIMAL(19,2)) AS valor_aumento_atipico,
+    CAST(MAX(I.maior_taxa_crescimento_pct) AS DECIMAL(9,2)) AS maior_taxa_crescimento_pct,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_volume_atipico_br
+FROM temp_CGUSC.fp.indicador_volume_atipico I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndVolBR
+ON temp_CGUSC.fp.indicador_volume_atipico_br(ano_base);
 GO
+
 
 -- ============================================================================
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_vendas_mensais;
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos;
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_semestres_validos_contagem;
-DROP TABLE IF EXISTS temp_CGUSC.fp.vol_crescimento_semestral;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_volume_atipico_br;
-DROP TABLE IF EXISTS #NaoComprovacaoSemestral;
+DROP TABLE IF EXISTS #volume_componentes_semestrais;
+DROP TABLE IF EXISTS #farmacias_dim;
 GO
-
--- ============================================================================
--- VERIFICACAO RAPIDA: TOP 100 por ranking nacional
--- ============================================================================
-SELECT TOP 100 *
-FROM temp_CGUSC.fp.indicador_volume_atipico_detalhado
-ORDER BY ranking_br;
-
--- ============================================================================
--- DIAGNOSTICO: Todas as farmácias de um municipio especifico
--- Util para entender por que a media municipal esta alta.
--- Troque 'Dores do Turvo' e 'MG' pelo municipio de interesse.
--- ============================================================================
-SELECT
-    D.cnpj,
-    D.razaoSocial,
-    D.municipio,
-    D.uf,
-    D.qtd_semestres_validos,
-    D.qtd_comparacoes,
-    D.qtd_semestres_risco,
-    D.risco_magnitude,
-    D.risco_frequencia,
-    D.risco_final,
-    D.municipio_media,
-    D.regiao_saude_media,
-    D.ranking_municipio,
-    D.ranking_regiao_saude
-FROM temp_CGUSC.fp.indicador_volume_atipico_detalhado D
-WHERE D.municipio = 'Dores do Turvo'
-  AND D.uf       = 'MG'
-ORDER BY D.risco_final DESC;

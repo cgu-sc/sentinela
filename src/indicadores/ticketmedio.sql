@@ -2,18 +2,14 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
--- INDICADOR DE POLIMEDICAMENTO
+-- INDICADOR DE TICKET MEDIO
 -- ============================================================================
--- OBJETIVO: Identificar farmacias com proporcao atipica de autorizacoes com
---           quatro ou mais itens auditados.
+-- OBJETIVO: Identificar farmacias com valor medio por autorizacao muito
+--           superior ao observado em estabelecimentos comparaveis.
 --
 -- METRICA PRINCIPAL:
 --   O indicador deve ser calculado por periodo a partir dos componentes:
---   valor_autorizacoes_suspeitas / valor_total_auditado.
---
--- METRICAS AUXILIARES:
---   total_autorizacoes_monitoradas e total_autorizacoes_suspeitas permitem
---   recompor o percentual por contagem quando necessario.
+--   valor_total_auditado / total_autorizacoes.
 --
 -- FONTE DE DADOS:
 --   - db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024
@@ -24,12 +20,12 @@ GO
 -- ============================================================================
 -- LIMPEZA PREVIA DE TABELAS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_br;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_detalhado;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_detalhado;
 GO
 
 -- ============================================================================
@@ -104,7 +100,7 @@ IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj')
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
 BEGIN
-    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para polimedicamento.', 16, 1);
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para ticket medio.', 16, 1);
     RETURN;
 END;
 
@@ -158,17 +154,16 @@ ON #medicamentos_patologia_gtin(codigo_barra);
 
 
 -- ============================================================================
--- PASSO 1: PRE-CALCULO POR AUTORIZACAO
+-- PASSO 1: VALOR TOTAL POR AUTORIZACAO
 -- ============================================================================
-DROP TABLE IF EXISTS #VendasPorAutorizacao;
+DROP TABLE IF EXISTS #ValorPorAutorizacao;
 
 SELECT
     F.id_cnpj,
     CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
     A.num_autorizacao,
-    CAST(COUNT_BIG(*) AS INT) AS qtd_itens_monitorados,
-    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_autorizacao
-INTO #VendasPorAutorizacao
+    CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_autorizacao
+INTO #ValorPorAutorizacao
 FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
 INNER JOIN #farmacias_dim F
     ON F.cnpj = A.cnpj
@@ -184,14 +179,8 @@ GROUP BY
     YEAR(A.data_hora),
     A.num_autorizacao;
 
-IF NOT EXISTS (SELECT 1 FROM #VendasPorAutorizacao)
-BEGIN
-    RAISERROR('Nao ha autorizacoes monitoradas para calcular polimedicamento.', 16, 1);
-    RETURN;
-END;
-
-CREATE CLUSTERED INDEX IDX_VendasPorAutorizacao_CNPJ_Ano
-ON #VendasPorAutorizacao(id_cnpj, ano_base);
+CREATE CLUSTERED INDEX IDX_ValorPorAutorizacao_CNPJ_Ano
+ON #ValorPorAutorizacao(id_cnpj, ano_base);
 
 DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
@@ -199,137 +188,130 @@ DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 -- ============================================================================
 -- PASSO 2: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio;
 
 SELECT
     id_cnpj,
     ano_base,
-    CAST(COUNT_BIG(*) AS INT) AS total_autorizacoes_monitoradas,
+    CAST(SUM(valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
+    CAST(COUNT(*) AS INT) AS total_autorizacoes,
     CAST(
-        SUM(
-            CASE
-                WHEN qtd_itens_monitorados >= 4 THEN 1
-                ELSE 0
-            END
-        ) AS INT
-    ) AS total_autorizacoes_suspeitas,
-    CAST(SUM(valor_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
-    CAST(
-        SUM(
-            CASE
-                WHEN qtd_itens_monitorados >= 4 THEN valor_autorizacao
-                ELSE CAST(0 AS DECIMAL(9,2))
-            END
-        ) AS DECIMAL(9,2)
-    ) AS valor_autorizacoes_suspeitas
-INTO temp_CGUSC.fp.indicador_polimedicamento
-FROM #VendasPorAutorizacao
+        CAST(SUM(valor_total_autorizacao) AS DECIMAL(12,4)) /
+        CAST(COUNT(*) AS DECIMAL(12,4))
+    AS DECIMAL(9,2)) AS valor_ticket_medio
+INTO temp_CGUSC.fp.indicador_ticket_medio
+FROM #ValorPorAutorizacao
 GROUP BY
     id_cnpj,
     ano_base
-HAVING SUM(valor_autorizacao) > 0;
+HAVING SUM(valor_total_autorizacao) > 0;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndPoli_CNPJ_Ano
-ON temp_CGUSC.fp.indicador_polimedicamento(id_cnpj, ano_base);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTicket_CNPJ_Ano
+ON temp_CGUSC.fp.indicador_ticket_medio(id_cnpj, ano_base);
 
-DROP TABLE IF EXISTS #VendasPorAutorizacao;
+DROP TABLE IF EXISTS #ValorPorAutorizacao;
 
 
 -- ============================================================================
 -- PASSO 3: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_detalhado;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_detalhado;
 
 SELECT
     I.id_cnpj,
     I.ano_base,
-    I.total_autorizacoes_monitoradas,
-    I.total_autorizacoes_suspeitas,
     CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
-    CAST(I.valor_autorizacoes_suspeitas AS DECIMAL(9,2)) AS valor_autorizacoes_suspeitas
-INTO temp_CGUSC.fp.indicador_polimedicamento_detalhado
-FROM temp_CGUSC.fp.indicador_polimedicamento I;
+    I.total_autorizacoes,
+    CAST(I.valor_ticket_medio AS DECIMAL(9,2)) AS valor_ticket_medio
+INTO temp_CGUSC.fp.indicador_ticket_medio_detalhado
+FROM temp_CGUSC.fp.indicador_ticket_medio I;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_FinalPoli_CNPJ
-ON temp_CGUSC.fp.indicador_polimedicamento_detalhado(id_cnpj, ano_base);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalTicket_CNPJ
+ON temp_CGUSC.fp.indicador_ticket_medio_detalhado(id_cnpj, ano_base);
 
 
 -- ============================================================================
 -- PASSO 4: AGREGADO POR REGIAO DE SAUDE/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_regiao;
 
 SELECT
     I.ano_base,
     F.id_regiao_saude,
-    SUM(I.total_autorizacoes_monitoradas) AS total_autorizacoes_monitoradas,
-    SUM(I.total_autorizacoes_suspeitas) AS total_autorizacoes_suspeitas,
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
-    CAST(SUM(I.valor_autorizacoes_suspeitas) AS DECIMAL(19,2)) AS valor_autorizacoes_suspeitas,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    CAST(
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,4)) /
+        CAST(SUM(I.total_autorizacoes) AS DECIMAL(19,4))
+    AS DECIMAL(9,2)) AS valor_ticket_medio,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_polimedicamento_regiao
-FROM temp_CGUSC.fp.indicador_polimedicamento I
+INTO temp_CGUSC.fp.indicador_ticket_medio_regiao
+FROM temp_CGUSC.fp.indicador_ticket_medio I
 INNER JOIN #farmacias_dim F
     ON F.id_cnpj = I.id_cnpj
 GROUP BY
     I.ano_base,
     F.id_regiao_saude;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndPoliReg
-ON temp_CGUSC.fp.indicador_polimedicamento_regiao(ano_base, id_regiao_saude);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTicketReg
+ON temp_CGUSC.fp.indicador_ticket_medio_regiao(ano_base, id_regiao_saude);
 
 
 -- ============================================================================
 -- PASSO 5: AGREGADO POR UF/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_uf;
 
 SELECT
     I.ano_base,
     F.uf,
-    SUM(I.total_autorizacoes_monitoradas) AS total_autorizacoes_monitoradas,
-    SUM(I.total_autorizacoes_suspeitas) AS total_autorizacoes_suspeitas,
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
-    CAST(SUM(I.valor_autorizacoes_suspeitas) AS DECIMAL(19,2)) AS valor_autorizacoes_suspeitas,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    CAST(
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,4)) /
+        CAST(SUM(I.total_autorizacoes) AS DECIMAL(19,4))
+    AS DECIMAL(9,2)) AS valor_ticket_medio,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_polimedicamento_uf
-FROM temp_CGUSC.fp.indicador_polimedicamento I
+INTO temp_CGUSC.fp.indicador_ticket_medio_uf
+FROM temp_CGUSC.fp.indicador_ticket_medio I
 INNER JOIN #farmacias_dim F
     ON F.id_cnpj = I.id_cnpj
 GROUP BY
     I.ano_base,
     F.uf;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndPoliUF
-ON temp_CGUSC.fp.indicador_polimedicamento_uf(ano_base, uf);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTicketUF
+ON temp_CGUSC.fp.indicador_ticket_medio_uf(ano_base, uf);
 
 
 -- ============================================================================
 -- PASSO 6: AGREGADO BRASIL/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_br;
 
 SELECT
     I.ano_base,
-    SUM(I.total_autorizacoes_monitoradas) AS total_autorizacoes_monitoradas,
-    SUM(I.total_autorizacoes_suspeitas) AS total_autorizacoes_suspeitas,
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
-    CAST(SUM(I.valor_autorizacoes_suspeitas) AS DECIMAL(19,2)) AS valor_autorizacoes_suspeitas,
+    SUM(I.total_autorizacoes) AS total_autorizacoes,
+    CAST(
+        CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,4)) /
+        CAST(SUM(I.total_autorizacoes) AS DECIMAL(19,4))
+    AS DECIMAL(9,2)) AS valor_ticket_medio,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_polimedicamento_br
-FROM temp_CGUSC.fp.indicador_polimedicamento I
+INTO temp_CGUSC.fp.indicador_ticket_medio_br
+FROM temp_CGUSC.fp.indicador_ticket_medio I
 GROUP BY
     I.ano_base;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndPoliBR
-ON temp_CGUSC.fp.indicador_polimedicamento_br(ano_base);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndTicketBR
+ON temp_CGUSC.fp.indicador_ticket_medio_br(ano_base);
 GO
 
 
 -- ============================================================================
 -- LIMPEZA DAS TABELAS INTERMEDIARIAS
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_polimedicamento_mun;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_ticket_medio_mun;
 DROP TABLE IF EXISTS #farmacias_dim;
 GO

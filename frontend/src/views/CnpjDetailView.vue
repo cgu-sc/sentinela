@@ -896,7 +896,7 @@ watch(
 /* ── ANIMAÇÃO DE ENTRADA DO CONTEÚDO (PADRÃO PREMIUM) ── */
 :deep(.p-tabview-panel) {
   height: 100%;
-  overflow-y: auto; /* Cada aba agora gerencia seu próprio scroll de forma isolada */
+  overflow: hidden; /* Evita scrollbar temporaria durante a animacao de entrada da aba */
   background: transparent !important;
   animation: tabContentEntry 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }

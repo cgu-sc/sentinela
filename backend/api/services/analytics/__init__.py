@@ -22,6 +22,7 @@ from .dashboard import (
     get_rede_por_cnpj_raiz,
     get_resultado_sentinela,
 )
+from .bootstrap import get_cnpj_bootstrap
 from .falecidos import get_falecidos_data, get_timeline_cpf
 from .farmacia import get_cnpj_access_status, get_dados_farmacia, get_movimentacao_data
 from .fator_risco import get_fator_risco_data
@@ -52,10 +53,6 @@ from .regional import (
     get_regional_benchmarking,
     get_regional_benchmarking_animation,
 )
-from .patologias import (
-    get_municipio_parkinson,
-    get_municipio_patologias,
-)
 from .nota_tecnica import generate_nota_tecnica
 from .volume_atipico import (
     get_volume_atipico_id_cnpjs_df,
@@ -68,6 +65,7 @@ __all__ = ['AnalyticsService', 'INDICATOR_MAPPING', '_INDICATOR_FLAGS']
 class AnalyticsService:
     _known_cnpj_dirs = _known_cnpj_dirs
     _get_cnpj_cache_dir = staticmethod(_get_cnpj_cache_dir)
+    get_cnpj_bootstrap = staticmethod(get_cnpj_bootstrap)
     get_dashboard_data = staticmethod(get_dashboard_data)
     get_producao_semestral_data = staticmethod(get_producao_semestral_data)
     get_resultado_sentinela = staticmethod(get_resultado_sentinela)
@@ -103,8 +101,6 @@ class AnalyticsService:
     get_metric_percentiles = staticmethod(get_metric_percentiles)
     get_metric_percentiles_animation = staticmethod(get_metric_percentiles_animation)
     get_cnpj_lookup = staticmethod(get_cnpj_lookup)
-    get_municipio_patologias = staticmethod(get_municipio_patologias)
-    get_municipio_parkinson = staticmethod(get_municipio_parkinson)
     generate_nota_tecnica = staticmethod(generate_nota_tecnica)
     get_volume_atipico_id_cnpjs_df = staticmethod(get_volume_atipico_id_cnpjs_df)
     get_volume_atipico_period_metrics = staticmethod(get_volume_atipico_period_metrics)

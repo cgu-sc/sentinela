@@ -33,6 +33,7 @@ import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
 import { getApiErrorMessage } from "@/utils/apiErrors";
 import { downloadBlobFromResponse } from "@/utils/download";
+import { createCnpjPerfSession, logCnpjPerf } from "@/utils/cnpjPerfLogger";
 
 // ── Índices das abas (evita números mágicos no template) ──
 const TAB_INDEX = {
@@ -85,7 +86,14 @@ const getTabIndexFromRoute = () => {
 const analyticsStore = useAnalyticsStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { resultadoCnpjs } = storeToRefs(analyticsStore);
-const { dadosCadastro, evolucaoFinanceira, evolucaoLoading, evolucaoLoaded } =
+const {
+  dadosCadastro,
+  evolucaoFinanceira,
+  evolucaoLoading,
+  evolucaoLoaded,
+  bootstrapGeoData,
+  bootstrapPeriodSummary,
+} =
   storeToRefs(cnpjDetailStore);
 
 const geoStore = useGeoStore();
@@ -112,7 +120,9 @@ const falecidosTabRef = ref(null);
 
 const qtdMunicipiosRegiao = computed(
   () =>
-    geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.id_regiao_saude) ?? null,
+    cnpjDetailStore.bootstrapData?.qtd_municipios_regiao ??
+    geoStore.qtdMunicipiosPorRegiao?.(geoData.value?.id_regiao_saude) ??
+    null,
 );
 
 const handleExport = async () => {
@@ -180,6 +190,9 @@ const handleGenerateNote = async () => {
 // ── Dados do CNPJ ─────────────────────────────────────────
 const setActiveTab = (index, { syncUrl = true } = {}) => {
   cnpjNav.activeTabIndex = index;
+  if (cnpjDetailStore.cnpjAccessStatus === "valid") {
+    queueMicrotask(() => loadActiveTabData(activePerfSession.value, "tab_change"));
+  }
 
   if (!syncUrl) return;
 
@@ -217,6 +230,9 @@ const cnpjData = computed(
 // Substitui valSemComp/totalMov do cnpjData quando disponível.
 const periodSummary = computed(() => {
   const semestres = evolucaoFinanceira.value?.semestres;
+  if (!semestres?.length && bootstrapPeriodSummary.value) {
+    return bootstrapPeriodSummary.value;
+  }
   if (!semestres?.length) {
     return evolucaoLoaded.value ? { totalMov: 0, valSemComp: 0, percValSemComp: 0 } : null;
   }
@@ -270,11 +286,48 @@ const goToEstablishments = () => {
 };
 
 let cnpjValidationRequest = 0;
+const activePerfSession = ref(null);
+
+const loadActiveTabData = async (perfSession, reason = "active_tab") => {
+  if (!cnpj.value || cnpjDetailStore.cnpjAccessStatus !== "valid") return;
+
+  const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+  const tabSlug = TAB_SLUG_BY_INDEX[cnpjNav.activeTabIndex];
+  if (!tabSlug) return;
+
+  logCnpjPerf(perfSession, "tab_fetch_dispatched", {
+    reason,
+    tab: tabSlug,
+    inicio,
+    fim,
+  });
+
+  try {
+    await cnpjDetailStore.ensureTabData(
+      tabSlug,
+      cnpj.value,
+      inicio,
+      fim,
+      volumeAtipicoPercentual,
+    );
+    logCnpjPerf(perfSession, "tab_fetch_settled", {
+      reason,
+      tab: tabSlug,
+      status: "fulfilled",
+    });
+  } catch (error) {
+    logCnpjPerf(perfSession, "tab_fetch_settled", {
+      reason,
+      tab: tabSlug,
+      status: "rejected",
+    });
+  }
+};
 
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
-    // Ao trocar de CNPJ, reseta tudo e dispara todos os fetches em paralelo
+    // Ao trocar de CNPJ, reseta tudo e carrega apenas bootstrap + aba ativa.
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
       cnpjNav.reset(getTabIndexFromRoute());
@@ -285,27 +338,26 @@ watch(
       return;
     }
 
-    const access = await cnpjDetailStore.validateCnpjAccess(newCnpj);
+    const perfSession = createCnpjPerfSession(newCnpj);
+    activePerfSession.value = perfSession;
+    logCnpjPerf(perfSession, "bootstrap_started");
+
+    const { inicio, fim } = getApiParams();
+    let access = null;
+    try {
+      const bootstrap = await cnpjDetailStore.fetchBootstrap(newCnpj, inicio, fim);
+      access = bootstrap?.status;
+    } catch (error) {
+      access = { status: cnpjDetailStore.cnpjAccessStatus };
+    }
     if (requestId !== cnpjValidationRequest || cnpj.value !== newCnpj) return;
+    logCnpjPerf(perfSession, "bootstrap_finished", {
+      status: access?.status ?? "unknown",
+    });
     if (access?.status !== "valid") return;
 
     if (newCnpj) {
-      // Eager load: dispara todos os fetches ao carregar a página
-      const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
-      cnpjDetailStore.fetchDadosCadastro(newCnpj);
-      cnpjDetailStore.fetchEvolucaoFinanceira(newCnpj, inicio, fim, volumeAtipicoPercentual);
-      cnpjDetailStore.fetchEvolucaoMensalGtin(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchMovimentacao(newCnpj);
-      cnpjDetailStore.fetchIndicadores(newCnpj);
-      cnpjDetailStore.fetchFalecidos(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchCrmData(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchCrmPerfilDiario(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchCrmPerfilHorario(newCnpj, inicio, fim);
-      cnpjDetailStore.fetchSocios(newCnpj);
-      cnpjDetailStore.fetchNetwork(newCnpj);
-      if (!cnpjData.value) {
-        await cnpjDetailStore.fetchCnpjAvulso(newCnpj);
-      }
+      await loadActiveTabData(perfSession, "initial");
     }
   },
   { immediate: true },
@@ -322,13 +374,27 @@ watch(
     if (!cnpj.value) return;
     if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
     if (filterStore.isAnimating) return;
-    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
-    cnpjDetailStore.fetchEvolucaoFinanceira(cnpj.value, inicio, fim, volumeAtipicoPercentual);
-    cnpjDetailStore.fetchEvolucaoMensalGtin(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchFalecidos(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchCrmData(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchCrmPerfilDiario(cnpj.value, inicio, fim);
-    cnpjDetailStore.fetchCrmPerfilHorario(cnpj.value, inicio, fim);
+    const { inicio, fim } = getApiParams();
+    const perfSession = activePerfSession.value;
+    logCnpjPerf(perfSession, "period_bootstrap_dispatched", {
+      inicio,
+      fim,
+    });
+    cnpjDetailStore.fetchBootstrap(cnpj.value, inicio, fim)
+      .then(() => loadActiveTabData(perfSession, "period_change"))
+      .then(() => {
+        if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;
+        logCnpjPerf(perfSession, "period_bootstrap_settled", {
+          status: "fulfilled",
+        });
+      })
+      .catch(() => {
+        if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;
+        logCnpjPerf(perfSession, "period_bootstrap_settled", {
+          status: "rejected",
+        });
+      });
+    return;
   },
   { deep: true },
 );
@@ -351,6 +417,8 @@ onMounted(() => {
 });
 
 const geoData = computed(() => {
+  if (bootstrapGeoData.value) return bootstrapGeoData.value;
+
   const data = cnpjData.value;
   if (!data || !localidades.value?.length) return null;
 
@@ -370,22 +438,23 @@ const formatCnpj = (v) => {
 
 // ── Controle de Carregamento Global ───────────────────────
 const isInitialLoading = computed(() => {
-  // Consideramos carregamento inicial se os dados básicos ou os dashboards principais ainda não voltaram
+  const hasBootstrap = Boolean(cnpjDetailStore.bootstrapData);
   return (
-    cnpjDetailStore.cnpjAccessStatus === "checking" ||
-    cnpjDetailStore.dadosCadastroLoading ||
-    cnpjDetailStore.cnpjsAvulsosLoading ||
-    (cnpjDetailStore.indicadoresLoading &&
-      !cnpjDetailStore.indicadoresData) ||
-    (cnpjDetailStore.prescritoresLoading &&
-      !cnpjDetailStore.prescritoresData) ||
-    (cnpjDetailStore.crmPerfilDiarioLoading &&
-      !cnpjDetailStore.crmPerfilDiario) ||
-    (cnpjDetailStore.evolucaoLoading && !cnpjDetailStore.evolucaoFinanceira) ||
-    (cnpjDetailStore.sociosLoading && !cnpjDetailStore.sociosData) ||
-    (cnpjDetailStore.networkLoading && !cnpjDetailStore.networkData)
+    (cnpjDetailStore.cnpjAccessStatus === "checking" && !hasBootstrap) ||
+    (cnpjDetailStore.bootstrapLoading && !hasBootstrap)
   );
 });
+
+watch(
+  isInitialLoading,
+  (loading, wasLoading) => {
+    if (wasLoading && !loading) {
+      logCnpjPerf(activePerfSession.value, "initial_overlay_hidden", {
+        active_tab: TAB_SLUG_BY_INDEX[cnpjNav.activeTabIndex],
+      });
+    }
+  },
+);
 </script>
 
 <template>
@@ -440,6 +509,7 @@ const isInitialLoading = computed(() => {
       :cnpj="cnpj"
       :cnpj-data="cnpjData"
       :geo-data="geoData"
+      :qtd-municipios-regiao="qtdMunicipiosRegiao"
       :cadastro="dadosCadastro"
       :is-exporting="isExporting"
       :is-generating-note="isGeneratingNote"
@@ -507,7 +577,12 @@ const isInitialLoading = computed(() => {
             >Análise de Autorizações</span
           ></template
         >
-        <AuthTab ref="authTabRef" :cnpj="cnpj" class="tab-content" />
+        <AuthTab
+          ref="authTabRef"
+          :cnpj="cnpj"
+          :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
+          class="tab-content"
+        />
       </TabPanel>
 
       <TabPanel>

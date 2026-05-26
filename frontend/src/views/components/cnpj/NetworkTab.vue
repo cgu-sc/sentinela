@@ -37,6 +37,7 @@ import {
   truncateLabel,
 } from "@/utils/network/networkNodeUtils";
 import { buildNetworkStylesheet } from "@/utils/network/networkStylesheet";
+import { createCnpjPerfSession, logCnpjPerf } from "@/utils/cnpjPerfLogger";
 
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
@@ -1127,6 +1128,11 @@ function getGraphFitViewport(elements, padding, rightReserve = 0) {
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
 async function buildGraph(data) {
   if (!cyContainer.value || !data) return;
+  const perfSession = createCnpjPerfSession(cnpj.value);
+  logCnpjPerf(perfSession, "network_graph_build_started", {
+    nodes: data.nodes?.length ?? 0,
+    edges: data.edges?.length ?? 0,
+  });
   observeGraphContainer();
 
   if (cyContainer.value) cyContainer.value.style.pointerEvents = "none";
@@ -1194,6 +1200,9 @@ async function buildGraph(data) {
       },
     })),
   ];
+  logCnpjPerf(perfSession, "network_graph_elements_built", {
+    elements: elements.length,
+  });
 
   // Oculta o canvas até o layout terminar — evita flash de nós empilhados em (0,0)
   if (cyContainer.value) cyContainer.value.style.opacity = "0";
@@ -1208,6 +1217,9 @@ async function buildGraph(data) {
   });
   graphReady.value = true;
   bindGraphCountUpdates();
+  logCnpjPerf(perfSession, "network_graph_cytoscape_created", {
+    elements: elements.length,
+  });
 
   // Força o reconhecimento do tamanho do container
   cy.resize();
@@ -1232,6 +1244,10 @@ async function buildGraph(data) {
   });
 
   cy.one("layoutstop", () => {
+    logCnpjPerf(perfSession, "network_graph_layout_stopped", {
+      nodes: cy?.nodes()?.length ?? 0,
+      edges: cy?.edges()?.length ?? 0,
+    });
     // Revela o grafo e reabilita eventos apenas após o layout terminar
     if (cyContainer.value) {
       cyContainer.value.style.opacity = "";

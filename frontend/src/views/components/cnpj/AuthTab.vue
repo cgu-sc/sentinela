@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import TabPlaceholder from './TabPlaceholder.vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
@@ -10,6 +10,7 @@ import CRMCronologia from './CRMCronologia.vue';
 import CRMPrescritoresTable from './CRMPrescritoresTable.vue';
 import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
+import { useFilterParameters } from "@/composables/useFilterParameters";
 
 const { formatarData, toLocalISO } = useFormatting();
 
@@ -21,12 +22,14 @@ const formattedPeriod = computed(() => {
 
 const props = defineProps({
   cnpj: { type: String, required: true },
+  isActive: { type: Boolean, default: false },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode, evolucaoFinanceira } = storeToRefs(cnpjDetailStore);
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const filterStore = useFilterStore();
+const { getApiParams } = useFilterParameters();
 const {
   cachedData: cachedPrescritoresData,
   isRefreshing,
@@ -36,6 +39,22 @@ const {
 
 // ── Estado de Navegação (Agora via Store) ─────────────────────────────────
 const activeKpiFilter = ref(null);
+
+function loadCronologiaIfActive() {
+  if (!props.isActive) return;
+  if (activeCrmViewMode.value !== 'cronologia') return;
+  const { inicio, fim } = getApiParams();
+  cnpjDetailStore.ensureTabData('autorizacoes', props.cnpj, inicio, fim);
+}
+
+watch(activeCrmViewMode, () => {
+  loadCronologiaIfActive();
+});
+
+watch(() => props.isActive, (active) => {
+  if (!active) return;
+  loadCronologiaIfActive();
+});
 
 // ── Dados Base ────────────────────────────────────────────────────────────
 const summary = computed(() => cachedPrescritoresData.value?.summary || {});

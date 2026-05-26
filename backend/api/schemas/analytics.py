@@ -178,45 +178,6 @@ class PercentilesAnimationResponse(BaseModel):
     """Payload completo de percentis por período — todos os períodos em uma única chamada."""
     quarters: List[PercentilesQuarterSchema]
 
-class MunicipioPatologiaRowSchema(BaseModel):
-    id_ibge7: int
-    patologia: str
-    regra_clinica: str
-    ano_base: int
-    qtd_cpfs_distintos_municipio: int
-    qtd_cpfs_incompativeis_municipio: int
-    qtd_autorizacoes_municipio: int
-    qtd_autorizacoes_incompativeis_municipio: int
-    valor_total_pago_municipio: float
-    valor_incompativel_pago_municipio: float
-    dt_processamento: datetime
-
-
-class MunicipioPatologiaResponse(BaseModel):
-    id_ibge7: int
-    patologia: Optional[str] = None
-    ano_base: Optional[int] = None
-    rows: List[MunicipioPatologiaRowSchema]
-
-
-class MunicipioParkinsonRowSchema(MunicipioPatologiaRowSchema):
-    ano_censo_populacao: int
-    populacao_50_mais: int
-    prevalencia_referencia: float
-    casos_esperados_50_mais: float
-    razao_cpfs_distintos_sobre_esperado: float
-
-
-class MunicipioParkinsonResponse(BaseModel):
-    id_ibge7: int
-    ano_base: Optional[int] = None
-    ano_censo_populacao: int
-    populacao_50_mais: int
-    prevalencia_referencia: float
-    casos_esperados_50_mais: float
-    rows: List[MunicipioParkinsonRowSchema]
-
-
 class EvolucaoMesSchema(BaseModel):
     mes: str
     total: float
@@ -440,6 +401,31 @@ class CnpjAccessStatusSchema(BaseModel):
     nome_fantasia: Optional[str] = None
     municipio: Optional[str] = None
     uf: Optional[str] = None
+
+class CnpjPeriodSummarySchema(BaseModel):
+    totalMov: float = 0.0
+    valSemComp: float = 0.0
+    percValSemComp: float = 0.0
+    totalQtde: int = 0
+    qtdeSemComp: int = 0
+    percQtdeSemComp: float = 0.0
+
+class CnpjGeoDataSchema(BaseModel):
+    sg_uf: str
+    no_regiao_saude: str
+    id_regiao_saude: int
+    no_municipio: str
+    id_ibge7: int
+    nu_populacao: Optional[int] = None
+    unidade_pf: Optional[str] = None
+
+class CnpjBootstrapResponse(BaseModel):
+    status: CnpjAccessStatusSchema
+    cadastro: DadosFarmaciaSchema
+    cnpj_data: ResultadoSentinelaCnpjSchema
+    geo_data: CnpjGeoDataSchema
+    qtd_municipios_regiao: int
+    period_summary: CnpjPeriodSummarySchema
 
 class SocioSchema(BaseModel):
     cnpj: str

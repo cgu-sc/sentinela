@@ -35,7 +35,7 @@ const requestTimesTooltip = computed(() => {
 });
 
 const qtdMunicipiosRegiao = computed(() =>
-  geoStore.qtdMunicipiosPorRegiao(props.geoData?.id_regiao_saude),
+  props.qtdMunicipiosRegiao ?? geoStore.qtdMunicipiosPorRegiao(props.geoData?.id_regiao_saude),
 );
 
 const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
@@ -54,6 +54,7 @@ const props = defineProps({
   cnpj:          { type: String,  required: true },
   cnpjData:      { type: Object,  default: null },
   geoData:       { type: Object,  default: null },
+  qtdMunicipiosRegiao: { type: Number,  default: null },
   cadastro:      { type: Object,  default: null },
   isExporting:   { type: Boolean, default: false },
   isGeneratingNote: { type: Boolean, default: false },

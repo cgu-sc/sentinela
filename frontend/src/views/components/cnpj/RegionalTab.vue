@@ -49,6 +49,7 @@ const filteredFarmacias = computed(() => {
 });
 
 const loadData = () => {
+  if (!props.isActive) return;
   if (props.geoData?.id_regiao_saude || props.geoData?.sg_uf) {
     const { inicio, fim } = getApiParams();
     fetchRegional(
@@ -70,6 +71,10 @@ watch(() => [props.geoData?.id_regiao_saude, props.geoData?.sg_uf], ([regiaoId, 
   if (regiaoId || uf) loadData();
 });
 
+watch(() => props.isActive, (active) => {
+  if (active) loadData();
+});
+
 watch(
   () => filterStore.periodo,
   () => {
@@ -83,6 +88,7 @@ watch(
   () => cnpjNav.pendingMunicipio,
   async (municipio) => {
     if (!municipio) return;
+    if (!props.isActive) return;
 
     if (!regionalLoaded.value) {
       loadData();

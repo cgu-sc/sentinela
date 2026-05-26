@@ -167,7 +167,7 @@ function onCnpjTableLazy(event) {
         </div>
         <h2 class="empty-title">Selecione um Indicador</h2>
         <p class="empty-desc">
-          Escolha um dos 18 indicadores de risco no painel à direita para visualizar
+          Escolha um dos 16 indicadores de risco no painel à direita para visualizar
           o desempenho das farmácias no escopo atual dos filtros.
         </p>
         <div class="empty-groups">

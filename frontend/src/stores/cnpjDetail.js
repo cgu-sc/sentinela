@@ -36,12 +36,16 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     movimentacaoData:    null,
     movimentacaoLoading: false,
     movimentacaoLoaded:  false,
+    movimentacaoLoadingKey: null,
+    movimentacaoLoadedKey:  null,
     movimentacaoError:   null,
 
     // ── Indicadores de Risco ──────────────────────────────────────────────────
     indicadoresData:    null,
     indicadoresLoading: false,
     indicadoresLoaded:  false,
+    indicadoresLoadingKey: null,
+    indicadoresLoadedKey:  null,
     indicadoresError:   null,
 
     // ── Falecidos ─────────────────────────────────────────────────────────────
@@ -73,6 +77,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     cnpjAccessCnpj:      null,
     cnpjAccessMessage:   null,
     cnpjAccessData:      null,
+    bootstrapData:       null,
+    bootstrapLoading:    false,
+    bootstrapLoadedKey:  null,
+    bootstrapRequestKey: null,
+    bootstrapGeoData:    null,
+    bootstrapPeriodSummary: null,
 
     // ── Municípios da região do CNPJ (para RegionalTab) ──────────────────────
     municipiosRegiao:        [],
@@ -169,6 +179,143 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         };
       }
     },
+
+    async fetchBootstrap(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      if (clean.length !== 14) {
+        return this.setInvalidCnpjFormat(clean);
+      }
+
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.bootstrapLoadedKey === key && this.bootstrapData) {
+        return this.bootstrapData;
+      }
+
+      const isBackgroundRefresh =
+        this.cnpjAccessStatus === 'valid' &&
+        this.cnpjAccessCnpj === clean &&
+        Boolean(this.bootstrapData);
+
+      this.bootstrapLoading = true;
+      this.bootstrapRequestKey = key;
+      this.cnpjAccessCnpj = clean;
+      if (!isBackgroundRefresh) {
+        this.cnpjAccessStatus = 'checking';
+        this.cnpjAccessMessage = null;
+        this.cnpjAccessData = null;
+      }
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+
+        const t0 = performance.now();
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCnpjBootstrap(clean), { params });
+        if (this.bootstrapRequestKey !== key) {
+          return null;
+        }
+        this.requestTimes['bootstrap'] = { label: 'Bootstrap', ms: Math.round(performance.now() - t0) };
+
+        if (!data.status?.status || !data.cadastro || !data.cnpj_data || !data.geo_data || !data.period_summary) {
+          throw new Error('Resposta de bootstrap incompleta para a tela de estabelecimento.');
+        }
+
+        this.bootstrapData = data;
+        this.bootstrapLoadedKey = key;
+        this.bootstrapGeoData = data.geo_data;
+        this.bootstrapPeriodSummary = data.period_summary;
+
+        this.cnpjAccessStatus = data.status.status;
+        this.cnpjAccessData = data.status;
+        this.cnpjAccessMessage = null;
+
+        this.dadosCadastro = data.cadastro;
+        this.dadosCadastroLoading = false;
+
+        this.cnpjsAvulsos.set(clean, data.cnpj_data);
+        this.cnpjsAvulsosLoading = false;
+
+        return data;
+      } catch (error) {
+        if (this.bootstrapRequestKey !== key) {
+          return null;
+        }
+        if (isBackgroundRefresh) {
+          throw error;
+        }
+        const statusCode = error?.response?.status;
+        const detail = error?.response?.data?.detail;
+        if (statusCode === 404) {
+          this.cnpjAccessStatus = detail?.status || 'not_in_program';
+          this.cnpjAccessMessage = detail?.message || 'CNPJ nao encontrado na base carregada do Programa Farmacia Popular.';
+        } else if (statusCode === 422) {
+          this.cnpjAccessStatus = detail?.status || 'invalid_format';
+          this.cnpjAccessMessage = detail?.message || 'A tela de estabelecimento aceita apenas CNPJ com 14 digitos.';
+        } else {
+          this.cnpjAccessStatus = 'error';
+          this.cnpjAccessMessage = detail || ERROR_MSG;
+        }
+        this.cnpjAccessData = null;
+        this.bootstrapData = null;
+        this.bootstrapLoadedKey = null;
+        this.bootstrapGeoData = null;
+        this.bootstrapPeriodSummary = null;
+        this.cnpjsAvulsos.delete(clean);
+        throw error;
+      } finally {
+        if (this.bootstrapRequestKey === key) {
+          this.bootstrapLoading = false;
+          this.bootstrapRequestKey = null;
+        }
+      }
+    },
+
+    async ensureTabData(tabSlug, cnpj, inicio = null, fim = null, volumeAtipicoPercentual = null) {
+      if (!cnpj) return;
+
+      if (tabSlug === 'movimentacao') {
+        await Promise.all([
+          this.fetchEvolucaoFinanceira(cnpj, inicio, fim, volumeAtipicoPercentual),
+          this.fetchEvolucaoMensalGtin(cnpj, inicio, fim),
+        ]);
+        return;
+      }
+
+      if (tabSlug === 'memoria') {
+        await this.fetchMovimentacao(cnpj);
+        return;
+      }
+
+      if (tabSlug === 'indicadores') {
+        await this.fetchIndicadores(cnpj);
+        return;
+      }
+
+      if (tabSlug === 'autorizacoes') {
+        const fetches = [this.fetchCrmData(cnpj, inicio, fim)];
+        if (this.activeCrmViewMode === 'cronologia') {
+          fetches.push(this.fetchCrmPerfilDiario(cnpj, inicio, fim));
+          fetches.push(this.fetchCrmPerfilHorario(cnpj, inicio, fim));
+        }
+        await Promise.all(fetches);
+        return;
+      }
+
+      if (tabSlug === 'falecidos') {
+        await this.fetchFalecidos(cnpj, inicio, fim);
+        return;
+      }
+
+      if (tabSlug === 'socios') {
+        await this.fetchSocios(cnpj);
+        return;
+      }
+
+      if (tabSlug === 'teia') {
+        await this.fetchNetwork(cnpj);
+      }
+    },
     // ── Cadastro ──────────────────────────────────────────────────────────────
     async fetchDadosCadastro(cnpj) {
       if (!cnpj) return;
@@ -255,46 +402,64 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
     // ── Memória de Cálculo ────────────────────────────────────────────────────
     async fetchMovimentacao(cnpj) {
-      if (!cnpj) return;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return;
+      if (this.movimentacaoLoadedKey === clean || this.movimentacaoLoadingKey === clean) return;
       this.movimentacaoLoading = true;
+      this.movimentacaoLoadingKey = clean;
       try {
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(cnpj));
+        const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(clean));
+        if (this.movimentacaoLoadingKey !== clean) return;
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['movimentacao'] = { label: 'Memória de Cálculo', ms, detail: buildTimingDetail(data) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
+        this.movimentacaoLoadedKey = clean;
         this.movimentacaoError  = null;
       } catch (e) {
+        if (this.movimentacaoLoadingKey !== clean) return;
         console.error('Erro ao buscar movimentação:', e);
         this.movimentacaoError = ERROR_MSG;
       } finally {
-        this.movimentacaoLoading = false;
+        if (this.movimentacaoLoadingKey === clean) {
+          this.movimentacaoLoading = false;
+          this.movimentacaoLoadingKey = null;
+        }
       }
     },
 
     // ── Indicadores ───────────────────────────────────────────────────────────
     async fetchIndicadores(cnpj) {
-      if (this.indicadoresLoaded) return;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return;
+      if (this.indicadoresLoadedKey === clean || this.indicadoresLoadingKey === clean) return;
       this.indicadoresLoading = true;
+      this.indicadoresLoadingKey = clean;
       try {
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(cnpj));
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(clean));
+        if (this.indicadoresLoadingKey !== clean) return;
         this.requestTimes['indicadores'] = { label: 'Indicadores de Risco', ms: Math.round(performance.now() - t0) };
         this.indicadoresData   = data;
         this.indicadoresLoaded = true;
+        this.indicadoresLoadedKey = clean;
         this.indicadoresError  = null;
       } catch (e) {
+        if (this.indicadoresLoadingKey !== clean) return;
         console.error('Erro ao buscar indicadores:', e);
         this.indicadoresError = ERROR_MSG;
       } finally {
-        this.indicadoresLoading = false;
+        if (this.indicadoresLoadingKey === clean) {
+          this.indicadoresLoading = false;
+          this.indicadoresLoadingKey = null;
+        }
       }
     },
 
     // ── Quadro Societário ─────────────────────────────────────────────────────
     async fetchSocios(cnpj) {
-      if (!cnpj || this.sociosLoaded === cnpj) return;
+      if (!cnpj || this.sociosLoaded === cnpj || this.sociosLoading) return;
       this.sociosLoading = true;
       this.sociosError   = null;
       try {
@@ -313,7 +478,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
     // ── Teia Societária ─────────────────────────────────────────────────────
     async fetchNetwork(cnpj) {
-      if (!cnpj || this.networkLoaded === cnpj) return;
+      if (!cnpj || this.networkLoaded === cnpj || this.networkLoading) return;
       this.networkLoading = true;
       this.networkError   = null;
       try {
@@ -550,11 +715,15 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.movimentacaoData    = null;
       this.movimentacaoLoading = false;
       this.movimentacaoLoaded  = false;
+      this.movimentacaoLoadingKey = null;
+      this.movimentacaoLoadedKey  = null;
       this.movimentacaoError   = null;
 
       this.indicadoresData    = null;
       this.indicadoresLoading = false;
       this.indicadoresLoaded  = false;
+      this.indicadoresLoadingKey = null;
+      this.indicadoresLoadedKey  = null;
       this.indicadoresError   = null;
 
       this.falecidosData    = null;
@@ -570,6 +739,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.crmPerfilDiario        = null;
       this.crmPerfilDiarioLoading = false;
       this.crmPerfilDiarioLoaded  = null;
+      this.crmPerfilHorario        = null;
+      this.crmPerfilHorarioLoading = false;
+      this.crmPerfilHorarioLoaded  = null;
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;
@@ -582,6 +754,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.cnpjAccessCnpj      = null;
       this.cnpjAccessMessage   = null;
       this.cnpjAccessData      = null;
+      this.bootstrapData       = null;
+      this.bootstrapLoading    = false;
+      this.bootstrapLoadedKey  = null;
+      this.bootstrapRequestKey = null;
+      this.bootstrapGeoData    = null;
+      this.bootstrapPeriodSummary = null;
 
       this.municipiosRegiao        = [];
       this.municipiosRegiaoKey     = null;

@@ -96,6 +96,7 @@ function getEffectivePeriodParams() {
 }
 
 const updateRiskCurve = () => {
+  if (!props.isActive) return;
   if (!props.geoData?.sg_uf) return;
   const { inicio, fim } = getEffectivePeriodParams();
 
@@ -138,6 +139,7 @@ const animationYMax    = ref(null); // max score_risco
 const animationYMaxPct = ref(null); // max percValSemComp
 
 const loadRegional = () => {
+    if (!props.isActive) return;
     if (!props.geoData?.sg_uf) return;
     const { inicio, fim } = getEffectivePeriodParams();
 
@@ -429,10 +431,8 @@ watch(riskMetric, () => {
 });
 
 watch(regionalScope, () => {
-    if (filterStore.animationMode) {
-      clearAnimationState();
-      filterStore.animationPreload.status = 'idle';
-    }
+    clearAnimationState();
+    filterStore.animationPreload.status = 'idle';
     loadRegional();
 });
 
@@ -448,6 +448,12 @@ watch(() => props.geoData?.sg_uf, () => {
     updateRiskCurve();
     loadRegional();
 }, { immediate: true });
+
+watch(() => props.isActive, (active) => {
+    if (!active) return;
+    updateRiskCurve();
+    loadRegional();
+});
 
 // Escuta mudanças no filtro global de período
 watch(() => filterStore.periodo, () => {
@@ -475,12 +481,6 @@ watch(() => filterStore.animationMode, (isActive) => {
     loadRegional();
 });
 
-watch(regionalScope, () => {
-    // Escopo mudou — cache de animação é inválido (regiao vs uf)
-    clearAnimationState();
-    filterStore.animationPreload.status = 'idle';
-    loadRegional();
-});
 
 // Texto de ranking baseado no escopo selecionado
 const rankingText = computed(() => {

@@ -632,7 +632,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           <VChart 
             ref="chartRef" 
             :option="chartOption" 
-            :update-options="{ notMerge: true }" 
+            :update-options="{ notMerge: false, lazyUpdate: true }" 
             autoresize 
             class="evolucao-chart" 
             @zr:click="onZrClick" 
@@ -666,7 +666,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         <div v-if="todosMeses.length" class="evolucao-chart-wrap mensal-chart-clickable">
           <VChart
             :option="mensalChartOption"
-            :update-options="{ notMerge: true }"
+            :update-options="{ notMerge: false, lazyUpdate: true }"
             autoresize
             class="evolucao-chart"
             @click="onMensalChartClick"
@@ -937,7 +937,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
           <VChart
             v-if="isMonthlyChartExpanded"
             :option="chartOptionMensalGtin(selectedSemestre?.semestre, true)"
-            :update-options="{ notMerge: true }"
+            :update-options="{ notMerge: false, lazyUpdate: true }"
             autoresize
             style="width: 100%; height: 100%;"
             @click="onMensalChartClick"

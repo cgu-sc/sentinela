@@ -12,6 +12,7 @@ from database import get_db, engine
 from api.router import api_router
 from fastapi.middleware.cors import CORSMiddleware
 from data_cache import load_cache
+from request_logging import configure_request_timing_logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +47,8 @@ app.add_middleware(
 )
 
 # Registro do Roteador Modular (Onde todas as rotas estão organizadas)
+configure_request_timing_logger(app)
+
 app.include_router(api_router, prefix="/api/v1")
 
 from fastapi.staticfiles import StaticFiles

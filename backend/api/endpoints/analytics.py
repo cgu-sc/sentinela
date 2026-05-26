@@ -14,13 +14,29 @@ from ..schemas.analytics import (
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
     SociosResponse, NetworkResponse,
-    MunicipioParkinsonResponse, MunicipioPatologiaResponse
+    CnpjBootstrapResponse,
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
+from request_logging import FrontendPerformanceEvent, log_frontend_performance
 import urllib.parse
 
 router = APIRouter()
+
+
+@router.post("/client-perf")
+def log_client_performance(event: FrontendPerformanceEvent):
+    return log_frontend_performance(event)
+
+
+@router.get("/cnpj/{cnpj}/bootstrap", response_model=CnpjBootstrapResponse)
+def get_cnpj_bootstrap(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna o pacote minimo para primeira renderizacao da tela de estabelecimento."""
+    return AnalyticsService.get_cnpj_bootstrap(cnpj, data_inicio, data_fim)
 
 
 @router.get("/cnpj/{cnpj}/status", response_model=CnpjAccessStatusSchema)
@@ -287,25 +303,6 @@ def get_regional_benchmarking_animation(
         data_fim=data_fim, 
         regiao_id=regiao_id
     )
-
-
-@router.get("/municipio/{id_ibge7}/patologias", response_model=MunicipioPatologiaResponse)
-def get_municipio_patologias(
-    id_ibge7: int,
-    patologia: Optional[str] = Query(None),
-    ano_base: Optional[int] = Query(None),
-):
-    """Retorna agregados anuais municipais de incompatibilidade clinica por patologia."""
-    return AnalyticsService.get_municipio_patologias(id_ibge7, patologia=patologia, ano_base=ano_base)
-
-
-@router.get("/municipio/{id_ibge7}/parkinson", response_model=MunicipioParkinsonResponse)
-def get_municipio_parkinson(
-    id_ibge7: int,
-    ano_base: Optional[int] = Query(None),
-):
-    """Retorna contexto municipal de Parkinson com referencia epidemiologica para populacao 50+."""
-    return AnalyticsService.get_municipio_parkinson(id_ibge7, ano_base=ano_base)
 
 
 @router.get("/cnpj/{cnpj}/crm-data", response_model=PrescritoresResponse)

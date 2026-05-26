@@ -12,9 +12,8 @@ from cache_producers.network import (
 )
 from .crm import (
     get_crm_data,
-    get_crm_perfil_diario,
-    get_crm_perfil_horario,
     get_crm_raio_x,
+    get_crm_timeline_dataset,
 )
 from .dashboard import (
     get_dashboard_data,
@@ -82,8 +81,7 @@ class AnalyticsService:
     get_regional_benchmarking = staticmethod(get_regional_benchmarking)
     get_regional_benchmarking_animation = staticmethod(get_regional_benchmarking_animation)
     get_crm_data = staticmethod(get_crm_data)
-    get_crm_perfil_diario = staticmethod(get_crm_perfil_diario)
-    get_crm_perfil_horario = staticmethod(get_crm_perfil_horario)
+    get_crm_timeline_dataset = staticmethod(get_crm_timeline_dataset)
     sync_crm_raiox_tx = staticmethod(sync_crm_raiox_tx)
     sync_mediana_autorizacoes_horaria = staticmethod(sync_mediana_autorizacoes_horaria)
     sync_mediana_autorizacoes_horaria_movel = staticmethod(sync_mediana_autorizacoes_horaria_movel)

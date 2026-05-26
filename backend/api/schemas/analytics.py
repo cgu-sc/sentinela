@@ -320,25 +320,6 @@ class CrmDailyProfileItem(BaseModel):
     score_crm_multiplo_minutos: Optional[int] = None
     score_crm_multiplo_crms: Optional[int] = None
 
-class CrmDailyProfileResponse(BaseModel):
-    cnpj: str
-    days: List[CrmDailyProfileItem]
-    from_cache: bool = False
-    read_time_ms: Optional[float] = None
-    query_time_ms: Optional[float] = None
-    save_time_ms: Optional[float] = None
-
-class CrmHourlyPointSchema(BaseModel):
-    dt_janela: date
-    hr_janela: int
-    nu_prescricoes: int
-    nu_crms_diferentes: int
-    mediana_hora: float
-    is_hora_com_alerta: int = 0
-    is_volume_horario_anomalo: int = 0
-    is_crm_unico: int = 0
-    is_crm_multiplo: int = 0
-
 class CrmHourlyEventSchema(BaseModel):
     dt_janela: date
     tipo: str
@@ -350,11 +331,32 @@ class CrmHourlyEventSchema(BaseModel):
     id_medico: Optional[str] = None
     nu_crms_distintos: Optional[int] = None
 
-class CrmHourlyProfileResponse(BaseModel):
+# ── Dataset semantico da Linha do Tempo CRM ─────────────────────
+class CrmTimelineHourSchema(BaseModel):
+    dt_janela: date
+    hr_janela: int
+    nu_prescricoes: int
+    nu_crms_diferentes: int
+    mediana_hora: float
+    is_hora_com_alerta: int = 0
+    is_volume_horario_anomalo: int = 0
+    is_crm_unico: int = 0
+    is_crm_multiplo: int = 0
+    alert_types: List[str] = Field(default_factory=list)
+
+class CrmTimelineDaySchema(CrmDailyProfileItem):
+    is_volume_horario_anomalo: int = 0
+    is_crm_unico: int = 0
+    is_anomalo: int = 0
+    hours: List[CrmTimelineHourSchema]
+    events: List[CrmHourlyEventSchema] = Field(default_factory=list)
+
+class CrmTimelineDatasetResponse(BaseModel):
     cnpj: str
-    points: List[CrmHourlyPointSchema]
-    events: List[CrmHourlyEventSchema] = []
+    days: List[CrmTimelineDaySchema]
     from_cache: bool = False
+    daily_from_cache: bool = False
+    hourly_from_cache: bool = False
     read_time_ms: Optional[float] = None
     query_time_ms: Optional[float] = None
     save_time_ms: Optional[float] = None
@@ -681,6 +683,7 @@ class CrmRaioXResponse(BaseModel):
     alertas_multi: List[CrmMultiploAlertaSchema] = Field(default_factory=list)
     from_cache: bool = False
     read_time_ms: Optional[float] = None
+
 
 class MesMensalGtinItem(BaseModel):
     mes: str                          # "YYYY-MM"

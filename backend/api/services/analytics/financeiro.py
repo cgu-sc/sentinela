@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -45,8 +45,6 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -448,4 +446,5 @@ def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalR
         from_cache=True,
         read_time_ms=read_time
     )
+
 

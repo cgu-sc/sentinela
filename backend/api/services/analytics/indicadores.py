@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from datetime import date
 import calendar
 import time
@@ -51,8 +51,6 @@ from ...schemas.analytics import (
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
     IndicadorCnpjPageResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -838,3 +836,4 @@ def get_indicadores_analise_cnpjs(
         print(f"ERRO EM get_indicadores_analise_cnpjs (indicador={indicador}): {e}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Erro interno ao paginar CNPJs do indicador.")
+

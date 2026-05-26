@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -43,8 +43,6 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -571,3 +569,4 @@ def get_cnpj_lookup() -> list[dict]:
     except Exception as e:
         print(f"⚠️ Erro ao buscar lookup de CNPJs: {e}")
         return []
+

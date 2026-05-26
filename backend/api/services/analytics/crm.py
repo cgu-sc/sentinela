@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+﻿from typing import Any, List, Optional
 from datetime import date, datetime
 import calendar
 import polars as pl
@@ -12,16 +12,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from cache_files import (
-    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
-    CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
-    CRM_HORARIO_EVENTOS_PARQUET,
-    CRM_HORARIO_PARQUET,
-    CRM_PERFIL_DIARIO_PARQUET,
     CRM_RAIOX_TX_PARQUET,
-    DADOS_CRMS_PARQUET,
-    GEOGRAFICO_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
-    VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
 )
 from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
 from ...schemas.analytics import (
@@ -58,8 +49,7 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
+    CrmTimelineDatasetResponse,
     CrmRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
@@ -905,215 +895,215 @@ def _load_crm_unico_alertas(cnpj: str, cnpj_dir: str) -> pl.DataFrame:
     return result.df if result.df is not None else pl.DataFrame()
 
 
-def get_crm_perfil_diario(
-    cnpj: str,
-    data_inicio: str | None = None,
-    data_fim: str | None = None
-) -> "CrmDailyProfileResponse":
-    """Retorna o perfil diário unificado de dispensação de um CNPJ.
+def _crm_hour_alert_types(hour: dict[str, Any]) -> list[str]:
+    alert_types = []
+    if _to_int(hour.get("is_volume_horario_anomalo")) == 1:
+        alert_types.append("volume_horario")
+    if _to_int(hour.get("is_crm_unico")) == 1:
+        alert_types.append("crm_unico")
+    if _to_int(hour.get("is_crm_multiplo")) == 1:
+        alert_types.append("crm_multiplo")
+    return alert_types
 
-    Cada dia inclui três flags independentes:
-      - is_dia_com_volume_horario_anomalo: surto horário de volume
-      - is_anomalo_unico:                  concentração temporal de médico individual
-      - is_crm_multiplo:                  concentração temporal com múltiplos CRMs
 
-    Fonte: temp_CGUSC.fp.app_crm_perfil_diario
-    Cache: sentinela_cache/<cnpj>/crm_perfil_diario.
-    """
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    result = load_or_sync_crm_perfil_diario(cnpj)
-    if result.error:
-        _raise_cache_unavailable("Perfil diario CRM", result.error)
-
-    df = result.df if result.df is not None else pl.DataFrame()
-    from_cache = result.from_cache
-    read_time_ms = result.read_time_ms
-    query_time_ms = result.query_time_ms
-    save_time_ms = result.save_time_ms
-
+def _filter_crm_date_range(df: pl.DataFrame, date_col: str, data_inicio: str | None, data_fim: str | None) -> pl.DataFrame:
     if df.is_empty():
-        return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
-                                       read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
-
-    # --- Filtro de Período ---
+        return df
     if data_inicio:
         d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
-        df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
+        df = df.filter(pl.col(date_col).cast(pl.Utf8) >= d_ini)
     if data_fim:
         d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
-        df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
+        df = df.filter(pl.col(date_col).cast(pl.Utf8) <= d_fim)
+    return df
 
-    if df.is_empty():
-        return CrmDailyProfileResponse(cnpj=cnpj, days=[], from_cache=from_cache,
-                                       read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
 
-    unico_scores: dict[str, dict] = {}
-    multi_scores: dict[str, dict] = {}
-    try:
-        unico_scores = _build_crm_unico_concentration_map(
-            _load_crm_unico_alertas(cnpj, cnpj_dir)
-        )
-        multi_scores = _build_crm_rhythm_map(
-            _load_crm_multi_alertas(cnpj, cnpj_dir),
-            date_col="dt_dia",
-            windows=_CRM_MULTIPLO_RHYTHM_WINDOWS,
-            crms_col="nu_crms_distintos",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Erro ao calcular scores de criticidade CRM '{cnpj}': {e}")
+def _sum_timing(*values: float | None) -> float | None:
+    total = sum(value for value in values if value is not None)
+    return total or None
 
-    days = [
-        {
-            "dt_janela":             str(r["dt_janela"])[:10],
-            "competencia":           _to_int(r.get("competencia")),
-            "nu_prescricoes_dia":    _to_int(r.get("nu_prescricoes_dia")),
-            "nu_crms_distintos":     _to_int(r.get("nu_crms_distintos")),
-            "mediana_diaria":        _to_float(r.get("mediana_diaria")),
-            "is_dia_com_volume_horario_anomalo": _to_int(r.get("is_dia_com_volume_horario_anomalo")),
-            "is_anomalo_unico":      _to_int(r.get("is_anomalo_unico")),
-            "is_crm_multiplo":       _to_int(r.get("is_crm_multiplo")),
-            "score_crm_unico_hora":   unico_scores.get(str(r["dt_janela"])[:10], {}).get("score"),
-            "score_crm_unico_qtd":    unico_scores.get(str(r["dt_janela"])[:10], {}).get("qtd"),
-            "score_crm_unico_minutos": unico_scores.get(str(r["dt_janela"])[:10], {}).get("minutos"),
-            "score_crm_unico_medico": unico_scores.get(str(r["dt_janela"])[:10], {}).get("id_medico"),
-            "score_crm_multiplo_hora": multi_scores.get(str(r["dt_janela"])[:10], {}).get("score"),
-            "score_crm_multiplo_qtd": multi_scores.get(str(r["dt_janela"])[:10], {}).get("qtd"),
-            "score_crm_multiplo_minutos": multi_scores.get(str(r["dt_janela"])[:10], {}).get("minutos"),
-            "score_crm_multiplo_crms": multi_scores.get(str(r["dt_janela"])[:10], {}).get("nu_crms"),
+
+def _build_timeline_hours_by_date(df: pl.DataFrame, df_mediana: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    mediana_lookup: dict[tuple[str, int], float] = {}
+    if not df_mediana.is_empty():
+        for r in df_mediana.iter_rows(named=True):
+            mediana_lookup[(str(r.get("dt_janela"))[:10], _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora_movel"))
+
+    activity: dict[tuple[str, int], dict[str, Any]] = {}
+    dates: set[str] = set()
+    for r in df.iter_rows(named=True):
+        dt = str(r["dt_janela"])[:10]
+        hour = _to_int(r.get("hr_janela"))
+        activity[(dt, hour)] = r
+        dates.add(dt)
+
+    hours_by_date: dict[str, list[dict[str, Any]]] = {}
+    for dt in sorted(dates):
+        day_hours = []
+        for hour in range(24):
+            row = activity.get((dt, hour))
+            item = {
+                "dt_janela": dt,
+                "hr_janela": hour,
+                "nu_prescricoes": _to_int(row.get("nu_prescricoes")) if row else 0,
+                "nu_crms_diferentes": _to_int(row.get("nu_crms_diferentes")) if row else 0,
+                "mediana_hora": mediana_lookup.get((dt, hour), 0.0),
+                "is_volume_horario_anomalo": _to_int(row.get("is_volume_horario_anomalo")) if row else 0,
+                "is_crm_unico": _to_int(row.get("is_crm_unico")) if row else 0,
+                "is_crm_multiplo": _to_int(row.get("is_crm_multiplo")) if row else 0,
+            }
+            item["is_hora_com_alerta"] = 1 if (
+                item["is_volume_horario_anomalo"] == 1
+                or item["is_crm_unico"] == 1
+                or item["is_crm_multiplo"] == 1
+            ) else 0
+            item["alert_types"] = _crm_hour_alert_types(item)
+            day_hours.append(item)
+        hours_by_date[dt] = day_hours
+    return hours_by_date
+
+
+def _build_timeline_events_by_date(df_events: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    events_by_date: dict[str, list[dict[str, Any]]] = {}
+    if df_events.is_empty():
+        return events_by_date
+
+    for r in df_events.iter_rows(named=True):
+        dt = str(r["dt_dia"])[:10]
+        event = {
+            "dt_janela": dt,
+            "tipo": r["tipo"],
+            "hora_inicio": r["hora_inicio"],
+            "hora_fim": r["hora_fim"],
+            "minuto_inicio": _to_int(r.get("minuto_inicio")),
+            "minuto_fim": _to_int(r.get("minuto_fim")),
+            "severidade": r["severidade"],
+            "id_medico": r["id_medico"],
+            "nu_crms_distintos": r["nu_crms_distintos"],
         }
-        for r in df.iter_rows(named=True)
-    ]
-    return CrmDailyProfileResponse(cnpj=cnpj, days=days, from_cache=from_cache,
-                                   read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
+        events_by_date.setdefault(dt, []).append(event)
 
-def get_crm_perfil_horario(
+    for dt, events in events_by_date.items():
+        events_by_date[dt] = sorted(events, key=lambda item: _to_int(item.get("minuto_inicio")))
+    return events_by_date
+
+
+def get_crm_timeline_dataset(
     cnpj: str,
     data_inicio: str | None = None,
     data_fim: str | None = None
-) -> CrmHourlyProfileResponse:
-    """Retorna o detalhamento horário (0-23h) de todos os dias anômalos do CNPJ.
-
-    Inclui is_hora_com_alerta, is_volume_horario_anomalo, is_crm_unico e is_crm_multiplo
-    por ponto horário, lidos de temp_CGUSC.fp.app_crm_perfil_horario.
-    Cache: sentinela_cache/<cnpj>/crm_horario.
-    """
+) -> CrmTimelineDatasetResponse:
+    """Retorna o dataset semantico da aba Linha do tempo & Raio-X agrupado por dia."""
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    result = load_or_sync_crm_perfil_horario(cnpj)
-    if result.error:
-        _raise_cache_unavailable("Perfil horario CRM", result.error)
 
-    df = result.df if result.df is not None else pl.DataFrame()
-    from_cache = result.from_cache
-    read_time_ms = result.read_time_ms
-    query_time_ms = result.query_time_ms
-    save_time_ms = result.save_time_ms
-
-    if df.is_empty():
-        return CrmHourlyProfileResponse(cnpj=cnpj, points=[], from_cache=from_cache,
-                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
-
-    # --- Filtro de Período ---
-    if data_inicio:
-        d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
-        df = df.filter(pl.col("dt_janela").cast(pl.Utf8) >= d_ini)
-    if data_fim:
-        d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
-        df = df.filter(pl.col("dt_janela").cast(pl.Utf8) <= d_fim)
-
-    if df.is_empty():
-        return CrmHourlyProfileResponse(cnpj=cnpj, points=[], events=[], from_cache=from_cache,
-                                        read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
-
-    # --- 2. Carregar/Gerar Eventos Temporais (Trilha) ---
+    daily_result = load_or_sync_crm_perfil_diario(cnpj)
+    if daily_result.error:
+        _raise_cache_unavailable("Perfil diario CRM", daily_result.error)
+    hourly_result = load_or_sync_crm_perfil_horario(cnpj)
+    if hourly_result.error:
+        _raise_cache_unavailable("Perfil horario CRM", hourly_result.error)
     events_result = load_or_sync_crm_horario_eventos(cnpj)
     if events_result.error:
         _raise_cache_unavailable("Eventos horarios CRM", events_result.error)
-    df_events = events_result.df if events_result.df is not None else pl.DataFrame()
-    # Filtro de período nos eventos
-    if not df_events.is_empty():
-        if data_inicio:
-            d_ini = data_inicio if len(data_inicio) == 10 else f"{data_inicio}-01"
-            df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) >= d_ini)
-        if data_fim:
-            d_fim = data_fim if len(data_fim) == 10 else f"{data_fim}-31"
-            df_events = df_events.filter(pl.col("dt_dia").cast(pl.Utf8) <= d_fim)
-
-    # Garante que o parquet de medianas moveis existe (auto-warming)
     mediana_result = sync_mediana_autorizacoes_horaria_movel(cnpj)
     if mediana_result.error:
         _raise_cache_unavailable("Mediana horaria movel CRM", mediana_result.error)
 
-    # Carrega lookup de medianas moveis por data/hora.
-    MEDIANA_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET)
-    mediana_lookup: dict = {}
-    df_med = pl.read_parquet(MEDIANA_PATH)
-    for r in df_med.iter_rows(named=True):
-        mediana_lookup[(str(r.get("dt_janela"))[:10], _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora_movel"))
+    df_daily = daily_result.df if daily_result.df is not None else pl.DataFrame()
+    df_hourly = hourly_result.df if hourly_result.df is not None else pl.DataFrame()
+    df_events = events_result.df if events_result.df is not None else pl.DataFrame()
+    df_mediana = mediana_result.df if mediana_result.df is not None else pl.DataFrame()
 
-    # Indexa atividade real e flags de anomalia por (data, hora)
-    activity: dict = {}
-    dates_flags: dict = {}
-    for r in df.iter_rows(named=True):
-        dt = str(r["dt_janela"])[:10]
-        activity[(dt, _to_int(r.get("hr_janela")))] = r
-        if dt not in dates_flags:
-            dates_flags[dt] = {
-                "is_volume_horario_anomalo": _to_int(r.get("is_volume_horario_anomalo")),
-                "is_crm_unico":              _to_int(r.get("is_crm_unico")),
-                "is_crm_multiplo":           _to_int(r.get("is_crm_multiplo")),
-            }
+    df_daily = _filter_crm_date_range(df_daily, "dt_janela", data_inicio, data_fim)
+    df_hourly = _filter_crm_date_range(df_hourly, "dt_janela", data_inicio, data_fim)
+    df_events = _filter_crm_date_range(df_events, "dt_dia", data_inicio, data_fim)
+    df_mediana = _filter_crm_date_range(df_mediana, "dt_janela", data_inicio, data_fim)
 
-    # Expande para 24 horas por dia anomalo com mediana movel para todas as horas.
-    points = []
-    for dt in sorted(dates_flags):
-        for h in range(24):
-            row = activity.get((dt, h))
-            mediana = mediana_lookup.get((dt, h), 0.0)
-            
-            # Pega as flags da hora especifica, nao do dia.
-            is_vol = _to_int(row.get("is_volume_horario_anomalo")) if row else 0
-            is_uni = _to_int(row.get("is_crm_unico")) if row else 0
-            is_mul = _to_int(row.get("is_crm_multiplo")) if row else 0
-            
-            points.append({
-                "dt_janela":          dt,
-                "hr_janela":          h,
-                "nu_prescricoes":     _to_int(row.get("nu_prescricoes"))     if row else 0,
-                "nu_crms_diferentes": _to_int(row.get("nu_crms_diferentes")) if row else 0,
-                "mediana_hora":       mediana,
-                "is_hora_com_alerta": 1 if (is_vol or is_uni or is_mul) else 0,
-                "is_volume_horario_anomalo": is_vol,
-                "is_crm_unico":              is_uni,
-                "is_crm_multiplo":           is_mul,
-            })
+    unico_scores = _build_crm_unico_concentration_map(_load_crm_unico_alertas(cnpj, cnpj_dir))
+    multi_scores = _build_crm_rhythm_map(
+        _load_crm_multi_alertas(cnpj, cnpj_dir),
+        date_col="dt_dia",
+        windows=_CRM_MULTIPLO_RHYTHM_WINDOWS,
+        crms_col="nu_crms_distintos",
+    )
 
-    # Prepara lista de eventos
-    events_list = []
-    if not df_events.is_empty():
-        events_list = [
-            {
-                "dt_janela":        str(r["dt_dia"])[:10],
-                "tipo":             r["tipo"],
-                "hora_inicio":      r["hora_inicio"],
-                "hora_fim":         r["hora_fim"],
-                "minuto_inicio":    _to_int(r.get("minuto_inicio")),
-                "minuto_fim":       _to_int(r.get("minuto_fim")),
-                "severidade":       r["severidade"],
-                "id_medico":        r["id_medico"],
-                "nu_crms_distintos": r["nu_crms_distintos"]
-            }
-            for r in df_events.iter_rows(named=True)
-        ]
+    hours_by_date = _build_timeline_hours_by_date(df_hourly, df_mediana)
+    events_by_date = _build_timeline_events_by_date(df_events)
 
-    # AUTO-WARMING: PrÃ©-aquece o parquet de TransaÃ§Ãµes Literais (Raio-X Unificado)
     raio_x_result = sync_crm_raiox_tx(cnpj)
     if raio_x_result.error:
         _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
 
-    return CrmHourlyProfileResponse(cnpj=cnpj, points=points, events=events_list, from_cache=from_cache,
-                                    read_time_ms=read_time_ms, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
+    days = []
+    for r in df_daily.iter_rows(named=True):
+        day = {
+            "dt_janela": str(r["dt_janela"])[:10],
+            "competencia": _to_int(r.get("competencia")),
+            "nu_prescricoes_dia": _to_int(r.get("nu_prescricoes_dia")),
+            "nu_crms_distintos": _to_int(r.get("nu_crms_distintos")),
+            "mediana_diaria": _to_float(r.get("mediana_diaria")),
+            "is_dia_com_volume_horario_anomalo": _to_int(r.get("is_dia_com_volume_horario_anomalo")),
+            "is_anomalo_unico": _to_int(r.get("is_anomalo_unico")),
+            "is_crm_multiplo": _to_int(r.get("is_crm_multiplo")),
+        }
+        key = str(day["dt_janela"])[:10]
+        day["is_volume_horario_anomalo"] = _to_int(day.get("is_dia_com_volume_horario_anomalo"))
+        day["is_crm_unico"] = _to_int(day.get("is_anomalo_unico"))
+        day["is_anomalo"] = 1 if (
+            day["is_volume_horario_anomalo"] == 1
+            or day["is_crm_unico"] == 1
+            or day["is_crm_multiplo"] == 1
+        ) else 0
+        day["score_crm_unico_hora"] = unico_scores.get(key, {}).get("score")
+        day["score_crm_unico_qtd"] = unico_scores.get(key, {}).get("qtd")
+        day["score_crm_unico_minutos"] = unico_scores.get(key, {}).get("minutos")
+        day["score_crm_unico_medico"] = unico_scores.get(key, {}).get("id_medico")
+        day["score_crm_multiplo_hora"] = multi_scores.get(key, {}).get("score")
+        day["score_crm_multiplo_qtd"] = multi_scores.get(key, {}).get("qtd")
+        day["score_crm_multiplo_minutos"] = multi_scores.get(key, {}).get("minutos")
+        day["score_crm_multiplo_crms"] = multi_scores.get(key, {}).get("nu_crms")
+        day["hours"] = hours_by_date.get(key, [])
+        day["events"] = events_by_date.get(key, [])
+        days.append(day)
+
+    read_time_ms = _sum_timing(
+        daily_result.read_time_ms,
+        hourly_result.read_time_ms,
+        events_result.read_time_ms,
+        mediana_result.read_time_ms,
+        raio_x_result.read_time_ms,
+    )
+    query_time_ms = _sum_timing(
+        daily_result.query_time_ms,
+        hourly_result.query_time_ms,
+        events_result.query_time_ms,
+        mediana_result.query_time_ms,
+        raio_x_result.query_time_ms,
+    )
+    save_time_ms = _sum_timing(
+        daily_result.save_time_ms,
+        hourly_result.save_time_ms,
+        events_result.save_time_ms,
+        mediana_result.save_time_ms,
+        raio_x_result.save_time_ms,
+    )
+
+    return CrmTimelineDatasetResponse(
+        cnpj=cnpj,
+        days=days,
+        from_cache=bool(
+            daily_result.from_cache
+            and hourly_result.from_cache
+            and events_result.from_cache
+            and mediana_result.from_cache
+            and raio_x_result.from_cache
+        ),
+        daily_from_cache=bool(daily_result.from_cache),
+        hourly_from_cache=bool(hourly_result.from_cache),
+        read_time_ms=read_time_ms,
+        query_time_ms=query_time_ms,
+        save_time_ms=save_time_ms,
+    )
 
 def _format_alert_time(value) -> Optional[str]:
     if value is None:
@@ -1295,4 +1285,5 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             status_code=500,
             detail=f"Erro no Raio-X CRM unificado: {e}",
         )
+
 

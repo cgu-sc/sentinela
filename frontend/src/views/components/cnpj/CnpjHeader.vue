@@ -432,7 +432,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
         <div class="rank-stat" v-if="qtdMunicipiosRegiao">
           <i class="pi pi-map" style="color: #34d399" />
           <div class="rank-details">
-            <span class="rank-label">Municípios da Região</span>
+            <span class="rank-label">Munic. da Região</span>
             <span class="rank-val">{{ qtdMunicipiosRegiao }}</span>
           </div>
         </div>
@@ -1143,7 +1143,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 
 .ranking-grid-new {
   display: flex;
-  gap: 3rem;
+  gap: 2.5rem;
 }
 
 .rank-stat {
@@ -1155,9 +1155,9 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 
 .rank-stat--clickable {
   cursor: pointer;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0;
   border-radius: 8px;
-  margin: -0.3rem -0.6rem;
+  margin: -0.3rem 0;
 }
 
 .rank-stat--clickable:hover {

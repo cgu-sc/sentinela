@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -62,8 +62,6 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -196,7 +194,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
 
     Lê temp_CGUSC.fp.app_mediana_autorizacoes_horaria e grava
     sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.
-    Usado pelo get_crm_perfil_horario para preencher a mediana de referência
+    Usado pelo timeline-dataset CRM para preencher a mediana de referência
     em horas sem atividade no dia selecionado.
     """
     import pandas as pd
@@ -757,4 +755,5 @@ def sync_network(cnpj: str) -> None:
         import traceback
         print(f"Erro ao gerar Teia Societaria para {cnpj}: {e}")
         print(traceback.format_exc())
+
 

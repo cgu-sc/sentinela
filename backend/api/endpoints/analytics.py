@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+﻿from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
@@ -10,7 +10,7 @@ from ..schemas.analytics import (
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
     PrescritoresResponse, DadosFarmaciaSchema, CnpjAccessStatusSchema, MovimentacaoResponse, IndicadorAnaliseResponse,
     IndicadorCnpjPageResponse,
-    PercentilesAnimationResponse, CrmDailyProfileResponse, CrmHourlyProfileResponse,
+    PercentilesAnimationResponse, CrmTimelineDatasetResponse,
     CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
     SociosResponse, NetworkResponse,
@@ -314,23 +314,15 @@ def get_crm_data_endpoint(
     """Retorna KPIs e top prescritores (CRMs) de um CNPJ, com filtro opcional de período."""
     return AnalyticsService.get_crm_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
-@router.get("/cnpj/{cnpj}/crm/perfil-diario", response_model=CrmDailyProfileResponse)
-def get_crm_perfil_diario(
+@router.get("/cnpj/{cnpj}/crm/timeline-dataset", response_model=CrmTimelineDatasetResponse)
+def get_crm_timeline_dataset(
     cnpj: str,
-    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
-    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
+    data_inicio: Optional[str] = Query(None, description="Inicio do periodo (YYYY-MM-DD ou YYYY-MM)"),
+    data_fim:    Optional[str] = Query(None, description="Fim do periodo (YYYY-MM-DD ou YYYY-MM)"),
 ):
-    """Retorna o perfil diário unificado de dispensações (flags de volume horário anômalo e concentração individual)."""
-    return AnalyticsService.get_crm_perfil_diario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+    """Retorna o dataset semantico da linha do tempo CRM, agrupado por dia."""
+    return AnalyticsService.get_crm_timeline_dataset(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
-@router.get("/cnpj/{cnpj}/crm/perfil-horario", response_model=CrmHourlyProfileResponse)
-def get_crm_perfil_horario(
-    cnpj: str,
-    data_inicio: Optional[str] = Query(None, description="Início do período (YYYY-MM-DD ou YYYY-MM)"),
-    data_fim:    Optional[str] = Query(None, description="Fim do período (YYYY-MM-DD ou YYYY-MM)"),
-):
-    """Retorna o detalhamento horário unificado (volume horário anômalo + CRM único) de um CNPJ."""
-    return AnalyticsService.get_crm_perfil_horario(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/crm/raio-x", response_model=CrmRaioXResponse)
 def get_crm_raio_x(

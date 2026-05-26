@@ -30,8 +30,7 @@ export const API_ENDPOINTS = {
   analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   analyticsFalecidos:   (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/falecidos`,
   analyticsCrmData: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm-data`,
-  analyticsCrmPerfilDiario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-diario`,
-  analyticsCrmPerfilHorario: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/perfil-horario`,
+  analyticsCrmTimelineDataset: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/timeline-dataset`,
   analyticsCrmRaioX: (cnpj, dateStr, hour) => {
     let url = `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/crm/raio-x?date_str=${dateStr}`;
     if (hour != null) url += `&hour=${hour}`;

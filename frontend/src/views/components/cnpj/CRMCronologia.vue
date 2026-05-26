@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
@@ -22,10 +22,8 @@ const props = defineProps({
 
 const cnpjDetailStore = useCnpjDetailStore();
 const {
-  crmPerfilDiario,
-  crmPerfilDiarioLoading,
-  crmPerfilHorario,
-  crmPerfilHorarioLoading,
+  crmTimelineDataset,
+  crmTimelineDatasetLoading,
   selectedTimelineEvent,
 } = storeToRefs(cnpjDetailStore);
 const { formatarData } = useFormatting();
@@ -34,19 +32,30 @@ const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
 
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
-const cachedCrmPerfilDiario  = ref(crmPerfilDiario.value);
-const cachedCrmPerfilHorario = ref(crmPerfilHorario.value);
+const cachedCrmTimelineDataset = ref(crmTimelineDataset.value);
 
-const showRefreshingDaily  = useDelayedLoading(crmPerfilDiarioLoading);
-const showRefreshingHourly = useDelayedLoading(crmPerfilHorarioLoading);
+const showRefreshingDaily  = useDelayedLoading(crmTimelineDatasetLoading);
+const showRefreshingHourly = useDelayedLoading(crmTimelineDatasetLoading);
 
-watch([crmPerfilDiario, crmPerfilDiarioLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmPerfilDiario.value = newData;
+watch([crmTimelineDataset, crmTimelineDatasetLoading], ([newData, loading]) => {
+  if (newData && !loading) cachedCrmTimelineDataset.value = newData;
 }, { immediate: true });
 
-watch([crmPerfilHorario, crmPerfilHorarioLoading], ([newData, loading]) => {
-  if (newData && !loading) cachedCrmPerfilHorario.value = newData;
-}, { immediate: true });
+const timelineDailyDataset = computed(() => ({
+  cnpj: cachedCrmTimelineDataset.value?.cnpj ?? props.cnpj,
+  days: cachedCrmTimelineDataset.value?.days ?? [],
+}));
+
+const timelineHourlyDataset = computed(() => {
+  const days = cachedCrmTimelineDataset.value?.days ?? [];
+  return {
+    cnpj: cachedCrmTimelineDataset.value?.cnpj ?? props.cnpj,
+    points: days.flatMap(day => day.hours),
+    events: days.flatMap(day => day.events),
+  };
+});
+
+const timelineDatasetReady = computed(() => Boolean(cachedCrmTimelineDataset.value));
 
 function normalizeDailyDay(d) {
   return {
@@ -61,14 +70,14 @@ function normalizeDailyDay(d) {
 // Série unificada: cada dia já traz volume anômalo, CRM único e CRM múltiplo
 // Não há mais necessidade de merge entre dois caches distintos.
 const unifiedDays = computed(() =>
-  (cachedCrmPerfilDiario.value?.days ?? []).map(normalizeDailyDay)
+  (timelineDailyDataset.value?.days ?? []).map(normalizeDailyDay)
 );
 
 
 // Índice por data para lookup O(1) no tooltip (evita scan linear a cada hover)
 const hourlyByDate = computed(() => {
   const map = new Map();
-  for (const pt of cachedCrmPerfilHorario.value?.points ?? []) {
+  for (const pt of timelineHourlyDataset.value?.points ?? []) {
     const key = String(pt.dt_janela).slice(0, 10);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(pt);
@@ -92,7 +101,7 @@ const DAILY_RANK_VISIBLE_LIMIT = 50;
 
 const volumeScoreByDate = computed(() => {
   const map = new Map();
-  for (const pt of cachedCrmPerfilHorario.value?.points ?? []) {
+  for (const pt of timelineHourlyDataset.value?.points ?? []) {
     if (pt.is_volume_horario_anomalo !== 1) continue;
     const key = String(pt.dt_janela).slice(0, 10);
     const mediana = Math.max(Number(pt.mediana_hora ?? 0), 3);
@@ -708,15 +717,15 @@ const chartOptionDaily = computed(() => {
 });
 
 const hourlyPoints = computed(() => {
-  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
+  if (!selectedDay.value || !timelineHourlyDataset.value) return [];
   const targetDate = selectedDay.value.dt_janela;
-  return cachedCrmPerfilHorario.value.points.filter(p => String(p.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
+  return timelineHourlyDataset.value.points.filter(p => String(p.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
 });
 
 const hourlyEvents = computed(() => {
-  if (!selectedDay.value || !cachedCrmPerfilHorario.value) return [];
+  if (!selectedDay.value || !timelineHourlyDataset.value) return [];
   const targetDate = selectedDay.value.dt_janela;
-  return (cachedCrmPerfilHorario.value.events ?? []).filter(e => String(e.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
+  return (timelineHourlyDataset.value.events ?? []).filter(e => String(e.dt_janela).substring(0,10) === String(targetDate).substring(0,10));
 });
 
 const chartOptionHourly = computed(() => {
@@ -938,10 +947,9 @@ watch(dailyRankLimit, () => {
   selectedHourlyHour.value = null;
 });
 
-// ── Retrigger quando parquet fica pronto (race condition com auto-seleção) ──
-// get_crm_perfil_horario cria o parquet via sync_crm_raiox_tx ANTES de responder,
-// então quando crmPerfilHorarioLoading vai a false o arquivo já existe.
-watch(crmPerfilHorarioLoading, (loading) => {
+// ── Retrigger quando o dataset horario fica pronto (race condition com auto-selecao) ──
+// O timeline-dataset aquece o parquet do Raio-X antes de responder.
+watch(crmTimelineDatasetLoading, (loading) => {
   if (!loading && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
     const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
     loadRaiox(selectedDay.value.dt_janela, hour);
@@ -961,7 +969,7 @@ watch(activeCrmViewMode, (mode) => {
 // Observa AMBOS: o evento de navegação e o cache de dados.
 // Isso garante que mesmo se o evento disparar antes do cache estar pronto,
 // o handler tentará novamente assim que os dados chegarem.
-watch([selectedTimelineEvent, cachedCrmPerfilDiario], async ([evt, profile]) => {
+watch([selectedTimelineEvent, timelineDailyDataset], async ([evt, profile]) => {
   if (!evt || !profile) return;
 
   const rawDayObj = profile.days.find(d => d.dt_janela === evt.date);
@@ -1174,7 +1182,7 @@ function toggleActiveRow(auth) {
         <div class="drill-panel-title">
           <i class="pi pi-chart-bar" />
           <span>HISTÓRICO DIÁRIO DE DISPENSAÇÕES</span>
-          <span v-if="crmPerfilDiarioLoading" class="chart-loading-badge">
+          <span v-if="crmTimelineDatasetLoading" class="chart-loading-badge">
             <i class="pi pi-spinner pi-spin"></i> Carregando...
           </span>
         </div>
@@ -1239,9 +1247,9 @@ function toggleActiveRow(auth) {
         Evolução diária de autorizações. Barras vermelhas indicam dias com algum tipo de anomalia. Os alertas podem refletir volume atípico, autorizações em sequência com uso de um único CRM ou autorizações em sequência com uso de múltiplos CRMs. Clique em um dia sinalizado para análise detalhada.
       </p>
       
-      <div v-if="!crmPerfilDiario && !crmPerfilDiarioLoading" class="chart-empty">
+      <div v-if="!timelineDatasetReady && !crmTimelineDatasetLoading" class="chart-empty">
         <i class="pi pi-chart-bar" style="font-size:1.5rem; opacity:.4"></i>
-        <span>Sem dados de perfil diário disponíveis.</span>
+        <span>Sem dados da linha do tempo CRM disponíveis.</span>
       </div>
       <div class="daily-chart-wrapper" :class="{ 'cursor-pointer-active': hoveredDailyDayIndex !== null }">
         <div class="chart-legend-html">
@@ -1267,7 +1275,7 @@ function toggleActiveRow(auth) {
           @datazoom="onDailyZoom"
         />
       </div>
-      <div v-if="!selectedDay && crmPerfilDiario" class="drill-hint">
+      <div v-if="!selectedDay && timelineDatasetReady" class="drill-hint">
         <i class="pi pi-hand-pointer" />
         <span>Clique em um dia sinalizado para análise detalhada</span>
       </div>
@@ -2299,3 +2307,4 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 /* ── Trilha de Eventos Horários Legada (Removida) ─────────────────────────── */
 </style>
+

@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+﻿import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
@@ -17,6 +17,23 @@ function buildTimingDetail(data) {
     data.query_time_ms != null ? `servidor: SQL ${data.query_time_ms}ms` : null,
     data.save_time_ms  != null ? `disco ${data.save_time_ms}ms`          : null,
   ].filter(Boolean).join(' | ') || null;
+}
+
+function assertCrmTimelineDataset(data) {
+  if (!data || !Array.isArray(data.days)) {
+    throw new Error('Contrato invalido em crm/timeline-dataset: campo days obrigatorio.');
+  }
+  data.days.forEach((day, index) => {
+    if (!day.dt_janela) {
+      throw new Error(`Contrato invalido em crm/timeline-dataset: days[${index}].dt_janela obrigatorio.`);
+    }
+    if (!Array.isArray(day.hours)) {
+      throw new Error(`Contrato invalido em crm/timeline-dataset: days[${index}].hours obrigatorio.`);
+    }
+    if (!Array.isArray(day.events)) {
+      throw new Error(`Contrato invalido em crm/timeline-dataset: days[${index}].events obrigatorio.`);
+    }
+  });
 }
 
 export const useCnpjDetailStore = defineStore('cnpjDetail', {
@@ -60,15 +77,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     prescritoresError:   null,
 
-    // ── Perfil Diário Unificado (CRM Múltiplos + CRM Único) ──────────────────
-    crmPerfilDiario:        null,
-    crmPerfilDiarioLoading: false,
-    crmPerfilDiarioLoaded:  null,  // Cache key: "cnpj|inicio|fim"
-
-    // ── Perfil Horário Unificado (CRM Múltiplos + CRM Único) ──────────────────
-    crmPerfilHorario:        null,
-    crmPerfilHorarioLoading: false,
-    crmPerfilHorarioLoaded:  null,  // Cache key: "cnpj|inicio|fim"
+    // Dataset semantico da linha do tempo CRM
+    crmTimelineDataset:        null,
+    crmTimelineDatasetLoading: false,
+    crmTimelineDatasetLoaded:  null,  // Cache key: "cnpj|inicio|fim"
+    crmTimelineDatasetRequestKey: null,
 
     // ── CNPJs abertos por URL direta (fora do fluxo de filtros globais) ───────
     cnpjsAvulsos:        new Map(),
@@ -295,8 +308,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       if (tabSlug === 'autorizacoes') {
         const fetches = [this.fetchCrmData(cnpj, inicio, fim)];
         if (this.activeCrmViewMode === 'cronologia') {
-          fetches.push(this.fetchCrmPerfilDiario(cnpj, inicio, fim));
-          fetches.push(this.fetchCrmPerfilHorario(cnpj, inicio, fim));
+          fetches.push(this.fetchCrmTimelineDataset(cnpj, inicio, fim));
         }
         if (this.activeCrmViewMode === 'falecidos') {
           fetches.push(this.fetchFalecidos(cnpj, inicio, fim));
@@ -572,51 +584,34 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    // ── Perfil Diário Unificado ─────────────────────────────────────────────────
-    async fetchCrmPerfilDiario(cnpj, inicio = null, fim = null) {
+    async fetchCrmTimelineDataset(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmPerfilDiarioLoaded === key) return;
-      this.crmPerfilDiarioLoading = true;
+      if (!cnpj || this.crmTimelineDatasetLoaded === key) return;
+      this.crmTimelineDatasetRequestKey = key;
+      this.crmTimelineDatasetLoading = true;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmPerfilDiario(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmTimelineDataset(cnpj), { params });
         const ms = Math.round(performance.now() - t0);
-        this.requestTimes['crm-daily'] = { label: 'Perfil Diário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmPerfilDiario        = data;
-        this.crmPerfilDiarioLoaded  = key;
+        if (this.crmTimelineDatasetRequestKey !== key) return;
+        assertCrmTimelineDataset(data);
+        this.requestTimes['crm-timeline'] = { label: 'Timeline CRM', ms, detail: buildTimingDetail(data) };
+        this.crmTimelineDataset        = data;
+        this.crmTimelineDatasetLoaded  = key;
       } catch (e) {
-        console.error('Erro ao buscar perfil diário de CRM:', e);
+        console.error('Erro ao buscar timeline CRM:', e);
       } finally {
-        this.crmPerfilDiarioLoading = false;
+        if (this.crmTimelineDatasetRequestKey === key) {
+          this.crmTimelineDatasetLoading = false;
+          this.crmTimelineDatasetRequestKey = null;
+        }
       }
     },
 
-
-    async fetchCrmPerfilHorario(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmPerfilHorarioLoaded === key) return;
-      this.crmPerfilHorarioLoading = true;
-      try {
-        const params = {};
-        if (inicio) params.data_inicio = inicio;
-        if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmPerfilHorario(cnpj), { params });
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['crm-hourly'] = { label: 'Perfil Horário CRM', ms, detail: buildTimingDetail(data) };
-        this.crmPerfilHorario        = data;
-        this.crmPerfilHorarioLoaded  = key;
-      } catch (e) {
-        console.error('Erro ao buscar perfil horário:', e);
-      } finally {
-        this.crmPerfilHorarioLoading = false;
-      }
-    },
-
-    // ── CNPJs Avulsos ─────────────────────────────────────────────────────────
+    // CNPJs Avulsos
     async fetchCnpjAvulso(cnpj, inicio = null, fim = null) {
       if (!cnpj || this.cnpjsAvulsos.has(cnpj)) return;
       this.cnpjsAvulsosLoading = true;
@@ -739,12 +734,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.prescritoresLoaded  = null;
       this.prescritoresError   = null;
 
-      this.crmPerfilDiario        = null;
-      this.crmPerfilDiarioLoading = false;
-      this.crmPerfilDiarioLoaded  = null;
-      this.crmPerfilHorario        = null;
-      this.crmPerfilHorarioLoading = false;
-      this.crmPerfilHorarioLoaded  = null;
+      this.crmTimelineDataset        = null;
+      this.crmTimelineDatasetLoading = false;
+      this.crmTimelineDatasetLoaded  = null;
+      this.crmTimelineDatasetRequestKey = null;
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;
@@ -784,3 +777,4 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
   },
 });
+

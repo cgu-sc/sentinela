@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -43,8 +43,6 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
-    CrmDailyProfileResponse,
-    CrmHourlyProfileResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -345,4 +343,5 @@ def get_timeline_cpf(cnpj_referencia: str, cpf: str) -> MultiCnpjTimelineRespons
             cpf=cpf, nome_falecido=None, dt_obito=None,
             events=[], cnpjs_envolvidos=[]
         )
+
 

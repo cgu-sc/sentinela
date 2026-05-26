@@ -900,7 +900,12 @@ BEGIN
             CAST(Base.janela_inicio AS DATE)                                  AS dt_dia,
             CAST(Base.janela_inicio AS DATETIME)                              AS dt_ini_concentracao,
             CAST(Ritmo.dt_fim_real AS DATETIME)                               AS dt_fim_concentracao,
-            CAST(DATEDIFF(MINUTE, Base.janela_inicio, Ritmo.dt_fim_real) AS TINYINT) AS nu_minutos_span,
+            CAST(
+                CASE
+                    WHEN DATEDIFF(SECOND, Base.janela_inicio, Ritmo.dt_fim_real) <= 0 THEN 1
+                    ELSE CEILING(DATEDIFF(SECOND, Base.janela_inicio, Ritmo.dt_fim_real) / 60.0)
+                END AS TINYINT
+            ) AS nu_minutos_span,
             CAST(Base.nu_5min AS SMALLINT)                                    AS nu_5min,
             CAST(Base.nu_10min AS SMALLINT)                                   AS nu_10min,
             CAST(Base.nu_15min AS SMALLINT)                                   AS nu_15min,
@@ -947,7 +952,16 @@ BEGIN
                 V.dt_fim_real,
                 V.janela_pior_ritmo_minutos,
                 V.nu_autorizacoes_pior_ritmo,
-                CAST(V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(DATEDIFF(MINUTE, Base.janela_inicio, V.dt_fim_real), 0) AS DECIMAL(7,2)) AS taxa_hora_pior_ritmo,
+                CAST(
+                    V.nu_autorizacoes_pior_ritmo * 60.0 /
+                    NULLIF(
+                        CASE
+                            WHEN DATEDIFF(SECOND, Base.janela_inicio, V.dt_fim_real) <= 0 THEN 1
+                            ELSE CEILING(DATEDIFF(SECOND, Base.janela_inicio, V.dt_fim_real) / 60.0)
+                        END,
+                        0
+                    ) AS DECIMAL(7,2)
+                ) AS taxa_hora_pior_ritmo,
                 V.criterio_pior_ritmo
             FROM (VALUES
                 (Base.fim_real_5min,  CAST(5 AS TINYINT),  CAST(Base.nu_5min AS SMALLINT),  CAST(4 AS TINYINT), CAST(1 AS TINYINT),  CAST('7_EM_5MIN' AS VARCHAR(30)),    CASE WHEN Base.nu_5min >= 7 THEN 1 ELSE 0 END),
@@ -963,7 +977,14 @@ BEGIN
             ) V(dt_fim_real, janela_pior_ritmo_minutos, nu_autorizacoes_pior_ritmo, id_severidade_criterio, prioridade_criterio, criterio_pior_ritmo, atingiu)
             WHERE V.atingiu = 1
             ORDER BY
-                V.nu_autorizacoes_pior_ritmo * 60.0 / NULLIF(DATEDIFF(MINUTE, Base.janela_inicio, V.dt_fim_real), 0) DESC,
+                V.nu_autorizacoes_pior_ritmo * 60.0 /
+                    NULLIF(
+                        CASE
+                            WHEN DATEDIFF(SECOND, Base.janela_inicio, V.dt_fim_real) <= 0 THEN 1
+                            ELSE CEILING(DATEDIFF(SECOND, Base.janela_inicio, V.dt_fim_real) / 60.0)
+                        END,
+                        0
+                    ) DESC,
                 V.id_severidade_criterio DESC,
                 V.prioridade_criterio ASC
         ) Ritmo

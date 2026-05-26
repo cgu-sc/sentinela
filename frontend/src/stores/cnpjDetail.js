@@ -101,7 +101,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
     // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
-    activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia'
+    activeCrmViewMode:     'medicos', // 'medicos' | 'cronologia' | 'falecidos'
 
     // ── Ranking GTINs ─────────────────────────────────────────────────────────
     gtinDetalhamentoMensalData: null,
@@ -297,6 +297,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (this.activeCrmViewMode === 'cronologia') {
           fetches.push(this.fetchCrmPerfilDiario(cnpj, inicio, fim));
           fetches.push(this.fetchCrmPerfilHorario(cnpj, inicio, fim));
+        }
+        if (this.activeCrmViewMode === 'falecidos') {
+          fetches.push(this.fetchFalecidos(cnpj, inicio, fim));
         }
         await Promise.all(fetches);
         return;

@@ -13,7 +13,6 @@ import { useFilterParameters } from "@/composables/useFilterParameters";
 import CnpjHeader from "./components/cnpj/CnpjHeader.vue";
 import FinancialMovementTab from "./components/cnpj/FinancialMovementTab.vue";
 import IndicatorsTab from "./components/cnpj/IndicatorsTab.vue";
-import MortalityTab from "./components/cnpj/MortalityTab.vue";
 import RegionalTab from "./components/cnpj/RegionalTab.vue";
 import AuthTab from "./components/cnpj/AuthTab.vue";
 import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
@@ -42,10 +41,9 @@ const TAB_INDEX = {
   MOVEMENT: 2,
   INDICATORS: 3,
   CRMS: 4,
-  MORTALITY: 5,
-  SOCIOS: 6,
-  NETWORK: 7,
-  REGIONAL: 8,
+  SOCIOS: 5,
+  NETWORK: 6,
+  REGIONAL: 7,
 };
 
 const TAB_SLUG_BY_INDEX = {
@@ -54,7 +52,6 @@ const TAB_SLUG_BY_INDEX = {
   [TAB_INDEX.MOVEMENT]: "memoria",
   [TAB_INDEX.INDICATORS]: "indicadores",
   [TAB_INDEX.CRMS]: "autorizacoes",
-  [TAB_INDEX.MORTALITY]: "falecidos",
   [TAB_INDEX.SOCIOS]: "socios",
   [TAB_INDEX.NETWORK]: "teia",
   [TAB_INDEX.REGIONAL]: "regional",
@@ -76,8 +73,13 @@ const getTabIndexFromRoute = () => {
   const legacyTabParam = Array.isArray(route.query.tab)
     ? route.query.tab[0]
     : route.query.tab;
+  const routeSlug = String(sectionParam ?? legacyTabParam ?? "").toLowerCase();
+  if (routeSlug === "falecidos") {
+    cnpjDetailStore.setCrmViewMode("falecidos");
+    return TAB_INDEX.CRMS;
+  }
   const tabIndex = TAB_INDEX_BY_SLUG[
-    String(sectionParam ?? legacyTabParam ?? "").toLowerCase()
+    routeSlug
   ];
   return Number.isInteger(tabIndex) ? tabIndex : TAB_INDEX.EVOLUTION;
 };
@@ -116,7 +118,12 @@ const { isExporting, exportCnpjPdf } = usePdfExport();
 const financialMovementTabRef = ref(null);
 const indicatorsTabRef = ref(null);
 const authTabRef = ref(null);
-const falecidosTabRef = ref(null);
+const falecidosTabRef = computed(() => ({
+  hasData: () => authTabRef.value?.hasFalecidosData?.() ?? false,
+  getSummary: () => authTabRef.value?.getFalecidosSummary?.() ?? null,
+  getAgrupados: () => authTabRef.value?.getFalecidosAgrupados?.() ?? [],
+  getRanking: () => authTabRef.value?.getFalecidosRanking?.() ?? [],
+}));
 
 const qtdMunicipiosRegiao = computed(
   () =>
@@ -534,7 +541,7 @@ watch(
         >
         <FinancialMovementTab
           ref="financialMovementTabRef"
-          class="tab-content"
+          class="tab-content detail-tab-enter"
         />
       </TabPanel>
 
@@ -551,7 +558,7 @@ watch(
           :period-summary="periodSummary"
           :period-loading="evolucaoLoading"
           :is-active="cnpjNav.activeTabIndex === 1"
-          class="tab-content"
+          class="tab-content detail-tab-enter"
         />
       </TabPanel>
 
@@ -561,14 +568,14 @@ watch(
             >Memória de Cálculo</span
           ></template
         >
-        <CalculationMemoryTab :cnpj="cnpj" class="tab-content" />
+        <CalculationMemoryTab :cnpj="cnpj" class="tab-content detail-tab-enter" />
       </TabPanel>
 
       <TabPanel>
         <template #header
           ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
         >
-        <IndicatorsTab ref="indicatorsTabRef" class="tab-content" />
+        <IndicatorsTab ref="indicatorsTabRef" class="tab-content detail-tab-enter" />
       </TabPanel>
 
       <TabPanel>
@@ -581,17 +588,8 @@ watch(
           ref="authTabRef"
           :cnpj="cnpj"
           :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
-          class="tab-content"
+          class="tab-content detail-tab-enter"
         />
-      </TabPanel>
-
-      <TabPanel>
-        <template #header
-          ><i class="pi pi-exclamation-triangle tab-icon" /><span
-            >Falecidos</span
-          ></template
-        >
-        <MortalityTab ref="falecidosTabRef" :cnpj="cnpj" class="tab-content" />
       </TabPanel>
 
       <TabPanel>
@@ -600,7 +598,7 @@ watch(
             >Quadro Societário</span
           ></template
         >
-        <SociosTab class="tab-content" />
+        <SociosTab class="tab-content detail-tab-enter" />
       </TabPanel>
 
       <TabPanel>
@@ -610,7 +608,7 @@ watch(
         <KeepAlive>
           <NetworkTab
             v-if="cnpjNav.activeTabIndex === TAB_INDEX.NETWORK"
-            class="tab-content"
+            class="tab-content detail-tab-enter"
           />
         </KeepAlive>
       </TabPanel>
@@ -624,7 +622,7 @@ watch(
           :geo-data="geoData"
           :cnpj-data="cnpjData"
           :is-active="cnpjNav.activeTabIndex === TAB_INDEX.REGIONAL"
-          class="tab-content"
+          class="tab-content detail-tab-enter"
         />
       </TabPanel>
     </TabView>
@@ -1047,6 +1045,21 @@ watch(
   min-height: calc(
     100vh - 450px
   ); /* Garante que a aba tenha uma altura mínima respeitável */
+}
+
+.detail-tab-enter {
+  animation: detailTabEnter 0.32s ease-out;
+}
+
+@keyframes detailTabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── GLOBAL LOADING OVERLAY (PREMIUM & ESTÁVEL) ── */

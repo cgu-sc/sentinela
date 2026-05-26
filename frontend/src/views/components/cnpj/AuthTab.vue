@@ -8,6 +8,7 @@ import { useStableTabState } from '@/composables/useStableTabState';
 import CRMKpiGrid from './CRMKpiGrid.vue';
 import CRMCronologia from './CRMCronologia.vue';
 import CRMPrescritoresTable from './CRMPrescritoresTable.vue';
+import MortalityTab from './MortalityTab.vue';
 import { useFilterStore } from "@/stores/filters";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
@@ -39,21 +40,22 @@ const {
 
 // ── Estado de Navegação (Agora via Store) ─────────────────────────────────
 const activeKpiFilter = ref(null);
+const mortalityTabRef = ref(null);
 
-function loadCronologiaIfActive() {
+function loadCurrentViewIfActive() {
   if (!props.isActive) return;
-  if (activeCrmViewMode.value !== 'cronologia') return;
+  if (!['cronologia', 'falecidos'].includes(activeCrmViewMode.value)) return;
   const { inicio, fim } = getApiParams();
   cnpjDetailStore.ensureTabData('autorizacoes', props.cnpj, inicio, fim);
 }
 
 watch(activeCrmViewMode, () => {
-  loadCronologiaIfActive();
+  loadCurrentViewIfActive();
 });
 
 watch(() => props.isActive, (active) => {
   if (!active) return;
-  loadCronologiaIfActive();
+  loadCurrentViewIfActive();
 });
 
 // ── Dados Base ────────────────────────────────────────────────────────────
@@ -164,6 +166,10 @@ defineExpose({
     totalSurtosCnpj: totalSurtosCnpj.value,
     diasComSurtosCnpj: diasComSurtosCnpj.value,
   }),
+  hasFalecidosData: () => mortalityTabRef.value?.hasData?.() ?? false,
+  getFalecidosSummary: () => mortalityTabRef.value?.getSummary?.() ?? null,
+  getFalecidosAgrupados: () => mortalityTabRef.value?.getAgrupados?.() ?? [],
+  getFalecidosRanking: () => mortalityTabRef.value?.getRanking?.() ?? [],
 });
 </script>
 
@@ -183,30 +189,7 @@ defineExpose({
       :description="prescritoresError"
     />
 
-    <TabPlaceholder
-      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0 && !evolucaoFinanceira?.semestres?.length"
-      variant="info"
-      icon="pi-chart-bar"
-      title="Sem movimentação no período"
-    >
-      <template #description>
-        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
-      </template>
-    </TabPlaceholder>
-
-    <TabPlaceholder
-      v-else-if="cachedPrescritoresData && crmsInteresse.length === 0"
-      variant="info"
-      icon="pi-id-card"
-      title="Sem prescrições no período"
-    >
-      <template #description>
-        Não foram encontradas prescrições vinculadas a este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
-      </template>
-    </TabPlaceholder>
-
     <div v-else class="content-wrapper" :class="{ 'is-refreshing': isRefreshing }">
-      <!-- Seletor de Visão -->
       <div class="view-mode-container animate-fade-in">
         <div class="view-mode-selector">
           <button class="view-mode-btn" :class="{ active: activeCrmViewMode === 'medicos' }" @click="cnpjDetailStore.setCrmViewMode('medicos')">
@@ -217,28 +200,61 @@ defineExpose({
             <i class="pi pi-chart-line" />
             <span>LINHA DO TEMPO & RAIO-X</span>
           </button>
+          <button class="view-mode-btn" :class="{ active: activeCrmViewMode === 'falecidos' }" @click="cnpjDetailStore.setCrmViewMode('falecidos')">
+            <i class="pi pi-exclamation-triangle" />
+            <span>FALECIDOS</span>
+          </button>
         </div>
       </div>
 
-      <!-- Visão: KPIs + Tabela de CRMs — v-show preserva estado expandido entre troca de abas -->
       <div v-show="activeCrmViewMode === 'medicos'" class="medicos-view">
-        <CRMKpiGrid
-          :kpi-data="kpiData"
-          :active-kpi-filter="activeKpiFilter"
-          @kpi-click="setKpiFilter"
-        />
-        <CRMPrescritoresTable
-          :crms-interesse="crmsInteresse"
-          :active-kpi-filter="activeKpiFilter"
-          :kpi-filters="kpiFilters"
-          :kpi-filter-labels="kpiFilterLabels"
-          :current-cnpj="cnpj"
-          @clear-filters="clearFilters"
-        />
+        <TabPlaceholder
+          v-if="cachedPrescritoresData && crmsInteresse.length === 0 && !evolucaoFinanceira?.semestres?.length"
+          variant="info"
+          icon="pi-chart-bar"
+          title="Sem movimentação no período"
+        >
+          <template #description>
+            Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+          </template>
+        </TabPlaceholder>
+
+        <TabPlaceholder
+          v-else-if="cachedPrescritoresData && crmsInteresse.length === 0"
+          variant="info"
+          icon="pi-id-card"
+          title="Sem prescrições no período"
+        >
+          <template #description>
+            Não foram encontradas prescrições vinculadas a este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+          </template>
+        </TabPlaceholder>
+
+        <template v-else>
+          <CRMKpiGrid
+            :kpi-data="kpiData"
+            :active-kpi-filter="activeKpiFilter"
+            @kpi-click="setKpiFilter"
+          />
+          <CRMPrescritoresTable
+            :crms-interesse="crmsInteresse"
+            :active-kpi-filter="activeKpiFilter"
+            :kpi-filters="kpiFilters"
+            :kpi-filter-labels="kpiFilterLabels"
+            :current-cnpj="cnpj"
+            @clear-filters="clearFilters"
+          />
+        </template>
       </div>
 
-      <!-- Visão: Cronologia — v-show preserva estado do drill-down entre troca de abas -->
       <CRMCronologia v-show="activeCrmViewMode === 'cronologia'" :cnpj="cnpj" />
+
+      <MortalityTab
+        v-show="activeCrmViewMode === 'falecidos'"
+        ref="mortalityTabRef"
+        :cnpj="cnpj"
+        class="animate-fade-in"
+      />
     </div>
   </div>
 </template>

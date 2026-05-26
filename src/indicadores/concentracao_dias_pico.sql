@@ -151,7 +151,7 @@ INNER JOIN #farmacias_dim F
 INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
-  AND A.data_hora <= @DataFim
+  AND A.data_hora < DATEADD(DAY, 1, @DataFim)
 GROUP BY
     F.id_cnpj,
     YEAR(A.data_hora),
@@ -200,6 +200,8 @@ SELECT
     ano_base,
     mes_base,
     competencia_mes,
+    CAST(SUM(CASE WHEN ranking_dia <= 3 THEN valor_dia ELSE 0 END) AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(MAX(total_mes) AS DECIMAL(19,2)) AS valor_total_auditado,
     CAST(
         SUM(CASE WHEN ranking_dia <= 3 THEN valor_dia ELSE 0 END) /
         NULLIF(CAST(MAX(total_mes) AS DECIMAL(18,2)), 0) * 100.0
@@ -229,6 +231,8 @@ SELECT DISTINCT
     id_cnpj,
     ano_base,
     CAST(COUNT(mes_base) OVER (PARTITION BY id_cnpj, ano_base) AS TINYINT) AS meses_analisados,
+    CAST(SUM(valor_top3_dias) OVER (PARTITION BY id_cnpj, ano_base) AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(SUM(valor_total_auditado) OVER (PARTITION BY id_cnpj, ano_base) AS DECIMAL(19,2)) AS valor_total_auditado,
 
     -- Mediana: comportamento tipico anual da farmacia
     CAST(
@@ -246,141 +250,90 @@ DROP TABLE IF EXISTS #ConcentracaoMensal;
 
 
 -- ============================================================================
--- PASSO 5: METRICAS POR MUNICIPIO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_mun;
-
-SELECT DISTINCT
-    I.ano_base,
-    CAST(F.uf        AS VARCHAR(2))   AS uf,
-    CAST(F.municipio AS VARCHAR(255)) AS municipio,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
-        OVER (
-            PARTITION BY
-                I.ano_base,
-                CAST(F.uf AS VARCHAR(2)),
-                CAST(F.municipio AS VARCHAR(255))
-        )
-    AS DECIMAL(7,4)) AS mediana_municipio
-INTO temp_CGUSC.fp.indicador_concentracao_pico_mun
-FROM temp_CGUSC.fp.indicador_concentracao_pico I
-INNER JOIN #farmacias_dim F ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndPicoMun
-ON temp_CGUSC.fp.indicador_concentracao_pico_mun(ano_base, uf, municipio);
-
-
--- ============================================================================
--- PASSO 6: METRICAS POR ESTADO (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_uf;
-
-SELECT DISTINCT
-    I.ano_base,
-    CAST(F.uf AS VARCHAR(2)) AS uf,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
-        OVER (PARTITION BY I.ano_base, CAST(F.uf AS VARCHAR(2)))
-    AS DECIMAL(7,4)) AS mediana_estado
-INTO temp_CGUSC.fp.indicador_concentracao_pico_uf
-FROM temp_CGUSC.fp.indicador_concentracao_pico I
-INNER JOIN #farmacias_dim F ON F.id_cnpj = I.id_cnpj;
-
-CREATE CLUSTERED INDEX IDX_IndPicoUF
-ON temp_CGUSC.fp.indicador_concentracao_pico_uf(ano_base, uf);
-
-
--- ============================================================================
--- PASSO 6B: METRICAS POR REGIAO DE SAUDE (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_regiao;
-
-SELECT DISTINCT
-    I.ano_base,
-    F.id_regiao_saude,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY I.mediana_concentracao)
-        OVER (PARTITION BY I.ano_base, F.id_regiao_saude)
-    AS DECIMAL(7,4)) AS mediana_regiao
-INTO temp_CGUSC.fp.indicador_concentracao_pico_regiao
-FROM temp_CGUSC.fp.indicador_concentracao_pico I
-INNER JOIN #farmacias_dim F ON F.id_cnpj = I.id_cnpj
-WHERE F.id_regiao_saude IS NOT NULL;
-
-CREATE CLUSTERED INDEX IDX_IndPicoReg
-ON temp_CGUSC.fp.indicador_concentracao_pico_regiao(ano_base, id_regiao_saude);
-
-
--- ============================================================================
--- PASSO 7: METRICAS NACIONAIS (MEDIANA)
--- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
-
-SELECT DISTINCT
-    ano_base,
-    CAST(
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY mediana_concentracao)
-        OVER (PARTITION BY ano_base)
-    AS DECIMAL(7,4)) AS mediana_pais
-INTO temp_CGUSC.fp.indicador_concentracao_pico_br
-FROM temp_CGUSC.fp.indicador_concentracao_pico;
-
-CREATE CLUSTERED INDEX IDX_IndPicoBR
-ON temp_CGUSC.fp.indicador_concentracao_pico_br(ano_base);
-
-
--- ============================================================================
--- PASSO 8: TABELA CONSOLIDADA FINAL
+-- PASSO 5: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_detalhado;
 
 SELECT
     I.id_cnpj,
     I.ano_base,
-
-    -- Indicadores base
     I.meses_analisados,
-    I.mediana_concentracao,
-
-    -- Benchmarks municipais
-    ISNULL(MUN.mediana_municipio, 0) AS municipio_mediana,
-    CAST((I.mediana_concentracao + 0.01) / (ISNULL(MUN.mediana_municipio, 0) + 0.01) AS DECIMAL(9,4)) AS risco_relativo_mun_mediana,
-
-    -- Benchmarks estaduais
-    ISNULL(UF.mediana_estado, 0) AS estado_mediana,
-    CAST((I.mediana_concentracao + 0.01) / (ISNULL(UF.mediana_estado, 0) + 0.01) AS DECIMAL(9,4)) AS risco_relativo_uf_mediana,
-
-    -- Benchmarks Regionais (Regiao de Saude)
-    ISNULL(REG.mediana_regiao, 0) AS regiao_saude_mediana,
-    CAST((I.mediana_concentracao + 0.01) / (ISNULL(REG.mediana_regiao, 0) + 0.01) AS DECIMAL(9,4)) AS risco_relativo_reg_mediana,
-
-    -- Benchmarks nacionais
-    BR.mediana_pais AS pais_mediana,
-    CAST((I.mediana_concentracao + 0.01) / (BR.mediana_pais + 0.01) AS DECIMAL(9,4)) AS risco_relativo_br_mediana
-
+    CAST(I.valor_top3_dias AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(I.valor_total_auditado AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(I.mediana_concentracao AS DECIMAL(7,4)) AS mediana_concentracao
 INTO temp_CGUSC.fp.indicador_concentracao_pico_detalhado
-FROM temp_CGUSC.fp.indicador_concentracao_pico I
-INNER JOIN #farmacias_dim F
-    ON F.id_cnpj = I.id_cnpj
-LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_mun MUN
-    ON  I.ano_base = MUN.ano_base
-    AND CAST(F.uf        AS VARCHAR(2))   = MUN.uf
-    AND CAST(F.municipio AS VARCHAR(255)) = MUN.municipio
-LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_uf UF
-    ON I.ano_base = UF.ano_base
-   AND CAST(F.uf AS VARCHAR(2)) = UF.uf
-LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_regiao REG
-    ON I.ano_base = REG.ano_base
-   AND F.id_regiao_saude = REG.id_regiao_saude
-INNER JOIN temp_CGUSC.fp.indicador_concentracao_pico_br BR
-    ON I.ano_base = BR.ano_base;
+FROM temp_CGUSC.fp.indicador_concentracao_pico I;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_FinalPico_CNPJ
 ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(id_cnpj, ano_base);
 
-CREATE NONCLUSTERED INDEX IDX_FinalPico_Risco
-ON temp_CGUSC.fp.indicador_concentracao_pico_detalhado(ano_base, risco_relativo_mun_mediana DESC);
+
+-- ============================================================================
+-- PASSO 6: AGREGADO POR REGIAO DE SAUDE/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_regiao;
+
+SELECT
+    I.ano_base,
+    F.id_regiao_saude,
+    SUM(I.meses_analisados) AS meses_analisados,
+    CAST(SUM(I.valor_top3_dias) AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_concentracao_pico_regiao
+FROM temp_CGUSC.fp.indicador_concentracao_pico I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.id_regiao_saude;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndPicoReg
+ON temp_CGUSC.fp.indicador_concentracao_pico_regiao(ano_base, id_regiao_saude);
+
+
+-- ============================================================================
+-- PASSO 7: AGREGADO POR UF/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_uf;
+
+SELECT
+    I.ano_base,
+    F.uf,
+    SUM(I.meses_analisados) AS meses_analisados,
+    CAST(SUM(I.valor_top3_dias) AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_concentracao_pico_uf
+FROM temp_CGUSC.fp.indicador_concentracao_pico I
+INNER JOIN #farmacias_dim F
+    ON F.id_cnpj = I.id_cnpj
+GROUP BY
+    I.ano_base,
+    F.uf;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndPicoUF
+ON temp_CGUSC.fp.indicador_concentracao_pico_uf(ano_base, uf);
+
+
+-- ============================================================================
+-- PASSO 8: AGREGADO BRASIL/ANO
+-- ============================================================================
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
+
+SELECT
+    I.ano_base,
+    SUM(I.meses_analisados) AS meses_analisados,
+    CAST(SUM(I.valor_top3_dias) AS DECIMAL(19,2)) AS valor_top3_dias,
+    CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
+INTO temp_CGUSC.fp.indicador_concentracao_pico_br
+FROM temp_CGUSC.fp.indicador_concentracao_pico I
+GROUP BY
+    I.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndPicoBR
+ON temp_CGUSC.fp.indicador_concentracao_pico_br(ano_base);
 GO
 
 -- ============================================================================
@@ -388,9 +341,6 @@ GO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_concentracao_pico_br;
 DROP TABLE IF EXISTS #farmacias_dim;
 GO
 

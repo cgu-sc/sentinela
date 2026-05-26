@@ -66,7 +66,6 @@ _INDICADOR_QUADRO_META = {
     "recorrencia_sistemica": ("Recorrência sistêmica", "pct"),
     "dias_pico": ("Concentração em dias de pico", "pct"),
     "dispersao_geografica": ("Dispersão interestadual", "pct"),
-    "compra_unica": ("Compra única", "pct"),
     "hhi_crm": ("Concentração de CRMs (HHI)", "dec"),
     "crms_irregulares": ("CRMs irregulares", "pct"),
 }
@@ -202,6 +201,19 @@ def _ratio(numerator: Any, denominator: Any) -> float | None:
         )
 
 
+def _format_periodo_anos_item(item: dict[str, Any]) -> str:
+    try:
+        ano_inicio = int(item["ano_inicio"])
+        ano_fim = int(item["ano_fim"])
+    except (KeyError, TypeError, ValueError):
+        raise RuntimeError("Periodo anual obrigatorio ausente para tabela clinica da Nota Tecnica.")
+    if ano_fim < ano_inicio:
+        raise RuntimeError(f"Periodo anual invalido para tabela clinica da Nota Tecnica: {ano_inicio}-{ano_fim}.")
+    if ano_inicio == ano_fim:
+        return f"em {ano_inicio}"
+    return f"no período de {ano_inicio} a {ano_fim}"
+
+
 def _sum_numeric(rows: list[dict[str, Any]], key: str) -> float:
     total = 0.0
     for row in rows:
@@ -286,32 +298,33 @@ def _build_clinica_municipal_context(
     top = (
         agregado_cnpj
         .sort(
-            ["qtd_cpfs_incompativeis", "valor_incompativel_pago", "qtd_cpfs_distintos"],
+            ["valor_incompativel_pago", "qtd_cpfs_incompativeis", "qtd_cpfs_distintos"],
             descending=[True, True, True],
         )
-        .head(20)
+        .head(10)
         .join(perfil, on="id_cnpj", how="left")
         .with_row_index("posicao", offset=1)
     )
     if top.filter(pl.col("cnpj").is_null() | pl.col("razao_social").is_null()).height > 0:
         ids = top.filter(pl.col("cnpj").is_null() | pl.col("razao_social").is_null()).get_column("id_cnpj").to_list()
-        raise RuntimeError(f"Perfil de estabelecimento ausente para Top 20 municipal clinico: id_cnpj={ids}.")
+        raise RuntimeError(f"Perfil de estabelecimento ausente para Top 10 municipal clinico: id_cnpj={ids}.")
 
-    total_incompativel = float(total["qtd_cpfs_incompativeis"])
+    total_valor_incompativel = float(total["valor_incompativel_pago"])
     top_rows = []
     for row in top.to_dicts():
         top_rows.append({
             **row,
             "is_alvo": int(row["id_cnpj"]) == id_cnpj_alvo,
             "percentual_cpfs_incompativeis": _ratio(row["qtd_cpfs_incompativeis"], row["qtd_cpfs_distintos"]),
-            "participacao_municipal": _ratio(row["qtd_cpfs_incompativeis"], total_incompativel),
+            "participacao_municipal": _ratio(row["valor_incompativel_pago"], total_valor_incompativel),
         })
 
     return {
         "resumo": resumo,
         "top20": top_rows,
         "qtd_farmacias_municipio": int(total["qtd_farmacias"]),
-        "qtd_cpfs_incompativeis_municipio": total_incompativel,
+        "qtd_cpfs_incompativeis_municipio": float(total["qtd_cpfs_incompativeis"]),
+        "valor_incompativel_municipio": total_valor_incompativel,
     }
 
 
@@ -476,6 +489,16 @@ def _format_indicador_quadro_value(value: Any, formato: str) -> str:
     raise RuntimeError(f"Formato de indicador critico nao mapeado para a Nota Tecnica: {formato}")
 
 
+def _indicador_valor_farmacia_header(formato: str) -> str:
+    if formato == "val":
+        return "Valor farmácia"
+    if formato in {"pct", "pct3"}:
+        return "Percentual farmácia"
+    if formato == "dec":
+        return "Índice farmácia"
+    raise RuntimeError(f"Formato de indicador critico nao mapeado para cabecalho da Nota Tecnica: {formato}")
+
+
 def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
     """Monta linhas do quadro-resumo de indicadores críticos a partir da matriz de risco."""
     cnpj_norm = _cnpj_digits(cnpj)
@@ -535,6 +558,361 @@ def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
             item["indicador"],
         ),
     )
+
+
+def _build_indicador_municipal_top10_context(cnpj: str, indicador_key: str) -> dict[str, Any]:
+    """Monta ranking municipal Top 10 para contextualizar um indicador crítico."""
+    if indicador_key not in INDICATOR_MAPPING:
+        raise RuntimeError(f"Indicador sem mapeamento para ranking municipal da Nota Tecnica: {indicador_key}")
+    if indicador_key not in _INDICATOR_FLAGS:
+        raise RuntimeError(f"Indicador sem flags para ranking municipal da Nota Tecnica: {indicador_key}")
+    if indicador_key not in _INDICADOR_QUADRO_META:
+        raise RuntimeError(f"Indicador sem metadados para ranking municipal da Nota Tecnica: {indicador_key}")
+
+    cnpj_norm = _cnpj_digits(cnpj)
+    label, formato = _INDICADOR_QUADRO_META[indicador_key]
+    c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[indicador_key]
+    c_atencao, c_critico = _INDICATOR_FLAGS[indicador_key]
+
+    df = get_df_matriz_risco()
+    df = df.rename({c: c.lower() for c in df.columns})
+    required_columns = {
+        "cnpj",
+        "razaosocial",
+        "municipio",
+        "uf",
+        c_val,
+        c_med_reg,
+        c_risco_reg,
+        c_atencao,
+        c_critico,
+    }
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "Matriz de risco sem colunas obrigatorias para ranking municipal da Nota Tecnica: "
+            + ", ".join(missing_columns)
+        )
+
+    df = df.with_columns([
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm"),
+        pl.col("municipio").cast(pl.Utf8).str.strip_chars().alias("_municipio_norm"),
+        pl.col("uf").cast(pl.Utf8).str.strip_chars().str.to_uppercase().alias("_uf_norm"),
+    ])
+    target_rows = df.filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if target_rows.height == 0:
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para ranking municipal.")
+    if target_rows.height > 1:
+        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco para ranking municipal.")
+    target = target_rows.row(0, named=True)
+    municipio = str(target["_municipio_norm"] or "").strip()
+    uf = str(target["_uf_norm"] or "").strip()
+    if not municipio or not uf:
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem municipio/UF na matriz de risco para ranking municipal.")
+
+    municipal = (
+        df
+        .filter(
+            (pl.col("_municipio_norm") == municipio)
+            & (pl.col("_uf_norm") == uf)
+            & pl.col(c_val).is_not_null()
+        )
+        .with_columns([
+            pl.col(c_val).cast(pl.Float64).alias("_valor_rank"),
+            pl.col(c_risco_reg).cast(pl.Float64).alias("_risco_rank"),
+        ])
+        .filter(pl.col("_valor_rank").is_not_null())
+        .sort(["_valor_rank", "_risco_rank", "_cnpj_norm"], descending=[True, True, False])
+        .with_row_index("posicao_municipal", offset=1)
+    )
+    if municipal.is_empty():
+        raise RuntimeError(f"Ranking municipal sem linhas para indicador {indicador_key} e municipio {municipio}/{uf}.")
+
+    top = municipal.head(10)
+    if top.filter(pl.col("_cnpj_norm") == cnpj_norm).is_empty():
+        target_rank_rows = municipal.filter(pl.col("_cnpj_norm") == cnpj_norm)
+        if target_rank_rows.is_empty():
+            raise RuntimeError(f"CNPJ {cnpj_norm} sem valor calculado para indicador {indicador_key}.")
+        top = pl.concat([top, target_rank_rows], how="vertical")
+
+    rows = []
+    for row in top.to_dicts():
+        status = "CRÍTICO" if int(row.get(c_critico) or 0) == 1 else ("ATENÇÃO" if int(row.get(c_atencao) or 0) == 1 else "NORMAL")
+        valor = row.get(c_val)
+        mediana_reg = row.get(c_med_reg)
+        risco_reg = row.get(c_risco_reg)
+        if valor is None or mediana_reg is None or risco_reg is None:
+            raise RuntimeError(f"Linha municipal sem valor, mediana regional ou risco para indicador {indicador_key}.")
+        razao_social = str(row.get("razaosocial") or "").strip()
+        if not razao_social:
+            raise RuntimeError(f"Linha municipal sem razao social para indicador {indicador_key} e CNPJ {row['_cnpj_norm']}.")
+        rows.append({
+            "posicao_municipal": int(row["posicao_municipal"]),
+            "cnpj": row["_cnpj_norm"],
+            "razao_social": razao_social,
+            "valor": _format_indicador_quadro_value(valor, formato),
+            "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
+            "risco_regional": float(risco_reg),
+            "status": status,
+            "is_alvo": row["_cnpj_norm"] == cnpj_norm,
+        })
+
+    return {
+        "indicador_key": indicador_key,
+        "indicador_label": label,
+        "municipio": municipio,
+        "uf": uf,
+        "rows": rows,
+        "total_farmacias_municipio": municipal.height,
+        "alvo_fora_top10": any(row["is_alvo"] and row["posicao_municipal"] > 10 for row in rows),
+    }
+
+
+def _build_indicador_regional_context(cnpj: str, indicador_key: str) -> dict[str, Any]:
+    """Monta o enquadramento da farmácia auditada na região de saúde do indicador."""
+    if indicador_key not in INDICATOR_MAPPING:
+        raise RuntimeError(f"Indicador sem mapeamento para enquadramento regional da Nota Tecnica: {indicador_key}")
+    if indicador_key not in _INDICADOR_QUADRO_META:
+        raise RuntimeError(f"Indicador sem metadados para enquadramento regional da Nota Tecnica: {indicador_key}")
+
+    cnpj_norm = _cnpj_digits(cnpj)
+    label, formato = _INDICADOR_QUADRO_META[indicador_key]
+    c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[indicador_key]
+
+    df = get_df_matriz_risco()
+    df = df.rename({c: c.lower() for c in df.columns})
+    required_columns = {
+        "cnpj",
+        "id_regiao_saude",
+        c_val,
+        c_med_reg,
+        c_risco_reg,
+    }
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "Matriz de risco sem colunas obrigatorias para enquadramento regional da Nota Tecnica: "
+            + ", ".join(missing_columns)
+        )
+
+    df = df.with_columns([
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm"),
+        pl.col("id_regiao_saude").cast(pl.Utf8).str.strip_chars().alias("_id_regiao_norm"),
+    ])
+    target_rows = df.filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if target_rows.height == 0:
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para enquadramento regional.")
+    if target_rows.height > 1:
+        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco para enquadramento regional.")
+
+    target = target_rows.row(0, named=True)
+    id_regiao = str(target["_id_regiao_norm"] or "").strip()
+    if not id_regiao:
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem id_regiao_saude na matriz de risco para enquadramento regional.")
+
+    regional = (
+        df
+        .filter(
+            (pl.col("_id_regiao_norm") == id_regiao)
+            & pl.col(c_val).is_not_null()
+            & pl.col(c_risco_reg).is_not_null()
+        )
+        .with_columns([
+            pl.col(c_val).cast(pl.Float64).alias("_valor_rank"),
+            pl.col(c_risco_reg).cast(pl.Float64).alias("_risco_rank"),
+        ])
+        .sort(["_valor_rank", "_risco_rank", "_cnpj_norm"], descending=[True, True, False])
+        .with_row_index("posicao_regional", offset=1)
+    )
+    if regional.is_empty():
+        raise RuntimeError(f"Enquadramento regional sem linhas para indicador {indicador_key} e id_regiao_saude={id_regiao}.")
+
+    target_rank_rows = regional.filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if target_rank_rows.is_empty():
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem valor/risco calculado no indicador {indicador_key} para enquadramento regional.")
+    regional_row = target_rank_rows.row(0, named=True)
+
+    valor = regional_row.get(c_val)
+    mediana_reg = regional_row.get(c_med_reg)
+    risco_reg = regional_row.get(c_risco_reg)
+    if valor is None or mediana_reg is None or risco_reg is None:
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem valor, mediana ou risco regional para indicador {indicador_key}.")
+
+    total_regional = regional.height
+    if total_regional <= 0:
+        raise RuntimeError(f"Universo regional invalido para indicador {indicador_key} e id_regiao_saude={id_regiao}.")
+    if total_regional == 1:
+        percentil_regional = 100.0
+    else:
+        percentil_regional = (total_regional - int(regional_row["posicao_regional"])) / (total_regional - 1) * 100.0
+
+    return {
+        "indicador_key": indicador_key,
+        "indicador_label": label,
+        "formato": formato,
+        "id_regiao_saude": id_regiao,
+        "valor": _format_indicador_quadro_value(valor, formato),
+        "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
+        "risco_regional": float(risco_reg),
+        "posicao_regional": int(regional_row["posicao_regional"]),
+        "total_regional": total_regional,
+        "percentil_regional": percentil_regional,
+    }
+
+
+def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int) -> None:
+    if not context:
+        raise RuntimeError("Contexto regional de indicador ausente para a Nota Tecnica.")
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Enquadramento regional da farmácia auditada no indicador {context["indicador_label"]}',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=2, cols=7)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(1.65), Inches(1.05), Inches(1.15), Inches(0.85), Inches(0.75), Inches(0.95), Inches(0.60)],
+    )
+
+    headers = [
+        "Indicador",
+        _indicador_valor_farmacia_header(context["formato"]),
+        "Mediana região",
+        "Risco vs. região",
+        "Posição região",
+        "Núm. Farmácias Reg.",
+        "Percentil reg.",
+    ]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=5.8, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    values = [
+        context["indicador_label"],
+        context["valor"],
+        context["mediana_regional"],
+        f'{_format_decimal_pt(context["risco_regional"], 1)}x',
+        _format_int_pt(context["posicao_regional"]),
+        _format_int_pt(context["total_regional"]),
+        f'{_format_decimal_pt(context["percentil_regional"], 1)}%',
+    ]
+    for col_idx, value in enumerate(values):
+        cell = table.rows[1].cells[col_idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+        _cell_bg(cell, 'E0F2FE')
+        _run(para, value, color='0F172A', size=5.8, bold=col_idx in (1, 3, 4, 6))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        f'Fonte: Sistema Sentinela, a partir da matriz de risco consolidada. Posição e percentil calculados pelo valor do indicador entre as farmácias com dado válido na região de saúde ID {context["id_regiao_saude"]}.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_indicador_municipal_top10_table(doc, context: dict[str, Any], tabela_num: int) -> None:
+    rows = context.get("rows") or []
+    if not rows:
+        raise RuntimeError("Ranking municipal de indicador sem linhas para a Nota Tecnica.")
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(8)
+    p_title.paragraph_format.space_after = Pt(5)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Farmácia auditada e Top 10 municipal no indicador {context["indicador_label"]}',
+        color='0F172A',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(rows) + 1, cols=7)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(0.42), Inches(1.10), Inches(2.15), Inches(1.05), Inches(0.90), Inches(0.58), Inches(0.80)],
+    )
+
+    headers = ["Pos.", "CNPJ", "Razão social", "Indicador", "Mediana reg.", "Risco", "Status"]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=5.8, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(rows, start=1):
+        values = [
+            _format_int_pt(row["posicao_municipal"]),
+            _format_cnpj_pt(row["cnpj"]),
+            row["razao_social"],
+            row["valor"],
+            row["mediana_regional"],
+            f'{_format_decimal_pt(row["risco_regional"], 1)}x',
+            row["status"],
+        ]
+        for col_idx, value in enumerate(values):
+            cell = table.rows[row_idx].cells[col_idx]
+            para = cell.paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 2 else WD_ALIGN_PARAGRAPH.CENTER
+            if row["is_alvo"]:
+                _cell_bg(cell, 'E0F2FE')
+            elif row_idx % 2:
+                _cell_bg(cell, 'F8FAFC')
+            else:
+                _cell_bg(cell, 'FFFFFF')
+            color = '991B1B' if row["status"] == "CRÍTICO" and col_idx in (5, 6) else '0F172A'
+            _run(para, value, color=color, size=5.8, bold=bool(row["is_alvo"]) or col_idx in (3, 5, 6))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    nota_alvo = " A farmácia auditada foi mantida na tabela embora esteja fora do Top 10 municipal." if context.get("alvo_fora_top10") else ""
+    _run(
+        p_foot,
+        f'Fonte: Sistema Sentinela, a partir da matriz de risco consolidada. Ranking ordenado pelo valor do indicador entre as farmácias de {context["municipio"]}/{context["uf"]}.{nota_alvo}',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
 
 
 def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num: int) -> None:
@@ -966,7 +1344,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
     resumo = municipal.get("resumo") or []
     if len(resumo) != 3:
         raise RuntimeError("Resumo municipal clinico deve conter farmacia analisada, demais farmacias e total municipal.")
-    total_incompativel = resumo[-1]["qtd_cpfs_incompativeis"]
+    total_valor_incompativel = resumo[-1]["valor_incompativel_pago"]
 
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -976,20 +1354,20 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
     p_title.paragraph_format.space_after = Pt(5)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Comparativo municipal de CPFs incompatíveis no recorte de {item["titulo"]}',
+        f'Tabela {tabela_num} - Comparativo municipal de valores incompatíveis no recorte de {item["titulo"]}, {_format_periodo_anos_item(item)}',
         color='0F172A',
         size=8,
         bold=True,
     )
 
-    table = doc.add_table(rows=len(resumo) + 1, cols=8)
+    table = doc.add_table(rows=len(resumo) + 1, cols=4)
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(1.63), Inches(0.52), Inches(0.72), Inches(0.82), Inches(0.61), Inches(0.82), Inches(1.10), Inches(0.78)],
+        [Inches(2.90), Inches(0.75), Inches(1.80), Inches(1.55)],
     )
 
-    headers = ["Grupo", "Farm.", "CPFs total", "CPFs incompat.", "% incompat.", "Aut. incompat.", "Valor incompat.", "Part. incompat. mun."]
+    headers = ["Grupo", "Farm.", "Valor incompatível", "Part. valor mun."]
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
@@ -998,21 +1376,16 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(resumo, start=1):
-        is_total_municipio = row["grupo"] == "Total do município"
         values = [
             row["grupo"],
             _format_int_pt(row["qtd_farmacias"]),
-            _format_int_pt(row["qtd_cpfs_distintos"]),
-            _format_int_pt(row["qtd_cpfs_incompativeis"]),
-            "—" if is_total_municipio else _format_optional_ratio_percent(_ratio(row["qtd_cpfs_incompativeis"], row["qtd_cpfs_distintos"]), 2),
-            _format_int_pt(row["qtd_autorizacoes_incompativeis"]),
             _format_brl_pt(row["valor_incompativel_pago"]),
-            _format_optional_ratio_percent(_ratio(row["qtd_cpfs_incompativeis"], total_incompativel), 2),
+            _format_optional_ratio_percent(_ratio(row["valor_incompativel_pago"], total_valor_incompativel), 2),
         ]
         for col_idx, value in enumerate(values):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=6, bold=row_idx == 1 or col_idx in (3, 6, 7))
+            _run(para, value, color='0F172A', size=7, bold=row_idx == 1 or col_idx in (2, 3))
 
     for row in table.rows:
         for cell in row.cells:
@@ -1027,7 +1400,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
     p_foot.paragraph_format.space_after = Pt(8)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
+        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Valores consolidados para o período selecionado.',
         color='64748B',
         size=7,
     )
@@ -1040,7 +1413,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
         raise RuntimeError("Ranking municipal clinico obrigatorio ausente para a Nota Tecnica.")
     top20 = municipal.get("top20") or []
     if not top20:
-        raise RuntimeError("Top 20 municipal clinico sem farmacias para a Nota Tecnica.")
+        raise RuntimeError("Top 10 municipal clinico sem farmacias para a Nota Tecnica.")
 
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1050,20 +1423,20 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
     p_title.paragraph_format.space_after = Pt(5)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Farmácias do município com maior quantidade de CPFs incompatíveis no recorte de {item["titulo"]}',
+        f'Tabela {tabela_num} - Farmácias do município com maior valor incompatível no recorte de {item["titulo"]}, {_format_periodo_anos_item(item)}',
         color='0F172A',
         size=8,
         bold=True,
     )
 
-    table = doc.add_table(rows=len(top20) + 1, cols=9)
+    table = doc.add_table(rows=len(top20) + 1, cols=5)
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(0.36), Inches(0.96), Inches(1.60), Inches(0.58), Inches(0.72), Inches(0.55), Inches(0.74), Inches(0.93), Inches(0.56)],
+        [Inches(0.45), Inches(1.20), Inches(2.65), Inches(1.45), Inches(1.25)],
     )
 
-    headers = ["Pos.", "CNPJ", "Razão social", "CPFs total", "CPFs incompat.", "% incompat.", "Aut. incompat.", "Valor incompat.", "Part. incompat. mun."]
+    headers = ["Pos.", "CNPJ", "Razão social", "Valor incompatível", "Part. valor mun."]
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
@@ -1076,17 +1449,13 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
             _format_int_pt(row["posicao"]),
             _format_cnpj_pt(row["cnpj"]),
             str(row["razao_social"]),
-            _format_int_pt(row["qtd_cpfs_distintos"]),
-            _format_int_pt(row["qtd_cpfs_incompativeis"]),
-            _format_optional_ratio_percent(row["percentual_cpfs_incompativeis"], 2),
-            _format_int_pt(row["qtd_autorizacoes_incompativeis"]),
             _format_brl_pt(row["valor_incompativel_pago"]),
             _format_optional_ratio_percent(row["participacao_municipal"], 2),
         ]
         for col_idx, value in enumerate(values):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 2 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=6, bold=bool(row["is_alvo"]) or col_idx in (4, 7, 8))
+            _run(para, value, color='0F172A', size=6.5, bold=bool(row["is_alvo"]) or col_idx in (3, 4))
 
     for row in table.rows:
         for cell in row.cells:
@@ -1101,7 +1470,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
     p_foot.paragraph_format.space_after = Pt(8)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
+        'Fonte: Sistema Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Ranking ordenado pelo valor incompatível consolidado no período selecionado.',
         color='64748B',
         size=7,
     )
@@ -1156,7 +1525,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
             "População 50+ multiplicada pela prevalência de referência",
         ),
         (
-            "CPFs observados na farmácia",
+            f'CPFs observados na farmácia em {demografia["ano_observado"]}',
             _format_int_pt(demografia["qtd_cpfs_distintos_observado"]),
             f'CPFs com dispensação de medicamentos para Parkinson em {demografia["ano_observado"]}',
         ),
@@ -1421,7 +1790,7 @@ def _add_incompatibilidade_patologica_text(
         )
         _run(
             p_municipio,
-            'As tabelas seguintes resumem o volume observado na farmácia, nos demais estabelecimentos municipais e no conjunto do município, além de listar as farmácias com maior quantidade de CPFs incompatíveis para o mesmo recorte clínico.',
+            'As tabelas seguintes resumem a materialidade financeira observada na farmácia, nos demais estabelecimentos municipais e no conjunto do município, além de listar as farmácias com maior valor incompatível para o mesmo recorte clínico.',
             color='0F172A',
             size=10,
         )

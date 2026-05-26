@@ -187,44 +187,7 @@ $$
 
 ---
 
-## 5. Compra Única
-
-### 5.1. Definição
-
-Mede a proporção de CPFs que realizaram **apenas uma compra** em todo o período analisado.
-
-### 5.2. Script
-
-```
-📄 Indicadores/compra_unica.sql
-```
-
-### 5.3. Contexto
-
-Medicamentos para doenças crônicas são de uso contínuo. Pacientes legítimos tendem a retornar periodicamente. Alto percentual de pacientes que realizaram apenas uma compra (compra única) pode indicar:
-
-- **CPFs usados uma vez:** Evitar detecção de padrões
-- **Vendas fictícias:** Cada venda usa CPF diferente (falsos positivos em farmácias de passagem)
-- **Farmácia de passagem:** Legítimo em locais turísticos
-
-### 5.4. Lógica de Cálculo
-
-#### Algoritmo
-
-1. **Agrupamento:** Agrupa vendas por CPF
-2. **Contagem:** Conta compras por CPF
-3. **Filtro:** Seleciona CPFs com exatamente 1 compra
-4. **Percentual:** Divide pelo total de CPFs distintos
-
-### 5.5. Fórmula
-
-$$
-\% \text{Compra Única} = \frac{\text{CPFs com apenas 1 compra}}{\text{Total de CPFs distintos}} \times 100
-$$
-
----
-
-## 6. Resumo do Grupo
+## 5. Resumo do Grupo
 
 | Indicador             | Métrica       | Alerta |
 | --------------------- | ------------- | ------ |
@@ -232,11 +195,10 @@ $$
 | Horário Atípico       | % vendas      | > 5%   |
 | Concentração em Pico  | % faturamento | > 40%  |
 | Dispersão Geográfica  | % vendas      |        |
-| Compra Única          | % CPFs        |        |
 
 ---
 
-## 7. Padrão de Automação
+## 6. Padrão de Automação
 
 !!! danger "Combinação Crítica"
 Quando uma farmácia apresenta valores elevados em **Vendas Rápidas** E **Horário Atípico** simultaneamente, é forte indicativo de:

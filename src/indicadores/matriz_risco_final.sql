@@ -17,7 +17,6 @@ PRINT '>> INICIANDO GERAÇÃO DA MATRIZ DE RISCO FINAL...';
 DECLARE @PESO_FALECIDOS                      FLOAT = 2.5; 
 DECLARE @PESO_PERCENTUAL_SEM_COMPROVACAO      FLOAT = 5.0; -- Peso Máximo
 DECLARE @PESO_RECORRENCIA_SISTEMICA             FLOAT = 2.0; 
-DECLARE @PESO_COMPRA_UNICA                   FLOAT = 1.0; 
 DECLARE @PESO_CRMS_IRREGULARES               FLOAT = 1.0; 
 DECLARE @PESO_INCONSISTENCIA_CLINICA         FLOAT = 1.5; 
 DECLARE @PESO_POLIMEDICAMENTO                FLOAT = 1.5; 
@@ -51,7 +50,6 @@ DECLARE @MAD_ATEN_RECEITA_PACIENTE       FLOAT = 2.5; DECLARE @MAD_CRIT_RECEITA_
 DECLARE @MAD_ATEN_PER_CAPITA             FLOAT = 2.5; DECLARE @MAD_CRIT_PER_CAPITA             FLOAT = 3.5;
 DECLARE @MAD_ATEN_DISTANCIA_GEOGRAFICA   FLOAT = 1.85; DECLARE @MAD_CRIT_DISTANCIA_GEOGRAFICA   FLOAT = 2.49;
 DECLARE @MAD_ATEN_CONCENTRACAO_PICO      FLOAT = 2.5; DECLARE @MAD_CRIT_CONCENTRACAO_PICO      FLOAT = 3;
-DECLARE @MAD_ATEN_COMPRA_UNICA           FLOAT = 1.40; DECLARE @MAD_CRIT_COMPRA_UNICA           FLOAT = 1.70;
 DECLARE @MAD_ATEN_CRM_HHI                FLOAT = 2.5; DECLARE @MAD_CRIT_CRM_HHI                FLOAT = 3.5;
 DECLARE @MAD_ATEN_RECORRENCIA_SISTEMICA  FLOAT = 1.50; DECLARE @MAD_CRIT_RECORRENCIA_SISTEMICA  FLOAT = 1.9;
 
@@ -119,7 +117,6 @@ IndicadoresPresenca AS (
         CASE WHEN I11.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_geografico,
         CASE WHEN I12.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_alto_custo,
         CASE WHEN I13.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_pico,
-        CASE WHEN I14.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_compra_unica,
         CASE WHEN I15.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crm,
         CASE WHEN I17.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_crms_irregulares,
         CASE WHEN I19.cnpj IS NOT NULL THEN 1 ELSE 0 END AS tem_recorrencia_sistemica,
@@ -182,10 +179,6 @@ IndicadoresPresenca AS (
         I13.municipio_mediana AS med_pico_mun, I13.estado_mediana AS med_pico_uf, I13.pais_mediana AS med_pico_br, I13.regiao_saude_mediana AS med_pico_reg,
         I13.risco_relativo_mun_mediana AS risco_pico_mun, I13.risco_relativo_uf_mediana AS risco_pico_uf, I13.risco_relativo_br_mediana AS risco_pico_br, I13.risco_relativo_reg_mediana AS risco_pico_reg,
 
-        I14.pct_compra_unica AS pct_compra_unica,
-        I14.municipio_mediana AS med_compra_unica_mun, I14.estado_mediana AS med_compra_unica_uf, I14.pais_mediana AS med_compra_unica_br, I14.regiao_saude_mediana AS med_compra_unica_reg,
-        I14.risco_relativo_mun_mediana AS risco_compra_unica_mun, I14.risco_relativo_uf_mediana AS risco_compra_unica_uf, I14.risco_relativo_br_mediana AS risco_compra_unica_br, I14.risco_relativo_reg_mediana AS risco_compra_unica_reg,
-
         CAST(I15.indice_hhi AS DECIMAL(18,2)) AS val_hhi_crm,
         -- avg_hhi_crm_mun (media_hhi_mun) removido — era a única média real do bloco I15.
         -- As três abaixo eram mal nomeadas como avg_ mas vêm de colunas _mediana na fonte.
@@ -227,7 +220,6 @@ IndicadoresPresenca AS (
     LEFT JOIN temp_CGUSC.fp.indicador_geografico_detalhado I11 ON I11.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_alto_custo_detalhado I12 ON I12.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_concentracao_pico_detalhado I13 ON I13.cnpj = F.cnpj
-    LEFT JOIN temp_CGUSC.fp.indicador_compra_unica_detalhado I14 ON I14.cnpj = F.cnpj
     -- I15: indicador_crm_hhi — HHI agregado por CNPJ, gerado por crms_1_detalhado_prescritor.sql.
     LEFT JOIN temp_CGUSC.fp.indicador_crm_hhi I15 ON I15.cnpj = F.cnpj
     LEFT JOIN temp_CGUSC.fp.indicador_crms_irregulares_detalhado I17 ON I17.cnpj = F.cnpj
@@ -253,7 +245,6 @@ CalculoFlagsRisco AS (
         CASE WHEN tem_geografico=1           AND ISNULL(risco_geografico_reg,0)           >= 5 THEN 1 ELSE 0 END AS flag_geografico_critico,
         CASE WHEN tem_alto_custo=1           AND ISNULL(risco_alto_custo_reg,0)           >= 5 THEN 1 ELSE 0 END AS flag_alto_custo_critico,
         CASE WHEN tem_pico=1                 AND ISNULL(risco_pico_reg,0)                 >= 5 THEN 1 ELSE 0 END AS flag_pico_critico,
-        CASE WHEN tem_compra_unica=1         AND ISNULL(risco_compra_unica_reg,0)         >= 5 THEN 1 ELSE 0 END AS flag_compra_unica_critico,
         CASE WHEN tem_crm=1                  AND ISNULL(risco_crm_reg,0)                  >= 5 THEN 1 ELSE 0 END AS flag_crm_critico,
         CASE WHEN tem_crms_irregulares=1     AND ISNULL(risco_crms_irregulares_reg,0)     >= 5 THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
         CASE WHEN tem_recorrencia_sistemica=1 AND ISNULL(risco_recorrencia_sistemica_reg,0) >= 5 THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_critico,
@@ -287,7 +278,6 @@ MedianasBasicas AS (
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_geografico,0))          OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_geografico,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_alto_custo,0))          OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_alto_custo,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_pico,0))                OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_pico,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_compra_unica,0))        OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_compra_unica,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(val_hhi_crm,0))             OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_crm_hhi,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_crms_irregulares,0))    OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_crms_irregulares,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ISNULL(pct_recorrencia_sistemica,0)) OVER (PARTITION BY (CASE WHEN CR.escopo_benchmark='REGIAO' THEN CAST(CP.id_regiao_saude AS VARCHAR(20)) ELSE CP.uf END)) AS med_recorrencia,
@@ -302,7 +292,7 @@ DesviosIndividuais AS (
         MB.id_regiao_saude,
         MB.uf,
         MB.escopo_benchmark,
-        MB.med_falecidos, MB.med_clinico, MB.med_teto, MB.med_polimedicamento, MB.med_ticket, MB.med_receita, MB.med_per_capita, MB.med_vendas_rapidas, MB.med_volume_atipico, MB.med_geografico, MB.med_alto_custo, MB.med_pico, MB.med_compra_unica, MB.med_crm_hhi, MB.med_crms_irregulares, MB.med_recorrencia, MB.med_auditado,
+        MB.med_falecidos, MB.med_clinico, MB.med_teto, MB.med_polimedicamento, MB.med_ticket, MB.med_receita, MB.med_per_capita, MB.med_vendas_rapidas, MB.med_volume_atipico, MB.med_geografico, MB.med_alto_custo, MB.med_pico, MB.med_crm_hhi, MB.med_crms_irregulares, MB.med_recorrencia, MB.med_auditado,
         ABS(ISNULL(IP.pct_falecidos,0) - MB.med_falecidos) AS dev_falecidos,
         ABS(ISNULL(IP.pct_clinico,0) - MB.med_clinico) AS dev_clinico,
         ABS(ISNULL(IP.pct_teto,0) - MB.med_teto) AS dev_teto,
@@ -315,7 +305,6 @@ DesviosIndividuais AS (
         ABS(ISNULL(IP.pct_geografico,0) - MB.med_geografico) AS dev_geografico,
         ABS(ISNULL(IP.pct_alto_custo,0) - MB.med_alto_custo) AS dev_alto_custo,
         ABS(ISNULL(IP.pct_pico,0) - MB.med_pico) AS dev_pico,
-        ABS(ISNULL(IP.pct_compra_unica,0) - MB.med_compra_unica) AS dev_compra_unica,
         ABS(ISNULL(IP.val_hhi_crm,0) - MB.med_crm_hhi) AS dev_crm_hhi,
         ABS(ISNULL(IP.pct_crms_irregulares,0) - MB.med_crms_irregulares) AS dev_crms_irregulares,
         ABS(ISNULL(IP.pct_recorrencia_sistemica,0) - MB.med_recorrencia) AS dev_recorrencia,
@@ -340,7 +329,6 @@ PassoCalculoMAD AS (
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_geografico)     OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_geografico,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_alto_custo)     OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_alto_custo,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_pico)           OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_pico,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_compra_unica)   OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_compra_unica,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_crm_hhi)        OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_crm_hhi,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_crms_irregulares) OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_crms_irregulares,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dev_recorrencia) OVER (PARTITION BY (CASE WHEN escopo_benchmark='REGIAO' THEN CAST(id_regiao_saude AS VARCHAR(20)) ELSE uf END)) AS mad_recorrencia,
@@ -366,7 +354,6 @@ CalculoFlagsMAD AS (
         ISNULL((0.6745 * (ISNULL(IP.pct_geografico,0) - PM.med_geografico)) / NULLIF(PM.mad_geografico,0),0) AS mz_geografico,
         ISNULL((0.6745 * (ISNULL(IP.pct_alto_custo,0) - PM.med_alto_custo)) / NULLIF(PM.mad_alto_custo,0),0) AS mz_alto_custo,
         ISNULL((0.6745 * (ISNULL(IP.pct_pico,0) - PM.med_pico)) / NULLIF(PM.mad_pico,0),0) AS mz_pico,
-        ISNULL((0.6745 * (ISNULL(IP.pct_compra_unica,0) - PM.med_compra_unica)) / NULLIF(PM.mad_compra_unica,0),0) AS mz_compra_unica,
         ISNULL((0.6745 * (ISNULL(IP.val_hhi_crm,0) - PM.med_crm_hhi)) / NULLIF(PM.mad_crm_hhi,0),0) AS mz_crm_hhi,
         ISNULL((0.6745 * (ISNULL(IP.pct_crms_irregulares,0) - PM.med_crms_irregulares)) / NULLIF(PM.mad_crms_irregulares,0),0) AS mz_crms_irregulares,
         ISNULL((0.6745 * (ISNULL(IP.pct_recorrencia_sistemica,0) - PM.med_recorrencia)) / NULLIF(PM.mad_recorrencia,0),0) AS mz_recorrencia,
@@ -392,7 +379,6 @@ ConsolidacaoFlagsMultinivel AS (
         CASE WHEN mz_geografico >= @MAD_CRIT_DISTANCIA_GEOGRAFICA THEN 1 ELSE 0 END AS flag_dispersao_geografica_critico,
         CASE WHEN mz_alto_custo >= @MAD_CRIT_ALTO_CUSTO THEN 1 ELSE 0 END AS flag_alto_custo_critico,
         CASE WHEN mz_pico >= @MAD_CRIT_CONCENTRACAO_PICO THEN 1 ELSE 0 END AS flag_concentracao_pico_critico,
-        CASE WHEN mz_compra_unica >= @MAD_CRIT_COMPRA_UNICA THEN 1 ELSE 0 END AS flag_compra_unica_critico,
         CASE WHEN mz_crm_hhi >= @MAD_CRIT_CRM_HHI THEN 1 ELSE 0 END AS flag_hhi_crm_critico,
         CASE WHEN mz_crms_irregulares >= @MAD_CRIT_CRMS_IRREGULARES THEN 1 ELSE 0 END AS flag_crms_irregulares_critico,
         CASE WHEN mz_recorrencia >= @MAD_CRIT_RECORRENCIA_SISTEMICA THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_critico,
@@ -411,7 +397,6 @@ ConsolidacaoFlagsMultinivel AS (
         CASE WHEN mz_geografico >= @MAD_ATEN_DISTANCIA_GEOGRAFICA AND mz_geografico < @MAD_CRIT_DISTANCIA_GEOGRAFICA THEN 1 ELSE 0 END AS flag_dispersao_geografica_atencao,
         CASE WHEN mz_alto_custo >= @MAD_ATEN_ALTO_CUSTO AND mz_alto_custo < @MAD_CRIT_ALTO_CUSTO THEN 1 ELSE 0 END AS flag_alto_custo_atencao,
         CASE WHEN mz_pico >= @MAD_ATEN_CONCENTRACAO_PICO AND mz_pico < @MAD_CRIT_CONCENTRACAO_PICO THEN 1 ELSE 0 END AS flag_concentracao_pico_atencao,
-        CASE WHEN mz_compra_unica >= @MAD_ATEN_COMPRA_UNICA AND mz_compra_unica < @MAD_CRIT_COMPRA_UNICA THEN 1 ELSE 0 END AS flag_compra_unica_atencao,
         CASE WHEN mz_crm_hhi >= @MAD_ATEN_CRM_HHI AND mz_crm_hhi < @MAD_CRIT_CRM_HHI THEN 1 ELSE 0 END AS flag_hhi_crm_atencao,
         CASE WHEN mz_crms_irregulares >= @MAD_ATEN_CRMS_IRREGULARES AND mz_crms_irregulares < @MAD_CRIT_CRMS_IRREGULARES THEN 1 ELSE 0 END AS flag_crms_irregulares_atencao,
         CASE WHEN mz_recorrencia >= @MAD_ATEN_RECORRENCIA_SISTEMICA AND mz_recorrencia < @MAD_CRIT_RECORRENCIA_SISTEMICA THEN 1 ELSE 0 END AS flag_recorrencia_sistemica_atencao,
@@ -423,14 +408,14 @@ ConsolidacaoFlagsMultinivel AS (
 ConsolidacaoFlags AS (
     SELECT
         *,
-        (flag_falecidos_critico + flag_incompatibilidade_patologica_critico + flag_estouro_teto_critico + flag_polimedicamento_critico + flag_ticket_medio_critico + flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico + flag_volume_atipico_critico + flag_dispersao_geografica_critico + flag_alto_custo_critico + flag_concentracao_pico_critico + flag_compra_unica_critico + flag_hhi_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_percentual_sem_comprovacao_critico) AS qtd_criticos,
-        (flag_falecidos_atencao + flag_incompatibilidade_patologica_atencao + flag_estouro_teto_atencao + flag_polimedicamento_atencao + flag_ticket_medio_atencao + flag_receita_paciente_atencao + flag_per_capita_atencao + flag_vendas_rapidas_atencao + flag_volume_atipico_atencao + flag_dispersao_geografica_atencao + flag_alto_custo_atencao + flag_concentracao_pico_atencao + flag_compra_unica_atencao + flag_hhi_crm_atencao + flag_crms_irregulares_atencao + flag_recorrencia_sistemica_atencao + flag_percentual_sem_comprovacao_atencao) AS qtd_atencao,
+        (flag_falecidos_critico + flag_incompatibilidade_patologica_critico + flag_estouro_teto_critico + flag_polimedicamento_critico + flag_ticket_medio_critico + flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico + flag_volume_atipico_critico + flag_dispersao_geografica_critico + flag_alto_custo_critico + flag_concentracao_pico_critico + flag_hhi_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_percentual_sem_comprovacao_critico) AS qtd_criticos,
+        (flag_falecidos_atencao + flag_incompatibilidade_patologica_atencao + flag_estouro_teto_atencao + flag_polimedicamento_atencao + flag_ticket_medio_atencao + flag_receita_paciente_atencao + flag_per_capita_atencao + flag_vendas_rapidas_atencao + flag_volume_atipico_atencao + flag_dispersao_geografica_atencao + flag_alto_custo_atencao + flag_concentracao_pico_atencao + flag_hhi_crm_atencao + flag_crms_irregulares_atencao + flag_recorrencia_sistemica_atencao + flag_percentual_sem_comprovacao_atencao) AS qtd_atencao,
 
         -- Pontuação cumulativa baseada nos níveis (+10 Crítico, +3 Atenção)
         (
-            (flag_falecidos_critico + flag_incompatibilidade_patologica_critico + flag_estouro_teto_critico + flag_polimedicamento_critico + flag_ticket_medio_critico + flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico + flag_volume_atipico_critico + flag_dispersao_geografica_critico + flag_alto_custo_critico + flag_concentracao_pico_critico + flag_compra_unica_critico + flag_hhi_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_percentual_sem_comprovacao_critico) * 10
+            (flag_falecidos_critico + flag_incompatibilidade_patologica_critico + flag_estouro_teto_critico + flag_polimedicamento_critico + flag_ticket_medio_critico + flag_receita_paciente_critico + flag_per_capita_critico + flag_vendas_rapidas_critico + flag_volume_atipico_critico + flag_dispersao_geografica_critico + flag_alto_custo_critico + flag_concentracao_pico_critico + flag_hhi_crm_critico + flag_crms_irregulares_critico + flag_recorrencia_sistemica_critico + flag_percentual_sem_comprovacao_critico) * 10
             +
-            (flag_falecidos_atencao + flag_incompatibilidade_patologica_atencao + flag_estouro_teto_atencao + flag_polimedicamento_atencao + flag_ticket_medio_atencao + flag_receita_paciente_atencao + flag_per_capita_atencao + flag_vendas_rapidas_atencao + flag_volume_atipico_atencao + flag_dispersao_geografica_atencao + flag_alto_custo_atencao + flag_concentracao_pico_atencao + flag_compra_unica_atencao + flag_hhi_crm_atencao + flag_crms_irregulares_atencao + flag_recorrencia_sistemica_atencao + flag_percentual_sem_comprovacao_atencao) * 3
+            (flag_falecidos_atencao + flag_incompatibilidade_patologica_atencao + flag_estouro_teto_atencao + flag_polimedicamento_atencao + flag_ticket_medio_atencao + flag_receita_paciente_atencao + flag_per_capita_atencao + flag_vendas_rapidas_atencao + flag_volume_atipico_atencao + flag_dispersao_geografica_atencao + flag_alto_custo_atencao + flag_concentracao_pico_atencao + flag_hhi_crm_atencao + flag_crms_irregulares_atencao + flag_recorrencia_sistemica_atencao + flag_percentual_sem_comprovacao_atencao) * 3
         ) AS pontos_penalidade
 
         -- CAMPO COMENTADO: lista textual de indicadores disparados por farmácia (ex: "🔴Vendas p/ Falecidos, 🟡Policompra")
@@ -450,7 +435,6 @@ ConsolidacaoFlags AS (
             (CASE WHEN flag_dispersao_geografica_critico=1 THEN ', 🔴Dispersão Geográfica Interestadual' WHEN flag_dispersao_geografica_atencao=1 THEN ', 🟡Dispersão Geográfica Interestadual' ELSE '' END) +
             (CASE WHEN flag_alto_custo_critico=1 THEN ', 🔴Medicamentos de Alto Custo' WHEN flag_alto_custo_atencao=1 THEN ', 🟡Medicamentos de Alto Custo' ELSE '' END) +
             (CASE WHEN flag_concentracao_pico_critico=1 THEN ', 🔴Concentração em Dias de Pico' WHEN flag_concentracao_pico_atencao=1 THEN ', 🟡Concentração em Dias de Pico' ELSE '' END) +
-            (CASE WHEN flag_compra_unica_critico=1 THEN ', 🔴Compra Única' WHEN flag_compra_unica_atencao=1 THEN ', 🟡Compra Única' ELSE '' END) +
             (CASE WHEN flag_hhi_crm_critico=1 THEN ', 🔴Concentração de CRMs (HHI)' WHEN flag_hhi_crm_atencao=1 THEN ', 🟡Concentração de CRMs (HHI)' ELSE '' END) +
             (CASE WHEN flag_crms_irregulares_critico=1 THEN ', 🔴Faturamento Atrelado a CRMs Irregulares' WHEN flag_crms_irregulares_atencao=1 THEN ', 🟡Faturamento Atrelado a CRMs Irregulares' ELSE '' END) +
             (CASE WHEN flag_recorrencia_sistemica_critico=1 THEN ', 🔴Recorrência Sistêmica' WHEN flag_recorrencia_sistemica_atencao=1 THEN ', 🟡Recorrência Sistêmica' ELSE '' END) +
@@ -521,10 +505,6 @@ NormalizacaoBase AS (
         CAST(PERCENT_RANK() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_pico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_pico,
         CAST(PERCENT_RANK() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_pico_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_pico,
 
-        -- 13. COMPRA ÚNICA
-        CAST(PERCENT_RANK() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_compra_unica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_compra_unica,
-        CAST(PERCENT_RANK() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_compra_unica_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_compra_unica,
-
         -- 14. CRM HHI
         CAST(PERCENT_RANK() OVER (PARTITION BY IP.id_regiao_saude ORDER BY ISNULL(IP.risco_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_reg_crm,
         CAST(PERCENT_RANK() OVER (PARTITION BY IP.uf             ORDER BY ISNULL(IP.risco_crm_reg, 0) ASC) * 100 AS DECIMAL(5,2)) AS pct_uf_crm,
@@ -566,7 +546,6 @@ Normalizacao AS (
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_geografico          ELSE pct_uf_geografico          END AS score_pct_geografico,
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_alto_custo          ELSE pct_uf_alto_custo          END AS score_pct_alto_custo,
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_pico                ELSE pct_uf_pico                END AS score_pct_pico,
-        CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_compra_unica        ELSE pct_uf_compra_unica        END AS score_pct_compra_unica,
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_crm                 ELSE pct_uf_crm                 END AS score_pct_crm,
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_crms_irregulares    ELSE pct_uf_crms_irregulares    END AS score_pct_crms_irregulares,
         CASE WHEN escopo_benchmark = 'REGIAO' THEN pct_reg_recorrencia_sistemica ELSE pct_uf_recorrencia_sistemica END AS score_pct_recorrencia_sistemica,
@@ -574,8 +553,8 @@ Normalizacao AS (
     FROM NormalizacaoBase
 ),
 
--- Pré-computa soma_pesos_ativos para reutilização no score_base e nas 18 contrib_*
--- Evita repetição da expressão de 18 termos em cada coluna de contribuição individual
+-- Pré-computa soma_pesos_ativos para reutilização no score_base e nas 16 contrib_*
+-- Evita repetição da expressão de 16 termos em cada coluna de contribuição individual
 PesosCalculados AS (
     SELECT
         cnpj,
@@ -592,7 +571,6 @@ PesosCalculados AS (
             (tem_geografico           * @PESO_DISTANCIA_GEOGRAFICA) +
             (tem_alto_custo           * @PESO_ALTO_CUSTO) +
             (tem_pico                 * @PESO_CONCENTRACAO_PICO) +
-            (tem_compra_unica         * @PESO_COMPRA_UNICA) +
             (tem_crm                  * @PESO_CONCENTRACAO_CRM_HHI) +
             (tem_crms_irregulares     * @PESO_CRMS_IRREGULARES) +
             (tem_recorrencia_sistemica* @PESO_RECORRENCIA_SISTEMICA) +
@@ -622,7 +600,6 @@ ScoreBaseCalculado AS (
                 (ISNULL(NV.score_pct_geografico,           0) * @PESO_DISTANCIA_GEOGRAFICA) +
                 (ISNULL(NV.score_pct_alto_custo,           0) * @PESO_ALTO_CUSTO) +
                 (ISNULL(NV.score_pct_pico,                 0) * @PESO_CONCENTRACAO_PICO) +
-                (ISNULL(NV.score_pct_compra_unica,         0) * @PESO_COMPRA_UNICA) +
                 (ISNULL(NV.score_pct_crm,                  0) * @PESO_CONCENTRACAO_CRM_HHI) +
                 (ISNULL(NV.score_pct_crms_irregulares,     0) * @PESO_CRMS_IRREGULARES) +
                 (ISNULL(NV.score_pct_recorrencia_sistemica,0) * @PESO_RECORRENCIA_SISTEMICA) +
@@ -645,7 +622,6 @@ ScoreBaseCalculado AS (
         CAST((ISNULL(NV.score_pct_geografico,     0) * @PESO_DISTANCIA_GEOGRAFICA) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_geografico,
         CAST((ISNULL(NV.score_pct_alto_custo,    0) * @PESO_ALTO_CUSTO) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_alto_custo,
         CAST((ISNULL(NV.score_pct_pico,          0) * @PESO_CONCENTRACAO_PICO) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_pico,
-        CAST((ISNULL(NV.score_pct_compra_unica,  0) * @PESO_COMPRA_UNICA) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_compra_unica,
         CAST((ISNULL(NV.score_pct_crm,           0) * @PESO_CONCENTRACAO_CRM_HHI) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_crm_hhi,
         CAST((ISNULL(NV.score_pct_crms_irregulares, 0) * @PESO_CRMS_IRREGULARES) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_crms_irregulares,
         CAST((ISNULL(NV.score_pct_recorrencia_sistemica, 0) * @PESO_RECORRENCIA_SISTEMICA) / NULLIF(PC.soma_pesos_ativos, 0) AS DECIMAL(5,2)) AS contrib_recorrencia_sistemica,

@@ -186,7 +186,6 @@ graph LR
 | `horario_atipico.sql`                   | Vendas na madrugada                       |
 | `concentracao_dias_pico.sql`            | Concentração em dias de pico              |
 | `geografico.sql`                        | Dispersão geográfica                      |
-| `compra_unica.sql`                      | Compra Única (ex-Fantasma)                |
 | `crms.sql`                              | Concentração de prescritores (HHI)        |
 | `exclusividade_crm.sql`                 | CRMs exclusivos da farmácia               |
 | `crms_irregulares.sql`                  | CRMs inválidos ou retroativos             |

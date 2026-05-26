@@ -1,6 +1,6 @@
 # Indicadores de Risco e Fraude
 
-Esta seção detalha os **18 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
+Esta seção detalha os **17 indicadores** utilizados pelo Sistema Sentinela para identificar comportamentos anômalos e potencialmente fraudulentos.
 
 ---
 
@@ -94,12 +94,11 @@ Os indicadores são organizados em **5 grupos** temáticos:
 | 10 | Horário Atípico | Automação | % de vendas na madrugada (00h-06h) |
 | 11 | Concentração em Pico | Automação | % de vendas nos 3 dias de maior movimento |
 | 12 | Dispersão Geográfica | Automação | % de pacientes de outras UFs |
-| 13 | Compra Única | Automação | % de CPFs com apenas uma compra |
-| 14 | Concentração HHI | CRMs | Índice de concentração de prescritores |
-| 15 | Exclusividade CRM | CRMs | % de CRMs exclusivos da farmácia |
-| 16 | Irregularidade CRM | CRMs | % de CRMs inválidos ou retroativos |
-| 17 | **Recorrência Sistêmica** | Automação | Padrão repetitivo de horários e datas |
-| 18 | **Auditoria Financeira** | Financeiro | % de não comprovação em auditorias prévias |
+| 13 | Concentração HHI | CRMs | Índice de concentração de prescritores |
+| 14 | Exclusividade CRM | CRMs | % de CRMs exclusivos da farmácia |
+| 15 | Irregularidade CRM | CRMs | % de CRMs inválidos ou retroativos |
+| 16 | **Recorrência Sistêmica** | Automação | Padrão repetitivo de horários e datas |
+| 17 | **Auditoria Financeira** | Financeiro | % de não comprovação em auditorias prévias |
 
 ---
 

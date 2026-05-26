@@ -42,7 +42,7 @@ $$M_i = \frac{0.6745 \times (Valor - Mediana)}{MAD}$$
 
 ## 3. Sistema Multinível (Atenção vs. Crítico)
 
-A V8.2 introduz a calibração de dois níveis para cada um dos 18 indicadores, permitindo identificar desde o "comportamento suspeito" até a "fraude explícita".
+A V8.2 introduz a calibração de dois níveis para cada um dos 16 indicadores, permitindo identificar desde o "comportamento suspeito" até a "fraude explícita".
 
 | Nível | Flag | Penalidade | Critério Estatístico |
 | :--- | :--- | :--- | :--- |

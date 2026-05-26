@@ -75,7 +75,6 @@ INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
     'recorrencia_sistemica': ('pct_recorrencia_sistemica', 'med_recorrencia_sistemica_reg','med_recorrencia_sistemica_uf','med_recorrencia_sistemica_br','risco_recorrencia_sistemica_reg','risco_recorrencia_sistemica_uf','risco_recorrencia_sistemica_br'),
     'dias_pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
     'dispersao_geografica':       ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
-    'compra_unica':      ('pct_compra_unica',          'med_compra_unica_reg',         'med_compra_unica_uf',         'med_compra_unica_br',         'risco_compra_unica_reg',         'risco_compra_unica_uf',         'risco_compra_unica_br'),
     'hhi_crm':               ('val_hhi_crm',               'med_hhi_crm_reg',              'med_hhi_crm_uf',              'med_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
     'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
 }
@@ -102,7 +101,6 @@ _INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
     'recorrencia_sistemica':         ('flag_recorrencia_sistemica_atencao',      'flag_recorrencia_sistemica_critico'),
     'dias_pico':                     ('flag_concentracao_pico_atencao',          'flag_concentracao_pico_critico'),
     'dispersao_geografica':          ('flag_dispersao_geografica_atencao',       'flag_dispersao_geografica_critico'),
-    'compra_unica':                  ('flag_compra_unica_atencao',               'flag_compra_unica_critico'),
     # 6. Integridade Médica
     'hhi_crm':                       ('flag_hhi_crm_atencao',                   'flag_hhi_crm_critico'),
     'crms_irregulares':              ('flag_crms_irregulares_atencao',           'flag_crms_irregulares_critico'),
@@ -256,7 +254,7 @@ def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]]
 
 
 def get_indicadores(cnpj: str) -> IndicadoresResponse:
-    """Retorna os 18 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
+    """Retorna os 16 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
     try:
         df = get_df_matriz_risco()
         df = df.rename({c: c.lower() for c in df.columns})

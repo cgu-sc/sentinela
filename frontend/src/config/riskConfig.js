@@ -112,7 +112,6 @@ export const INDICATOR_THRESHOLDS = {
   recorrencia_sistemica:  { atencao: 1.4, critico: 1.7 },
   dias_pico:              { atencao: 1.4, critico: 1.7 },
   dispersao_geografica:   { atencao: 2.0, critico: 3.0 },
-  compra_unica:           { atencao: 1.4, critico: 1.7 },
 
   // 6. Integridade Médica
   hhi_crm:                { atencao: 2.0, critico: 3.0 },
@@ -120,7 +119,7 @@ export const INDICATOR_THRESHOLDS = {
 };
 
 /**
- * Definição dos 6 grupos de indicadores e seus 18 indicadores.
+ * Definição dos 6 grupos de indicadores e seus 16 indicadores.
  * - key:          identificador no objeto `indicadores` retornado pela API
  * - label:        nome exibido no card
  * - formato:      'pct' | 'pct3' | 'val' | 'dec'
@@ -184,8 +183,6 @@ export const INDICATOR_GROUPS = [
         metodologia: 'Percentual do faturamento mensal concentrado nos 3 dias de maior movimento do mês.' },
       { key: 'dispersao_geografica', label: 'Dispersão Interestadual', formato: 'pct', thresholdKey: 'dispersao_geografica',
         metodologia: 'Percentual de vendas para pacientes cuja UF de residência difere da UF da farmácia.' },
-      { key: 'compra_unica', label: 'Compra Única', formato: 'pct', thresholdKey: 'compra_unica',
-        metodologia: 'Percentual de pacientes (CPFs) que realizaram apenas uma compra em todo o histórico de operação da farmácia.' },
     ],
   },
   {

@@ -25,6 +25,7 @@ GO
 DECLARE @DataInicio  DATE = '2015-07-01';
 DECLARE @DataFim     DATE = '2024-12-10';
 DECLARE @LoteTamanho INT  = 500;
+DECLARE @MaxLotes    INT  = 999;
 
 
 -- ============================================================================
@@ -269,166 +270,217 @@ DECLARE @TotalVendas INT;
 DECLARE @QtdOutraUF INT;
 DECLARE @ValorTotalAuditado DECIMAL(19,2);
 DECLARE @ValorOutraUF DECIMAL(19,2);
+DECLARE @LoteAtual INT = 0;
+DECLARE @ContadorLote INT;
 
-DECLARE cursor_cnpjs CURSOR LOCAL FAST_FORWARD FOR
-    SELECT TOP (@LoteTamanho) cnpj
-    FROM temp_CGUSC.fp.indicador_controle_geografico
-    WHERE situacao IN (0, 3)
-      AND tentativas < 3
-    ORDER BY cnpj;
-
-OPEN cursor_cnpjs;
-FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
-
-WHILE @@FETCH_STATUS = 0
+WHILE @LoteAtual < @MaxLotes
+  AND EXISTS (
+      SELECT 1
+      FROM temp_CGUSC.fp.indicador_controle_geografico
+      WHERE situacao IN (0, 3)
+        AND tentativas < 3
+  )
 BEGIN
-    BEGIN TRY
-        SELECT @IdCnpjAtual = F.id_cnpj
-        FROM #farmacias_dim F
-        WHERE F.cnpj = @CNPJAtual;
+    SET @LoteAtual = @LoteAtual + 1;
+    SET @ContadorLote = 0;
 
-        IF @IdCnpjAtual IS NULL
-        BEGIN
-            RAISERROR('CNPJ da fila nao encontrado em temp_CGUSC.fp.dados_farmacia.', 16, 1);
-        END;
+    UPDATE temp_CGUSC.fp.indicador_controle_geografico
+    SET situacao = 0,
+        mensagem_erro = 'Reversao para reprocessamento'
+    WHERE situacao = 1
+      AND DATEDIFF(MINUTE, data_inicio_processamento, GETDATE()) > 30;
 
-        UPDATE temp_CGUSC.fp.indicador_controle_geografico
-        SET situacao = 1,
-            data_inicio_processamento = GETDATE(),
-            data_fim_processamento = NULL,
-            mensagem_erro = NULL,
-            tentativas = tentativas + 1
-        WHERE cnpj = @CNPJAtual;
+    PRINT '=======================================================================';
+    PRINT CONCAT('Iniciando lote geografico ', @LoteAtual, ' de ate ', @LoteTamanho, ' CNPJs.');
+    PRINT '=======================================================================';
 
-        DROP TABLE IF EXISTS #AutorizacoesGeograficas;
+    DECLARE cursor_cnpjs CURSOR LOCAL FAST_FORWARD FOR
+        SELECT TOP (@LoteTamanho) cnpj
+        FROM temp_CGUSC.fp.indicador_controle_geografico
+        WHERE situacao IN (0, 3)
+          AND tentativas < 3
+        ORDER BY cnpj;
 
-        SELECT
-            F.id_cnpj,
-            CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
-            A.num_autorizacao,
-            CAST(UPPER(LTRIM(RTRIM(MAX(CAST(B.unidadeFederacao AS VARCHAR(2)))))) AS VARCHAR(2)) AS uf_paciente,
-            MAX(F.uf) AS uf_farmacia,
-            CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_autorizacao
-        INTO #AutorizacoesGeograficas
-        FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-        INNER JOIN #farmacias_dim F
-            ON F.cnpj = A.cnpj
-        INNER JOIN db_CPF.dbo.CPF B
-            ON B.CPF = A.cpf
-        INNER JOIN #medicamentos_patologia_gtin C
-            ON C.codigo_barra = A.codigo_barra
-        WHERE A.cnpj = @CNPJAtual
-          AND A.data_hora >= @DataInicio
-          AND A.data_hora < DATEADD(DAY, 1, @DataFim)
-          AND A.num_autorizacao IS NOT NULL
-          AND A.cpf IS NOT NULL
-          AND A.valor_pago IS NOT NULL
-          AND A.valor_pago >= 0
-          AND A.codigo_barra IS NOT NULL
-        GROUP BY
-            F.id_cnpj,
-            YEAR(A.data_hora),
-            A.num_autorizacao;
-
-        CREATE CLUSTERED INDEX IDX_AutorizacoesGeograficas_CNPJ_Ano
-        ON #AutorizacoesGeograficas(id_cnpj, ano_base);
-
-        DROP TABLE IF EXISTS #ResultadoCNPJ;
-
-        SELECT
-            id_cnpj,
-            ano_base,
-            CAST(COUNT(*) AS INT) AS total_vendas_monitoradas,
-            CAST(
-                SUM(
-                    CASE
-                        WHEN uf_paciente <> uf_farmacia THEN 1
-                        ELSE 0
-                    END
-                ) AS INT
-            ) AS qtd_vendas_outra_uf,
-            CAST(SUM(valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
-            CAST(
-                SUM(
-                    CASE
-                        WHEN uf_paciente <> uf_farmacia THEN valor_total_autorizacao
-                        ELSE CAST(0 AS DECIMAL(9,2))
-                    END
-                ) AS DECIMAL(9,2)
-            ) AS valor_vendas_outra_uf
-        INTO #ResultadoCNPJ
-        FROM #AutorizacoesGeograficas
-        GROUP BY
-            id_cnpj,
-            ano_base
-        HAVING SUM(valor_total_autorizacao) > 0;
-
-        DELETE FROM temp_CGUSC.fp.indicador_geografico
-        WHERE id_cnpj = @IdCnpjAtual;
-
-        INSERT INTO temp_CGUSC.fp.indicador_geografico (
-            id_cnpj,
-            ano_base,
-            total_vendas_monitoradas,
-            qtd_vendas_outra_uf,
-            valor_total_auditado,
-            valor_vendas_outra_uf
-        )
-        SELECT
-            id_cnpj,
-            ano_base,
-            total_vendas_monitoradas,
-            qtd_vendas_outra_uf,
-            valor_total_auditado,
-            valor_vendas_outra_uf
-        FROM #ResultadoCNPJ;
-
-        SELECT
-            @TotalVendas = SUM(total_vendas_monitoradas),
-            @QtdOutraUF = SUM(qtd_vendas_outra_uf),
-            @ValorTotalAuditado = SUM(valor_total_auditado),
-            @ValorOutraUF = SUM(valor_vendas_outra_uf)
-        FROM #ResultadoCNPJ;
-
-        SET @TotalVendas = CASE WHEN @TotalVendas IS NULL THEN 0 ELSE @TotalVendas END;
-        SET @QtdOutraUF = CASE WHEN @QtdOutraUF IS NULL THEN 0 ELSE @QtdOutraUF END;
-        SET @ValorTotalAuditado = CASE WHEN @ValorTotalAuditado IS NULL THEN 0 ELSE @ValorTotalAuditado END;
-        SET @ValorOutraUF = CASE WHEN @ValorOutraUF IS NULL THEN 0 ELSE @ValorOutraUF END;
-
-        UPDATE temp_CGUSC.fp.indicador_controle_geografico
-        SET situacao = 2,
-            data_fim_processamento = GETDATE(),
-            total_vendas = @TotalVendas,
-            total_outra_uf = @QtdOutraUF,
-            valor_total_auditado = @ValorTotalAuditado,
-            valor_vendas_outra_uf = @ValorOutraUF,
-            mensagem_erro = NULL
-        WHERE cnpj = @CNPJAtual;
-
-        SET @Contador = @Contador + 1;
-
-        IF @Contador % 10 = 0
-            PRINT CONCAT('Processados: ', @Contador, ' CNPJs neste lote.');
-    END TRY
-    BEGIN CATCH
-        UPDATE temp_CGUSC.fp.indicador_controle_geografico
-        SET situacao = 3,
-            data_fim_processamento = GETDATE(),
-            mensagem_erro = ERROR_MESSAGE()
-        WHERE cnpj = @CNPJAtual;
-    END CATCH;
-
-    SET @IdCnpjAtual = NULL;
-    SET @TotalVendas = NULL;
-    SET @QtdOutraUF = NULL;
-    SET @ValorTotalAuditado = NULL;
-    SET @ValorOutraUF = NULL;
-
+    OPEN cursor_cnpjs;
     FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        BEGIN TRY
+            SELECT @IdCnpjAtual = F.id_cnpj
+            FROM #farmacias_dim F
+            WHERE F.cnpj = @CNPJAtual;
+
+            IF @IdCnpjAtual IS NULL
+            BEGIN
+                RAISERROR('CNPJ da fila nao encontrado em temp_CGUSC.fp.dados_farmacia.', 16, 1);
+            END;
+
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
+            SET situacao = 1,
+                data_inicio_processamento = GETDATE(),
+                data_fim_processamento = NULL,
+                mensagem_erro = NULL,
+                tentativas = tentativas + 1
+            WHERE cnpj = @CNPJAtual;
+
+            DROP TABLE IF EXISTS #AutorizacoesGeograficas;
+
+            SELECT
+                F.id_cnpj,
+                CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
+                A.num_autorizacao,
+                CAST(UPPER(LTRIM(RTRIM(MAX(CAST(B.unidadeFederacao AS VARCHAR(2)))))) AS VARCHAR(2)) AS uf_paciente,
+                MAX(F.uf) AS uf_farmacia,
+                CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_total_autorizacao
+            INTO #AutorizacoesGeograficas
+            FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
+            INNER JOIN #farmacias_dim F
+                ON F.cnpj = A.cnpj
+            INNER JOIN db_CPF.dbo.CPF B
+                ON B.CPF = A.cpf
+            INNER JOIN #medicamentos_patologia_gtin C
+                ON C.codigo_barra = A.codigo_barra
+            WHERE A.cnpj = @CNPJAtual
+              AND A.data_hora >= @DataInicio
+              AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+              AND A.num_autorizacao IS NOT NULL
+              AND A.cpf IS NOT NULL
+              AND A.valor_pago IS NOT NULL
+              AND A.valor_pago >= 0
+              AND A.codigo_barra IS NOT NULL
+            GROUP BY
+                F.id_cnpj,
+                YEAR(A.data_hora),
+                A.num_autorizacao;
+
+            CREATE CLUSTERED INDEX IDX_AutorizacoesGeograficas_CNPJ_Ano
+            ON #AutorizacoesGeograficas(id_cnpj, ano_base);
+
+            DROP TABLE IF EXISTS #ResultadoCNPJ;
+
+            SELECT
+                id_cnpj,
+                ano_base,
+                CAST(COUNT(*) AS INT) AS total_vendas_monitoradas,
+                CAST(
+                    SUM(
+                        CASE
+                            WHEN uf_paciente <> uf_farmacia THEN 1
+                            ELSE 0
+                        END
+                    ) AS INT
+                ) AS qtd_vendas_outra_uf,
+                CAST(SUM(valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
+                CAST(
+                    SUM(
+                        CASE
+                            WHEN uf_paciente <> uf_farmacia THEN valor_total_autorizacao
+                            ELSE CAST(0 AS DECIMAL(9,2))
+                        END
+                    ) AS DECIMAL(9,2)
+                ) AS valor_vendas_outra_uf
+            INTO #ResultadoCNPJ
+            FROM #AutorizacoesGeograficas
+            GROUP BY
+                id_cnpj,
+                ano_base
+            HAVING SUM(valor_total_autorizacao) > 0;
+
+            DELETE FROM temp_CGUSC.fp.indicador_geografico
+            WHERE id_cnpj = @IdCnpjAtual;
+
+            INSERT INTO temp_CGUSC.fp.indicador_geografico (
+                id_cnpj,
+                ano_base,
+                total_vendas_monitoradas,
+                qtd_vendas_outra_uf,
+                valor_total_auditado,
+                valor_vendas_outra_uf
+            )
+            SELECT
+                id_cnpj,
+                ano_base,
+                total_vendas_monitoradas,
+                qtd_vendas_outra_uf,
+                valor_total_auditado,
+                valor_vendas_outra_uf
+            FROM #ResultadoCNPJ;
+
+            SELECT
+                @TotalVendas = SUM(total_vendas_monitoradas),
+                @QtdOutraUF = SUM(qtd_vendas_outra_uf),
+                @ValorTotalAuditado = SUM(valor_total_auditado),
+                @ValorOutraUF = SUM(valor_vendas_outra_uf)
+            FROM #ResultadoCNPJ;
+
+            SET @TotalVendas = CASE WHEN @TotalVendas IS NULL THEN 0 ELSE @TotalVendas END;
+            SET @QtdOutraUF = CASE WHEN @QtdOutraUF IS NULL THEN 0 ELSE @QtdOutraUF END;
+            SET @ValorTotalAuditado = CASE WHEN @ValorTotalAuditado IS NULL THEN 0 ELSE @ValorTotalAuditado END;
+            SET @ValorOutraUF = CASE WHEN @ValorOutraUF IS NULL THEN 0 ELSE @ValorOutraUF END;
+
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
+            SET situacao = 2,
+                data_fim_processamento = GETDATE(),
+                total_vendas = @TotalVendas,
+                total_outra_uf = @QtdOutraUF,
+                valor_total_auditado = @ValorTotalAuditado,
+                valor_vendas_outra_uf = @ValorOutraUF,
+                mensagem_erro = NULL
+            WHERE cnpj = @CNPJAtual;
+
+            SET @Contador = @Contador + 1;
+            SET @ContadorLote = @ContadorLote + 1;
+
+            IF @ContadorLote % 10 = 0
+                PRINT CONCAT('Lote ', @LoteAtual, ': processados ', @ContadorLote, ' CNPJs.');
+        END TRY
+        BEGIN CATCH
+            UPDATE temp_CGUSC.fp.indicador_controle_geografico
+            SET situacao = 3,
+                data_fim_processamento = GETDATE(),
+                mensagem_erro = ERROR_MESSAGE(),
+                tentativas = CASE WHEN situacao = 1 THEN tentativas ELSE tentativas + 1 END
+            WHERE cnpj = @CNPJAtual;
+        END CATCH;
+
+        SET @IdCnpjAtual = NULL;
+        SET @TotalVendas = NULL;
+        SET @QtdOutraUF = NULL;
+        SET @ValorTotalAuditado = NULL;
+        SET @ValorOutraUF = NULL;
+
+        FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
+    END;
+
+    CLOSE cursor_cnpjs;
+    DEALLOCATE cursor_cnpjs;
+
+    PRINT CONCAT('Lote geografico ', @LoteAtual, ' encerrado. CNPJs concluidos no lote: ', @ContadorLote, '. Total concluido nesta execucao: ', @Contador, '.');
+
+    IF EXISTS (
+        SELECT 1
+        FROM temp_CGUSC.fp.indicador_controle_geografico
+        WHERE situacao = 3
+          AND tentativas >= 3
+    )
+    BEGIN
+        PRINT 'Existem CNPJs com erro e tentativas esgotadas. Encerrando processamento automatico antes da geracao final.';
+        BREAK;
+    END;
 END;
 
-CLOSE cursor_cnpjs;
-DEALLOCATE cursor_cnpjs;
+IF @LoteAtual >= @MaxLotes
+   AND EXISTS (
+       SELECT 1
+       FROM temp_CGUSC.fp.indicador_controle_geografico
+       WHERE situacao IN (0, 3)
+         AND tentativas < 3
+   )
+BEGIN
+    RAISERROR('Limite de lotes atingido antes de concluir indicador_geografico. Aumente @MaxLotes ou investigue a fila.', 16, 1);
+    RETURN;
+END;
 
 
 -- ============================================================================

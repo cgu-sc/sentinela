@@ -47,6 +47,8 @@ def _query_params(request: Request) -> dict[str, Any]:
         "data_inicio",
         "data_fim",
         "periodo",
+        "date_str",
+        "hour",
         "scope",
         "metric",
         "uf",

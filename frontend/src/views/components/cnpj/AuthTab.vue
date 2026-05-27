@@ -41,6 +41,16 @@ const {
 // ── Estado de Navegação (Agora via Store) ─────────────────────────────────
 const activeKpiFilter = ref(null);
 const mortalityTabRef = ref(null);
+const openedCrmViews = ref(new Set(['medicos', activeCrmViewMode.value]));
+
+function markCrmViewOpened(mode) {
+  if (!mode) return;
+  openedCrmViews.value = new Set([...openedCrmViews.value, mode]);
+}
+
+function hasOpenedCrmView(mode) {
+  return openedCrmViews.value.has(mode);
+}
 
 function loadCurrentViewIfActive() {
   if (!props.isActive) return;
@@ -49,8 +59,16 @@ function loadCurrentViewIfActive() {
   cnpjDetailStore.ensureTabData('autorizacoes', props.cnpj, inicio, fim);
 }
 
+watch(activeCrmViewMode, (mode) => {
+  markCrmViewOpened(mode);
+}, { immediate: true });
+
 watch(activeCrmViewMode, () => {
   loadCurrentViewIfActive();
+});
+
+watch(() => props.cnpj, () => {
+  openedCrmViews.value = new Set(['medicos', activeCrmViewMode.value]);
 });
 
 watch(() => props.isActive, (active) => {
@@ -61,8 +79,21 @@ watch(() => props.isActive, (active) => {
 // ── Dados Base ────────────────────────────────────────────────────────────
 const summary = computed(() => cachedPrescritoresData.value?.summary || {});
 const crmsInteresse = computed(() => cachedPrescritoresData.value?.crms_interesse || []);
-const cnpjAlerts = computed(() => cachedPrescritoresData.value?.cnpj_alerts || []);
-const cnpjAlertsMultiplo = computed(() => cnpjAlerts.value.filter(a => a.tipo === 'MULTIPLO'));
+
+function requireLoadedSummaryNumber(field) {
+  if (!cachedPrescritoresData.value) return 0;
+  if (summary.value[field] == null) {
+    throw new Error(`Contrato invalido em crm-data: summary.${field} obrigatorio.`);
+  }
+  return Number(summary.value[field]);
+}
+
+function requireCrmAlertCount(m, field) {
+  if (m[field] == null) {
+    throw new Error(`Contrato invalido em crm-data: ${field} obrigatorio para ${m.id_medico}.`);
+  }
+  return Number(m[field]);
+}
 
 // ── KPIs (mantidos aqui para defineExpose) ────────────────────────────────
 const concentracaoTop1 = computed(() => summary.value.pct_concentracao_top1 || 0);
@@ -88,8 +119,8 @@ const valorFraudeCrm          = computed(() => (summary.value.vl_crm_invalido ||
 
 const qtdCrmExclusivo         = computed(() => crmsInteresse.value.filter(m => m.flag_crm_exclusivo > 0).length);
 const qtdLancamentosAgrupados = computed(() => crmsInteresse.value.filter(m => m.alerta_concentracao_unico_crm).length);
-const totalSurtosCnpj         = computed(() => cnpjAlertsMultiplo.value.length);
-const diasComSurtosCnpj       = computed(() => new Set(cnpjAlertsMultiplo.value.map(a => a.dt)).size);
+const totalSurtosCnpj         = computed(() => requireLoadedSummaryNumber('qtd_alertas_cnpj_multiplo'));
+const diasComSurtosCnpj       = computed(() => requireLoadedSummaryNumber('qtd_dias_alertas_cnpj_multiplo'));
 const qtdAcima400km           = computed(() => crmsInteresse.value.filter(m => m.alerta5_geografico).length);
 
 // Objeto passado como prop para CRMKpiGrid
@@ -124,7 +155,7 @@ const kpiFilters = {
   exclusivo:   (m) => m.flag_crm_exclusivo > 0,
   fraude_crm:  (m) => m.flag_crm_invalido > 0 || m.flag_prescricao_antes_registro > 0,
   distancia:   (m) => !!m.alerta5_geografico,
-  surtos_cnpj: (m) => m.alertas_crm_multiplos?.length > 0,
+  surtos_cnpj: (m) => requireCrmAlertCount(m, 'qtd_alertas_crm_multiplos') > 0,
 };
 
 const kpiFilterLabels = {
@@ -207,7 +238,11 @@ defineExpose({
         </div>
       </div>
 
-      <div v-show="activeCrmViewMode === 'medicos'" class="medicos-view">
+      <div
+        v-if="hasOpenedCrmView('medicos')"
+        v-show="activeCrmViewMode === 'medicos'"
+        class="medicos-view"
+      >
         <TabPlaceholder
           v-if="cachedPrescritoresData && crmsInteresse.length === 0 && !evolucaoFinanceira?.semestres?.length"
           variant="info"
@@ -247,9 +282,14 @@ defineExpose({
         </template>
       </div>
 
-      <CRMCronologia v-show="activeCrmViewMode === 'cronologia'" :cnpj="cnpj" />
+      <CRMCronologia
+        v-if="hasOpenedCrmView('cronologia')"
+        v-show="activeCrmViewMode === 'cronologia'"
+        :cnpj="cnpj"
+      />
 
       <MortalityTab
+        v-if="hasOpenedCrmView('falecidos')"
         v-show="activeCrmViewMode === 'falecidos'"
         ref="mortalityTabRef"
         :cnpj="cnpj"
@@ -265,22 +305,6 @@ defineExpose({
   flex-direction: column;
   gap: 1.5rem;
 }
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 1rem;
-  color: var(--text-muted);
-  background: var(--surface-bg);
-  border-radius: 12px;
-  border: 1px dashed var(--border-color);
-}
-
-.loading-state i { font-size: 2rem; margin-bottom: 1rem; color: var(--primary-color); }
-.empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
 
 .content-wrapper {
   display: flex;

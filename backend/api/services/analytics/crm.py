@@ -40,6 +40,7 @@ from ...schemas.analytics import (
     RegionalResponse,
     RegionalAnimationQuarterSchema,
     RegionalAnimationResponse,
+    CrmMedicoAlertasResponse,
     PrescritoresResponse,
     DadosFarmaciaSchema,
     MovimentacaoRowSchema,
@@ -207,6 +208,242 @@ def _raise_cache_unavailable(area: str, error: str | None) -> None:
         detail=f"{area} indisponivel: {error or 'falha ao sincronizar cache local.'}",
     )
 
+
+def _to_comp(date_str: str) -> int:
+    return int(date_str[:7].replace("-", ""))
+
+
+def _filter_competencia(df: pl.DataFrame, comp_ini: int | None, comp_fim: int | None) -> pl.DataFrame:
+    if df is None or df.is_empty():
+        return df
+    if comp_ini:
+        df = df.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
+    if comp_fim:
+        df = df.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+    return df
+
+
+def _count_rows_by_medico(df: pl.DataFrame) -> dict[str, int]:
+    if df is None or df.is_empty() or "id_medico" not in df.columns:
+        return {}
+    return {
+        str(row["id_medico"]): _to_int(row["qtd"])
+        for row in (
+            df.group_by("id_medico")
+            .agg(pl.len().alias("qtd"))
+            .iter_rows(named=True)
+        )
+    }
+
+
+def _build_crm_unico_alertas_por_medico(df_ad: pl.DataFrame) -> dict[str, list[dict]]:
+    alertas_por_medico: dict[str, list[dict]] = {}
+    if df_ad is None or df_ad.is_empty():
+        return alertas_por_medico
+
+    for row in df_ad.iter_rows(named=True):
+        mid = str(row["id_medico"])
+        alertas_por_medico.setdefault(mid, []).append({
+            "dt":             str(row["dt_alerta"]),
+            "nu_prescricoes": row["nu_prescricoes_dia"],
+            "nu_minutos":     row["nu_minutos_dia"],
+            "nu_minutos_intervalo": row.get("nu_minutos_intervalo"),
+            "taxa_hora":      _to_float(row.get("taxa_hora")),
+            "dt_ini_hora":    str(row.get("dt_ini_hora") or ""),
+            "dt_fim_hora":    str(row.get("dt_fim_hora") or ""),
+            "id_severidade":  _to_int(row.get("id_severidade")),
+        })
+    return alertas_por_medico
+
+
+def _build_alertas_geograficos_por_medico(df_geo: pl.DataFrame) -> dict[str, list[dict]]:
+    alertas_geo_por_medico: dict[str, list[dict]] = {}
+    if df_geo is None or df_geo.is_empty():
+        return alertas_geo_por_medico
+
+    for row in df_geo.iter_rows(named=True):
+        mid = str(row["id_medico"])
+        alertas_geo_por_medico.setdefault(mid, []).append({
+            "competencia":    row["competencia"],
+            "cnpj_a":         row["cnpj_a"],
+            "municipio_a":    row["no_municipio_a"],
+            "uf_a":           row["sg_uf_a"],
+            "dt_ini_a":       str(row["dt_ini_a"]),
+            "dt_fim_a":       str(row["dt_fim_a"]),
+            "nu_presc_a":     row["nu_prescricoes_a"],
+            "vl_autorizacoes_a": _to_float(row.get("vl_autorizacoes_a")),
+            "cnpj_b":         row["cnpj_b"],
+            "municipio_b":    row["no_municipio_b"],
+            "uf_b":           row["sg_uf_b"],
+            "dt_ini_b":       str(row["dt_ini_b"]),
+            "dt_fim_b":       str(row["dt_fim_b"]),
+            "nu_presc_b":     row["nu_prescricoes_b"],
+            "vl_autorizacoes_b": _to_float(row.get("vl_autorizacoes_b")),
+            "vl_autorizacoes_total": _to_float(row.get("vl_autorizacoes_total")),
+            "distancia_km":   _to_float(row.get("distancia_km")),
+        })
+    return alertas_geo_por_medico
+
+
+def _build_alertas_crm_multiplos_por_medico(
+    cnpj_dir: str,
+    df_cm: pl.DataFrame,
+    comp_ini: int | None,
+    comp_fim: int | None,
+    timing: _CrmTiming | None = None,
+) -> dict[str, list[dict]]:
+    TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
+    alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
+
+    if df_cm is None or df_cm.is_empty() or not os.path.exists(TX_PARQUET_PATH):
+        return alertas_crm_multiplos_por_medico
+
+    try:
+        df_tx = pl.read_parquet(TX_PARQUET_PATH)
+        if df_tx.is_empty():
+            return alertas_crm_multiplos_por_medico
+
+        if comp_ini or comp_fim:
+            dt_temp = pl.col("dt_janela")
+            if df_tx["dt_janela"].dtype == pl.Utf8:
+                dt_temp = dt_temp.str.to_date("%Y-%m-%d")
+
+            df_tx = df_tx.with_columns(
+                (dt_temp.dt.year() * 100 + dt_temp.dt.month()).cast(pl.Int32).alias("_comp")
+            )
+            if comp_ini:
+                df_tx = df_tx.filter(pl.col("_comp") >= comp_ini)
+            if comp_fim:
+                df_tx = df_tx.filter(pl.col("_comp") <= comp_fim)
+
+        df_tx = df_tx.with_columns(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10))
+        df_cm_period = _filter_competencia(df_cm, comp_ini, comp_fim)
+        if df_cm_period is None or df_cm_period.is_empty():
+            return alertas_crm_multiplos_por_medico
+
+        def _datetime_expr(df_ref: pl.DataFrame, column: str):
+            dtype = df_ref.schema.get(column)
+            expr = pl.col(column)
+            if dtype == pl.Utf8:
+                return expr.str.strptime(pl.Datetime, strict=False)
+            if dtype == pl.Date:
+                return expr.cast(pl.Datetime)
+            return expr.cast(pl.Datetime, strict=False)
+
+        tx_join = df_tx.with_columns([
+            _datetime_expr(df_tx, "data_hora").alias("_tx_data_hora"),
+            pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
+            pl.col("id_medico").cast(pl.Utf8).alias("_id_medico"),
+            pl.col("num_autorizacao").cast(pl.Utf8).alias("_num_autorizacao"),
+        ]).select([
+            "_dt_alerta",
+            "_tx_data_hora",
+            "_id_medico",
+            "_num_autorizacao",
+        ])
+
+        cm_join = df_cm_period.with_row_index("_alerta_idx").with_columns([
+            pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
+            _datetime_expr(df_cm_period, "dt_ini_concentracao").alias("_dt_ini"),
+            _datetime_expr(df_cm_period, "dt_fim_concentracao").alias("_dt_fim"),
+        ]).select([
+            "_alerta_idx",
+            "_dt_alerta",
+            "_dt_ini",
+            "_dt_fim",
+            "hr_janela",
+            "nu_prescricoes",
+            "nu_crms",
+            "nu_crms_distintos",
+            "nu_minutos_intervalo",
+            "nu_minutos_span",
+            "taxa_hora",
+            "id_severidade",
+            "severidade",
+            "criterio_pior_ritmo",
+        ])
+
+        joined = (
+            tx_join
+            .join(cm_join, on="_dt_alerta", how="inner")
+            .filter(
+                pl.col("_tx_data_hora").is_not_null()
+                & pl.col("_dt_ini").is_not_null()
+                & pl.col("_dt_fim").is_not_null()
+                & (pl.col("_tx_data_hora") >= pl.col("_dt_ini"))
+                & (pl.col("_tx_data_hora") <= pl.col("_dt_fim"))
+                & pl.col("_id_medico").is_not_null()
+                & (pl.col("_id_medico") != "")
+            )
+        )
+        if timing is not None:
+            timing.detail("cruzamento_join_linhas", len(joined))
+
+        if joined.is_empty():
+            return alertas_crm_multiplos_por_medico
+
+        cruzamento = (
+            joined
+            .group_by(["_alerta_idx", "_id_medico"])
+            .agg([
+                pl.col("_num_autorizacao").n_unique().alias("nu_presc_crm"),
+                pl.col("_dt_alerta").first().alias("dt"),
+                pl.col("_dt_ini").first().alias("_dt_ini"),
+                pl.col("_dt_fim").first().alias("_dt_fim"),
+                pl.col("hr_janela").first().alias("hr_janela"),
+                pl.col("nu_prescricoes").first().alias("nu_prescricoes"),
+                pl.col("nu_crms").first().alias("nu_crms"),
+                pl.col("nu_crms_distintos").first().alias("nu_crms_distintos"),
+                pl.col("nu_minutos_intervalo").first().alias("nu_minutos_intervalo"),
+                pl.col("nu_minutos_span").first().alias("nu_minutos_span"),
+                pl.col("taxa_hora").first().alias("taxa_hora"),
+                pl.col("id_severidade").first().alias("id_severidade"),
+                pl.col("severidade").first().alias("severidade"),
+                pl.col("criterio_pior_ritmo").first().alias("criterio_pior_ritmo"),
+            ])
+        )
+
+        for row in cruzamento.iter_rows(named=True):
+            dt_ini = row.get("_dt_ini")
+            dt_fim = row.get("_dt_fim")
+            if dt_ini is None or dt_fim is None:
+                continue
+
+            mid = str(row.get("_id_medico") or "")
+            hr = _to_int(row.get("hr_janela"), getattr(dt_ini, "hour", 0))
+            total = _to_int(row.get("nu_prescricoes"))
+            crms_total = _to_int(row.get("nu_crms") or row.get("nu_crms_distintos"))
+            nu_minutos = _to_int(row.get("nu_minutos_intervalo") or row.get("nu_minutos_span"))
+            taxa_hora = _to_float(row.get("taxa_hora"))
+            severidade = row.get("severidade") or "ALERTA"
+            inicio = dt_ini.strftime("%H:%M") if hasattr(dt_ini, "strftime") else str(dt_ini)[11:16]
+            fim = dt_fim.strftime("%H:%M") if hasattr(dt_fim, "strftime") else str(dt_fim)[11:16]
+            desc = f"{total} autorizacoes entre {inicio} e {fim}, envolvendo {crms_total} CRMs ({severidade})"
+
+            alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
+                "dt": str(row.get("dt") or "")[:10],
+                "hr": hr,
+                "nu_presc_crm": _to_int(row.get("nu_presc_crm")),
+                "nu_presc_total": total,
+                "nu_crms_total": crms_total,
+                "nu_minutos": nu_minutos,
+                "taxa_hora": taxa_hora,
+                "dt_ini_hora": str(dt_ini),
+                "dt_fim_hora": str(dt_fim),
+                "id_severidade": _to_int(row.get("id_severidade")),
+                "multiplicador": 0,
+                "mediana_hora": 0,
+                "severidade": severidade,
+                "criterio_pior_ritmo": row.get("criterio_pior_ritmo"),
+                "descricao": desc,
+            })
+    except Exception as exc:
+        if timing is not None:
+            timing.detail("cruzamento_erro", str(exc))
+        print(f"[CRM] Erro ao processar cruzamento de surtos: {exc}")
+
+    return alertas_crm_multiplos_por_medico
+
 def get_crm_data(
     cnpj: str,
     data_inicio: str | None = None,
@@ -218,10 +455,6 @@ def get_crm_data(
     timing = _CrmTiming(cnpj, data_inicio, data_fim, enabled=timing_log)
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     timing.mark("resolver diretorio cache CNPJ")
-
-    # â”€â”€ helpers de competÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    def _to_comp(date_str: str) -> int:
-        return int(date_str[:7].replace("-", ""))
 
     comp_ini = _to_comp(data_inicio) if data_inicio else None
     comp_fim = _to_comp(data_fim)    if data_fim    else None
@@ -437,35 +670,14 @@ def get_crm_data(
         "from_cache":                     from_cache,
     }
 
-    # â”€â”€ 7. Alertas diÃ¡rios â€” injeta em cada mÃ©dico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â”€â”€ 7. Alertas diÃ¡rios â€” contadores por mÃ©dico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     df_ad = _load_crm_unico_alertas(cnpj, cnpj_dir)
-    alertas_por_medico: dict[str, list[dict]] = {}
     if not df_ad.is_empty():
-        # Filtro de perÃ­odo no DataFrame de alertas
-        if comp_ini:
-            df_ad = df_ad.filter(
-                pl.col("competencia").cast(pl.Int32) >= comp_ini
-            )
-        if comp_fim:
-            df_ad = df_ad.filter(
-                pl.col("competencia").cast(pl.Int32) <= comp_fim
-            )
-            
-        for row in df_ad.iter_rows(named=True):
-            mid = row["id_medico"]
-            alertas_por_medico.setdefault(mid, []).append({
-                "dt":             str(row["dt_alerta"]),
-                "nu_prescricoes": row["nu_prescricoes_dia"],
-                "nu_minutos":     row["nu_minutos_dia"],
-                "nu_minutos_intervalo": row.get("nu_minutos_intervalo"),
-                "taxa_hora":      _to_float(row.get("taxa_hora")),
-                "dt_ini_hora":    str(row.get("dt_ini_hora") or ""),
-                "dt_fim_hora":    str(row.get("dt_fim_hora") or ""),
-                "id_severidade":  _to_int(row.get("id_severidade")),
-            })
+        df_ad = _filter_competencia(df_ad, comp_ini, comp_fim)
 
+    alertas_unico_count = _count_rows_by_medico(df_ad)
     for m in crms_interesse_list:
-        m["alertas_crm_unico"] = alertas_por_medico.get(m["id_medico"], [])
+        m["qtd_alertas_crm_unico"] = alertas_unico_count.get(str(m["id_medico"]), 0)
     timing.detail("alertas_crm_unico_linhas", len(df_ad) if df_ad is not None else 0)
     timing.mark("alertas CRM unico por medico")
 
@@ -476,35 +688,12 @@ def get_crm_data(
         _raise_cache_unavailable("Alertas geograficos CRM", geo_result.error)
     df_geo = geo_result.df
 
-    alertas_geo_por_medico: dict[str, list[dict]] = {}
     if df_geo is not None and not df_geo.is_empty():
-        if comp_ini: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-        if comp_fim: df_geo = df_geo.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
-        
-        for row in df_geo.iter_rows(named=True):
-            mid = row["id_medico"]
-            alertas_geo_por_medico.setdefault(mid, []).append({
-                "competencia":    row["competencia"],
-                "cnpj_a":         row["cnpj_a"],
-                "municipio_a":    row["no_municipio_a"],
-                "uf_a":           row["sg_uf_a"],
-                "dt_ini_a":       str(row["dt_ini_a"]),
-                "dt_fim_a":       str(row["dt_fim_a"]),
-                "nu_presc_a":     row["nu_prescricoes_a"],
-                "vl_autorizacoes_a": _to_float(row.get("vl_autorizacoes_a")),
-                "cnpj_b":         row["cnpj_b"],
-                "municipio_b":    row["no_municipio_b"],
-                "uf_b":           row["sg_uf_b"],
-                "dt_ini_b":       str(row["dt_ini_b"]),
-                "dt_fim_b":       str(row["dt_fim_b"]),
-                "nu_presc_b":     row["nu_prescricoes_b"],
-                "vl_autorizacoes_b": _to_float(row.get("vl_autorizacoes_b")),
-                "vl_autorizacoes_total": _to_float(row.get("vl_autorizacoes_total")),
-                "distancia_km":   _to_float(row.get("distancia_km")),
-            })
+        df_geo = _filter_competencia(df_geo, comp_ini, comp_fim)
 
+    alertas_geo_count = _count_rows_by_medico(df_geo)
     for m in crms_interesse_list:
-        m["alertas_geograficos"] = alertas_geo_por_medico.get(m["id_medico"], [])
+        m["qtd_alertas_geograficos"] = alertas_geo_count.get(str(m["id_medico"]), 0)
     timing.detail("alertas_geograficos_linhas", len(df_geo) if df_geo is not None else 0)
     timing.mark("alertas geograficos")
 
@@ -522,7 +711,6 @@ def get_crm_data(
     timing.mark("sync raio-x CRM")
 
     # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
-    cnpj_alerts_list = []
     volume_hours_result = load_or_sync_crm_timeline_hora(cnpj)
     if volume_hours_result.error:
         timing.write(status="ERRO", error=volume_hours_result.error)
@@ -535,243 +723,73 @@ def get_crm_data(
         volume_alert_hours = _filter_crm_date_range(df_volume_hours, "dt_janela", data_inicio, data_fim)
         volume_alert_hours = volume_alert_hours.filter(pl.col("is_volume_horario_anomalo").cast(pl.Int8) == 1)
         volume_alert_count = len(volume_alert_hours)
-        for r in volume_alert_hours.iter_rows(named=True):
-            nu_prescricoes = _to_int(r.get("nu_prescricoes"))
-            mediana_hora = _to_float(r.get("mediana_hora"))
-            cnpj_alerts_list.append({
-                "tipo": "VOLUME",
-                "dt": str(r["dt_janela"])[:10],
-                "hr": _to_int(r.get("hr_janela")),
-                "nu_prescricoes": nu_prescricoes,
-                "nu_crms": _to_int(r.get("nu_crms_diferentes")),
-                "multiplicador": nu_prescricoes / max(mediana_hora, 1.0),
-                "mediana_hora": mediana_hora
-            })
 
     # 8.2 - Alertas de Múltiplos CRMs (df_cm)
+    cnpj_alerts_multiplo_count = 0
+    cnpj_alerts_multiplo_dates: set[str] = set()
     if df_cm is not None and not df_cm.is_empty():
-        _cm = df_cm
-        if comp_ini: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-        if comp_fim: _cm = _cm.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
+        _cm = _filter_competencia(df_cm, comp_ini, comp_fim)
+        cnpj_alerts_multiplo_count = len(_cm)
+        if not _cm.is_empty():
+            cnpj_alerts_multiplo_dates = {
+                str(value)[:10]
+                for value in _cm["dt_alerta"].to_list()
+                if value is not None
+            }
         for r in _cm.iter_rows(named=True):
-            nu_prescricoes = _to_int(r.get("nu_prescricoes"))
-            nu_minutos = _to_int(r.get("nu_minutos_intervalo") or r.get("nu_minutos_span"))
             taxa_hora = _to_float(r.get("taxa_hora"))
             if taxa_hora <= 0:
                 raise HTTPException(
                     status_code=500,
                     detail="Campo obrigatorio taxa_hora ausente ou invalido em alerta de concentracao CRM multiplo.",
                 )
-            cnpj_alerts_list.append({
-                "tipo": "MULTIPLO",
-                "dt": str(r["dt_alerta"]),
-                "hr": _to_int(r.get("hr_janela")),
-                "nu_prescricoes": nu_prescricoes,
-                "nu_crms": _to_int(r.get("nu_crms")),
-                "nu_minutos": nu_minutos,
-                "taxa_hora": taxa_hora,
-                "dt_ini_hora": str(r.get("dt_ini_concentracao") or ""),
-                "dt_fim_hora": str(r.get("dt_fim_concentracao") or ""),
-                "id_severidade": _to_int(r.get("id_severidade")),
-                "multiplicador": 0.0,
-                "mediana_hora": 0.0
-            })
 
     # 8.3 - Alertas de Médico Único (df_ad - Agregado por Janela)
     # Note: df_ad contém múltiplos alertas por médico. No nível de CNPJ,
     # queremos mostrar quando HOUVE um alerta de médico único.
+    cnpj_alerts_unico_count = 0
     if df_ad is not None and not df_ad.is_empty():
-        _ad = df_ad
-        if comp_ini: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-        if comp_fim: _ad = _ad.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
-        
         # Agrupamos por janela para não duplicar se 2 médicos tiveram alerta na mesma hora
         # (embora o frontend lide com isso, é mais limpo consolidar)
-        _ad_agg = _ad.group_by(["dt_alerta", "hr_janela"]).agg([
+        _ad_agg = df_ad.group_by(["dt_alerta", "hr_janela"]).agg([
             pl.count("id_medico").alias("nu_crms"),
             pl.sum("nu_prescricoes_dia").alias("nu_prescricoes")
         ])
-        for r in _ad_agg.iter_rows(named=True):
-            cnpj_alerts_list.append({
-                "tipo": "UNICO",
-                "dt": str(r["dt_alerta"]),
-                "hr": _to_int(r.get("hr_janela")),
-                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
-                "nu_crms": _to_int(r.get("nu_crms")),
-                "multiplicador": 0.0,
-                "mediana_hora": 0.0
-            })
+        cnpj_alerts_unico_count = len(_ad_agg)
 
-    # Ordenação Final por Data/Hora
-    cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
     timing.detail("alertas_volume_linhas", volume_alert_count)
-    timing.detail("alertas_cnpj_total", len(cnpj_alerts_list))
-    timing.mark("alertas CNPJ e ordenacao")
+    timing.detail("alertas_cnpj_total", volume_alert_count + cnpj_alerts_multiplo_count + cnpj_alerts_unico_count)
+    timing.mark("contadores alertas CNPJ")
 
     # ——— 9. Cruzamento: Quais surtos do estabelecimento cada CRM participou? ———————
-    TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
-    alertas_crm_multiplos_por_medico: dict[str, list[dict]] = {}
-
-    if os.path.exists(TX_PARQUET_PATH):
-        try:
-            # Carregamos as transações anômalas (Raio-X) do estabelecimento
-            df_tx = pl.read_parquet(TX_PARQUET_PATH)
-            if not df_tx.is_empty():
-                # Filtro de período nas transações se necessário
-                if comp_ini or comp_fim:
-                    # Garantimos que seja Date para os accessors .dt
-                    dt_temp = pl.col("dt_janela")
-                    if df_tx["dt_janela"].dtype == pl.Utf8:
-                        dt_temp = dt_temp.str.to_date("%Y-%m-%d")
-                        
-                    df_tx = df_tx.with_columns(
-                        (dt_temp.dt.year() * 100 + dt_temp.dt.month()).cast(pl.Int32).alias("_comp")
-                    )
-                    if comp_ini: df_tx = df_tx.filter(pl.col("_comp") >= comp_ini)
-                    if comp_fim: df_tx = df_tx.filter(pl.col("_comp") <= comp_fim)
-
-                # Garantimos que dt_janela seja String para o join posterior.
-                df_tx = df_tx.with_columns(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10))
-
-                df_cm_period = df_cm
-                if comp_ini:
-                    df_cm_period = df_cm_period.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-                if comp_fim:
-                    df_cm_period = df_cm_period.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
-
-                def _datetime_expr(df_ref: pl.DataFrame, column: str):
-                    dtype = df_ref.schema.get(column)
-                    expr = pl.col(column)
-                    if dtype == pl.Utf8:
-                        return expr.str.strptime(pl.Datetime, strict=False)
-                    if dtype == pl.Date:
-                        return expr.cast(pl.Datetime)
-                    return expr.cast(pl.Datetime, strict=False)
-
-                tx_join = df_tx.with_columns([
-                    _datetime_expr(df_tx, "data_hora").alias("_tx_data_hora"),
-                    pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
-                    pl.col("id_medico").cast(pl.Utf8).alias("_id_medico"),
-                    pl.col("num_autorizacao").cast(pl.Utf8).alias("_num_autorizacao"),
-                ]).select([
-                    "_dt_alerta",
-                    "_tx_data_hora",
-                    "_id_medico",
-                    "_num_autorizacao",
-                ])
-
-                cm_join = df_cm_period.with_row_index("_alerta_idx").with_columns([
-                    pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10).alias("_dt_alerta"),
-                    _datetime_expr(df_cm_period, "dt_ini_concentracao").alias("_dt_ini"),
-                    _datetime_expr(df_cm_period, "dt_fim_concentracao").alias("_dt_fim"),
-                ]).select([
-                    "_alerta_idx",
-                    "_dt_alerta",
-                    "_dt_ini",
-                    "_dt_fim",
-                    "hr_janela",
-                    "nu_prescricoes",
-                    "nu_crms",
-                    "nu_crms_distintos",
-                    "nu_minutos_intervalo",
-                    "nu_minutos_span",
-                    "taxa_hora",
-                    "id_severidade",
-                    "severidade",
-                    "criterio_pior_ritmo",
-                ])
-
-                joined = (
-                    tx_join
-                    .join(cm_join, on="_dt_alerta", how="inner")
-                    .filter(
-                        pl.col("_tx_data_hora").is_not_null()
-                        & pl.col("_dt_ini").is_not_null()
-                        & pl.col("_dt_fim").is_not_null()
-                        & (pl.col("_tx_data_hora") >= pl.col("_dt_ini"))
-                        & (pl.col("_tx_data_hora") <= pl.col("_dt_fim"))
-                        & pl.col("_id_medico").is_not_null()
-                        & (pl.col("_id_medico") != "")
-                    )
-                )
-                timing.detail("cruzamento_join_linhas", len(joined))
-
-                if not joined.is_empty():
-                    cruzamento = (
-                        joined
-                        .group_by(["_alerta_idx", "_id_medico"])
-                        .agg([
-                            pl.col("_num_autorizacao").n_unique().alias("nu_presc_crm"),
-                            pl.col("_dt_alerta").first().alias("dt"),
-                            pl.col("_dt_ini").first().alias("_dt_ini"),
-                            pl.col("_dt_fim").first().alias("_dt_fim"),
-                            pl.col("hr_janela").first().alias("hr_janela"),
-                            pl.col("nu_prescricoes").first().alias("nu_prescricoes"),
-                            pl.col("nu_crms").first().alias("nu_crms"),
-                            pl.col("nu_crms_distintos").first().alias("nu_crms_distintos"),
-                            pl.col("nu_minutos_intervalo").first().alias("nu_minutos_intervalo"),
-                            pl.col("nu_minutos_span").first().alias("nu_minutos_span"),
-                            pl.col("taxa_hora").first().alias("taxa_hora"),
-                            pl.col("id_severidade").first().alias("id_severidade"),
-                            pl.col("severidade").first().alias("severidade"),
-                            pl.col("criterio_pior_ritmo").first().alias("criterio_pior_ritmo"),
-                        ])
-                    )
-
-                    for row in cruzamento.iter_rows(named=True):
-                        dt_ini = row.get("_dt_ini")
-                        dt_fim = row.get("_dt_fim")
-                        if dt_ini is None or dt_fim is None:
-                            continue
-
-                        mid = str(row.get("_id_medico") or "")
-                        hr = _to_int(row.get("hr_janela"), getattr(dt_ini, "hour", 0))
-                        total = _to_int(row.get("nu_prescricoes"))
-                        crms_total = _to_int(row.get("nu_crms") or row.get("nu_crms_distintos"))
-                        nu_minutos = _to_int(row.get("nu_minutos_intervalo") or row.get("nu_minutos_span"))
-                        taxa_hora = _to_float(row.get("taxa_hora"))
-                        severidade = row.get("severidade") or "ALERTA"
-                        inicio = dt_ini.strftime("%H:%M") if hasattr(dt_ini, "strftime") else str(dt_ini)[11:16]
-                        fim = dt_fim.strftime("%H:%M") if hasattr(dt_fim, "strftime") else str(dt_fim)[11:16]
-                        desc = f"{total} autorizacoes entre {inicio} e {fim}, envolvendo {crms_total} CRMs ({severidade})"
-
-                        alertas_crm_multiplos_por_medico.setdefault(mid, []).append({
-                            "dt": str(row.get("dt") or "")[:10],
-                            "hr": hr,
-                            "nu_presc_crm": _to_int(row.get("nu_presc_crm")),
-                            "nu_presc_total": total,
-                            "nu_crms_total": crms_total,
-                            "nu_minutos": nu_minutos,
-                            "taxa_hora": taxa_hora,
-                            "dt_ini_hora": str(dt_ini),
-                            "dt_fim_hora": str(dt_fim),
-                            "id_severidade": _to_int(row.get("id_severidade")),
-                            "multiplicador": 0,
-                            "mediana_hora": 0,
-                            "severidade": severidade,
-                            "criterio_pior_ritmo": row.get("criterio_pior_ritmo"),
-                            "descricao": desc
-                        })
-
-        except Exception as exc:
-            timing.detail("cruzamento_erro", str(exc))
-            print(f"[CRM] Erro ao processar cruzamento de surtos para {cnpj}: {exc}")
-            # print(f"⚠️ Erro ao processar cruzamento de surtos para {cnpj}: {e}")
-            pass
+    alertas_crm_multiplos_por_medico = _build_alertas_crm_multiplos_por_medico(
+        cnpj_dir,
+        df_cm,
+        comp_ini,
+        comp_fim,
+        timing,
+    )
 
     # Atribuição final aos médicos
     for m in crms_interesse_list:
-        m["alertas_crm_multiplos"] = alertas_crm_multiplos_por_medico.get(m["id_medico"], [])
-        m["alerta_concentracao_multiplos_crms"] = 1 if m["alertas_crm_multiplos"] else 0
+        qtd_multiplos = len(alertas_crm_multiplos_por_medico.get(str(m["id_medico"]), []))
+        m["qtd_alertas_crm_multiplos"] = qtd_multiplos
+        m["alerta_concentracao_multiplos_crms"] = 1 if qtd_multiplos else 0
     timing.detail("medicos_com_alertas_multiplos", len(alertas_crm_multiplos_por_medico))
     timing.mark("cruzamento raio-x x surtos multiplos")
 
+    summary_dict.update({
+        "qtd_alertas_volume_horario": volume_alert_count,
+        "qtd_alertas_cnpj_unico": cnpj_alerts_unico_count,
+        "qtd_alertas_cnpj_multiplo": cnpj_alerts_multiplo_count,
+        "qtd_dias_alertas_cnpj_multiplo": len(cnpj_alerts_multiplo_dates),
+    })
 
     response = PrescritoresResponse(
         cnpj=cnpj,
         summary=summary_dict,
         crms_interesse=crms_interesse_list,
-        cnpj_alerts=cnpj_alerts_list,
+        cnpj_alerts=[],
         from_cache=from_cache,
         tem_historico=tem_historico,
         read_time_ms=read_time_ms,
@@ -781,6 +799,52 @@ def get_crm_data(
     timing.mark("montagem response")
     timing.write()
     return response
+
+
+def get_crm_medico_alertas(
+    cnpj: str,
+    id_medico: str,
+    data_inicio: str | None = None,
+    data_fim: str | None = None,
+) -> CrmMedicoAlertasResponse:
+    """Retorna os alertas detalhados de um CRM especifico, sob demanda."""
+    if not id_medico:
+        raise HTTPException(status_code=400, detail="id_medico obrigatorio para consulta de alertas CRM.")
+
+    cnpj_dir = _get_cnpj_cache_dir(cnpj)
+    comp_ini = _to_comp(data_inicio) if data_inicio else None
+    comp_fim = _to_comp(data_fim) if data_fim else None
+    medico_key = str(id_medico)
+
+    df_ad = _load_crm_unico_alertas(cnpj, cnpj_dir)
+    df_ad = _filter_competencia(df_ad, comp_ini, comp_fim)
+    alertas_unico = _build_crm_unico_alertas_por_medico(df_ad).get(medico_key, [])
+
+    geo_result = load_or_sync_geografico(cnpj)
+    if geo_result.error:
+        _raise_cache_unavailable("Alertas geograficos CRM", geo_result.error)
+    df_geo = geo_result.df if geo_result.df is not None else pl.DataFrame()
+    df_geo = _filter_competencia(df_geo, comp_ini, comp_fim)
+    alertas_geograficos = _build_alertas_geograficos_por_medico(df_geo).get(medico_key, [])
+
+    df_cm = _load_crm_multi_alertas(cnpj, cnpj_dir)
+    raio_x_result = sync_crm_raiox_tx(cnpj)
+    if raio_x_result.error:
+        _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
+    alertas_multiplos = _build_alertas_crm_multiplos_por_medico(
+        cnpj_dir,
+        df_cm,
+        comp_ini,
+        comp_fim,
+    ).get(medico_key, [])
+
+    return CrmMedicoAlertasResponse(
+        cnpj=cnpj,
+        id_medico=medico_key,
+        alertas_crm_unico=alertas_unico,
+        alertas_geograficos=alertas_geograficos,
+        alertas_crm_multiplos=alertas_multiplos,
+    )
 
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
@@ -1150,15 +1214,27 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
         import time as _time
 
         if os.path.exists(parquet_path):
-            t0 = _time.perf_counter()
-            df = pl.read_parquet(parquet_path)
-            read_time_ms = round((_time.perf_counter() - t0) * 1000, 1)
-
             filter_expr = pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10) == date_str
             if hour is not None:
                 filter_expr = filter_expr & (pl.col("hr_janela") == hour)
 
-            filtered_df = df.filter(filter_expr)
+            tx_columns = [
+                "data_hora",
+                "num_autorizacao",
+                "id_medico",
+                "codigo_barra",
+                "valor_pago",
+            ]
+
+            t0 = _time.perf_counter()
+            filtered_df = (
+                pl.scan_parquet(parquet_path)
+                .filter(filter_expr)
+                .select(tx_columns)
+                .collect()
+            )
+            read_time_ms = round((_time.perf_counter() - t0) * 1000, 1)
+
             if not filtered_df.is_empty():
                 from data_cache import get_medicamentos_df
 

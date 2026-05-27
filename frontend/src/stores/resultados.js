@@ -19,7 +19,7 @@ export const useResultadoStore = defineStore('resultados', {
       this.isLoading = true;
       this.error = null;
       try {
-        const response = await axios.get(API_ENDPOINTS.dashboardResultados);
+        const response = await axios.get(API_ENDPOINTS.analyticsResultados);
         this.resultados = response.data;
         this.lastUpdated = new Date();
       } catch (err) {

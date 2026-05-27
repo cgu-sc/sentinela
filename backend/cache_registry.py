@@ -484,10 +484,6 @@ def get_global_parquet_files_by_key() -> dict[str, str]:
     }
 
 
-def get_global_parquet_files() -> tuple[str, ...]:
-    return tuple(definition.filename for definition in GLOBAL_CACHE_DEFINITIONS)
-
-
 def get_cnpj_parquet_files() -> tuple[str, ...]:
     return tuple(definition.filename for definition in CNPJ_CACHE_DEFINITIONS)
 

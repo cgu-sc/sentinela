@@ -2,8 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useFormatting } from "@/composables/useFormatting";
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useFilterParameters } from "@/composables/useFilterParameters";
 
 const cnpjDetailStore = useCnpjDetailStore();
+const { getApiParams } = useFilterParameters();
 
 const props = defineProps({
   crmsInteresse:    { type: Array,  required: true },
@@ -28,7 +30,47 @@ watch(() => props.activeKpiFilter, (newVal) => {
   if (newVal !== null) filterOnlyIssues.value = false;
 });
 
-function toggleAlertasDiarios(idMedico) {
+function getAlertasKey(idMedico) {
+  const { inicio, fim } = getApiParams();
+  return `${props.currentCnpj}|${idMedico}|${inicio ?? ''}|${fim ?? ''}`;
+}
+
+function getAlertasDetalhados(idMedico) {
+  return cnpjDetailStore.crmMedicoAlertasByKey[getAlertasKey(idMedico)] ?? null;
+}
+
+function isAlertasLoading(idMedico) {
+  return Boolean(cnpjDetailStore.crmMedicoAlertasLoadingByKey[getAlertasKey(idMedico)]);
+}
+
+function getAlertasError(idMedico) {
+  return cnpjDetailStore.crmMedicoAlertasErrorByKey[getAlertasKey(idMedico)] ?? null;
+}
+
+function requireAlertCount(m, field) {
+  if (m[field] == null) {
+    throw new Error(`Contrato invalido em crm-data: ${field} obrigatorio para ${m.id_medico}.`);
+  }
+  return Number(m[field]);
+}
+
+function qtdAlertasUnico(m) {
+  return requireAlertCount(m, 'qtd_alertas_crm_unico');
+}
+
+function qtdAlertasGeo(m) {
+  return requireAlertCount(m, 'qtd_alertas_geograficos');
+}
+
+function qtdAlertasMultiplos(m) {
+  return requireAlertCount(m, 'qtd_alertas_crm_multiplos');
+}
+
+function hasAlertasDetalhados(m) {
+  return qtdAlertasUnico(m) > 0 || qtdAlertasGeo(m) > 0 || qtdAlertasMultiplos(m) > 0;
+}
+
+async function toggleAlertasDiarios(idMedico) {
   if (expandedAlertasMedico.value.has(idMedico)) {
     expandedAlertasMedico.value.delete(idMedico);
   } else {
@@ -36,9 +78,14 @@ function toggleAlertasDiarios(idMedico) {
     // Define a aba padrão ao abrir: concentração se existir, senão geográfico
     const m = props.crmsInteresse.find(x => x.id_medico === idMedico);
     if (m && !activeAlertTab.value[idMedico]) {
-      if (m.alertas_crm_unico?.length) activeAlertTab.value[idMedico] = 'conc';
-      else if (m.alertas_geograficos?.length) activeAlertTab.value[idMedico] = 'geo';
-      else if (m.alertas_crm_multiplos?.length) activeAlertTab.value[idMedico] = 'surto';
+      if (qtdAlertasUnico(m) > 0) activeAlertTab.value[idMedico] = 'conc';
+      else if (qtdAlertasGeo(m) > 0) activeAlertTab.value[idMedico] = 'geo';
+      else if (qtdAlertasMultiplos(m) > 0) activeAlertTab.value[idMedico] = 'surto';
+    }
+    expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
+    if (m && hasAlertasDetalhados(m) && !getAlertasDetalhados(idMedico)) {
+      const { inicio, fim } = getApiParams();
+      await cnpjDetailStore.fetchCrmMedicoAlertas(props.currentCnpj, idMedico, inicio, fim);
     }
   }
   expandedAlertasMedico.value = new Set(expandedAlertasMedico.value);
@@ -166,7 +213,7 @@ const maxPDOverall = computed(() => {
           <template v-for="(m, i) in visibleCrms" :key="i">
             <tr
               :class="{ 'row-expandable': m.alerta_concentracao_unico_crm || m.alerta5_geografico || m.alerta_concentracao_multiplos_crms }"
-              @click="(m.alertas_crm_unico?.length || m.alertas_geograficos?.length || m.alertas_crm_multiplos?.length) ? toggleAlertasDiarios(m.id_medico) : null"
+              @click="hasAlertasDetalhados(m) ? toggleAlertasDiarios(m.id_medico) : null"
             >
               <td class="col-center">
                   <div class="rank-badge" :class="{ 'gold': i === 0, 'silver': i === 1, 'bronze': i === 2 }">
@@ -192,7 +239,7 @@ const maxPDOverall = computed(() => {
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO CRM ÚNICO
-                    <span v-if="m.alertas_crm_unico?.length" class="badge-count">({{ m.alertas_crm_unico.length }}x)</span>
+                    <span v-if="qtdAlertasUnico(m) > 0" class="badge-count">({{ qtdAlertasUnico(m) }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
@@ -211,7 +258,7 @@ const maxPDOverall = computed(() => {
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
-                    <span v-if="m.alertas_geograficos?.length" class="badge-count">({{ m.alertas_geograficos.length }}x)</span>
+                    <span v-if="qtdAlertasGeo(m) > 0" class="badge-count">({{ qtdAlertasGeo(m) }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <span
@@ -221,11 +268,11 @@ const maxPDOverall = computed(() => {
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs MÚLTIPLOS
-                    <span v-if="m.alertas_crm_multiplos?.length" class="badge-count">({{ m.alertas_crm_multiplos.length }}x)</span>
+                    <span v-if="qtdAlertasMultiplos(m) > 0" class="badge-count">({{ qtdAlertasMultiplos(m) }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
                   <i
-                    v-if="!m.alertas_crm_unico?.length && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.alerta_concentracao_multiplos_crms && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
+                    v-if="!hasAlertasDetalhados(m) && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.alerta_concentracao_multiplos_crms && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
                     class="pi pi-check-circle"
                     style="color: var(--text-muted); font-size: 0.85rem;"
                     v-tooltip.top="'Sem ocorrências identificadas'"
@@ -272,9 +319,34 @@ const maxPDOverall = computed(() => {
             </tr>
 
             <!-- Linha expandida de alertas (Concentração ou Geográfico) com sistema de abas -->
-            <tr v-if="expandedAlertasMedico.has(m.id_medico) && (m.alertas_crm_unico?.length || m.alertas_geograficos?.length || m.alertas_crm_multiplos?.length)" class="alertas-diarios-row">
+            <tr v-if="expandedAlertasMedico.has(m.id_medico) && hasAlertasDetalhados(m)" class="alertas-diarios-row">
               <td colspan="11" class="alertas-diarios-cell">
                 <div
+                  v-if="isAlertasLoading(m.id_medico)"
+                  class="evidence-panel"
+                >
+                  <div class="panel-header">
+                    <div class="panel-header-left">
+                      <i class="pi pi-spin pi-spinner panel-icon" />
+                      <span class="panel-title">Carregando alertas detalhados</span>
+                      <span class="panel-crm-badge">{{ m.id_medico }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else-if="getAlertasError(m.id_medico)"
+                  class="evidence-panel"
+                >
+                  <div class="panel-header">
+                    <div class="panel-header-left">
+                      <i class="pi pi-exclamation-triangle panel-icon" />
+                      <span class="panel-title">{{ getAlertasError(m.id_medico) }}</span>
+                      <span class="panel-crm-badge">{{ m.id_medico }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else-if="getAlertasDetalhados(m.id_medico)"
                   class="evidence-panel"
                   :class="{
                     'theme-conc': activeAlertTab[m.id_medico] === 'conc',
@@ -298,34 +370,34 @@ const maxPDOverall = computed(() => {
                       <span class="panel-crm-badge">{{ m.id_medico }}</span>
                     </div>
                     <!-- SEGMENTED CONTROL (Abas Dinâmicas) -->
-                    <div class="segmented-control" v-if="(m.alertas_crm_unico?.length ? 1 : 0) + (m.alertas_geograficos?.length ? 1 : 0) + (m.alertas_crm_multiplos?.length ? 1 : 0) > 1">
+                    <div class="segmented-control" v-if="(qtdAlertasUnico(m) > 0 ? 1 : 0) + (qtdAlertasGeo(m) > 0 ? 1 : 0) + (qtdAlertasMultiplos(m) > 0 ? 1 : 0) > 1">
                       <button
-                        v-if="m.alertas_crm_unico?.length"
+                        v-if="qtdAlertasUnico(m) > 0"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'conc' }"
                         @click="setAlertTab(m.id_medico, 'conc')"
                       >
                         CRM Único
-                        <span class="seg-count">{{ m.alertas_crm_unico.length }}</span>
+                        <span class="seg-count">{{ qtdAlertasUnico(m) }}</span>
                       </button>
                       <button
-                        v-if="m.alertas_geograficos?.length"
+                        v-if="qtdAlertasGeo(m) > 0"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'geo' }"
                         @click="setAlertTab(m.id_medico, 'geo')"
                       >
                         <i class="pi pi-map-marker" />
                         Distância
-                        <span class="seg-count">{{ m.alertas_geograficos.length }}</span>
+                        <span class="seg-count">{{ qtdAlertasGeo(m) }}</span>
                       </button>
                       <button
-                        v-if="m.alertas_crm_multiplos?.length"
+                        v-if="qtdAlertasMultiplos(m) > 0"
                         class="segment-btn"
                         :class="{ 'seg-active': activeAlertTab[m.id_medico] === 'surto' }"
                         @click="setAlertTab(m.id_medico, 'surto')"
                       >
                         CRMs Múltiplos
-                        <span class="seg-count">{{ m.alertas_crm_multiplos.length }}</span>
+                        <span class="seg-count">{{ qtdAlertasMultiplos(m) }}</span>
                       </button>
                     </div>
                   </div>
@@ -346,7 +418,7 @@ const maxPDOverall = computed(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(a, j) in m.alertas_crm_unico" :key="j" class="alerta-diario-item">
+                      <tr v-for="(a, j) in getAlertasDetalhados(m.id_medico).alertas_crm_unico" :key="j" class="alerta-diario-item">
                         <td class="col-date">{{ formatarDataAlerta(a.dt) }}</td>
                         <td class="col-crm">{{ m.id_medico }}</td>
                         <td class="col-right td-metric">{{ a.nu_prescricoes }}</td>
@@ -371,7 +443,7 @@ const maxPDOverall = computed(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(g, k) in m.alertas_geograficos" :key="'geo-'+k">
+                      <tr v-for="(g, k) in getAlertasDetalhados(m.id_medico).alertas_geograficos" :key="'geo-'+k">
                         <td class="geo-cell">
                           <div class="geo-main">{{ g.municipio_a }}/{{ g.uf_a }}</div>
                           <div class="geo-sub">{{ g.cnpj_a }} · {{ g.nu_presc_a }} presc.</div>
@@ -407,7 +479,7 @@ const maxPDOverall = computed(() => {
                     </thead>
                     <tbody>
                       <tr 
-                        v-for="(s, l) in m.alertas_crm_multiplos" 
+                        v-for="(s, l) in getAlertasDetalhados(m.id_medico).alertas_crm_multiplos" 
                         :key="'surto-'+l"
                         class="clickable-surto-row"
                         v-tooltip.top="'Clique para ver no Raio-X'"
@@ -560,8 +632,6 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .bar-text { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.78rem; font-weight: 500; color: var(--text-color); text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color); }
 .part-fill { background: linear-gradient(90deg, rgba(148, 163, 184, 0.45), rgba(148, 163, 184, 0.65)) !important; opacity: 1 !important; }
 .acum-fill { background: linear-gradient(90deg, rgba(99, 102, 241, 0.7), rgba(129, 140, 248, 0.9)) !important; opacity: 1 !important; }
-.pd-loc-fill { background: linear-gradient(90deg, #f43f5e, #fb7185) !important; opacity: 0.8 !important; }
-.pd-br-fill { background: linear-gradient(90deg, #64748b, #94a3b8) !important; opacity: 0.8 !important; }
 
 .med-id {
   font-weight: 700;
@@ -612,7 +682,6 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 .alertas-diarios-row,
 .premium-table.row-hover tbody tr.alertas-diarios-row:hover { background: transparent !important; cursor: default !important; }
-.alertas-diarios-table tr:hover { background: transparent !important; }
 .alertas-diarios-cell { padding: 0.75rem 1rem !important; border-bottom: 2px solid var(--tabs-border) !important; background: transparent !important; }
 
 /* ── Rank & Medals ──────────────────────────────────────────────────────── */
@@ -669,10 +738,6 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   padding: 1.25rem !important;
   border-bottom: 1px solid var(--tabs-border);
 }
-.alertas-diarios-table { width: 100%; border-collapse: collapse; background: transparent; font-size: 0.78rem; }
-.alertas-diarios-table thead tr { background: color-mix(in srgb, var(--text-color) 4%, transparent); }
-.alertas-diarios-table th { padding: 0.35rem 0.75rem; font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; text-align: left; }
-.alertas-diarios-table td { padding: 0.4rem 0.75rem; border-top: 1px solid var(--tabs-border); color: var(--text-color); opacity: 0.8; }
 .col-date { font-weight: 400; white-space: nowrap; }
 .col-crm { white-space: nowrap; color: var(--text-secondary); font-size: 0.75rem; }
 .col-descricao { color: var(--text-secondary); font-size: 0.75rem; }
@@ -685,15 +750,6 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .crm-more-btn i { font-size: 0.7rem; }
 
 /* Estilos da Tabela Geográfica */
-.table-subgroup-title {
-  background: rgba(139, 92, 246, 0.08) !important;
-  color: #8b5cf6 !important;
-  font-weight: 800 !important;
-  text-align: center !important;
-  padding: 0.5rem !important;
-  letter-spacing: 0.1em;
-}
-
 .geo-cell { line-height: 1.4; padding: 0.6rem 0.75rem !important; }
 .geo-main { font-weight: 600; color: var(--text-color); font-size: 0.8rem; opacity: 0.85; }
 .geo-sub { font-size: 0.68rem; color: var(--text-color); opacity: 0.75; }
@@ -706,14 +762,6 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   font-weight: 600;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
-
-.geo-detail-table {
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-
 
 /* ── Evidence Panel (Design Premium) ───────────────────────────────── */
 .evidence-panel {

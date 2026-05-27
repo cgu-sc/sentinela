@@ -50,7 +50,7 @@ async function fetchRegional(regiao, uf) {
   try {
     isLoading.value = true;
     errorMsg.value  = null;
-    const url = API_ENDPOINTS.analyticsRegional(regiao, uf);
+    const url = API_ENDPOINTS.analyticsRegionalBenchmarking(uf, regiao);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     regionalData.value = await res.json();

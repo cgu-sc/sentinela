@@ -2619,10 +2619,6 @@ def get_df_matriz_risco() -> pl.DataFrame:
         raise RuntimeError("Cache de Matriz de Risco não carregado. Execute uma sincronização.")
     return _df_matriz_risco
 
-def get_df_bench_crm_uf() -> pl.DataFrame:
-    if _df_bench_crm_uf is None:
-        raise RuntimeError("Cache de Benchmark CRM (UF) não carregado. Execute uma sincronização.")
-    return _df_bench_crm_uf
 
 def get_df_bench_crm_regiao() -> pl.DataFrame:
     if _df_bench_crm_regiao is None:
@@ -2658,14 +2654,6 @@ def scan_teia_fonte_nivel3() -> pl.LazyFrame:
 def scan_teia_fonte_nivel4() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
 
-def get_df_teia_fonte_nivel2() -> pl.DataFrame:
-    return scan_teia_fonte_nivel2().collect()
-
-def get_df_teia_fonte_nivel3() -> pl.DataFrame:
-    return scan_teia_fonte_nivel3().collect()
-
-def get_df_teia_fonte_nivel4() -> pl.DataFrame:
-    return scan_teia_fonte_nivel4().collect()
 
 def get_medicamentos_df() -> pl.DataFrame:
     global _df_medicamentos
@@ -2698,14 +2686,6 @@ def scan_analise_gtin_inconsistencia_clinica_regiao() -> pl.LazyFrame:
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
     )
 
-def get_df_analise_gtin_inconsistencia_clinica() -> pl.DataFrame:
-    return scan_analise_gtin_inconsistencia_clinica().collect()
-
-def get_df_analise_gtin_inconsistencia_clinica_municipio() -> pl.DataFrame:
-    return scan_analise_gtin_inconsistencia_clinica_municipio().collect()
-
-def get_df_analise_gtin_inconsistencia_clinica_regiao() -> pl.DataFrame:
-    return scan_analise_gtin_inconsistencia_clinica_regiao().collect()
 
 def get_df_dados_ibge_demografia() -> pl.DataFrame:
     if _df_dados_ibge_demografia is None:
@@ -2738,17 +2718,6 @@ def scan_esocial_cnpj_ultima_movimentacao() -> pl.LazyFrame:
         _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH,
     )
 
-def get_df_esocial_cnpj_ano() -> pl.DataFrame:
-    return scan_esocial_cnpj_ano().collect()
-
-def get_df_esocial_cnpj_trabalhador_ano() -> pl.DataFrame:
-    return scan_esocial_cnpj_trabalhador_ano().collect()
-
-def get_df_esocial_cnpj_movimentacao_ano() -> pl.DataFrame:
-    return scan_esocial_cnpj_movimentacao_ano().collect()
-
-def get_df_esocial_cnpj_ultima_movimentacao() -> pl.DataFrame:
-    return scan_esocial_cnpj_ultima_movimentacao().collect()
 
 def get_df_sentinela_metadados_base() -> pl.DataFrame:
     if _df_sentinela_metadados_base is None:

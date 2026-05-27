@@ -61,15 +61,6 @@ def _svg_currency_axis_label(value: float) -> str:
     return _svg_escape(_axis_currency_label(value))
 
 
-def _svg_point_path(points: list[tuple[float, float]]) -> str:
-    if not points:
-        return ""
-    first_x, first_y = points[0]
-    commands = [f"M {first_x:.2f} {first_y:.2f}"]
-    commands.extend(f"L {x:.2f} {y:.2f}" for x, y in points[1:])
-    return " ".join(commands)
-
-
 def _svg_smooth_path(points: list[tuple[float, float]]) -> str:
     if not points:
         return ""

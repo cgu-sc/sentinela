@@ -163,15 +163,6 @@ def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False
     return run
 
 
-def _sup_note(para, number: int, *, color: str = '0F172A'):
-    """Adiciona numero sobrescrito para nota manual de rodape."""
-    run = para.add_run(str(number))
-    run.font.superscript = True
-    run.font.size = Pt(7)
-    run.font.color.rgb = _rgb(color)
-    return run
-
-
 def _get_or_add_footnotes_part(doc):
     """Obtem ou cria a parte XML de footnotes reais do Word."""
     try:
@@ -325,37 +316,6 @@ def _write_cell(cell, text: str, *, size: float = 6.4, bold: bool = False, color
     if align is not None:
         p.alignment = align
     _run(p, text, color=color, size=size, bold=bold)
-
-
-def _write_cell_fast(cell, text: str, *, size: float = 6.4, bold: bool = False, color: str = '0F172A', align=None):
-    if bold and color in {'0F172A', '475569', '64748B'}:
-        color = '334155'
-    p = cell.paragraphs[0]
-    p._p.clear_content()
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    if align is not None:
-        p.alignment = align
-
-    r = OxmlElement('w:r')
-    r_pr = OxmlElement('w:rPr')
-    if bold:
-        r_pr.append(OxmlElement('w:b'))
-    color_el = OxmlElement('w:color')
-    color_el.set(qn('w:val'), color)
-    r_pr.append(color_el)
-    sz = OxmlElement('w:sz')
-    sz.set(qn('w:val'), str(int(round(size * 2))))
-    r_pr.append(sz)
-    r.append(r_pr)
-
-    text_el = OxmlElement('w:t')
-    text_value = str(text)
-    if text_value.startswith(' ') or text_value.endswith(' '):
-        text_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-    text_el.text = text_value
-    r.append(text_el)
-    p._p.append(r)
 
 
 def _append_table_row_fast(table, values, widths, *, alignments=None, sizes=None, color: str = '0F172A', fill: str | None = None):

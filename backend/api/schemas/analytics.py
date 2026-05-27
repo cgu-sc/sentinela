@@ -302,6 +302,13 @@ class PrescritoresResponse(BaseModel):
     query_time_ms: Optional[float] = None
     save_time_ms: Optional[float] = None
 
+class CrmMedicoAlertasResponse(BaseModel):
+    cnpj: str
+    id_medico: str
+    alertas_crm_unico: List[dict]
+    alertas_geograficos: List[dict]
+    alertas_crm_multiplos: List[dict]
+
 class CrmDailyProfileItem(BaseModel):
     dt_janela: str
     competencia: int

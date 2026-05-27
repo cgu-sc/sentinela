@@ -274,6 +274,9 @@ const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
 const expandedRaioxRows = ref(new Set());
 const hoveredAlert = ref(null);
+const raioxCache = new Map();
+const raioxRequests = new Map();
+const activeRaioxKey = ref(null);
 
 // CRM Único: refs declaradas aqui (antes dos watches) para evitar TDZ quando o
 // watch com immediate:true dispara durante o setup com dados já em cache.
@@ -427,31 +430,102 @@ function toggleRaioxRow(auth) {
   expandedRaioxRows.value = new Set(expandedRaioxRows.value);
 }
 
+function buildRaioxKey(dt_janela, hourInt) {
+  return `${props.cnpj}|${dt_janela}|${hourInt ?? 'all'}`;
+}
+
+function getSelectedRaioxHour() {
+  return selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
+}
+
+function hasRaioxPayload(dt_janela, hourInt = null) {
+  return raioxCache.has(buildRaioxKey(dt_janela, hourInt));
+}
+
+function hasRaioxRequest(dt_janela, hourInt = null) {
+  return raioxRequests.has(buildRaioxKey(dt_janela, hourInt));
+}
+
+function assertRaioxPayload(data) {
+  if (!data || !Array.isArray(data.transactions)) {
+    throw new Error('Contrato invalido em crm/raio-x: transactions obrigatorio.');
+  }
+  if (!Array.isArray(data.alertas_unico)) {
+    throw new Error('Contrato invalido em crm/raio-x: alertas_unico obrigatorio.');
+  }
+  if (!Array.isArray(data.alertas_multi)) {
+    throw new Error('Contrato invalido em crm/raio-x: alertas_multi obrigatorio.');
+  }
+}
+
+function applyRaioxPayload(data) {
+  hourlyTransactions.value = data.transactions;
+  unicoAlertas.value = data.alertas_unico;
+  multiAlertas.value = data.alertas_multi;
+}
+
 async function loadRaiox(dt_janela, hourInt = null) {
+  const key = buildRaioxKey(dt_janela, hourInt);
+  activeRaioxKey.value = key;
+
+  if (raioxCache.has(key)) {
+    applyRaioxPayload(raioxCache.get(key));
+    hourlyTransactionsLoading.value = false;
+    return;
+  }
+
   hourlyTransactionsLoading.value = true;
   try {
-    const url = API_ENDPOINTS.analyticsCrmRaioX(props.cnpj, dt_janela, hourInt);
-    const t0 = performance.now();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Falha HTTP');
-    const data = await res.json();
-    const ms = Math.round(performance.now() - t0);
-    cnpjDetailStore.requestTimes['crm-raio-x'] = {
-      label: 'Raio-X CRM',
-      ms,
-      detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
-    };
-    hourlyTransactions.value = data.transactions || [];
-    unicoAlertas.value = data.alertas_unico || [];
-    multiAlertas.value = data.alertas_multi || [];
+    const request = raioxRequests.get(key) ?? (async () => {
+      const url = API_ENDPOINTS.analyticsCrmRaioX(props.cnpj, dt_janela, hourInt);
+      const t0 = performance.now();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Falha HTTP');
+      const data = await res.json();
+      assertRaioxPayload(data);
+      const ms = Math.round(performance.now() - t0);
+      raioxCache.set(key, data);
+      cnpjDetailStore.requestTimes['crm-raio-x'] = {
+        label: 'Raio-X CRM',
+        ms,
+        detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
+      };
+      return data;
+    })();
+
+    if (!raioxRequests.has(key)) {
+      raioxRequests.set(key, request);
+    }
+
+    const data = await request;
+    if (activeRaioxKey.value !== key) return;
+    applyRaioxPayload(data);
   } catch (err) {
     console.error("Erro ao buscar Raio-X CRM:", err);
     hourlyTransactions.value = [];
     unicoAlertas.value = [];
     multiAlertas.value = [];
   } finally {
-    hourlyTransactionsLoading.value = false;
+    raioxRequests.delete(key);
+    if (activeRaioxKey.value === key) {
+      hourlyTransactionsLoading.value = false;
+    }
   }
+}
+
+async function ensureRaioxLoaded(dt_janela, hourInt = null) {
+  if (!dt_janela) return;
+
+  const key = buildRaioxKey(dt_janela, hourInt);
+  activeRaioxKey.value = key;
+
+  if (raioxCache.has(key)) {
+    applyRaioxPayload(raioxCache.get(key));
+    hourlyTransactionsLoading.value = false;
+    return;
+  }
+
+  await loadRaiox(dt_janela, hourInt);
 }
 
 async function onDailyZrClick() {
@@ -464,7 +538,7 @@ async function onDailyZrClick() {
   selectedDay.value = day;
   selectedHourlyHour.value = 'all';
 
-  await loadRaiox(day.dt_janela, null);
+  await ensureRaioxLoaded(day.dt_janela, null);
 }
 
 async function onChartClick(params) {
@@ -936,7 +1010,7 @@ watch(filteredDailyDays, (newDays) => {
           );
       selectedDay.value = maxDay;
       selectedHourlyHour.value = 'all';
-      loadRaiox(maxDay.dt_janela, null);
+      ensureRaioxLoaded(maxDay.dt_janela, null);
 
       // 2. Centraliza o Gráfico no dia selecionado
       const idx = newDays.findIndex(d => d.dt_janela === maxDay.dt_janela);
@@ -959,18 +1033,22 @@ watch(dailyRankLimit, () => {
 // ── Retrigger quando o dataset horario fica pronto (race condition com auto-selecao) ──
 // O timeline-dataset aquece o parquet do Raio-X antes de responder.
 watch(crmTimelineDatasetLoading, (loading) => {
-  if (!loading && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
-    const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
-    loadRaiox(selectedDay.value.dt_janela, hour);
+  if (!loading && selectedDay.value) {
+    const hour = getSelectedRaioxHour();
+    if (!hasRaioxPayload(selectedDay.value.dt_janela, hour) && !hasRaioxRequest(selectedDay.value.dt_janela, hour)) {
+      ensureRaioxLoaded(selectedDay.value.dt_janela, hour);
+    }
   }
 });
 
 // Belt-and-suspenders: quando o usuário abre a aba Cronologia e o dado ainda está vazio
 const { activeCrmViewMode } = storeToRefs(cnpjDetailStore);
 watch(activeCrmViewMode, (mode) => {
-  if (mode === 'cronologia' && selectedDay.value && activeGroupedRaiox.value.length === 0 && !activeTransactionsLoading.value) {
-    const hour = selectedHourlyHour.value === 'all' ? null : selectedHourlyHour.value;
-    loadRaiox(selectedDay.value.dt_janela, hour);
+  if (mode === 'cronologia' && selectedDay.value) {
+    const hour = getSelectedRaioxHour();
+    if (!hasRaioxPayload(selectedDay.value.dt_janela, hour) && !hasRaioxRequest(selectedDay.value.dt_janela, hour)) {
+      ensureRaioxLoaded(selectedDay.value.dt_janela, hour);
+    }
   }
 });
 
@@ -990,7 +1068,7 @@ watch([selectedTimelineEvent, timelineDailyDataset], async ([evt, profile]) => {
   selectedHourlyHour.value = 'all';
 
   // 2. Carrega as transações do dia inteiro
-  await loadRaiox(evt.date, null);
+  await ensureRaioxLoaded(evt.date, null);
 
   // 3. Centraliza o zoom
   const idx = profile.days.findIndex(d => d.dt_janela === evt.date);
@@ -1049,12 +1127,12 @@ async function onHourlyZrClick() {
   // Toggle do filtro
   if (selectedHourlyHour.value === hourInt) {
     selectedHourlyHour.value = 'all';
-    await loadRaiox(selectedDay.value.dt_janela, null);
+    await ensureRaioxLoaded(selectedDay.value.dt_janela, null);
     return;
   }
   
   selectedHourlyHour.value = hourInt;
-  await loadRaiox(selectedDay.value.dt_janela, hourInt);
+  await ensureRaioxLoaded(selectedDay.value.dt_janela, hourInt);
 }
 
 
@@ -1310,7 +1388,7 @@ function toggleActiveRow(auth) {
           <button 
             v-if="selectedHourlyHour !== 'all'" 
             class="reset-filter-btn animate-fade-in"
-            @click="selectedHourlyHour = 'all'; loadRaiox(selectedDay.dt_janela, null)"
+            @click="selectedHourlyHour = 'all'; ensureRaioxLoaded(selectedDay.dt_janela, null)"
           >
             <i class="pi pi-filter-slash" />
             <span>Ver Dia Todo</span>

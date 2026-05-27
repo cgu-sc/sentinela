@@ -6,6 +6,7 @@ import { fetchRegionalPayload } from '@/composables/useRegional';
 const PREFETCH_CONCURRENCY = 2;
 const networkRequests = new Map();
 const networkLevelRequests = new Map();
+const crmMedicoAlertasRequests = new Map();
 
 async function runTasksWithConcurrency(tasks, limit = PREFETCH_CONCURRENCY) {
   const queue = [...tasks];
@@ -55,6 +56,30 @@ function assertCrmTimelineDataset(data) {
   });
 }
 
+function assertCrmDataLight(data) {
+  if (!data || !Array.isArray(data.crms_interesse) || !data.summary) {
+    throw new Error('Contrato invalido em crm-data: summary e crms_interesse obrigatorios.');
+  }
+  data.crms_interesse.forEach((crm, index) => {
+    ['qtd_alertas_crm_unico', 'qtd_alertas_geograficos', 'qtd_alertas_crm_multiplos'].forEach((field) => {
+      if (crm[field] == null) {
+        throw new Error(`Contrato invalido em crm-data: crms_interesse[${index}].${field} obrigatorio.`);
+      }
+    });
+  });
+}
+
+function assertCrmMedicoAlertas(data) {
+  if (!data || !data.id_medico) {
+    throw new Error('Contrato invalido em crm/medico-alertas: id_medico obrigatorio.');
+  }
+  ['alertas_crm_unico', 'alertas_geograficos', 'alertas_crm_multiplos'].forEach((field) => {
+    if (!Array.isArray(data[field])) {
+      throw new Error(`Contrato invalido em crm/medico-alertas: ${field} obrigatorio.`);
+    }
+  });
+}
+
 export const useCnpjDetailStore = defineStore('cnpjDetail', {
   state: () => ({
     // ── Cadastro ──────────────────────────────────────────────────────────────
@@ -98,6 +123,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
     prescritoresRequestKey: null,
     prescritoresError:   null,
+    crmMedicoAlertasByKey: {},
+    crmMedicoAlertasLoadingByKey: {},
+    crmMedicoAlertasErrorByKey: {},
 
     // Dataset semantico da linha do tempo CRM
     crmTimelineDataset:        null,
@@ -765,6 +793,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(clean), { params });
         if (this.prescritoresRequestKey !== key) return;
+        assertCrmDataLight(data);
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-data'] = { label: 'CRM Data', ms, detail: buildTimingDetail(data) };
         this.prescritoresData   = data;
@@ -779,6 +808,59 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
           this.prescritoresLoading = false;
           this.prescritoresRequestKey = null;
         }
+      }
+    },
+
+    async fetchCrmMedicoAlertas(cnpj, idMedico, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const medico = String(idMedico ?? '').trim();
+      if (!clean || !medico) return null;
+
+      const key = `${clean}|${medico}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.crmMedicoAlertasByKey[key]) return this.crmMedicoAlertasByKey[key];
+      if (crmMedicoAlertasRequests.has(key)) return crmMedicoAlertasRequests.get(key);
+
+      this.crmMedicoAlertasLoadingByKey = {
+        ...this.crmMedicoAlertasLoadingByKey,
+        [key]: true,
+      };
+      this.crmMedicoAlertasErrorByKey = {
+        ...this.crmMedicoAlertasErrorByKey,
+        [key]: null,
+      };
+
+      const request = (async () => {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const t0 = performance.now();
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMedicoAlertas(clean, medico), { params });
+        assertCrmMedicoAlertas(data);
+        const ms = Math.round(performance.now() - t0);
+        this.requestTimes['crm-medico-alertas'] = { label: 'Alertas CRM', ms, detail: medico };
+        this.crmMedicoAlertasByKey = {
+          ...this.crmMedicoAlertasByKey,
+          [key]: data,
+        };
+        return data;
+      })();
+
+      crmMedicoAlertasRequests.set(key, request);
+      try {
+        return await request;
+      } catch (e) {
+        console.error('Erro ao buscar alertas do CRM:', e);
+        this.crmMedicoAlertasErrorByKey = {
+          ...this.crmMedicoAlertasErrorByKey,
+          [key]: ERROR_MSG,
+        };
+        return null;
+      } finally {
+        crmMedicoAlertasRequests.delete(key);
+        this.crmMedicoAlertasLoadingByKey = {
+          ...this.crmMedicoAlertasLoadingByKey,
+          [key]: false,
+        };
       }
     },
 
@@ -947,6 +1029,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.prescritoresLoaded  = null;
       this.prescritoresRequestKey = null;
       this.prescritoresError   = null;
+      this.crmMedicoAlertasByKey = {};
+      this.crmMedicoAlertasLoadingByKey = {};
+      this.crmMedicoAlertasErrorByKey = {};
 
       this.crmTimelineDataset        = null;
       this.crmTimelineDatasetLoading = false;

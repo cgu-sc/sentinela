@@ -104,15 +104,16 @@ const volumeScoreByDate = computed(() => {
   for (const pt of timelineHourlyDataset.value?.points ?? []) {
     if (pt.is_volume_horario_anomalo !== 1) continue;
     const key = String(pt.dt_janela).slice(0, 10);
-    const mediana = Math.max(Number(pt.mediana_hora ?? 0), 3);
-    const score = mediana > 0 ? Number(pt.nu_prescricoes ?? 0) / mediana : 0;
+    const nuPrescricoes = Number(pt.nu_prescricoes ?? 0);
+    const mediana = Number(pt.mediana_hora ?? 0);
+    const score = Math.max(nuPrescricoes - mediana, 0);
     const current = map.get(key);
     if (!current || score > current.score) {
       map.set(key, {
         score,
         hr_janela: pt.hr_janela,
-        nu_prescricoes: pt.nu_prescricoes,
-        mediana_hora: pt.mediana_hora,
+        nu_prescricoes: nuPrescricoes,
+        mediana_hora: mediana,
       });
     }
   }
@@ -124,6 +125,12 @@ function getDailyRankScore(day, mode) {
   if (mode === 'multiplo') return Number(day.score_crm_multiplo_hora ?? 0);
   if (mode === 'volume') return Number(volumeScoreByDate.value.get(day.dt_janela)?.score ?? 0);
   return 0;
+}
+
+function formatVolumeExcess(value) {
+  const score = Number(value ?? 0);
+  if (score <= 0) return '';
+  return Number.isInteger(score) ? String(score) : score.toFixed(1);
 }
 
 const dailyRankedDays = computed(() => {
@@ -157,8 +164,9 @@ function formatDailyRankMetric(day, mode = dailyRankMode.value) {
   }
   if (mode === 'volume') {
     const info = volumeScoreByDate.value.get(day.dt_janela);
-    if (!info?.score) return '';
-    return `${info.score.toFixed(1)}x · ${String(info.hr_janela).padStart(2, '0')}h`;
+    const scoreLabel = formatVolumeExcess(info?.score);
+    if (!scoreLabel) return '';
+    return `+${scoreLabel} · ${String(info.hr_janela).padStart(2, '0')}h`;
   }
   return '';
 }
@@ -175,7 +183,8 @@ function formatDailyRankBadge(day, mode = dailyRankMode.value) {
   }
   if (mode === 'volume') {
     const info = volumeScoreByDate.value.get(day.dt_janela);
-    return info?.score ? `${info.score.toFixed(1)}x` : '';
+    const scoreLabel = formatVolumeExcess(info?.score);
+    return scoreLabel ? `+${scoreLabel}` : '';
   }
   return '';
 }

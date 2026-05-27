@@ -217,22 +217,6 @@ def _build_cnpj_cache_definitions() -> tuple[CacheDefinition, ...]:
             },
         ),
         CacheDefinition(
-            key="volume_horario_anomalo_alertas",
-            filename=cache_files.VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
-            scope="cnpj",
-            producer="cache_producers.crm.load_or_sync_volume_horario_anomalo",
-            schema={
-                "id_cnpj": pl.Int32,
-                "competencia": pl.Int32,
-                "dt_alerta": pl.Utf8,
-                "hr_janela": pl.Int32,
-                "nu_prescricoes": pl.Int32,
-                "nu_crms": pl.Int32,
-                "mediana_hora": pl.Float64,
-                "multiplicador": pl.Float64,
-            },
-        ),
-        CacheDefinition(
             key="crm_raiox_tx",
             filename=cache_files.CRM_RAIOX_TX_PARQUET,
             scope="cnpj",

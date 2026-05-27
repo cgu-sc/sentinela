@@ -105,8 +105,8 @@ const volumeScoreByDate = computed(() => {
     if (pt.is_volume_horario_anomalo !== 1) continue;
     const key = String(pt.dt_janela).slice(0, 10);
     const nuPrescricoes = Number(pt.nu_prescricoes ?? 0);
-    const mediana = Number(pt.mediana_hora ?? 0);
-    const score = Math.max(nuPrescricoes - mediana, 0);
+    const mediana = Math.max(Number(pt.mediana_hora ?? 0), 1);
+    const score = nuPrescricoes / mediana;
     const current = map.get(key);
     if (!current || score > current.score) {
       map.set(key, {
@@ -127,10 +127,10 @@ function getDailyRankScore(day, mode) {
   return 0;
 }
 
-function formatVolumeExcess(value) {
+function formatVolumeMultiplier(value) {
   const score = Number(value ?? 0);
   if (score <= 0) return '';
-  return Number.isInteger(score) ? String(score) : score.toFixed(1);
+  return score.toFixed(1);
 }
 
 const dailyRankedDays = computed(() => {
@@ -164,9 +164,9 @@ function formatDailyRankMetric(day, mode = dailyRankMode.value) {
   }
   if (mode === 'volume') {
     const info = volumeScoreByDate.value.get(day.dt_janela);
-    const scoreLabel = formatVolumeExcess(info?.score);
+    const scoreLabel = formatVolumeMultiplier(info?.score);
     if (!scoreLabel) return '';
-    return `+${scoreLabel} · ${String(info.hr_janela).padStart(2, '0')}h`;
+    return `${scoreLabel}x · ${String(info.hr_janela).padStart(2, '0')}h`;
   }
   return '';
 }
@@ -183,8 +183,8 @@ function formatDailyRankBadge(day, mode = dailyRankMode.value) {
   }
   if (mode === 'volume') {
     const info = volumeScoreByDate.value.get(day.dt_janela);
-    const scoreLabel = formatVolumeExcess(info?.score);
-    return scoreLabel ? `+${scoreLabel}` : '';
+    const scoreLabel = formatVolumeMultiplier(info?.score);
+    return scoreLabel ? `${scoreLabel}x` : '';
   }
   return '';
 }

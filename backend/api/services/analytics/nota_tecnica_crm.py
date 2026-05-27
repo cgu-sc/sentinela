@@ -46,6 +46,23 @@ def _required_positive_float(value: Any, field_name: str, context: str) -> float
     return number
 
 
+def _required_nonnegative_float(value: Any, field_name: str, context: str) -> float:
+    number = _as_optional_float(value)
+    if number is None or number < 0:
+        raise ValueError(f"Campo obrigatorio {field_name} ausente ou invalido em {context}.")
+    return number
+
+
+def _required_nonnegative_int(value: Any, field_name: str, context: str) -> int:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        raise ValueError(f"Campo obrigatorio {field_name} ausente ou invalido em {context}.")
+    if number < 0:
+        raise ValueError(f"Campo obrigatorio {field_name} ausente ou invalido em {context}.")
+    return number
+
+
 def _format_optional_decimal_pt(value: Any, decimals: int = 1, empty: str = "n.c.") -> str:
     number = _as_optional_float(value)
     if number is None:
@@ -53,21 +70,15 @@ def _format_optional_decimal_pt(value: Any, decimals: int = 1, empty: str = "n.c
     return _format_decimal_pt(number, decimals)
 
 
-def _volume_horario_excesso_value(row: dict[str, Any]) -> float | None:
-    multiplicador = _as_optional_float(row.get("multiplicador"))
-    if multiplicador is not None:
-        return multiplicador
-    mediana = _as_optional_float(row.get("mediana_hora"))
-    if mediana == 0:
-        return float(_as_int(row.get("nu_prescricoes")))
-    return None
+def _volume_horario_multiplicador_value(row: dict[str, Any]) -> float:
+    mediana = _required_nonnegative_float(row.get("mediana_hora"), "mediana_hora", "alerta de volume horario CRM")
+    nu_prescricoes = _required_nonnegative_int(row.get("nu_prescricoes"), "nu_prescricoes", "alerta de volume horario CRM")
+    return nu_prescricoes / max(mediana, 1.0)
 
 
-def _format_volume_horario_excesso(row: dict[str, Any]) -> str:
-    excesso = _volume_horario_excesso_value(row)
-    if excesso is None:
-        return "n.c."
-    return f"{_format_decimal_pt(excesso, 1)}x"
+def _format_volume_horario_multiplicador(row: dict[str, Any]) -> str:
+    multiplicador = _volume_horario_multiplicador_value(row)
+    return f"{_format_decimal_pt(multiplicador, 1)}x"
 
 
 def _as_int(value: Any) -> int:
@@ -791,7 +802,6 @@ def _build_crm_evidencias_complementares_context(
             "nu_prescricoes": _as_int(alerta.get("nu_prescricoes")),
             "nu_crms": _as_int(alerta.get("nu_crms")),
             "mediana_hora": _as_optional_float(alerta.get("mediana_hora")),
-            "multiplicador": _as_optional_float(alerta.get("multiplicador")),
         }
         for alerta in cnpj_alerts
         if alerta.get("tipo") == "VOLUME"
@@ -799,8 +809,7 @@ def _build_crm_evidencias_complementares_context(
     ]
     volume_horario_rows.sort(
         key=lambda item: (
-            _volume_horario_excesso_value(item) is not None,
-            _volume_horario_excesso_value(item) or 0.0,
+            _volume_horario_multiplicador_value(item),
             item["nu_prescricoes"],
         ),
         reverse=True,
@@ -942,9 +951,8 @@ def _build_crm_evidencias_complementares_context(
             "qtd_alertas": len(volume_horario_top_rows),
             "maior_multiplicador": next(
                 (
-                    _volume_horario_excesso_value(row)
+                    _volume_horario_multiplicador_value(row)
                     for row in volume_horario_top_rows
-                    if _volume_horario_excesso_value(row) is not None
                 ),
                 None,
             ),
@@ -1446,7 +1454,7 @@ def _add_crm_volume_horario_complementar_text(
     )
     _run(
         p,
-        ", ordenados pelo afastamento em relação à mediana. ",
+        ", ordenados pelo multiplicador em relação à mediana histórica da faixa horária. ",
         color="0F172A",
         size=10,
     )
@@ -1459,15 +1467,16 @@ def _add_crm_volume_horario_complementar_text(
             color="0F172A",
             size=10,
         )
-        multiplicador_principal = _as_optional_float(principal.get("multiplicador"))
         mediana_principal = _as_optional_float(principal.get("mediana_hora"))
-        excesso_principal = _volume_horario_excesso_value(principal)
-        if multiplicador_principal is not None:
-            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
-        elif excesso_principal is not None:
-            _run(p, f"{_format_decimal_pt(excesso_principal, 1)} vezes", color="334155", size=10, bold=True)
-        else:
-            _run(p, "sem comparação calculável", color="334155", size=10, bold=True)
+        multiplicador_principal = _volume_horario_multiplicador_value(principal)
+        _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
+        if mediana_principal == 0:
+            _run(
+                p,
+                " (calculado com denominador mínimo de 1 autorização, pois a mediana histórica do horário é zero)",
+                color="0F172A",
+                size=10,
+            )
         _run(p, ", com mediana histórica de ", color="0F172A", size=10)
         mediana_principal = _as_optional_float(principal.get("mediana_hora"))
         _run(
@@ -1486,7 +1495,7 @@ def _add_crm_volume_horario_complementar_text(
     _format_crm_table_title(title)
     _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="0F172A", size=9, bold=True)
 
-    headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Excesso"]
+    headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Multiplicador"]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [Inches(0.99), Inches(0.74), Inches(1.23), Inches(0.74), Inches(1.33), Inches(1.97)]
     _crm_table_header(table, headers, widths)
@@ -1499,7 +1508,7 @@ def _add_crm_volume_horario_complementar_text(
             str(_as_int(row.get("nu_prescricoes"))),
             str(_as_int(row.get("nu_crms"))),
             _format_optional_decimal_pt(row.get("mediana_hora"), 1),
-            _format_volume_horario_excesso(row),
+            _format_volume_horario_multiplicador(row),
         ]
         for idx, value in enumerate(values):
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER

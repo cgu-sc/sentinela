@@ -19,12 +19,11 @@ from cache_files import (
     GEOGRAFICO_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
-    VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
 )
 from cache_producers.types import CacheLoadResult
 
 _CRM_ALERTS_CACHE_VERSION = 4
-_CRM_SEVERITY_CACHE_VERSION = 2
+_CRM_SEVERITY_CACHE_VERSION = 3
 _CRM_RAIOX_TX_CACHE_VERSION = 3
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
@@ -167,20 +166,6 @@ def load_or_sync_geografico(cnpj: str, engine=None) -> CacheLoadResult:
     return result
 
 
-def load_or_sync_volume_horario_anomalo(cnpj: str, engine=None) -> CacheLoadResult:
-    return _load_or_sync_sql_cache(
-        cnpj,
-        VOLUME_HORARIO_ANOMALO_ALERTAS_PARQUET,
-        text("SELECT V.id_cnpj, V.competencia, V.dt_alerta, V.hr_janela,"
-             " V.nu_prescricoes, V.nu_crms, V.mediana_hora, V.multiplicador"
-             " FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V"
-             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj"
-             " WHERE F.cnpj = :cnpj"),
-        {"cnpj": cnpj},
-        engine,
-    )
-
-
 def load_or_sync_crm_perfil_diario(cnpj: str, engine=None) -> CacheLoadResult:
     parquet_path = _path(cnpj, CRM_PERFIL_DIARIO_PARQUET)
     df, read_time_ms = _read_parquet(parquet_path)
@@ -252,13 +237,14 @@ def load_or_sync_crm_horario_eventos(cnpj: str, engine=None) -> CacheLoadResult:
                     INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
                     WHERE F.cnpj = :cnpj
                     UNION ALL
-                    SELECT 'VOLUME' as tipo, V.dt_alerta as dt_dia, NULL as id_medico, V.nu_crms as nu_crms_distintos,
-                           DATEADD(HOUR, V.hr_janela, CAST(V.dt_alerta AS DATETIME)) as dt_ini_concentracao,
-                           DATEADD(HOUR, V.hr_janela + 1, CAST(V.dt_alerta AS DATETIME)) as dt_fim_concentracao,
+                    SELECT 'VOLUME' as tipo, P.dt_janela as dt_dia, NULL as id_medico, P.nu_crms_diferentes as nu_crms_distintos,
+                           DATEADD(HOUR, P.hr_janela, CAST(P.dt_janela AS DATETIME)) as dt_ini_concentracao,
+                           DATEADD(HOUR, P.hr_janela + 1, CAST(P.dt_janela AS DATETIME)) as dt_fim_concentracao,
                            'CRITICO' as severidade
-                    FROM temp_CGUSC.fp.app_volume_horario_anomalo_alertas V
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = V.id_cnpj
+                    FROM temp_CGUSC.fp.app_crm_timeline_hora P
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj
                     WHERE F.cnpj = :cnpj
+                      AND P.is_volume_horario_anomalo = 1
                 """),
                 conn,
                 params={"cnpj": cnpj},

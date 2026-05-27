@@ -70,13 +70,8 @@ from cache_producers.crm import (
     load_or_sync_crm_timeline_hora,
     load_or_sync_crm_unico_alertas,
     load_or_sync_geografico,
-    load_or_sync_volume_horario_anomalo,
     sync_crm_raiox_tx,
 )
-
-_CRM_SEVERITY_CACHE_VERSION = 2
-_CRM_ALERTS_CACHE_VERSION = 2
-
 
 def _format_timing_ms(ms: float) -> str:
     return f"{ms / 1000:.3f}s" if ms >= 1000 else f"{ms:.1f}ms"
@@ -528,26 +523,29 @@ def get_crm_data(
 
     # ——— 8. Alertas do Estabelecimento (Cross-CRM) ———————————————————————————————
     cnpj_alerts_list = []
-    volume_result = load_or_sync_volume_horario_anomalo(cnpj)
-    if volume_result.error:
-        timing.write(status="ERRO", error=volume_result.error)
-        _raise_cache_unavailable("Alertas de volume horario CRM", volume_result.error)
-    df_ca = volume_result.df
+    volume_hours_result = load_or_sync_crm_timeline_hora(cnpj)
+    if volume_hours_result.error:
+        timing.write(status="ERRO", error=volume_hours_result.error)
+        _raise_cache_unavailable("Alertas de volume horario CRM", volume_hours_result.error)
+    df_volume_hours = volume_hours_result.df
 
-    # 8.1 - Alertas de Volume (df_ca)
-    if df_ca is not None and not df_ca.is_empty():
-        _ca = df_ca
-        if comp_ini: _ca = _ca.filter(pl.col("competencia").cast(pl.Int32) >= comp_ini)
-        if comp_fim: _ca = _ca.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
-        for r in _ca.iter_rows(named=True):
+    # 8.1 - Alertas de Volume
+    volume_alert_count = 0
+    if df_volume_hours is not None and not df_volume_hours.is_empty():
+        volume_alert_hours = _filter_crm_date_range(df_volume_hours, "dt_janela", data_inicio, data_fim)
+        volume_alert_hours = volume_alert_hours.filter(pl.col("is_volume_horario_anomalo").cast(pl.Int8) == 1)
+        volume_alert_count = len(volume_alert_hours)
+        for r in volume_alert_hours.iter_rows(named=True):
+            nu_prescricoes = _to_int(r.get("nu_prescricoes"))
+            mediana_hora = _to_float(r.get("mediana_hora"))
             cnpj_alerts_list.append({
                 "tipo": "VOLUME",
-                "dt": str(r["dt_alerta"]),
+                "dt": str(r["dt_janela"])[:10],
                 "hr": _to_int(r.get("hr_janela")),
-                "nu_prescricoes": _to_int(r.get("nu_prescricoes")),
-                "nu_crms": _to_int(r.get("nu_crms")),
-                "multiplicador": _to_optional_float(r.get("multiplicador")),
-                "mediana_hora":  _to_float(r.get("mediana_hora"))
+                "nu_prescricoes": nu_prescricoes,
+                "nu_crms": _to_int(r.get("nu_crms_diferentes")),
+                "multiplicador": nu_prescricoes / max(mediana_hora, 1.0),
+                "mediana_hora": mediana_hora
             })
 
     # 8.2 - Alertas de Múltiplos CRMs (df_cm)
@@ -606,7 +604,7 @@ def get_crm_data(
 
     # Ordenação Final por Data/Hora
     cnpj_alerts_list.sort(key=lambda x: (x["dt"], x["hr"]))
-    timing.detail("alertas_volume_linhas", len(df_ca) if df_ca is not None else 0)
+    timing.detail("alertas_volume_linhas", volume_alert_count)
     timing.detail("alertas_cnpj_total", len(cnpj_alerts_list))
     timing.mark("alertas CNPJ e ordenacao")
 
@@ -632,7 +630,7 @@ def get_crm_data(
                     if comp_ini: df_tx = df_tx.filter(pl.col("_comp") >= comp_ini)
                     if comp_fim: df_tx = df_tx.filter(pl.col("_comp") <= comp_fim)
 
-                # Garantimos que dt_janela seja String para o Join posterior (df_ca usa Utf8)
+                # Garantimos que dt_janela seja String para o join posterior.
                 df_tx = df_tx.with_columns(pl.col("dt_janela").cast(pl.Utf8).str.slice(0, 10))
 
                 df_cm_period = df_cm

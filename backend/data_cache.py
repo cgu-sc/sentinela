@@ -2161,7 +2161,6 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             # 1. Lista de médicos prescritores e alertas associados.
             cache_manager.sync_cnpj_cache("crm_prescritores", cnpj, engine)
             cache_manager.sync_cnpj_cache("geografico", cnpj, engine)
-            cache_manager.sync_cnpj_cache("volume_horario_anomalo_alertas", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_concentracao_unico_alertas", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_concentracao_multiplo_alertas", cnpj, engine)
             

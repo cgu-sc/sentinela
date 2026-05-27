@@ -2,6 +2,11 @@ import { computeRadialNetworkLayout } from "./networkLayoutEngine";
 
 export const DENSE_GRAPH_NODE_THRESHOLD = 28;
 export const MAX_DENSE_LAYOUT_SCALE = 2.8;
+const CORRIDOR_MIN_SPAN = 190;
+const CORRIDOR_NODE_GAP = 96;
+const CORRIDOR_GROUP_GAP = 56;
+const CORRIDOR_BASE_DISTANCE = 270;
+const CORRIDOR_CURVE_FACTOR = 0.24;
 
 export function sortGraphNodes(nodes) {
   return nodes.sort((a, b) => {
@@ -36,6 +41,95 @@ function circularMeanAngle(angles) {
     { x: 0, y: 0 },
   );
   return Math.atan2(sum.y, sum.x);
+}
+
+function getAnchorSide(anchor, center) {
+  const dx = anchor.x - center.x;
+  const dy = anchor.y - center.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+  return dy >= 0 ? "bottom" : "top";
+}
+
+function getGroupLaneSpan(count) {
+  return Math.max(CORRIDOR_MIN_SPAN, (Math.max(1, count) - 1) * CORRIDOR_NODE_GAP + 120);
+}
+
+function allocateCorridors(groups, getAnchor, center, getCount) {
+  const layoutByGroup = new Map();
+  const groupsBySide = new Map();
+
+  groups.forEach((group) => {
+    const anchor = getAnchor(group);
+    if (!anchor) return;
+    const side = getAnchorSide(anchor, center);
+    if (!groupsBySide.has(side)) groupsBySide.set(side, []);
+    groupsBySide.get(side).push({
+      group,
+      anchor,
+      side,
+      preferredLaneCenter:
+        side === "right" || side === "left" ? anchor.y : anchor.x,
+      span: getGroupLaneSpan(getCount(group)),
+    });
+  });
+
+  groupsBySide.forEach((entries) => {
+    entries.sort((a, b) => a.preferredLaneCenter - b.preferredLaneCenter);
+    let previousEnd = -Infinity;
+    let preferredSum = 0;
+    let packedSum = 0;
+
+    entries.forEach((entry) => {
+      const halfSpan = entry.span / 2;
+      entry.laneCenter = Math.max(
+        entry.preferredLaneCenter,
+        previousEnd + CORRIDOR_GROUP_GAP + halfSpan,
+      );
+      previousEnd = entry.laneCenter + halfSpan;
+      preferredSum += entry.preferredLaneCenter;
+      packedSum += entry.laneCenter;
+    });
+
+    const recenterOffset = (preferredSum - packedSum) / Math.max(entries.length, 1);
+    entries.forEach((entry) => {
+      layoutByGroup.set(entry.group, {
+        anchor: entry.anchor,
+        side: entry.side,
+        laneCenter: entry.laneCenter + recenterOffset,
+        laneSpan: entry.span,
+      });
+    });
+  });
+
+  return layoutByGroup;
+}
+
+function computeCorridorFanPosition({ layout, index, count }) {
+  const safeCount = Math.max(1, count || 1);
+  const safeIndex = Math.max(0, Math.min(index || 0, safeCount - 1));
+  const slot = safeCount === 1 ? 0 : safeIndex / (safeCount - 1) - 0.5;
+  const usableSpan = Math.max(0, layout.laneSpan - 70);
+  const laneOffset = slot * usableSpan;
+
+  if (layout.side === "right" || layout.side === "left") {
+    const direction = layout.side === "right" ? 1 : -1;
+    const y = layout.laneCenter + laneOffset;
+    const x =
+      layout.anchor.x +
+      direction *
+        (CORRIDOR_BASE_DISTANCE +
+          Math.abs(y - layout.anchor.y) * CORRIDOR_CURVE_FACTOR);
+    return { x, y };
+  }
+
+  const direction = layout.side === "bottom" ? 1 : -1;
+  const x = layout.laneCenter + laneOffset;
+  const y =
+    layout.anchor.y +
+    direction *
+      (CORRIDOR_BASE_DISTANCE +
+        Math.abs(x - layout.anchor.x) * CORRIDOR_CURVE_FACTOR);
+  return { x, y };
 }
 
 export function createNetworkLayouts({
@@ -286,38 +380,97 @@ export function createNetworkLayouts({
       .sort((a, b) => a - b)
       .forEach((distance) => {
         const nodes = sortGraphNodes(rings.get(distance));
-        const orderedNodes = nodes
-          .map((node, fallbackIndex) => {
-            const parentAngles = node
-              .connectedEdges(":visible")
-              .connectedNodes(":visible")
-              .filter((other) => (distanceById.get(other.id()) || 0) < distance)
-              .map((other) => angleById.get(other.id()))
-              .filter((angle) => Number.isFinite(angle));
-
-            return {
-              node,
-              baseAngle: parentAngles.length
-                ? circularMeanAngle(parentAngles)
-                : -Math.PI / 2 +
-                  (Math.PI * 2 * fallbackIndex) / Math.max(nodes.length, 1),
-            };
-          })
-          .sort((a, b) => {
-            if (a.baseAngle !== b.baseAngle) return a.baseAngle - b.baseAngle;
-            const labelA =
-              a.node.data("fullLabel") || a.node.data("label") || a.node.id();
-            const labelB =
-              b.node.data("fullLabel") || b.node.data("label") || b.node.id();
-            return String(labelA).localeCompare(String(labelB), "pt-BR");
-          });
-
         const radiusX = ringStepX * distance;
         const radiusY = ringStepY * distance;
-        orderedNodes.forEach(({ node }, index) => {
+
+        if (distance <= 1) {
+          nodes.forEach((node, index) => {
+            const angle =
+              -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(nodes.length, 1);
+            angleById.set(node.id(), angle);
+            targetPositions.set(
+              node.id(),
+              positionOnEllipse(center, radiusX, radiusY, angle),
+            );
+          });
+          return;
+        }
+
+        const groupsByParent = new Map();
+        const fallbackNodes = [];
+
+        nodes.forEach((node) => {
+          const parent = sortGraphNodes(
+            node
+              .connectedEdges(":visible")
+              .connectedNodes(":visible")
+              .filter((other) => {
+                const parentDistance = distanceById.get(other.id());
+                return (
+                  Number.isFinite(parentDistance) &&
+                  parentDistance < distance &&
+                  targetPositions.has(other.id())
+                );
+              })
+              .toArray(),
+          ).sort((a, b) => {
+            const distanceDiff =
+              (distanceById.get(b.id()) || 0) - (distanceById.get(a.id()) || 0);
+            if (distanceDiff) return distanceDiff;
+            const labelA = a.data("fullLabel") || a.data("label") || a.id();
+            const labelB = b.data("fullLabel") || b.data("label") || b.id();
+            return String(labelA).localeCompare(String(labelB), "pt-BR");
+          })[0];
+
+          if (!parent) {
+            fallbackNodes.push(node);
+            return;
+          }
+
+          if (!groupsByParent.has(parent.id())) {
+            groupsByParent.set(parent.id(), { parent, nodes: [] });
+          }
+          groupsByParent.get(parent.id()).nodes.push(node);
+        });
+
+        const parentGroups = Array.from(groupsByParent.values()).sort((a, b) => {
+            const angleA = angleById.get(a.parent.id()) ?? 0;
+            const angleB = angleById.get(b.parent.id()) ?? 0;
+            if (angleA !== angleB) return angleA - angleB;
+            const labelA =
+              a.parent.data("fullLabel") || a.parent.data("label") || a.parent.id();
+            const labelB =
+              b.parent.data("fullLabel") || b.parent.data("label") || b.parent.id();
+            return String(labelA).localeCompare(String(labelB), "pt-BR");
+          });
+        const corridorByGroup = allocateCorridors(
+          parentGroups,
+          (group) => targetPositions.get(group.parent.id()),
+          center,
+          (group) => group.nodes.length,
+        );
+
+        parentGroups.forEach((group) => {
+            const { parent, nodes: childNodes } = group;
+            const corridor = corridorByGroup.get(group);
+            if (!corridor) return;
+            sortGraphNodes(childNodes).forEach((node, index) => {
+              const position = computeCorridorFanPosition({
+                layout: corridor,
+                index,
+                count: childNodes.length,
+              });
+              targetPositions.set(node.id(), position);
+              angleById.set(
+                node.id(),
+                Math.atan2(position.y - center.y, position.x - center.x),
+              );
+            });
+          });
+
+        fallbackNodes.forEach((node, index) => {
           const angle =
-            -Math.PI / 2 +
-            (Math.PI * 2 * index) / Math.max(orderedNodes.length, 1);
+            -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(fallbackNodes.length, 1);
           angleById.set(node.id(), angle);
           targetPositions.set(
             node.id(),
@@ -579,8 +732,8 @@ export function createNetworkLayouts({
       return;
     }
 
-    const blockGapX = Math.max(300, Math.min(width * 0.27, 430)) * densityScale;
-    const blockGapY = Math.max(220, Math.min(height * 0.3, 340)) * densityScale;
+    const blockGapX = Math.max(520, Math.min(width * 0.36, 760)) * densityScale;
+    const blockGapY = Math.max(420, Math.min(height * 0.42, 620)) * densityScale;
     const blockColumns = Math.max(
       1,
       Math.min(3, Math.ceil(Math.sqrt(communities.length))),
@@ -589,28 +742,41 @@ export function createNetworkLayouts({
     const blockStartY =
       center.y -
       ((Math.ceil(communities.length / blockColumns) - 1) * blockGapY) / 2;
-    const memberGapX = 104 * densityScale;
-    const memberGapY = 76 * densityScale;
 
-    communities.forEach(({ pivot, members }, communityIndex) => {
+    const communityLayouts = communities.map((community, communityIndex) => {
       const blockCol = communityIndex % blockColumns;
       const blockRow = Math.floor(communityIndex / blockColumns);
-      const blockCenter = {
-        x: blockStartX + blockCol * blockGapX,
-        y: blockStartY + blockRow * blockGapY,
+      return {
+        ...community,
+        blockCenter: {
+          x: blockStartX + blockCol * blockGapX,
+          y: blockStartY + blockRow * blockGapY,
+        },
       };
+    });
+    const corridorByCommunity = allocateCorridors(
+      communityLayouts,
+      ({ blockCenter }) => blockCenter,
+      center,
+      ({ members }) => members.length,
+    );
+
+    communityLayouts.forEach((communityLayout) => {
+      const { pivot, members, blockCenter } = communityLayout;
       const sortedMembers = sortGraphNodes(members);
-      const memberColumns = Math.max(1, Math.ceil(Math.sqrt(sortedMembers.length)));
-      const gridWidth = (memberColumns - 1) * memberGapX;
+      const corridor = corridorByCommunity.get(communityLayout);
 
       targetPositions.set(pivot.id(), blockCenter);
+      if (!corridor) return;
       sortedMembers.forEach((member, index) => {
-        const col = index % memberColumns;
-        const row = Math.floor(index / memberColumns);
-        targetPositions.set(member.id(), {
-          x: blockCenter.x - gridWidth / 2 + col * memberGapX,
-          y: blockCenter.y + 82 * densityScale + row * memberGapY,
-        });
+        targetPositions.set(
+          member.id(),
+          computeCorridorFanPosition({
+            layout: corridor,
+            index,
+            count: sortedMembers.length,
+          }),
+        );
       });
     });
 

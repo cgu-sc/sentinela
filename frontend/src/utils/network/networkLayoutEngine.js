@@ -9,6 +9,47 @@ const ANCHORED_FAN_NODE_GAP = 130;
 const ANCHORED_FAN_MIN_SPREAD = Math.PI * 0.16;
 const ANCHORED_FAN_MAX_SPREAD = Math.PI * 0.78;
 
+export function computeAnchoredFanPosition({
+  anchor,
+  anchorAngle,
+  index,
+  count,
+  maxSpread = ANCHORED_FAN_MAX_SPREAD,
+  minSpread = ANCHORED_FAN_MIN_SPREAD,
+}) {
+  const safeCount = Math.max(1, count || 1);
+  const safeIndex = Math.max(0, Math.min(index || 0, safeCount - 1));
+  const effectiveMaxSpread = Math.max(0.08, maxSpread || ANCHORED_FAN_MAX_SPREAD);
+  const effectiveMinSpread = Math.min(
+    effectiveMaxSpread,
+    Math.max(0, minSpread || 0),
+  );
+  const desiredArcLength =
+    (safeCount - 1) * ANCHORED_FAN_NODE_GAP * OUTER_GROUP_LABEL_FACTOR;
+  const radius =
+    safeCount === 1
+      ? ANCHORED_FAN_BASE_DISTANCE
+      : Math.max(
+          ANCHORED_FAN_BASE_DISTANCE,
+          desiredArcLength / effectiveMaxSpread,
+        );
+  const spread =
+    safeCount === 1
+      ? 0
+      : Math.min(
+          effectiveMaxSpread,
+          Math.max(effectiveMinSpread, desiredArcLength / radius),
+        );
+  const offset =
+    safeCount === 1 ? 0 : -spread / 2 + (spread * safeIndex) / (safeCount - 1);
+  const angle = anchorAngle + offset;
+
+  return {
+    x: anchor.x + Math.cos(angle) * radius,
+    y: anchor.y + Math.sin(angle) * radius,
+  };
+}
+
 function getDenseLayoutScale(nodeCount) {
   if (nodeCount <= DENSE_GRAPH_NODE_THRESHOLD) return 1;
   return Math.min(
@@ -133,32 +174,16 @@ export function computeRadialNetworkLayout({ nodes, edges, width, height }) {
     const anchorAngle = primaryPartnerId ? partnerAngle.get(primaryPartnerId) : null;
 
     if (anchor && Number.isFinite(anchorAngle)) {
-      const desiredArcLength =
-        (group.length - 1) * ANCHORED_FAN_NODE_GAP * OUTER_GROUP_LABEL_FACTOR;
-      const radius =
-        group.length === 1
-          ? ANCHORED_FAN_BASE_DISTANCE
-          : Math.max(
-              ANCHORED_FAN_BASE_DISTANCE,
-              desiredArcLength / ANCHORED_FAN_MAX_SPREAD,
-            );
-      const spread =
-        group.length === 1
-          ? 0
-          : Math.min(
-              ANCHORED_FAN_MAX_SPREAD,
-              Math.max(ANCHORED_FAN_MIN_SPREAD, desiredArcLength / radius),
-            );
-
       group.forEach(({ node }, index) => {
-        const offset =
-          group.length === 1 ? 0 : -spread / 2 + (spread * index) / (group.length - 1);
-        const angle = anchorAngle + offset;
-
-        positions.set(node.id, {
-          x: anchor.x + Math.cos(angle) * radius,
-          y: anchor.y + Math.sin(angle) * radius,
-        });
+        positions.set(
+          node.id,
+          computeAnchoredFanPosition({
+            anchor,
+            anchorAngle,
+            index,
+            count: group.length,
+          }),
+        );
       });
       return;
     }

@@ -30,6 +30,7 @@ import {
   getDenseLayoutScale,
   sortGraphNodes,
 } from "@/utils/network/networkLayouts";
+import { computeAnchoredFanPosition } from "@/utils/network/networkLayoutEngine";
 import {
   getNodeClasses,
   isTruthyFlag,
@@ -257,6 +258,100 @@ const applyRingView = networkLayouts.applyRingView;
 const applyN4CommunityGridView = networkLayouts.applyN4CommunityGridView;
 const runGraphLayout = networkLayouts.runGraphLayout;
 
+const INCREMENTAL_CORRIDOR_MIN_SPAN = 190;
+const INCREMENTAL_CORRIDOR_NODE_GAP = 96;
+const INCREMENTAL_CORRIDOR_GROUP_GAP = 56;
+const INCREMENTAL_CORRIDOR_BASE_DISTANCE = 270;
+const INCREMENTAL_CORRIDOR_CURVE_FACTOR = 0.24;
+
+function getIncrementalAnchorSide(anchor, center) {
+  const dx = anchor.x - center.x;
+  const dy = anchor.y - center.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+  return dy >= 0 ? "bottom" : "top";
+}
+
+function getIncrementalLaneSpan(count) {
+  return Math.max(
+    INCREMENTAL_CORRIDOR_MIN_SPAN,
+    (Math.max(1, count) - 1) * INCREMENTAL_CORRIDOR_NODE_GAP + 120,
+  );
+}
+
+function computeIncrementalCorridorPosition({ layout, index, count }) {
+  const safeCount = Math.max(1, count || 1);
+  const safeIndex = Math.max(0, Math.min(index || 0, safeCount - 1));
+  const slot = safeCount === 1 ? 0 : safeIndex / (safeCount - 1) - 0.5;
+  const laneOffset = slot * Math.max(0, layout.laneSpan - 70);
+
+  if (layout.side === "right" || layout.side === "left") {
+    const direction = layout.side === "right" ? 1 : -1;
+    const y = layout.laneCenter + laneOffset;
+    const x =
+      layout.anchor.x +
+      direction *
+        (INCREMENTAL_CORRIDOR_BASE_DISTANCE +
+          Math.abs(y - layout.anchor.y) * INCREMENTAL_CORRIDOR_CURVE_FACTOR);
+    return { x, y };
+  }
+
+  const direction = layout.side === "bottom" ? 1 : -1;
+  const x = layout.laneCenter + laneOffset;
+  const y =
+    layout.anchor.y +
+    direction *
+      (INCREMENTAL_CORRIDOR_BASE_DISTANCE +
+        Math.abs(x - layout.anchor.x) * INCREMENTAL_CORRIDOR_CURVE_FACTOR);
+  return { x, y };
+}
+
+function allocateIncrementalCorridors(groups, center) {
+  const layoutByGroup = new Map();
+  const groupsBySide = new Map();
+
+  groups.forEach((group) => {
+    const side = getIncrementalAnchorSide(group.anchor, center);
+    if (!groupsBySide.has(side)) groupsBySide.set(side, []);
+    groupsBySide.get(side).push({
+      ...group,
+      side,
+      preferredLaneCenter:
+        side === "right" || side === "left" ? group.anchor.y : group.anchor.x,
+      span: getIncrementalLaneSpan(group.nodeIds.length),
+    });
+  });
+
+  groupsBySide.forEach((entries) => {
+    entries.sort((a, b) => a.preferredLaneCenter - b.preferredLaneCenter);
+    let previousEnd = -Infinity;
+    let preferredSum = 0;
+    let packedSum = 0;
+
+    entries.forEach((entry) => {
+      const halfSpan = entry.span / 2;
+      entry.laneCenter = Math.max(
+        entry.preferredLaneCenter,
+        previousEnd + INCREMENTAL_CORRIDOR_GROUP_GAP + halfSpan,
+      );
+      previousEnd = entry.laneCenter + halfSpan;
+      preferredSum += entry.preferredLaneCenter;
+      packedSum += entry.laneCenter;
+    });
+
+    const recenterOffset = (preferredSum - packedSum) / Math.max(entries.length, 1);
+    entries.forEach((entry) => {
+      layoutByGroup.set(entry.key, {
+        anchor: entry.anchor,
+        side: entry.side,
+        laneCenter: entry.laneCenter + recenterOffset,
+        laneSpan: entry.span,
+      });
+    });
+  });
+
+  return layoutByGroup;
+}
+
 const mergeNetworkData = (newData, options = {}) => {
   if (!cy || !newData) return false;
   const {
@@ -308,6 +403,25 @@ const mergeNetworkData = (newData, options = {}) => {
     });
   }
   const targetPositions = new Map();
+  const incrementalGroups = [];
+
+  if (placeNewNodesNearAnchors) {
+    anchorGroups.forEach((nodeIds, key) => {
+      if (key === "__center__") return;
+      const anchor = cy.getElementById(key);
+      if (!anchor?.length || anchor.hidden()) return;
+      incrementalGroups.push({
+        key,
+        anchor: anchor.position(),
+        nodeIds,
+      });
+    });
+  }
+
+  const incrementalCorridors = allocateIncrementalCorridors(
+    incrementalGroups,
+    graphCenter,
+  );
 
   // Adicionar nós
   newNodes.forEach((n, index) => {
@@ -322,21 +436,29 @@ const mergeNetworkData = (newData, options = {}) => {
       anchor?.length && !anchor.hidden()
         ? Math.atan2(basePosition.y - graphCenter.y, basePosition.x - graphCenter.x)
         : (Math.PI * 2 * index) / Math.max(newNodes.length, 1);
-    const spread = Math.min(Math.PI * 1.05, Math.max(0.32, (group.length - 1) * 0.28));
-    const angle =
-      group.length <= 1
-        ? baseAngle
-        : baseAngle - spread / 2 + (spread * groupIndex) / (group.length - 1);
-    const targetRadius = Math.min(280, 125 + Math.sqrt(group.length) * 42);
+    const corridor = anchorId ? incrementalCorridors.get(anchorId) : null;
+    const targetPosition = corridor
+      ? computeIncrementalCorridorPosition({
+          layout: corridor,
+          index: groupIndex,
+          count: group.length,
+        })
+      : computeAnchoredFanPosition({
+          anchor: basePosition,
+          anchorAngle: baseAngle,
+          index: groupIndex,
+          count: group.length,
+        });
+    const startAngle = Math.atan2(
+      targetPosition.y - basePosition.y,
+      targetPosition.x - basePosition.x,
+    );
     const startRadius = 28;
     const position = {
-      x: basePosition.x + Math.cos(angle) * startRadius,
-      y: basePosition.y + Math.sin(angle) * startRadius,
+      x: basePosition.x + Math.cos(startAngle) * startRadius,
+      y: basePosition.y + Math.sin(startAngle) * startRadius,
     };
-    targetPositions.set(n.id, {
-      x: basePosition.x + Math.cos(angle) * targetRadius,
-      y: basePosition.y + Math.sin(angle) * targetRadius,
-    });
+    targetPositions.set(n.id, targetPosition);
 
     cy.add({
       group: "nodes",
@@ -588,20 +710,6 @@ function markExpandedNodesFromData(data) {
       expandedNodes.value.add(node.id);
     }
   });
-}
-
-function getExpansionRingSizes(nodeCount) {
-  if (nodeCount <= 0) return [];
-  if (nodeCount <= 8) return [nodeCount];
-
-  const ringCount = Math.ceil(nodeCount / 6);
-  const baseSize = Math.floor(nodeCount / ringCount);
-  const extra = nodeCount % ringCount;
-
-  return Array.from(
-    { length: ringCount },
-    (_, index) => baseSize + (index < extra ? 1 : 0),
-  );
 }
 
 const expandBatch = async (mode) => {
@@ -1379,6 +1487,7 @@ async function expandNode(nodeId) {
       }
       currentLayout = null;
 
+      const animationDuration = 620;
       const anchorPosition = anchorNode.position();
       const visibleBox = cy.nodes(":visible").boundingBox({
         includeLabels: false,
@@ -1387,84 +1496,51 @@ async function expandNode(nodeId) {
         x: (visibleBox.x1 + visibleBox.x2) / 2,
         y: (visibleBox.y1 + visibleBox.y2) / 2,
       };
-      const baseAngle =
-        Math.abs(anchorPosition.x - graphCenter.x) +
-          Math.abs(anchorPosition.y - graphCenter.y) >
-        12
-          ? Math.atan2(
-              anchorPosition.y - graphCenter.y,
-              anchorPosition.x - graphCenter.x,
-            )
-          : -Math.PI / 2;
       const addedNodes = sortGraphNodes(added.nodes().toArray());
-      const addedNodeCount = addedNodes.length;
-      const ringSizes = getExpansionRingSizes(addedNodeCount);
-      const fanSpread = Math.min(
-        Math.PI * 1.65,
-        Math.max(Math.PI * 0.55, addedNodeCount * 0.32),
-      );
-      const baseRadius = Math.min(
-        220,
-        Math.max(118, 82 + addedNodeCount * 14),
-      );
-      const ringGap = Math.min(
-        130,
-        Math.max(72, 48 + addedNodeCount * 7),
-      );
-      const animationDuration = 620;
-      let nodeIndex = 0;
+      const corridor = allocateIncrementalCorridors(
+        [
+          {
+            key: nodeId,
+            anchor: anchorPosition,
+            nodeIds: addedNodes.map((node) => node.id()),
+          },
+        ],
+        graphCenter,
+      ).get(nodeId);
 
-      ringSizes.forEach((ringSize, ring) => {
-        const ringSpread =
-          ringSizes.length === 1
-            ? fanSpread
-            : Math.min(
-                fanSpread,
-                Math.max(Math.PI * 0.5, ringSize * 0.42),
-              );
-        const radius = baseRadius + ring * ringGap;
-        const stagger =
-          ring > 0 && ringSize > 1 ? ringSpread / Math.max(ringSize * 2, 2) : 0;
-
-        for (let indexInRing = 0; indexInRing < ringSize; indexInRing += 1) {
-          const node = addedNodes[nodeIndex];
-          nodeIndex += 1;
-          const angle =
-            ringSize === 1
-              ? baseAngle
-              : baseAngle -
-                ringSpread / 2 +
-                (ringSpread * indexInRing) / Math.max(ringSize - 1, 1) +
-                stagger;
-
-          node.animate(
-            {
-              position: {
-                x: anchorPosition.x + Math.cos(angle) * radius,
-                y: anchorPosition.y + Math.sin(angle) * radius,
-              },
-            },
-            { duration: animationDuration, easing: "ease-out-cubic" },
-          );
-        }
+      addedNodes.forEach((node, index) => {
+        const position = corridor
+          ? computeIncrementalCorridorPosition({
+              layout: corridor,
+              index,
+              count: addedNodes.length,
+            })
+          : computeAnchoredFanPosition({
+              anchor: anchorPosition,
+              anchorAngle: Math.atan2(
+                anchorPosition.y - graphCenter.y,
+                anchorPosition.x - graphCenter.x,
+              ),
+              index,
+              count: addedNodes.length,
+            });
+        node.animate(
+          { position },
+          { duration: animationDuration, easing: "ease-out-cubic" },
+        );
       });
 
       // Destaca vizinhos do nó expandido
       applyVisibilityFilters();
       if (!hasActiveSearch.value) {
+        fitGraphToView(INITIAL_FIT_PADDING, {
+          animate: true,
+          duration: Math.min(650, animationDuration),
+        });
         window.setTimeout(() => {
-          fitGraphToView(INITIAL_FIT_PADDING, {
-            animate: true,
-            duration: 420,
-          });
-        }, 140);
-        window.setTimeout(() => {
-          fitGraphToView(INITIAL_FIT_PADDING, {
-            animate: true,
-            duration: 420,
-          });
+          fitGraphToView(INITIAL_FIT_PADDING, { animate: true, duration: 360 });
           rememberPresentationZoom(expansionLevel);
-        }, animationDuration + 80);
+        }, animationDuration + 40);
       }
     }
     expandedNodes.value.add(nodeId);

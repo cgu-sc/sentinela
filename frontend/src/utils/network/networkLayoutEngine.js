@@ -1,5 +1,8 @@
 const DENSE_GRAPH_NODE_THRESHOLD = 28;
 const MAX_DENSE_LAYOUT_SCALE = 2.8;
+const MIN_OUTER_GROUP_GAP_PX = 90;
+const OUTER_GROUP_LABEL_FACTOR = 1.15;
+const MAX_OUTER_GROUP_SPREAD = Math.PI * 1.6;
 
 function getDenseLayoutScale(nodeCount) {
   if (nodeCount <= DENSE_GRAPH_NODE_THRESHOLD) return 1;
@@ -109,13 +112,25 @@ export function computeRadialNetworkLayout({ nodes, edges, width, height }) {
   });
 
   groupedByAngle.forEach((group) => {
-    const spread = Math.min(0.7, Math.max(0.22, group.length * 0.14));
+    const groupRadiusScale =
+      1 + Math.min(0.45, Math.max(0, group.length - 6) * 0.04);
+    const groupRadiusX = outerRadiusX * groupRadiusScale;
+    const groupRadiusY = outerRadiusY * groupRadiusScale;
+    const referenceRadius = Math.max(1, Math.min(groupRadiusX, groupRadiusY));
+    const neededArc =
+      ((group.length - 1) * MIN_OUTER_GROUP_GAP_PX * OUTER_GROUP_LABEL_FACTOR) /
+      referenceRadius;
+    const spread = Math.min(
+      MAX_OUTER_GROUP_SPREAD,
+      Math.max(0.35, neededArc),
+    );
+
     group.forEach(({ node, baseAngle }, index) => {
       const offset =
         group.length === 1 ? 0 : -spread / 2 + (spread * index) / (group.length - 1);
       positions.set(
         node.id,
-        positionOnEllipse(center, outerRadiusX, outerRadiusY, baseAngle + offset),
+        positionOnEllipse(center, groupRadiusX, groupRadiusY, baseAngle + offset),
       );
     });
   });

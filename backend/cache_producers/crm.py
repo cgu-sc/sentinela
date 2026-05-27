@@ -15,7 +15,7 @@ from cache_files import (
     CRM_TIMELINE_DIA_PARQUET,
     CRM_TIMELINE_EVENTOS_PARQUET,
     CRM_TIMELINE_HORA_PARQUET,
-    DADOS_CRMS_PARQUET,
+    CRM_PRESCRITORES_PARQUET,
     GEOGRAFICO_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
@@ -79,7 +79,7 @@ def _empty_schema(filename: str) -> dict:
 
 
 def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, DADOS_CRMS_PARQUET)
+    parquet_path = _path(cnpj, CRM_PRESCRITORES_PARQUET)
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         missing_cols = [col for col in ["no_medico", "dt_inscricao_crm"] if col not in df.columns]
@@ -110,7 +110,7 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
             )
             query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=_empty_schema(DADOS_CRMS_PARQUET))
+        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=_empty_schema(CRM_PRESCRITORES_PARQUET))
         if "no_medico" not in df.columns:
             df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
         if "dt_inscricao_crm" not in df.columns:

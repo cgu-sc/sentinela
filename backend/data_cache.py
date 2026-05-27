@@ -2158,8 +2158,8 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 
     for i, cnpj in enumerate(cnpjs, 1):
         try:
-            # 1. Lista de Médicos e Alertas (Gera 3 parquets: _prescritores, _crm_unico_alertas, _cnpj_alerts)
-            cache_manager.sync_cnpj_cache("dados_crms", cnpj, engine)
+            # 1. Lista de médicos prescritores e alertas associados.
+            cache_manager.sync_cnpj_cache("crm_prescritores", cnpj, engine)
             cache_manager.sync_cnpj_cache("geografico", cnpj, engine)
             cache_manager.sync_cnpj_cache("volume_horario_anomalo_alertas", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_concentracao_unico_alertas", cnpj, engine)

@@ -169,8 +169,8 @@ def _build_cnpj_cache_definitions() -> tuple[CacheDefinition, ...]:
             },
         ),
         CacheDefinition(
-            key="dados_crms",
-            filename=cache_files.DADOS_CRMS_PARQUET,
+            key="crm_prescritores",
+            filename=cache_files.CRM_PRESCRITORES_PARQUET,
             scope="cnpj",
             producer="cache_producers.crm.load_or_sync_crm_data",
             schema={

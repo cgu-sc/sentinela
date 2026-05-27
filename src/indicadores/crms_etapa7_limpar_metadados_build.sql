@@ -78,6 +78,21 @@ BEGIN
     RAISERROR('Tabela fp.app_crm_export nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
     RETURN;
 END;
+IF OBJECT_ID('fp.app_crm_timeline_dia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.app_crm_timeline_dia nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
+    RETURN;
+END;
+IF OBJECT_ID('fp.app_crm_timeline_hora', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.app_crm_timeline_hora nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
+    RETURN;
+END;
+IF OBJECT_ID('fp.app_crm_timeline_eventos', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.app_crm_timeline_eventos nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
+    RETURN;
+END;
 
 PRINT '>> [LIMPEZA CRM] Tabelas de metadata/controle/log encontradas antes da limpeza:';
 

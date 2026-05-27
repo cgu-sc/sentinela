@@ -5,6 +5,9 @@
 --   1. temp_CGUSC.fp.build_alertas_crm_registro
 --   2. temp_CGUSC.fp.build_alertas_crm
 --   3. temp_CGUSC.fp.build_crm_export
+--   4. temp_CGUSC.fp.build_crm_timeline_dia
+--   5. temp_CGUSC.fp.build_crm_timeline_hora
+--   6. temp_CGUSC.fp.build_crm_timeline_eventos
 --
 -- Nao recria build_alertas_crm_geografico, benchmarks ou HHI. Essas tabelas devem
 -- existir previamente quando forem usadas pelos joins abaixo.
@@ -62,6 +65,30 @@ END;
 IF OBJECT_ID('temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas') IS NULL
 BEGIN
     RAISERROR('Tabela temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_diario') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_perfil_diario nao encontrada. Rode o loteado primeiro.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.build_crm_perfil_horario') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.build_crm_perfil_horario nao encontrada. Rode o loteado primeiro.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel nao encontrada. Rode o loteado primeiro.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.build_volume_horario_anomalo_alertas') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.build_volume_horario_anomalo_alertas nao encontrada. Rode o loteado primeiro.', 16, 1);
     RETURN;
 END;
 
@@ -154,6 +181,9 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_detalhado_pos_global_slim_metadata;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_registro;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_export;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_dia;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_hora;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_eventos;
 
 CREATE TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_slim_metadata (
     id_pipeline       TINYINT      NOT NULL,
@@ -164,6 +194,9 @@ CREATE TABLE temp_CGUSC.fp.build_crm_detalhado_pos_global_slim_metadata (
     nu_alertas_crm_registro BIGINT NULL,
     nu_alertas_crm    BIGINT       NULL,
     nu_crm_export     BIGINT       NULL,
+    nu_timeline_dia   BIGINT       NULL,
+    nu_timeline_hora  BIGINT       NULL,
+    nu_timeline_eventos BIGINT     NULL,
     dt_criacao        DATETIME     NOT NULL,
     dt_atualizacao    DATETIME     NULL,
     status            VARCHAR(20)  NOT NULL,
@@ -183,7 +216,7 @@ DELETE FROM temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
 WHERE pipeline_versao = @pipeline_versao
   AND dt_data_inicio = @DataInicio
   AND dt_data_fim = @DataFim
-  AND etapa IN ('SLIM_1_ALERTAS_CRM_REGISTRO', 'SLIM_2_ALERTAS_CRM', 'SLIM_3_CRM_EXPORT');
+  AND etapa IN ('SLIM_1_ALERTAS_CRM_REGISTRO', 'SLIM_2_ALERTAS_CRM', 'SLIM_3_CRM_EXPORT', 'SLIM_4B_CRM_TIMELINE_APP');
 
 BEGIN TRY
 
@@ -527,12 +560,221 @@ WHERE id_etapa_log = @id_etapa_log;
 PRINT '   build_crm_export concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 -- ============================================================================
+-- PASSO 4.B: Contrato enxuto da timeline CRM para o app
+-- ============================================================================
+PRINT '>> Passo 4.B: Criando temp_CGUSC.fp.build_crm_timeline_*...';
+SET @etapa = 'SLIM_4B_CRM_TIMELINE_APP';
+SET @t1 = GETDATE();
+SET @id_etapa_log = NULL;
+
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
+    (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
+VALUES
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1,
+     'PROCESSANDO', 'Criando build_crm_timeline_dia, build_crm_timeline_hora e build_crm_timeline_eventos.');
+
+SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+DROP TABLE IF EXISTS #timeline_unico_scores;
+SELECT
+    U.id_cnpj,
+    CAST(U.dt_dia AS DATE) AS dt_janela,
+    CAST(U.id_medico AS VARCHAR(13)) AS id_medico,
+    CAST(U.taxa_hora_pior_ritmo AS DECIMAL(7,2)) AS score_crm_unico_hora,
+    CAST(U.nu_autorizacoes_pior_ritmo AS SMALLINT) AS score_crm_unico_qtd,
+    CAST(U.janela_pior_ritmo_minutos AS SMALLINT) AS score_crm_unico_minutos,
+    ROW_NUMBER() OVER (
+        PARTITION BY U.id_cnpj, U.dt_dia
+        ORDER BY
+            U.id_severidade DESC,
+            U.taxa_hora_pior_ritmo DESC,
+            U.nu_autorizacoes_pior_ritmo DESC,
+            U.id_medico
+    ) AS rn
+INTO #timeline_unico_scores
+FROM temp_CGUSC.fp.build_crm_concentracao_unico_alertas U;
+
+CREATE CLUSTERED INDEX IDX_TimelineUnicoScores
+    ON #timeline_unico_scores(id_cnpj, dt_janela, rn);
+
+DROP TABLE IF EXISTS #timeline_multiplo_scores;
+SELECT
+    MU.id_cnpj,
+    CAST(MU.dt_dia AS DATE) AS dt_janela,
+    CAST(MU.taxa_hora_pior_ritmo AS DECIMAL(7,2)) AS score_crm_multiplo_hora,
+    CAST(MU.nu_autorizacoes_pior_ritmo AS SMALLINT) AS score_crm_multiplo_qtd,
+    CAST(MU.janela_pior_ritmo_minutos AS SMALLINT) AS score_crm_multiplo_minutos,
+    CAST(MU.nu_crms_distintos AS SMALLINT) AS score_crm_multiplo_crms,
+    ROW_NUMBER() OVER (
+        PARTITION BY MU.id_cnpj, MU.dt_dia
+        ORDER BY
+            MU.id_severidade DESC,
+            MU.taxa_hora_pior_ritmo DESC,
+            MU.nu_autorizacoes_pior_ritmo DESC,
+            MU.nu_crms_distintos DESC
+    ) AS rn
+INTO #timeline_multiplo_scores
+FROM temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas MU;
+
+CREATE CLUSTERED INDEX IDX_TimelineMultiploScores
+    ON #timeline_multiplo_scores(id_cnpj, dt_janela, rn);
+
+SELECT
+    CAST(D.id_cnpj AS INT) AS id_cnpj,
+    CAST(D.dt_janela AS DATE) AS dt_janela,
+    CAST(D.competencia AS INT) AS competencia,
+    CAST(D.nu_prescricoes_dia AS SMALLINT) AS nu_prescricoes_dia,
+    CAST(D.nu_crms_distintos AS SMALLINT) AS nu_crms_distintos,
+    CAST(D.mediana_diaria AS DECIMAL(7,2)) AS mediana_diaria,
+    CAST(D.is_dia_com_volume_horario_anomalo AS BIT) AS is_dia_com_volume_horario_anomalo,
+    CAST(D.is_anomalo_unico AS BIT) AS is_anomalo_unico,
+    CAST(D.is_crm_multiplo AS BIT) AS is_crm_multiplo,
+    U.score_crm_unico_hora,
+    U.score_crm_unico_qtd,
+    U.score_crm_unico_minutos,
+    U.id_medico AS score_crm_unico_medico,
+    MU.score_crm_multiplo_hora,
+    MU.score_crm_multiplo_qtd,
+    MU.score_crm_multiplo_minutos,
+    MU.score_crm_multiplo_crms
+INTO temp_CGUSC.fp.build_crm_timeline_dia
+FROM temp_CGUSC.fp.build_crm_perfil_diario D
+LEFT JOIN #timeline_unico_scores U
+    ON  U.id_cnpj = D.id_cnpj
+    AND U.dt_janela = D.dt_janela
+    AND U.rn = 1
+LEFT JOIN #timeline_multiplo_scores MU
+    ON  MU.id_cnpj = D.id_cnpj
+    AND MU.dt_janela = D.dt_janela
+    AND MU.rn = 1;
+
+CREATE CLUSTERED INDEX IDX_CrmTimelineDia
+    ON temp_CGUSC.fp.build_crm_timeline_dia(id_cnpj, dt_janela);
+
+SELECT
+    CAST(H.id_cnpj AS INT) AS id_cnpj,
+    CAST(H.dt_janela AS DATE) AS dt_janela,
+    CAST(H.hr_janela AS TINYINT) AS hr_janela,
+    CAST(H.nu_prescricoes AS SMALLINT) AS nu_prescricoes,
+    CAST(H.nu_crms_diferentes AS SMALLINT) AS nu_crms_diferentes,
+    CAST(M.mediana_hora_movel AS DECIMAL(6,2)) AS mediana_hora,
+    CAST(M.mad_hora_movel AS DECIMAL(10,4)) AS mad_hora,
+    CAST(H.is_hora_com_alerta AS BIT) AS is_hora_com_alerta,
+    CAST(H.is_volume_horario_anomalo AS BIT) AS is_volume_horario_anomalo,
+    CAST(H.is_crm_unico AS BIT) AS is_crm_unico,
+    CAST(H.is_crm_multiplo AS BIT) AS is_crm_multiplo
+INTO temp_CGUSC.fp.build_crm_timeline_hora
+FROM temp_CGUSC.fp.build_crm_perfil_horario H
+LEFT JOIN temp_CGUSC.fp.build_mediana_autorizacoes_horaria_movel M
+    ON  M.id_cnpj = H.id_cnpj
+    AND M.dt_janela = H.dt_janela
+    AND M.hr_janela = H.hr_janela;
+
+CREATE CLUSTERED INDEX IDX_CrmTimelineHora
+    ON temp_CGUSC.fp.build_crm_timeline_hora(id_cnpj, dt_janela, hr_janela);
+
+SELECT
+    CAST(E.id_cnpj AS INT) AS id_cnpj,
+    CAST(E.dt_janela AS DATE) AS dt_janela,
+    CAST(E.tipo AS VARCHAR(8)) AS tipo,
+    CAST(E.hora_inicio AS CHAR(5)) AS hora_inicio,
+    CAST(E.hora_fim AS CHAR(5)) AS hora_fim,
+    CAST(E.minuto_inicio AS SMALLINT) AS minuto_inicio,
+    CAST(E.minuto_fim AS SMALLINT) AS minuto_fim,
+    CAST(E.severidade AS VARCHAR(7)) AS severidade,
+    CAST(E.id_medico AS VARCHAR(13)) AS id_medico,
+    CAST(E.nu_crms_distintos AS SMALLINT) AS nu_crms_distintos
+INTO temp_CGUSC.fp.build_crm_timeline_eventos
+FROM (
+    SELECT
+        U.id_cnpj,
+        U.dt_dia AS dt_janela,
+        CAST('UNICO' AS VARCHAR(8)) AS tipo,
+        CONVERT(CHAR(5), U.dt_ini_concentracao, 108) AS hora_inicio,
+        CONVERT(CHAR(5), U.dt_fim_concentracao, 108) AS hora_fim,
+        DATEDIFF(MINUTE, CAST(U.dt_dia AS DATETIME), U.dt_ini_concentracao) AS minuto_inicio,
+        DATEDIFF(MINUTE, CAST(U.dt_dia AS DATETIME), U.dt_fim_concentracao) AS minuto_fim,
+        CASE U.id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+            ELSE 'ALERTA'
+        END AS severidade,
+        U.id_medico,
+        CAST(NULL AS SMALLINT) AS nu_crms_distintos
+    FROM temp_CGUSC.fp.build_crm_concentracao_unico_alertas U
+
+    UNION ALL
+
+    SELECT
+        MU.id_cnpj,
+        MU.dt_dia AS dt_janela,
+        CAST('MULTIPLO' AS VARCHAR(8)) AS tipo,
+        CONVERT(CHAR(5), MU.dt_ini_concentracao, 108) AS hora_inicio,
+        CONVERT(CHAR(5), MU.dt_fim_concentracao, 108) AS hora_fim,
+        DATEDIFF(MINUTE, CAST(MU.dt_dia AS DATETIME), MU.dt_ini_concentracao) AS minuto_inicio,
+        DATEDIFF(MINUTE, CAST(MU.dt_dia AS DATETIME), MU.dt_fim_concentracao) AS minuto_fim,
+        CASE MU.id_severidade
+            WHEN 4 THEN 'EXTREMO'
+            WHEN 3 THEN 'CRITICO'
+            WHEN 2 THEN 'GRAVE'
+            WHEN 1 THEN 'ALTO'
+            ELSE 'ALERTA'
+        END AS severidade,
+        CAST(NULL AS VARCHAR(13)) AS id_medico,
+        MU.nu_crms_distintos
+    FROM temp_CGUSC.fp.build_crm_concentracao_multiplo_alertas MU
+
+    UNION ALL
+
+    SELECT
+        V.id_cnpj,
+        V.dt_alerta AS dt_janela,
+        CAST('VOLUME' AS VARCHAR(8)) AS tipo,
+        RIGHT('0' + CAST(V.hr_janela AS VARCHAR(2)), 2) + ':00' AS hora_inicio,
+        CASE
+            WHEN V.hr_janela = 23 THEN '24:00'
+            ELSE RIGHT('0' + CAST(V.hr_janela + 1 AS VARCHAR(2)), 2) + ':00'
+        END AS hora_fim,
+        V.hr_janela * 60 AS minuto_inicio,
+        (V.hr_janela + 1) * 60 AS minuto_fim,
+        'CRITICO' AS severidade,
+        CAST(NULL AS VARCHAR(13)) AS id_medico,
+        V.nu_crms AS nu_crms_distintos
+    FROM temp_CGUSC.fp.build_volume_horario_anomalo_alertas V
+) E;
+
+CREATE CLUSTERED INDEX IDX_CrmTimelineEventos
+    ON temp_CGUSC.fp.build_crm_timeline_eventos(id_cnpj, dt_janela, minuto_inicio);
+
+SET @dt_fim_etapa = GETDATE();
+SELECT @nu_registros_etapa =
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_dia)
+  + (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_hora)
+  + (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_eventos);
+
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
+SET dt_fim_etapa = @dt_fim_etapa,
+    segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
+    milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
+    nu_registros = @nu_registros_etapa,
+    status = 'OK',
+    observacao = 'build_crm_timeline_* criadas.'
+WHERE id_etapa_log = @id_etapa_log;
+
+PRINT '   build_crm_timeline_* concluidas em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+
+-- ============================================================================
 -- FINALIZACAO
 -- ============================================================================
 UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_slim_metadata
 SET nu_alertas_crm_registro = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_registro),
     nu_alertas_crm = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm),
     nu_crm_export = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_export),
+    nu_timeline_dia = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_dia),
+    nu_timeline_hora = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_hora),
+    nu_timeline_eventos = (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_eventos),
     status = 'OK',
     dt_atualizacao = GETDATE(),
     observacao = 'Pos-global slim finalizado com sucesso.'
@@ -551,6 +793,9 @@ SELECT
     nu_alertas_crm_registro,
     nu_alertas_crm,
     nu_crm_export,
+    nu_timeline_dia,
+    nu_timeline_hora,
+    nu_timeline_eventos,
     status,
     dt_criacao,
     dt_atualizacao,
@@ -560,7 +805,10 @@ FROM temp_CGUSC.fp.build_crm_detalhado_pos_global_slim_metadata;
 SELECT
     (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm_registro) AS qtd_alertas_crm_registro,
     (SELECT COUNT(*) FROM temp_CGUSC.fp.build_alertas_crm) AS qtd_alertas_crm,
-    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_export) AS qtd_crm_export;
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_export) AS qtd_crm_export,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_dia) AS qtd_crm_timeline_dia,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_hora) AS qtd_crm_timeline_hora,
+    (SELECT COUNT(*) FROM temp_CGUSC.fp.build_crm_timeline_eventos) AS qtd_crm_timeline_eventos;
 
 SELECT TOP 30
     id_medico,

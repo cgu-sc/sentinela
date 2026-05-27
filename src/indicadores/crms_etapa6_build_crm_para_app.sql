@@ -76,6 +76,21 @@ BEGIN
     RAISERROR('Tabela fp.build_crm_export nao encontrada.', 16, 1);
     RETURN;
 END;
+IF OBJECT_ID('fp.build_crm_timeline_dia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.build_crm_timeline_dia nao encontrada.', 16, 1);
+    RETURN;
+END;
+IF OBJECT_ID('fp.build_crm_timeline_hora', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.build_crm_timeline_hora nao encontrada.', 16, 1);
+    RETURN;
+END;
+IF OBJECT_ID('fp.build_crm_timeline_eventos', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.build_crm_timeline_eventos nao encontrada.', 16, 1);
+    RETURN;
+END;
 
 PRINT '>> [PROMOCAO CRM] Renomeando tabelas...';
 
@@ -117,6 +132,15 @@ BEGIN TRY
 
     IF OBJECT_ID('fp.app_crm_export', 'U') IS NOT NULL DROP TABLE fp.app_crm_export;
     EXEC sp_rename 'fp.build_crm_export', 'app_crm_export';
+
+    IF OBJECT_ID('fp.app_crm_timeline_dia', 'U') IS NOT NULL DROP TABLE fp.app_crm_timeline_dia;
+    EXEC sp_rename 'fp.build_crm_timeline_dia', 'app_crm_timeline_dia';
+
+    IF OBJECT_ID('fp.app_crm_timeline_hora', 'U') IS NOT NULL DROP TABLE fp.app_crm_timeline_hora;
+    EXEC sp_rename 'fp.build_crm_timeline_hora', 'app_crm_timeline_hora';
+
+    IF OBJECT_ID('fp.app_crm_timeline_eventos', 'U') IS NOT NULL DROP TABLE fp.app_crm_timeline_eventos;
+    EXEC sp_rename 'fp.build_crm_timeline_eventos', 'app_crm_timeline_eventos';
 
     IF OBJECT_ID('fp.build_indicador_crm_bench_uf', 'U') IS NOT NULL
     BEGIN

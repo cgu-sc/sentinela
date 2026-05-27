@@ -25,14 +25,13 @@ GO
 -- ============================================================================
 
 -- ============================================================================
--- LIMPEZA PREVIA DE TABELAS FINAIS/DERIVADAS
+-- LIMPEZA PREVIA DE TABELAS DE STAGING
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
+DROP TABLE IF EXISTS temp_CGUSC.fp.falecidos_por_farmacia_staging;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado_staging;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao_staging;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf_staging;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br_staging;
 GO
 
 -- ============================================================================
@@ -231,8 +230,20 @@ END;
 CREATE CLUSTERED INDEX IDX_AutorizacoesAuditadas_CNPJ_Ano
 ON #AutorizacoesAuditadas(id_cnpj, ano_base);
 
+CREATE NONCLUSTERED INDEX IDX_AutorizacoesAuditadas_Auto
+ON #AutorizacoesAuditadas(id_cnpj, ano_base, num_autorizacao, cpf);
+
 CREATE NONCLUSTERED INDEX IDX_AutorizacoesAuditadas_CPF
 ON #AutorizacoesAuditadas(cpf);
+
+DROP TABLE IF EXISTS #cpfs_auditados;
+
+SELECT DISTINCT cpf
+INTO #cpfs_auditados
+FROM #AutorizacoesAuditadas;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_cpfs_auditados
+ON #cpfs_auditados(cpf);
 
 DROP TABLE IF EXISTS #obitos_unificados;
 
@@ -243,6 +254,8 @@ SELECT
     MAX(OB.fonte) AS fonte
 INTO #obitos_unificados
 FROM temp_CGUSC.fp.obito_unificada OB
+INNER JOIN #cpfs_auditados C
+    ON C.cpf = OB.cpf
 WHERE OB.dt_obito IS NOT NULL
 GROUP BY OB.cpf;
 
@@ -277,6 +290,9 @@ WHERE A.data_autorizacao > OB.dt_obito;
 CREATE CLUSTERED INDEX IDX_FalecidosAutorizacoes_CNPJ_Ano
 ON #FalecidosAutorizacoes(id_cnpj, ano_base);
 
+CREATE NONCLUSTERED INDEX IDX_FalecidosAutorizacoes_Auto
+ON #FalecidosAutorizacoes(id_cnpj, ano_base, num_autorizacao, cpf);
+
 CREATE NONCLUSTERED INDEX IDX_FalecidosAutorizacoes_CPF
 ON #FalecidosAutorizacoes(cpf);
 
@@ -310,7 +326,7 @@ ON #cpf_info(cpf);
 -- PASSO 3: DETALHAMENTO NOMINAL POR AUTORIZACAO
 -- Mantem o contrato historico de colunas consumido pela API/cache.
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.falecidos_por_farmacia;
+DROP TABLE IF EXISTS temp_CGUSC.fp.falecidos_por_farmacia_staging;
 
 SELECT
     F.cnpj,
@@ -326,51 +342,91 @@ SELECT
     CAST(F.qtd_itens_na_autorizacao AS TINYINT) AS qtd_itens_na_autorizacao,
     CAST(F.valor_total_autorizacao AS DECIMAL(9,2)) AS valor_total_autorizacao,
     CAST(F.dias_apos_obito AS SMALLINT) AS dias_apos_obito
-INTO temp_CGUSC.fp.falecidos_por_farmacia
+INTO temp_CGUSC.fp.falecidos_por_farmacia_staging
 FROM #FalecidosAutorizacoes F
 LEFT JOIN #cpf_info I
     ON I.cpf = F.cpf;
 
-CREATE CLUSTERED INDEX IDX_FalecFarm_CNPJ
-ON temp_CGUSC.fp.falecidos_por_farmacia(cnpj);
+CREATE CLUSTERED INDEX IDX_FalecFarm_CNPJ_Staging
+ON temp_CGUSC.fp.falecidos_por_farmacia_staging(cnpj);
 
-CREATE NONCLUSTERED INDEX IDX_FalecFarm_Auto
-ON temp_CGUSC.fp.falecidos_por_farmacia(num_autorizacao);
+CREATE NONCLUSTERED INDEX IDX_FalecFarm_Auto_Staging
+ON temp_CGUSC.fp.falecidos_por_farmacia_staging(num_autorizacao);
 
-CREATE NONCLUSTERED INDEX IDX_FalecFarm_CPF
-ON temp_CGUSC.fp.falecidos_por_farmacia(cpf);
+CREATE NONCLUSTERED INDEX IDX_FalecFarm_CPF_Staging
+ON temp_CGUSC.fp.falecidos_por_farmacia_staging(cpf);
 
 
 -- ============================================================================
 -- PASSO 4: CALCULO BASE POR FARMACIA/ANO
 -- ============================================================================
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
+DROP TABLE IF EXISTS #IndicadorFalecidosTotal;
+DROP TABLE IF EXISTS #IndicadorFalecidosObitos;
 
 SELECT
     A.id_cnpj,
     A.ano_base,
-    CAST(COUNT(DISTINCT A.num_autorizacao) AS INT) AS total_autorizacoes,
-    CAST(COUNT(DISTINCT CASE WHEN F.num_autorizacao IS NOT NULL THEN F.num_autorizacao END) AS INT) AS qtd_autorizacoes_falecidos,
-    CAST(SUM(A.valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
-    CAST(
-        SUM(
-            CASE
-                WHEN F.num_autorizacao IS NOT NULL THEN F.valor_total_autorizacao
-                ELSE CAST(0 AS DECIMAL(9,2))
-            END
-        ) AS DECIMAL(9,2)
-    ) AS valor_falecidos
-INTO temp_CGUSC.fp.indicador_falecidos
-FROM #AutorizacoesAuditadas A
-LEFT JOIN #FalecidosAutorizacoes F
-    ON F.id_cnpj = A.id_cnpj
-   AND F.ano_base = A.ano_base
-   AND F.num_autorizacao = A.num_autorizacao
-   AND F.cpf = A.cpf
+    CAST(COUNT_BIG(*) AS INT) AS total_autorizacoes,
+    CAST(SUM(A.valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado
+INTO #IndicadorFalecidosTotal
+FROM (
+    SELECT
+        A.id_cnpj,
+        A.ano_base,
+        A.num_autorizacao,
+        SUM(A.valor_total_autorizacao) AS valor_total_autorizacao
+    FROM #AutorizacoesAuditadas A
+    GROUP BY
+        A.id_cnpj,
+        A.ano_base,
+        A.num_autorizacao
+) A
 GROUP BY
     A.id_cnpj,
     A.ano_base
 HAVING SUM(A.valor_total_autorizacao) > 0;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndicadorFalecidosTotal_CNPJ_Ano
+ON #IndicadorFalecidosTotal(id_cnpj, ano_base);
+
+SELECT
+    F.id_cnpj,
+    F.ano_base,
+    CAST(COUNT_BIG(*) AS INT) AS qtd_autorizacoes_falecidos,
+    CAST(SUM(F.valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_falecidos
+INTO #IndicadorFalecidosObitos
+FROM (
+    SELECT
+        F.id_cnpj,
+        F.ano_base,
+        F.num_autorizacao,
+        SUM(F.valor_total_autorizacao) AS valor_total_autorizacao
+    FROM #FalecidosAutorizacoes F
+    GROUP BY
+        F.id_cnpj,
+        F.ano_base,
+        F.num_autorizacao
+) F
+GROUP BY
+    F.id_cnpj,
+    F.ano_base;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_IndicadorFalecidosObitos_CNPJ_Ano
+ON #IndicadorFalecidosObitos(id_cnpj, ano_base);
+
+SELECT
+    T.id_cnpj,
+    T.ano_base,
+    T.total_autorizacoes,
+    CAST(COALESCE(F.qtd_autorizacoes_falecidos, 0) AS INT) AS qtd_autorizacoes_falecidos,
+    T.valor_total_auditado,
+    CAST(COALESCE(F.valor_falecidos, 0) AS DECIMAL(9,2)) AS valor_falecidos
+INTO temp_CGUSC.fp.indicador_falecidos
+FROM #IndicadorFalecidosTotal T
+LEFT JOIN #IndicadorFalecidosObitos F
+    ON F.id_cnpj = T.id_cnpj
+   AND F.ano_base = T.ano_base;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidos_CNPJ_Ano
 ON temp_CGUSC.fp.indicador_falecidos(id_cnpj, ano_base);
@@ -379,7 +435,7 @@ ON temp_CGUSC.fp.indicador_falecidos(id_cnpj, ano_base);
 -- ============================================================================
 -- PASSO 5: TABELA CONSOLIDADA FINAL POR CNPJ/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado_staging;
 
 SELECT
     I.id_cnpj,
@@ -388,17 +444,17 @@ SELECT
     I.qtd_autorizacoes_falecidos,
     CAST(I.valor_total_auditado AS DECIMAL(9,2)) AS valor_total_auditado,
     CAST(I.valor_falecidos AS DECIMAL(9,2)) AS valor_falecidos
-INTO temp_CGUSC.fp.indicador_falecidos_detalhado
+INTO temp_CGUSC.fp.indicador_falecidos_detalhado_staging
 FROM temp_CGUSC.fp.indicador_falecidos I;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_FinalFalecidos_CNPJ
-ON temp_CGUSC.fp.indicador_falecidos_detalhado(id_cnpj, ano_base);
+CREATE UNIQUE CLUSTERED INDEX IDX_FinalFalecidos_CNPJ_Staging
+ON temp_CGUSC.fp.indicador_falecidos_detalhado_staging(id_cnpj, ano_base);
 
 
 -- ============================================================================
 -- PASSO 6: AGREGADO POR REGIAO DE SAUDE/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao_staging;
 
 SELECT
     I.ano_base,
@@ -408,7 +464,7 @@ SELECT
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
     CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_falecidos_regiao
+INTO temp_CGUSC.fp.indicador_falecidos_regiao_staging
 FROM temp_CGUSC.fp.indicador_falecidos I
 INNER JOIN #farmacias_dim F
     ON F.id_cnpj = I.id_cnpj
@@ -416,14 +472,14 @@ GROUP BY
     I.ano_base,
     F.id_regiao_saude;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosReg
-ON temp_CGUSC.fp.indicador_falecidos_regiao(ano_base, id_regiao_saude);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosReg_Staging
+ON temp_CGUSC.fp.indicador_falecidos_regiao_staging(ano_base, id_regiao_saude);
 
 
 -- ============================================================================
 -- PASSO 7: AGREGADO POR UF/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf_staging;
 
 SELECT
     I.ano_base,
@@ -433,7 +489,7 @@ SELECT
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
     CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_falecidos_uf
+INTO temp_CGUSC.fp.indicador_falecidos_uf_staging
 FROM temp_CGUSC.fp.indicador_falecidos I
 INNER JOIN #farmacias_dim F
     ON F.id_cnpj = I.id_cnpj
@@ -441,14 +497,14 @@ GROUP BY
     I.ano_base,
     F.uf;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosUF
-ON temp_CGUSC.fp.indicador_falecidos_uf(ano_base, uf);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosUF_Staging
+ON temp_CGUSC.fp.indicador_falecidos_uf_staging(ano_base, uf);
 
 
 -- ============================================================================
 -- PASSO 8: AGREGADO BRASIL/ANO
 -- ============================================================================
-DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
+DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br_staging;
 
 SELECT
     I.ano_base,
@@ -457,13 +513,42 @@ SELECT
     CAST(SUM(I.valor_total_auditado) AS DECIMAL(19,2)) AS valor_total_auditado,
     CAST(SUM(I.valor_falecidos) AS DECIMAL(19,2)) AS valor_falecidos,
     CAST(COUNT_BIG(*) AS INT) AS qtd_cnpjs
-INTO temp_CGUSC.fp.indicador_falecidos_br
+INTO temp_CGUSC.fp.indicador_falecidos_br_staging
 FROM temp_CGUSC.fp.indicador_falecidos I
 GROUP BY
     I.ano_base;
 
-CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosBR
-ON temp_CGUSC.fp.indicador_falecidos_br(ano_base);
+CREATE UNIQUE CLUSTERED INDEX IDX_IndFalecidosBR_Staging
+ON temp_CGUSC.fp.indicador_falecidos_br_staging(ano_base);
+
+
+-- ============================================================================
+-- PASSO 9: TROCA ATOMICA DAS TABELAS FINAIS
+-- ============================================================================
+BEGIN TRY
+    BEGIN TRAN;
+
+    DROP TABLE IF EXISTS temp_CGUSC.fp.falecidos_por_farmacia;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_detalhado;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_regiao;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_uf;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_br;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
+
+    EXEC sp_rename 'fp.falecidos_por_farmacia_staging', 'falecidos_por_farmacia', 'OBJECT';
+    EXEC sp_rename 'fp.indicador_falecidos_detalhado_staging', 'indicador_falecidos_detalhado', 'OBJECT';
+    EXEC sp_rename 'fp.indicador_falecidos_regiao_staging', 'indicador_falecidos_regiao', 'OBJECT';
+    EXEC sp_rename 'fp.indicador_falecidos_uf_staging', 'indicador_falecidos_uf', 'OBJECT';
+    EXEC sp_rename 'fp.indicador_falecidos_br_staging', 'indicador_falecidos_br', 'OBJECT';
+
+    COMMIT TRAN;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRAN;
+
+    THROW;
+END CATCH;
 GO
 
 
@@ -473,6 +558,9 @@ GO
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_falecidos_mun;
 DROP TABLE IF EXISTS #AutorizacoesAuditadas;
+DROP TABLE IF EXISTS #IndicadorFalecidosTotal;
+DROP TABLE IF EXISTS #IndicadorFalecidosObitos;
+DROP TABLE IF EXISTS #cpfs_auditados;
 DROP TABLE IF EXISTS #obitos_unificados;
 DROP TABLE IF EXISTS #FalecidosAutorizacoes;
 DROP TABLE IF EXISTS #cpfs_falecidos;

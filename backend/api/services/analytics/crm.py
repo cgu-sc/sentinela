@@ -49,7 +49,10 @@ from ...schemas.analytics import (
     IndicadorCnpjRowSchema,
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
+    CrmHourlyTransactionSchema,
+    CrmMultiploAlertaSchema,
     CrmTimelineDatasetResponse,
+    CrmUnicoAlertaSchema,
     CrmRaioXResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
@@ -61,15 +64,14 @@ from ...schemas.analytics import (
 from ._cache import _get_cnpj_cache_dir
 from cache_producers.crm import (
     load_or_sync_crm_data,
-    load_or_sync_crm_horario_eventos,
     load_or_sync_crm_multi_alertas,
-    load_or_sync_crm_perfil_diario,
-    load_or_sync_crm_perfil_horario,
+    load_or_sync_crm_timeline_dia,
+    load_or_sync_crm_timeline_eventos,
+    load_or_sync_crm_timeline_hora,
     load_or_sync_crm_unico_alertas,
     load_or_sync_geografico,
     load_or_sync_volume_horario_anomalo,
     sync_crm_raiox_tx,
-    sync_mediana_autorizacoes_horaria_movel,
 )
 
 _CRM_SEVERITY_CACHE_VERSION = 2
@@ -923,12 +925,7 @@ def _sum_timing(*values: float | None) -> float | None:
     return total or None
 
 
-def _build_timeline_hours_by_date(df: pl.DataFrame, df_mediana: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
-    mediana_lookup: dict[tuple[str, int], float] = {}
-    if not df_mediana.is_empty():
-        for r in df_mediana.iter_rows(named=True):
-            mediana_lookup[(str(r.get("dt_janela"))[:10], _to_int(r.get("hr_janela")))] = _to_float(r.get("mediana_hora_movel"))
-
+def _build_timeline_hours_by_date(df: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
     activity: dict[tuple[str, int], dict[str, Any]] = {}
     dates: set[str] = set()
     for r in df.iter_rows(named=True):
@@ -947,7 +944,7 @@ def _build_timeline_hours_by_date(df: pl.DataFrame, df_mediana: pl.DataFrame) ->
                 "hr_janela": hour,
                 "nu_prescricoes": _to_int(row.get("nu_prescricoes")) if row else 0,
                 "nu_crms_diferentes": _to_int(row.get("nu_crms_diferentes")) if row else 0,
-                "mediana_hora": mediana_lookup.get((dt, hour), 0.0),
+                "mediana_hora": _to_float(row.get("mediana_hora")) if row else 0.0,
                 "is_volume_horario_anomalo": _to_int(row.get("is_volume_horario_anomalo")) if row else 0,
                 "is_crm_unico": _to_int(row.get("is_crm_unico")) if row else 0,
                 "is_crm_multiplo": _to_int(row.get("is_crm_multiplo")) if row else 0,
@@ -969,7 +966,7 @@ def _build_timeline_events_by_date(df_events: pl.DataFrame) -> dict[str, list[di
         return events_by_date
 
     for r in df_events.iter_rows(named=True):
-        dt = str(r["dt_dia"])[:10]
+        dt = str(r["dt_janela"])[:10]
         event = {
             "dt_janela": dt,
             "tipo": r["tipo"],
@@ -994,40 +991,25 @@ def get_crm_timeline_dataset(
     data_fim: str | None = None
 ) -> CrmTimelineDatasetResponse:
     """Retorna o dataset semantico da aba Linha do tempo & Raio-X agrupado por dia."""
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-
-    daily_result = load_or_sync_crm_perfil_diario(cnpj)
+    daily_result = load_or_sync_crm_timeline_dia(cnpj)
     if daily_result.error:
-        _raise_cache_unavailable("Perfil diario CRM", daily_result.error)
-    hourly_result = load_or_sync_crm_perfil_horario(cnpj)
+        _raise_cache_unavailable("Timeline diaria CRM", daily_result.error)
+    hourly_result = load_or_sync_crm_timeline_hora(cnpj)
     if hourly_result.error:
-        _raise_cache_unavailable("Perfil horario CRM", hourly_result.error)
-    events_result = load_or_sync_crm_horario_eventos(cnpj)
+        _raise_cache_unavailable("Timeline horaria CRM", hourly_result.error)
+    events_result = load_or_sync_crm_timeline_eventos(cnpj)
     if events_result.error:
-        _raise_cache_unavailable("Eventos horarios CRM", events_result.error)
-    mediana_result = sync_mediana_autorizacoes_horaria_movel(cnpj)
-    if mediana_result.error:
-        _raise_cache_unavailable("Mediana horaria movel CRM", mediana_result.error)
+        _raise_cache_unavailable("Timeline de eventos CRM", events_result.error)
 
     df_daily = daily_result.df if daily_result.df is not None else pl.DataFrame()
     df_hourly = hourly_result.df if hourly_result.df is not None else pl.DataFrame()
     df_events = events_result.df if events_result.df is not None else pl.DataFrame()
-    df_mediana = mediana_result.df if mediana_result.df is not None else pl.DataFrame()
 
     df_daily = _filter_crm_date_range(df_daily, "dt_janela", data_inicio, data_fim)
     df_hourly = _filter_crm_date_range(df_hourly, "dt_janela", data_inicio, data_fim)
-    df_events = _filter_crm_date_range(df_events, "dt_dia", data_inicio, data_fim)
-    df_mediana = _filter_crm_date_range(df_mediana, "dt_janela", data_inicio, data_fim)
+    df_events = _filter_crm_date_range(df_events, "dt_janela", data_inicio, data_fim)
 
-    unico_scores = _build_crm_unico_concentration_map(_load_crm_unico_alertas(cnpj, cnpj_dir))
-    multi_scores = _build_crm_rhythm_map(
-        _load_crm_multi_alertas(cnpj, cnpj_dir),
-        date_col="dt_dia",
-        windows=_CRM_MULTIPLO_RHYTHM_WINDOWS,
-        crms_col="nu_crms_distintos",
-    )
-
-    hours_by_date = _build_timeline_hours_by_date(df_hourly, df_mediana)
+    hours_by_date = _build_timeline_hours_by_date(df_hourly)
     events_by_date = _build_timeline_events_by_date(df_events)
 
     raio_x_result = sync_crm_raiox_tx(cnpj)
@@ -1054,14 +1036,14 @@ def get_crm_timeline_dataset(
             or day["is_crm_unico"] == 1
             or day["is_crm_multiplo"] == 1
         ) else 0
-        day["score_crm_unico_hora"] = unico_scores.get(key, {}).get("score")
-        day["score_crm_unico_qtd"] = unico_scores.get(key, {}).get("qtd")
-        day["score_crm_unico_minutos"] = unico_scores.get(key, {}).get("minutos")
-        day["score_crm_unico_medico"] = unico_scores.get(key, {}).get("id_medico")
-        day["score_crm_multiplo_hora"] = multi_scores.get(key, {}).get("score")
-        day["score_crm_multiplo_qtd"] = multi_scores.get(key, {}).get("qtd")
-        day["score_crm_multiplo_minutos"] = multi_scores.get(key, {}).get("minutos")
-        day["score_crm_multiplo_crms"] = multi_scores.get(key, {}).get("nu_crms")
+        day["score_crm_unico_hora"] = r.get("score_crm_unico_hora")
+        day["score_crm_unico_qtd"] = r.get("score_crm_unico_qtd")
+        day["score_crm_unico_minutos"] = r.get("score_crm_unico_minutos")
+        day["score_crm_unico_medico"] = r.get("score_crm_unico_medico")
+        day["score_crm_multiplo_hora"] = r.get("score_crm_multiplo_hora")
+        day["score_crm_multiplo_qtd"] = r.get("score_crm_multiplo_qtd")
+        day["score_crm_multiplo_minutos"] = r.get("score_crm_multiplo_minutos")
+        day["score_crm_multiplo_crms"] = r.get("score_crm_multiplo_crms")
         day["hours"] = hours_by_date.get(key, [])
         day["events"] = events_by_date.get(key, [])
         days.append(day)
@@ -1070,21 +1052,18 @@ def get_crm_timeline_dataset(
         daily_result.read_time_ms,
         hourly_result.read_time_ms,
         events_result.read_time_ms,
-        mediana_result.read_time_ms,
         raio_x_result.read_time_ms,
     )
     query_time_ms = _sum_timing(
         daily_result.query_time_ms,
         hourly_result.query_time_ms,
         events_result.query_time_ms,
-        mediana_result.query_time_ms,
         raio_x_result.query_time_ms,
     )
     save_time_ms = _sum_timing(
         daily_result.save_time_ms,
         hourly_result.save_time_ms,
         events_result.save_time_ms,
-        mediana_result.save_time_ms,
         raio_x_result.save_time_ms,
     )
 
@@ -1095,7 +1074,6 @@ def get_crm_timeline_dataset(
             daily_result.from_cache
             and hourly_result.from_cache
             and events_result.from_cache
-            and mediana_result.from_cache
             and raio_x_result.from_cache
         ),
         daily_from_cache=bool(daily_result.from_cache),
@@ -1168,7 +1146,7 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
         _raise_cache_unavailable("Raio-X CRM", raio_x_result.error)
 
     read_time_ms = None
-    transactions: list[dict] = []
+    transactions: list[CrmHourlyTransactionSchema] = []
 
     try:
         import time as _time
@@ -1196,9 +1174,12 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                     pl.col("id_medico").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8),
                 ])
-                transactions = enriched_df.to_dicts()
+                transactions = [
+                    CrmHourlyTransactionSchema(**row)
+                    for row in enriched_df.to_dicts()
+                ]
 
-        alertas_unico: list[dict] = []
+        alertas_unico: list[CrmUnicoAlertaSchema] = []
         df_unico = _load_crm_unico_alertas(cnpj, cnpj_dir)
         if not df_unico.is_empty():
             day_unico = df_unico.filter(pl.col("dt_alerta").cast(pl.Utf8).str.slice(0, 10) == date_str)
@@ -1217,23 +1198,23 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 ritmo_qtd = _to_int(r.get("nu_prescricoes_dia"))
                 ritmo_minutos = _to_int(r.get("nu_minutos_dia"))
                 ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
-                alertas_unico.append({
-                    "id_medico": str(r["id_medico"]),
-                    "hr_janela": _to_int(r.get("hr_janela")),
-                    "nu_prescricoes_dia": _to_int(r.get("nu_prescricoes_dia")),
-                    "nu_minutos_dia": _to_int(r.get("nu_minutos_dia")),
-                    "taxa_hora": _to_float(r.get("taxa_hora")),
-                    "ritmo_hora": ritmo_hora,
-                    "ritmo_qtd": ritmo_qtd,
-                    "ritmo_minutos": ritmo_minutos,
-                    "severidade": r.get("severidade"),
-                    "criterio_pior_ritmo": r.get("criterio_pior_ritmo"),
-                    "dt_ini_hora": _format_alert_time(r.get("dt_ini_hora")),
-                    "dt_fim_hora": _format_alert_time(r.get("dt_fim_hora")),
-                })
+                alertas_unico.append(CrmUnicoAlertaSchema(
+                    id_medico=str(r["id_medico"]),
+                    hr_janela=_to_int(r.get("hr_janela")),
+                    nu_prescricoes_dia=_to_int(r.get("nu_prescricoes_dia")),
+                    nu_minutos_dia=_to_int(r.get("nu_minutos_dia")),
+                    taxa_hora=_to_float(r.get("taxa_hora")),
+                    ritmo_hora=ritmo_hora,
+                    ritmo_qtd=ritmo_qtd,
+                    ritmo_minutos=ritmo_minutos,
+                    severidade=r.get("severidade"),
+                    criterio_pior_ritmo=r.get("criterio_pior_ritmo"),
+                    dt_ini_hora=_format_alert_time(r.get("dt_ini_hora")),
+                    dt_fim_hora=_format_alert_time(r.get("dt_fim_hora")),
+                ))
 
         df_multi = _load_crm_multi_alertas(cnpj, cnpj_dir)
-        alertas_multi: list[dict] = []
+        alertas_multi: list[CrmMultiploAlertaSchema] = []
         if not df_multi.is_empty():
             day_multi = df_multi.filter(pl.col("dt_dia").cast(pl.Utf8).str.slice(0, 10) == date_str)
             if hour is not None:
@@ -1253,19 +1234,19 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 ritmo_qtd = _to_int(r.get("nu_prescricoes"))
                 ritmo_minutos = _to_int(r.get("nu_minutos_span"))
                 ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
-                alertas_multi.append({
-                    "dt_janela": str(r["dt_dia"])[:10],
-                    "hr_janela": _extract_alert_hour(r.get("dt_ini_concentracao")),
-                    "nu_prescricoes": ritmo_qtd,
-                    "nu_crms": _to_int(r.get("nu_crms_distintos")),
-                    "ritmo_hora": ritmo_hora,
-                    "ritmo_qtd": ritmo_qtd,
-                    "ritmo_minutos": ritmo_minutos,
-                    "severidade": r.get("severidade"),
-                    "criterio_pior_ritmo": r.get("criterio_pior_ritmo"),
-                    "dt_ini_hora": _format_alert_time(r.get("dt_ini_concentracao")),
-                    "dt_fim_hora": _format_alert_time(r.get("dt_fim_concentracao")),
-                })
+                alertas_multi.append(CrmMultiploAlertaSchema(
+                    dt_janela=str(r["dt_dia"])[:10],
+                    hr_janela=_extract_alert_hour(r.get("dt_ini_concentracao")),
+                    nu_prescricoes=ritmo_qtd,
+                    nu_crms=_to_int(r.get("nu_crms_distintos")),
+                    ritmo_hora=ritmo_hora,
+                    ritmo_qtd=ritmo_qtd,
+                    ritmo_minutos=ritmo_minutos,
+                    severidade=r.get("severidade"),
+                    criterio_pior_ritmo=r.get("criterio_pior_ritmo"),
+                    dt_ini_hora=_format_alert_time(r.get("dt_ini_concentracao")),
+                    dt_fim_hora=_format_alert_time(r.get("dt_fim_concentracao")),
+                ))
 
         return CrmRaioXResponse(
             cnpj=cnpj,

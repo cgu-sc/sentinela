@@ -12,6 +12,9 @@ from cache_files import (
     CRM_HORARIO_PARQUET,
     CRM_PERFIL_DIARIO_PARQUET,
     CRM_RAIOX_TX_PARQUET,
+    CRM_TIMELINE_DIA_PARQUET,
+    CRM_TIMELINE_EVENTOS_PARQUET,
+    CRM_TIMELINE_HORA_PARQUET,
     DADOS_CRMS_PARQUET,
     GEOGRAFICO_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
@@ -281,6 +284,97 @@ def load_or_sync_crm_horario_eventos(cnpj: str, engine=None) -> CacheLoadResult:
     except Exception:
         print(f"[ ANALYTICS ] {cnpj} - EVENTOS CRM - indisponivel (sem cache e banco offline)")
         return CacheLoadResult(pl.DataFrame(schema=_empty_schema(CRM_HORARIO_EVENTOS_PARQUET)), from_cache=False, error="Banco Offline.")
+
+
+def load_or_sync_crm_timeline_dia(cnpj: str, engine=None) -> CacheLoadResult:
+    schema = _empty_schema(CRM_TIMELINE_DIA_PARQUET)
+    required = set(schema)
+    parquet_path = _path(cnpj, CRM_TIMELINE_DIA_PARQUET)
+    df, read_time_ms = _read_parquet(parquet_path)
+    if df is not None:
+        missing_cols = sorted(required - set(df.columns))
+        if not missing_cols:
+            return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+        print(f"[ CACHE ] {cnpj} - timeline dia - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+
+    return _load_or_sync_sql_cache(
+        cnpj,
+        CRM_TIMELINE_DIA_PARQUET,
+        text(
+            "SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,"
+            " P.competencia, P.nu_prescricoes_dia, P.nu_crms_distintos, P.mediana_diaria,"
+            " P.is_dia_com_volume_horario_anomalo, P.is_anomalo_unico, P.is_crm_multiplo,"
+            " P.score_crm_unico_hora, P.score_crm_unico_qtd, P.score_crm_unico_minutos,"
+            " P.score_crm_unico_medico, P.score_crm_multiplo_hora, P.score_crm_multiplo_qtd,"
+            " P.score_crm_multiplo_minutos, P.score_crm_multiplo_crms"
+            " FROM temp_CGUSC.fp.app_crm_timeline_dia P"
+            " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
+            " WHERE F.cnpj = :cnpj"
+            " ORDER BY P.dt_janela"
+        ),
+        {"cnpj": cnpj},
+        engine,
+        read_existing=False,
+    )
+
+
+def load_or_sync_crm_timeline_hora(cnpj: str, engine=None) -> CacheLoadResult:
+    schema = _empty_schema(CRM_TIMELINE_HORA_PARQUET)
+    required = set(schema)
+    parquet_path = _path(cnpj, CRM_TIMELINE_HORA_PARQUET)
+    df, read_time_ms = _read_parquet(parquet_path)
+    if df is not None:
+        missing_cols = sorted(required - set(df.columns))
+        if not missing_cols:
+            return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+        print(f"[ CACHE ] {cnpj} - timeline hora - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+
+    return _load_or_sync_sql_cache(
+        cnpj,
+        CRM_TIMELINE_HORA_PARQUET,
+        text(
+            "SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,"
+            " P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora,"
+            " P.mad_hora, P.is_hora_com_alerta, P.is_volume_horario_anomalo,"
+            " P.is_crm_unico, P.is_crm_multiplo"
+            " FROM temp_CGUSC.fp.app_crm_timeline_hora P"
+            " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
+            " WHERE F.cnpj = :cnpj"
+            " ORDER BY P.dt_janela, P.hr_janela"
+        ),
+        {"cnpj": cnpj},
+        engine,
+        read_existing=False,
+    )
+
+
+def load_or_sync_crm_timeline_eventos(cnpj: str, engine=None) -> CacheLoadResult:
+    schema = _empty_schema(CRM_TIMELINE_EVENTOS_PARQUET)
+    required = set(schema)
+    parquet_path = _path(cnpj, CRM_TIMELINE_EVENTOS_PARQUET)
+    df, read_time_ms = _read_parquet(parquet_path)
+    if df is not None:
+        missing_cols = sorted(required - set(df.columns))
+        if not missing_cols:
+            return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+        print(f"[ CACHE ] {cnpj} - timeline eventos - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+
+    return _load_or_sync_sql_cache(
+        cnpj,
+        CRM_TIMELINE_EVENTOS_PARQUET,
+        text(
+            "SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,"
+            " P.tipo, P.hora_inicio, P.hora_fim, P.minuto_inicio, P.minuto_fim,"
+            " P.severidade, P.id_medico, P.nu_crms_distintos"
+            " FROM temp_CGUSC.fp.app_crm_timeline_eventos P"
+            " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
+            " WHERE F.cnpj = :cnpj"
+            " ORDER BY P.dt_janela, P.minuto_inicio, P.tipo"
+        ),
+        {"cnpj": cnpj},
+        engine,
+        read_existing=False,
+    )
 
 
 def load_or_sync_crm_unico_alertas(cnpj: str, engine=None) -> CacheLoadResult:

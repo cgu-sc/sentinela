@@ -411,7 +411,6 @@ watch(
 
     if (newCnpj) {
       await loadActiveTabData(perfSession, "initial");
-      queueBackgroundPrefetch(perfSession, "initial");
     }
   },
   { immediate: true },
@@ -438,7 +437,6 @@ watch(
       .then(() => loadActiveTabData(perfSession, "period_change"))
       .then(() => {
         if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;
-        queueBackgroundPrefetch(perfSession, "period_change");
         logCnpjPerf(perfSession, "period_bootstrap_settled", {
           status: "fulfilled",
         });
@@ -578,6 +576,7 @@ watch(
     <TabView
       v-if="canRenderDetail"
       class="detail-tabs"
+      lazy
       :activeIndex="cnpjNav.activeTabIndex"
       @tab-change="setActiveTab($event.index)"
     >

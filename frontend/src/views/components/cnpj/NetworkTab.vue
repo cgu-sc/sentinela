@@ -250,7 +250,6 @@ const networkLayouts = createNetworkLayouts({
   initialFitPadding: 48,
 });
 
-const getLayoutBoundingBox = networkLayouts.getLayoutBoundingBox;
 const rememberPresentationZoom = networkLayouts.rememberPresentationZoom;
 const applyRadialView = networkLayouts.applyRadialView;
 const applyLayeredRadialView = networkLayouts.applyLayeredRadialView;
@@ -1168,7 +1167,6 @@ function applyNodeDensitySizing() {
 const INITIAL_FIT_PADDING = 48;
 const GRAPH_RIGHT_OVERLAY_GAP = 24;
 const GRAPH_RIGHT_RESERVE_MAX_RATIO = 0.32;
-const REFIT_DELAY_MS = 80;
 
 function getGraphRightReservePx(containerWidth) {
   if (!cyContainer.value || !containerWidth) return 0;
@@ -1256,8 +1254,7 @@ async function buildGraph(data) {
     try {
       cy.stop();
     } catch (e) {}
-    // Drena o RAF pendente antes de destruir: o callback do cose já agendado
-    // executa aqui, vê que está parado e encerra — sem acessar _private nulo
+    // Drena RAFs pendentes antes de destruir para evitar callbacks em instâncias antigas.
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       cy.destroy();
@@ -1319,10 +1316,11 @@ async function buildGraph(data) {
     container: cyContainer.value,
     elements,
     style: buildNetworkStylesheet(),
-    layout: { name: "preset" }, // sem auto-layout — controlamos manualmente via currentLayout
+    layout: { name: "preset" },
     minZoom: 0.18,
     maxZoom: 3,
   });
+  const graphInstance = cy;
   graphReady.value = true;
   bindGraphCountUpdates();
   logCnpjPerf(perfSession, "network_graph_cytoscape_created", {
@@ -1334,49 +1332,24 @@ async function buildGraph(data) {
   applyVisibilityFilters();
   scheduleGraphCountsUpdate();
 
-  // Layout manual rastreado em currentLayout para poder ser cancelado antes do destroy
-  currentLayout = cy.layout({
-    name: "cose",
-    animate: true,
-    animationDuration: 800,
-    nodeRepulsion: () => 8500,
-    idealEdgeLength: () => 58,
-    gravity: 1.35,
-    numIter: 900,
-    initialTemp: 1000,
-    coolingFactor: 0.99,
-    minTemp: 1.0,
-    boundingBox: getLayoutBoundingBox(),
-    fit: false,
-    randomize: true,
-  });
-
-  cy.one("layoutstop", () => {
-    logCnpjPerf(perfSession, "network_graph_layout_stopped", {
-      nodes: cy?.nodes()?.length ?? 0,
-      edges: cy?.edges()?.length ?? 0,
-    });
-    // Revela o grafo e reabilita eventos apenas após o layout terminar
-    if (cyContainer.value) {
-      cyContainer.value.style.opacity = "";
-      cyContainer.value.style.pointerEvents = "";
-    }
-    if (hasActiveSearch.value) {
-      applyGraphHighlights();
-    } else {
-      applyRadialView({ rememberN2Zoom: true });
-    }
-  });
-  currentLayout.run();
-
   cy.ready(() => {
-    setTimeout(() => {
+    requestAnimationFrame(() => {
+      if (!cy || cy !== graphInstance) return;
+
+      applyRadialView({ rememberN2Zoom: true });
       if (hasActiveSearch.value) {
         applyGraphHighlights();
-      } else {
-        applyRadialView({ rememberN2Zoom: true });
       }
-    }, REFIT_DELAY_MS);
+
+      if (cyContainer.value && cy === graphInstance) {
+        cyContainer.value.style.opacity = "";
+        cyContainer.value.style.pointerEvents = "";
+      }
+      logCnpjPerf(perfSession, "network_graph_radial_applied", {
+        nodes: cy?.nodes()?.length ?? 0,
+        edges: cy?.edges()?.length ?? 0,
+      });
+    });
   });
 
   // Eventos interativos

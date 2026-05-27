@@ -1,6 +1,25 @@
 ﻿import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
+import { fetchRegionalPayload } from '@/composables/useRegional';
+
+const PREFETCH_CONCURRENCY = 2;
+const networkRequests = new Map();
+const networkLevelRequests = new Map();
+
+async function runTasksWithConcurrency(tasks, limit = PREFETCH_CONCURRENCY) {
+  const queue = [...tasks];
+  const workers = Array.from(
+    { length: Math.min(limit, queue.length) },
+    async () => {
+      while (queue.length) {
+        const task = queue.shift();
+        await task();
+      }
+    },
+  );
+  await Promise.all(workers);
+}
 
 function normalizeCnpj(value) {
   return String(value ?? '').replace(/\D/g, '');
@@ -48,6 +67,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     evolucaoLoaded:     false,
     evolucaoError:      null,
     evolucaoKey:        null,   // Cache key: "cnpj|inicio|fim" — evita re-fetch desnecessário
+    evolucaoRequestKey: null,
 
     // ── Memória de Cálculo ────────────────────────────────────────────────────
     movimentacaoData:    null,
@@ -69,12 +89,14 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     falecidosData:    null,
     falecidosLoading: false,
     falecidosLoaded:  null,   // Cache key: "cnpj|inicio|fim"
+    falecidosRequestKey: null,
     falecidosError:   null,
 
     // ── Prescritores / CRMs ───────────────────────────────────────────────────
     prescritoresData:    null,
     prescritoresLoading: false,
     prescritoresLoaded:  null,   // Cache key: "cnpj|inicio|fim"
+    prescritoresRequestKey: null,
     prescritoresError:   null,
 
     // Dataset semantico da linha do tempo CRM
@@ -106,11 +128,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     metricPercentiles:        null,
     metricPercentilesLoading: false,
     metricPercentilesLoaded:  false, // Guarda a chave do escopo atual
+    metricPercentilesRequestKey: null,
     
     // ── Evolução Mensal GTIN ─────────────────────────────────────────────────
     evolucaoMensalGtin:        null,
     evolucaoMensalGtinLoading: false,
     evolucaoMensalGtinKey:     null,
+    evolucaoMensalGtinRequestKey: null,
 
     // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
@@ -125,13 +149,21 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     sociosData:    null,
     sociosLoading: false,
     sociosLoaded:  false,
+    sociosRequestKey: null,
     sociosError:   null,
 
     // ── Teia Societária (Grafo de Relacionamentos) ────────────────────────────
     networkData:    null,
     networkLoading: false,
     networkLoaded:  false,
+    networkRequestKey: null,
+    networkLevelData: { 3: null, 4: null },
+    networkLevelLoading: { 3: false, 4: false },
+    networkLevelLoaded: { 3: null, 4: null },
+    networkLevelRequestKey: { 3: null, 4: null },
     networkError:   null,
+
+    prefetchRequestKey: null,
 
     // ── Timing de Requisições (diagnóstico de performance) ───────────────────
     // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
@@ -331,6 +363,77 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         await this.fetchNetwork(cnpj);
       }
     },
+
+    async prefetchAllDetailData({
+      cnpj,
+      inicio = null,
+      fim = null,
+      volumeAtipicoPercentual = null,
+      geoData = null,
+      concurrency = PREFETCH_CONCURRENCY,
+    }) {
+      const clean = normalizeCnpj(cnpj);
+      if (clean.length !== 14 || this.cnpjAccessStatus !== 'valid') return;
+
+      const uf = geoData?.sg_uf ?? null;
+      const regiaoId = geoData?.id_regiao_saude ?? null;
+      const requestKey = [
+        clean,
+        inicio ?? '',
+        fim ?? '',
+        `vol:${volumeAtipicoPercentual ?? ''}`,
+        `uf:${uf ?? ''}`,
+        `regiao:${regiaoId ?? ''}`,
+      ].join('|');
+
+      this.prefetchRequestKey = requestKey;
+      const isCurrentPrefetch = () =>
+        this.prefetchRequestKey === requestKey &&
+        this.cnpjAccessStatus === 'valid' &&
+        this.cnpjAccessCnpj === clean;
+
+      const tasks = [
+        ['movimentacao-financeira', () => this.fetchEvolucaoFinanceira(clean, inicio, fim, volumeAtipicoPercentual)],
+        ['movimentacao-gtin', () => this.fetchEvolucaoMensalGtin(clean, inicio, fim)],
+        ['memoria-calculo', () => this.fetchMovimentacao(clean)],
+        ['indicadores', () => this.fetchIndicadores(clean)],
+        ['crm-prescritores', () => this.fetchCrmData(clean, inicio, fim)],
+        ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
+        ['falecidos', () => this.fetchFalecidos(clean, inicio, fim)],
+        ['socios', () => this.fetchSocios(clean)],
+        ['teia-n2', () => this.fetchNetwork(clean)],
+      ];
+
+      if (uf) {
+        tasks.push(
+          ['regional-benchmarking', () => fetchRegionalPayload(uf, inicio, fim, regiaoId)],
+          ['percentis-risco', () => this.fetchMetricPercentiles(
+            'brasil',
+            uf,
+            regiaoId,
+            'percentual_sem_comprovacao',
+            inicio,
+            fim,
+          )],
+        );
+      }
+
+      await runTasksWithConcurrency(
+        tasks.map(([label, run]) => async () => {
+          if (!isCurrentPrefetch()) return;
+          try {
+            await run();
+          } catch (error) {
+            console.error(`[CNPJ preload] Falha ao carregar ${label}:`, error);
+          }
+        }),
+        concurrency,
+      );
+
+      if (this.prefetchRequestKey === requestKey) {
+        this.prefetchRequestKey = null;
+      }
+    },
     // ── Cadastro ──────────────────────────────────────────────────────────────
     async fetchDadosCadastro(cnpj) {
       if (!cnpj) return;
@@ -349,8 +452,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     async fetchEvolucaoFinanceira(cnpj, inicio = null, fim = null, volumeAtipicoPercentual = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}|vol:${volumeAtipicoPercentual ?? ''}`;
       if (this.evolucaoKey === key) return;
+      if (this.evolucaoRequestKey === key) return;
 
       this.evolucaoLoading = true;
+      this.evolucaoRequestKey = key;
 
       try {
         const params = {};
@@ -362,16 +467,21 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });
+        if (this.evolucaoRequestKey !== key) return;
         this.requestTimes['evolucao'] = { label: 'Movimentação Financeira', ms: Math.round(performance.now() - t0) };
         this.evolucaoFinanceira = data;
         this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
         this.evolucaoError      = null;
       } catch (e) {
+        if (this.evolucaoRequestKey !== key) return;
         console.error('Erro ao buscar evolução financeira:', e);
         this.evolucaoError = ERROR_MSG;
       } finally {
-        this.evolucaoLoading = false;
+        if (this.evolucaoRequestKey === key) {
+          this.evolucaoLoading = false;
+          this.evolucaoRequestKey = null;
+        }
       }
     },
 
@@ -379,21 +489,28 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     async fetchEvolucaoMensalGtin(cnpj, inicio = null, fim = null) {
       const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.evolucaoMensalGtinKey === key) return;
+      if (this.evolucaoMensalGtinRequestKey === key) return;
       this.evolucaoMensalGtinLoading = true;
+      this.evolucaoMensalGtinRequestKey = key;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucaoMensalGtin(cnpj), { params });
+        if (this.evolucaoMensalGtinRequestKey !== key) return;
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['movimentacao-gtin'] = { label: 'Movimentação GTIN', ms, detail: buildTimingDetail(data) };
         this.evolucaoMensalGtin    = data;
         this.evolucaoMensalGtinKey = key;
       } catch (e) {
+        if (this.evolucaoMensalGtinRequestKey !== key) return;
         console.error('Erro ao buscar evolução mensal GTIN:', e);
       } finally {
-        this.evolucaoMensalGtinLoading = false;
+        if (this.evolucaoMensalGtinRequestKey === key) {
+          this.evolucaoMensalGtinLoading = false;
+          this.evolucaoMensalGtinRequestKey = null;
+        }
       }
     },
 
@@ -474,39 +591,64 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
     // ── Quadro Societário ─────────────────────────────────────────────────────
     async fetchSocios(cnpj) {
-      if (!cnpj || this.sociosLoaded === cnpj || this.sociosLoading) return;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean || this.sociosLoaded === clean || this.sociosRequestKey === clean) return;
       this.sociosLoading = true;
+      this.sociosRequestKey = clean;
       this.sociosError   = null;
       try {
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsSocios(cnpj));
+        const { data } = await axios.get(API_ENDPOINTS.analyticsSocios(clean));
+        if (this.sociosRequestKey !== clean) return;
         this.requestTimes['socios'] = { label: 'Quadro Societário', ms: Math.round(performance.now() - t0) };
         this.sociosData   = data;
-        this.sociosLoaded = cnpj;
+        this.sociosLoaded = clean;
       } catch (e) {
+        if (this.sociosRequestKey !== clean) return;
         console.error('Erro ao buscar quadro societário:', e);
         this.sociosError = ERROR_MSG;
       } finally {
-        this.sociosLoading = false;
+        if (this.sociosRequestKey === clean) {
+          this.sociosLoading = false;
+          this.sociosRequestKey = null;
+        }
       }
     },
 
     // ── Teia Societária ─────────────────────────────────────────────────────
     async fetchNetwork(cnpj) {
-      if (!cnpj || this.networkLoaded === cnpj || this.networkLoading) return;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean || this.networkLoaded === clean) return this.networkData;
+      if (networkRequests.has(clean)) return networkRequests.get(clean);
+
       this.networkLoading = true;
+      this.networkRequestKey = clean;
       this.networkError   = null;
-      try {
+
+      const request = (async () => {
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(cnpj));
+        const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(clean));
+        if (this.networkRequestKey !== clean) return null;
         this.requestTimes['network'] = { label: 'Teia Societária', ms: Math.round(performance.now() - t0) };
         this.networkData   = data;
-        this.networkLoaded = cnpj;
+        this.networkLoaded = clean;
+        return data;
+      })();
+
+      networkRequests.set(clean, request);
+      try {
+        return await request;
       } catch (e) {
+        if (this.networkRequestKey !== clean) return null;
         console.error('Erro ao buscar teia societária:', e);
         this.networkError = ERROR_MSG;
+        return null;
       } finally {
-        this.networkLoading = false;
+        networkRequests.delete(clean);
+        if (this.networkRequestKey === clean) {
+          this.networkLoading = false;
+          this.networkRequestKey = null;
+        }
       }
     },
 
@@ -522,30 +664,74 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     async fetchNetworkLevel(cnpj, level) {
-      if (!cnpj || !level) return null;
-      try {
-        const endpoint = level === 3 ? API_ENDPOINTS.analyticsNetworkLevel3(cnpj) : API_ENDPOINTS.analyticsNetworkLevel4(cnpj);
+      const clean = normalizeCnpj(cnpj);
+      const numericLevel = Number(level);
+      if (!clean) return null;
+      if (![3, 4].includes(numericLevel)) {
+        throw new Error(`Nivel de teia invalido: ${level}`);
+      }
+
+      const key = `${clean}|${numericLevel}`;
+      if (this.networkLevelLoaded[numericLevel] === key) {
+        return this.networkLevelData[numericLevel];
+      }
+      if (networkLevelRequests.has(key)) {
+        return networkLevelRequests.get(key);
+      }
+
+      this.networkLevelLoading[numericLevel] = true;
+      this.networkLevelRequestKey[numericLevel] = key;
+
+      const request = (async () => {
+        const endpoint = numericLevel === 3
+          ? API_ENDPOINTS.analyticsNetworkLevel3(clean)
+          : API_ENDPOINTS.analyticsNetworkLevel4(clean);
+        const t0 = performance.now();
         const { data } = await axios.get(endpoint);
+        if (this.networkLevelRequestKey[numericLevel] !== key) return null;
+        this.requestTimes[`network-n${numericLevel}`] = {
+          label: `Teia Societária N${numericLevel}`,
+          ms: Math.round(performance.now() - t0),
+        };
+        this.networkLevelData[numericLevel] = data;
+        this.networkLevelLoaded[numericLevel] = key;
         return data;
+      })();
+
+      networkLevelRequests.set(key, request);
+      try {
+        return await request;
       } catch (e) {
-        console.error(`Erro ao buscar nível ${level}:`, e);
+        if (this.networkLevelRequestKey[numericLevel] !== key) return null;
+        console.error(`Erro ao buscar nível ${numericLevel}:`, e);
         return null;
+      } finally {
+        networkLevelRequests.delete(key);
+        if (this.networkLevelRequestKey[numericLevel] === key) {
+          this.networkLevelLoading[numericLevel] = false;
+          this.networkLevelRequestKey[numericLevel] = null;
+        }
       }
     },
 
     // ── Falecidos ─────────────────────────────────────────────────────────────
     async fetchFalecidos(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return;
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.falecidosLoaded === key) return;
+      if (this.falecidosRequestKey === key) return;
 
       this.falecidosLoading = true;
+      this.falecidosRequestKey = key;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
 
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(clean), { params });
+        if (this.falecidosRequestKey !== key) return;
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['falecidos'] = { label: 'Falecidos', ms, detail: buildTimingDetail(data) };
 
@@ -553,40 +739,55 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         this.falecidosLoaded = key;
         this.falecidosError  = null;
       } catch (e) {
+        if (this.falecidosRequestKey !== key) return;
         console.error('Erro ao buscar dados de falecidos:', e);
         this.falecidosError = ERROR_MSG;
       } finally {
-        this.falecidosLoading = false;
+        if (this.falecidosRequestKey === key) {
+          this.falecidosLoading = false;
+          this.falecidosRequestKey = null;
+        }
       }
     },
 
     // ── Prescritores / CRMs ───────────────────────────────────────────────────
     async fetchCrmData(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return;
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.prescritoresLoaded === key) return;
+      if (this.prescritoresRequestKey === key) return;
       this.prescritoresLoading = true;
+      this.prescritoresRequestKey = key;
       try {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(clean), { params });
+        if (this.prescritoresRequestKey !== key) return;
         const ms = Math.round(performance.now() - t0);
         this.requestTimes['crm-data'] = { label: 'CRM Data', ms, detail: buildTimingDetail(data) };
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
         this.prescritoresError  = null;
       } catch (e) {
+        if (this.prescritoresRequestKey !== key) return;
         console.error('Erro ao buscar dados de prescritores:', e);
         this.prescritoresError = ERROR_MSG;
       } finally {
-        this.prescritoresLoading = false;
+        if (this.prescritoresRequestKey === key) {
+          this.prescritoresLoading = false;
+          this.prescritoresRequestKey = null;
+        }
       }
     },
 
     async fetchCrmTimelineDataset(cnpj, inicio = null, fim = null) {
-      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
-      if (!cnpj || this.crmTimelineDatasetLoaded === key) return;
+      const clean = normalizeCnpj(cnpj);
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      if (!clean || this.crmTimelineDatasetLoaded === key) return;
+      if (this.crmTimelineDatasetRequestKey === key) return;
       this.crmTimelineDatasetRequestKey = key;
       this.crmTimelineDatasetLoading = true;
       try {
@@ -594,7 +795,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmTimelineDataset(cnpj), { params });
+        const { data } = await axios.get(API_ENDPOINTS.analyticsCrmTimelineDataset(clean), { params });
         const ms = Math.round(performance.now() - t0);
         if (this.crmTimelineDatasetRequestKey !== key) return;
         assertCrmTimelineDataset(data);
@@ -660,20 +861,27 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     async fetchMetricPercentiles(scope, uf = null, regiao_id = null, metric = 'score', inicio = null, fim = null) {
       const key = `${scope}|${uf ?? ''}|${regiao_id ?? ''}|${metric}|${inicio ?? ''}|${fim ?? ''}`;
       if (this.metricPercentilesLoaded === key) return;
+      if (this.metricPercentilesRequestKey === key) return;
       
       this.metricPercentilesLoading = true;
+      this.metricPercentilesRequestKey = key;
       try {
         const params = { scope, uf, regiao_id, metric };
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
 
         const { data } = await axios.get(API_ENDPOINTS.analyticsMetricPercentiles, { params });
+        if (this.metricPercentilesRequestKey !== key) return;
         this.metricPercentiles = data || [];
         this.metricPercentilesLoaded = key;
       } catch (e) {
+        if (this.metricPercentilesRequestKey !== key) return;
         console.error('Erro ao buscar percentis da métrica:', e);
       } finally {
-        this.metricPercentilesLoading = false;
+        if (this.metricPercentilesRequestKey === key) {
+          this.metricPercentilesLoading = false;
+          this.metricPercentilesRequestKey = null;
+        }
       }
     },
 
@@ -693,6 +901,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
     // ── Reset completo ao trocar de CNPJ ──────────────────────────────────────
     resetAll() {
+      networkRequests.clear();
+      networkLevelRequests.clear();
+
       this.dadosCadastro        = null;
       this.dadosCadastroLoading = false;
 
@@ -701,10 +912,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.evolucaoLoaded     = false;
       this.evolucaoError      = null;
       this.evolucaoKey        = null;
+      this.evolucaoRequestKey = null;
 
       this.evolucaoMensalGtin        = null;
       this.evolucaoMensalGtinLoading = false;
       this.evolucaoMensalGtinKey     = null;
+      this.evolucaoMensalGtinRequestKey = null;
 
       this.gtinDetalhamentoMensalData    = null;
       this.gtinDetalhamentoMensalLoading = false;
@@ -727,11 +940,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.falecidosData    = null;
       this.falecidosLoading = false;
       this.falecidosLoaded  = null;
+      this.falecidosRequestKey = null;
       this.falecidosError   = null;
 
       this.prescritoresData    = null;
       this.prescritoresLoading = false;
       this.prescritoresLoaded  = null;
+      this.prescritoresRequestKey = null;
       this.prescritoresError   = null;
 
       this.crmTimelineDataset        = null;
@@ -764,16 +979,24 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.metricPercentiles        = null;
       this.metricPercentilesLoading = false;
       this.metricPercentilesLoaded  = false;
+      this.metricPercentilesRequestKey = null;
 
       this.sociosData    = null;
       this.sociosLoading = false;
       this.sociosLoaded  = false;
+      this.sociosRequestKey = null;
       this.sociosError   = null;
 
       this.networkData    = null;
       this.networkLoading = false;
       this.networkLoaded  = false;
+      this.networkRequestKey = null;
+      this.networkLevelData = { 3: null, 4: null };
+      this.networkLevelLoading = { 3: false, 4: false };
+      this.networkLevelLoaded = { 3: null, 4: null };
+      this.networkLevelRequestKey = { 3: null, 4: null };
       this.networkError   = null;
+      this.prefetchRequestKey = null;
     },
   },
 });

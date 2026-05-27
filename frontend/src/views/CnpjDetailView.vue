@@ -331,10 +331,56 @@ const loadActiveTabData = async (perfSession, reason = "active_tab") => {
   }
 };
 
+const queueBackgroundPrefetch = (perfSession, reason = "background_prefetch") => {
+  if (!cnpj.value || cnpjDetailStore.cnpjAccessStatus !== "valid") return;
+
+  const sessionId = perfSession?.sessionId ?? null;
+  const currentCnpj = cnpj.value;
+  const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+
+  queueMicrotask(() => {
+    if (activePerfSession.value?.sessionId !== sessionId) return;
+    if (cnpj.value !== currentCnpj) return;
+    if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
+
+    logCnpjPerf(perfSession, "prefetch_dispatched", {
+      reason,
+      concurrency: 2,
+      inicio,
+      fim,
+    });
+
+    cnpjDetailStore
+      .prefetchAllDetailData({
+        cnpj: currentCnpj,
+        inicio,
+        fim,
+        volumeAtipicoPercentual,
+        geoData: geoData.value,
+        concurrency: 2,
+      })
+      .then(() => {
+        if (activePerfSession.value?.sessionId !== sessionId) return;
+        logCnpjPerf(perfSession, "prefetch_settled", {
+          reason,
+          status: "fulfilled",
+        });
+      })
+      .catch((error) => {
+        if (activePerfSession.value?.sessionId !== sessionId) return;
+        console.error("Erro no preload das abas do CNPJ:", error);
+        logCnpjPerf(perfSession, "prefetch_settled", {
+          reason,
+          status: "rejected",
+        });
+      });
+  });
+};
+
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
-    // Ao trocar de CNPJ, reseta tudo e carrega apenas bootstrap + aba ativa.
+    // Ao trocar de CNPJ, reseta tudo, carrega bootstrap + aba ativa e aquece as demais em background.
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
       cnpjNav.reset(getTabIndexFromRoute());
@@ -365,6 +411,7 @@ watch(
 
     if (newCnpj) {
       await loadActiveTabData(perfSession, "initial");
+      queueBackgroundPrefetch(perfSession, "initial");
     }
   },
   { immediate: true },
@@ -391,6 +438,7 @@ watch(
       .then(() => loadActiveTabData(perfSession, "period_change"))
       .then(() => {
         if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;
+        queueBackgroundPrefetch(perfSession, "period_change");
         logCnpjPerf(perfSession, "period_bootstrap_settled", {
           status: "fulfilled",
         });

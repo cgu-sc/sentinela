@@ -6,6 +6,41 @@
 import { ref } from 'vue';
 import { API_ENDPOINTS } from '@/config/api';
 
+const regionalPayloadCache = new Map();
+const regionalPayloadRequests = new Map();
+
+function buildRegionalCacheKey(uf, inicio = null, fim = null, regiaoId = null) {
+  return `${regiaoId ?? 'UF'}|${uf ?? ''}|${inicio ?? ''}|${fim ?? ''}`;
+}
+
+export async function fetchRegionalPayload(uf, inicio = null, fim = null, regiaoId = null) {
+  if (!uf && !regiaoId) return null;
+
+  const cacheKey = buildRegionalCacheKey(uf, inicio, fim, regiaoId);
+  if (regionalPayloadCache.has(cacheKey)) {
+    return regionalPayloadCache.get(cacheKey);
+  }
+  if (regionalPayloadRequests.has(cacheKey)) {
+    return regionalPayloadRequests.get(cacheKey);
+  }
+
+  const request = (async () => {
+    const url = API_ENDPOINTS.analyticsRegionalBenchmarking(uf, regiaoId, inicio, fim);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    regionalPayloadCache.set(cacheKey, data);
+    return data;
+  })();
+
+  regionalPayloadRequests.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    regionalPayloadRequests.delete(cacheKey);
+  }
+}
+
 const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
 
 export function useRegional() {
@@ -29,7 +64,7 @@ export function useRegional() {
    */
   async function fetchRegional(uf, inicio = null, fim = null, regiaoId = null) {
     if (!uf && !regiaoId) return;
-    const cacheKey = `${regiaoId ?? 'UF'}|${uf}|${inicio ?? ''}|${fim ?? ''}`;
+    const cacheKey = buildRegionalCacheKey(uf, inicio, fim, regiaoId);
 
     if (regionalLoaded.value && loadedRegion.value === cacheKey) {
       return;
@@ -39,11 +74,7 @@ export function useRegional() {
       regionalLoading.value = true;
       regionalLoaded.value  = false;
 
-      const url = API_ENDPOINTS.analyticsRegionalBenchmarking(uf, regiaoId, inicio, fim);
-
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      regionalData.value = await res.json();
+      regionalData.value = await fetchRegionalPayload(uf, inicio, fim, regiaoId);
       loadedRegion.value = cacheKey;
       regionalError.value = null;
     } catch (e) {

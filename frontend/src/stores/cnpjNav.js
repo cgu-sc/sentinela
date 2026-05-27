@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-const TAB_INDEX_REGIONAL = 8;
+const TAB_INDEX_REGIONAL = 7;
 
 /**
  * Store de navegação do Detalhe do CNPJ.

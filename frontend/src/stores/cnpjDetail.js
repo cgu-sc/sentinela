@@ -395,7 +395,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       const tasks = [
         ['movimentacao-financeira', () => this.fetchEvolucaoFinanceira(clean, inicio, fim, volumeAtipicoPercentual)],
         ['movimentacao-gtin', () => this.fetchEvolucaoMensalGtin(clean, inicio, fim)],
-        ['memoria-calculo', () => this.fetchMovimentacao(clean)],
         ['indicadores', () => this.fetchIndicadores(clean)],
         ['crm-prescritores', () => this.fetchCrmData(clean, inicio, fim)],
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],

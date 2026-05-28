@@ -46,6 +46,7 @@ _SECAO5_MAP = [
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros de CRMs nas autorizações'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
 ]
+_SECAO5_ORDER = {key: idx for idx, (key, _, _) in enumerate(_SECAO5_MAP)}
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = False
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
@@ -554,7 +555,7 @@ def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
         quadro_rows,
         key=lambda item: (
             0 if item["key"] == "percentual_nao_comprovacao" else 1,
-            -float(item["risco_regional"]),
+            _SECAO5_ORDER.get(item["key"], len(_SECAO5_ORDER)),
             item["indicador"],
         ),
     )

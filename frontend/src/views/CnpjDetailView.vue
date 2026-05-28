@@ -103,6 +103,18 @@ const { localidades } = storeToRefs(geoStore);
 
 const filterStore = useFilterStore();
 const cnpjNav = useCnpjNavStore();
+const visitedTabIndexes = ref(new Set([cnpjNav.activeTabIndex]));
+
+const hasVisitedTab = (index) => visitedTabIndexes.value.has(index);
+
+const markTabVisited = (index) => {
+  if (!Number.isInteger(index) || visitedTabIndexes.value.has(index)) return;
+  visitedTabIndexes.value = new Set([...visitedTabIndexes.value, index]);
+};
+
+const resetVisitedTabs = (activeIndex = cnpjNav.activeTabIndex) => {
+  visitedTabIndexes.value = new Set([activeIndex]);
+};
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
@@ -197,6 +209,7 @@ const handleGenerateNote = async () => {
 // ── Dados do CNPJ ─────────────────────────────────────────
 const setActiveTab = (index, { syncUrl = true } = {}) => {
   cnpjNav.activeTabIndex = index;
+  markTabVisited(index);
   if (cnpjDetailStore.cnpjAccessStatus === "valid") {
     queueMicrotask(() => loadActiveTabData(activePerfSession.value, "tab_change"));
   }
@@ -384,6 +397,7 @@ watch(
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
       cnpjNav.reset(getTabIndexFromRoute());
+      resetVisitedTabs(cnpjNav.activeTabIndex);
     }
     const requestId = ++cnpjValidationRequest;
     if (!newCnpj) {
@@ -413,6 +427,12 @@ watch(
       await loadActiveTabData(perfSession, "initial");
     }
   },
+  { immediate: true },
+);
+
+watch(
+  () => cnpjNav.activeTabIndex,
+  (index) => markTabVisited(index),
   { immediate: true },
 );
 
@@ -576,7 +596,6 @@ watch(
     <TabView
       v-if="canRenderDetail"
       class="detail-tabs"
-      lazy
       :activeIndex="cnpjNav.activeTabIndex"
       @tab-change="setActiveTab($event.index)"
     >
@@ -587,6 +606,7 @@ watch(
           ></template
         >
         <FinancialMovementTab
+          v-if="hasVisitedTab(TAB_INDEX.EVOLUTION)"
           ref="financialMovementTabRef"
           class="tab-content detail-tab-enter"
         />
@@ -599,6 +619,7 @@ watch(
           ></template
         >
         <RiskDiagnosisTab
+          v-if="hasVisitedTab(TAB_INDEX.DIAGNOSIS)"
           :cnpj="cnpj"
           :cnpj-data="cnpjData"
           :geo-data="geoData"
@@ -615,14 +636,22 @@ watch(
             >Memória de Cálculo</span
           ></template
         >
-        <CalculationMemoryTab :cnpj="cnpj" class="tab-content detail-tab-enter" />
+        <CalculationMemoryTab
+          v-if="hasVisitedTab(TAB_INDEX.MOVEMENT)"
+          :cnpj="cnpj"
+          class="tab-content detail-tab-enter"
+        />
       </TabPanel>
 
       <TabPanel>
         <template #header
           ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
         >
-        <IndicatorsTab ref="indicatorsTabRef" class="tab-content detail-tab-enter" />
+        <IndicatorsTab
+          v-if="hasVisitedTab(TAB_INDEX.INDICATORS)"
+          ref="indicatorsTabRef"
+          class="tab-content detail-tab-enter"
+        />
       </TabPanel>
 
       <TabPanel>
@@ -632,6 +661,7 @@ watch(
           ></template
         >
         <AuthTab
+          v-if="hasVisitedTab(TAB_INDEX.CRMS)"
           ref="authTabRef"
           :cnpj="cnpj"
           :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
@@ -645,19 +675,20 @@ watch(
             >Quadro Societário</span
           ></template
         >
-        <SociosTab class="tab-content detail-tab-enter" />
+        <SociosTab
+          v-if="hasVisitedTab(TAB_INDEX.SOCIOS)"
+          class="tab-content detail-tab-enter"
+        />
       </TabPanel>
 
       <TabPanel>
         <template #header>
           <i class="pi pi-share-alt tab-icon" /><span>Teia Societária</span>
         </template>
-        <KeepAlive>
-          <NetworkTab
-            v-if="cnpjNav.activeTabIndex === TAB_INDEX.NETWORK"
-            class="tab-content detail-tab-enter"
-          />
-        </KeepAlive>
+        <NetworkTab
+          v-if="hasVisitedTab(TAB_INDEX.NETWORK)"
+          class="tab-content detail-tab-enter"
+        />
       </TabPanel>
 
       <TabPanel>
@@ -665,6 +696,7 @@ watch(
           <i class="pi pi-map tab-icon" /><span>Região de Saúde</span>
         </template>
         <RegionalTab
+          v-if="hasVisitedTab(TAB_INDEX.REGIONAL)"
           :cnpj="cnpj"
           :geo-data="geoData"
           :cnpj-data="cnpjData"

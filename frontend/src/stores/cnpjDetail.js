@@ -189,6 +189,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     networkLevelLoading: { 3: false, 4: false },
     networkLevelLoaded: { 3: null, 4: null },
     networkLevelRequestKey: { 3: null, 4: null },
+    networkPresentationState: null,
     networkError:   null,
 
     prefetchRequestKey: null,
@@ -741,6 +742,21 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    saveNetworkPresentationState(cnpj, state) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean || !state) return;
+      this.networkPresentationState = {
+        ...state,
+        cnpj: clean,
+      };
+    },
+
+    getNetworkPresentationState(cnpj) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean || this.networkPresentationState?.cnpj !== clean) return null;
+      return this.networkPresentationState;
+    },
+
     // ── Falecidos ─────────────────────────────────────────────────────────────
     async fetchFalecidos(cnpj, inicio = null, fim = null) {
       const clean = normalizeCnpj(cnpj);
@@ -1079,6 +1095,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.networkLevelLoading = { 3: false, 4: false };
       this.networkLevelLoaded = { 3: null, 4: null };
       this.networkLevelRequestKey = { 3: null, 4: null };
+      this.networkPresentationState = null;
       this.networkError   = null;
       this.prefetchRequestKey = null;
     },

@@ -6,6 +6,7 @@ import {
   onMounted,
   onBeforeUnmount,
   onActivated,
+  onDeactivated,
   nextTick,
 } from "vue";
 import { storeToRefs } from "pinia";
@@ -51,6 +52,7 @@ const cyContainer = ref(null);
 let cy = null;
 let resizeObserver = null;
 let currentLayout = null;
+let graphPresentationSaveFrame = null;
 
 // ── Controle de UI ──────────────────────────────────────────────────────────
 const selectedNode = ref(null);
@@ -220,6 +222,116 @@ const restoreLayerFilterSnapshot = (snapshot) => {
     ...snapshot,
   };
 };
+
+const isValidGraphPosition = (position) =>
+  Number.isFinite(position?.x) && Number.isFinite(position?.y);
+
+function mergeNetworkPayloads(...payloads) {
+  const nodeById = new Map();
+  const edgeById = new Map();
+
+  payloads.filter(Boolean).forEach((payload) => {
+    (payload.nodes || []).forEach((node) => {
+      if (!nodeById.has(node.id)) nodeById.set(node.id, node);
+    });
+    (payload.edges || []).forEach((edge) => {
+      if (!edgeById.has(edge.id)) edgeById.set(edge.id, edge);
+    });
+  });
+
+  return {
+    nodes: Array.from(nodeById.values()),
+    edges: Array.from(edgeById.values()),
+  };
+}
+
+function getCompatiblePresentationState(state, data) {
+  if (!state?.nodePositions || !data?.nodes?.length) return null;
+  const hasEveryNodePosition = data.nodes.every((node) =>
+    isValidGraphPosition(state.nodePositions[node.id]),
+  );
+  return hasEveryNodePosition ? state : null;
+}
+
+function getGraphPresentationState() {
+  if (!cy) return null;
+
+  const nodePositions = {};
+  cy.nodes().forEach((node) => {
+    const position = node.position();
+    nodePositions[node.id()] = { x: position.x, y: position.y };
+  });
+
+  return {
+    level: currentLevel.value,
+    zoom: cy.zoom(),
+    pan: { ...cy.pan() },
+    nodePositions,
+    expandedNodeIds: Array.from(expandedNodes.value),
+    layerFilters: getLayerFilterSnapshot(),
+    nextReorganizeMode: { ...nextReorganizeMode.value },
+  };
+}
+
+function saveGraphPresentationState() {
+  const state = getGraphPresentationState();
+  if (state) cnpjDetailStore.saveNetworkPresentationState(cnpj.value, state);
+}
+
+function scheduleGraphPresentationStateSave() {
+  if (graphPresentationSaveFrame) {
+    window.cancelAnimationFrame(graphPresentationSaveFrame);
+  }
+  graphPresentationSaveFrame = window.requestAnimationFrame(() => {
+    graphPresentationSaveFrame = null;
+    saveGraphPresentationState();
+  });
+}
+
+function restorePresentationUiState(state) {
+  if (!state) return;
+  if (state.level) currentLevel.value = state.level;
+  if (Array.isArray(state.expandedNodeIds)) {
+    expandedNodes.value = new Set(state.expandedNodeIds);
+  }
+  if (state.layerFilters) restoreLayerFilterSnapshot(state.layerFilters);
+  if (state.nextReorganizeMode) {
+    nextReorganizeMode.value = {
+      ...nextReorganizeMode.value,
+      ...state.nextReorganizeMode,
+    };
+  }
+}
+
+async function getGraphDataForPresentationState(state) {
+  if (!networkData.value) return null;
+  if (state?.level === "N3") {
+    const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+    return mergeNetworkPayloads(networkData.value, dataN3);
+  }
+  if (state?.level === "N4") {
+    const [dataN3, dataN4] = await Promise.all([
+      cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3),
+      cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4),
+    ]);
+    return mergeNetworkPayloads(networkData.value, dataN3, dataN4);
+  }
+  return networkData.value;
+}
+
+async function getInitialGraphBuildPayload() {
+  const presentationState = cnpjDetailStore.getNetworkPresentationState(cnpj.value);
+  const graphData = await getGraphDataForPresentationState(presentationState);
+  const restorableState = getCompatiblePresentationState(
+    presentationState,
+    graphData,
+  );
+
+  return {
+    graphData: restorableState ? graphData : networkData.value,
+    presentationState: restorableState,
+  };
+}
 
 const updateLayerFilter = (key, value) => {
   layerFilters.value = {
@@ -1232,8 +1344,14 @@ function getGraphFitViewport(elements, padding, rightReserve = 0) {
 }
 
 // ── Inicializa / Destrói o grafo ────────────────────────────────────────────
-async function buildGraph(data) {
+async function buildGraph(data, { presentationState = null } = {}) {
   if (!cyContainer.value || !data) return;
+  const restoredPresentation = getCompatiblePresentationState(
+    presentationState,
+    data,
+  );
+  if (restoredPresentation) restorePresentationUiState(restoredPresentation);
+
   const perfSession = createCnpjPerfSession(cnpj.value);
   logCnpjPerf(perfSession, "network_graph_build_started", {
     nodes: data.nodes?.length ?? 0,
@@ -1251,6 +1369,7 @@ async function buildGraph(data) {
     currentLayout = null;
   }
   if (cy) {
+    saveGraphPresentationState();
     try {
       cy.stop();
     } catch (e) {}
@@ -1264,34 +1383,41 @@ async function buildGraph(data) {
   }
 
   const elements = [
-    ...data.nodes.map((n) => ({
-      classes: getNodeClasses(n),
-      data: {
-        id: n.id,
-        label: truncateLabel(n.label, 22),
-        fullLabel: n.label,
-        type: n.type,
-        municipio: n.municipio,
-        uf: n.uf,
-        situacao_rf: n.situacao_rf,
-        nome_socio: n.nome_socio,
-        razao_social: n.razao_social,
-        nome_fantasia: n.nome_fantasia,
-        id_cnae_principal: n.id_cnae_principal,
-        cnae_principal: n.cnae_principal,
-        id_cnae_secundario: n.id_cnae_secundario,
-        cnae_secundario: n.cnae_secundario,
-        is_falecido: isTruthyFlag(n.is_falecido),
-        is_cadunico: isTruthyFlag(n.is_cadunico),
-        is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
-        is_par: isTruthyFlag(n.is_par),
-        qtd_processos_par: n.qtd_processos_par || 0,
-        par_situacoes: n.par_situacoes,
-        par_primeira_instauracao: n.par_primeira_instauracao,
-        par_ultima_instauracao: n.par_ultima_instauracao,
-        par_ultima_conclusao: n.par_ultima_conclusao,
-      },
-    })),
+    ...data.nodes.map((n) => {
+      const element = {
+        classes: getNodeClasses(n),
+        data: {
+          id: n.id,
+          label: truncateLabel(n.label, 22),
+          fullLabel: n.label,
+          type: n.type,
+          municipio: n.municipio,
+          uf: n.uf,
+          situacao_rf: n.situacao_rf,
+          nome_socio: n.nome_socio,
+          razao_social: n.razao_social,
+          nome_fantasia: n.nome_fantasia,
+          id_cnae_principal: n.id_cnae_principal,
+          cnae_principal: n.cnae_principal,
+          id_cnae_secundario: n.id_cnae_secundario,
+          cnae_secundario: n.cnae_secundario,
+          is_falecido: isTruthyFlag(n.is_falecido),
+          is_cadunico: isTruthyFlag(n.is_cadunico),
+          is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
+          is_par: isTruthyFlag(n.is_par),
+          qtd_processos_par: n.qtd_processos_par || 0,
+          par_situacoes: n.par_situacoes,
+          par_primeira_instauracao: n.par_primeira_instauracao,
+          par_ultima_instauracao: n.par_ultima_instauracao,
+          par_ultima_conclusao: n.par_ultima_conclusao,
+        },
+      };
+      const savedPosition = restoredPresentation?.nodePositions?.[n.id];
+      if (isValidGraphPosition(savedPosition)) {
+        element.position = { ...savedPosition };
+      }
+      return element;
+    }),
     ...data.edges.map((e) => ({
       data: {
         id: e.id,
@@ -1336,7 +1462,26 @@ async function buildGraph(data) {
     requestAnimationFrame(() => {
       if (!cy || cy !== graphInstance) return;
 
-      applyRadialView({ rememberN2Zoom: true });
+      if (restoredPresentation) {
+        if (Number.isFinite(restoredPresentation.zoom)) {
+          cy.zoom(restoredPresentation.zoom);
+        }
+        if (restoredPresentation.pan) {
+          cy.pan({ ...restoredPresentation.pan });
+        }
+        zoom.value = Math.round(cy.zoom() * 100);
+        logCnpjPerf(perfSession, "network_graph_presentation_restored", {
+          nodes: cy?.nodes()?.length ?? 0,
+          edges: cy?.edges()?.length ?? 0,
+          level: currentLevel.value,
+        });
+      } else {
+        applyRadialView({ rememberN2Zoom: true });
+        logCnpjPerf(perfSession, "network_graph_radial_applied", {
+          nodes: cy?.nodes()?.length ?? 0,
+          edges: cy?.edges()?.length ?? 0,
+        });
+      }
       if (hasActiveSearch.value) {
         applyGraphHighlights();
       }
@@ -1345,10 +1490,6 @@ async function buildGraph(data) {
         cyContainer.value.style.opacity = "";
         cyContainer.value.style.pointerEvents = "";
       }
-      logCnpjPerf(perfSession, "network_graph_radial_applied", {
-        nodes: cy?.nodes()?.length ?? 0,
-        edges: cy?.edges()?.length ?? 0,
-      });
     });
   });
 
@@ -1367,9 +1508,14 @@ async function buildGraph(data) {
 
   cy.on("zoom", () => {
     zoom.value = Math.round(cy.zoom() * 100);
+    scheduleGraphPresentationStateSave();
   });
 
-  zoom.value = 100;
+  cy.on("pan", () => {
+    scheduleGraphPresentationStateSave();
+  });
+
+  if (!restoredPresentation) zoom.value = 100;
 }
 
 // ── Lógica de Expansão (Nível 3) ─────────────────────────────────────────────
@@ -1561,10 +1707,9 @@ function observeGraphContainer() {
   if (!cyContainer.value || resizeObserver) return;
 
   resizeObserver = new ResizeObserver(() => {
+    cy?.resize();
     if (hasActiveSearch.value) {
       applyGraphHighlights();
-    } else {
-      fitGraphToView(INITIAL_FIT_PADDING);
     }
   });
   resizeObserver.observe(cyContainer.value);
@@ -1628,10 +1773,14 @@ watch(
     if (isBatchExpanding.value) return;
     if (data) {
       await nextTick();
-      await buildGraph(data);
+      const payload = cy
+        ? { graphData: data, presentationState: null }
+        : await getInitialGraphBuildPayload();
+      await buildGraph(payload.graphData || data, {
+        presentationState: payload.presentationState,
+      });
     }
   },
-  { immediate: true },
 );
 
 watch(networkSearch, () => {
@@ -1675,11 +1824,15 @@ onMounted(async () => {
   } else {
     await nextTick();
     observeGraphContainer();
-    await buildGraph(networkData.value);
+    const payload = await getInitialGraphBuildPayload();
+    await buildGraph(payload.graphData || networkData.value, {
+      presentationState: payload.presentationState,
+    });
   }
 });
 
 onBeforeUnmount(() => {
+  saveGraphPresentationState();
   document.removeEventListener("click", handleFiltersMenuOutsideClick);
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -1687,10 +1840,18 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(graphCountUpdateFrame);
     graphCountUpdateFrame = null;
   }
+  if (graphPresentationSaveFrame) {
+    window.cancelAnimationFrame(graphPresentationSaveFrame);
+    graphPresentationSaveFrame = null;
+  }
   cy?.destroy();
   cy = null;
   graphReady.value = false;
   updateGraphCounts();
+});
+
+onDeactivated(() => {
+  saveGraphPresentationState();
 });
 
 onActivated(() => {

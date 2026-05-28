@@ -44,8 +44,8 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     _run(
         p_title,
         'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -104,7 +104,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
+        'Fonte: Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
         color='64748B',
         size=8,
     )
@@ -118,8 +118,8 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
     _run(
         p_title,
         'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -156,7 +156,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, f'Fonte: Sistema Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
+    _run(p_foot, f'Fonte: Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
     _keep_small_table_together(p_title, table, [p_foot])
 
 
@@ -166,9 +166,9 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
-        color='0F172A',
-        size=9,
+        f'Tabela {tabela_num} - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -238,8 +238,8 @@ def _add_quadro_evolucao_financeira(
     _run(
         p_title,
         f'Tabela {tabela_num} - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -320,7 +320,7 @@ def _add_quadro_evolucao_financeira(
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, aba “Evolução Financeira”, a partir das dispensações informadas no Sistema Autorizador de Vendas do PFPB e do levantamento de “vendas sem comprovação”.',
+        'Fonte: Sentinela, aba “Evolução Financeira”, a partir das dispensações informadas no Sistema Autorizador de Vendas do PFPB e do levantamento de “vendas sem comprovação”.',
         color='64748B',
         size=8,
     )
@@ -337,8 +337,8 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
     _run(
         p_title,
         f'Tabela {tabela_num} - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -409,7 +409,7 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, a partir da evolução mensal por GTIN. O percentual indicado no campo “Aumento no semestre” representa o crescimento do GTIN em relação ao semestre anterior e é exibido apenas quando o valor anterior é superior a R$ 1,00. GTINs com participação individual menor ou igual a 0,1% no aumento positivo do semestre são consolidados em uma linha agregada.',
+        'Fonte: Sentinela, a partir da evolução mensal por GTIN. O percentual indicado no campo “Aumento no semestre” representa o crescimento do GTIN em relação ao semestre anterior e é exibido apenas quando o valor anterior é superior a R$ 1,00. GTINs com participação individual menor ou igual a 0,1% no aumento positivo do semestre são consolidados em uma linha agregada.',
         color='64748B',
         size=8,
     )
@@ -420,7 +420,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='0F172A', size=9, bold=True)
+    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=8, bold=True)
     _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=8)
 
     tbl = doc.add_table(rows=0, cols=2)
@@ -524,8 +524,8 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _run(
         p_title,
         f'Quadro 01-A - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -569,7 +569,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. Data de carga mais recente da base eSocial disponível: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
+        f'Fonte: Sentinela, a partir de dados do eSocial. Data de carga mais recente da base eSocial disponível: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
         color='64748B',
         size=8,
     )
@@ -587,8 +587,8 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     _run(
         p_title,
         f'Quadro 01-B - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -637,7 +637,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         escopo = "O quadro apresenta a lista completa de vínculos trabalhistas identificados no período analisado."
     _run(
         p_foot,
-        f'Fonte: Sistema Sentinela, a partir de dados do eSocial. {escopo}',
+        f'Fonte: Sentinela, a partir de dados do eSocial. {escopo}',
         color='64748B',
         size=8,
     )
@@ -647,7 +647,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição.', color='0F172A', size=9, bold=True)
+    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=8, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
@@ -663,19 +663,19 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
         _cell_bg(cell, 'E2E8F0')
 
     r1 = table.rows[1].cells
-    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia')
-    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
-    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'))
+    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia', color='475569', size=9)
+    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=9, bold=True)
+    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'), color='0F172A', size=9, bold=True)
     
     r2 = table.rows[2].cells
-    _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)')
-    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'))
-    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'))
+    _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)', color='475569', size=9)
+    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=9, bold=True)
+    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'), color='0F172A', size=9, bold=True)
 
     r3 = table.rows[3].cells
-    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação')
-    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','))
-    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','))
+    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação', color='475569', size=9)
+    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=9, bold=True)
+    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=9, bold=True)
     
     for row in table.rows[1:]:
         row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER

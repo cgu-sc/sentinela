@@ -21,6 +21,7 @@ from .nota_tecnica_formatters import (
     _format_decimal_pt,
     _title_case_pt,
 )
+from .nota_tecnica_crm import _add_crm_evidencias_complementares_body
 
 def _format_municipio_falecido(value: Any) -> str:
     text = str(value or "").strip()
@@ -88,8 +89,38 @@ def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
     return grupos_lista
 
 
-def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_comp: dict[str, Any], timing: Any = None):
-    """Adiciona o Anexo III com detalhamento das vendas para pessoas falecidas."""
+def _add_anexo_iii_crm_evidencias(
+    doc,
+    razao_social: str,
+    evidencias_comp: dict[str, Any],
+    tabela_num: int,
+    timing: Any = None,
+):
+    """Adiciona o Anexo III com evidencias complementares de CRM."""
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    section.footer.is_linked_to_previous = False
+    section.footer.paragraphs[0].text = ''
+    section.top_margin = Inches(0.5)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.7)
+    section.right_margin = Inches(0.7)
+
+    doc.add_heading('ANEXO III - EVIDÊNCIAS COMPLEMENTARES RELACIONADAS AO USO DE CRMS NO SAV', level=1)
+    tabela_num = _add_crm_evidencias_complementares_body(doc, razao_social, evidencias_comp, tabela_num)
+    if timing:
+        timing.mark("anexo III evidencias CRM")
+    return tabela_num
+
+
+def _add_anexo_falecidos(
+    doc,
+    razao_social: str,
+    cnpj_fmt: str,
+    falecidos_comp: dict[str, Any],
+    timing: Any = None,
+    anexo_num: str = 'III',
+):
+    """Adiciona o anexo com detalhamento das vendas para pessoas falecidas."""
     transacoes = falecidos_comp.get("transacoes") or []
     if not transacoes:
         return
@@ -110,9 +141,9 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
     cpfs_distintos = int(falecidos_comp.get("cpfs_distintos") or len(grupos))
     valor_total = float(falecidos_comp.get("valor_total") or 0.0)
     if timing:
-        timing.mark(f"anexo III agrupamento ({len(grupos)} CPFs, {len(transacoes)} transacoes)")
+        timing.mark(f"anexo {anexo_num} agrupamento ({len(grupos)} CPFs, {len(transacoes)} transacoes)")
 
-    doc.add_heading('ANEXO III - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
+    doc.add_heading(f'ANEXO {anexo_num} - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
     p_intro = doc.add_paragraph()
     p_intro.paragraph_format.space_after = Pt(8)
     _run(
@@ -149,7 +180,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
         _cell_bg(cell, 'E2E8F0')
         _write_cell(cell, label, size=7.3, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.CENTER)
     if timing:
-        timing.mark("anexo III cabecalho tabela")
+        timing.mark(f"anexo {anexo_num} cabecalho tabela")
 
     for grupo_idx, grupo in enumerate(grupos, start=1):
         for t in grupo["transacoes"]:
@@ -193,7 +224,7 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
         _cell_bg(subtotal_row.cells[5], 'F8FAFC')
         _write_cell(subtotal_row.cells[5], '', size=7.4)
         if timing:
-            timing.mark(f"anexo III CPF {grupo_idx} ({len(grupo['transacoes'])} transacoes)")
+            timing.mark(f"anexo {anexo_num} CPF {grupo_idx} ({len(grupo['transacoes'])} transacoes)")
 
     total_row = table.add_row()
     _row_cant_split(total_row)
@@ -213,4 +244,4 @@ def _add_anexo_iii_falecidos(doc, razao_social: str, cnpj_fmt: str, falecidos_co
     _cell_bg(total_row.cells[5], 'E2E8F0')
     _write_cell(total_row.cells[5], '', size=7.6)
     if timing:
-        timing.mark("anexo III total geral")
+        timing.mark(f"anexo {anexo_num} total geral")

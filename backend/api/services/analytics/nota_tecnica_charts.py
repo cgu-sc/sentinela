@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import _format_block_footnote, _format_block_title, _format_picture_paragraph, _run
 from .nota_tecnica_formatters import _format_decimal_pt
@@ -1051,7 +1051,7 @@ def _build_parkinson_faixas_etarias_chart_prefer_svg(demografia: dict[str, Any])
 
 
 def _format_figure_title(paragraph):
-    _format_block_title(paragraph, space_before=18, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _format_block_title(paragraph, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _format_figure_footnote(paragraph):
@@ -1065,8 +1065,8 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
     _run(
         p_title,
         f'Figura {figure_number:02d} - Posicionamento regional da Farmácia {razao_social} (CNPJ {cnpj_fmt}) em relação aos estabelecimentos da mesma Região de Saúde.',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -1075,41 +1075,32 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
     _format_picture_paragraph(p_img)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
-
-    p_foot = doc.add_paragraph()
-    _format_figure_footnote(p_foot)
-    _run(
-        p_foot,
-        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
-        color='64748B',
-        size=8,
-    )
-def _add_figura_percentil_risco(doc, razao_social: str, cnpj_fmt: str, percentil_comp: dict[str, Any], figure_number: int = 1):
+def _add_figura_percentil_risco(
+    doc,
+    razao_social: str,
+    cnpj_fmt: str,
+    percentil_comp: dict[str, Any],
+    figure_number: int = 1,
+    show_title: bool = True,
+):
     """Insere figura de percentil de risco no documento."""
-    p_title = doc.add_paragraph()
-    _format_figure_title(p_title)
-    _run(
-        p_title,
-        f'Figura {figure_number:02d} - Posição percentílica da Farmácia {razao_social} (CNPJ {cnpj_fmt}) quanto ao percentual de vendas sem comprovação na Região de Saúde.',
-        color='0F172A',
-        size=9,
-        bold=True,
-    )
+    if show_title:
+        p_title = doc.add_paragraph()
+        _format_figure_title(p_title)
+        _run(
+            p_title,
+            f'Figura {figure_number:02d} - Posição percentílica da Farmácia {razao_social} (CNPJ {cnpj_fmt}) quanto ao percentual de vendas sem comprovação na Região de Saúde.',
+            color='334155',
+            size=8,
+            bold=True,
+        )
 
     chart_stream = _build_percentil_risco_chart_prefer_svg(percentil_comp)
     p_img = doc.add_paragraph()
-    _format_picture_paragraph(p_img)
+    _format_picture_paragraph(p_img, keep_with_next=False)
+    p_img.paragraph_format.space_after = Pt(12)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
-
-    p_foot = doc.add_paragraph()
-    _format_figure_footnote(p_foot)
-    _run(
-        p_foot,
-        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
-        color='64748B',
-        size=8,
-    )
 def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura da evolucao financeira no documento."""
     p_title = doc.add_paragraph()
@@ -1117,8 +1108,8 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     _run(
         p_title,
         f'Figura {figure_number:02d} - Evolução semestral dos recursos recebidos e das "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -1145,8 +1136,8 @@ def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_num
     _run(
         p_title,
         f'Figura {figure_number:02d} - Comparação entre casos esperados de doença de Parkinson no município e CPFs observados com dispensação na farmácia.',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 
@@ -1160,7 +1151,7 @@ def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_num
     _format_figure_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sistema Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
+        'Fonte: Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
         color='64748B',
         size=8,
     )
@@ -1173,8 +1164,8 @@ def _add_figura_parkinson_faixas_etarias(doc, demografia: dict[str, Any], figure
     _run(
         p_title,
         f'Figura {figure_number:02d} - Distribuição etária da população municipal utilizada como base para estimativa epidemiológica de doença de Parkinson.',
-        color='0F172A',
-        size=9,
+        color='334155',
+        size=8,
         bold=True,
     )
 

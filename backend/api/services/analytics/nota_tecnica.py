@@ -23,7 +23,7 @@ from .nota_tecnica_charts import (
     _add_figura_posicionamento_regional,
 )
 from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
-from .nota_tecnica_anexos import _add_anexo_iii_falecidos
+from .nota_tecnica_anexos import _add_anexo_falecidos, _add_anexo_iii_crm_evidencias
 from .nota_tecnica_contexts import (
     _build_esocial_context,
     _build_evolucao_financeira_context,
@@ -49,7 +49,6 @@ from .nota_tecnica_criticidades import (
     _add_dias_pico_text,
     _add_dispersao_geografica_text,
     _add_falecidos_criticidade_text,
-    _add_indicador_municipal_top10_table,
     _add_indicador_regional_table,
     _add_indicadores_criticos_quadro,
     _add_incompatibilidade_patologica_text,
@@ -64,7 +63,6 @@ from .nota_tecnica_criticidades import (
     _build_dias_pico_context,
     _build_dispersao_geografica_context,
     _build_falecidos_context,
-    _build_indicador_municipal_top10_context,
     _build_indicador_regional_context,
     _build_indicadores_criticos_quadro,
     _build_incompatibilidade_patologica_context,
@@ -79,7 +77,6 @@ from .nota_tecnica_criticidades import (
     _get_criticos,
 )
 from .nota_tecnica_crm import (
-    _add_crm_evidencias_complementares_text,
     _add_crms_irregulares_text,
     _add_hhi_crm_text,
     _build_crm_evidencias_complementares_context,
@@ -189,38 +186,73 @@ def _vez_ou_vezes(value: float) -> str:
     return "vez" if abs(value) <= 1 else "vezes"
 
 
-def _crm_evidencias_intro_resumo(crm_evidencias_comp: dict[str, Any] | None) -> str:
-    if not crm_evidencias_comp:
-        return ''
-
-    evidencias: list[str] = []
-    if crm_evidencias_comp.get("distancia"):
-        evidencias.append("distância geográfica elevada entre médicos prescritores e o estabelecimento")
-    if crm_evidencias_comp.get("intensiva"):
-        evidencias.append("volume diário atípico de prescrições por CRM")
-    if crm_evidencias_comp.get("volume_horario"):
-        evidencias.append("volume horário anômalo de autorizações")
-    if crm_evidencias_comp.get("crm_unico"):
-        evidencias.append("concentração temporal de autorizações vinculadas a um mesmo CRM")
-    if crm_evidencias_comp.get("crms_multiplos"):
-        evidencias.append("episódios de autorizações concentradas envolvendo múltiplos CRMs")
-    principais_contexto = crm_evidencias_comp.get("principais_crms_contexto") or {}
-    if principais_contexto.get("qtd_com_alerta"):
-        evidencias.append("CRMs de interesse com alertas operacionais associados ao estabelecimento")
-
-    if not evidencias:
-        return "evidências complementares relacionadas ao uso de CRMs no SAV"
-    return _format_list_pt(evidencias)
-
-
 def _build_codigo_verificacao(cnpj: str, generated_at: datetime) -> str:
     cnpj_digits = ''.join(ch for ch in str(cnpj or '') if ch.isdigit()) or 'SEM-CNPJ'
     suffix = uuid.uuid4().hex[:8].upper()
     return f'NT-{cnpj_digits}-{generated_at:%Y%m%d}-{suffix}'
 
 
+def _add_sumario_official_header(doc, brasao_path: str):
+    if not os.path.exists(brasao_path):
+        raise FileNotFoundError(f'Brasao da CGU nao encontrado em {brasao_path}')
+
+    placeholder_color = 'DC2626'
+    default_color = '0F172A'
+
+    p_brasao = doc.add_paragraph()
+    p_brasao.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_brasao.paragraph_format.space_after = Pt(4)
+    p_brasao.add_run().add_picture(brasao_path, width=Inches(1.15))
+
+    def add_centered_line(parts: list[tuple[str, str, bool]], *, size: float = 9, space_after: float = 0):
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_after = Pt(space_after)
+        for text, color, bold in parts:
+            _run(p, text, color=color, size=size, bold=bold)
+
+    add_centered_line([('CONTROLADORIA-GERAL DA UNIÃO', default_color, True)], size=14, space_after=1)
+    add_centered_line(
+        [
+            ('CONTROLADORIA-GERAL DA UNIÃO NO ESTADO DE ', default_color, True),
+            ('XXXXXXXXXXX', placeholder_color, True),
+        ],
+        size=9,
+        space_after=1,
+    )
+    add_centered_line(
+        [
+            ('Endereço – Cidade/UF - CEP ', default_color, False),
+            ('XX.XXX-XX', placeholder_color, False),
+            (' – Tel. ', default_color, False),
+            ('(XX) XXXX-XXXX', placeholder_color, False),
+            (' – e-mail', default_color, False),
+        ],
+        size=8,
+        space_after=8,
+    )
+    add_centered_line(
+        [
+            ('NOTA TÉCNICA Nº ', default_color, True),
+            ('XXX/20XX/NAE/XX/Regional/XX', placeholder_color, True),
+        ],
+        size=10,
+        space_after=1,
+    )
+    add_centered_line(
+        [
+            ('(PROCESSO Nº ', default_color, True),
+            ('00XXX.XXXXXX/2026-XX', placeholder_color, True),
+            (')', default_color, True),
+        ],
+        size=9,
+        space_after=10,
+    )
+
+
 def _apply_codigo_verificacao_footer(doc, codigo_verificacao: str):
-    footer_text = f'Sistema Sentinela • Código de verificação: {codigo_verificacao}'
+    footer_text = f'Sentinela • Código de verificação: {codigo_verificacao}'
     for section in doc.sections:
         section.footer.is_linked_to_previous = False
         footer = section.footer.paragraphs[0] if section.footer.paragraphs else section.footer.add_paragraph()
@@ -478,7 +510,6 @@ def _build_sumario(
     criticos: set[str],
     razao_social: str,
     cnpj_fmt: str,
-    has_crm_evidencias: bool = False,
 ):
     """Constrói a página de sumário dinâmica."""
     p_title = doc.add_paragraph()
@@ -504,9 +535,6 @@ def _build_sumario(
     criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
     for _, num, full_title in criticidade_items:
         _add_toc_entry(doc, f'  {num}', full_title, page='7')
-    if has_crm_evidencias:
-        crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
-        _add_toc_entry(doc, f'  {crm_evidencias_num}', 'Evidências complementares relacionadas ao uso de CRMs no SAV', page='7')
 
     _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='8')
     doc.add_page_break()
@@ -596,9 +624,11 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     style_normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     
     # Aplica o tema Grafite Médio (Slate 700) para as Seções/Títulos
+    heading_sizes = {1: 13, 2: 12, 3: 11}
     for i in range(1, 4):
         try:
             style_heading: Any = doc.styles[f'Heading {i}']
+            style_heading.font.size = Pt(heading_sizes[i])
             style_heading.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
             if i == 2:
                 style_heading.paragraph_format.space_before = Pt(14)
@@ -703,7 +733,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     p_ts.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_ts.paragraph_format.space_before = Pt(0)
     _run(p_ts, '\n\n\n\n', color='94A3B8', size=8)
-    _run(p_ts, f'Relatório extraído do Sistema Sentinela em {generated_at.strftime("%d/%m/%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
+    _run(p_ts, f'Relatório extraído do Sentinela em {generated_at.strftime("%d/%m/%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
     _run(p_ts, f'Código de verificação: {codigo_verificacao}', color='64748B', size=8, bold=True)
 
     # ── 4. Seção 1: Sumário (Sem Rodapé) ──────────────────────────────────
@@ -714,13 +744,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_sumario.top_margin = Inches(0.5); sec_sumario.bottom_margin = Inches(0.5)
     sec_sumario.left_margin = Inches(0.7); sec_sumario.right_margin = Inches(0.7)
 
+    _add_sumario_official_header(doc, brasao_path)
+
     # SUMÁRIO
     _build_sumario(
         doc,
         criticos,
         razao_social,
         cnpj_fmt,
-        has_crm_evidencias=bool(crm_evidencias_comp),
     )
     timing.mark("capa e sumario")
 
@@ -772,18 +803,17 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_paragraph(f'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
     
     p_intro = doc.add_paragraph()
-    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, consignada no Relatório de Auditoria nº 823121 (ANEXO I desta Nota Técnica), foi identificada, para a Farmácia ', color='0F172A', size=10)
-    _run(p_intro, razao_social, color='334155', size=10, bold=True)
-    _run(p_intro, ', no período de ', color='0F172A', size=10)
-    _run(p_intro, periodo_txt, color='334155', size=10, bold=True, underline=True)
-    _run(p_intro, ', ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=10)
+    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, consignada no Relatório de Auditoria nº 823121 (ANEXO I desta Nota Técnica), foi identificada, para a Farmácia ', color='0F172A', size=11)
+    _run(p_intro, razao_social, color='334155', size=11, bold=True)
+    _run(p_intro, ', no período de ', color='0F172A', size=11)
+    _run(p_intro, periodo_txt, color='334155', size=11, bold=True, underline=True)
+    _run(p_intro, ', ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
     criticidade_items_intro = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
     for _, num, full_title in criticidade_items_intro:
         snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
-    crm_evidencias_num_intro = f'7.{criticidade_start + len(criticidade_items_intro)}'
     
     if len(snippets) <= 4:
         texto_snippets = ("; ".join(snippets[:-1]) + "; e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
@@ -797,18 +827,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     if crm_evidencias_comp:
         if len(snippets) > 4:
             doc.add_paragraph()
-        crm_evidencias_resumo = _crm_evidencias_intro_resumo(crm_evidencias_comp)
         doc.add_paragraph(
-            f'Adicionalmente, o Subitem {crm_evidencias_num_intro} apresenta evidências complementares relacionadas ao uso de CRMs no SAV, incluindo {crm_evidencias_resumo}, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
+            'Adicionalmente, o ANEXO III desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
         )
     doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
-    if 'falecidos' in criticos: fontes.append('SIRC e SISOBI')
     if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
-    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados no item 5 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisição de medicamentos pelas farmácias que aderiram ao Programa, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
+    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas a aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
 
     nota_pfpb_2 = (
         'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
@@ -897,25 +925,25 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     doc.add_heading('4.2. Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', level=2)
     doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a capilaridade de mais de 30 mil estabelecimentos credenciados.')
     p_sent = doc.add_paragraph()
-    _run(p_sent, 'Para enfrentar essa realidade, a CGU elaborou o ', color='0F172A', size=10)
-    _run(p_sent, 'Relatório de Apuração nº 823121', color='334155', size=10, bold=True)
-    _run(p_sent, ' (ANEXO I desta NT), fundamentado no desenvolvimento do ', color='0F172A', size=10)
-    _run(p_sent, 'Sistema Sentinela', color='334155', size=10, bold=True)
-    _run(p_sent, ', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.', color='0F172A', size=10)
+    _run(p_sent, 'Para enfrentar essa realidade, a CGU elaborou o ', color='0F172A', size=11)
+    _run(p_sent, 'Relatório de Apuração nº 823121', color='334155', size=11, bold=True)
+    _run(p_sent, ' (ANEXO I desta NT), fundamentado no desenvolvimento do ', color='0F172A', size=11)
+    _run(p_sent, 'Sentinela', color='334155', size=11, bold=True)
+    _run(p_sent, ', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.', color='0F172A', size=11)
     p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Caso isso ocorra, a farmácia estaria praticando uma “venda sem comprovação”')
     _footnote_ref(doc, p_cgu, 7, nota_cgu_7)
     p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
     doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir dessa informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, em razão da inexistência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base de Notas Fiscais Eletrônicas (NF-e) da Receita Federal do Brasil, utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e de suas compras posteriores com as vendas realizadas no âmbito do Programa.')
-    p_cutoff = doc.add_paragraph('A metodologia técnica do Sistema Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
+    p_cutoff = doc.add_paragraph('A metodologia técnica do Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
     p_cutoff.add_run('cut-off').italic = True
     p_cutoff.add_run(', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo “virtual” favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia que fazem parte do rol do PFPB foram vendidos somente para clientes que fizeram uso do Programa. Assim, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
 
     p_gtin = doc.add_paragraph()
-    _run(p_gtin, 'Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 5/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ', color='0F172A', size=10)
-    _run(p_gtin, 'GTIN/EAN', color='334155', size=10, bold=True)
-    _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=10)
-    doc.add_paragraph('Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sistema Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
-    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sistema Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.')
+    _run(p_gtin, 'Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 5/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ', color='0F172A', size=11)
+    _run(p_gtin, 'GTIN/EAN', color='334155', size=11, bold=True)
+    _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=11)
+    doc.add_paragraph('Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
+    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.')
 
     # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
     sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1064,7 +1092,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         doc,
         p_regional_53,
         11,
-        'A região de saúde utilizada para os comparativos do Sistema Sentinela segue a mesma estabelecida pelo Sistema Único de Saúde (ver https://www.gov.br/saude/pt-br/se/dgip/regionalizacao), que, em resumo, a considera como um espaço geográfico contínuo, formado pelo agrupamento de municípios limítrofes, que compartilham características culturais, econômicas e sociais semelhantes.',
+        'A região de saúde utilizada para os comparativos do Sentinela segue a mesma estabelecida pelo Sistema Único de Saúde (ver https://www.gov.br/saude/pt-br/se/dgip/regionalizacao), que, em resumo, a considera como um espaço geográfico contínuo, formado pelo agrupamento de municípios limítrofes, que compartilham características culturais, econômicas e sociais semelhantes.',
     )
     _run(p_regional_53, ' que contempla ', color='0F172A', size=10)
     _run(p_regional_53, f'{qtd_farmacias} {farmacia_txt}', color='334155', size=10, bold=True)
@@ -1094,14 +1122,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     percentil_risco_comp = _build_percentil_risco_context(cnpj_data, cadastro, data_inicio, data_fim)
     timing.mark("contexto percentil de risco")
-    p_percentil_intro = doc.add_paragraph()
-    _run(
-        p_percentil_intro,
-        'A distribuição percentílica regional permite visualizar a posição relativa da farmácia em relação aos demais estabelecimentos da mesma Região de Saúde, considerando o percentual de vendas sem comprovação apurado para o período analisado.',
-        color='0F172A',
-        size=10,
+    _add_figura_percentil_risco(
+        doc,
+        razao_social,
+        cnpj_fmt,
+        percentil_risco_comp,
+        figure_number=2,
+        show_title=False,
     )
-    _add_figura_percentil_risco(doc, razao_social, cnpj_fmt, percentil_risco_comp, figure_number=2)
     timing.mark("figura percentil de risco")
 
     tabela_num = 0
@@ -1156,16 +1184,18 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             )
             for row in semestres_atipicos
         ])
-        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo das transferências em ', color='0F172A', size=10)
-        _run(p_54_analise, crescimento_labels, color='334155', size=10, bold=True)
+        crescimento_prefixo = 'no ' if len(semestres_atipicos) == 1 else 'nos semestres '
+        _run(p_54_analise, f'Nesse intervalo, chama a atenção o aumento expressivo das transferências {crescimento_prefixo}', color='0F172A', size=10)
+        _run(p_54_analise, crescimento_labels, color='0F172A', size=10, bold=True)
         _run(p_54_analise, ', sempre em comparação ao semestre imediatamente anterior. ', color='0F172A', size=10)
 
         top_irregulares = evolucao_comp["top_irregulares"]
         if top_irregulares:
             top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares])
             top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
-            _run(p_54_analise, 'Também se verificam valores relevantes de “vendas sem comprovação” em ', color='0F172A', size=10)
-            _run(p_54_analise, top_labels, color='334155', size=10)
+            top_prefixo = 'no ' if len(top_irregulares) == 1 else 'nos semestres '
+            _run(p_54_analise, f'Também se verificam valores relevantes de “vendas sem comprovação” {top_prefixo}', color='0F172A', size=10)
+            _run(p_54_analise, top_labels, color='0F172A', size=10)
             _run(p_54_analise, ', que somam ', color='0F172A', size=10)
             _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='334155', size=10, bold=True)
             _run(p_54_analise, ', conforme tabela e figura a seguir.', color='0F172A', size=10)
@@ -1195,7 +1225,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
-    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela a seguir sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela; na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.')
+    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.')
     indicadores_criticos_quadro = _build_indicadores_criticos_quadro(cnpj)
     if indicadores_criticos_quadro:
         tabela_num += 1
@@ -1203,13 +1233,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         timing.mark("secao 7 quadro indicadores criticos")
     resumos_criticidades: list[str] = []
     criticidade_start = 1
-
-    def _add_top10_municipal_indicador(key: str) -> None:
-        nonlocal tabela_num
-        top10_context = _build_indicador_municipal_top10_context(cnpj, key)
-        tabela_num += 1
-        _add_indicador_municipal_top10_table(doc, top10_context, tabela_num)
-        timing.mark(f"secao 7 top10 municipal {key}")
 
     def _add_enquadramento_regional_indicador(key: str) -> None:
         nonlocal tabela_num
@@ -1224,9 +1247,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'falecidos':
                 if not falecidos_comp:
                     raise RuntimeError('Indicador falecidos classificado como critico, mas o contexto detalhado esta ausente na Nota Tecnica.')
-                _add_falecidos_criticidade_text(doc, num, razao_social, falecidos_comp)
+                anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
+                _add_falecidos_criticidade_text(doc, num, razao_social, falecidos_comp, anexo_num=anexo_falecidos_num)
                 _add_enquadramento_regional_indicador(key)
-                _add_top10_municipal_indicador(key)
                 resumos_criticidades.append(_build_resumo_falecidos(num, falecidos_comp))
                 timing.mark(f"secao 7 criticidade {key}")
                 continue
@@ -1247,7 +1270,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if teto_comp:
                     _add_teto_text(doc, num, razao_social, teto_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, teto_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1258,7 +1280,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if polimedicamento_comp:
                     _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, polimedicamento_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1269,7 +1290,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if ticket_comp:
                     _add_ticket_medio_text(doc, num, razao_social, ticket_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, ticket_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1280,7 +1300,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if receita_comp:
                     _add_receita_paciente_text(doc, num, razao_social, receita_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, receita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1291,7 +1310,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if per_capita_comp:
                     _add_per_capita_text(doc, num, razao_social, per_capita_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, per_capita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1302,7 +1320,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if alto_custo_comp:
                     _add_alto_custo_text(doc, num, razao_social, alto_custo_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, alto_custo_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1313,7 +1330,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if vendas_rapidas_comp:
                     _add_vendas_rapidas_text(doc, num, razao_social, vendas_rapidas_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, vendas_rapidas_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1324,7 +1340,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if recorrencia_comp:
                     _add_recorrencia_sistemica_text(doc, num, razao_social, recorrencia_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, recorrencia_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1335,7 +1350,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if dias_pico_comp:
                     _add_dias_pico_text(doc, num, razao_social, dias_pico_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, dias_pico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1346,7 +1360,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 if dispersao_comp:
                     _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1358,7 +1371,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     tabela_num += 1
                     _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp, tabela_num)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1376,7 +1388,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     tabela_num += 1
                     _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp, tabela_num)
                     _add_enquadramento_regional_indicador(key)
-                    _add_top10_municipal_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1386,16 +1397,10 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             doc.add_heading(f'{num} {full_title}', level=2)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
             _add_enquadramento_regional_indicador(key)
-            _add_top10_municipal_indicador(key)
             timing.mark(f"secao 7 criticidade {key}")
     else:
-        doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sistema Sentinela.')
+        doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sentinela.')
     timing.mark("secao 7 fechamento criticidades")
-
-    if crm_evidencias_comp:
-        crm_evidencias_num = f'7.{criticidade_start + len(criticidade_items)}'
-        tabela_num = _add_crm_evidencias_complementares_text(doc, crm_evidencias_num, razao_social, crm_evidencias_comp, tabela_num)
-        timing.mark("secao 7 evidencias CRM complementares")
 
     # 8. CONCLUSÃO
     h8 = _format_main_heading(doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1))
@@ -1449,9 +1454,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     _add_anexo_ii_memoria_calculo(doc, razao_social, cnpj_fmt, periodo_txt, anexo_ii_comp, timing=timing)
     timing.mark("anexo II fechamento")
 
-    if falecidos_comp:
-        _add_anexo_iii_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing)
+    if crm_evidencias_comp:
+        tabela_num = _add_anexo_iii_crm_evidencias(doc, razao_social, crm_evidencias_comp, tabela_num, timing=timing)
         timing.mark("anexo III fechamento")
+
+    if falecidos_comp:
+        anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
+        _add_anexo_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing, anexo_num=anexo_falecidos_num)
+        timing.mark(f"anexo {anexo_falecidos_num} fechamento")
 
     _apply_codigo_verificacao_footer(doc, codigo_verificacao)
 

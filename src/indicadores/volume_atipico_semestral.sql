@@ -14,7 +14,7 @@ GO
 -- Importante:
 --   Esta tabela NAO fixa limite de crescimento percentual. Ela guarda
 --   taxa_crescimento_pct e o aumento absoluto para que a API aplique tambem
---   a regra de materialidade minima (ex: R$ 5.000).
+--   a regra de materialidade minima (ex: R$ 10.000).
 --   O excesso acima dos limites escolhidos deve ser calculado na API:
 --
 --     CASE WHEN taxa_crescimento_pct > @limite

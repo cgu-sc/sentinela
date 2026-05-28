@@ -5,7 +5,7 @@ from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import _cell_bg, _keep_small_table_together, _run, _set_table_fixed_widths
 from .nota_tecnica_formatters import _format_decimal_pt, _format_list_pt
-from .nota_tecnica_quadros import _add_quadro_esocial, _add_quadro_esocial_trabalhadores
+from .nota_tecnica_quadros import _add_quadro_esocial, _add_quadro_esocial_trabalhadores, _format_quadro_title
 
 
 def _plural(value: int, singular: str, plural: str) -> str:
@@ -65,15 +65,13 @@ def _add_movimentacao_sem_funcionario_table(
     qtd_autorizacoes_periodo_txt: str,
 ):
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.space_before = Pt(6)
-    p_title.paragraph_format.space_after = Pt(3)
-    p_title.paragraph_format.keep_with_next = True
+    _format_quadro_title(p_title)
     _run(
         p_title,
-        'Síntese da movimentação após o último mês com trabalhador ativo',
+        'Quadro 01-C - Síntese da movimentação após o último mês com trabalhador ativo',
         color='334155',
-        size=8.5,
+        size=8,
+        bold=True,
     )
 
     rows = [
@@ -126,7 +124,7 @@ def _add_legal_context(doc):
     p_leg.paragraph_format.space_before = Pt(6)
     _run(
         p_leg,
-        'A ausência de vínculo identificado no eSocial para trabalhador com CBO de farmacêutico indica possível fragilidade na regularidade técnico-operacional do estabelecimento, uma vez que a atividade farmacêutica exige responsabilidade e assistência técnica de profissional habilitado durante o horário de funcionamento. Assim, a farmácia deve comprovar, por meio de documentação idônea, a existência de farmacêutico responsável e a regularidade das dispensações realizadas no período analisado.',
+        'A ausência de vínculo identificado no eSocial para trabalhador com CBO de farmacêutico indica possível fragilidade na regularidade técnico-operacional do estabelecimento, uma vez que a atividade farmacêutica exige responsabilidade e assistência técnica de profissional habilitado durante o horário de funcionamento.',
         color='0F172A',
         size=10,
     )
@@ -231,7 +229,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         competencia_txt = row.get("competencia_txt") or "competência-base"
         _run(
             p_intro,
-            f'Em consulta à base do eSocial disponível no Sistema Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
+            f'Em consulta à base do eSocial disponível no Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
             color='0F172A',
             size=10,
         )
@@ -276,7 +274,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         periodo_anos_txt = esocial_comp.get("periodo_anos_txt") or "período analisado"
         _run(
             p_intro,
-            f'Em consulta à base do eSocial disponível no Sistema Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} entre {periodo_anos_txt}. ',
+            f'Em consulta à base do eSocial disponível no Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} entre {periodo_anos_txt}. ',
             color='0F172A',
             size=10,
         )

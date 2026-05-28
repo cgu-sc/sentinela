@@ -37,7 +37,7 @@ GO
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-31';
 DECLARE @LimiteCrescimentoPct DECIMAL(9,2) = 50.00;
-DECLARE @LimiteAumentoValor   DECIMAL(9,2) = 5000.00;
+DECLARE @LimiteAumentoValor   DECIMAL(9,2) = 10000.00;
 
 DECLARE @ChaveSemestreInicio INT =
     (YEAR(@DataInicio) * 100) + CAST(CASE WHEN MONTH(@DataInicio) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS INT);

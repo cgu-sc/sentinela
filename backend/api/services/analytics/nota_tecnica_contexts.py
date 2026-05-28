@@ -19,6 +19,7 @@ from data_cache import (
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
 from .nota_tecnica_formatters import (
+    _format_date_pt,
     _format_date_month_year_long_pt,
     _format_month_year_long_pt,
     _format_month_year_pt,
@@ -857,8 +858,8 @@ def _build_esocial_context(
             "cpf_trabalhador": str(row.get("cpf_trabalhador") or ""),
             "cbo": int(row["cbo"]) if row.get("cbo") is not None else None,
             "titulo_cbo": str(row.get("titulo_cbo") or "").strip() or "—",
-            "dt_admissao_txt": _format_date_iso(row.get("dt_admissao")),
-            "dt_rescisao_txt": _format_date_iso(row.get("dt_rescisao")),
+            "dt_admissao_txt": _format_date_pt(row.get("dt_admissao")),
+            "dt_rescisao_txt": _format_date_pt(row.get("dt_rescisao")),
         })
 
     movimentacao_sem_funcionario_alerta = None

@@ -285,7 +285,7 @@ const chartOption = computed(() => {
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
               <span style="opacity:.68;">Aumento mínimo para alerta</span>
-              <strong>${formatCurrencyFull(s.limite_aumento_volume_atipico ?? 5000)}</strong>
+              <strong>${formatCurrencyFull(s.limite_aumento_volume_atipico ?? 10000)}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;">
               <span style="opacity:.68;">Meses com movimentação</span>

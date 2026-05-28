@@ -471,6 +471,10 @@ BEGIN
         FROM #MovimentacaoGeografica M
         INNER JOIN db_CPF.dbo.CPF B
             ON B.CPF = M.cpf
+           -- Excecao operacional autorizada: CPF sem UF nao permite classificar
+           -- mesma/outra UF. Esses casos saem do universo monitorado.
+           -- Remover este filtro quando unidadeFederacao estiver completa na fonte.
+           AND NULLIF(LTRIM(RTRIM(CAST(B.unidadeFederacao AS VARCHAR(2)))), '') IS NOT NULL
         GROUP BY
             M.id_cnpj,
             M.ano_base,
@@ -493,7 +497,7 @@ BEGIN
                OR NULLIF(LTRIM(RTRIM(uf_farmacia)), '') IS NULL
         )
         BEGIN
-            RAISERROR('Movimentacao geografica possui UF de paciente ou farmacia ausente apos join com CPF.', 16, 1);
+            RAISERROR('Movimentacao geografica possui UF de paciente ou farmacia ausente apos filtro de CPF com UF obrigatoria.', 16, 1);
             RETURN;
         END;
 

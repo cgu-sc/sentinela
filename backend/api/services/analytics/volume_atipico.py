@@ -9,7 +9,7 @@ from data_cache import get_df_dados_farmacia, get_df_volume_atipico_semestral
 DEFAULT_VOLUME_ATIPICO_LIMITE = 50.0
 MIN_VOLUME_ATIPICO_LIMITE = 40.0
 MAX_VOLUME_ATIPICO_LIMITE = 2000.0
-DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO = 5000.0
+DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO = 10000.0
 STATUS_SEMESTRE_COMPARAVEL = 1
 _VOLUME_ATIPICO_ID_CNPJS_CACHE: dict[
     tuple[int, Optional[int], Optional[int], float, float],

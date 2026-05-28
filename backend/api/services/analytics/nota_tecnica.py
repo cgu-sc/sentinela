@@ -75,6 +75,7 @@ from .nota_tecnica_criticidades import (
     _build_vendas_rapidas_context,
     _count_incompatibilidade_patologica_tables,
     _get_criticos,
+    _get_criticos_ordenados_por_risco,
 )
 from .nota_tecnica_crm import (
     _add_crms_irregulares_text,
@@ -89,6 +90,7 @@ from .nota_tecnica_formatters import (
     _format_list_pt,
 )
 from .nota_tecnica_docx_utils import (
+    _add_bookmark,
     _cell_bg,
     _cell_bg_run,
     _cell_borders,
@@ -472,12 +474,18 @@ def _iter_criticidade_items(
     *,
     start_index: int = 1,
     exclude_keys: set[str] | None = None,
+    ordered_keys: list[str] | None = None,
 ) -> list[tuple[str, str, str]]:
     """Retorna criticidades criticas com numeracao da secao 7."""
     items: list[tuple[str, str, str]] = []
     exclude_keys = exclude_keys or set()
-    for key, _, title in _SECAO5_MAP:
+    titles_by_key = {key: title for key, _, title in _SECAO5_MAP}
+    keys = ordered_keys if ordered_keys is not None else [key for key, _, _ in _SECAO5_MAP]
+    for key in keys:
         if key in exclude_keys or key not in criticos:
+            continue
+        title = titles_by_key.get(key)
+        if title is None:
             continue
         full_title = title.format(farmacia=razao_social) if '{farmacia}' in title else title
         items.append((key, f'7.{start_index + len(items)}', full_title))
@@ -510,6 +518,7 @@ def _build_sumario(
     criticos: set[str],
     razao_social: str,
     cnpj_fmt: str,
+    criticidade_order: list[str],
 ):
     """Constrói a página de sumário dinâmica."""
     p_title = doc.add_paragraph()
@@ -532,7 +541,12 @@ def _build_sumario(
 
     _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='7')
     criticidade_start = 1
-    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
+    criticidade_items = _iter_criticidade_items(
+        criticos,
+        razao_social,
+        start_index=criticidade_start,
+        ordered_keys=criticidade_order,
+    )
     for _, num, full_title in criticidade_items:
         _add_toc_entry(doc, f'  {num}', full_title, page='7')
 
@@ -587,16 +601,17 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     classificacao = cnpj_data.get('classificacao_risco') or ''
     risco_hex, risco_label = _risk_color(classificacao, score)
 
-    if data_inicio and data_fim:
+    if data_inicio is not None and data_fim is not None:
         periodo_txt = f'{data_inicio.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}'
-    elif data_inicio:
+    elif data_inicio is not None:
         periodo_txt = f'A partir de {data_inicio.strftime("%d/%m/%Y")}'
-    elif data_fim:
+    elif data_fim is not None:
         periodo_txt = f'Até {data_fim.strftime("%d/%m/%Y")}'
     else:
         periodo_txt = 'Histórico completo'
 
     criticos = _get_criticos(cnpj)
+    criticidade_order = _get_criticos_ordenados_por_risco(cnpj, criticos)
     timing.mark("criticidades matriz")
     falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim) if 'falecidos' in criticos else None
     if 'falecidos' in criticos and not falecidos_comp:
@@ -755,6 +770,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         criticos,
         razao_social,
         cnpj_fmt,
+        criticidade_order,
     )
     timing.mark("capa e sumario")
 
@@ -814,7 +830,12 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
-    criticidade_items_intro = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
+    criticidade_items_intro = _iter_criticidade_items(
+        criticos,
+        razao_social,
+        start_index=criticidade_start,
+        ordered_keys=criticidade_order,
+    )
     for _, num, full_title in criticidade_items_intro:
         snippets.append(f'[Subitem {num}] {full_title[:1].lower()}{full_title[1:]}')
     
@@ -1043,11 +1064,12 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc)
 
-    _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
+    h6 = _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
+    _add_bookmark(h6, "secao6_percentual_nao_comprovacao")
     p_53 = doc.add_paragraph()
     _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO {anexo_memoria_num} desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
     
-    if data_inicio and data_fim:
+    if data_inicio is not None and data_fim is not None:
         _run(p_53, 'no período de ', color='0F172A', size=10)
         _run(p_53, periodo_txt, color='0F172A', size=10, bold=True)
         _run(p_53, '. ', color='0F172A', size=10)
@@ -1181,7 +1203,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         _run(p_54_analise, '. ', color='0F172A', size=10)
         crescimento_labels = _format_list_pt([
             (
-                f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 1)}%)'
+                f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
                 if row.get("taxa_crescimento_pct") is not None
                 else row["semestre_fmt"]
             )
@@ -1244,13 +1266,26 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         _add_indicador_regional_table(doc, regional_context, tabela_num)
         timing.mark(f"secao 7 enquadramento regional {key}")
 
-    criticidade_items = _iter_criticidade_items(criticos, razao_social, start_index=criticidade_start)
+    criticidade_items = _iter_criticidade_items(
+        criticos,
+        razao_social,
+        start_index=criticidade_start,
+        ordered_keys=criticidade_order,
+    )
     if criticidade_items:
         for key, num, full_title in criticidade_items:
+            bookmark_name = f"secao7_{key}"
             if key == 'falecidos':
                 if not falecidos_comp:
                     raise RuntimeError('Indicador falecidos classificado como critico, mas o contexto detalhado esta ausente na Nota Tecnica.')
-                _add_falecidos_criticidade_text(doc, num, razao_social, falecidos_comp, anexo_num=anexo_falecidos_num)
+                _add_falecidos_criticidade_text(
+                    doc,
+                    num,
+                    razao_social,
+                    falecidos_comp,
+                    anexo_num=anexo_falecidos_num,
+                    bookmark_name=bookmark_name,
+                )
                 _add_enquadramento_regional_indicador(key)
                 resumos_criticidades.append(_build_resumo_falecidos(num, falecidos_comp))
                 timing.mark(f"secao 7 criticidade {key}")
@@ -1259,7 +1294,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
                 if clinico_comp:
                     tabela_inicio_clinica = tabela_num + 1
-                    _add_incompatibilidade_patologica_text(doc, num, razao_social, clinico_comp, tabela_inicio_clinica)
+                    _add_incompatibilidade_patologica_text(
+                        doc,
+                        num,
+                        razao_social,
+                        clinico_comp,
+                        tabela_inicio_clinica,
+                        bookmark_name=bookmark_name,
+                    )
                     tabela_num += _count_incompatibilidade_patologica_tables(clinico_comp)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
@@ -1270,7 +1312,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'teto':
                 teto_comp = _build_teto_context(cnpj, data_inicio, data_fim)
                 if teto_comp:
-                    _add_teto_text(doc, num, razao_social, teto_comp)
+                    _add_teto_text(doc, num, razao_social, teto_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, teto_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1280,7 +1322,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'polimedicamento' and full_title.startswith('Vendas de quatro ou mais itens'):
                 polimedicamento_comp = _build_polimedicamento_context(cnpj, data_inicio, data_fim)
                 if polimedicamento_comp:
-                    _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp)
+                    _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, polimedicamento_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1290,7 +1332,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'ticket_medio':
                 ticket_comp = _build_ticket_medio_context(cnpj, data_inicio, data_fim)
                 if ticket_comp:
-                    _add_ticket_medio_text(doc, num, razao_social, ticket_comp)
+                    _add_ticket_medio_text(doc, num, razao_social, ticket_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, ticket_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1300,7 +1342,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'receita_paciente':
                 receita_comp = _build_receita_paciente_context(cnpj, data_inicio, data_fim)
                 if receita_comp:
-                    _add_receita_paciente_text(doc, num, razao_social, receita_comp)
+                    _add_receita_paciente_text(doc, num, razao_social, receita_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, receita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1310,7 +1352,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'per_capita':
                 per_capita_comp = _build_per_capita_context(cnpj, data_inicio, data_fim)
                 if per_capita_comp:
-                    _add_per_capita_text(doc, num, razao_social, per_capita_comp)
+                    _add_per_capita_text(doc, num, razao_social, per_capita_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, per_capita_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1320,7 +1362,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'alto_custo':
                 alto_custo_comp = _build_alto_custo_context(cnpj, data_inicio, data_fim)
                 if alto_custo_comp:
-                    _add_alto_custo_text(doc, num, razao_social, alto_custo_comp)
+                    _add_alto_custo_text(doc, num, razao_social, alto_custo_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, alto_custo_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1330,7 +1372,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'vendas_rapidas':
                 vendas_rapidas_comp = _build_vendas_rapidas_context(cnpj, data_inicio, data_fim)
                 if vendas_rapidas_comp:
-                    _add_vendas_rapidas_text(doc, num, razao_social, vendas_rapidas_comp)
+                    _add_vendas_rapidas_text(doc, num, razao_social, vendas_rapidas_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, vendas_rapidas_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1340,7 +1382,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'recorrencia_sistemica':
                 recorrencia_comp = _build_recorrencia_sistemica_context(cnpj, data_inicio, data_fim)
                 if recorrencia_comp:
-                    _add_recorrencia_sistemica_text(doc, num, razao_social, recorrencia_comp)
+                    _add_recorrencia_sistemica_text(doc, num, razao_social, recorrencia_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, recorrencia_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1350,7 +1392,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'dias_pico':
                 dias_pico_comp = _build_dias_pico_context(cnpj, data_inicio, data_fim)
                 if dias_pico_comp:
-                    _add_dias_pico_text(doc, num, razao_social, dias_pico_comp)
+                    _add_dias_pico_text(doc, num, razao_social, dias_pico_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, dias_pico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1360,7 +1402,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'dispersao_geografica':
                 dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
                 if dispersao_comp:
-                    _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp)
+                    _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp, bookmark_name=bookmark_name)
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1368,10 +1410,24 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                     timing.mark(f"secao 7 criticidade {key}")
                     continue
             if key == 'hhi_crm':
-                hhi_crm_comp = _build_hhi_crm_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
+                hhi_crm_comp = _build_hhi_crm_context(
+                    cnpj,
+                    data_inicio,
+                    data_fim,
+                    cnpj_data.get('totalMov'),
+                    crm_data=crm_data_comp,
+                )
                 if hhi_crm_comp:
                     tabela_num += 1
-                    _add_hhi_crm_text(doc, num, razao_social, cnpj_fmt, hhi_crm_comp, tabela_num)
+                    _add_hhi_crm_text(
+                        doc,
+                        num,
+                        razao_social,
+                        cnpj_fmt,
+                        hhi_crm_comp,
+                        tabela_num,
+                        bookmark_name=bookmark_name,
+                    )
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1388,7 +1444,15 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 )
                 if crms_irregulares_comp:
                     tabela_num += 1
-                    _add_crms_irregulares_text(doc, num, razao_social, cnpj_fmt, crms_irregulares_comp, tabela_num)
+                    _add_crms_irregulares_text(
+                        doc,
+                        num,
+                        razao_social,
+                        cnpj_fmt,
+                        crms_irregulares_comp,
+                        tabela_num,
+                        bookmark_name=bookmark_name,
+                    )
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, crms_irregulares_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1396,7 +1460,8 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
                 timing.mark(f"secao 7 criticidade {key}")
                 continue
 
-            doc.add_heading(f'{num} {full_title}', level=2)
+            heading = doc.add_heading(f'{num} {full_title}', level=2)
+            _add_bookmark(heading, bookmark_name)
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
             _add_enquadramento_regional_indicador(key)
             timing.mark(f"secao 7 criticidade {key}")

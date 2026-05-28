@@ -229,7 +229,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         competencia_txt = row.get("competencia_txt") or "competência-base"
         _run(
             p_intro,
-            f'Em consulta à base do eSocial disponível no Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
+            f'Com base nos dados do eSocial incorporados às análises do Sentinela, atualizados até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
             color='0F172A',
             size=10,
         )
@@ -274,7 +274,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
         periodo_anos_txt = esocial_comp.get("periodo_anos_txt") or "período analisado"
         _run(
             p_intro,
-            f'Em consulta à base do eSocial disponível no Sentinela, atualizada até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} entre {periodo_anos_txt}. ',
+            f'Com base nos dados do eSocial incorporados às análises do Sentinela, atualizados até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} entre {periodo_anos_txt}. ',
             color='0F172A',
             size=10,
         )

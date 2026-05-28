@@ -1,3 +1,5 @@
+from itertools import count
+
 from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
 from docx.opc.packuri import PackURI
 from docx.opc.part import XmlPart
@@ -5,6 +7,73 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
+
+
+_BOOKMARK_ID_COUNTER = count(1)
+
+
+def _add_bookmark(paragraph, name: str):
+    """Adiciona um bookmark interno do Word ao paragrafo informado."""
+    if not name:
+        raise RuntimeError("Nome de bookmark obrigatorio para Nota Tecnica.")
+
+    bookmark_id = str(next(_BOOKMARK_ID_COUNTER))
+    start = OxmlElement('w:bookmarkStart')
+    start.set(qn('w:id'), bookmark_id)
+    start.set(qn('w:name'), name)
+
+    end = OxmlElement('w:bookmarkEnd')
+    end.set(qn('w:id'), bookmark_id)
+
+    p = paragraph._p
+    insert_idx = 1 if p.pPr is not None else 0
+    p.insert(insert_idx, start)
+    p.append(end)
+
+
+def _add_internal_hyperlink(
+    paragraph,
+    text: str,
+    anchor: str,
+    *,
+    color: str = '2563EB',
+    size: float = 7,
+    bold: bool = False,
+    underline: bool = True,
+):
+    """Adiciona um hyperlink interno apontando para um bookmark do documento."""
+    if not anchor:
+        raise RuntimeError("Destino de hyperlink interno obrigatorio para Nota Tecnica.")
+
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('w:anchor'), anchor)
+    hyperlink.set(qn('w:history'), '1')
+
+    run = OxmlElement('w:r')
+    r_pr = OxmlElement('w:rPr')
+
+    if bold:
+        r_pr.append(OxmlElement('w:b'))
+
+    color_el = OxmlElement('w:color')
+    color_el.set(qn('w:val'), color)
+    r_pr.append(color_el)
+
+    underline_el = OxmlElement('w:u')
+    underline_el.set(qn('w:val'), 'single' if underline else 'none')
+    r_pr.append(underline_el)
+
+    size_el = OxmlElement('w:sz')
+    size_el.set(qn('w:val'), str(int(round(size * 2))))
+    r_pr.append(size_el)
+
+    run.append(r_pr)
+    t = OxmlElement('w:t')
+    t.text = text
+    run.append(t)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+    return hyperlink
 
 
 def _cell_bg(cell, fill_hex: str):

@@ -24,6 +24,7 @@ from cache_producers.crm import (
     sync_crm_raiox_tx,
 )
 from .nota_tecnica_docx_utils import (
+    _add_bookmark,
     _cell_bg,
     _format_block_footnote,
     _format_block_title,
@@ -548,6 +549,7 @@ def _build_hhi_crm_context(
     cnpj: str,
     data_inicio: Optional[date],
     data_fim: Optional[date],
+    total_mov_quadro_02: float,
     crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de concentração atípica de CRM."""
@@ -605,9 +607,12 @@ def _build_hhi_crm_context(
 
     total_medicos = len(crms)
     total_autorizacoes = sum(_as_int(row.get("nu_prescricoes")) for row in crms)
-    valor_total = sum(_as_float(row.get("vl_total_prescricoes")) for row in crms)
+    valor_total_crm = sum(_as_float(row.get("vl_total_prescricoes")) for row in crms)
+    valor_total_farmacia = _as_float(total_mov_quadro_02)
     if total_medicos <= 0 or total_autorizacoes <= 0:
         return None
+    if valor_total_farmacia <= 0:
+        raise RuntimeError("Total financeiro da farmacia obrigatorio para o indicador HHI/CRM da Nota Tecnica.")
 
     crms_ordenados = sorted(
         crms,
@@ -631,13 +636,13 @@ def _build_hhi_crm_context(
     principal_valor = _as_float(principal.get("vl_total_prescricoes"))
 
     media_autorizacoes = total_autorizacoes / total_medicos
-    media_valor = valor_total / total_medicos if valor_total else 0.0
+    media_valor = valor_total_farmacia / total_medicos
 
-    if data_inicio and data_fim:
+    if data_inicio is not None and data_fim is not None:
         periodo_intervalo = f'de {data_inicio.strftime("%d.%m.%Y")} a {data_fim.strftime("%d.%m.%Y")}'
-    elif data_inicio:
+    elif data_inicio is not None:
         periodo_intervalo = f'a partir de {data_inicio.strftime("%d.%m.%Y")}'
-    elif data_fim:
+    elif data_fim is not None:
         periodo_intervalo = f'até {data_fim.strftime("%d.%m.%Y")}'
     else:
         periodo_intervalo = "no período analisado"
@@ -646,7 +651,8 @@ def _build_hhi_crm_context(
         "periodo_intervalo": periodo_intervalo,
         "total_medicos": total_medicos,
         "total_autorizacoes": total_autorizacoes,
-        "valor_total": valor_total,
+        "valor_total": valor_total_farmacia,
+        "valor_total_crm": valor_total_crm,
         "media_autorizacoes": media_autorizacoes,
         "media_valor": media_valor,
         "top_crms": top_crms,
@@ -654,9 +660,9 @@ def _build_hhi_crm_context(
         "principal_autorizacoes": principal_autorizacoes,
         "principal_valor": principal_valor,
         "pct_autorizacoes": principal_autorizacoes / total_autorizacoes * 100,
-        "pct_valor": (principal_valor / valor_total * 100) if valor_total else 0.0,
+        "pct_valor": principal_valor / valor_total_farmacia * 100,
         "mult_autorizacoes": principal_autorizacoes / media_autorizacoes,
-        "mult_valor": (principal_valor / media_valor) if media_valor else 0.0,
+        "mult_valor": principal_valor / media_valor,
         "indice_hhi": indice_hhi,
         "multiplicador_regiao": multiplicador_regiao,
         "multiplicador_uf": multiplicador_uf,
@@ -735,11 +741,11 @@ def _build_crms_irregulares_context(
     if not matriz_row and not crms_irregulares:
         return None
 
-    if data_inicio and data_fim:
+    if data_inicio is not None and data_fim is not None:
         periodo_intervalo = f'de {data_inicio.strftime("%d.%m.%Y")} a {data_fim.strftime("%d.%m.%Y")}'
-    elif data_inicio:
+    elif data_inicio is not None:
         periodo_intervalo = f'a partir de {data_inicio.strftime("%d.%m.%Y")}'
-    elif data_fim:
+    elif data_fim is not None:
         periodo_intervalo = f'até {data_fim.strftime("%d.%m.%Y")}'
     else:
         periodo_intervalo = "no período analisado"
@@ -1565,7 +1571,15 @@ def _add_crm_evidencias_complementares_body(
     return tabela_num
 
 
-def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_comp: dict[str, Any], tabela_num: int):
+def _add_hhi_crm_text(
+    doc,
+    num: str,
+    razao_social: str,
+    cnpj_fmt: str,
+    hhi_crm_comp: dict[str, Any],
+    tabela_num: int,
+    bookmark_name: str | None = None,
+):
     """Adiciona o subitem de concentração atípica de registros do mesmo CRM."""
     periodo_intervalo = hhi_crm_comp["periodo_intervalo"]
     total_medicos = hhi_crm_comp["total_medicos"]
@@ -1580,10 +1594,12 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     crm_ident = f"{crm_num}/{crm_uf}" if crm_uf else crm_num
     nome_medico = str(principal.get("no_medico") or "Não localizado")
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f"{num} Concentração atípica de registros de CRMs nas autorizações",
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -1728,7 +1744,15 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     _run(p4, f'{_format_decimal_pt(hhi_crm_comp["mult_valor"], 2)} vezes', color="334155", size=10, bold=True)
     _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A presença simultânea de concentração em autorizações e em valores reforça o caráter atípico do padrão observado.", color="0F172A", size=10)
 
-def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, irregulares_comp: dict[str, Any], tabela_num: int):
+def _add_crms_irregulares_text(
+    doc,
+    num: str,
+    razao_social: str,
+    cnpj_fmt: str,
+    irregulares_comp: dict[str, Any],
+    tabela_num: int,
+    bookmark_name: str | None = None,
+):
     """Adiciona o subitem de vendas vinculadas a CRMs irregulares."""
     periodo_intervalo = irregulares_comp["periodo_intervalo"]
     total_autorizacoes = irregulares_comp["total_autorizacoes"]
@@ -1745,7 +1769,9 @@ def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, 
     multiplicador_uf_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_uf"]))
     multiplicador_br_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_brasil"]))
 
-    doc.add_heading(f"{num} Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs", level=2)
+    heading = doc.add_heading(f"{num} Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs", level=2)
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(

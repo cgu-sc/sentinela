@@ -254,7 +254,7 @@ def _add_quadro_evolucao_financeira(
         'Vendas regulares',
         'Vendas sem comprovação',
         '% sem comprovação',
-        'Aumento atípico',
+        'Aumento atípico do total de vendas',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -283,7 +283,7 @@ def _add_quadro_evolucao_financeira(
         if has_aumento_atipico:
             _run(
                 cells[5].paragraphs[0],
-                f'+{_format_decimal_pt(item["taxa_crescimento_pct"], 1)}%',
+                f'+{_format_decimal_pt(item["taxa_crescimento_pct"], 2)}%',
                 color='991B1B',
                 size=8,
                 bold=True,
@@ -432,6 +432,9 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     col_value_w = Inches(4.83)
     _set_table_fixed_widths(tbl, [col_label_w, col_value_w])
 
+    data_abertura = data.get('data_abertura')
+    abertura_txt = data_abertura.strftime('%d/%m/%Y') if data_abertura is not None else '—'
+
     rows_to_add = [
         ('CNPJ', data.get('cnpj_fmt')),
         ('Razão Social', data.get('razao_social')),
@@ -439,7 +442,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         ('Natureza Jurídica', data.get('natureza_juridica') or '—'),
         ('CNAE Principal', f"{data.get('id_cnae_principal') or ''} - {data.get('cnae_principal') or ''}"),
         ('CNAE Secundária', f"{data.get('id_cnae_secundario') or ''} - {data.get('cnae_secundario') or ''}"),
-        ('Abertura', data.get('data_abertura').strftime('%d/%m/%Y') if data.get('data_abertura') else '—'),
+        ('Abertura', abertura_txt),
         ('Situação', data.get('situacao_rf') or '—'),
         ('Porte', data.get('porte_empresa') or '—'),
         ('Capital Social *', f"R$ {capital_social:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')),

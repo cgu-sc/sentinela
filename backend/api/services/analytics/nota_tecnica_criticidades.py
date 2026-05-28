@@ -16,6 +16,8 @@ from data_cache import (
 from .falecidos import get_falecidos_data
 from .indicadores import INDICATOR_MAPPING, _INDICATOR_FLAGS
 from .nota_tecnica_docx_utils import (
+    _add_bookmark,
+    _add_internal_hyperlink,
     _cell_bg,
     _footnote_ref,
     _keep_small_table_together,
@@ -472,6 +474,61 @@ def _get_criticos(cnpj: str) -> set[str]:
         return set()
 
 
+def _get_criticos_ordenados_por_risco(cnpj: str, criticos: set[str] | None = None) -> list[str]:
+    """Ordena indicadores criticos pela severidade regional usada na Nota Tecnica."""
+    criticos = set(criticos if criticos is not None else _get_criticos(cnpj))
+    if not criticos:
+        return []
+
+    if _FORCAR_TODOS_CRITICOS_NOTA_TECNICA:
+        return [key for key, _, _ in _SECAO5_MAP if key in criticos]
+
+    cnpj_norm = _cnpj_digits(cnpj)
+    df = get_df_matriz_risco()
+    df = df.rename({c: c.lower() for c in df.columns})
+
+    required_columns = {"cnpj"}
+    for key in criticos:
+        if key not in INDICATOR_MAPPING:
+            raise RuntimeError(f"Indicador critico sem mapeamento de colunas para ordenacao da Nota Tecnica: {key}")
+        _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        required_columns.add(c_risco_reg)
+
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "Matriz de risco sem colunas obrigatorias para ordenar indicadores criticos da Nota Tecnica: "
+            + ", ".join(missing_columns)
+        )
+
+    rows = df.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
+    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if rows.height == 0:
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para ordenacao da Nota Tecnica.")
+    if rows.height > 1:
+        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco.")
+
+    matriz_row = rows.row(0, named=True)
+    risco_por_key: dict[str, float] = {}
+    for key in criticos:
+        _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        risco_reg = matriz_row.get(c_risco_reg)
+        if risco_reg is None:
+            raise RuntimeError(f"Indicador critico {key} sem risco regional na matriz.")
+        risco_por_key[key] = float(risco_reg)
+
+    return sorted(
+        criticos,
+        key=lambda key: (
+            0 if key == "percentual_nao_comprovacao" else 1,
+            -risco_por_key[key],
+            _SECAO5_ORDER.get(key, len(_SECAO5_ORDER)),
+            key,
+        ),
+    )
+
+
 def _format_indicador_quadro_value(value: Any, formato: str) -> str:
     if value is None:
         raise RuntimeError("Indicador critico sem valor calculado para o quadro da Nota Tecnica.")
@@ -545,20 +602,20 @@ def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
         quadro_rows.append({
             "key": key,
             "indicador": label,
+            "bookmark": (
+                "secao6_percentual_nao_comprovacao"
+                if key == "percentual_nao_comprovacao"
+                else f"secao7_{key}" if key in _SECAO5_ORDER else None
+            ),
             "valor": _format_indicador_quadro_value(valor, formato),
             "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
             "risco_regional": float(risco_reg),
             "status": "CRÍTICO",
         })
 
-    return sorted(
-        quadro_rows,
-        key=lambda item: (
-            0 if item["key"] == "percentual_nao_comprovacao" else 1,
-            _SECAO5_ORDER.get(item["key"], len(_SECAO5_ORDER)),
-            item["indicador"],
-        ),
-    )
+    ordem = _get_criticos_ordenados_por_risco(cnpj, {row["key"] for row in quadro_rows})
+    ordem_por_key = {key: idx for idx, key in enumerate(ordem)}
+    return sorted(quadro_rows, key=lambda item: ordem_por_key[item["key"]])
 
 
 def _build_indicador_regional_context(cnpj: str, indicador_key: str) -> dict[str, Any]:
@@ -783,7 +840,18 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
                 _run(para, value, color='991B1B', size=7, bold=True)
             else:
                 _cell_bg(cell, fill)
-                _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
+                if col_idx == 0 and row.get("bookmark"):
+                    _add_internal_hyperlink(
+                        para,
+                        value,
+                        row["bookmark"],
+                        color='1D4ED8',
+                        size=7,
+                        bold=True,
+                        underline=False,
+                    )
+                else:
+                    _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
 
     for row in table.rows:
         for cell in row.cells:
@@ -870,6 +938,7 @@ def _add_falecidos_criticidade_text(
     razao_social: str,
     falecidos_comp: dict[str, Any],
     anexo_num: str = 'III',
+    bookmark_name: str | None = None,
 ):
     """Adiciona texto analitico de vendas para pessoas falecidas."""
     total_autorizacoes = falecidos_comp["total_autorizacoes"]
@@ -877,7 +946,9 @@ def _add_falecidos_criticidade_text(
     valor_total = falecidos_comp["valor_total"]
     periodo_desc = falecidos_comp["periodo_desc"]
 
-    doc.add_heading(f'{num} Vendas de medicamentos para pessoas falecidas', level=2)
+    heading = doc.add_heading(f'{num} Vendas de medicamentos para pessoas falecidas', level=2)
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
     p1 = doc.add_paragraph()
     _run(p1, f'Em análise às informações lançadas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do PFPB, {periodo_desc}, foram identificados registros de vendas (distribuição) de medicamentos para pessoas na data de seus óbitos e/ou posteriormente a essa data, com confirmação nas bases de dados do SIRC', color='0F172A', size=10)
     _footnote_ref(
@@ -1479,6 +1550,7 @@ def _add_incompatibilidade_patologica_text(
     razao_social: str,
     clinico_comp: dict[str, Any],
     tabela_inicio_num: int,
+    bookmark_name: str | None = None,
 ):
     """Adiciona texto analitico de incompatibilidade patologica e ranking interno."""
     periodo_desc = clinico_comp["periodo_desc"]
@@ -1487,7 +1559,9 @@ def _add_incompatibilidade_patologica_text(
     multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
     ranking_patologias = clinico_comp.get("ranking_patologias") or []
-    doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
+    heading = doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -1680,7 +1754,7 @@ def _build_teto_context(
     }
 
 
-def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any]):
+def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de vendas no teto maximo usando a matriz atual."""
     periodo_desc = teto_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(teto_comp["percentual"], 2)
@@ -1688,10 +1762,12 @@ def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any]):
     multiplicador_uf_fmt = _format_decimal_pt(teto_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(teto_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas no “teto máximo” para clientes da Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -1771,7 +1847,7 @@ def _build_polimedicamento_context(
     }
 
 
-def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_comp: dict[str, Any]):
+def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de cupons com quatro ou mais medicamentos usando a matriz atual."""
     periodo_desc = polimedicamento_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(polimedicamento_comp["percentual"], 2)
@@ -1779,10 +1855,12 @@ def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_
     multiplicador_uf_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -1856,7 +1934,7 @@ def _build_ticket_medio_context(
     }
 
 
-def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[str, Any]):
+def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de ticket medio usando a matriz atual."""
     periodo_desc = ticket_comp["periodo_desc"]
     valor_fmt = _format_decimal_pt(ticket_comp["valor"], 2)
@@ -1864,10 +1942,12 @@ def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[s
     multiplicador_uf_fmt = _format_decimal_pt(ticket_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(ticket_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -1941,7 +2021,7 @@ def _build_receita_paciente_context(
     }
 
 
-def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: dict[str, Any]):
+def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de faturamento medio mensal por cliente usando a matriz atual."""
     periodo_desc = receita_comp["periodo_desc"]
     valor_fmt = _format_decimal_pt(receita_comp["valor"], 2)
@@ -1949,10 +2029,12 @@ def _add_receita_paciente_text(doc, num: str, razao_social: str, receita_comp: d
     multiplicador_uf_fmt = _format_decimal_pt(receita_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(receita_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Faturamento médio mensal por cliente, obtido pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2026,7 +2108,7 @@ def _build_per_capita_context(
     }
 
 
-def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict[str, Any]):
+def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de faturamento mensal per capita usando a matriz atual."""
     periodo_desc = per_capita_comp["periodo_desc"]
     valor_fmt = _format_decimal_pt(per_capita_comp["valor"], 2)
@@ -2034,10 +2116,12 @@ def _add_per_capita_text(doc, num: str, razao_social: str, per_capita_comp: dict
     multiplicador_uf_fmt = _format_decimal_pt(per_capita_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(per_capita_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Faturamento mensal per capita, obtido pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2111,7 +2195,7 @@ def _build_alto_custo_context(
     }
 
 
-def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict[str, Any]):
+def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de medicamentos de alto custo usando a matriz atual."""
     periodo_desc = alto_custo_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(alto_custo_comp["percentual"], 2)
@@ -2119,10 +2203,12 @@ def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict
     multiplicador_uf_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas de medicamentos de alto custo realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2196,7 +2282,7 @@ def _build_vendas_rapidas_context(
     }
 
 
-def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_comp: dict[str, Any]):
+def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de vendas em menos de 60 segundos usando a matriz atual."""
     periodo_desc = vendas_rapidas_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(vendas_rapidas_comp["percentual"], 2)
@@ -2204,7 +2290,9 @@ def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_co
     multiplicador_uf_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(f'{num} Vendas de medicamentos em tempo inferior a 60 segundos', level=2)
+    heading = doc.add_heading(f'{num} Vendas de medicamentos em tempo inferior a 60 segundos', level=2)
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2285,7 +2373,7 @@ def _build_recorrencia_sistemica_context(
     }
 
 
-def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrencia_comp: dict[str, Any]):
+def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrencia_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de recorrencia sistemica de 30 dias usando a matriz atual."""
     periodo_desc = recorrencia_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(recorrencia_comp["percentual"], 2)
@@ -2293,10 +2381,12 @@ def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrenci
     multiplicador_uf_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2370,7 +2460,7 @@ def _build_dias_pico_context(
     }
 
 
-def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[str, Any]):
+def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de vendas em dias de pico usando a matriz atual."""
     periodo_desc = dias_pico_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(dias_pico_comp["percentual"], 2)
@@ -2378,10 +2468,12 @@ def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[s
     multiplicador_uf_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas de medicamentos em dias de pico realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(
@@ -2455,7 +2547,7 @@ def _build_dispersao_geografica_context(
     }
 
 
-def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_comp: dict[str, Any]):
+def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_comp: dict[str, Any], bookmark_name: str | None = None):
     """Adiciona texto analitico de vendas para residentes em outros Estados usando a matriz atual."""
     periodo_desc = dispersao_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(dispersao_comp["percentual"], 2)
@@ -2463,10 +2555,12 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
     multiplicador_uf_fmt = _format_decimal_pt(dispersao_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(dispersao_comp["multiplicador_brasil"], 2)
 
-    doc.add_heading(
+    heading = doc.add_heading(
         f'{num} Vendas de medicamentos para pessoas residentes em outros Estados realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
+    if bookmark_name:
+        _add_bookmark(heading, bookmark_name)
 
     p1 = doc.add_paragraph()
     _run(

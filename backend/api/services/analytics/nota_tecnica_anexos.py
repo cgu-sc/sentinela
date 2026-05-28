@@ -89,14 +89,15 @@ def _build_falecidos_grupos(transacoes: list[Any]) -> list[dict[str, Any]]:
     return grupos_lista
 
 
-def _add_anexo_iii_crm_evidencias(
+def _add_anexo_crm_evidencias(
     doc,
     razao_social: str,
     evidencias_comp: dict[str, Any],
     tabela_num: int,
     timing: Any = None,
+    anexo_num: str = 'III',
 ):
-    """Adiciona o Anexo III com evidencias complementares de CRM."""
+    """Adiciona o anexo com evidencias complementares de CRM."""
     section = doc.add_section(WD_SECTION.NEW_PAGE)
     section.footer.is_linked_to_previous = False
     section.footer.paragraphs[0].text = ''
@@ -105,10 +106,17 @@ def _add_anexo_iii_crm_evidencias(
     section.left_margin = Inches(0.7)
     section.right_margin = Inches(0.7)
 
-    doc.add_heading('ANEXO III - EVIDÊNCIAS COMPLEMENTARES RELACIONADAS AO USO DE CRMS NO SAV', level=1)
+    heading = doc.add_heading(
+        f'ANEXO {anexo_num} – NOTA TÉCNICA Nº XXX/20XX/NAE/XX/Regional/XX\n'
+        'EVIDÊNCIAS COMPLEMENTARES RELACIONADAS AO USO DE CRMS NO SAV',
+        level=1,
+    )
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    heading.paragraph_format.space_after = Pt(12)
+    heading.paragraph_format.keep_with_next = True
     tabela_num = _add_crm_evidencias_complementares_body(doc, razao_social, evidencias_comp, tabela_num)
     if timing:
-        timing.mark("anexo III evidencias CRM")
+        timing.mark(f"anexo {anexo_num} evidencias CRM")
     return tabela_num
 
 

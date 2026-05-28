@@ -112,7 +112,7 @@ def _build_sections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _build_anexo_ii_context(cnpj: str, db_or_engine: Any) -> dict[str, Any]:
-    """Monta a memoria de calculo das vendas sem comprovacao para o Anexo II."""
+    """Monta a memoria de calculo das vendas sem comprovacao para o anexo correspondente."""
     movimentacao = get_movimentacao_data(cnpj, _resolve_engine(db_or_engine))
     summary = _model_to_dict(getattr(movimentacao, "summary", None))
     rows = [_model_to_dict(row) for row in (getattr(movimentacao, "rows", None) or [])]
@@ -190,7 +190,7 @@ def _add_table_header(table, headers: list[str], widths: list[Any], *, size: flo
         _write_cell(cell, label, size=size, bold=True, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
-def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any = None):
+def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any = None, anexo_num: str = "II"):
     if not detalhes:
         return
 
@@ -239,7 +239,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
         _run(
             p_title,
-            f"Quadro II.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
+            f"Quadro {anexo_num}.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
             color="334155",
             size=8,
             bold=True,
@@ -292,7 +292,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
             _cell_bg(cell, "F8FAFC")
             _write_cell(cell, value, size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.CENTER)
         if timing:
-            timing.mark(f"anexo II detalhe GTIN {idx} ({len(rows)} linhas)")
+            timing.mark(f"anexo {anexo_num} detalhe GTIN {idx} ({len(rows)} linhas)")
 
 
 def _add_anexo_ii_memoria_calculo(
@@ -302,8 +302,9 @@ def _add_anexo_ii_memoria_calculo(
     periodo_txt: str,
     anexo_ii_comp: dict[str, Any],
     timing: Any = None,
+    anexo_num: str = "II",
 ):
-    """Adiciona o Anexo II com resumo, consolidado e detalhamento da memoria de calculo."""
+    """Adiciona o anexo com resumo, consolidado e detalhamento da memoria de calculo."""
     section = doc.add_section(WD_SECTION.NEW_PAGE)
     section.footer.is_linked_to_previous = False
     section.footer.paragraphs[0].text = ""
@@ -319,7 +320,14 @@ def _add_anexo_ii_memoria_calculo(
     consolidados = anexo_ii_comp.get("consolidado") or []
     detalhes = anexo_ii_comp.get("detalhes") or []
 
-    doc.add_heading("ANEXO II - MEMÓRIA DE CÁLCULO DAS VENDAS SEM COMPROVAÇÃO", level=1)
+    heading = doc.add_heading(
+        f"ANEXO {anexo_num} – NOTA TÉCNICA Nº XXX/20XX/NAE/XX/Regional/XX\n"
+        "MEMÓRIA DE CÁLCULO DAS VENDAS SEM COMPROVAÇÃO",
+        level=1,
+    )
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    heading.paragraph_format.space_after = Pt(12)
+    heading.paragraph_format.keep_with_next = True
     p_intro = doc.add_paragraph()
     p_intro.paragraph_format.space_after = Pt(8)
     _run(
@@ -331,7 +339,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title = doc.add_paragraph()
     _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title, "Quadro II.1 - Resumo geral da memória de cálculo", color="334155", size=8, bold=True)
+    _run(p_title, f"Quadro {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=8, bold=True)
 
     summary_headers = [
         "Total de medicamentos dispensados",
@@ -360,11 +368,11 @@ def _add_anexo_ii_memoria_calculo(
         _set_cell_width(row.cells[idx], summary_widths[idx])
         _write_cell(row.cells[idx], value, size=7.5, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
     if timing:
-        timing.mark("anexo II resumo geral")
+        timing.mark(f"anexo {anexo_num} resumo geral")
 
     p_title2 = doc.add_paragraph()
     _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title2, "Quadro II.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=8, bold=True)
+    _run(p_title2, f"Quadro {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=8, bold=True)
 
     headers = [
         "GTIN",
@@ -424,7 +432,7 @@ def _add_anexo_ii_memoria_calculo(
             align=WD_ALIGN_PARAGRAPH.CENTER,
         )
     if timing:
-        timing.mark(f"anexo II quadro consolidado ({len(consolidados)} GTINs)")
+        timing.mark(f"anexo {anexo_num} quadro consolidado ({len(consolidados)} GTINs)")
 
     p_foot = doc.add_paragraph()
     _format_block_footnote(p_foot, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
@@ -435,7 +443,7 @@ def _add_anexo_ii_memoria_calculo(
         size=8,
     )
 
-    _add_anexo_ii_detalhamento(doc, detalhes, timing=timing)
+    _add_anexo_ii_detalhamento(doc, detalhes, timing=timing, anexo_num=anexo_num)
     if timing:
         total_linhas = sum(len(item.get("rows") or []) for item in detalhes)
-        timing.mark(f"anexo II detalhamento total ({len(detalhes)} GTINs, {total_linhas} linhas)")
+        timing.mark(f"anexo {anexo_num} detalhamento total ({len(detalhes)} GTINs, {total_linhas} linhas)")

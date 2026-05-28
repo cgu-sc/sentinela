@@ -505,7 +505,7 @@ def _load_crm_evidencias_detalhadas(
         missing = sorted(required - set(df_hourly.columns))
         if missing:
             raise RuntimeError(
-                "Cache horario CRM sem colunas obrigatorias para o Anexo III da Nota Tecnica: "
+                "Cache horario CRM sem colunas obrigatorias para o anexo de evidencias CRM da Nota Tecnica: "
                 + ", ".join(missing)
             )
         df_volume = _filter_crm_date_range(df_hourly, "dt_janela", data_inicio_txt, data_fim_txt)
@@ -533,7 +533,7 @@ def _load_crm_evidencias_detalhadas(
     df_multi = multi_result.df if multi_result.df is not None else pl.DataFrame()
     raio_x_result = sync_crm_raiox_tx(cnpj)
     if raio_x_result.error:
-        raise RuntimeError(f"Raio-X CRM indisponivel para cruzamento do Anexo III da Nota Tecnica: {raio_x_result.error}")
+        raise RuntimeError(f"Raio-X CRM indisponivel para cruzamento do anexo de evidencias CRM da Nota Tecnica: {raio_x_result.error}")
     alertas_multiplos_por_medico = _build_alertas_crm_multiplos_por_medico(
         _get_cnpj_cache_dir(cnpj),
         df_multi,
@@ -1047,7 +1047,7 @@ def _build_crm_evidencias_complementares_context(
         "qtd_crms_multiplos": qtd_crms_multiplos,
         "qtd_surtos_multiplos": qtd_surtos_multiplos,
         "volume_horario": {
-            "qtd_alertas": len(volume_horario_top_rows),
+            "qtd_alertas": len(volume_horario_rows),
             "maior_multiplicador": next(
                 (
                     _volume_horario_multiplicador_value(row)
@@ -1373,7 +1373,7 @@ def _add_crm_volume_horario_complementar_text(
     )
     _run(
         p,
-        ", ordenados pelo multiplicador em relação à mediana histórica da faixa horária. ",
+        ", ordenados pelo multiplicador em relação à mediana histórica da respectiva faixa horária. ",
         color="0F172A",
         size=10,
     )
@@ -1382,30 +1382,40 @@ def _add_crm_volume_horario_complementar_text(
         _run(p, f"{_as_int(principal.get('nu_prescricoes'))}", color="334155", size=10, bold=True)
         _run(
             p,
-            f" autorizações em {_format_date_br(principal.get('dt'))}, às {_format_time_hour(principal.get('hr'))}, volume ",
+            f" autorizações em {_format_date_br(principal.get('dt'))}, às {_format_time_hour(principal.get('hr'))}",
             color="0F172A",
             size=10,
         )
         mediana_principal = _as_optional_float(principal.get("mediana_hora"))
         multiplicador_principal = _volume_horario_multiplicador_value(principal)
-        _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
         if mediana_principal == 0:
             _run(
                 p,
-                " (calculado com denominador mínimo de 1 autorização, pois a mediana histórica do horário é zero)",
+                ". Como a mediana histórica desse horário é de ",
                 color="0F172A",
                 size=10,
             )
-        _run(p, ", com mediana histórica de ", color="0F172A", size=10)
-        mediana_principal = _as_optional_float(principal.get("mediana_hora"))
-        _run(
-            p,
-            f"{_format_optional_decimal_pt(mediana_principal, 1)} {_plural(int(round(mediana_principal or 0.0)), 'autorização', 'autorizações')}",
-            color="334155",
-            size=10,
-            bold=True,
-        )
-        _run(p, " para esse horário.", color="0F172A", size=10)
+            _run(p, "0,0 autorização", color="334155", size=10, bold=True)
+            _run(
+                p,
+                ", o multiplicador exibido na tabela foi calculado com denominador mínimo de 1 autorização, resultando em volume ",
+                color="0F172A",
+                size=10,
+            )
+            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
+            _run(p, " superior à mediana histórica para o horário.", color="0F172A", size=10)
+        else:
+            _run(p, ", volume ", color="0F172A", size=10)
+            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
+            _run(p, " a mediana histórica de ", color="0F172A", size=10)
+            _run(
+                p,
+                f"{_format_optional_decimal_pt(mediana_principal, 1)} {_plural(int(round(mediana_principal or 0.0)), 'autorização', 'autorizações')}",
+                color="334155",
+                size=10,
+                bold=True,
+            )
+            _run(p, " para esse horário.", color="0F172A", size=10)
 
     if not rows:
         return
@@ -1685,34 +1695,38 @@ def _add_hhi_crm_text(doc, num: str, razao_social: str, cnpj_fmt: str, hhi_crm_c
     _run(p3, nome_medico, color="334155", size=10, bold=True)
     _run(p3, ", CRM ", color="0F172A", size=10)
     _run(p3, crm_ident, color="334155", size=10, bold=True)
-    _run(p3, ". No período analisado, esse CRM concentrou ", color="0F172A", size=10)
+    _run(p3, f". Embora tenham sido identificados {total_medicos} médicos no período analisado, esse CRM concentrou ", color="0F172A", size=10)
     _run(p3, f"{principal_autorizacoes}", color="334155", size=10, bold=True)
-    _run(p3, f" das {total_autorizacoes} autorizações verificadas, correspondendo a ", color="0F172A", size=10)
-    _run(p3, f'{_format_decimal_pt(hhi_crm_comp["pct_autorizacoes"], 2)}%', color="334155", size=10, bold=True)
+    _run(p3, f" das {total_autorizacoes} autorizações verificadas, volume ", color="0F172A", size=10)
+    mult_autorizacoes = _as_float(hhi_crm_comp["mult_autorizacoes"])
+    mult_autorizacoes_fmt = _format_decimal_pt(mult_autorizacoes, 2)
     _run(
         p3,
-        f" da produção da farmácia. Embora tenham sido identificados {total_medicos} médicos no período, com média de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM, o volume associado ao CRM {crm_ident} foi ",
+        f'{mult_autorizacoes_fmt} {_vez_ou_vezes(mult_autorizacoes)} superior',
+        color="334155",
+        size=10,
+        bold=True,
+    )
+    _run(
+        p3,
+        f" à média de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM.",
         color="0F172A",
         size=10,
     )
-    mult_autorizacoes = _as_float(hhi_crm_comp["mult_autorizacoes"])
-    mult_autorizacoes_fmt = _format_decimal_pt(mult_autorizacoes, 2)
-    _run(p3, f'{mult_autorizacoes_fmt} {_vez_ou_vezes(mult_autorizacoes)} essa média', color="334155", size=10, bold=True)
-    _run(p3, ".", color="0F172A", size=10)
 
     p4 = doc.add_paragraph()
-    _run(p4, f"Em termos financeiros, as vendas vinculadas ao referido CRM somaram ", color="0F172A", size=10)
+    _run(p4, "Sob o aspecto financeiro, as vendas associadas ao referido CRM somaram ", color="0F172A", size=10)
     _run(p4, f"R$ {_format_decimal_pt(principal_valor, 2)}", color="334155", size=10, bold=True)
-    _run(p4, ", equivalentes a ", color="0F172A", size=10)
+    _run(p4, ", correspondendo a ", color="0F172A", size=10)
     _run(p4, f'{_format_decimal_pt(hhi_crm_comp["pct_valor"], 2)}%', color="334155", size=10, bold=True)
     _run(
         p4,
-        f" dos R$ {_format_decimal_pt(valor_total, 2)} analisados. Esse montante também se mostra destoante da distribuição média por médico, uma vez que supera em ",
+        f" dos R$ {_format_decimal_pt(valor_total, 2)} pagos pelo PFPB à farmácia no período e superando em ",
         color="0F172A",
         size=10,
     )
     _run(p4, f'{_format_decimal_pt(hhi_crm_comp["mult_valor"], 2)} vezes', color="334155", size=10, bold=True)
-    _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A coincidência entre concentração de autorizações e concentração de valores reforça o caráter atípico do padrão observado.", color="0F172A", size=10)
+    _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A presença simultânea de concentração em autorizações e em valores reforça o caráter atípico do padrão observado.", color="0F172A", size=10)
 
 def _add_crms_irregulares_text(doc, num: str, razao_social: str, cnpj_fmt: str, irregulares_comp: dict[str, Any], tabela_num: int):
     """Adiciona o subitem de vendas vinculadas a CRMs irregulares."""

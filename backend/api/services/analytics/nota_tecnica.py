@@ -23,7 +23,7 @@ from .nota_tecnica_charts import (
     _add_figura_posicionamento_regional,
 )
 from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
-from .nota_tecnica_anexos import _add_anexo_falecidos, _add_anexo_iii_crm_evidencias
+from .nota_tecnica_anexos import _add_anexo_crm_evidencias, _add_anexo_falecidos
 from .nota_tecnica_contexts import (
     _build_esocial_context,
     _build_evolucao_financeira_context,
@@ -454,8 +454,8 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
         return (
             f'[Subitem {num}]: Concentração atípica de registros vinculados ao CRM {crm_ident}, com '
             f'{comp.get("principal_autorizacoes") or 0:,}'.replace(',', '.')
-            + f' autorizações ({_format_decimal_pt(comp.get("pct_autorizacoes") or 0.0, 2)}% do total) e valor associado de '
-            + f'R$ {_format_decimal_pt(comp.get("principal_valor") or 0.0, 2)};'
+            + f' autorizações e valor associado de R$ {_format_decimal_pt(comp.get("principal_valor") or 0.0, 2)}, '
+            + f'equivalente a {_format_decimal_pt(comp.get("pct_valor") or 0.0, 2)}% do valor pago pelo PFPB à farmácia no período;'
         )
     if key == "crms_irregulares":
         return (
@@ -603,7 +603,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         raise RuntimeError('Indicador falecidos classificado como critico, mas o detalhamento de falecidos nao foi encontrado para a Nota Tecnica.')
     timing.mark("contexto falecidos")
     anexo_ii_comp = _build_anexo_ii_context(cnpj, db)
-    timing.mark("contexto anexo II memoria de calculo")
+    timing.mark("contexto anexo memoria de calculo")
     try:
         crm_data_comp = get_crm_data(
             cnpj,
@@ -617,6 +617,9 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     timing.mark("contexto CRM base")
     crm_evidencias_comp = _build_crm_evidencias_complementares_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
     timing.mark("contexto evidencias CRM complementares")
+    anexo_crm_num = 'II' if crm_evidencias_comp else None
+    anexo_memoria_num = 'III' if crm_evidencias_comp else 'II'
+    anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
 
     # 3. Documento e margens
     doc = Document()
@@ -828,7 +831,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         if len(snippets) > 4:
             doc.add_paragraph()
         doc.add_paragraph(
-            'Adicionalmente, o ANEXO III desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
+            f'Adicionalmente, o ANEXO {anexo_crm_num} desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
         )
     doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
@@ -1042,7 +1045,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
 
     _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
     p_53 = doc.add_paragraph()
-    _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO II desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
+    _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO {anexo_memoria_num} desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=10)
     
     if data_inicio and data_fim:
         _run(p_53, 'no período de ', color='0F172A', size=10)
@@ -1247,7 +1250,6 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             if key == 'falecidos':
                 if not falecidos_comp:
                     raise RuntimeError('Indicador falecidos classificado como critico, mas o contexto detalhado esta ausente na Nota Tecnica.')
-                anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
                 _add_falecidos_criticidade_text(doc, num, razao_social, falecidos_comp, anexo_num=anexo_falecidos_num)
                 _add_enquadramento_regional_indicador(key)
                 resumos_criticidades.append(_build_resumo_falecidos(num, falecidos_comp))
@@ -1398,6 +1400,14 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             doc.add_paragraph(f'Foi detectado um alerta CRÍTICO para o indicador "{full_title}". Este comportamento indica uma distorção estatística severa (Modified Z-Score > 3.0) que exige verificação documental imediata.')
             _add_enquadramento_regional_indicador(key)
             timing.mark(f"secao 7 criticidade {key}")
+        if crm_evidencias_comp:
+            p_crm_anexo = doc.add_paragraph()
+            _run(
+                p_crm_anexo,
+                f'Além dos indicadores críticos apresentados anteriormente, foram identificadas, no SAV, informações complementares relacionadas a CRMs vinculados a prescrições de medicamentos vendidos pela Farmácia. Essas evidências, apresentadas no ANEXO {anexo_crm_num} desta Nota Técnica, não correspondem, isoladamente, a indicadores de risco da matriz do Sentinela, mas auxiliam na contextualização da dinâmica dos lançamentos realizados pelo estabelecimento.',
+                color='0F172A',
+                size=10,
+            )
     else:
         doc.add_paragraph('Não foram identificadas outras criticidades em nível crítico para detalhamento nesta seção, sem prejuízo do acompanhamento sistêmico dos demais indicadores do Sentinela.')
     timing.mark("secao 7 fechamento criticidades")
@@ -1438,28 +1448,60 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         size=10,
     )
 
+    def _add_signature_block(nome: str, cargo: str) -> None:
+        doc.add_paragraph()
+        p_linha = doc.add_paragraph()
+        p_linha.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p_linha, '________________________________________________________', color='0F172A', size=10)
+
+        p_nome = doc.add_paragraph()
+        p_nome.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p_nome, nome, color='0F172A', size=10, bold=True)
+
+        p_cargo = doc.add_paragraph()
+        p_cargo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p_cargo, cargo, color='0F172A', size=10)
+
+    _add_signature_block('Fulano de Tal', 'Cargo')
+    _add_signature_block('Cicrano de Tal', 'Cargo')
+
     doc.add_paragraph()
     p_despacho_titulo = doc.add_paragraph()
     _run(
         p_despacho_titulo,
-        'Despacho do(a) Superintendente da Controladoria-Regional da União em ______________________________',
+        f'Despacho do(a) Superintendente da Controladoria-Regional da União em {generated_at.strftime("%d/%m/%Y")}',
         color='0F172A',
         size=10,
         bold=True,
     )
     p_despacho = doc.add_paragraph()
     _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
+    _add_signature_block('Beltrano de Tal', 'Cargo')
     timing.mark("conclusao e encaminhamento")
 
-    _add_anexo_ii_memoria_calculo(doc, razao_social, cnpj_fmt, periodo_txt, anexo_ii_comp, timing=timing)
-    timing.mark("anexo II fechamento")
-
     if crm_evidencias_comp:
-        tabela_num = _add_anexo_iii_crm_evidencias(doc, razao_social, crm_evidencias_comp, tabela_num, timing=timing)
-        timing.mark("anexo III fechamento")
+        tabela_num = _add_anexo_crm_evidencias(
+            doc,
+            razao_social,
+            crm_evidencias_comp,
+            tabela_num,
+            timing=timing,
+            anexo_num=anexo_crm_num,
+        )
+        timing.mark(f"anexo {anexo_crm_num} fechamento")
+
+    _add_anexo_ii_memoria_calculo(
+        doc,
+        razao_social,
+        cnpj_fmt,
+        periodo_txt,
+        anexo_ii_comp,
+        timing=timing,
+        anexo_num=anexo_memoria_num,
+    )
+    timing.mark(f"anexo {anexo_memoria_num} fechamento")
 
     if falecidos_comp:
-        anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
         _add_anexo_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing, anexo_num=anexo_falecidos_num)
         timing.mark(f"anexo {anexo_falecidos_num} fechamento")
 

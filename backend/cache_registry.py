@@ -34,6 +34,18 @@ def _falecidos_schema() -> dict:
     }
 
 
+def _geografico_origem_uf_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "ano_base": pl.Int16,
+        "uf_farmacia": pl.Utf8,
+        "uf_paciente": pl.Utf8,
+        "is_outra_uf": pl.Boolean,
+        "qtd_autorizacoes": pl.Int32,
+        "valor_autorizado": pl.Float64,
+    }
+
+
 GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("movimentacao", cache_files.MOVIMENTACAO_PARQUET, "global"),
     CacheDefinition("localidades", cache_files.LOCALIDADES_PARQUET, "global"),
@@ -54,6 +66,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("analise_gtin_inconsistencia_clinica_regiao", cache_files.ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET, "global"),
     CacheDefinition("dados_ibge_demografia", cache_files.DADOS_IBGE_DEMOGRAFIA_PARQUET, "global"),
     CacheDefinition("volume_atipico_semestral", cache_files.VOLUME_ATIPICO_SEMESTRAL_PARQUET, "global"),
+    CacheDefinition("geografico_origem_uf", cache_files.GEOGRAFICO_ORIGEM_UF_PARQUET, "global", _geografico_origem_uf_schema()),
     CacheDefinition("esocial_cnpj_ano", cache_files.ESOCIAL_CNPJ_ANO_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_trabalhador_ano", cache_files.ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET, "global"),
     CacheDefinition("esocial_cnpj_movimentacao_ano", cache_files.ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET, "global"),

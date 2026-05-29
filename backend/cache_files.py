@@ -19,6 +19,7 @@ ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET = "analise_gtin_inconsiste
 ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET = "analise_gtin_inconsistencia_clinica_regiao.parquet"
 DADOS_IBGE_DEMOGRAFIA_PARQUET = "dados_ibge_demografia.parquet"
 VOLUME_ATIPICO_SEMESTRAL_PARQUET = "volume_atipico_semestral.parquet"
+GEOGRAFICO_ORIGEM_UF_PARQUET = "geografico_origem_uf.parquet"
 ESOCIAL_CNPJ_ANO_PARQUET = "esocial_cnpj_ano.parquet"
 ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET = "esocial_cnpj_trabalhador_ano.parquet"
 ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET = "esocial_cnpj_movimentacao_ano.parquet"

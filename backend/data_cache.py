@@ -124,6 +124,15 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "dt_carga_fonte",
         "dt_processamento",
     },
+    "geografico_origem_uf": {
+        "id_cnpj",
+        "ano_base",
+        "uf_farmacia",
+        "uf_paciente",
+        "is_outra_uf",
+        "qtd_autorizacoes",
+        "valor_autorizado",
+    },
     "esocial_cnpj_movimentacao_ano": {
         "id_cnpj",
         "ano_base",
@@ -279,6 +288,7 @@ _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH = _global_cache_path
 _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH = _global_cache_path("analise_gtin_inconsistencia_clinica_regiao")
 _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH = _global_cache_path("dados_ibge_demografia")
 _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH = _global_cache_path("volume_atipico_semestral")
+_GEOGRAFICO_ORIGEM_UF_PARQUET_PATH = _global_cache_path("geografico_origem_uf")
 _ESOCIAL_CNPJ_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_ano")
 _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_trabalhador_ano")
 _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH = _global_cache_path("esocial_cnpj_movimentacao_ano")
@@ -622,6 +632,70 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
     _df_volume_atipico_semestral.write_parquet(
         _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH,
         compression="zstd",
+    )
+
+def _sync_geografico_origem_uf(engine, progress_callback=None):
+    """Sincroniza a distribuicao geografica por UF de residencia do paciente."""
+    print("Sincronizando Geografico Origem UF...")
+    required = {
+        "id_cnpj",
+        "ano_base",
+        "uf_farmacia",
+        "uf_paciente",
+        "is_outra_uf",
+        "qtd_autorizacoes",
+        "valor_autorizado",
+    }
+    total_rows = _assert_fp_source_table(
+        engine,
+        "indicador_geografico_origem_uf",
+        required,
+    )
+
+    sql = """
+        SELECT
+            id_cnpj,
+            ano_base,
+            uf_farmacia,
+            uf_paciente,
+            is_outra_uf,
+            qtd_autorizacoes,
+            valor_autorizado
+        FROM [temp_CGUSC].[fp].[indicador_geografico_origem_uf]
+    """
+
+    print(f"   -> Registros geografico origem UF: {total_rows:,}")
+    chunk_list = []
+    rows_processed = 0
+    chunk_size = 50_000
+
+    for chunk in pd.read_sql(sql, engine, chunksize=chunk_size):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("ano_base").cast(pl.Int16),
+            pl.col("uf_farmacia").cast(pl.String),
+            pl.col("uf_paciente").cast(pl.String),
+            pl.col("is_outra_uf").cast(pl.Boolean),
+            pl.col("qtd_autorizacoes").cast(pl.Int32),
+            pl.col("valor_autorizado").cast(pl.Float64),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        print(f"   -> Progresso Geografico Origem UF: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+
+    df_geografico_origem_uf = (
+        pl.concat(chunk_list).sort(["id_cnpj", "ano_base", "uf_paciente"])
+    )
+    df_geografico_origem_uf.write_parquet(
+        _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH,
+        compression="zstd",
+    )
+    _mark_on_demand_global_cache_ready(
+        "geografico_origem_uf",
+        _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH,
     )
 
 def _sync_esocial(engine, progress_callback=None):
@@ -2313,6 +2387,15 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "taxa_crescimento_pct",
                 "aumento_valor_semestre",
             },
+            "geografico_origem_uf": {
+                "id_cnpj",
+                "ano_base",
+                "uf_farmacia",
+                "uf_paciente",
+                "is_outra_uf",
+                "qtd_autorizacoes",
+                "valor_autorizado",
+            },
             "esocial_cnpj_ano": {
                 "id_cnpj",
                 "ano_base",
@@ -2503,6 +2586,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
+        _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _df_esocial_cnpj_ano = None
         _df_esocial_cnpj_trabalhador_ano = None
         _df_esocial_cnpj_movimentacao_ano = None
@@ -2547,6 +2631,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Analise Clinica Regiao", "weight": 2, "func": lambda cb: _sync_analise_gtin_inconsistencia_clinica_regiao(engine, cb)},
         {"name": "Demografia IBGE",       "weight": 2,  "func": lambda cb: _sync_dados_ibge_demografia(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
+        {"name": "Geografico Origem UF",  "weight": 2,  "func": lambda cb: _sync_geografico_origem_uf(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Metadados das Bases",   "weight": 1,  "func": lambda cb: _sync_sentinela_metadados_base(engine, cb)},
         {"name": "Falecidos",             "weight": 2,  "func": lambda cb: _sync_falecidos(engine, cb)},
@@ -2706,6 +2791,12 @@ def scan_esocial_cnpj_trabalhador_ano() -> pl.LazyFrame:
         _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
     )
 
+def scan_geografico_origem_uf() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "geografico_origem_uf",
+        _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH,
+    )
+
 def scan_esocial_cnpj_movimentacao_ano() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet(
         "esocial_cnpj_movimentacao_ano",
@@ -2761,6 +2852,7 @@ def get_cache_status() -> dict:
         "analise_gtin_inconsistencia_clinica_regiao": {"label": "Analise Clinica Regiao", "path": _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)},
         "dados_ibge_demografia": {"label": "Demografia IBGE", "path": _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH, "loaded": _df_dados_ibge_demografia is not None},
         "volume_atipico_semestral": {"label": "Volume Atipico Semestral", "path": _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH, "loaded": _df_volume_atipico_semestral is not None},
+        "geografico_origem_uf": {"label": "Geografico Origem UF", "path": _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)},
         "esocial_cnpj_ano": {"label": "eSocial CNPJ/Ano", "path": _ESOCIAL_CNPJ_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_ano", _ESOCIAL_CNPJ_ANO_PARQUET_PATH)},
         "esocial_cnpj_trabalhador_ano": {"label": "eSocial Trabalhador/Ano", "path": _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_trabalhador_ano", _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH)},
         "esocial_cnpj_movimentacao_ano": {"label": "eSocial Movimentacao/Ano", "path": _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("esocial_cnpj_movimentacao_ano", _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH)},

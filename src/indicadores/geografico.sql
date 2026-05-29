@@ -211,7 +211,7 @@ BEGIN
         uf_paciente CHAR(2) NOT NULL,
         is_outra_uf BIT NOT NULL,
         qtd_autorizacoes INT NOT NULL,
-        valor_autorizado DECIMAL(19,2) NOT NULL,
+        valor_autorizado DECIMAL(9,2) NOT NULL,
         CONSTRAINT PK_IndGeoOrigemUF PRIMARY KEY CLUSTERED (id_cnpj, ano_base, uf_paciente)
     );
 END
@@ -568,7 +568,7 @@ BEGIN
                 END AS BIT
             ) AS is_outra_uf,
             CAST(COUNT(*) AS INT) AS qtd_autorizacoes,
-            CAST(SUM(valor_total_autorizacao) AS DECIMAL(19,2)) AS valor_autorizado
+            CAST(SUM(valor_total_autorizacao) AS DECIMAL(9,2)) AS valor_autorizado
         INTO #OrigemUfLote
         FROM #AutorizacoesGeograficas
         GROUP BY
@@ -813,7 +813,6 @@ BEGIN
     -- Tabelas finais/derivadas antigas so sao substituidas apos conclusao integral.
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_mun;
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_detalhado;
-    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado;
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_regiao;
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_uf;
     DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_geografico_br;
@@ -837,74 +836,7 @@ BEGIN
     ON temp_CGUSC.fp.indicador_geografico_detalhado(id_cnpj, ano_base);
 
     -- ========================================================================
-    -- PASSO 6: DETALHAMENTO DE AUTORIZACOES POR UF DE RESIDENCIA DO PACIENTE
-    -- ========================================================================
-    IF EXISTS (
-        SELECT 1
-        FROM temp_CGUSC.fp.indicador_geografico_origem_uf
-        WHERE qtd_autorizacoes <= 0
-           OR valor_autorizado < 0
-    )
-    BEGIN
-        RAISERROR('Tabela temp_CGUSC.fp.indicador_geografico_origem_uf possui componentes invalidos.', 16, 1);
-        RETURN;
-    END;
-
-    ;WITH OrigemComTotais AS (
-        SELECT
-            O.id_cnpj,
-            O.ano_base,
-            O.uf_farmacia,
-            O.uf_paciente,
-            O.is_outra_uf,
-            O.qtd_autorizacoes,
-            CAST(O.valor_autorizado AS DECIMAL(19,2)) AS valor_autorizado,
-            SUM(CAST(O.valor_autorizado AS DECIMAL(19,6))) OVER (
-                PARTITION BY O.id_cnpj, O.ano_base
-            ) AS valor_total_cnpj_ano,
-            SUM(
-                CASE
-                    WHEN O.is_outra_uf = 1 THEN CAST(O.valor_autorizado AS DECIMAL(19,6))
-                    ELSE CAST(0 AS DECIMAL(19,6))
-                END
-            ) OVER (
-                PARTITION BY O.id_cnpj, O.ano_base
-            ) AS valor_total_outra_uf_cnpj_ano
-        FROM temp_CGUSC.fp.indicador_geografico_origem_uf O
-    )
-    SELECT
-        id_cnpj,
-        ano_base,
-        uf_farmacia,
-        uf_paciente,
-        is_outra_uf,
-        qtd_autorizacoes,
-        valor_autorizado,
-        CAST(valor_total_cnpj_ano AS DECIMAL(19,2)) AS valor_total_cnpj_ano,
-        CAST(valor_total_outra_uf_cnpj_ano AS DECIMAL(19,2)) AS valor_total_outra_uf_cnpj_ano,
-        CAST(
-            (CAST(valor_autorizado AS DECIMAL(19,6)) * 100.0)
-            / valor_total_cnpj_ano
-        AS DECIMAL(9,4)) AS percentual_valor_sobre_total,
-        CAST(
-            CASE
-                WHEN is_outra_uf = 1 AND valor_total_outra_uf_cnpj_ano > 0
-                    THEN (CAST(valor_autorizado AS DECIMAL(19,6)) * 100.0)
-                         / valor_total_outra_uf_cnpj_ano
-                ELSE NULL
-            END
-        AS DECIMAL(9,4)) AS percentual_valor_sobre_outra_uf
-    INTO temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado
-    FROM OrigemComTotais;
-
-    CREATE UNIQUE CLUSTERED INDEX IDX_FinalGeoOrigemUF_CNPJ_Ano_UF
-    ON temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado(id_cnpj, ano_base, uf_paciente);
-
-    CREATE NONCLUSTERED INDEX IDX_FinalGeoOrigemUF_UF
-    ON temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado(ano_base, uf_farmacia, uf_paciente);
-
-    -- ========================================================================
-    -- PASSO 7: AGREGADO POR REGIAO DE SAUDE/ANO
+    -- PASSO 6: AGREGADO POR REGIAO DE SAUDE/ANO
     -- ========================================================================
     SELECT
         I.ano_base,
@@ -926,7 +858,7 @@ BEGIN
     ON temp_CGUSC.fp.indicador_geografico_regiao(ano_base, id_regiao_saude);
 
     -- ========================================================================
-    -- PASSO 8: AGREGADO POR UF/ANO
+    -- PASSO 7: AGREGADO POR UF/ANO
     -- ========================================================================
     SELECT
         I.ano_base,
@@ -948,7 +880,7 @@ BEGIN
     ON temp_CGUSC.fp.indicador_geografico_uf(ano_base, uf);
 
     -- ========================================================================
-    -- PASSO 9: AGREGADO BRASIL/ANO
+    -- PASSO 8: AGREGADO BRASIL/ANO
     -- ========================================================================
     SELECT
         I.ano_base,

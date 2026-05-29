@@ -2,6 +2,53 @@ USE [temp_CGUSC]
 GO
 
 -- ============================================================================
+-- SANEAMENTO PRE-BATCH DE SCHEMA LEGADO
+-- ============================================================================
+-- O SQL Server compila as referencias estaticas antes de executar o corpo do
+-- script. Se a tabela base existir com schema antigo, os SELECT/INSERT finais
+-- falham com Msg 207 antes do DROP condicional do corpo principal. Por isso a
+-- limpeza de schema legado precisa estar em batch separado.
+IF OBJECT_ID('temp_CGUSC.fp.indicador_vendas_consecutivas', 'U') IS NOT NULL
+   AND (
+        COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'id_cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'ano_base') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'total_intervalos_analisados') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'total_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'qtd_vendas_rapidas') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'percentual_vendas_consecutivas') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_total_analisado') IS NOT NULL
+   )
+BEGIN
+    PRINT 'Tabela temp_CGUSC.fp.indicador_vendas_consecutivas com schema antigo. Recriando base e controle para processamento loteado.';
+    DROP TABLE temp_CGUSC.fp.indicador_vendas_consecutivas;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_controle_vendas_consecutivas;
+END;
+
+IF OBJECT_ID('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'U') IS NOT NULL
+   AND (
+        COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'id') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'data_inicio_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'data_fim_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'situacao') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_intervalos_analisados') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'valor_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'mensagem_erro') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'tentativas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_autorizacoes') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'percentual_calculado') IS NOT NULL
+   )
+BEGIN
+    PRINT 'Tabela temp_CGUSC.fp.indicador_controle_vendas_consecutivas com schema antigo. Recriando controle de processamento.';
+    DROP TABLE temp_CGUSC.fp.indicador_controle_vendas_consecutivas;
+END;
+GO
+
+-- ============================================================================
 -- INDICADOR DE VENDAS CONSECUTIVAS RAPIDAS
 -- ============================================================================
 -- OBJETIVO: Identificar farmacias com proporcao atipica de autorizacoes
@@ -155,6 +202,25 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_br;
 DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_vendas_consecutivas_detalhado;
 
 
+IF OBJECT_ID('temp_CGUSC.fp.indicador_vendas_consecutivas', 'U') IS NOT NULL
+   AND (
+        COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'id_cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'ano_base') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'total_intervalos_analisados') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'total_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'qtd_vendas_rapidas') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'percentual_vendas_consecutivas') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'valor_total_analisado') IS NOT NULL
+   )
+BEGIN
+    PRINT 'Tabela temp_CGUSC.fp.indicador_vendas_consecutivas com schema antigo. Recriando base e controle para processamento loteado.';
+    DROP TABLE temp_CGUSC.fp.indicador_vendas_consecutivas;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.indicador_controle_vendas_consecutivas;
+END;
+
+
 -- ============================================================================
 -- PASSO 1: TABELA DE RESULTADOS BASE INCREMENTAL
 -- ============================================================================
@@ -188,6 +254,28 @@ ELSE IF COL_LENGTH('temp_CGUSC.fp.indicador_vendas_consecutivas', 'id_cnpj') IS 
 BEGIN
     RAISERROR('Tabela temp_CGUSC.fp.indicador_vendas_consecutivas existe com schema incompativel. Recrie a tabela antes de executar.', 16, 1);
     RETURN;
+END;
+
+
+IF OBJECT_ID('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'U') IS NOT NULL
+   AND (
+        COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'id') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'cnpj') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'data_inicio_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'data_fim_processamento') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'situacao') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_intervalos_analisados') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'valor_total_auditado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'valor_vendas_rapidas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'mensagem_erro') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'tentativas') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'total_autorizacoes') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_controle_vendas_consecutivas', 'percentual_calculado') IS NOT NULL
+   )
+BEGIN
+    PRINT 'Tabela temp_CGUSC.fp.indicador_controle_vendas_consecutivas com schema antigo. Recriando controle de processamento.';
+    DROP TABLE temp_CGUSC.fp.indicador_controle_vendas_consecutivas;
 END;
 
 

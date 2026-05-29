@@ -1,12 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..schemas.preferences import (
     FiltersPayload,
+    NotaTecnicaPayload,
     PreferencesSchema,
     UiPayload,
     WatchlistPayload,
 )
 from ..services.preferences import PreferencesService
+from ..services.analytics.nota_tecnica_regionais import resolve_nota_tecnica_regional
 
 router = APIRouter()
 
@@ -36,3 +38,12 @@ def save_watchlist(payload: WatchlistPayload):
 @router.put("/ui", response_model=PreferencesSchema)
 def save_ui(payload: UiPayload):
     return PreferencesService.update_ui(payload.ui)
+
+
+@router.put("/nota-tecnica", response_model=PreferencesSchema)
+def save_nota_tecnica(payload: NotaTecnicaPayload):
+    try:
+        resolve_nota_tecnica_regional(payload.nota_tecnica.get("regional_codigo"))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return PreferencesService.update_nota_tecnica(payload.nota_tecnica)

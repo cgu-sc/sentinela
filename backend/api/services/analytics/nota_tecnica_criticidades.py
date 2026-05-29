@@ -28,7 +28,7 @@ from .nota_tecnica_charts import (
     _add_figura_parkinson_comparacao,
     _add_figura_parkinson_faixas_etarias,
 )
-from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
+from .nota_tecnica_formatters import _format_date_month_year_long_pt, _format_decimal_pt, _title_case_pt
 
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
 
@@ -764,8 +764,8 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         cell = table.rows[1].cells[col_idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
-        _cell_bg(cell, 'E0F2FE')
-        _run(para, value, color='0F172A', size=5.8, bold=col_idx in (1, 3, 4, 6))
+        _cell_bg(cell, 'F8FAFC')
+        _run(para, value, color='0F172A', size=5.8)
 
     for row in table.rows:
         for cell in row.cells:
@@ -911,15 +911,17 @@ def _build_falecidos_context(
     inicio_ref = data_inicio or (min(datas) if datas else None)
     fim_ref = data_fim or (max(datas) if datas else None)
     if inicio_ref and fim_ref:
+        inicio_txt = _format_date_month_year_long_pt(inicio_ref)
+        fim_txt = _format_date_month_year_long_pt(fim_ref)
         periodo_desc = (
-            f'no ano de {inicio_ref.year}'
-            if inicio_ref.year == fim_ref.year
-            else f'no período de {inicio_ref.year} a {fim_ref.year}'
+            f'no mês de {inicio_txt}'
+            if inicio_txt == fim_txt
+            else f'no período de {inicio_txt} a {fim_txt}'
         )
     elif inicio_ref:
-        periodo_desc = f'a partir de {inicio_ref.year}'
+        periodo_desc = f'a partir de {_format_date_month_year_long_pt(inicio_ref)}'
     elif fim_ref:
-        periodo_desc = f'até {fim_ref.year}'
+        periodo_desc = f'até {_format_date_month_year_long_pt(fim_ref)}'
     else:
         periodo_desc = 'no período analisado'
 

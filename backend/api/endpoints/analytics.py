@@ -471,17 +471,36 @@ def get_metric_percentiles(
 ):
     """Retorna os percentis de score de risco ou não comprovação para o escopo selecionado."""
     return AnalyticsService.get_metric_percentiles(scope, uf, regiao_id, metric, data_inicio, data_fim)
+
+
+@router.get("/nota-tecnica/regionais")
+def get_nota_tecnica_regionais():
+    """Lista as regionais emissoras disponíveis para a Nota Técnica."""
+    return AnalyticsService.list_nota_tecnica_regionais()
+
+
 @router.get("/cnpj/{cnpj}/nota-tecnica")
 def get_nota_tecnica(
     cnpj: str,
     data_inicio: Optional[date] = Query(None),
     data_fim: Optional[date] = Query(None),
+    regional_codigo: str = Query(...),
+    numero_nota: Optional[str] = Query(None),
+    numero_processo: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Gera e retorna o download da Nota Técnica Preliminar (.docx)."""
     try:
-        file_stream = AnalyticsService.generate_nota_tecnica(db, cnpj, data_inicio, data_fim)
-    except RuntimeError as exc:
+        file_stream = AnalyticsService.generate_nota_tecnica(
+            db,
+            cnpj,
+            data_inicio,
+            data_fim,
+            regional_codigo,
+            numero_nota,
+            numero_processo,
+        )
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro inesperado ao gerar Nota Tecnica: {exc}") from exc

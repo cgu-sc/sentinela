@@ -79,6 +79,11 @@ def _format_date_month_year_long_pt(value: date) -> str:
     return _format_month_year_long_pt(f"{value.year:04d}-{value.month:02d}")
 
 
+def _format_full_date_long_pt(value: date) -> str:
+    """Formata uma data como dia, mes por extenso e ano."""
+    return f"{value.day} de {_format_date_month_year_long_pt(value)}"
+
+
 def _format_semestre_pt(semestre: str) -> str:
     """Formata labels como 1S/2021 para 1o Semestre/2021."""
     label = (semestre or "").strip()

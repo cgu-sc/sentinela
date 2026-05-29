@@ -26,7 +26,8 @@ GO
 -- ============================================================================
 DECLARE @DataInicio  DATE = '2015-07-01';
 DECLARE @DataFim     DATE = '2024-12-10';
-DECLARE @LoteTamanho INT  = 50;
+DECLARE @LoteTamanho INT  = 500;
+DECLARE @MaxLotes    INT  = 999;
 
 
 -- ============================================================================
@@ -247,73 +248,156 @@ WHERE situacao = 1
 -- ============================================================================
 -- PASSO 3: PROCESSAMENTO INCREMENTAL POR LOTE
 -- ============================================================================
-DECLARE @CNPJAtual VARCHAR(14);
-DECLARE @IdCnpjAtual INT;
 DECLARE @Contador INT = 0;
-DECLARE @TotalIntervalos INT;
-DECLARE @VendasRapidas INT;
-DECLARE @ValorTotalAuditado DECIMAL(19,2);
-DECLARE @ValorVendasRapidas DECIMAL(19,2);
+DECLARE @LoteAtual INT = 0;
+DECLARE @ContadorLote INT;
+DECLARE @DataInicioProcessamento DATETIME;
+DECLARE @MensagemErroLote VARCHAR(MAX);
+DECLARE @LoteInicio DATETIME;
+DECLARE @EtapaInicio DATETIME;
+DECLARE @LinhasEtapa BIGINT;
+DECLARE @MsgLog VARCHAR(1000);
 
-DECLARE cursor_cnpjs CURSOR LOCAL FAST_FORWARD FOR
-    SELECT TOP (@LoteTamanho) cnpj
-    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
-    WHERE situacao IN (0, 3)
-      AND tentativas < 3
-    ORDER BY cnpj;
-
-OPEN cursor_cnpjs;
-FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
-
-WHILE @@FETCH_STATUS = 0
+WHILE @LoteAtual < @MaxLotes
+  AND EXISTS (
+      SELECT 1
+      FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+      WHERE situacao IN (0, 3)
+        AND tentativas < 3
+  )
 BEGIN
+    SET @LoteAtual = @LoteAtual + 1;
+    SET @ContadorLote = 0;
+    SET @LoteInicio = GETDATE();
+
+    UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+    SET situacao = 0,
+        mensagem_erro = 'Reversao para reprocessamento'
+    WHERE situacao = 1
+      AND DATEDIFF(MINUTE, data_inicio_processamento, GETDATE()) > 30;
+
+    PRINT '=======================================================================';
+    PRINT CONCAT('Iniciando lote vendas consecutivas ', @LoteAtual, ' de ate ', @LoteTamanho, ' CNPJs.');
+    PRINT '=======================================================================';
+    SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' iniciado em ', CONVERT(VARCHAR(19), @LoteInicio, 120), '.');
+    RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+    DROP TABLE IF EXISTS #lote_atual;
+
+    SET @EtapaInicio = GETDATE();
+    SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Selecionando CNPJs do lote...');
+    RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+    SELECT TOP (@LoteTamanho)
+        C.cnpj,
+        F.id_cnpj
+    INTO #lote_atual
+    FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+    INNER JOIN #farmacias_dim F
+        ON F.cnpj = C.cnpj
+    WHERE C.situacao IN (0, 3)
+      AND C.tentativas < 3
+    ORDER BY C.cnpj;
+
+    SET @ContadorLote = @@ROWCOUNT;
+    SET @MsgLog = CONCAT(
+        '[VENDAS_CONSEC] Lote ', @LoteAtual,
+        ' | #lote_atual: ', @ContadorLote,
+        ' CNPJs | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+    );
+    RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+    IF @ContadorLote = 0
+        BREAK;
+
+    SET @EtapaInicio = GETDATE();
+    CREATE UNIQUE CLUSTERED INDEX IDX_lote_atual_cnpj
+    ON #lote_atual(cnpj);
+
+    CREATE UNIQUE NONCLUSTERED INDEX IDX_lote_atual_id
+    ON #lote_atual(id_cnpj);
+    SET @MsgLog = CONCAT(
+        '[VENDAS_CONSEC] Lote ', @LoteAtual,
+        ' | indices de #lote_atual criados | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+    );
+    RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
     BEGIN TRY
-        SELECT @IdCnpjAtual = F.id_cnpj
-        FROM #farmacias_dim F
-        WHERE F.cnpj = @CNPJAtual;
+        SET @DataInicioProcessamento = GETDATE();
 
-        IF @IdCnpjAtual IS NULL
-        BEGIN
-            RAISERROR('CNPJ da fila nao encontrado em temp_CGUSC.fp.dados_farmacia.', 16, 1);
-        END;
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Marcando lote como PROCESSANDO...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
-        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+        UPDATE C
         SET situacao = 1,
-            data_inicio_processamento = GETDATE(),
+            data_inicio_processamento = @DataInicioProcessamento,
             data_fim_processamento = NULL,
             mensagem_erro = NULL,
             tentativas = tentativas + 1
-        WHERE cnpj = @CNPJAtual;
+        FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+        INNER JOIN #lote_atual L
+            ON L.cnpj = C.cnpj;
+
+        SET @LinhasEtapa = @@ROWCOUNT;
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | controle PROCESSANDO: ', @LinhasEtapa,
+            ' linhas | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
         DROP TABLE IF EXISTS #AutorizacoesAgrupadas;
 
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Agregando autorizacoes monitoradas...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
         SELECT
-            F.id_cnpj,
+            L.id_cnpj,
             CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
             A.num_autorizacao,
             MIN(A.data_hora) AS data_hora_transacao,
             CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(9,2)) AS valor_autorizacao
         INTO #AutorizacoesAgrupadas
         FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
-        INNER JOIN #farmacias_dim F
-            ON F.cnpj = A.cnpj
+        INNER JOIN #lote_atual L
+            ON L.cnpj = A.cnpj
         INNER JOIN #medicamentos_patologia_gtin C
             ON C.codigo_barra = A.codigo_barra
-        WHERE A.cnpj = @CNPJAtual
-          AND A.data_hora >= @DataInicio
+        WHERE A.data_hora >= @DataInicio
           AND A.data_hora < DATEADD(DAY, 1, @DataFim)
           AND A.num_autorizacao IS NOT NULL
           AND A.codigo_barra IS NOT NULL
           AND A.valor_pago IS NOT NULL
         GROUP BY
-            F.id_cnpj,
+            L.id_cnpj,
             YEAR(A.data_hora),
-            A.num_autorizacao;
+            A.num_autorizacao
+        OPTION (RECOMPILE);
 
+        SET @LinhasEtapa = @@ROWCOUNT;
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | #AutorizacoesAgrupadas: ', @LinhasEtapa,
+            ' autorizacoes/ano | tempo ', DATEDIFF(SECOND, @EtapaInicio, GETDATE()), ' s.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @EtapaInicio = GETDATE();
         CREATE CLUSTERED INDEX IDX_AutorizacoesAgrupadas_CNPJ_Ano
-        ON #AutorizacoesAgrupadas(id_cnpj, ano_base, data_hora_transacao);
+        ON #AutorizacoesAgrupadas(id_cnpj, ano_base, data_hora_transacao, num_autorizacao);
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | indice #AutorizacoesAgrupadas criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
         DROP TABLE IF EXISTS #CalculoVelocidade;
+
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Calculando intervalos entre autorizacoes...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
         SELECT
             id_cnpj,
@@ -328,10 +412,28 @@ BEGIN
         INTO #CalculoVelocidade
         FROM #AutorizacoesAgrupadas;
 
+        SET @LinhasEtapa = @@ROWCOUNT;
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | #CalculoVelocidade: ', @LinhasEtapa,
+            ' linhas | tempo ', DATEDIFF(SECOND, @EtapaInicio, GETDATE()), ' s.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @EtapaInicio = GETDATE();
         CREATE CLUSTERED INDEX IDX_CalculoVelocidade_CNPJ_Ano
         ON #CalculoVelocidade(id_cnpj, ano_base);
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | indice #CalculoVelocidade criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
-        DROP TABLE IF EXISTS #ResultadoCNPJ;
+        DROP TABLE IF EXISTS #ResultadoLote;
+
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Agregando resultado por CNPJ/ano...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
         SELECT
             A.id_cnpj,
@@ -340,7 +442,7 @@ BEGIN
             CAST(ISNULL(R.total_vendas_rapidas, 0) AS INT) AS total_vendas_rapidas,
             CAST(SUM(A.valor_autorizacao) AS DECIMAL(9,2)) AS valor_total_auditado,
             CAST(ISNULL(R.valor_vendas_rapidas, 0) AS DECIMAL(9,2)) AS valor_vendas_rapidas
-        INTO #ResultadoCNPJ
+        INTO #ResultadoLote
         FROM #AutorizacoesAgrupadas A
         LEFT JOIN (
             SELECT
@@ -381,8 +483,68 @@ BEGIN
             R.valor_vendas_rapidas
         HAVING SUM(A.valor_autorizacao) > 0;
 
-        DELETE FROM temp_CGUSC.fp.indicador_vendas_consecutivas
-        WHERE id_cnpj = @IdCnpjAtual;
+        SET @LinhasEtapa = @@ROWCOUNT;
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | #ResultadoLote: ', @LinhasEtapa,
+            ' linhas | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @EtapaInicio = GETDATE();
+        CREATE UNIQUE CLUSTERED INDEX IDX_ResultadoLote_CNPJ_Ano
+        ON #ResultadoLote(id_cnpj, ano_base);
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | indice #ResultadoLote criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        DROP TABLE IF EXISTS #ResumoControleLote;
+
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Montando resumo do controle...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SELECT
+            L.cnpj,
+            CAST(ISNULL(SUM(R.total_intervalos_analisados), 0) AS INT) AS total_intervalos_analisados,
+            CAST(ISNULL(SUM(R.total_vendas_rapidas), 0) AS INT) AS total_vendas_rapidas,
+            CAST(ISNULL(SUM(R.valor_total_auditado), 0) AS DECIMAL(19,2)) AS valor_total_auditado,
+            CAST(ISNULL(SUM(R.valor_vendas_rapidas), 0) AS DECIMAL(19,2)) AS valor_vendas_rapidas
+        INTO #ResumoControleLote
+        FROM #lote_atual L
+        LEFT JOIN #ResultadoLote R
+            ON R.id_cnpj = L.id_cnpj
+        GROUP BY L.cnpj;
+
+        SET @LinhasEtapa = @@ROWCOUNT;
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | #ResumoControleLote: ', @LinhasEtapa,
+            ' CNPJs | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @EtapaInicio = GETDATE();
+        CREATE UNIQUE CLUSTERED INDEX IDX_ResumoControleLote_CNPJ
+        ON #ResumoControleLote(cnpj);
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | indice #ResumoControleLote criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @EtapaInicio = GETDATE();
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] Lote ', @LoteAtual, ' | Iniciando transacao final DELETE/INSERT/UPDATE...');
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        BEGIN TRAN;
+
+        DELETE I
+        FROM temp_CGUSC.fp.indicador_vendas_consecutivas I
+        INNER JOIN #lote_atual L
+            ON L.id_cnpj = I.id_cnpj;
 
         INSERT INTO temp_CGUSC.fp.indicador_vendas_consecutivas (
             id_cnpj,
@@ -399,54 +561,84 @@ BEGIN
             total_vendas_rapidas,
             valor_total_auditado,
             valor_vendas_rapidas
-        FROM #ResultadoCNPJ;
+        FROM #ResultadoLote;
 
-        SELECT
-            @TotalIntervalos = SUM(total_intervalos_analisados),
-            @VendasRapidas = SUM(total_vendas_rapidas),
-            @ValorTotalAuditado = SUM(valor_total_auditado),
-            @ValorVendasRapidas = SUM(valor_vendas_rapidas)
-        FROM #ResultadoCNPJ;
-
-        SET @TotalIntervalos = CASE WHEN @TotalIntervalos IS NULL THEN 0 ELSE @TotalIntervalos END;
-        SET @VendasRapidas = CASE WHEN @VendasRapidas IS NULL THEN 0 ELSE @VendasRapidas END;
-        SET @ValorTotalAuditado = CASE WHEN @ValorTotalAuditado IS NULL THEN 0 ELSE @ValorTotalAuditado END;
-        SET @ValorVendasRapidas = CASE WHEN @ValorVendasRapidas IS NULL THEN 0 ELSE @ValorVendasRapidas END;
-
-        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+        UPDATE C
         SET situacao = 2,
             data_fim_processamento = GETDATE(),
-            total_intervalos_analisados = @TotalIntervalos,
-            total_vendas_rapidas = @VendasRapidas,
-            valor_total_auditado = @ValorTotalAuditado,
-            valor_vendas_rapidas = @ValorVendasRapidas,
+            total_intervalos_analisados = R.total_intervalos_analisados,
+            total_vendas_rapidas = R.total_vendas_rapidas,
+            valor_total_auditado = R.valor_total_auditado,
+            valor_vendas_rapidas = R.valor_vendas_rapidas,
             mensagem_erro = NULL
-        WHERE cnpj = @CNPJAtual;
+        FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+        INNER JOIN #ResumoControleLote R
+            ON R.cnpj = C.cnpj;
 
-        SET @Contador = @Contador + 1;
+        COMMIT TRAN;
 
-        IF @Contador % 10 = 0
-            PRINT CONCAT('Processados: ', @Contador, ' CNPJs neste lote.');
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' | transacao final concluida | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+
+        SET @Contador = @Contador + @ContadorLote;
+
+        PRINT CONCAT('Lote ', @LoteAtual, ': processados ', @ContadorLote, ' CNPJs em bloco.');
+        SET @MsgLog = CONCAT(
+            '[VENDAS_CONSEC] Lote ', @LoteAtual,
+            ' concluido | CNPJs: ', @ContadorLote,
+            ' | tempo total ', DATEDIFF(SECOND, @LoteInicio, GETDATE()), ' s',
+            ' | total na execucao: ', @Contador, '.'
+        );
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
     END TRY
     BEGIN CATCH
-        UPDATE temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRAN;
+
+        SET @MensagemErroLote = ERROR_MESSAGE();
+
+        UPDATE C
         SET situacao = 3,
             data_fim_processamento = GETDATE(),
-            mensagem_erro = ERROR_MESSAGE()
-        WHERE cnpj = @CNPJAtual;
+            mensagem_erro = @MensagemErroLote
+        FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas C
+        INNER JOIN #lote_atual L
+            ON L.cnpj = C.cnpj;
+
+        PRINT CONCAT('Erro no lote vendas consecutivas ', @LoteAtual, ': ', @MensagemErroLote);
+        SET @MsgLog = CONCAT('[VENDAS_CONSEC] ERRO lote ', @LoteAtual, ' | ', @MensagemErroLote);
+        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
+        BREAK;
     END CATCH;
 
-    SET @IdCnpjAtual = NULL;
-    SET @TotalIntervalos = NULL;
-    SET @VendasRapidas = NULL;
-    SET @ValorTotalAuditado = NULL;
-    SET @ValorVendasRapidas = NULL;
+    PRINT CONCAT('Lote vendas consecutivas ', @LoteAtual, ' encerrado. CNPJs concluidos no lote: ', @ContadorLote, '. Total concluido nesta execucao: ', @Contador, '.');
 
-    FETCH NEXT FROM cursor_cnpjs INTO @CNPJAtual;
+    IF EXISTS (
+        SELECT 1
+        FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+        WHERE situacao = 3
+          AND tentativas >= 3
+    )
+    BEGIN
+        PRINT 'Existem CNPJs com erro e tentativas esgotadas. Encerrando processamento automatico antes da geracao final.';
+        BREAK;
+    END;
 END;
 
-CLOSE cursor_cnpjs;
-DEALLOCATE cursor_cnpjs;
+IF @LoteAtual >= @MaxLotes
+   AND EXISTS (
+       SELECT 1
+       FROM temp_CGUSC.fp.indicador_controle_vendas_consecutivas
+       WHERE situacao IN (0, 3)
+         AND tentativas < 3
+   )
+BEGIN
+    RAISERROR('Limite de lotes atingido antes de concluir indicador_vendas_consecutivas. Aumente @MaxLotes ou investigue a fila.', 16, 1);
+    RETURN;
+END;
 
 
 -- ============================================================================

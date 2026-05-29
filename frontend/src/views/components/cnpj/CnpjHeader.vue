@@ -10,6 +10,7 @@ import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
+import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
@@ -22,6 +23,7 @@ const geoStore = useGeoStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { requestTimes } = storeToRefs(cnpjDetailStore);
+const notaTecnicaConfig = useNotaTecnicaConfigStore();
 
 const requestTimesTooltip = computed(() => {
   const entries = Object.values(requestTimes.value);
@@ -64,7 +66,7 @@ const props = defineProps({
   periodLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["export", "generateNote"]);
+const emit = defineEmits(["export", "generateNote", "configureNoteRegional"]);
 
 const copied = ref(false);
 const copyCnpj = () => {
@@ -498,6 +500,14 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           </button>
           <button
+            class="list-btn list-btn--regional-nt"
+            @click="emit('configureNoteRegional')"
+            v-tooltip.bottom="notaTecnicaConfig.selectedRegionalLabel || 'Selecionar Regional da Nota Técnica'"
+          >
+            <i class="pi pi-building" />
+            <span>{{ notaTecnicaConfig.selectedRegionalCodigo || "UF" }}</span>
+          </button>
+          <button
             class="list-btn list-btn--icon-only list-btn--note"
             @click="emit('generateNote')"
             :disabled="isGeneratingNote"
@@ -689,6 +699,26 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   border-color: var(--btn-note-color);
   box-shadow: 0 4px 12px
     color-mix(in srgb, var(--btn-note-color) 25%, transparent);
+}
+
+.list-btn--regional-nt {
+  min-width: 46px;
+  gap: 0.35rem;
+  padding: 0 0.55rem;
+  color: var(--text-color);
+  border-color: color-mix(in srgb, var(--primary-color) 32%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 7%, transparent);
+}
+
+.list-btn--regional-nt span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.list-btn--regional-nt:hover {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 13%, transparent);
 }
 
 .list-btn--interesse {

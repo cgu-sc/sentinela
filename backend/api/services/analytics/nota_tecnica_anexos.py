@@ -94,6 +94,7 @@ def _add_anexo_crm_evidencias(
     razao_social: str,
     evidencias_comp: dict[str, Any],
     tabela_num: int,
+    numero_nota_tecnica: str,
     timing: Any = None,
     anexo_num: str = 'III',
 ):
@@ -107,7 +108,7 @@ def _add_anexo_crm_evidencias(
     section.right_margin = Inches(0.7)
 
     heading = doc.add_heading(
-        f'ANEXO {anexo_num} – NOTA TÉCNICA Nº XXX/20XX/NAE/XX/Regional/XX\n'
+        f'ANEXO {anexo_num} – NOTA TÉCNICA Nº {numero_nota_tecnica}\n'
         'EVIDÊNCIAS COMPLEMENTARES RELACIONADAS AO USO DE CRMS NO SAV',
         level=1,
     )
@@ -125,6 +126,7 @@ def _add_anexo_falecidos(
     razao_social: str,
     cnpj_fmt: str,
     falecidos_comp: dict[str, Any],
+    numero_nota_tecnica: str,
     timing: Any = None,
     anexo_num: str = 'III',
 ):
@@ -151,7 +153,14 @@ def _add_anexo_falecidos(
     if timing:
         timing.mark(f"anexo {anexo_num} agrupamento ({len(grupos)} CPFs, {len(transacoes)} transacoes)")
 
-    doc.add_heading(f'ANEXO {anexo_num} - DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS', level=1)
+    heading = doc.add_heading(
+        f'ANEXO {anexo_num} – NOTA TÉCNICA Nº {numero_nota_tecnica}\n'
+        'DETALHAMENTO DE VENDAS PARA PESSOAS FALECIDAS',
+        level=1,
+    )
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    heading.paragraph_format.space_after = Pt(12)
+    heading.paragraph_format.keep_with_next = True
     p_intro = doc.add_paragraph()
     p_intro.paragraph_format.space_after = Pt(8)
     _run(

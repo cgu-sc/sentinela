@@ -32,7 +32,7 @@ from .nota_tecnica_docx_utils import (
     _set_table_fixed_widths,
     _write_cell,
 )
-from .nota_tecnica_formatters import _format_decimal_pt
+from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
 
 
 def _as_float(value: Any) -> float:
@@ -425,9 +425,9 @@ def _crm_alertas_contexto_labels(row: dict[str, Any]) -> list[str]:
     if _as_int(row.get("flag_crm_exclusivo")) > 0:
         labels.append("CRM exclusivo")
     if row.get("alertas_crm_unico") or _as_int(row.get("qtd_alertas_crm_unico")) > 0:
-        labels.append("Lançamentos sequenciais")
+        labels.append("Concentração em único CRM")
     if row.get("alertas_crm_multiplos") or _as_int(row.get("qtd_alertas_crm_multiplos")) > 0:
-        labels.append("Múltiplos CRMs")
+        labels.append("Concentração em múltiplos CRMs")
     if row.get("alerta5_geografico") or row.get("alertas_geograficos") or _as_int(row.get("qtd_alertas_geograficos")) > 0:
         labels.append("Registro geográfico")
 
@@ -436,11 +436,11 @@ def _crm_alertas_contexto_labels(row: dict[str, Any]) -> list[str]:
     alerta_30_local = _as_int(row.get("flag_robo")) > 0 or prescricoes_dia_local > 30
     alerta_30_brasil = _as_int(row.get("flag_robo_oculto")) > 0 or prescricoes_dia_brasil > 30
     if alerta_30_local and alerta_30_brasil:
-        labels.append(">30 presc./dia local/Brasil")
+        labels.append("Volume diário atípico local/Brasil")
     elif alerta_30_local:
-        labels.append(">30 presc./dia local")
+        labels.append("Volume diário atípico local")
     elif alerta_30_brasil:
-        labels.append(">30 presc./dia Brasil")
+        labels.append("Volume diário atípico Brasil")
 
     return labels
 
@@ -1152,7 +1152,7 @@ def _add_crm_intensiva_complementar_text(
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         values = [
             crm_uf,
-            str(row.get("no_medico") or "Não localizado"),
+            _title_case_pt(row.get("no_medico") or "Não localizado"),
             str(row.get("tipo") or "—"),
             _format_decimal_pt(_as_float(row.get("nu_prescricoes_dia")), 2),
             _format_decimal_pt(_as_float(row.get("prescricoes_dia_total_brasil")), 2),
@@ -1225,9 +1225,9 @@ def _add_crm_unico_complementar_text(
     _format_crm_table_title(title)
     _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="334155", size=8, bold=True)
 
-    headers = ["Início", "Fim", "CRM/UF", "Nome", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
+    headers = ["Início", "Fim", "Médico/CRM", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(1.06), Inches(1.06), Inches(0.64), Inches(2.34), Inches(0.41), Inches(0.44), Inches(0.44), Inches(0.61)]
+    widths = [Inches(1.05), Inches(1.05), Inches(2.82), Inches(0.48), Inches(0.55), Inches(0.68), Inches(0.67)]
     _crm_table_header(table, headers, widths)
 
     for row in rows:
@@ -1239,8 +1239,6 @@ def _add_crm_unico_complementar_text(
         values = [
             _format_datetime_br_minute(row.get("dt_ini_hora") or row.get("dt")),
             _format_datetime_br_minute(row.get("dt_fim_hora") or row.get("dt")),
-            crm_uf,
-            str(row.get("no_medico") or "Não localizado"),
             str(_as_int(row.get("nu_prescricoes"))),
             _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
             f'{_format_decimal_pt(taxa_hora, 1)}/h',
@@ -1248,9 +1246,20 @@ def _add_crm_unico_complementar_text(
             if row.get("valor_alerta_disponivel")
             else "N/d",
         ]
-        for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 1, 2, 5) else None
-            _write_cell(cells[idx], value, size=6.8, align=align)
+        for idx, value in enumerate(values[:2]):
+            _write_cell(cells[idx], value, size=6.8, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+        p_medico = cells[2].paragraphs[0]
+        p_medico.text = ""
+        p_medico.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p_medico.paragraph_format.space_before = Pt(0)
+        p_medico.paragraph_format.space_after = Pt(0)
+        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=6.8)
+        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=5.8)
+
+        for col_idx, value in enumerate(values[2:], start=3):
+            align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
+            _write_cell(cells[col_idx], value, size=6.8, align=align)
 
 
 def _add_crms_multiplos_complementar_text(
@@ -1483,8 +1492,7 @@ def _add_principais_crms_contexto_text(
     _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="334155", size=8, bold=True)
 
     headers = [
-        "CRM/UF",
-        "Nome",
+        "Médico/CRM",
         "Alertas/anomalias",
         "Autorizações",
         "Valor autorizado",
@@ -1493,13 +1501,12 @@ def _add_principais_crms_contexto_text(
     ]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [
-        Inches(0.69),
-        Inches(1.43),
-        Inches(1.33),
-        Inches(0.67),
-        Inches(0.99),
-        Inches(0.61),
-        Inches(1.28),
+        Inches(2.00),
+        Inches(1.89),
+        Inches(0.74),
+        Inches(1.05),
+        Inches(0.62),
+        Inches(1.00),
     ]
     _crm_table_header(table, headers, widths)
 
@@ -1517,17 +1524,31 @@ def _add_principais_crms_contexto_text(
             f'{_format_decimal_pt(_as_float(row.get("prescricoes_dia_total_brasil")), 2)} Brasil'
         )
         values = [
-            crm_uf,
-            str(row.get("no_medico") or "Não localizado"),
-            "; ".join(alertas) if alertas else "Sem alerta",
+            "\n".join(alertas) if alertas else "Sem alerta",
             str(_as_int(row.get("nu_prescricoes"))),
             f'R$ {_format_decimal_pt(_as_float(row.get("vl_total_prescricoes")), 2)}',
             f'{_format_decimal_pt(_as_float(row.get("pct_participacao")), 2)}%',
             presc_dia,
         ]
-        for idx, value in enumerate(values):
-            align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 6) else None
-            _write_cell(cells[idx], value, size=6.6, align=align)
+        p_medico = cells[0].paragraphs[0]
+        p_medico.text = ""
+        p_medico.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p_medico.paragraph_format.space_before = Pt(0)
+        p_medico.paragraph_format.space_after = Pt(0)
+        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=6.6)
+        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=5.7)
+
+        for col_idx, value in enumerate(values, start=1):
+            align = (
+                WD_ALIGN_PARAGRAPH.LEFT
+                if col_idx == 1
+                else WD_ALIGN_PARAGRAPH.RIGHT
+                if col_idx in (2, 3, 4)
+                else WD_ALIGN_PARAGRAPH.CENTER
+                if col_idx == 5
+                else None
+            )
+            _write_cell(cells[col_idx], value, size=6.6, align=align)
 
 
 def _add_crm_evidencias_complementares_body(
@@ -1686,7 +1707,7 @@ def _add_hhi_crm_text(
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         values = [
             crm_uf,
-            str(row.get("no_medico") or "Não localizado"),
+            _title_case_pt(row.get("no_medico") or "Não localizado"),
             _format_date_br(row.get("dt_inscricao_crm")),
             str(row_autorizacoes),
             f'{_format_decimal_pt(pct_producao_total, 2)}%',
@@ -1859,7 +1880,7 @@ def _add_crms_irregulares_text(
                 motivos.append("Prescrição antes do registro")
             values = [
                 crm_uf,
-                str(row.get("no_medico") or "Não localizado"),
+                _title_case_pt(row.get("no_medico") or "Não localizado"),
                 _format_date_br(row.get("dt_inscricao_crm")),
                 "; ".join(motivos) or "Irregularidade CRM",
                 str(row_autorizacoes),

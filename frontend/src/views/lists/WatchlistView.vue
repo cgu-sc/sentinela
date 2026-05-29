@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import axios from "axios";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
+import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { usePdfExport } from "@/composables/usePdfExport";
@@ -12,12 +13,14 @@ import { API_ENDPOINTS } from "@/config/api";
 import { getApiErrorMessage } from "@/utils/apiErrors";
 import { downloadBlobFromResponse } from "@/utils/download";
 import ObservationDialog from "@/views/components/cnpj/ObservationDialog.vue";
+import NotaTecnicaRegionalDialog from "@/views/components/nota-tecnica/NotaTecnicaRegionalDialog.vue";
 import { useToast } from "primevue/usetoast";
 
 const router = useRouter();
 const farmaciaLists = useFarmaciaListsStore();
 const filterStore = useFilterStore();
 const geoStore = useGeoStore();
+const notaTecnicaConfig = useNotaTecnicaConfigStore();
 const toast = useToast();
 const { formatBRL, formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const { getApiParams } = useFilterParameters();
@@ -30,6 +33,8 @@ const obsTarget = ref(null);
 const copiedCnpj = ref(null);
 const exportingReportCnpj = ref(null);
 const generatingNoteCnpj = ref(null);
+const regionalDialogVisible = ref(false);
+const pendingNoteItem = ref(null);
 
 const formatCnpj = (v) => {
   if (!v) return "—";
@@ -98,6 +103,17 @@ async function fetchWatchlistAnalytics() {
 }
 
 watch([monitoredCnpjsKey, periodKey], fetchWatchlistAnalytics, { immediate: true });
+
+onMounted(() => {
+  notaTecnicaConfig.ensureLoaded().catch((error) => {
+    toast.add({
+      severity: "warn",
+      summary: "Regional da Nota Técnica",
+      detail: error?.message || "Não foi possível carregar a configuração da Nota Técnica.",
+      life: 6000,
+    });
+  });
+});
 
 // Map O(1): cnpj → dados analíticos da consulta dedicada da lista
 const analyticsMap = computed(() => {
@@ -191,14 +207,31 @@ async function gerarRelatorio(item) {
   }
 }
 
-async function gerarNotaTecnica(item) {
+function buildNotaTecnicaUrl(cnpj, dadosNota = {}) {
+  const { inicio, fim } = getApiParams();
+  const params = new URLSearchParams({
+    data_inicio: inicio,
+    data_fim: fim,
+    regional_codigo: notaTecnicaConfig.selectedRegionalCodigo,
+  });
+  if (dadosNota.numeroNota) params.set("numero_nota", dadosNota.numeroNota);
+  if (dadosNota.numeroProcesso) params.set("numero_processo", dadosNota.numeroProcesso);
+  return `${API_ENDPOINTS.analyticsNotaTecnica(cnpj)}?${params.toString()}`;
+}
+
+async function gerarNotaTecnica(item, { skipRegionalCheck = false, dadosNota = {} } = {}) {
   if (generatingNoteCnpj.value) return;
 
-  const { inicio, fim } = getApiParams();
-  const url = `${API_ENDPOINTS.analyticsNotaTecnica(item.cnpj)}?data_inicio=${inicio}&data_fim=${fim}`;
-
-  generatingNoteCnpj.value = item.cnpj;
   try {
+    if (!skipRegionalCheck) {
+      await notaTecnicaConfig.ensureLoaded();
+      pendingNoteItem.value = item;
+      regionalDialogVisible.value = true;
+      return;
+    }
+
+    generatingNoteCnpj.value = item.cnpj;
+    const url = buildNotaTecnicaUrl(item.cnpj, dadosNota);
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(
@@ -218,6 +251,18 @@ async function gerarNotaTecnica(item) {
   } finally {
     generatingNoteCnpj.value = null;
   }
+}
+
+async function onRegionalSavedForList(dadosNota) {
+  if (!pendingNoteItem.value) return;
+  const item = pendingNoteItem.value;
+  pendingNoteItem.value = null;
+  await gerarNotaTecnica(item, { skipRegionalCheck: true, dadosNota });
+}
+
+function setRegionalDialogVisible(visible) {
+  regionalDialogVisible.value = visible;
+  if (!visible) pendingNoteItem.value = null;
 }
 
 function editarObservacao(item) {
@@ -256,6 +301,15 @@ function formatScore(v) {
           <span>Estabelecimentos monitorados</span>
         </div>
         <div class="card-header-right">
+          <button
+            class="regional-nt-chip"
+            type="button"
+            @click="regionalDialogVisible = true"
+            v-tooltip.top="'Regional emissora das Notas Técnicas'"
+          >
+            <i class="pi pi-building" />
+            <span>{{ notaTecnicaConfig.selectedRegionalLabel || "Regional da NT não definida" }}</span>
+          </button>
           <span class="period-chip" v-tooltip.top="'Período de análise atual'">
             <i class="pi pi-calendar" />
             <span>Período: {{ periodoAnaliseLabel }}</span>
@@ -411,6 +465,12 @@ function formatScore(v) {
       :cnpj="obsTarget.cnpj"
       :entity-name="obsTarget.razaoSocial || formatCnpj(obsTarget.cnpj)"
     />
+    <NotaTecnicaRegionalDialog
+      :visible="regionalDialogVisible"
+      :continue-label="pendingNoteItem ? 'Gerar Nota Técnica' : 'Salvar dados'"
+      @update:visible="setRegionalDialogVisible"
+      @saved="onRegionalSavedForList"
+    />
   </div>
 </template>
 
@@ -543,6 +603,26 @@ function formatScore(v) {
 
 .period-chip i {
   font-size: 0.72rem;
+}
+
+.regional-nt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.24rem 0.58rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  color: var(--text-color);
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.regional-nt-chip:hover {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .card-count {

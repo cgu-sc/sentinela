@@ -4,16 +4,20 @@ import { useConfigStore } from '@/stores/config';
 import { useIndicadoresStore } from '@/stores/indicadores';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
+import { useNotaTecnicaConfigStore } from '@/stores/notaTecnicaConfig';
 import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS as SYSTEM_DEFAULTS } from '@/config/riskConfig';
 import IndicadorDistribution from './components/indicadores/IndicadorDistribution.vue';
 import Button from 'primevue/button';
 import InputNumber from 'primevue/inputnumber';
 import Dropdown from 'primevue/dropdown';
+import { useToast } from 'primevue/usetoast';
 
 const configStore = useConfigStore();
 const indicadoresStore = useIndicadoresStore();
 const filterStore = useFilterStore();
 const geoStore = useGeoStore();
+const notaTecnicaConfig = useNotaTecnicaConfigStore();
+const toast = useToast();
 
 // Seleção para o Simulador
 const calibrationIndicator = ref('falecidos');
@@ -91,9 +95,30 @@ function refreshCalibration() {
   indicadoresStore.fetchIndicadorAnalise(calibrationIndicator.value, params);
 }
 
+async function saveNotaTecnicaRegional(event) {
+  try {
+    await notaTecnicaConfig.saveRegionalCodigo(event.value);
+  } catch (error) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Regional da Nota Técnica',
+      detail: error?.message || 'Não foi possível salvar a regional emissora.',
+      life: 6000,
+    });
+  }
+}
+
 onMounted(() => {
   // Inicialização do simulador
   refreshCalibration();
+  notaTecnicaConfig.ensureLoaded().catch((error) => {
+    toast.add({
+      severity: 'warn',
+      summary: 'Regional da Nota Técnica',
+      detail: error?.message || 'Não foi possível carregar a configuração da Nota Técnica.',
+      life: 6000,
+    });
+  });
 });
 </script>
 
@@ -118,6 +143,55 @@ onMounted(() => {
     </header>
 
     <main v-if="Object.keys(configStore.thresholds).length > 0" class="settings-main">
+      <section class="nt-settings-card anim-fade-in">
+        <div class="nt-settings-header">
+          <div>
+            <div class="table-title">
+              <i class="pi pi-file-edit" />
+              <span>Nota Técnica</span>
+            </div>
+            <p class="table-desc">Configuração operacional usada no cabeçalho das Notas Técnicas geradas pelo Sentinela.</p>
+          </div>
+          <span class="nt-regional-status">
+            {{ notaTecnicaConfig.selectedRegionalLabel || "Regional não definida" }}
+          </span>
+        </div>
+
+        <div class="nt-settings-grid">
+          <div class="control-item">
+            <label>Regional emissora</label>
+            <Dropdown
+              v-model="notaTecnicaConfig.selectedRegionalCodigo"
+              :options="notaTecnicaConfig.regionais"
+              optionLabel="estado"
+              optionValue="codigo"
+              filter
+              class="p-inputtext-sm w-full"
+              placeholder="Selecione a regional"
+              :loading="notaTecnicaConfig.loading"
+              @change="saveNotaTecnicaRegional"
+            >
+              <template #option="{ option }">
+                <div class="nt-regional-option">
+                  <span>{{ option.codigo }} - {{ option.estado }}</span>
+                  <small>{{ option.nome_unidade }}</small>
+                </div>
+              </template>
+              <template #value="{ value }">
+                <span v-if="value">{{ notaTecnicaConfig.selectedRegionalLabel }}</span>
+                <span v-else>Selecione a regional</span>
+              </template>
+            </Dropdown>
+          </div>
+
+          <div v-if="notaTecnicaConfig.selectedRegional" class="nt-preview">
+            <span>{{ notaTecnicaConfig.selectedRegional.nome_unidade }}</span>
+            <span>{{ notaTecnicaConfig.selectedRegional.linha_endereco }}</span>
+            <span>{{ notaTecnicaConfig.selectedRegional.superintendente }}</span>
+          </div>
+        </div>
+      </section>
+
       <div class="layout-grid">
         
         <!-- SEÇÃO 1: SIMULADOR DE IMPACTO ESPACIAL -->
@@ -339,6 +413,69 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.nt-settings-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.nt-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.nt-regional-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  color: var(--text-color);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.nt-settings-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.nt-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.nt-regional-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nt-regional-option span {
+  font-weight: 600;
+}
+
+.nt-regional-option small {
+  color: var(--text-muted);
 }
 
 /* ── SIMULADOR ── */

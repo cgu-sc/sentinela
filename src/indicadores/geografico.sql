@@ -117,7 +117,7 @@ SELECT
     CAST(F.id AS INT) AS id_cnpj,
     CAST(F.cnpj AS VARCHAR(14)) AS cnpj,
     CAST(F.municipio AS VARCHAR(255)) AS municipio,
-    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS VARCHAR(2)) AS uf,
+    CAST(UPPER(LTRIM(RTRIM(F.uf))) AS CHAR(2)) AS uf,
     CAST(F.id_regiao_saude AS INT) AS id_regiao_saude
 INTO #farmacias_dim
 FROM temp_CGUSC.fp.dados_farmacia AS F;
@@ -205,46 +205,35 @@ ALTER COLUMN valor_vendas_outra_uf DECIMAL(12,2) NOT NULL;
 IF OBJECT_ID('temp_CGUSC.fp.indicador_geografico_origem_uf', 'U') IS NULL
 BEGIN
     CREATE TABLE temp_CGUSC.fp.indicador_geografico_origem_uf (
-        id INT IDENTITY(1,1) PRIMARY KEY,
         id_cnpj INT NOT NULL,
         ano_base SMALLINT NOT NULL,
-        uf_farmacia VARCHAR(2) NOT NULL,
-        uf_paciente VARCHAR(2) NOT NULL,
-        total_pacientes_distintos_cnpj_ano INT NOT NULL,
-        total_pacientes_distintos_outra_uf INT NOT NULL,
-        qtd_pacientes_distintos_uf INT NOT NULL,
-        qtd_autorizacoes_uf INT NOT NULL,
-        valor_total_uf DECIMAL(12,2) NOT NULL,
-        valor_total_cnpj_ano DECIMAL(12,2) NOT NULL,
-        data_calculo DATETIME NOT NULL DEFAULT GETDATE(),
-        CONSTRAINT UQ_IndGeoOrigemUF_CNPJ_Ano_UF UNIQUE (id_cnpj, ano_base, uf_paciente)
+        uf_farmacia CHAR(2) NOT NULL,
+        uf_paciente CHAR(2) NOT NULL,
+        is_outra_uf BIT NOT NULL,
+        qtd_autorizacoes INT NOT NULL,
+        valor_autorizado DECIMAL(19,2) NOT NULL,
+        CONSTRAINT PK_IndGeoOrigemUF PRIMARY KEY CLUSTERED (id_cnpj, ano_base, uf_paciente)
     );
-
-    CREATE INDEX IDX_IndGeoOrigemUF_CNPJ_Ano
-    ON temp_CGUSC.fp.indicador_geografico_origem_uf(id_cnpj, ano_base);
 END
-ELSE IF COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'id') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'id_cnpj') IS NULL
+ELSE IF COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'id_cnpj') IS NULL
      OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'ano_base') IS NULL
      OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'uf_farmacia') IS NULL
      OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'uf_paciente') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'total_pacientes_distintos_cnpj_ano') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'total_pacientes_distintos_outra_uf') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'qtd_pacientes_distintos_uf') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'qtd_autorizacoes_uf') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'valor_total_uf') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'valor_total_cnpj_ano') IS NULL
-     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'data_calculo') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'is_outra_uf') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'qtd_autorizacoes') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'valor_autorizado') IS NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'id') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'total_pacientes_distintos_cnpj_ano') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'total_pacientes_distintos_outra_uf') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'qtd_pacientes_distintos_uf') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'qtd_autorizacoes_uf') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'valor_total_uf') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'valor_total_cnpj_ano') IS NOT NULL
+     OR COL_LENGTH('temp_CGUSC.fp.indicador_geografico_origem_uf', 'data_calculo') IS NOT NULL
 BEGIN
     RAISERROR('Tabela temp_CGUSC.fp.indicador_geografico_origem_uf existe com schema incompativel. Recrie a tabela antes de executar.', 16, 1);
     RETURN;
 END;
-
-ALTER TABLE temp_CGUSC.fp.indicador_geografico_origem_uf
-ALTER COLUMN valor_total_uf DECIMAL(12,2) NOT NULL;
-
-ALTER TABLE temp_CGUSC.fp.indicador_geografico_origem_uf
-ALTER COLUMN valor_total_cnpj_ano DECIMAL(12,2) NOT NULL;
 
 
 -- ============================================================================
@@ -414,7 +403,7 @@ BEGIN
             CAST(YEAR(A.data_hora) AS SMALLINT) AS ano_base,
             A.num_autorizacao,
             A.cpf,
-            MAX(L.uf) AS uf_farmacia,
+            CAST(MAX(L.uf) AS CHAR(2)) AS uf_farmacia,
             CAST(SUM(CAST(A.valor_pago AS DECIMAL(19,2))) AS DECIMAL(12,2)) AS valor_total_autorizacao
         INTO #MovimentacaoGeografica
         FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 A
@@ -464,8 +453,8 @@ BEGIN
             M.ano_base,
             M.num_autorizacao,
             M.cpf,
-            CAST(UPPER(LTRIM(RTRIM(MAX(CAST(B.unidadeFederacao AS VARCHAR(2)))))) AS VARCHAR(2)) AS uf_paciente,
-            MAX(M.uf_farmacia) AS uf_farmacia,
+            CAST(UPPER(LTRIM(RTRIM(MAX(CAST(B.unidadeFederacao AS VARCHAR(2)))))) AS CHAR(2)) AS uf_paciente,
+            CAST(MAX(M.uf_farmacia) AS CHAR(2)) AS uf_farmacia,
             CAST(SUM(M.valor_total_autorizacao) AS DECIMAL(12,2)) AS valor_total_autorizacao
         INTO #AutorizacoesGeograficas
         FROM #MovimentacaoGeografica M
@@ -561,185 +550,33 @@ BEGIN
         );
         RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
-        DROP TABLE IF EXISTS #PacientesGeoDistinct;
-
-        SET @EtapaInicio = GETDATE();
-        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Deduplicando pacientes por CNPJ/ano/UF de origem...');
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SELECT DISTINCT
-            id_cnpj,
-            ano_base,
-            cpf,
-            uf_farmacia,
-            uf_paciente
-        INTO #PacientesGeoDistinct
-        FROM #AutorizacoesGeograficas;
-
-        SET @LinhasEtapa = @@ROWCOUNT;
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | #PacientesGeoDistinct: ', @LinhasEtapa,
-            ' pacientes/CNPJ/ano/UF | tempo ', DATEDIFF(SECOND, @EtapaInicio, GETDATE()), ' s.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SET @EtapaInicio = GETDATE();
-        CREATE UNIQUE CLUSTERED INDEX IDX_PacientesGeoDistinct_CNPJ_Ano_UF_CPF
-        ON #PacientesGeoDistinct(id_cnpj, ano_base, uf_paciente, cpf);
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | indice #PacientesGeoDistinct criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        DROP TABLE IF EXISTS #PacientesGeoDenominador;
-
-        SET @EtapaInicio = GETDATE();
-        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Calculando denominadores de pacientes por CNPJ/ano...');
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SELECT
-            id_cnpj,
-            ano_base,
-            CAST(COUNT(*) AS INT) AS total_pacientes_distintos_cnpj_ano,
-            CAST(
-                SUM(
-                    CASE
-                        WHEN uf_paciente <> uf_farmacia THEN 1
-                        ELSE 0
-                    END
-                ) AS INT
-            ) AS total_pacientes_distintos_outra_uf
-        INTO #PacientesGeoDenominador
-        FROM #PacientesGeoDistinct
-        GROUP BY
-            id_cnpj,
-            ano_base;
-
-        SET @LinhasEtapa = @@ROWCOUNT;
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | #PacientesGeoDenominador: ', @LinhasEtapa,
-            ' linhas | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SET @EtapaInicio = GETDATE();
-        CREATE UNIQUE CLUSTERED INDEX IDX_PacientesGeoDenominador_CNPJ_Ano
-        ON #PacientesGeoDenominador(id_cnpj, ano_base);
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | indice #PacientesGeoDenominador criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        DROP TABLE IF EXISTS #OrigemUfPacientesLote;
-
-        SET @EtapaInicio = GETDATE();
-        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Agregando pacientes de outra UF por origem...');
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SELECT
-            id_cnpj,
-            ano_base,
-            uf_farmacia,
-            uf_paciente,
-            CAST(COUNT(*) AS INT) AS qtd_pacientes_distintos_uf
-        INTO #OrigemUfPacientesLote
-        FROM #PacientesGeoDistinct
-        WHERE uf_paciente <> uf_farmacia
-        GROUP BY
-            id_cnpj,
-            ano_base,
-            uf_farmacia,
-            uf_paciente;
-
-        SET @LinhasEtapa = @@ROWCOUNT;
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | #OrigemUfPacientesLote: ', @LinhasEtapa,
-            ' linhas | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SET @EtapaInicio = GETDATE();
-        CREATE UNIQUE CLUSTERED INDEX IDX_OrigemUfPacientesLote_CNPJ_Ano_UF
-        ON #OrigemUfPacientesLote(id_cnpj, ano_base, uf_paciente);
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | indice #OrigemUfPacientesLote criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        DROP TABLE IF EXISTS #OrigemUfAutorizacoesLote;
-
-        SET @EtapaInicio = GETDATE();
-        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Agregando autorizacoes de outra UF por origem...');
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SELECT
-            id_cnpj,
-            ano_base,
-            uf_farmacia,
-            uf_paciente,
-            CAST(COUNT(*) AS INT) AS qtd_autorizacoes_uf,
-            CAST(SUM(valor_total_autorizacao) AS DECIMAL(12,2)) AS valor_total_uf
-        INTO #OrigemUfAutorizacoesLote
-        FROM #AutorizacoesGeograficas
-        WHERE uf_paciente <> uf_farmacia
-        GROUP BY
-            id_cnpj,
-            ano_base,
-            uf_farmacia,
-            uf_paciente;
-
-        SET @LinhasEtapa = @@ROWCOUNT;
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | #OrigemUfAutorizacoesLote: ', @LinhasEtapa,
-            ' linhas | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
-        SET @EtapaInicio = GETDATE();
-        CREATE UNIQUE CLUSTERED INDEX IDX_OrigemUfAutorizacoesLote_CNPJ_Ano_UF
-        ON #OrigemUfAutorizacoesLote(id_cnpj, ano_base, uf_paciente);
-        SET @MsgLog = CONCAT(
-            '[GEO] Lote ', @LoteAtual,
-            ' | indice #OrigemUfAutorizacoesLote criado | tempo ', DATEDIFF(MILLISECOND, @EtapaInicio, GETDATE()), ' ms.'
-        );
-        RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
-
         DROP TABLE IF EXISTS #OrigemUfLote;
 
         SET @EtapaInicio = GETDATE();
-        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Consolidando origem de pacientes por UF...');
+        SET @MsgLog = CONCAT('[GEO] Lote ', @LoteAtual, ' | Agregando autorizacoes por UF de residencia do paciente...');
         RAISERROR(@MsgLog, 0, 1) WITH NOWAIT;
 
         SELECT
-            P.id_cnpj,
-            P.ano_base,
-            P.uf_farmacia,
-            P.uf_paciente,
-            D.total_pacientes_distintos_cnpj_ano,
-            D.total_pacientes_distintos_outra_uf,
-            P.qtd_pacientes_distintos_uf,
-            A.qtd_autorizacoes_uf,
-            A.valor_total_uf,
-            R.valor_total_auditado AS valor_total_cnpj_ano
+            id_cnpj,
+            ano_base,
+            uf_farmacia,
+            uf_paciente,
+            CAST(
+                CASE
+                    WHEN uf_paciente <> uf_farmacia THEN 1
+                    ELSE 0
+                END AS BIT
+            ) AS is_outra_uf,
+            CAST(COUNT(*) AS INT) AS qtd_autorizacoes,
+            CAST(SUM(valor_total_autorizacao) AS DECIMAL(19,2)) AS valor_autorizado
         INTO #OrigemUfLote
-        FROM #OrigemUfPacientesLote P
-        INNER JOIN #OrigemUfAutorizacoesLote A
-            ON A.id_cnpj = P.id_cnpj
-           AND A.ano_base = P.ano_base
-           AND A.uf_paciente = P.uf_paciente
-        INNER JOIN #PacientesGeoDenominador D
-            ON D.id_cnpj = P.id_cnpj
-           AND D.ano_base = P.ano_base
-        INNER JOIN #ResultadoLote R
-            ON R.id_cnpj = P.id_cnpj
-           AND R.ano_base = P.ano_base;
+        FROM #AutorizacoesGeograficas
+        GROUP BY
+            id_cnpj,
+            ano_base,
+            uf_farmacia,
+            uf_paciente
+        HAVING SUM(valor_total_autorizacao) > 0;
 
         SET @LinhasEtapa = @@ROWCOUNT;
         SET @MsgLog = CONCAT(
@@ -831,24 +668,18 @@ BEGIN
             ano_base,
             uf_farmacia,
             uf_paciente,
-            total_pacientes_distintos_cnpj_ano,
-            total_pacientes_distintos_outra_uf,
-            qtd_pacientes_distintos_uf,
-            qtd_autorizacoes_uf,
-            valor_total_uf,
-            valor_total_cnpj_ano
+            is_outra_uf,
+            qtd_autorizacoes,
+            valor_autorizado
         )
         SELECT
             id_cnpj,
             ano_base,
             uf_farmacia,
             uf_paciente,
-            total_pacientes_distintos_cnpj_ano,
-            total_pacientes_distintos_outra_uf,
-            qtd_pacientes_distintos_uf,
-            qtd_autorizacoes_uf,
-            valor_total_uf,
-            valor_total_cnpj_ano
+            is_outra_uf,
+            qtd_autorizacoes,
+            valor_autorizado
         FROM #OrigemUfLote;
 
         UPDATE C
@@ -1006,48 +837,65 @@ BEGIN
     ON temp_CGUSC.fp.indicador_geografico_detalhado(id_cnpj, ano_base);
 
     -- ========================================================================
-    -- PASSO 6: DETALHAMENTO DE PACIENTES DE OUTRA UF POR UF DE ORIGEM
+    -- PASSO 6: DETALHAMENTO DE AUTORIZACOES POR UF DE RESIDENCIA DO PACIENTE
     -- ========================================================================
     IF EXISTS (
         SELECT 1
         FROM temp_CGUSC.fp.indicador_geografico_origem_uf
-        WHERE total_pacientes_distintos_cnpj_ano <= 0
-           OR total_pacientes_distintos_outra_uf <= 0
-           OR qtd_pacientes_distintos_uf <= 0
-           OR qtd_autorizacoes_uf <= 0
-           OR valor_total_uf < 0
-           OR valor_total_cnpj_ano <= 0
+        WHERE qtd_autorizacoes <= 0
+           OR valor_autorizado < 0
     )
     BEGIN
-        RAISERROR('Tabela temp_CGUSC.fp.indicador_geografico_origem_uf possui denominadores ou componentes invalidos.', 16, 1);
+        RAISERROR('Tabela temp_CGUSC.fp.indicador_geografico_origem_uf possui componentes invalidos.', 16, 1);
         RETURN;
     END;
 
+    ;WITH OrigemComTotais AS (
+        SELECT
+            O.id_cnpj,
+            O.ano_base,
+            O.uf_farmacia,
+            O.uf_paciente,
+            O.is_outra_uf,
+            O.qtd_autorizacoes,
+            CAST(O.valor_autorizado AS DECIMAL(19,2)) AS valor_autorizado,
+            SUM(CAST(O.valor_autorizado AS DECIMAL(19,6))) OVER (
+                PARTITION BY O.id_cnpj, O.ano_base
+            ) AS valor_total_cnpj_ano,
+            SUM(
+                CASE
+                    WHEN O.is_outra_uf = 1 THEN CAST(O.valor_autorizado AS DECIMAL(19,6))
+                    ELSE CAST(0 AS DECIMAL(19,6))
+                END
+            ) OVER (
+                PARTITION BY O.id_cnpj, O.ano_base
+            ) AS valor_total_outra_uf_cnpj_ano
+        FROM temp_CGUSC.fp.indicador_geografico_origem_uf O
+    )
     SELECT
-        O.id_cnpj,
-        O.ano_base,
-        O.uf_farmacia,
-        O.uf_paciente,
-        O.total_pacientes_distintos_cnpj_ano,
-        O.total_pacientes_distintos_outra_uf,
-        O.qtd_pacientes_distintos_uf,
-        O.qtd_autorizacoes_uf,
-        CAST(O.valor_total_uf AS DECIMAL(12,2)) AS valor_total_uf,
-        CAST(O.valor_total_cnpj_ano AS DECIMAL(12,2)) AS valor_total_cnpj_ano,
+        id_cnpj,
+        ano_base,
+        uf_farmacia,
+        uf_paciente,
+        is_outra_uf,
+        qtd_autorizacoes,
+        valor_autorizado,
+        CAST(valor_total_cnpj_ano AS DECIMAL(19,2)) AS valor_total_cnpj_ano,
+        CAST(valor_total_outra_uf_cnpj_ano AS DECIMAL(19,2)) AS valor_total_outra_uf_cnpj_ano,
         CAST(
-            (CAST(O.qtd_pacientes_distintos_uf AS DECIMAL(19,6)) * 100.0)
-            / CAST(O.total_pacientes_distintos_cnpj_ano AS DECIMAL(19,6))
-        AS DECIMAL(9,4)) AS percentual_pacientes_sobre_total,
+            (CAST(valor_autorizado AS DECIMAL(19,6)) * 100.0)
+            / valor_total_cnpj_ano
+        AS DECIMAL(9,4)) AS percentual_valor_sobre_total,
         CAST(
-            (CAST(O.qtd_pacientes_distintos_uf AS DECIMAL(19,6)) * 100.0)
-            / CAST(O.total_pacientes_distintos_outra_uf AS DECIMAL(19,6))
-        AS DECIMAL(9,4)) AS percentual_pacientes_sobre_outra_uf,
-        CAST(
-            (CAST(O.valor_total_uf AS DECIMAL(19,6)) * 100.0)
-            / CAST(O.valor_total_cnpj_ano AS DECIMAL(19,6))
-        AS DECIMAL(9,4)) AS percentual_valor_sobre_total
+            CASE
+                WHEN is_outra_uf = 1 AND valor_total_outra_uf_cnpj_ano > 0
+                    THEN (CAST(valor_autorizado AS DECIMAL(19,6)) * 100.0)
+                         / valor_total_outra_uf_cnpj_ano
+                ELSE NULL
+            END
+        AS DECIMAL(9,4)) AS percentual_valor_sobre_outra_uf
     INTO temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado
-    FROM temp_CGUSC.fp.indicador_geografico_origem_uf O;
+    FROM OrigemComTotais;
 
     CREATE UNIQUE CLUSTERED INDEX IDX_FinalGeoOrigemUF_CNPJ_Ano_UF
     ON temp_CGUSC.fp.indicador_geografico_origem_uf_detalhado(id_cnpj, ano_base, uf_paciente);

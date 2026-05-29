@@ -35,6 +35,7 @@ class PreferencesService:
             "filters": {},
             "watchlist": [],
             "ui": {},
+            "nota_tecnica": {},
         }
 
     @classmethod
@@ -65,6 +66,7 @@ class PreferencesService:
         normalized["filters"] = data.get("filters") if isinstance(data.get("filters"), dict) else {}
         normalized["watchlist"] = data.get("watchlist") if isinstance(data.get("watchlist"), list) else []
         normalized["ui"] = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+        normalized["nota_tecnica"] = data.get("nota_tecnica") if isinstance(data.get("nota_tecnica"), dict) else {}
         return normalized
 
     @classmethod
@@ -124,4 +126,10 @@ class PreferencesService:
     def update_ui(cls, ui: Dict[str, Any]) -> Dict[str, Any]:
         data = cls.read()
         data["ui"] = ui
+        return cls.write(data)
+
+    @classmethod
+    def update_nota_tecnica(cls, nota_tecnica: Dict[str, Any]) -> Dict[str, Any]:
+        data = cls.read()
+        data["nota_tecnica"] = nota_tecnica
         return cls.write(data)

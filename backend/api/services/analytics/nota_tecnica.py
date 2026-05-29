@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import uuid
 from decimal import Decimal
 from datetime import date, datetime
@@ -85,8 +86,10 @@ from .nota_tecnica_crm import (
     _build_hhi_crm_context,
 )
 from .nota_tecnica_esocial import _add_esocial_context_text
+from .nota_tecnica_regionais import resolve_nota_tecnica_regional
 from .nota_tecnica_formatters import (
     _format_decimal_pt,
+    _format_full_date_long_pt,
     _format_list_pt,
 )
 from .nota_tecnica_docx_utils import (
@@ -194,7 +197,40 @@ def _build_codigo_verificacao(cnpj: str, generated_at: datetime) -> str:
     return f'NT-{cnpj_digits}-{generated_at:%Y%m%d}-{suffix}'
 
 
-def _add_sumario_official_header(doc, brasao_path: str):
+def _resolve_numero_nota_input(numero_nota: Optional[str]) -> tuple[str, bool]:
+    text = str(numero_nota or "").strip()
+    if not text:
+        return "XXX", True
+    if not text.isdigit():
+        raise ValueError("Número da Nota Técnica deve conter apenas dígitos.")
+    return text, False
+
+
+def _resolve_numero_processo_input(numero_processo: Optional[str], ano_nota: int) -> tuple[str, bool]:
+    text = str(numero_processo or "").strip()
+    if not text:
+        return f"00XXX.XXXXXX/{ano_nota}-XX", True
+
+    if text.isdigit() and len(text) == 17:
+        digits = text
+    elif re.fullmatch(r"\d{5}\.\d{6}/\d{4}-\d{2}", text):
+        digits = "".join(ch for ch in text if ch.isdigit())
+    else:
+        raise ValueError("Número do processo deve conter 17 dígitos ou estar no padrão 00000.000000/0000-00.")
+
+    return f"{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[15:]}", False
+
+
+def _add_sumario_official_header(
+    doc,
+    brasao_path: str,
+    regional: dict[str, str],
+    ano_nota: int,
+    numero_nota: str,
+    numero_nota_placeholder: bool,
+    numero_processo: str,
+    numero_processo_placeholder: bool,
+):
     if not os.path.exists(brasao_path):
         raise FileNotFoundError(f'Brasao da CGU nao encontrado em {brasao_path}')
 
@@ -215,29 +251,14 @@ def _add_sumario_official_header(doc, brasao_path: str):
             _run(p, text, color=color, size=size, bold=bold)
 
     add_centered_line([('CONTROLADORIA-GERAL DA UNIÃO', default_color, True)], size=14, space_after=1)
-    add_centered_line(
-        [
-            ('CONTROLADORIA-GERAL DA UNIÃO NO ESTADO DE ', default_color, True),
-            ('XXXXXXXXXXX', placeholder_color, True),
-        ],
-        size=9,
-        space_after=1,
-    )
-    add_centered_line(
-        [
-            ('Endereço – Cidade/UF - CEP ', default_color, False),
-            ('XX.XXX-XX', placeholder_color, False),
-            (' – Tel. ', default_color, False),
-            ('(XX) XXXX-XXXX', placeholder_color, False),
-            (' – e-mail', default_color, False),
-        ],
-        size=8,
-        space_after=8,
-    )
+    add_centered_line([(regional["nome_unidade"], default_color, True)], size=9, space_after=1)
+    add_centered_line([(regional["linha_endereco"], default_color, False)], size=8, space_after=1)
+    add_centered_line([(regional["linha_contato"], default_color, False)], size=8, space_after=8)
     add_centered_line(
         [
             ('NOTA TÉCNICA Nº ', default_color, True),
-            ('XXX/20XX/NAE/XX/Regional/XX', placeholder_color, True),
+            (numero_nota, placeholder_color if numero_nota_placeholder else default_color, True),
+            (f'/{ano_nota}/NAE/{regional["codigo"]}/Regional/{regional["codigo"]}', default_color, True),
         ],
         size=10,
         space_after=1,
@@ -245,7 +266,7 @@ def _add_sumario_official_header(doc, brasao_path: str):
     add_centered_line(
         [
             ('(PROCESSO Nº ', default_color, True),
-            ('00XXX.XXXXXX/2026-XX', placeholder_color, True),
+            (numero_processo, placeholder_color if numero_processo_placeholder else default_color, True),
             (')', default_color, True),
         ],
         size=9,
@@ -556,12 +577,29 @@ def _build_sumario(
 
 # ── Geração do documento ─────────────────────────────────────────────────────
 
-def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, data_fim: Optional[date] = None):
+def generate_nota_tecnica(
+    db,
+    cnpj: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    regional_codigo: Optional[str] = None,
+    numero_nota: Optional[str] = None,
+    numero_processo: Optional[str] = None,
+):
     """Gera a Nota Técnica Preliminar em formato .docx."""
     timing_log_enabled = _nota_tecnica_timing_enabled()
     timing = _NotaTecnicaTiming(cnpj, data_inicio, data_fim)
     generated_at = datetime.now()
     codigo_verificacao = _build_codigo_verificacao(cnpj, generated_at)
+    regional_emissora = resolve_nota_tecnica_regional(regional_codigo)
+    numero_nota_base, numero_nota_placeholder = _resolve_numero_nota_input(numero_nota)
+    numero_processo_texto, numero_processo_placeholder = _resolve_numero_processo_input(
+        numero_processo,
+        generated_at.year,
+    )
+    numero_nota_tecnica = (
+        f'{numero_nota_base}/{generated_at.year}/NAE/{regional_emissora["codigo"]}/Regional/{regional_emissora["codigo"]}'
+    )
 
     # 1. Coleta de dados
     cadastro_obj = get_dados_farmacia(cnpj)
@@ -762,7 +800,16 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
     sec_sumario.top_margin = Inches(0.5); sec_sumario.bottom_margin = Inches(0.5)
     sec_sumario.left_margin = Inches(0.7); sec_sumario.right_margin = Inches(0.7)
 
-    _add_sumario_official_header(doc, brasao_path)
+    _add_sumario_official_header(
+        doc,
+        brasao_path,
+        regional_emissora,
+        generated_at.year,
+        numero_nota_base,
+        numero_nota_placeholder,
+        numero_processo_texto,
+        numero_processo_placeholder,
+    )
 
     # SUMÁRIO
     _build_sumario(
@@ -1513,35 +1560,49 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         size=10,
     )
 
-    def _add_signature_block(nome: str, cargo: str) -> None:
-        doc.add_paragraph()
+    def _add_signature_block(nome: str, cargo: str, *, space_before: float = 6) -> None:
         p_linha = doc.add_paragraph()
         p_linha.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_linha.paragraph_format.space_before = Pt(space_before)
+        p_linha.paragraph_format.space_after = Pt(0)
         _run(p_linha, '________________________________________________________', color='0F172A', size=10)
 
         p_nome = doc.add_paragraph()
         p_nome.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_nome.paragraph_format.space_after = Pt(0)
         _run(p_nome, nome, color='0F172A', size=10, bold=True)
 
         p_cargo = doc.add_paragraph()
         p_cargo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_cargo.paragraph_format.space_after = Pt(4)
         _run(p_cargo, cargo, color='0F172A', size=10)
 
-    _add_signature_block('Fulano de Tal', 'Cargo')
-    _add_signature_block('Cicrano de Tal', 'Cargo')
+    _add_signature_block('Fulano de Tal', 'Cargo', space_before=22)
+    _add_signature_block('Cicrano de Tal', 'Cargo', space_before=14)
 
     doc.add_paragraph()
     p_despacho_titulo = doc.add_paragraph()
     _run(
         p_despacho_titulo,
-        f'Despacho do(a) Superintendente da Controladoria-Regional da União em {generated_at.strftime("%d/%m/%Y")}',
+        f'Despacho do(a) Superintendente da Controladoria-Regional da União no Estado de {regional_emissora["estado"]}',
         color='0F172A',
         size=10,
         bold=True,
     )
+    p_despacho_data = doc.add_paragraph()
+    _run(
+        p_despacho_data,
+        f'{regional_emissora["cidade_uf"]}, {_format_full_date_long_pt(generated_at.date())}.',
+        color='0F172A',
+        size=10,
+    )
     p_despacho = doc.add_paragraph()
     _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
-    _add_signature_block('Beltrano de Tal', 'Cargo')
+    _add_signature_block(
+        regional_emissora["superintendente"],
+        regional_emissora["cargo_superintendente"],
+        space_before=22,
+    )
     timing.mark("conclusao e encaminhamento")
 
     if crm_evidencias_comp:
@@ -1550,6 +1611,7 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
             razao_social,
             crm_evidencias_comp,
             tabela_num,
+            numero_nota_tecnica,
             timing=timing,
             anexo_num=anexo_crm_num,
         )
@@ -1561,13 +1623,22 @@ def generate_nota_tecnica(db, cnpj: str, data_inicio: Optional[date] = None, dat
         cnpj_fmt,
         periodo_txt,
         anexo_ii_comp,
+        numero_nota_tecnica,
         timing=timing,
         anexo_num=anexo_memoria_num,
     )
     timing.mark(f"anexo {anexo_memoria_num} fechamento")
 
     if falecidos_comp:
-        _add_anexo_falecidos(doc, razao_social, cnpj_fmt, falecidos_comp, timing=timing, anexo_num=anexo_falecidos_num)
+        _add_anexo_falecidos(
+            doc,
+            razao_social,
+            cnpj_fmt,
+            falecidos_comp,
+            numero_nota_tecnica,
+            timing=timing,
+            anexo_num=anexo_falecidos_num,
+        )
         timing.mark(f"anexo {anexo_falecidos_num} fechamento")
 
     _apply_codigo_verificacao_footer(doc, codigo_verificacao)

@@ -7,6 +7,7 @@ import { useGeoStore } from "@/stores/geo";
 import { useFilterStore } from "@/stores/filters";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useRecentCnpjStore } from "@/stores/recentCnpj";
+import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
@@ -19,6 +20,7 @@ import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
 import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import SociosTab from "./components/cnpj/SociosTab.vue";
 import NetworkTab from "./components/cnpj/NetworkTab.vue";
+import NotaTecnicaRegionalDialog from "./components/nota-tecnica/NotaTecnicaRegionalDialog.vue";
 import { useChartTheme } from "@/config/chartTheme";
 import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
 import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
@@ -103,6 +105,7 @@ const { localidades } = storeToRefs(geoStore);
 
 const filterStore = useFilterStore();
 const cnpjNav = useCnpjNavStore();
+const notaTecnicaConfig = useNotaTecnicaConfigStore();
 const visitedTabIndexes = ref(new Set([cnpjNav.activeTabIndex]));
 
 const hasVisitedTab = (index) => visitedTabIndexes.value.has(index);
@@ -176,12 +179,25 @@ const handleExport = async () => {
   });
 };
 const isGeneratingNote = ref(false);
-const handleGenerateNote = async () => {
-  const { inicio, fim } = getApiParams();
-  const url = `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?data_inicio=${inicio}&data_fim=${fim}`;
+const regionalDialogVisible = ref(false);
+const pendingNoteGeneration = ref(false);
 
+const buildNotaTecnicaUrl = (dadosNota = {}) => {
+  const { inicio, fim } = getApiParams();
+  const params = new URLSearchParams({
+    data_inicio: inicio,
+    data_fim: fim,
+    regional_codigo: notaTecnicaConfig.selectedRegionalCodigo,
+  });
+  if (dadosNota.numeroNota) params.set("numero_nota", dadosNota.numeroNota);
+  if (dadosNota.numeroProcesso) params.set("numero_processo", dadosNota.numeroProcesso);
+  return `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?${params.toString()}`;
+};
+
+const downloadNotaTecnica = async (dadosNota = {}) => {
+  isGeneratingNote.value = true;
   try {
-    isGeneratingNote.value = true;
+    const url = buildNotaTecnicaUrl(dadosNota);
 
     // Baixa o arquivo como blob para não sair da página
     const response = await fetch(url);
@@ -192,6 +208,21 @@ const handleGenerateNote = async () => {
     }
 
     await downloadBlobFromResponse(response, `Nota_Tecnica_${cnpj.value}.docx`);
+  } finally {
+    isGeneratingNote.value = false;
+  }
+};
+
+const handleGenerateNote = async ({ skipRegionalCheck = false, dadosNota = {} } = {}) => {
+  try {
+    if (!skipRegionalCheck) {
+      await notaTecnicaConfig.ensureLoaded();
+      pendingNoteGeneration.value = true;
+      regionalDialogVisible.value = true;
+      return;
+    }
+
+    await downloadNotaTecnica(dadosNota);
   } catch (error) {
     console.error("Erro ao gerar Nota Técnica:", error);
     toast.add({
@@ -200,9 +231,18 @@ const handleGenerateNote = async () => {
       detail: error?.message || "Não foi possível gerar o arquivo.",
       life: 8000,
     });
-  } finally {
-    isGeneratingNote.value = false;
   }
+};
+
+const handleRegionalSaved = async (dadosNota) => {
+  if (!pendingNoteGeneration.value) return;
+  pendingNoteGeneration.value = false;
+  await handleGenerateNote({ skipRegionalCheck: true, dadosNota });
+};
+
+const setRegionalDialogVisible = (visible) => {
+  regionalDialogVisible.value = visible;
+  if (!visible) pendingNoteGeneration.value = false;
 };
 // ── Composables (Fim) ─────────────────────────────────────
 
@@ -487,6 +527,14 @@ watch(
 
 onMounted(() => {
   // Movimentação Financeira agora é carregada de forma autônoma pelo componente filho
+  notaTecnicaConfig.ensureLoaded().catch((error) => {
+    toast.add({
+      severity: "warn",
+      summary: "Regional da Nota Técnica",
+      detail: error?.message || "Não foi possível carregar a configuração da Nota Técnica.",
+      life: 6000,
+    });
+  });
 });
 
 const geoData = computed(() => {
@@ -590,6 +638,14 @@ watch(
       :period-loading="evolucaoLoading"
       @export="handleExport"
       @generate-note="handleGenerateNote"
+      @configure-note-regional="regionalDialogVisible = true"
+    />
+
+    <NotaTecnicaRegionalDialog
+      :visible="regionalDialogVisible"
+      :continue-label="pendingNoteGeneration ? 'Gerar Nota Técnica' : 'Salvar dados'"
+      @update:visible="setRegionalDialogVisible"
+      @saved="handleRegionalSaved"
     />
 
     <!-- TABS -->

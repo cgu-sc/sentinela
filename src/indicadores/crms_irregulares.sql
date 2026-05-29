@@ -208,13 +208,14 @@ IF EXISTS (
     FROM temp_CFM.dbo.medicos_jul_2025_mod
     WHERE NU_CRM IS NOT NULL
       AND NULLIF(LTRIM(RTRIM(CAST(SG_uf AS VARCHAR(10)))), '') IS NOT NULL
-      AND (
-            DT_INSCRICAO IS NULL
-         OR TRY_CONVERT(DATE, DT_INSCRICAO, 103) IS NULL
-      )
+      -- Excecao operacional autorizada: CRM/UF existente no CFM sem
+      -- DT_INSCRICAO permanece localizado, mas nao gera alerta por uso
+      -- antes da inscricao. Data preenchida e invalida continua bloqueante.
+      AND DT_INSCRICAO IS NOT NULL
+      AND TRY_CONVERT(DATE, DT_INSCRICAO, 103) IS NULL
 )
 BEGIN
-    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui DT_INSCRICAO obrigatoria nula/invalida para CRM/UF valido.', 16, 1);
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui DT_INSCRICAO preenchida e invalida para CRM/UF valido.', 16, 1);
     RETURN;
 END;
 
@@ -234,10 +235,9 @@ IF EXISTS (
     FROM #CFM_Normalizado
     WHERE NULLIF(LTRIM(RTRIM(NU_CRM)), '') IS NULL
        OR LEN(SG_uf) <> 2
-       OR dt_inscricao_convertida IS NULL
 )
 BEGIN
-    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui CRM/UF/data invalido apos normalizacao.', 16, 1);
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui CRM/UF invalido apos normalizacao.', 16, 1);
     RETURN;
 END;
 

@@ -18,7 +18,7 @@ from .nota_tecnica_docx_utils import (
     _set_table_fixed_widths,
     _write_cell,
 )
-from .nota_tecnica_formatters import _format_decimal_pt
+from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
 
 
 def _model_to_dict(model: Any) -> dict[str, Any]:
@@ -301,6 +301,7 @@ def _add_anexo_ii_memoria_calculo(
     cnpj_fmt: str,
     periodo_txt: str,
     anexo_ii_comp: dict[str, Any],
+    numero_nota_tecnica: str,
     timing: Any = None,
     anexo_num: str = "II",
 ):
@@ -321,7 +322,7 @@ def _add_anexo_ii_memoria_calculo(
     detalhes = anexo_ii_comp.get("detalhes") or []
 
     heading = doc.add_heading(
-        f"ANEXO {anexo_num} – NOTA TÉCNICA Nº XXX/20XX/NAE/XX/Regional/XX\n"
+        f"ANEXO {anexo_num} – NOTA TÉCNICA Nº {numero_nota_tecnica}\n"
         "MEMÓRIA DE CÁLCULO DAS VENDAS SEM COMPROVAÇÃO",
         level=1,
     )
@@ -408,7 +409,7 @@ def _add_anexo_ii_memoria_calculo(
             _row_cant_split(row)
             values = [
                 item["gtin"],
-                item["medicamento"],
+                _title_case_pt(item["medicamento"]),
                 item["periodo_sem_comprovacao"],
                 f'{int(item["estoque_final"]):,}'.replace(",", "."),
                 f'{int(item["vendas"]):,}'.replace(",", "."),

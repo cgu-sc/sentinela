@@ -1,6 +1,5 @@
 ﻿from typing import Any, List, Optional
 from datetime import date, datetime
-import calendar
 import polars as pl
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -14,7 +13,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from cache_files import (
     CRM_RAIOX_TX_PARQUET,
 )
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_crm_prescricoes_brasil_semestre, get_df_dados_farmacia, get_cache_dir
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -221,6 +220,31 @@ def _filter_competencia(df: pl.DataFrame, comp_ini: int | None, comp_fim: int | 
     if comp_fim:
         df = df.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
     return df
+
+
+def _competencia_to_semestre_key(competencia: int) -> int:
+    ano = competencia // 100
+    mes = competencia % 100
+    semestre = 1 if mes <= 6 else 2
+    return ano * 10 + semestre
+
+
+def _build_crm_brasil_semestre_summary(comp_ini: int | None, comp_fim: int | None) -> pl.DataFrame:
+    df_brasil = get_df_crm_prescricoes_brasil_semestre()
+    if comp_ini:
+        df_brasil = df_brasil.filter(pl.col("chave_semestre") >= _competencia_to_semestre_key(comp_ini))
+    if comp_fim:
+        df_brasil = df_brasil.filter(pl.col("chave_semestre") <= _competencia_to_semestre_key(comp_fim))
+    if df_brasil.is_empty():
+        raise RuntimeError("Cache de prescricoes CRM Brasil/Semestre sem dados para o periodo solicitado.")
+    return (
+        df_brasil
+        .group_by("id_medico")
+        .agg([
+            pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
+            pl.sum("dias_ativos_brasil").alias("dias_ativos_brasil"),
+        ])
+    )
 
 
 def _count_rows_by_medico(df: pl.DataFrame) -> dict[str, int]:
@@ -504,23 +528,6 @@ def get_crm_data(
     # â”€â”€ 3. Agrega por id_medico (colapsa competÃªncias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total_valor = _to_float(df["vl_total_prescricoes"].sum())
 
-    # CÃ¡lculo de dias no perÃ­odo para o ritmo diÃ¡rio real
-    from datetime import datetime
-    import calendar
-    try:
-        # Assume formato YYYY-MM ou YYYY-MM-DD
-        d_ini_str = data_inicio if data_inicio else "2015-01"
-        d_fim_str = data_fim if data_fim else datetime.now().strftime("%Y-%m")
-        
-        d_ini = datetime.strptime(d_ini_str[:7], "%Y-%m")
-        d_fim_base = datetime.strptime(d_fim_str[:7], "%Y-%m")
-        last_day = calendar.monthrange(d_fim_base.year, d_fim_base.month)[1]
-        d_fim = d_fim_base.replace(day=last_day)
-        
-        dias_periodo = max((d_fim - d_ini).days + 1, 1)
-    except Exception:
-        dias_periodo = 30
-
     # â”€â”€ Dias ativos por mÃ©dico (vetorizado, sem Python callback) â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Calcula quantos dias tem cada competÃªncia (YYYYMM) criando o 1Âº dia do
     # prÃ³ximo mÃªs e subtraindo 1 dia. Trata a virada de ano (dez â†’ jan).
@@ -539,7 +546,6 @@ def get_crm_data(
         .agg([
             pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
             pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
-            pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
             pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do mÃ©dico
             pl.col("no_medico").drop_nulls().first().alias("no_medico"),
             pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
@@ -555,7 +561,23 @@ def get_crm_data(
         .with_columns([
             # Divide pelo total de dias dos meses em que o mÃ©dico de fato prescreveu
             (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
-            (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("prescricoes_dia_total_brasil"),
+        ])
+        .join(_build_crm_brasil_semestre_summary(comp_ini, comp_fim), on="id_medico", how="left")
+    )
+
+    missing_brasil = df_med.filter(
+        pl.col("nu_prescricoes_total_brasil").is_null()
+        | pl.col("dias_ativos_brasil").is_null()
+        | (pl.col("dias_ativos_brasil") <= 0)
+    )
+    if not missing_brasil.is_empty():
+        ids = ", ".join(str(row["id_medico"]) for row in missing_brasil.select("id_medico").head(10).iter_rows(named=True))
+        raise RuntimeError(f"Cache CRM Brasil/Semestre sem cobertura para CRM(s): {ids}.")
+
+    df_med = (
+        df_med
+        .with_columns([
+            (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("dias_ativos_brasil")).round(2).alias("prescricoes_dia_total_brasil"),
         ])
         .with_columns([
             (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),

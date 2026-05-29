@@ -1,6 +1,8 @@
 import io
 import html
+import json
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -53,6 +55,241 @@ def _svg_to_png_stream(svg: str) -> io.BytesIO:
     if not png_bytes:
         raise RuntimeError("SVG to PNG conversion returned empty PNG bytes")
     stream = io.BytesIO(png_bytes)
+    stream.seek(0)
+    return stream
+
+
+def _brasil_uf_geojson_path() -> Path:
+    return Path(__file__).resolve().parents[4] / "frontend" / "public" / "geo" / "brasil-uf.json"
+
+
+def _iter_geojson_polygon_rings(geometry: dict[str, Any]):
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates") or []
+    if geometry_type == "Polygon":
+        for ring in coordinates[:1]:
+            yield ring
+    elif geometry_type == "MultiPolygon":
+        for polygon in coordinates:
+            for ring in polygon[:1]:
+                yield ring
+
+
+def _polygon_area_and_centroid(points: list[tuple[float, float]]) -> tuple[float, float, float]:
+    if len(points) < 3:
+        return 0.0, 0.0, 0.0
+
+    area_acc = 0.0
+    centroid_x_acc = 0.0
+    centroid_y_acc = 0.0
+    ring = points
+    if points[0] != points[-1]:
+        ring = [*points, points[0]]
+
+    for idx in range(len(ring) - 1):
+        x0, y0 = ring[idx]
+        x1, y1 = ring[idx + 1]
+        cross = (x0 * y1) - (x1 * y0)
+        area_acc += cross
+        centroid_x_acc += (x0 + x1) * cross
+        centroid_y_acc += (y0 + y1) * cross
+
+    signed_area = area_acc / 2.0
+    if abs(signed_area) < 1e-12:
+        xs = [x for x, _ in points]
+        ys = [y for _, y in points]
+        return 0.0, sum(xs) / len(xs), sum(ys) / len(ys)
+
+    centroid_x = centroid_x_acc / (6.0 * signed_area)
+    centroid_y = centroid_y_acc / (6.0 * signed_area)
+    return abs(signed_area), centroid_x, centroid_y
+
+
+def _weighted_centroid_from_rings(rings: list[list[tuple[float, float]]]) -> tuple[float, float] | None:
+    weighted_area = 0.0
+    weighted_x = 0.0
+    weighted_y = 0.0
+    fallback_points: list[tuple[float, float]] = []
+
+    for points in rings:
+        fallback_points.extend(points)
+        area, centroid_x, centroid_y = _polygon_area_and_centroid(points)
+        if area <= 0:
+            continue
+        weighted_area += area
+        weighted_x += centroid_x * area
+        weighted_y += centroid_y * area
+
+    if weighted_area > 0:
+        return weighted_x / weighted_area, weighted_y / weighted_area
+    if fallback_points:
+        xs = [x for x, _ in fallback_points]
+        ys = [y for _, y in fallback_points]
+        return sum(xs) / len(xs), sum(ys) / len(ys)
+    return None
+
+
+def _build_mapa_geografico_origem_uf(dispersao_comp: dict[str, Any]) -> io.BytesIO:
+    """Gera mapa do Brasil por UF de residencia do paciente."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import LinearSegmentedColormap, Normalize
+    from matplotlib.patches import Polygon
+
+    geojson_path = _brasil_uf_geojson_path()
+    if not geojson_path.exists():
+        raise RuntimeError(f"GeoJSON de UF do Brasil nao encontrado: {geojson_path}")
+
+    with geojson_path.open("r", encoding="utf-8") as handle:
+        geojson = json.load(handle)
+
+    rows = dispersao_comp.get("origem_uf_rows") or []
+    if not rows:
+        raise RuntimeError("Dados de origem geografica por UF ausentes para gerar mapa.")
+
+    uf_farmacia = str(dispersao_comp.get("uf_farmacia") or "").upper()
+    pct_by_uf = {
+        str(row["uf_paciente"]).upper(): float(row.get("percentual_sobre_total") or 0.0)
+        for row in rows
+    }
+    valor_by_uf = {
+        str(row["uf_paciente"]).upper(): float(row.get("valor_autorizado") or 0.0)
+        for row in rows
+    }
+    min_pct_color = 2.0
+    max_pct = max((pct for pct in pct_by_uf.values() if pct >= min_pct_color), default=min_pct_color)
+
+    cmap = LinearSegmentedColormap.from_list(
+        "sentinela_geo_origem",
+        ["#FFF5F5", "#FEE2E2", "#FECACA", "#FCA5A5", "#F87171", "#DC2626", "#7F1D1D"],
+    )
+    norm = Normalize(vmin=min_pct_color, vmax=max_pct)
+
+    fig, ax = plt.subplots(figsize=(7.1, 5.2), dpi=150)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    all_x: list[float] = []
+    all_y: list[float] = []
+    label_points: list[tuple[float, float, str, float]] = []
+    farmacia_point: tuple[float, float] | None = None
+
+    for feature in geojson.get("features", []):
+        props = feature.get("properties") or {}
+        uf = str(props.get("UF") or "").upper()
+        pct = pct_by_uf.get(uf, 0.0)
+        has_value = valor_by_uf.get(uf, 0.0) > 0
+        if has_value and pct >= min_pct_color:
+            face_color = cmap(norm(pct))
+        else:
+            face_color = "#FAF6F6"
+        edge_color = "#FFFFFF"
+        line_width = 0.55
+
+        rings_for_centroid: list[list[tuple[float, float]]] = []
+        for ring in _iter_geojson_polygon_rings(feature.get("geometry") or {}):
+            points = [(float(x), float(y)) for x, y in ring]
+            if not points:
+                continue
+            all_x.extend(x for x, _ in points)
+            all_y.extend(y for _, y in points)
+            rings_for_centroid.append(points)
+            patch = Polygon(
+                points,
+                closed=True,
+                facecolor=face_color,
+                edgecolor=edge_color,
+                linewidth=line_width,
+                joinstyle="round",
+                zorder=2 if has_value else 1,
+            )
+            ax.add_patch(patch)
+
+        centroid = _weighted_centroid_from_rings(rings_for_centroid)
+        if has_value and centroid is not None:
+            center_x, center_y = centroid
+            label_points.append((center_x, center_y, uf, pct))
+            if uf == uf_farmacia:
+                farmacia_point = (center_x, center_y)
+
+    if not all_x or not all_y:
+        raise RuntimeError("GeoJSON de UF do Brasil sem coordenadas validas para gerar mapa.")
+
+    ax.set_xlim(min(all_x) - 1.0, max(all_x) + 1.0)
+    ax.set_ylim(min(all_y) - 1.0, max(all_y) + 1.0)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    top_labels = sorted(label_points, key=lambda item: item[3], reverse=True)[:8]
+    for x, y, uf, pct in top_labels:
+        ax.text(
+            x,
+            y,
+            uf,
+            ha="center",
+            va="center",
+            fontsize=6.2,
+            color="#0F172A",
+            fontweight="semibold",
+            zorder=3,
+        )
+
+    if farmacia_point is not None:
+        x, y = farmacia_point
+        ax.scatter(
+            [x],
+            [y],
+            s=54,
+            marker="o",
+            facecolor="#F59E0B",
+            edgecolor="#FFFFFF",
+            linewidth=1.0,
+            zorder=5,
+        )
+
+    sm = ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.032, pad=0.018)
+    cbar.outline.set_visible(False)
+    cbar.ax.tick_params(labelsize=6.5, colors="#475569", length=0)
+    cbar.set_label("% do valor autorizado total", fontsize=7, color="#334155", labelpad=6)
+
+    ax.scatter(
+        [0.022],
+        [0.032],
+        s=34,
+        marker="o",
+        facecolor="#F59E0B",
+        edgecolor="#FFFFFF",
+        linewidth=0.9,
+        transform=ax.transAxes,
+        zorder=6,
+    )
+    ax.text(
+        0.01,
+        0.02,
+        f"      Farmácia: {uf_farmacia.upper()}",
+        transform=ax.transAxes,
+        ha="left",
+        va="bottom",
+        fontsize=7.4,
+        color="#78350F",
+        fontweight="semibold",
+        bbox={
+            "boxstyle": "round,pad=0.22",
+            "facecolor": "#FFFBEB",
+            "edgecolor": "#F59E0B",
+            "linewidth": 0.55,
+            "alpha": 0.96,
+        },
+    )
+
+    fig.tight_layout(pad=0.2)
+    stream = io.BytesIO()
+    fig.savefig(stream, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     stream.seek(0)
     return stream
 
@@ -1058,6 +1295,34 @@ def _format_figure_footnote(paragraph):
     _format_block_footnote(paragraph, space_before=5, space_after=18, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
+def _add_mapa_geografico_origem_uf(doc, razao_social: str, dispersao_comp: dict[str, Any]):
+    """Insere mapa da origem geografica por UF no documento."""
+    p_title = doc.add_paragraph()
+    _format_figure_title(p_title)
+    _run(
+        p_title,
+        f'Mapa 01 - Distribuição do valor autorizado por UF de residência do paciente vinculada à Farmácia {razao_social}.',
+        color='334155',
+        size=8,
+        bold=True,
+    )
+
+    chart_stream = _build_mapa_geografico_origem_uf(dispersao_comp)
+    p_img = doc.add_paragraph()
+    _format_picture_paragraph(p_img, keep_with_next=False)
+    run = p_img.add_run()
+    run.add_picture(chart_stream, width=Inches(7.1))
+
+    p_foot = doc.add_paragraph()
+    _format_figure_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: Sentinela, a partir das autorizações registradas no SAV/PFPB e da UF de residência do beneficiário constante na base de CPFs da Receita Federal do Brasil, utilizada no indicador geográfico. A escala representa a participação financeira de cada UF no valor autorizado total da farmácia no período analisado.',
+        color='64748B',
+        size=8,
+    )
+
+
 def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, posicionamento_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura de posicionamento regional no documento."""
     p_title = doc.add_paragraph()
@@ -1075,6 +1340,8 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
     _format_picture_paragraph(p_img)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
+
+
 def _add_figura_percentil_risco(
     doc,
     razao_social: str,
@@ -1101,6 +1368,8 @@ def _add_figura_percentil_risco(
     p_img.paragraph_format.space_after = Pt(12)
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
+
+
 def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolucao_comp: dict[str, Any], figure_number: int = 1):
     """Insere figura da evolucao financeira no documento."""
     p_title = doc.add_paragraph()

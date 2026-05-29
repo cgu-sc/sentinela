@@ -221,6 +221,36 @@ def _resolve_numero_processo_input(numero_processo: Optional[str], ano_nota: int
     return f"{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[15:]}", False
 
 
+def _resolve_assinantes_tecnicos(
+    assinantes_tecnicos: Optional[list[dict[str, Any]]],
+) -> list[dict[str, str]]:
+    if assinantes_tecnicos is None:
+        return [
+            {"nome": "Fulano de Tal", "cargo": "Cargo"},
+            {"nome": "Cicrano de Tal", "cargo": "Cargo"},
+        ]
+    if not isinstance(assinantes_tecnicos, list):
+        raise ValueError("assinantes_tecnicos deve ser uma lista.")
+    if len(assinantes_tecnicos) > 3:
+        raise ValueError("Informe no maximo 3 assinaturas tecnicas.")
+
+    normalized: list[dict[str, str]] = []
+    for item in assinantes_tecnicos:
+        if not isinstance(item, dict):
+            raise ValueError("Cada assinatura tecnica deve ser um objeto.")
+        nome = str(item.get("nome", "")).strip()
+        cargo = str(item.get("cargo", "")).strip()
+        if (nome and not cargo) or (cargo and not nome):
+            raise ValueError("Cada assinatura tecnica deve conter nome e cargo.")
+        if nome and cargo:
+            normalized.append({"nome": nome, "cargo": cargo})
+
+    return normalized or [
+        {"nome": "Fulano de Tal", "cargo": "Cargo"},
+        {"nome": "Cicrano de Tal", "cargo": "Cargo"},
+    ]
+
+
 def _add_sumario_official_header(
     doc,
     brasao_path: str,
@@ -447,6 +477,14 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
         "dias_pico": "Vendas de medicamentos em dias de pico",
         "dispersao_geografica": "Vendas para pessoas residentes em outros Estados",
     }
+    if key == "dispersao_geografica":
+        percentual_financeiro = float(comp.get("percentual_financeiro_outra_uf") or 0.0)
+        valor_outra_uf = float(comp.get("total_valor_outra_uf") or 0.0)
+        return (
+            f'[Subitem {num}]: {percentuais_templates[key]} com percentual financeiro de '
+            f'{_format_decimal_pt(percentual_financeiro, 2)}% do valor autorizado total da farmácia no período. '
+            f'Estas vendas representaram valor autorizado de R$ {_format_decimal_pt(valor_outra_uf, 2)};'
+        )
     if key in percentuais_templates:
         valor_estimado = _valor_estimado_por_percentual(total_mov, percentual)
         return (
@@ -585,6 +623,7 @@ def generate_nota_tecnica(
     regional_codigo: Optional[str] = None,
     numero_nota: Optional[str] = None,
     numero_processo: Optional[str] = None,
+    assinantes_tecnicos: Optional[list[dict[str, Any]]] = None,
 ):
     """Gera a Nota Técnica Preliminar em formato .docx."""
     timing_log_enabled = _nota_tecnica_timing_enabled()
@@ -597,6 +636,7 @@ def generate_nota_tecnica(
         numero_processo,
         generated_at.year,
     )
+    assinantes_tecnicos_resolvidos = _resolve_assinantes_tecnicos(assinantes_tecnicos)
     numero_nota_tecnica = (
         f'{numero_nota_base}/{generated_at.year}/NAE/{regional_emissora["codigo"]}/Regional/{regional_emissora["codigo"]}'
     )
@@ -869,11 +909,11 @@ def generate_nota_tecnica(
     doc.add_paragraph(f'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
     
     p_intro = doc.add_paragraph()
-    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, consignada no Relatório de Auditoria nº 823121 (ANEXO I desta Nota Técnica), foi identificada, para a Farmácia ', color='0F172A', size=11)
+    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, sintetizada no item 4 da NT e consignada no Relatório de Auditoria nº 823121 constante de seu ANEXO I, foi identificada, para a Farmácia ', color='0F172A', size=11)
     _run(p_intro, razao_social, color='334155', size=11, bold=True)
     _run(p_intro, ', no período de ', color='0F172A', size=11)
     _run(p_intro, periodo_txt, color='334155', size=11, bold=True, underline=True)
-    _run(p_intro, ', ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
+    _run(p_intro, ', conforme item 6 e detalhamento contido em seu ANEXO II, ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
@@ -901,7 +941,7 @@ def generate_nota_tecnica(
         doc.add_paragraph(
             f'Adicionalmente, o ANEXO {anexo_crm_num} desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
         )
-    doc.add_paragraph('A NT traz ainda análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
+    doc.add_paragraph('A NT traz ainda, em seu item 5, análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
@@ -1449,7 +1489,15 @@ def generate_nota_tecnica(
             if key == 'dispersao_geografica':
                 dispersao_comp = _build_dispersao_geografica_context(cnpj, data_inicio, data_fim)
                 if dispersao_comp:
-                    _add_dispersao_geografica_text(doc, num, razao_social, dispersao_comp, bookmark_name=bookmark_name)
+                    tabela_num += 1
+                    _add_dispersao_geografica_text(
+                        doc,
+                        num,
+                        razao_social,
+                        dispersao_comp,
+                        tabela_num,
+                        bookmark_name=bookmark_name,
+                    )
                     _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
@@ -1544,6 +1592,15 @@ def generate_nota_tecnica(
 
     _add_resumo_criticidades_conclusao(doc, resumos_criticidades)
 
+    p_atencao_conclusao = doc.add_paragraph()
+    _run(
+        p_atencao_conclusao,
+        'ATENÇÃO: Caso sejam identificadas criticidades em relação ao estabelecimento (sócio laranja, endereço inexistente, alteração de endereço para outro município, sócio com vínculo empregatício, etc.), trazer os achados de forma resumida para a conclusão.',
+        color='DC2626',
+        size=10,
+        bold=True,
+    )
+
     p_fontes_conclusao = doc.add_paragraph()
     _run(
         p_fontes_conclusao,
@@ -1560,28 +1617,42 @@ def generate_nota_tecnica(
         size=10,
     )
 
+    closing_block_paragraphs = []
+
+    def _keep_closing_block_with_next(paragraph) -> None:
+        paragraph.paragraph_format.keep_with_next = True
+        closing_block_paragraphs.append(paragraph)
+
     def _add_signature_block(nome: str, cargo: str, *, space_before: float = 6) -> None:
         p_linha = doc.add_paragraph()
         p_linha.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_linha.paragraph_format.space_before = Pt(space_before)
         p_linha.paragraph_format.space_after = Pt(0)
+        _keep_closing_block_with_next(p_linha)
         _run(p_linha, '________________________________________________________', color='0F172A', size=10)
 
         p_nome = doc.add_paragraph()
         p_nome.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_nome.paragraph_format.space_after = Pt(0)
+        _keep_closing_block_with_next(p_nome)
         _run(p_nome, nome, color='0F172A', size=10, bold=True)
 
         p_cargo = doc.add_paragraph()
         p_cargo.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_cargo.paragraph_format.space_after = Pt(4)
+        _keep_closing_block_with_next(p_cargo)
         _run(p_cargo, cargo, color='0F172A', size=10)
 
-    _add_signature_block('Fulano de Tal', 'Cargo', space_before=22)
-    _add_signature_block('Cicrano de Tal', 'Cargo', space_before=14)
+    for index, assinante in enumerate(assinantes_tecnicos_resolvidos):
+        _add_signature_block(
+            assinante["nome"],
+            assinante["cargo"],
+            space_before=22 if index == 0 else 14,
+        )
 
     doc.add_paragraph()
     p_despacho_titulo = doc.add_paragraph()
+    _keep_closing_block_with_next(p_despacho_titulo)
     _run(
         p_despacho_titulo,
         f'Despacho do(a) Superintendente da Controladoria-Regional da União no Estado de {regional_emissora["estado"]}',
@@ -1590,6 +1661,7 @@ def generate_nota_tecnica(
         bold=True,
     )
     p_despacho_data = doc.add_paragraph()
+    _keep_closing_block_with_next(p_despacho_data)
     _run(
         p_despacho_data,
         f'{regional_emissora["cidade_uf"]}, {_format_full_date_long_pt(generated_at.date())}.',
@@ -1597,12 +1669,14 @@ def generate_nota_tecnica(
         size=10,
     )
     p_despacho = doc.add_paragraph()
+    _keep_closing_block_with_next(p_despacho)
     _run(p_despacho, 'De acordo, encaminhe-se conforme proposto.', color='0F172A', size=10)
     _add_signature_block(
         regional_emissora["superintendente"],
         regional_emissora["cargo_superintendente"],
         space_before=22,
     )
+    closing_block_paragraphs[-1].paragraph_format.keep_with_next = False
     timing.mark("conclusao e encaminhamento")
 
     if crm_evidencias_comp:

@@ -227,6 +227,7 @@ DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_geografico;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm_registro;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_alertas_crm;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_export;
+DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_prescricoes_brasil_semestre;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_dia;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_hora;
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_crm_timeline_eventos;
@@ -944,6 +945,52 @@ SET dt_fim_etapa = @dt_fim_etapa,
 WHERE id_etapa_log = @id_etapa_log;
 
 PRINT '   build_crm_export concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
+
+
+-- ============================================================================
+-- PASSO 4.A.1: Resumo nacional semestral de prescricoes por CRM
+-- ============================================================================
+PRINT '>> Passo 4.A.1: Criando temp_CGUSC.fp.build_crm_prescricoes_brasil_semestre...';
+SET @etapa = '4A1_CRM_BRASIL_SEMESTRE';
+SET @t1 = GETDATE();
+SET @id_etapa_log = NULL;
+
+INSERT INTO temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
+    (pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, status, observacao)
+VALUES
+    (@pipeline_versao, @DataInicio, @DataFim, @etapa, @t1,
+     'PROCESSANDO', 'Criando build_crm_prescricoes_brasil_semestre.');
+
+SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+SELECT
+    P.id_medico,
+    CAST((P.competencia / 100) * 10 + CASE WHEN P.competencia % 100 BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS INT) AS chave_semestre,
+    CAST(SUM(CAST(P.nu_prescricoes_medico_em_todos_estabelecimentos AS BIGINT)) AS INT) AS nu_prescricoes_total_brasil,
+    CAST(SUM(DAY(EOMONTH(DATEFROMPARTS(P.competencia / 100, P.competencia % 100, 1)))) AS SMALLINT) AS dias_ativos_brasil
+INTO temp_CGUSC.fp.build_crm_prescricoes_brasil_semestre
+FROM temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos P
+GROUP BY
+    P.id_medico,
+    P.competencia / 100,
+    CASE WHEN P.competencia % 100 BETWEEN 1 AND 6 THEN 1 ELSE 2 END;
+
+CREATE UNIQUE CLUSTERED INDEX IDX_CrmBrasilSemestre_Key
+    ON temp_CGUSC.fp.build_crm_prescricoes_brasil_semestre(id_medico, chave_semestre);
+
+SET @dt_fim_etapa = GETDATE();
+SELECT @nu_registros_etapa = COUNT(*) FROM temp_CGUSC.fp.build_crm_prescricoes_brasil_semestre;
+
+UPDATE temp_CGUSC.fp.build_crm_detalhado_pos_global_etapa_log
+SET dt_fim_etapa = @dt_fim_etapa,
+    segundos_etapa = DATEDIFF(SECOND, @t1, @dt_fim_etapa),
+    milissegundos_etapa = DATEDIFF(MILLISECOND, @t1, @dt_fim_etapa),
+    nu_registros = @nu_registros_etapa,
+    status = 'OK',
+    observacao = 'build_crm_prescricoes_brasil_semestre criada.'
+WHERE id_etapa_log = @id_etapa_log;
+
+PRINT '   build_crm_prescricoes_brasil_semestre concluida em: ' + CONVERT(VARCHAR(20), @dt_fim_etapa - @t1, 114);
 
 
 -- ============================================================================

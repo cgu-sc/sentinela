@@ -46,6 +46,15 @@ def _geografico_origem_uf_schema() -> dict:
     }
 
 
+def _crm_prescricoes_brasil_semestre_schema() -> dict:
+    return {
+        "id_medico": pl.Utf8,
+        "chave_semestre": pl.Int32,
+        "nu_prescricoes_total_brasil": pl.Int32,
+        "dias_ativos_brasil": pl.Int16,
+    }
+
+
 GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("movimentacao", cache_files.MOVIMENTACAO_PARQUET, "global"),
     CacheDefinition("localidades", cache_files.LOCALIDADES_PARQUET, "global"),
@@ -54,6 +63,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("bench_crm_uf", cache_files.BENCH_CRM_UF_PARQUET, "global"),
     CacheDefinition("bench_crm_regiao", cache_files.BENCH_CRM_REGIAO_PARQUET, "global"),
     CacheDefinition("bench_crm_br", cache_files.BENCH_CRM_BR_PARQUET, "global"),
+    CacheDefinition("crm_prescricoes_brasil_semestre", cache_files.CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET, "global", _crm_prescricoes_brasil_semestre_schema()),
     CacheDefinition("dados_farmacia", cache_files.FARMACIAS_PARQUET, "global"),
     CacheDefinition("perfil_estabelecimento", cache_files.PERFIL_ESTABELECIMENTO_PARQUET, "global"),
     CacheDefinition("dados_socios", cache_files.SOCIOS_PARQUET, "global"),

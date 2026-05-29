@@ -8,6 +8,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
   const selectedRegionalCodigo = ref(null);
   const ultimoNumeroNota = ref("");
   const ultimoNumeroProcesso = ref("");
+  const assinantesTecnicos = ref([]);
   const loading = ref(false);
   const saving = ref(false);
   const loaded = ref(false);
@@ -21,8 +22,8 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
     return regional ? `${regional.codigo} - ${regional.estado}` : null;
   });
 
-  async function ensureLoaded() {
-    if (loaded.value) return;
+  async function ensureLoaded({ force = false } = {}) {
+    if (loaded.value && !force) return;
 
     loading.value = true;
     try {
@@ -42,16 +43,31 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
         preferencesResponse.data?.nota_tecnica?.ultimo_numero_nota ?? "";
       ultimoNumeroProcesso.value =
         preferencesResponse.data?.nota_tecnica?.ultimo_numero_processo ?? "";
+      assinantesTecnicos.value = normalizeAssinantes(
+        preferencesResponse.data?.nota_tecnica?.assinantes_tecnicos ?? [],
+      );
       loaded.value = true;
     } finally {
       loading.value = false;
     }
   }
 
+  function normalizeAssinantes(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((assinante) => ({
+        nome: String(assinante?.nome ?? "").trim(),
+        cargo: String(assinante?.cargo ?? "").trim(),
+      }))
+      .filter((assinante) => assinante.nome || assinante.cargo)
+      .slice(0, 3);
+  }
+
   async function saveNotaTecnicaConfig({
     regionalCodigo,
     numeroNota = ultimoNumeroNota.value,
     numeroProcesso = ultimoNumeroProcesso.value,
+    assinantes = assinantesTecnicos.value,
   }) {
     const normalized = String(regionalCodigo || "").trim().toUpperCase();
     if (!normalized) {
@@ -65,10 +81,12 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
 
     saving.value = true;
     try {
+      const assinantesNormalizados = normalizeAssinantes(assinantes);
       const notaTecnica = {
         regional_codigo: normalized,
         ultimo_numero_nota: String(numeroNota || "").trim(),
         ultimo_numero_processo: String(numeroProcesso || "").trim(),
+        assinantes_tecnicos: assinantesNormalizados,
       };
       const { data } = await axios.put(API_ENDPOINTS.preferencesNotaTecnica, {
         nota_tecnica: notaTecnica,
@@ -77,6 +95,9 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
       ultimoNumeroNota.value = data?.nota_tecnica?.ultimo_numero_nota ?? notaTecnica.ultimo_numero_nota;
       ultimoNumeroProcesso.value =
         data?.nota_tecnica?.ultimo_numero_processo ?? notaTecnica.ultimo_numero_processo;
+      assinantesTecnicos.value = normalizeAssinantes(
+        data?.nota_tecnica?.assinantes_tecnicos ?? notaTecnica.assinantes_tecnicos,
+      );
       loaded.value = true;
       return selectedRegional.value;
     } finally {
@@ -93,6 +114,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
     selectedRegionalCodigo,
     ultimoNumeroNota,
     ultimoNumeroProcesso,
+    assinantesTecnicos,
     selectedRegional,
     selectedRegionalLabel,
     loading,

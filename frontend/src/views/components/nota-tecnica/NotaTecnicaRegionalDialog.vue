@@ -20,6 +20,7 @@ const selectedCodigo = ref(null);
 const numeroNota = ref("");
 const numeroProcesso = ref("");
 const numeroProcessoDigitsRaw = ref("");
+const assinantesTecnicos = ref([]);
 const anoNota = new Date().getFullYear();
 
 const regionalOptions = computed(() =>
@@ -66,16 +67,62 @@ function onNumeroProcessoInput(event) {
   numeroProcesso.value = formatProcessoDigits(digits.slice(0, 17));
 }
 
+function normalizeAssinantes(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((assinante) => ({
+      nome: String(assinante?.nome ?? "").trim(),
+      cargo: String(assinante?.cargo ?? "").trim(),
+    }))
+    .filter((assinante) => assinante.nome || assinante.cargo)
+    .slice(0, 3);
+}
+
+function addAssinante() {
+  if (assinantesTecnicos.value.length >= 3) return;
+  assinantesTecnicos.value = [
+    ...assinantesTecnicos.value,
+    { nome: "", cargo: "" },
+  ];
+}
+
+function removeAssinante(index) {
+  assinantesTecnicos.value = assinantesTecnicos.value.filter((_, i) => i !== index);
+}
+
+function updateAssinante(index, field, value) {
+  assinantesTecnicos.value = assinantesTecnicos.value.map((assinante, i) =>
+    i === index ? { ...assinante, [field]: value } : assinante,
+  );
+}
+
+function validateAssinantes() {
+  if (assinantesTecnicos.value.length > 3) {
+    throw new Error("Informe no máximo 3 assinaturas técnicas.");
+  }
+
+  for (const assinante of assinantesTecnicos.value) {
+    const nome = String(assinante?.nome ?? "").trim();
+    const cargo = String(assinante?.cargo ?? "").trim();
+    if ((nome && !cargo) || (!nome && cargo)) {
+      throw new Error("Informe nome e cargo da assinatura técnica ou remova a linha.");
+    }
+  }
+
+  return normalizeAssinantes(assinantesTecnicos.value);
+}
+
 watch(
   () => props.visible,
   async (visible) => {
     if (!visible) return;
     try {
-      await notaTecnicaConfig.ensureLoaded();
+      await notaTecnicaConfig.ensureLoaded({ force: true });
       selectedCodigo.value = notaTecnicaConfig.selectedRegionalCodigo;
       numeroNota.value = notaTecnicaConfig.ultimoNumeroNota || "";
       numeroProcesso.value = notaTecnicaConfig.ultimoNumeroProcesso || "";
       numeroProcessoDigitsRaw.value = String(numeroProcesso.value || "").replace(/\D/g, "");
+      assinantesTecnicos.value = normalizeAssinantes(notaTecnicaConfig.assinantesTecnicos);
     } catch (error) {
       toast.add({
         severity: "error",
@@ -98,15 +145,18 @@ async function save() {
       throw new Error("O número do processo deve conter 17 dígitos ou ficar em branco.");
     }
 
+    const assinantes = validateAssinantes();
     const regional = await notaTecnicaConfig.saveNotaTecnicaConfig({
       regionalCodigo: selectedCodigo.value,
       numeroNota: numeroNota.value,
       numeroProcesso: processoFormatado.value,
+      assinantes,
     });
     emit("saved", {
       regional,
       numeroNota: numeroNota.value || null,
       numeroProcesso: processoFormatado.value || null,
+      assinantesTecnicos: assinantes,
     });
     close();
   } catch (error) {
@@ -180,6 +230,51 @@ async function save() {
         </div>
       </div>
 
+      <div class="nt-assinaturas">
+        <div class="nt-assinaturas-header">
+          <div>
+            <strong>Assinaturas técnicas</strong>
+            <span>Opcional. Se ficar vazio, o documento manterá os placeholders editáveis.</span>
+          </div>
+          <Button
+            label="Adicionar"
+            icon="pi pi-plus"
+            class="nt-add-assinante"
+            :disabled="assinantesTecnicos.length >= 3"
+            @click="addAssinante"
+          />
+        </div>
+
+        <div
+          v-for="(assinante, index) in assinantesTecnicos"
+          :key="index"
+          class="nt-assinante-row"
+        >
+          <div class="nt-regional-field">
+            <label>Nome</label>
+            <InputText
+              :model-value="assinante.nome"
+              placeholder="Nome completo"
+              @input="updateAssinante(index, 'nome', $event.target.value)"
+            />
+          </div>
+          <div class="nt-regional-field">
+            <label>Cargo/Função</label>
+            <InputText
+              :model-value="assinante.cargo"
+              placeholder="Cargo ou função"
+              @input="updateAssinante(index, 'cargo', $event.target.value)"
+            />
+          </div>
+          <Button
+            icon="pi pi-trash"
+            class="nt-remove-assinante"
+            v-tooltip.bottom="'Remover assinatura'"
+            @click="removeAssinante(index)"
+          />
+        </div>
+      </div>
+
       <div class="nt-document-preview">
         <span>{{ notaPreview }}</span>
         <span>(PROCESSO Nº {{ processoPreview }})</span>
@@ -211,6 +306,7 @@ async function save() {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-x: hidden;
 }
 
 .nt-regional-copy {
@@ -238,6 +334,88 @@ async function save() {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
   gap: 0.85rem;
+}
+
+.nt-assinaturas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
+}
+
+.nt-assinaturas-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.nt-assinaturas-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.nt-assinaturas-header strong {
+  color: var(--text-color);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.nt-assinaturas-header span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.nt-assinante-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.25rem;
+  align-items: end;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.nt-assinante-row .nt-regional-field {
+  min-width: 0;
+}
+
+.nt-assinante-row :deep(.p-inputtext) {
+  width: 100%;
+  min-width: 0;
+}
+
+:global(.nt-regional-dialog .nt-add-assinante.p-button),
+:global(.nt-regional-dialog .nt-remove-assinante.p-button) {
+  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--primary-color) 7%, transparent) !important;
+  color: var(--primary-color) !important;
+}
+
+:global(.nt-regional-dialog .nt-add-assinante.p-button) {
+  flex-shrink: 0;
+  padding: 0.55rem 0.75rem !important;
+  white-space: nowrap;
+}
+
+:global(.nt-regional-dialog .nt-remove-assinante.p-button) {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  padding: 0 !important;
+  justify-content: center;
+  align-self: end;
+}
+
+:global(.nt-regional-dialog .nt-add-assinante.p-button:hover),
+:global(.nt-regional-dialog .nt-remove-assinante.p-button:hover) {
+  border-color: color-mix(in srgb, var(--primary-color) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
 }
 
 .nt-regional-preview {

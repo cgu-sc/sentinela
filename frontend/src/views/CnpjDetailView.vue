@@ -8,7 +8,6 @@ import { useFilterStore } from "@/stores/filters";
 import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useRecentCnpjStore } from "@/stores/recentCnpj";
 import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
-import { useRiskMetrics } from "@/composables/useRiskMetrics";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import CnpjHeader from "./components/cnpj/CnpjHeader.vue";
@@ -21,14 +20,9 @@ import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import SociosTab from "./components/cnpj/SociosTab.vue";
 import NetworkTab from "./components/cnpj/NetworkTab.vue";
 import NotaTecnicaRegionalDialog from "./components/nota-tecnica/NotaTecnicaRegionalDialog.vue";
-import { useChartTheme } from "@/config/chartTheme";
-import { CHART_TOOLTIP_SHADOW } from "@/config/colors.js";
-import { RISK_COLORS, RISK_THRESHOLDS } from "@/config/riskConfig";
 import { storeToRefs } from "pinia";
 import TabView from "primevue/tabview";
 import TabPanel from "primevue/tabpanel";
-import Tag from "primevue/tag";
-import Chip from "primevue/chip";
 import ProgressSpinner from "primevue/progressspinner";
 import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
@@ -121,10 +115,7 @@ const resetVisitedTabs = (activeIndex = cnpjNav.activeTabIndex) => {
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
-const { getRiskSeverity, getRiskLabel, getRiskColor, getRiskClass } =
-  useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
-const { chartTheme, chartDataColors, baseChartConfig } = useChartTheme();
 const toast = useToast();
 
 import { usePdfExport } from "@/composables/usePdfExport";
@@ -191,6 +182,9 @@ const buildNotaTecnicaUrl = (dadosNota = {}) => {
   });
   if (dadosNota.numeroNota) params.set("numero_nota", dadosNota.numeroNota);
   if (dadosNota.numeroProcesso) params.set("numero_processo", dadosNota.numeroProcesso);
+  if (dadosNota.assinantesTecnicos?.length) {
+    params.set("assinantes_tecnicos", JSON.stringify(dadosNota.assinantesTecnicos));
+  }
   return `${API_ENDPOINTS.analyticsNotaTecnica(cnpj.value)}?${params.toString()}`;
 };
 
@@ -384,56 +378,10 @@ const loadActiveTabData = async (perfSession, reason = "active_tab") => {
   }
 };
 
-const queueBackgroundPrefetch = (perfSession, reason = "background_prefetch") => {
-  if (!cnpj.value || cnpjDetailStore.cnpjAccessStatus !== "valid") return;
-
-  const sessionId = perfSession?.sessionId ?? null;
-  const currentCnpj = cnpj.value;
-  const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
-
-  queueMicrotask(() => {
-    if (activePerfSession.value?.sessionId !== sessionId) return;
-    if (cnpj.value !== currentCnpj) return;
-    if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
-
-    logCnpjPerf(perfSession, "prefetch_dispatched", {
-      reason,
-      concurrency: 2,
-      inicio,
-      fim,
-    });
-
-    cnpjDetailStore
-      .prefetchAllDetailData({
-        cnpj: currentCnpj,
-        inicio,
-        fim,
-        volumeAtipicoPercentual,
-        geoData: geoData.value,
-        concurrency: 2,
-      })
-      .then(() => {
-        if (activePerfSession.value?.sessionId !== sessionId) return;
-        logCnpjPerf(perfSession, "prefetch_settled", {
-          reason,
-          status: "fulfilled",
-        });
-      })
-      .catch((error) => {
-        if (activePerfSession.value?.sessionId !== sessionId) return;
-        console.error("Erro no preload das abas do CNPJ:", error);
-        logCnpjPerf(perfSession, "prefetch_settled", {
-          reason,
-          status: "rejected",
-        });
-      });
-  });
-};
-
 watch(
   () => cnpj.value,
   async (newCnpj, oldCnpj) => {
-    // Ao trocar de CNPJ, reseta tudo, carrega bootstrap + aba ativa e aquece as demais em background.
+    // Ao trocar de CNPJ, reseta tudo e carrega bootstrap + aba ativa.
     if (newCnpj !== oldCnpj) {
       cnpjDetailStore.resetAll();
       cnpjNav.reset(getTabIndexFromRoute());
@@ -638,7 +586,6 @@ watch(
       :period-loading="evolucaoLoading"
       @export="handleExport"
       @generate-note="handleGenerateNote"
-      @configure-note-regional="regionalDialogVisible = true"
     />
 
     <NotaTecnicaRegionalDialog

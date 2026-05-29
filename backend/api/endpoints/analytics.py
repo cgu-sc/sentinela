@@ -19,9 +19,38 @@ from ..schemas.analytics import (
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
 from request_logging import FrontendPerformanceEvent, log_frontend_performance
+import json
 import urllib.parse
 
 router = APIRouter()
+
+
+def _parse_assinantes_tecnicos_param(value: Optional[str]) -> Optional[List[dict]]:
+    if value is None or not value.strip():
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="assinantes_tecnicos deve ser um JSON valido.") from exc
+    if not isinstance(parsed, list):
+        raise HTTPException(status_code=422, detail="assinantes_tecnicos deve ser uma lista.")
+    if len(parsed) > 3:
+        raise HTTPException(status_code=422, detail="Informe no maximo 3 assinaturas tecnicas.")
+
+    normalized = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=422, detail="Cada assinatura tecnica deve ser um objeto.")
+        nome = str(item.get("nome", "")).strip()
+        cargo = str(item.get("cargo", "")).strip()
+        if (nome and not cargo) or (cargo and not nome):
+            raise HTTPException(
+                status_code=422,
+                detail="Cada assinatura tecnica deve conter nome e cargo.",
+            )
+        if nome and cargo:
+            normalized.append({"nome": nome, "cargo": cargo})
+    return normalized
 
 
 @router.post("/client-perf")
@@ -487,6 +516,7 @@ def get_nota_tecnica(
     regional_codigo: str = Query(...),
     numero_nota: Optional[str] = Query(None),
     numero_processo: Optional[str] = Query(None),
+    assinantes_tecnicos: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Gera e retorna o download da Nota Técnica Preliminar (.docx)."""
@@ -499,6 +529,7 @@ def get_nota_tecnica(
             regional_codigo,
             numero_nota,
             numero_processo,
+            _parse_assinantes_tecnicos_param(assinantes_tecnicos),
         )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

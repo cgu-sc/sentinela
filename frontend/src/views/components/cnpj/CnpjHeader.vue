@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed } from "vue";
 import { useFrozenData } from "@/composables/useFrozenData";
 
 import { useRiskMetrics } from "@/composables/useRiskMetrics";
@@ -10,7 +10,6 @@ import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
-import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
@@ -23,7 +22,6 @@ const geoStore = useGeoStore();
 
 const cnpjDetailStore = useCnpjDetailStore();
 const { requestTimes } = storeToRefs(cnpjDetailStore);
-const notaTecnicaConfig = useNotaTecnicaConfigStore();
 
 const requestTimesTooltip = computed(() => {
   const entries = Object.values(requestTimes.value);
@@ -40,7 +38,7 @@ const qtdMunicipiosRegiao = computed(() =>
   props.qtdMunicipiosRegiao ?? geoStore.qtdMunicipiosPorRegiao(props.geoData?.id_regiao_saude),
 );
 
-const { getRiskLabel, getRiskClass, getRiskColor } = useRiskMetrics();
+const { getRiskClass } = useRiskMetrics();
 const { formatCurrencyFull, formatNumberFull } = useFormatting();
 const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
@@ -66,7 +64,7 @@ const props = defineProps({
   periodLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["export", "generateNote", "configureNoteRegional"]);
+const emit = defineEmits(["export", "generateNote"]);
 
 const copied = ref(false);
 const copyCnpj = () => {
@@ -500,14 +498,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           </button>
           <button
-            class="list-btn list-btn--regional-nt"
-            @click="emit('configureNoteRegional')"
-            v-tooltip.bottom="notaTecnicaConfig.selectedRegionalLabel || 'Selecionar Regional da Nota Técnica'"
-          >
-            <i class="pi pi-building" />
-            <span>{{ notaTecnicaConfig.selectedRegionalCodigo || "UF" }}</span>
-          </button>
-          <button
             class="list-btn list-btn--icon-only list-btn--note"
             @click="emit('generateNote')"
             :disabled="isGeneratingNote"
@@ -585,45 +575,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   flex-shrink: 0;
 }
 
-.analysis-period-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.45rem;
-  max-width: 100%;
-  padding: 0.32rem 0.62rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--card-border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-color) 7%, var(--establishment-header-bg));
-  color: var(--establishment-header-text);
-  font-size: 0.72rem;
-  line-height: 1;
-  white-space: nowrap;
-  transition: opacity 0.2s ease, filter 0.2s ease;
-}
-
-.analysis-period-badge i {
-  color: var(--primary-color);
-  font-size: 0.78rem;
-}
-
-.analysis-period-label {
-  color: var(--text-muted);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.analysis-period-badge strong {
-  color: var(--establishment-header-text);
-  font-weight: 750;
-}
-
-.analysis-period-badge--loading {
-  opacity: 0.82;
-  filter: saturate(0.8);
-}
-
 .list-actions {
   display: flex;
   align-items: center;
@@ -699,26 +650,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   border-color: var(--btn-note-color);
   box-shadow: 0 4px 12px
     color-mix(in srgb, var(--btn-note-color) 25%, transparent);
-}
-
-.list-btn--regional-nt {
-  min-width: 46px;
-  gap: 0.35rem;
-  padding: 0 0.55rem;
-  color: var(--text-color);
-  border-color: color-mix(in srgb, var(--primary-color) 32%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 7%, transparent);
-}
-
-.list-btn--regional-nt span {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.list-btn--regional-nt:hover {
-  border-color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 13%, transparent);
 }
 
 .list-btn--interesse {

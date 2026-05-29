@@ -4,6 +4,8 @@ import unicodedata
 
 import polars as pl
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 from data_cache import (
@@ -12,6 +14,7 @@ from data_cache import (
     get_df_matriz_risco,
     get_df_perfil_estabelecimento,
     scan_analise_gtin_inconsistencia_clinica,
+    scan_geografico_origem_uf,
 )
 from .falecidos import get_falecidos_data
 from .indicadores import INDICATOR_MAPPING, _INDICATOR_FLAGS
@@ -25,6 +28,7 @@ from .nota_tecnica_docx_utils import (
     _set_table_fixed_widths,
 )
 from .nota_tecnica_charts import (
+    _add_mapa_geografico_origem_uf,
     _add_figura_parkinson_comparacao,
     _add_figura_parkinson_faixas_etarias,
 )
@@ -748,7 +752,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=5.8, bold=True)
+        _run(para, header, color='0F172A', size=7, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     values = [
@@ -765,7 +769,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
         _cell_bg(cell, 'F8FAFC')
-        _run(para, value, color='0F172A', size=5.8)
+        _run(para, value, color='0F172A', size=7)
 
     for row in table.rows:
         for cell in row.cells:
@@ -2537,25 +2541,227 @@ def _build_dispersao_geografica_context(
     else:
         periodo_desc = 'no período analisado'
 
+    cnpj_limpo = _cnpj_digits(cnpj)
+    farmacias = get_df_dados_farmacia()
+    _require_columns(farmacias, {"id_cnpj", "cnpj", "uf"}, "Cache de farmacias")
+    farmacias = farmacias.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").alias("_cnpj_limpo")
+    )
+    farmacia_rows = farmacias.filter(pl.col("_cnpj_limpo") == cnpj_limpo)
+    if farmacia_rows.is_empty():
+        raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_cnpj no cache de farmacias para dispersao geografica.")
+    farmacia_row = farmacia_rows.row(0, named=True)
+    id_cnpj = int(farmacia_row["id_cnpj"])
+
+    origem_uf = (
+        scan_geografico_origem_uf()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .collect()
+    )
+    _require_columns(
+        origem_uf,
+        {
+            "id_cnpj",
+            "ano_base",
+            "uf_farmacia",
+            "uf_paciente",
+            "is_outra_uf",
+            "qtd_autorizacoes",
+            "valor_autorizado",
+        },
+        "Cache geografico de origem por UF",
+    )
+    if data_inicio:
+        origem_uf = origem_uf.filter(pl.col("ano_base") >= data_inicio.year)
+    if data_fim:
+        origem_uf = origem_uf.filter(pl.col("ano_base") <= data_fim.year)
+    if origem_uf.is_empty():
+        raise RuntimeError(
+            f"Cache geografico_origem_uf sem registros para id_cnpj={id_cnpj} no periodo da Nota Tecnica."
+        )
+
+    origem_uf_agg = (
+        origem_uf
+        .group_by(["uf_farmacia", "uf_paciente", "is_outra_uf"])
+        .agg([
+            pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
+            pl.sum("valor_autorizado").alias("valor_autorizado"),
+        ])
+        .sort("valor_autorizado", descending=True)
+    )
+    total_valor_origem = float(origem_uf_agg.get_column("valor_autorizado").sum() or 0.0)
+    total_valor_outra_uf = float(
+        origem_uf_agg
+        .filter(pl.col("is_outra_uf") == True)
+        .get_column("valor_autorizado")
+        .sum()
+        or 0.0
+    )
+    total_autorizacoes_origem = int(origem_uf_agg.get_column("qtd_autorizacoes").sum() or 0)
+    total_autorizacoes_outra_uf = int(
+        origem_uf_agg
+        .filter(pl.col("is_outra_uf") == True)
+        .get_column("qtd_autorizacoes")
+        .sum()
+        or 0
+    )
+    if total_valor_origem <= 0:
+        raise RuntimeError(f"Cache geografico_origem_uf sem valor autorizado positivo para id_cnpj={id_cnpj}.")
+
+    percentual_financeiro_outra_uf = (total_valor_outra_uf / total_valor_origem) * 100.0
+    origem_rows = []
+    for origem_row in origem_uf_agg.iter_rows(named=True):
+        valor = float(origem_row["valor_autorizado"] or 0.0)
+        is_outra = bool(origem_row["is_outra_uf"])
+        origem_rows.append({
+            "uf_farmacia": str(origem_row["uf_farmacia"] or "").strip().upper(),
+            "uf_paciente": str(origem_row["uf_paciente"] or "").strip().upper(),
+            "is_outra_uf": is_outra,
+            "qtd_autorizacoes": int(origem_row["qtd_autorizacoes"] or 0),
+            "valor_autorizado": valor,
+            "percentual_sobre_total": (valor / total_valor_origem) * 100.0,
+            "percentual_sobre_outra_uf": (
+                (valor / total_valor_outra_uf) * 100.0
+                if is_outra and total_valor_outra_uf > 0
+                else None
+            ),
+        })
+
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_geografico"),
+        "percentual_financeiro_outra_uf": percentual_financeiro_outra_uf,
         "mediana_regiao": as_float("med_geografico_reg"),
         "mediana_uf": as_float("med_geografico_uf"),
         "mediana_brasil": as_float("med_geografico_br"),
         "multiplicador_regiao": as_float("risco_geografico_reg"),
         "multiplicador_uf": as_float("risco_geografico_uf"),
         "multiplicador_brasil": as_float("risco_geografico_br"),
+        "id_cnpj": id_cnpj,
+        "uf_farmacia": str(farmacia_row["uf"] or "").strip().upper(),
+        "origem_uf_rows": origem_rows,
+        "total_valor_origem": total_valor_origem,
+        "total_valor_outra_uf": total_valor_outra_uf,
+        "total_autorizacoes_origem": total_autorizacoes_origem,
+        "total_autorizacoes_outra_uf": total_autorizacoes_outra_uf,
     }
 
 
-def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_comp: dict[str, Any], bookmark_name: str | None = None):
+def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_comp: dict[str, Any], tabela_num: int):
+    rows = dispersao_comp.get("origem_uf_rows") or []
+    if not rows:
+        raise RuntimeError("Distribuicao geografica por UF obrigatoria ausente para a Nota Tecnica.")
+
+    rows_tabela = rows[:12]
+    restantes = rows[12:]
+    if restantes:
+        valor_restante = sum(float(row["valor_autorizado"] or 0.0) for row in restantes)
+        autorizacoes_restante = sum(int(row["qtd_autorizacoes"] or 0) for row in restantes)
+        total_valor = float(dispersao_comp["total_valor_origem"] or 0.0)
+        total_outra = float(dispersao_comp["total_valor_outra_uf"] or 0.0)
+        valor_outra_restante = sum(
+            float(row["valor_autorizado"] or 0.0)
+            for row in restantes
+            if bool(row.get("is_outra_uf"))
+        )
+        rows_tabela.append({
+            "uf_paciente": "Demais UFs",
+            "is_outra_uf": any(bool(row.get("is_outra_uf")) for row in restantes),
+            "qtd_autorizacoes": autorizacoes_restante,
+            "valor_autorizado": valor_restante,
+            "percentual_sobre_total": (valor_restante / total_valor) * 100.0 if total_valor > 0 else 0.0,
+            "percentual_sobre_outra_uf": (
+                (valor_outra_restante / total_outra) * 100.0
+                if total_outra > 0 and valor_outra_restante > 0
+                else None
+            ),
+        })
+
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.keep_with_next = True
+    p_title.paragraph_format.keep_together = True
+    p_title.paragraph_format.space_before = Pt(16)
+    p_title.paragraph_format.space_after = Pt(8)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} - Distribuição das autorizações por UF de residência do paciente vinculadas à Farmácia {razao_social}.',
+        color='334155',
+        size=8,
+        bold=True,
+    )
+
+    table = doc.add_table(rows=len(rows_tabela) + 1, cols=5)
+    table.style = 'Table Grid'
+    _set_table_fixed_widths(
+        table,
+        [Inches(1.02), Inches(1.12), Inches(1.40), Inches(1.20), Inches(1.26)],
+    )
+    tbl_pr = table._tbl.tblPr
+    table_jc = tbl_pr.find(qn('w:jc'))
+    if table_jc is None:
+        table_jc = OxmlElement('w:jc')
+        tbl_pr.append(table_jc)
+    table_jc.set(qn('w:val'), 'center')
+
+    headers = [
+        "UF paciente",
+        "Autorizações",
+        "Valor autorizado",
+        "% do valor total",
+        "% do valor em outras UFs",
+    ]
+    for idx, header in enumerate(headers):
+        cell = table.rows[0].cells[idx]
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=6.8, bold=True)
+        _cell_bg(cell, 'E2E8F0')
+
+    for row_idx, row in enumerate(rows_tabela, start=1):
+        cells = table.rows[row_idx].cells
+        pct_outra = row.get("percentual_sobre_outra_uf")
+        values = [
+            row["uf_paciente"],
+            _format_int_pt(row["qtd_autorizacoes"]),
+            _format_brl_pt(row["valor_autorizado"]),
+            f'{_format_decimal_pt(float(row["percentual_sobre_total"]), 2)}%',
+            f'{_format_decimal_pt(float(pct_outra), 2)}%' if pct_outra is not None else '—',
+        ]
+        fill = 'F8FAFC' if row_idx % 2 else 'FFFFFF'
+        for col_idx, value in enumerate(values):
+            cell = cells[col_idx]
+            para = cell.paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+            _cell_bg(cell, fill)
+            _run(para, value, color='0F172A', size=6.8, bold=col_idx in (2, 3))
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(1)
+
+    p_foot = doc.add_paragraph()
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_foot.paragraph_format.keep_together = True
+    p_foot.paragraph_format.space_before = Pt(3)
+    p_foot.paragraph_format.space_after = Pt(8)
+    _run(
+        p_foot,
+        'Fonte: Sentinela, a partir das autorizações registradas no SAV/PFPB e da UF de residência do beneficiário constante na base de CPFs da Receita Federal do Brasil, utilizada no indicador geográfico.',
+        color='64748B',
+        size=7,
+    )
+    _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_comp: dict[str, Any], tabela_num: int, bookmark_name: str | None = None):
     """Adiciona texto analitico de vendas para residentes em outros Estados usando a matriz atual."""
     periodo_desc = dispersao_comp["periodo_desc"]
-    percentual_fmt = _format_decimal_pt(dispersao_comp["percentual"], 2)
-    multiplicador_reg_fmt = _format_decimal_pt(dispersao_comp["multiplicador_regiao"], 2)
-    multiplicador_uf_fmt = _format_decimal_pt(dispersao_comp["multiplicador_uf"], 2)
-    multiplicador_br_fmt = _format_decimal_pt(dispersao_comp["multiplicador_brasil"], 2)
+    percentual_financeiro_fmt = _format_decimal_pt(dispersao_comp["percentual_financeiro_outra_uf"], 2)
+    total_aut_outra = _format_int_pt(dispersao_comp["total_autorizacoes_outra_uf"])
+    total_valor_outra = _format_brl_pt(dispersao_comp["total_valor_outra_uf"])
 
     heading = doc.add_heading(
         f'{num} Vendas de medicamentos para pessoas residentes em outros Estados realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
@@ -2580,12 +2786,30 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
 
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=10)
-    _run(p2, f'{percentual_fmt}%', color='334155', size=10, bold=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas para pessoas residentes em outros Estados. Tal percentual corresponde a ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=10)
-    _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}', color='334155', size=10, bold=True)
-    _run(p2, ' o percentual mediano das farmácias de seu Estado e ', color='0F172A', size=10)
-    _run(p2, f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}', color='334155', size=10, bold=True)
-    _run(p2, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)
+    _run(p2, f'{percentual_financeiro_fmt}%', color='334155', size=10, bold=True)
+    _run(
+        p2,
+        ' do valor autorizado em vendas de medicamentos no âmbito do PFPB esteve associado a pessoas residentes em outros Estados. Esse percentual é calculado pela razão entre o valor autorizado para beneficiários de outras UFs e o valor autorizado total do estabelecimento no período analisado.',
+        color='0F172A',
+        size=10,
+    )
+
+    p3 = doc.add_paragraph()
+    _run(
+        p3,
+        'No detalhamento por UF de residência dos beneficiários, foram identificadas ',
+        color='0F172A',
+        size=10,
+    )
+    _run(p3, total_aut_outra, color='334155', size=10, bold=True)
+    _run(p3, ' autorizações para pessoas residentes em outros Estados, correspondentes a ', color='0F172A', size=10)
+    _run(p3, total_valor_outra, color='334155', size=10, bold=True)
+    _run(
+        p3,
+        ' em valor autorizado. A distribuição financeira por UF, apresentada na tabela e no mapa a seguir, permite identificar as origens que mais contribuíram para o comportamento atípico observado.',
+        color='0F172A',
+        size=10,
+    )
+
+    _add_dispersao_geografica_origem_uf_table(doc, razao_social, dispersao_comp, tabela_num)
+    _add_mapa_geografico_origem_uf(doc, razao_social, dispersao_comp)

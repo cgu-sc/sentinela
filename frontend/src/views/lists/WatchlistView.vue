@@ -216,6 +216,9 @@ function buildNotaTecnicaUrl(cnpj, dadosNota = {}) {
   });
   if (dadosNota.numeroNota) params.set("numero_nota", dadosNota.numeroNota);
   if (dadosNota.numeroProcesso) params.set("numero_processo", dadosNota.numeroProcesso);
+  if (dadosNota.assinantesTecnicos?.length) {
+    params.set("assinantes_tecnicos", JSON.stringify(dadosNota.assinantesTecnicos));
+  }
   return `${API_ENDPOINTS.analyticsNotaTecnica(cnpj)}?${params.toString()}`;
 }
 

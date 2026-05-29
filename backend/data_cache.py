@@ -238,6 +238,12 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "percentual_cpfs_incompativeis_regiao",
         "dt_processamento",
     },
+    "crm_prescricoes_brasil_semestre": {
+        "id_medico",
+        "chave_semestre",
+        "nu_prescricoes_total_brasil",
+        "dias_ativos_brasil",
+    },
 }
 
 
@@ -309,7 +315,6 @@ _df_matriz_risco: pl.DataFrame | None = None
 _df_bench_crm_uf: pl.DataFrame | None = None
 _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
-_df_crm_prescricoes_brasil_semestre: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
 _df_perfil_estabelecimento: pl.DataFrame | None = None
 _df_dados_socios:   pl.DataFrame | None = None
@@ -2217,7 +2222,6 @@ def _sync_crm_benchmarks(engine, progress_callback=None):
 
 def _sync_crm_prescricoes_brasil_semestre(engine, progress_callback=None):
     """Sincroniza o resumo nacional semestral de prescricoes por CRM."""
-    global _df_crm_prescricoes_brasil_semestre
     print("Sincronizando prescricoes Brasil por CRM/Semestre...")
     required = {
         "id_medico",
@@ -2259,10 +2263,17 @@ def _sync_crm_prescricoes_brasil_semestre(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_crm_prescricoes_brasil_semestre = pl.concat(chunk_list).sort(["id_medico", "chave_semestre"])
-    _df_crm_prescricoes_brasil_semestre.write_parquet(
+    if not chunk_list:
+        raise RuntimeError("Fonte app_crm_prescricoes_brasil_semestre sem registros para sincronizacao.")
+
+    df_crm_prescricoes_brasil_semestre = pl.concat(chunk_list).sort(["id_medico", "chave_semestre"])
+    df_crm_prescricoes_brasil_semestre.write_parquet(
         _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH,
         compression="zstd",
+    )
+    _mark_on_demand_global_cache_ready(
+        "crm_prescricoes_brasil_semestre",
+        _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH,
     )
 
 
@@ -2320,7 +2331,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_crm_prescricoes_brasil_semestre, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
     _ON_DEMAND_GLOBAL_CACHE_READY.clear()
 
@@ -2439,12 +2450,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "chave_semestre_anterior",
                 "taxa_crescimento_pct",
                 "aumento_valor_semestre",
-            },
-            "crm_prescricoes_brasil_semestre": {
-                "id_medico",
-                "chave_semestre",
-                "nu_prescricoes_total_brasil",
-                "dias_ativos_brasil",
             },
             "geografico_origem_uf": {
                 "id_cnpj",
@@ -2627,7 +2632,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_uf    = _try_load("bench_crm_uf",   _BENCH_CRM_UF_PATH)
         _df_bench_crm_regiao= _try_load("bench_crm_regiao", _BENCH_CRM_REGIAO_PATH)
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
-        _df_crm_prescricoes_brasil_semestre = _try_load("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
         _df_perfil_estabelecimento = _try_load("perfil_estabelecimento", _PERFIL_ESTABELECIMENTO_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
@@ -2646,6 +2650,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("analise_gtin_inconsistencia_clinica_regiao", _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH)
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)
         _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _df_esocial_cnpj_ano = None
         _df_esocial_cnpj_trabalhador_ano = None
@@ -2776,11 +2781,6 @@ def get_df_bench_crm_br() -> pl.DataFrame:
         raise RuntimeError("Cache de Benchmark CRM (Brasil) não carregado. Execute uma sincronização.")
     return _df_bench_crm_br
 
-def get_df_crm_prescricoes_brasil_semestre() -> pl.DataFrame:
-    if _df_crm_prescricoes_brasil_semestre is None:
-        raise RuntimeError("Cache de prescricoes CRM Brasil/Semestre nao carregado. Execute uma sincronizacao.")
-    return _df_crm_prescricoes_brasil_semestre
-
 def get_df_dados_farmacia() -> pl.DataFrame:
     if _df_dados_farmacia is None:
         raise RuntimeError("Cache de Dados das Farmácias não carregado. Execute uma sincronização.")
@@ -2804,6 +2804,13 @@ def scan_teia_fonte_nivel3() -> pl.LazyFrame:
 
 def scan_teia_fonte_nivel4() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet("teia_fonte_nivel4", _TEIA_FONTE_NIVEL4_PARQUET_PATH)
+
+
+def scan_crm_prescricoes_brasil_semestre() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "crm_prescricoes_brasil_semestre",
+        _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH,
+    )
 
 
 def get_medicamentos_df() -> pl.DataFrame:
@@ -2906,7 +2913,7 @@ def get_cache_status() -> dict:
         "bench_crm_uf":    {"label": "Benchmark CRM (UF)",      "path": _BENCH_CRM_UF_PATH,        "loaded": _df_bench_crm_uf is not None},
         "bench_crm_regiao":{"label": "Benchmark CRM (Região)", "path": _BENCH_CRM_REGIAO_PATH,    "loaded": _df_bench_crm_regiao is not None},
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
-        "crm_prescricoes_brasil_semestre": {"label": "CRM Brasil Semestral", "path": _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH, "loaded": _df_crm_prescricoes_brasil_semestre is not None},
+        "crm_prescricoes_brasil_semestre": {"label": "CRM Brasil Semestral", "path": _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "perfil_estabelecimento": {"label": "Perfil Estabelecimentos", "path": _PERFIL_ESTABELECIMENTO_PARQUET_PATH, "loaded": _df_perfil_estabelecimento is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},

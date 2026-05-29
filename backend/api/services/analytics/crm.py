@@ -13,7 +13,17 @@ from decimal import Decimal, ROUND_HALF_UP
 from cache_files import (
     CRM_RAIOX_TX_PARQUET,
 )
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_crm_prescricoes_brasil_semestre, get_df_dados_farmacia, get_cache_dir
+from data_cache import (
+    get_df,
+    get_rede_df,
+    get_localidades_df,
+    get_df_matriz_risco,
+    get_df_bench_crm_regiao,
+    get_df_bench_crm_br,
+    scan_crm_prescricoes_brasil_semestre,
+    get_df_dados_farmacia,
+    get_cache_dir,
+)
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -229,22 +239,35 @@ def _competencia_to_semestre_key(competencia: int) -> int:
     return ano * 10 + semestre
 
 
-def _build_crm_brasil_semestre_summary(comp_ini: int | None, comp_fim: int | None) -> pl.DataFrame:
-    df_brasil = get_df_crm_prescricoes_brasil_semestre()
+def _build_crm_brasil_semestre_summary(
+    comp_ini: int | None,
+    comp_fim: int | None,
+    id_medicos: list[str],
+) -> pl.DataFrame:
+    id_medicos_validos = sorted({str(id_medico) for id_medico in id_medicos if id_medico is not None})
+    if not id_medicos_validos:
+        raise RuntimeError("Nao ha CRMs validos para consultar o cache Brasil/Semestre.")
+
+    df_brasil = scan_crm_prescricoes_brasil_semestre().filter(
+        pl.col("id_medico").is_in(id_medicos_validos)
+    )
     if comp_ini:
         df_brasil = df_brasil.filter(pl.col("chave_semestre") >= _competencia_to_semestre_key(comp_ini))
     if comp_fim:
         df_brasil = df_brasil.filter(pl.col("chave_semestre") <= _competencia_to_semestre_key(comp_fim))
-    if df_brasil.is_empty():
-        raise RuntimeError("Cache de prescricoes CRM Brasil/Semestre sem dados para o periodo solicitado.")
-    return (
+
+    summary = (
         df_brasil
         .group_by("id_medico")
         .agg([
             pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
             pl.sum("dias_ativos_brasil").alias("dias_ativos_brasil"),
         ])
+        .collect()
     )
+    if summary.is_empty():
+        raise RuntimeError("Cache de prescricoes CRM Brasil/Semestre sem dados para os CRMs e periodo solicitados.")
+    return summary
 
 
 def _count_rows_by_medico(df: pl.DataFrame) -> dict[str, int]:
@@ -562,7 +585,12 @@ def get_crm_data(
             # Divide pelo total de dias dos meses em que o mÃ©dico de fato prescreveu
             (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
         ])
-        .join(_build_crm_brasil_semestre_summary(comp_ini, comp_fim), on="id_medico", how="left")
+    )
+    id_medicos_brasil = df_med.select("id_medico").drop_nulls().unique().to_series().to_list()
+    df_med = df_med.join(
+        _build_crm_brasil_semestre_summary(comp_ini, comp_fim, id_medicos_brasil),
+        on="id_medico",
+        how="left",
     )
 
     missing_brasil = df_med.filter(

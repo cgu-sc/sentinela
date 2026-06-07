@@ -13,12 +13,12 @@ GO
 --
 -- CRITERIOS DE IRREGULARIDADE:
 --   1. CRM/UF nao localizado no CFM.
---   2. CRM/UF utilizado antes da data de inscricao no CFM.
+--   2. CRM/UF utilizado antes da primeira inscricao do medico naquela UF.
 --
 -- REGRA METODOLOGICA:
---   Quando a primeira prescricao anual do CRM na farmacia ocorre antes da data
---   de inscricao no CFM, todo o valor anual daquele CRM/farmacia e considerado
---   irregular.
+--   Quando a primeira prescricao anual do CRM na farmacia ocorre antes da
+--   primeira inscricao do medico naquela UF, todo o valor anual daquele
+--   CRM/farmacia e considerado irregular.
 --
 -- FONTE DE DADOS:
 --   As fontes abaixo sao mantidas porque possuem os campos CRM e UF do CRM,
@@ -59,9 +59,9 @@ END;
 
 IF COL_LENGTH('temp_CFM.dbo.medicos_jul_2025_mod', 'NU_CRM') IS NULL
    OR COL_LENGTH('temp_CFM.dbo.medicos_jul_2025_mod', 'SG_uf') IS NULL
-   OR COL_LENGTH('temp_CFM.dbo.medicos_jul_2025_mod', 'DT_INSCRICAO') IS NULL
+   OR COL_LENGTH('temp_CFM.dbo.medicos_jul_2025_mod', 'prim_inscricao_uf') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod sem colunas obrigatorias NU_CRM/SG_uf/DT_INSCRICAO.', 16, 1);
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod sem colunas obrigatorias NU_CRM/SG_uf/prim_inscricao_uf.', 16, 1);
     RETURN;
 END;
 
@@ -208,14 +208,13 @@ IF EXISTS (
     FROM temp_CFM.dbo.medicos_jul_2025_mod
     WHERE NU_CRM IS NOT NULL
       AND NULLIF(LTRIM(RTRIM(CAST(SG_uf AS VARCHAR(10)))), '') IS NOT NULL
-      -- Excecao operacional autorizada: CRM/UF existente no CFM sem
-      -- DT_INSCRICAO permanece localizado, mas nao gera alerta por uso
-      -- antes da inscricao. Data preenchida e invalida continua bloqueante.
-      AND DT_INSCRICAO IS NOT NULL
-      AND TRY_CONVERT(DATE, DT_INSCRICAO, 103) IS NULL
+      AND (
+          prim_inscricao_uf IS NULL
+          OR TRY_CONVERT(DATE, prim_inscricao_uf, 103) IS NULL
+      )
 )
 BEGIN
-    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui DT_INSCRICAO preenchida e invalida para CRM/UF valido.', 16, 1);
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui prim_inscricao_uf nula ou invalida para CRM/UF valido.', 16, 1);
     RETURN;
 END;
 
@@ -224,7 +223,7 @@ DROP TABLE IF EXISTS #CFM_Normalizado;
 SELECT
     CAST(LTRIM(RTRIM(CAST(NU_CRM AS VARCHAR(25)))) AS VARCHAR(25)) AS NU_CRM,
     CAST(UPPER(LTRIM(RTRIM(CAST(SG_uf AS VARCHAR(10))))) AS VARCHAR(10)) AS SG_uf,
-    TRY_CONVERT(DATE, DT_INSCRICAO, 103) AS dt_inscricao_convertida
+    TRY_CONVERT(DATE, prim_inscricao_uf, 103) AS dt_primeira_inscricao_uf
 INTO #CFM_Normalizado
 FROM temp_CFM.dbo.medicos_jul_2025_mod
 WHERE NU_CRM IS NOT NULL
@@ -245,10 +244,10 @@ IF EXISTS (
     SELECT 1
     FROM #CFM_Normalizado
     GROUP BY NU_CRM, SG_uf
-    HAVING COUNT(DISTINCT dt_inscricao_convertida) > 1
+    HAVING COUNT(DISTINCT dt_primeira_inscricao_uf) > 1
 )
 BEGIN
-    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui datas de inscricao conflitantes para o mesmo CRM/UF.', 16, 1);
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod possui datas de primeira inscricao na UF conflitantes para o mesmo CRM/UF.', 16, 1);
     RETURN;
 END;
 
@@ -257,7 +256,7 @@ DROP TABLE IF EXISTS #CFM_Base;
 SELECT
     NU_CRM,
     CAST(SG_uf AS VARCHAR(2)) AS SG_uf,
-    MIN(dt_inscricao_convertida) AS dt_inscricao_convertida
+    MIN(dt_primeira_inscricao_uf) AS dt_primeira_inscricao_uf
 INTO #CFM_Base
 FROM #CFM_Normalizado
 GROUP BY
@@ -369,8 +368,8 @@ SELECT
     CAST(CASE WHEN CFM.NU_CRM IS NULL THEN 1 ELSE 0 END AS TINYINT) AS flag_nao_localizado,
     CAST(
         CASE
-            WHEN CFM.dt_inscricao_convertida IS NOT NULL
-             AND CAST(MIN(U.data_hora) AS DATE) < CFM.dt_inscricao_convertida
+            WHEN CFM.dt_primeira_inscricao_uf IS NOT NULL
+             AND CAST(MIN(U.data_hora) AS DATE) < CFM.dt_primeira_inscricao_uf
                 THEN 1
             ELSE 0
         END AS TINYINT
@@ -390,7 +389,7 @@ GROUP BY
     U.nu_crm,
     U.sg_uf_crm,
     CFM.NU_CRM,
-    CFM.dt_inscricao_convertida
+    CFM.dt_primeira_inscricao_uf
 HAVING SUM(U.valor_pago) > 0;
 
 IF NOT EXISTS (SELECT 1 FROM #CRMsPorFarmaciaAno)

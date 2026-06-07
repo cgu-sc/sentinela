@@ -44,6 +44,12 @@ BEGIN
     RETURN;
 END;
 
+IF COL_LENGTH('temp_CGUSC.fp.build_dados_medico', 'dt_primeira_inscricao_uf') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.build_dados_medico sem coluna obrigatoria dt_primeira_inscricao_uf. Rode crms_etapa1_pre_global.sql novamente.', 16, 1);
+    RETURN;
+END;
+
 IF OBJECT_ID('temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos') IS NULL
 BEGIN
     RAISERROR('Tabela temp_CGUSC.fp.build_crm_prescricoes_todos_estabelecimentos nao encontrada. Rode o pre-global primeiro.', 16, 1);
@@ -261,15 +267,15 @@ SELECT
     A.id_medico,
     A.competencia,
     CONVERT(VARCHAR(20), MIN(A.dt_prescricao_inicial_medico), 103) AS dt_primeira_presc,
-    CONVERT(VARCHAR(20), M.dt_inscricao, 103) AS dt_registro_crm,
+    CONVERT(VARCHAR(20), M.dt_primeira_inscricao_uf, 103) AS dt_registro_crm,
     'IRREGULAR' AS tipo_anomalia,
     SUM(A.nu_prescricoes_medico) AS nu_prescricoes,
     SUM(A.vl_autorizacoes_medico) AS vl_prescricoes
 FROM temp_CGUSC.fp.build_dados_crm_detalhado A
 INNER JOIN temp_CGUSC.fp.build_dados_medico M
     ON M.id_medico = A.id_medico
-WHERE M.dt_inscricao > A.dt_prescricao_inicial_medico
-GROUP BY A.nu_cnpj, A.id_medico, A.competencia, M.dt_inscricao;
+WHERE M.dt_primeira_inscricao_uf > A.dt_prescricao_inicial_medico
+GROUP BY A.nu_cnpj, A.id_medico, A.competencia, M.dt_primeira_inscricao_uf;
 
 CREATE CLUSTERED INDEX IDX_Registro
     ON temp_CGUSC.fp.build_alertas_crm_registro(cnpj, id_medico, competencia);
@@ -499,7 +505,7 @@ SELECT
     CAST(CASE WHEN CONC.nu_cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_concentracao_mesmo_crm,
     CAST(CASE WHEN G.id_medico IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_distancia_geografica,
     A.dt_prescricao_inicial_medico AS dt_primeira_prescricao,
-    M.dt_inscricao AS dt_inscricao_crm,
+    M.dt_primeira_inscricao_uf AS dt_inscricao_crm,
     CAST(CASE WHEN REG_INV.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_crm_invalido,
     CAST(CASE WHEN REG_IRR.cnpj IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS flag_prescricao_antes_registro,
     ISNULL(AL.alerta_concentracao_multiplos_crms, CAST(0 AS BIT)) AS alerta_concentracao_multiplos_crms
@@ -703,7 +709,7 @@ SELECT
     CAST(H.hr_janela AS TINYINT) AS hr_janela,
     CAST(H.nu_prescricoes AS SMALLINT) AS nu_prescricoes,
     CAST(H.nu_crms_diferentes AS SMALLINT) AS nu_crms_diferentes,
-    CAST(M.mediana_hora_movel AS DECIMAL(6,2)) AS mediana_hora,
+    CAST(H.mediana_hora AS DECIMAL(6,2)) AS mediana_hora,
     CAST(M.mad_hora_movel AS DECIMAL(10,4)) AS mad_hora,
     CAST(H.is_hora_com_alerta AS BIT) AS is_hora_com_alerta,
     CAST(H.is_volume_horario_anomalo AS BIT) AS is_volume_horario_anomalo,

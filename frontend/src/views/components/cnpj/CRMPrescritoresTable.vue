@@ -222,7 +222,7 @@ const maxPDOverall = computed(() => {
               </td>
               <td>
                 <div class="med-id">{{ m.id_medico }}</div>
-                <div class="med-sub">Registro: {{ m.dt_inscricao_crm ? formatarData(m.dt_inscricao_crm) : 'ND' }}</div>
+                <div class="med-sub">1ª inscrição UF: {{ m.dt_inscricao_crm ? formatarData(m.dt_inscricao_crm) : 'ND' }}</div>
               </td>
               <td class="flags-cell">
                 <div class="tags-container">

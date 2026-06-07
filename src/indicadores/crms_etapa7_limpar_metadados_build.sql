@@ -23,6 +23,11 @@ BEGIN
     RAISERROR('Tabela fp.app_crm_concentracao_unico_alertas nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
     RETURN;
 END;
+IF OBJECT_ID('fp.app_dados_medico', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.app_dados_medico nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);
+    RETURN;
+END;
 IF OBJECT_ID('fp.app_crm_concentracao_multiplo_alertas', 'U') IS NULL
 BEGIN
     RAISERROR('Tabela fp.app_crm_concentracao_multiplo_alertas nao encontrada. Execute a etapa 6 antes da limpeza.', 16, 1);

@@ -192,7 +192,7 @@ export const INDICATOR_GROUPS = [
       { key: 'hhi_crm', label: 'Concentração de CRMs (HHI)', formato: 'dec', thresholdKey: 'hhi_crm',
         metodologia: 'Índice Herfindahl-Hirschman (HHI) que mede a concentração de prescrições. HHI elevado indica dependência excessiva de poucos CRMs.' },
       { key: 'crms_irregulares', label: 'Faturamento CRMs Irregulares', formato: 'pct', thresholdKey: 'crms_irregulares',
-        metodologia: 'Percentual do faturamento vinculado a CRMs inexistentes no CFM ou com prescrições anteriores à data de inscrição do médico.' },
+        metodologia: 'Percentual do faturamento vinculado a CRMs inexistentes no CFM ou com prescrições anteriores à primeira inscrição do médico na UF do CRM.' },
     ],
   },
 ];

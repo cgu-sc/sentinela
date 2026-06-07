@@ -29,6 +29,7 @@ from data_cache import (
     _sync_crm_prescricoes_brasil_semestre,
     _sync_dados_farmacia,
     _sync_dados_ibge_demografia,
+    _sync_dados_medico,
     _sync_dados_par,
     _sync_dados_socios,
     _sync_esocial,
@@ -87,6 +88,7 @@ MODULOS = sorted([
     {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio"},
     {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido"},
     {"id": 23, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido"},
+    {"id": 24, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 5.5},
     {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado"},
     {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido"},
     {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
@@ -112,7 +114,7 @@ def selecionar_modulos() -> list[dict]:
     entrada = input("\nDigite os numeros separados por virgula (ex: 1,3,7): ").strip()
 
     if entrada == "0":
-        return MODULOS
+        return sorted(MODULOS, key=lambda m: m.get("ordem", m["id"]))
 
     ids_validos = {m["id"] for m in MODULOS}
     selecionados = []
@@ -134,7 +136,7 @@ def selecionar_modulos() -> list[dict]:
     if erros:
         print(f"\nAviso: opcoes ignoradas (invalidas): {', '.join(erros)}")
 
-    return sorted(selecionados, key=lambda m: m["id"])
+    return sorted(selecionados, key=lambda m: m.get("ordem", m["id"]))
 
 
 def perguntar_params(selecionados: list[dict]) -> None:

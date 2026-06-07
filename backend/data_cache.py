@@ -29,6 +29,11 @@ def get_cache_dir() -> str:
 
 _CACHE_DIR = get_cache_dir()
 _GLOBAL_PARQUETS = cache_registry.get_global_parquet_files_by_key()
+_GLOBAL_PARQUET_SCHEMAS = {
+    definition.key: definition.schema
+    for definition in cache_registry.GLOBAL_CACHE_DEFINITIONS
+    if definition.schema is not None
+}
 _ON_DEMAND_GLOBAL_CACHE_READY: set[str] = set()
 
 _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
@@ -244,6 +249,13 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "nu_prescricoes_total_brasil",
         "dias_ativos_brasil",
     },
+    "dados_medico": {
+        "id_medico",
+        "nu_crm",
+        "sg_uf",
+        "no_medico",
+        "dt_primeira_inscricao_uf",
+    },
 }
 
 
@@ -254,10 +266,28 @@ def _global_cache_path(key: str) -> str:
 def _validate_parquet_schema(name: str, path: str, required: set[str] | None = None) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Parquet global {name} nao encontrado em {path}.")
-    schema_columns = set(pl.scan_parquet(path).limit(0).collect().columns)
-    if required and not required.issubset(schema_columns):
-        missing_cols = ", ".join(sorted(required - schema_columns))
+    parquet_schema = pl.scan_parquet(path).limit(0).collect().schema
+    schema_columns = set(parquet_schema.keys())
+    expected_schema = _GLOBAL_PARQUET_SCHEMAS.get(name)
+    required_columns = set(required or set())
+    if expected_schema:
+        required_columns.update(expected_schema.keys())
+
+    if required_columns and not required_columns.issubset(schema_columns):
+        missing_cols = ", ".join(sorted(required_columns - schema_columns))
         raise ValueError(f"schema antigo sem colunas obrigatorias: {missing_cols}")
+
+    if expected_schema:
+        type_mismatches = [
+            f"{col}: esperado {expected_dtype}, encontrado {parquet_schema[col]}"
+            for col, expected_dtype in expected_schema.items()
+            if col in parquet_schema and parquet_schema[col] != expected_dtype
+        ]
+        if type_mismatches:
+            raise ValueError(
+                "schema antigo com tipos invalidos: "
+                + "; ".join(type_mismatches)
+            )
 
 
 def _mark_on_demand_global_cache_ready(name: str, path: str) -> None:
@@ -282,6 +312,7 @@ _BENCH_CRM_UF_PATH = _global_cache_path("bench_crm_uf")
 _BENCH_CRM_REGIAO_PATH = _global_cache_path("bench_crm_regiao")
 _BENCH_CRM_BR_PATH = _global_cache_path("bench_crm_br")
 _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH = _global_cache_path("crm_prescricoes_brasil_semestre")
+_DADOS_MEDICO_PARQUET_PATH = _global_cache_path("dados_medico")
 _DADOS_FARMACIA_PARQUET_PATH = _global_cache_path("dados_farmacia")
 _PERFIL_ESTABELECIMENTO_PARQUET_PATH = _global_cache_path("perfil_estabelecimento")
 _DADOS_SOCIOS_PARQUET_PATH = _global_cache_path("dados_socios")
@@ -2277,6 +2308,66 @@ def _sync_crm_prescricoes_brasil_semestre(engine, progress_callback=None):
     )
 
 
+def _sync_dados_medico(engine, progress_callback=None):
+    """Sincroniza a dimensao global de medicos por CRM/UF."""
+    print("Sincronizando dados dos medicos por CRM/UF...")
+    required = {
+        "id_medico",
+        "nu_crm",
+        "sg_uf",
+        "no_medico",
+        "dt_primeira_inscricao_uf",
+    }
+    total_rows = _assert_fp_source_table(
+        engine,
+        "app_dados_medico",
+        required,
+    )
+
+    sql = """
+        SELECT
+            id_medico,
+            nu_crm,
+            sg_uf,
+            no_medico,
+            dt_primeira_inscricao_uf
+        FROM [temp_CGUSC].[fp].[app_dados_medico]
+    """
+
+    chunk_list = []
+    rows_processed = 0
+    chunk_size = 100_000
+    print(f"   -> Registros dados_medico: {total_rows:,}")
+
+    for chunk in pd.read_sql(sql, engine, chunksize=chunk_size):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_medico").cast(pl.String),
+            pl.col("nu_crm").cast(pl.Int64),
+            pl.col("sg_uf").cast(pl.String),
+            pl.col("no_medico").cast(pl.String),
+            pl.col("dt_primeira_inscricao_uf").cast(pl.Date),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
+        print(f"   -> Progresso dados_medico: {p}% ({rows_processed:,} / {total_rows:,})")
+        if progress_callback:
+            progress_callback(p)
+
+    if not chunk_list:
+        raise RuntimeError("Fonte app_dados_medico sem registros para sincronizacao.")
+
+    df_dados_medico = pl.concat(chunk_list).sort(["id_medico"])
+    df_dados_medico.write_parquet(
+        _DADOS_MEDICO_PARQUET_PATH,
+        compression="zstd",
+    )
+    _mark_on_demand_global_cache_ready(
+        "dados_medico",
+        _DADOS_MEDICO_PARQUET_PATH,
+    )
+
+
 def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
     """Tarefa: Gera todos os parquets (médicos, diário, horário, alertas) para os CNPJs selecionados."""
     import cache_manager
@@ -2651,6 +2742,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_dados_ibge_demografia = _try_load("dados_ibge_demografia", _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH)
         _df_volume_atipico_semestral = _try_load("volume_atipico_semestral", _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH)
         _try_mark_on_demand("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)
+        _try_mark_on_demand("dados_medico", _DADOS_MEDICO_PARQUET_PATH)
         _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _df_esocial_cnpj_ano = None
         _df_esocial_cnpj_trabalhador_ano = None
@@ -2697,6 +2789,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Demografia IBGE",       "weight": 2,  "func": lambda cb: _sync_dados_ibge_demografia(engine, cb)},
         {"name": "Volume Atipico Semestral", "weight": 5, "func": lambda cb: _sync_volume_atipico_semestral(engine, cb)},
         {"name": "CRM Brasil Semestral",    "weight": 1,  "func": lambda cb: _sync_crm_prescricoes_brasil_semestre(engine, cb)},
+        {"name": "Dados Medico",            "weight": 1,  "func": lambda cb: _sync_dados_medico(engine, cb)},
         {"name": "Geografico Origem UF",  "weight": 2,  "func": lambda cb: _sync_geografico_origem_uf(engine, cb)},
         {"name": "Contexto eSocial",      "weight": 3,  "func": lambda cb: _sync_esocial(engine, cb)},
         {"name": "Metadados das Bases",   "weight": 1,  "func": lambda cb: _sync_sentinela_metadados_base(engine, cb)},
@@ -2813,6 +2906,10 @@ def scan_crm_prescricoes_brasil_semestre() -> pl.LazyFrame:
     )
 
 
+def scan_dados_medico() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("dados_medico", _DADOS_MEDICO_PARQUET_PATH)
+
+
 def get_medicamentos_df() -> pl.DataFrame:
     global _df_medicamentos
     if _df_medicamentos is None:
@@ -2914,6 +3011,7 @@ def get_cache_status() -> dict:
         "bench_crm_regiao":{"label": "Benchmark CRM (Região)", "path": _BENCH_CRM_REGIAO_PATH,    "loaded": _df_bench_crm_regiao is not None},
         "bench_crm_br":    {"label": "Benchmark CRM (Brasil)", "path": _BENCH_CRM_BR_PATH,        "loaded": _df_bench_crm_br is not None},
         "crm_prescricoes_brasil_semestre": {"label": "CRM Brasil Semestral", "path": _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)},
+        "dados_medico": {"label": "Dados Medico", "path": _DADOS_MEDICO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("dados_medico", _DADOS_MEDICO_PARQUET_PATH)},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "perfil_estabelecimento": {"label": "Perfil Estabelecimentos", "path": _PERFIL_ESTABELECIMENTO_PARQUET_PATH, "loaded": _df_perfil_estabelecimento is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},

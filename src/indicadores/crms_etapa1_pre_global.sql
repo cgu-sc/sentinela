@@ -172,19 +172,36 @@ WHERE F.uf IS NOT NULL
 PRINT '>> Passo 1: Criando temp_CGUSC.fp.build_dados_medico...';
 SET @t1 = GETDATE();
 
+IF COL_LENGTH('temp_CFM.dbo.medicos_jul_2025_mod', 'prim_inscricao_uf') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CFM.dbo.medicos_jul_2025_mod sem coluna obrigatoria prim_inscricao_uf.', 16, 1);
+    RETURN;
+END;
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.build_dados_medico;
 
+WITH MedicosNormalizados AS (
+    SELECT
+        TRY_CAST(NU_CRM AS BIGINT) AS nu_crm,
+        CAST(UPPER(LTRIM(RTRIM(CAST(SG_UF AS VARCHAR(2))))) AS VARCHAR(2)) AS sg_uf,
+        CAST(MAX(CAST(NM_MEDICO AS VARCHAR(255))) AS VARCHAR(255)) AS no_medico,
+        MIN(TRY_CONVERT(DATE, prim_inscricao_uf, 103)) AS dt_primeira_inscricao_uf
+    FROM temp_CFM.dbo.medicos_jul_2025_mod
+    WHERE NU_CRM IS NOT NULL
+      AND TRY_CAST(NU_CRM AS BIGINT) > 0
+    GROUP BY
+        TRY_CAST(NU_CRM AS BIGINT),
+        CAST(UPPER(LTRIM(RTRIM(CAST(SG_UF AS VARCHAR(2))))) AS VARCHAR(2))
+)
 SELECT
-    CAST(ROW_NUMBER() OVER (ORDER BY TRY_CAST(NU_CRM AS INT), SG_UF) AS INT) AS id,
-    CAST(CAST(TRY_CAST(NU_CRM AS BIGINT) AS VARCHAR(10)) + '/' + SG_UF AS VARCHAR(13)) AS id_medico,
-    TRY_CAST(NU_CRM AS BIGINT)                           AS nu_crm,
-    SG_UF                                                AS sg_uf,
-    NM_MEDICO                                            AS no_medico,
-    TRY_CONVERT(DATE, DT_INSCRICAO, 103)                 AS dt_inscricao
+    CAST(ROW_NUMBER() OVER (ORDER BY nu_crm, sg_uf) AS INT) AS id,
+    CAST(CAST(nu_crm AS VARCHAR(10)) + '/' + sg_uf AS VARCHAR(13)) AS id_medico,
+    nu_crm,
+    sg_uf,
+    no_medico,
+    dt_primeira_inscricao_uf
 INTO temp_CGUSC.fp.build_dados_medico
-FROM temp_CFM.dbo.medicos_jul_2025_mod
-WHERE NU_CRM IS NOT NULL
-  AND TRY_CAST(NU_CRM AS BIGINT) > 0;
+FROM MedicosNormalizados;
 
 CREATE CLUSTERED INDEX IDX_Join_Medico
     ON temp_CGUSC.fp.build_dados_medico(id_medico);

@@ -156,7 +156,7 @@ DECLARE @nu_registros_etapa BIGINT;
 DECLARE @id_etapa_log BIGINT;
 DECLARE @nu_ufs_processadas INT = 0;
 
-DECLARE @lote_size  INT      = 20;
+DECLARE @lote_size  INT      = 50;
 DECLARE @t0         DATETIME = GETDATE();
 DECLARE @t1         DATETIME;
 DECLARE @t_bloco    DATETIME;
@@ -1491,6 +1491,17 @@ BEGIN
 
     SET @t_bloco = GETDATE();
 
+    SET @etapa = '2.C.1_BASE_HORARIA_SELECT';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'SELECT INTO #base_horaria em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     DROP TABLE IF EXISTS #base_horaria;
     SELECT
         nu_cnpj AS cnpj,
@@ -1503,8 +1514,48 @@ BEGIN
     FROM #base_horaria_mestra
     GROUP BY nu_cnpj, competencia, dt_dia, hr_janela;
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'SELECT INTO #base_horaria.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.2_BASE_HORARIA_INDEXES';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Indices de #base_horaria em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     CREATE CLUSTERED INDEX IDX_BH_Surto ON #base_horaria(cnpj, dt_janela, hr_janela);
     CREATE NONCLUSTERED INDEX IDX_BH_Movel ON #base_horaria(cnpj, hr_janela, dt_janela) INCLUDE (nu_prescricoes_hora);
+
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        observacao = 'Indices IDX_BH_Surto e IDX_BH_Movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.3_MEDIANA_TRIMESTRAL';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'PERCENTILE_CONT trimestral por CNPJ/hora em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     DROP TABLE IF EXISTS #mediana_hora;
     SELECT DISTINCT
@@ -1515,6 +1566,27 @@ BEGIN
             OVER (PARTITION BY cnpj, (competencia / 100), ((competencia % 100 - 1) / 3), hr_janela) AS mediana_hora
     INTO #mediana_hora
     FROM #base_horaria;
+
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'SELECT INTO #mediana_hora.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.4_DATAS_HORAS_MOVEL';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Criacao de grade dia ativo x 24 horas em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     DROP TABLE IF EXISTS #horas_janela;
     CREATE TABLE #horas_janela (
@@ -1542,6 +1614,27 @@ BEGIN
     CREATE CLUSTERED INDEX IDX_DatasHorasMovel
         ON #datas_horas_movel(cnpj, dt_janela, hr_janela);
 
+    SET @nu_registros_etapa = (SELECT COUNT_BIG(*) FROM #datas_horas_movel);
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #datas_horas_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.5_DIAS_ATIVOS_MOVEL';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Criacao de #dias_ativos_movel em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     DROP TABLE IF EXISTS #dias_ativos_movel;
     SELECT
         cnpj,
@@ -1553,6 +1646,64 @@ BEGIN
     CREATE CLUSTERED INDEX IDX_DiasAtivosMovel
         ON #dias_ativos_movel(cnpj, dt_janela);
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #dias_ativos_movel;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #dias_ativos_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.6A_HORAS_CANDIDATAS';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Selecao de horas candidatas a volume horario anomalo em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+    DROP TABLE IF EXISTS #horas_volume_candidatas;
+    SELECT
+        cnpj,
+        competencia,
+        dt_janela,
+        hr_janela,
+        nu_prescricoes_hora
+    INTO #horas_volume_candidatas
+    FROM #base_horaria
+    WHERE nu_prescricoes_hora >= 10;
+
+    CREATE CLUSTERED INDEX IDX_HorasVolumeCandidatas
+        ON #horas_volume_candidatas(cnpj, dt_janela, hr_janela);
+
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #horas_volume_candidatas;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #horas_volume_candidatas.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.6B_BASELINE_MOVEL_SELECT';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'SELECT INTO #baseline_horaria_movel para horas candidatas em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     DROP TABLE IF EXISTS #baseline_horaria_movel;
     SELECT
         H.cnpj,
@@ -1561,7 +1712,7 @@ BEGIN
         H.hr_janela,
         CAST(ISNULL(B.nu_prescricoes_hora, 0) AS SMALLINT) AS nu_prescricoes_hora
     INTO #baseline_horaria_movel
-    FROM #datas_horas_movel H
+    FROM #horas_volume_candidatas H
     INNER JOIN #dias_ativos_movel D
         ON  D.cnpj = H.cnpj
         AND D.dt_janela >= DATEADD(MONTH, -3, H.dt_janela)
@@ -1571,8 +1722,69 @@ BEGIN
         AND B.dt_janela = D.dt_janela
         AND B.hr_janela = H.hr_janela;
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'SELECT INTO #baseline_horaria_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.6C_BASELINE_MOVEL_INDEX';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Indice de #baseline_horaria_movel em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     CREATE CLUSTERED INDEX IDX_BaselineMovel
         ON #baseline_horaria_movel(cnpj, dt_janela, hr_janela, nu_prescricoes_hora);
+
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        observacao = 'Indice IDX_BaselineMovel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.6D_BASELINE_MOVEL_COUNT';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Contagem de #baseline_horaria_movel em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #baseline_horaria_movel;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'COUNT_BIG de #baseline_horaria_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.7_MESES_ATIVOS_BASELINE';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Contagem de meses ativos do baseline em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     DROP TABLE IF EXISTS #meses_ativos_baseline;
     SELECT
@@ -1582,7 +1794,7 @@ BEGIN
     INTO #meses_ativos_baseline
     FROM (
         SELECT DISTINCT cnpj, dt_janela
-        FROM #datas_horas_movel
+        FROM #horas_volume_candidatas
     ) H
     INNER JOIN #dias_ativos_movel D
         ON  D.cnpj = H.cnpj
@@ -1595,6 +1807,28 @@ BEGIN
 
     CREATE CLUSTERED INDEX IDX_MesesAtivosBaseline
         ON #meses_ativos_baseline(cnpj, dt_janela);
+
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #meses_ativos_baseline;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #meses_ativos_baseline.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.8_MEDIANA_MOVEL_CALC';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'PERCENTILE_CONT da mediana movel em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     DROP TABLE IF EXISTS #mediana_hora_movel_calc;
     SELECT DISTINCT
@@ -1614,6 +1848,28 @@ BEGIN
     CREATE CLUSTERED INDEX IDX_MedianaMovelCalc
         ON #mediana_hora_movel_calc(cnpj, dt_janela, hr_janela);
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #mediana_hora_movel_calc;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #mediana_hora_movel_calc.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.9_MEDIANA_MOVEL_FINAL';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Filtro de mediana movel com baseline minimo em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     DROP TABLE IF EXISTS #mediana_hora_movel;
     SELECT
         cnpj,
@@ -1626,6 +1882,28 @@ BEGIN
     WHERE qtd_meses_ativos_baseline >= 2;
 
     CREATE CLUSTERED INDEX IDX_MedianaMovel ON #mediana_hora_movel(cnpj, dt_janela, hr_janela);
+
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #mediana_hora_movel;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #mediana_hora_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.10_MAD_MOVEL';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'PERCENTILE_CONT do MAD movel em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
 
     DROP TABLE IF EXISTS #mad_hora_movel;
     SELECT DISTINCT
@@ -1644,17 +1922,41 @@ BEGIN
 
     CREATE CLUSTERED INDEX IDX_MadMovel ON #mad_hora_movel(cnpj, dt_janela, hr_janela);
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SELECT @nu_registros_etapa = COUNT_BIG(*) FROM #mad_hora_movel;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'Criacao e indice de #mad_hora_movel.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.11_ANOMALIAS_SELECT';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Classificacao de anomalias horarias em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     DROP TABLE IF EXISTS #anomalias_horarias;
     SELECT
         H.*,
-        M.mediana_hora_movel AS mediana_hora,
+        MT.mediana_hora AS mediana_hora,
         MAD.mad_hora_movel AS mad_hora,
         CASE
             WHEN H.nu_prescricoes_hora >= 10
+             AND M.mediana_hora_movel IS NOT NULL
              AND MAD.mad_hora_movel > 0
              AND (0.6745 * (H.nu_prescricoes_hora - M.mediana_hora_movel) / MAD.mad_hora_movel) > 4.5
             THEN 1
             WHEN H.nu_prescricoes_hora >= 10
+             AND M.mediana_hora_movel IS NOT NULL
              AND MAD.mad_hora_movel = 0
              AND H.nu_prescricoes_hora > M.mediana_hora_movel
             THEN 1
@@ -1662,6 +1964,10 @@ BEGIN
         END AS is_anomalo_hora
     INTO #anomalias_horarias
     FROM #base_horaria H
+    LEFT JOIN #mediana_hora MT
+        ON  MT.cnpj = H.cnpj
+        AND MT.competencia = H.competencia
+        AND MT.hr_janela = H.hr_janela
     LEFT JOIN #mediana_hora_movel M
         ON  M.cnpj = H.cnpj
         AND M.dt_janela = H.dt_janela
@@ -1671,7 +1977,40 @@ BEGIN
         AND MAD.dt_janela = H.dt_janela
         AND MAD.hr_janela = H.hr_janela;
 
+    SET @nu_registros_etapa = @@ROWCOUNT;
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        nu_registros = @nu_registros_etapa,
+        observacao = 'SELECT INTO #anomalias_horarias.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C.12_ANOMALIAS_INDEX';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
+    SET @t_etapa = GETDATE();
+    SET @id_etapa_log = NULL;
+    INSERT INTO temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+        (uf_farmacia, pipeline_versao, dt_data_inicio, dt_data_fim, etapa, dt_inicio_etapa, observacao)
+    VALUES
+        (@uf_farmacia, @pipeline_versao, @DataInicio, @DataFim, @etapa, @t_etapa, 'Indice de #anomalias_horarias em andamento.');
+    SET @id_etapa_log = CONVERT(BIGINT, SCOPE_IDENTITY());
+
     CREATE CLUSTERED INDEX IDX_AnomaliaH ON #anomalias_horarias(cnpj, dt_janela, hr_janela);
+
+    SET @dt_fim_etapa = GETDATE();
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_etapa_log
+    SET dt_fim_etapa = @dt_fim_etapa,
+        segundos_etapa = DATEDIFF(SECOND, @t_etapa, @dt_fim_etapa),
+        milissegundos_etapa = DATEDIFF(MILLISECOND, @t_etapa, @dt_fim_etapa),
+        observacao = 'Indice IDX_AnomaliaH.'
+    WHERE id_etapa_log = @id_etapa_log;
+
+    SET @etapa = '2.C_ANOMALIAS_HORARIAS';
+    UPDATE temp_CGUSC.fp.build_crm_detalhado_lote_log SET etapa = @etapa WHERE id_lote_log = @id_lote_log;
+    UPDATE C SET etapa = @etapa FROM temp_CGUSC.fp.build_crm_detalhado_lote_controle C INNER JOIN #lote_atual L ON L.id_cnpj = C.id_cnpj;
 
     PRINT '      2.C anomalias horarias:    ' + CONVERT(VARCHAR(20), GETDATE() - @t_bloco, 114);
 

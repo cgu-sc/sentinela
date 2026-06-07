@@ -1682,7 +1682,7 @@ def _add_hhi_crm_text(
     headers = [
         "CRM/UF",
         "Nome",
-        "Data da inscrição no CFM",
+        "Data da primeira inscrição na UF",
         "Número de autorizações vinculadas ao CRM",
         "% sobre a produção total da farmácia",
         "Valor total pago pelo PFPB tendo como base o CRM",
@@ -1797,7 +1797,7 @@ def _add_crms_irregulares_text(
     p1 = doc.add_paragraph()
     _run(
         p1,
-        "No âmbito do PFPB, as dispensações devem estar respaldadas por prescrições emitidas por médicos com registro ativo e regular no Conselho Regional de Medicina (CRM). Para este indicador, foram consideradas duas situações de irregularidade: CRMs inválidos ou não localizados na base do Conselho Federal de Medicina (CFM), e prescrições com data anterior à inscrição do médico no respectivo conselho. A ocorrência de qualquer dessas situações aponta para o processamento de dispensações com prescrição médica incompatível com os requisitos legais do Programa.",
+        "No âmbito do PFPB, as dispensações devem estar respaldadas por prescrições emitidas por médicos com registro ativo e regular no Conselho Regional de Medicina (CRM). Para este indicador, foram consideradas duas situações de irregularidade: CRMs inválidos ou não localizados na base do Conselho Federal de Medicina (CFM), e prescrições com data anterior à primeira inscrição do médico na UF do respectivo CRM. A ocorrência de qualquer dessas situações aponta para o processamento de dispensações com prescrição médica incompatível com os requisitos legais do Programa.",
         color="0F172A",
         size=10,
     )
@@ -1815,7 +1815,7 @@ def _add_crms_irregulares_text(
         _run(p2, f"{qtd_invalidos}", color="334155", size=10, bold=True)
         _run(p2, " com números inválidos e ", color="0F172A", size=10)
         _run(p2, f"{qtd_antes_registro}", color="334155", size=10, bold=True)
-        _run(p2, " com prescrição médica emitida antes do registro do CRM", color="0F172A", size=10)
+        _run(p2, " com prescrição médica emitida antes da primeira inscrição do CRM na UF", color="0F172A", size=10)
     _run(p2, ". Tal percentual corresponde a ", color="0F172A", size=10)
     _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
     _run(p2, " o percentual mediano de vendas com essa mesma criticidade entre as farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
@@ -1837,7 +1837,7 @@ def _add_crms_irregulares_text(
     headers = [
         "CRM/UF",
         "Nome",
-        "Data da inscrição no CFM",
+        "Data da primeira inscrição na UF",
         "Irregularidade identificada",
         "Número de autorizações vinculadas ao CRM",
         "% sobre a produção total da farmácia",
@@ -1877,7 +1877,7 @@ def _add_crms_irregulares_text(
             if _as_int(row.get("flag_crm_invalido")) > 0:
                 motivos.append("CRM inválido")
             if _as_int(row.get("flag_prescricao_antes_registro")) > 0:
-                motivos.append("Prescrição antes do registro")
+                motivos.append("Prescrição antes da primeira inscrição na UF")
             values = [
                 crm_uf,
                 _title_case_pt(row.get("no_medico") or "Não localizado"),

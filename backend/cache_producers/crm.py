@@ -25,6 +25,7 @@ from cache_producers.types import CacheLoadResult
 _CRM_ALERTS_CACHE_VERSION = 4
 _CRM_SEVERITY_CACHE_VERSION = 3
 _CRM_RAIOX_TX_CACHE_VERSION = 3
+_CRM_PRESCRITORES_CACHE_VERSION = 2
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 
@@ -81,10 +82,19 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
     parquet_path = _path(cnpj, CRM_PRESCRITORES_PARQUET)
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
-        missing_cols = [col for col in ["no_medico", "dt_inscricao_crm"] if col not in df.columns]
-        if not missing_cols:
+        missing_cols = [
+            col
+            for col in ["no_medico", "dt_inscricao_crm", "_crm_prescritores_cache_version"]
+            if col not in df.columns
+        ]
+        version_ok = (
+            "_crm_prescritores_cache_version" in df.columns
+            and (df.height == 0 or _to_int(df["_crm_prescritores_cache_version"].max()) >= _CRM_PRESCRITORES_CACHE_VERSION)
+        )
+        if not missing_cols and version_ok:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-        print(f"[ CACHE ] {cnpj} - CRM - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+        motivo = f"cache sem {', '.join(missing_cols)}" if missing_cols else "versao de cache defasada"
+        print(f"[ CACHE ] {cnpj} - CRM - {motivo}; regenerando parquet.")
 
     query_time_ms: float | None = None
     save_time_ms: float | None = None
@@ -98,10 +108,9 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
                      "E.flag_crm_invalido, "
                      "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
                      "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                     "E.dt_primeira_prescricao, M.no_medico, M.dt_inscricao AS dt_inscricao_crm, "
+                     "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
                      "E.nu_estabelecimentos"
                      " FROM temp_CGUSC.fp.app_crm_export E"
-                     " LEFT JOIN temp_CGUSC.fp.build_dados_medico M ON M.id_medico = E.id_medico"
                      " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
                      " WHERE F.cnpj = :cnpj"),
                 conn,
@@ -110,13 +119,36 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
             query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=_empty_schema(CRM_PRESCRITORES_PARQUET))
-        if "no_medico" not in df.columns:
-            df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias("no_medico"))
-        if "dt_inscricao_crm" not in df.columns:
-            df = df.with_columns(pl.lit(None, dtype=pl.Date).alias("dt_inscricao_crm"))
+        if not df.is_empty():
+            from data_cache import scan_dados_medico
+
+            id_medicos = df["id_medico"].cast(pl.Utf8).unique().to_list()
+            df_medicos = (
+                scan_dados_medico()
+                .filter(pl.col("id_medico").is_in(id_medicos))
+                .select(["id_medico", "no_medico"])
+                .collect()
+            )
+            df = df.with_columns(pl.col("id_medico").cast(pl.Utf8)).join(
+                df_medicos,
+                on="id_medico",
+                how="left",
+            )
+
+        missing_after_build = [col for col in ["no_medico", "dt_inscricao_crm"] if col not in df.columns]
+        if missing_after_build:
+            raise RuntimeError(
+                f"Contrato invalido ao gerar {CRM_PRESCRITORES_PARQUET}: colunas ausentes {', '.join(missing_after_build)}."
+            )
+
+        df = df.with_columns([
+            pl.col("no_medico").cast(pl.Utf8),
+            pl.col("dt_inscricao_crm").cast(pl.Date),
+        ])
         for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
             if col in df.columns:
                 df = df.with_columns(pl.col(col).cast(pl.Int8))
+        df = df.with_columns(pl.lit(_CRM_PRESCRITORES_CACHE_VERSION).alias("_crm_prescritores_cache_version"))
 
         t1 = time.perf_counter()
         df.write_parquet(parquet_path, compression="zstd")

@@ -21,6 +21,11 @@ BEGIN
     RAISERROR('Tabela fp.build_crm_concentracao_unico_alertas nao encontrada.', 16, 1);
     RETURN;
 END;
+IF OBJECT_ID('fp.build_dados_medico', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela fp.build_dados_medico nao encontrada.', 16, 1);
+    RETURN;
+END;
 IF OBJECT_ID('fp.build_crm_concentracao_multiplo_alertas', 'U') IS NULL
 BEGIN
     RAISERROR('Tabela fp.build_crm_concentracao_multiplo_alertas nao encontrada.', 16, 1);
@@ -101,6 +106,9 @@ PRINT '>> [PROMOCAO CRM] Renomeando tabelas...';
 
 BEGIN TRY
     BEGIN TRAN;
+
+    IF OBJECT_ID('fp.app_dados_medico', 'U') IS NOT NULL DROP TABLE fp.app_dados_medico;
+    EXEC sp_rename 'fp.build_dados_medico', 'app_dados_medico';
 
     IF OBJECT_ID('fp.app_crm_concentracao_unico_alertas', 'U') IS NOT NULL DROP TABLE fp.app_crm_concentracao_unico_alertas;
     EXEC sp_rename 'fp.build_crm_concentracao_unico_alertas', 'app_crm_concentracao_unico_alertas';

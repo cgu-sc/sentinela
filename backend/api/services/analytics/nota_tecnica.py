@@ -688,8 +688,8 @@ def generate_nota_tecnica(
     else:
         periodo_txt = 'Histórico completo'
 
-    criticos = _get_criticos(cnpj)
-    criticidade_order = _get_criticos_ordenados_por_risco(cnpj, criticos)
+    criticos = _get_criticos(cnpj, data_inicio, data_fim)
+    criticidade_order = _get_criticos_ordenados_por_risco(cnpj, criticos, data_inicio, data_fim)
     timing.mark("criticidades matriz")
     falecidos_comp = _build_falecidos_context(cnpj, uf, data_inicio, data_fim) if 'falecidos' in criticos else None
     if 'falecidos' in criticos and not falecidos_comp:
@@ -1338,7 +1338,7 @@ def generate_nota_tecnica(
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
     doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.')
-    indicadores_criticos_quadro = _build_indicadores_criticos_quadro(cnpj)
+    indicadores_criticos_quadro = _build_indicadores_criticos_quadro(cnpj, data_inicio, data_fim)
     if indicadores_criticos_quadro:
         tabela_num += 1
         _add_indicadores_criticos_quadro(doc, indicadores_criticos_quadro, tabela_num)
@@ -1348,7 +1348,7 @@ def generate_nota_tecnica(
 
     def _add_enquadramento_regional_indicador(key: str) -> None:
         nonlocal tabela_num
-        regional_context = _build_indicador_regional_context(cnpj, key)
+        regional_context = _build_indicador_regional_context(cnpj, key, data_inicio, data_fim)
         tabela_num += 1
         _add_indicador_regional_table(doc, regional_context, tabela_num)
         timing.mark(f"secao 7 enquadramento regional {key}")

@@ -10,7 +10,8 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
+from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...utils.text_search import apply_token_search
@@ -244,35 +245,24 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             ])
             .sort("percValSemComp", descending=True, nulls_last=True)
         )
-        # Enrich with rankings and counts from matriz_risco_consolidada
-        try:
-            risco_df = get_df_matriz_risco()
-            # Tornar colunas case-insensitive de forma segura (cria novo DataFrame devido ao copy-on-write construtivo)
-            risco_df = risco_df.rename({c: c.lower() for c in risco_df.columns})
-            
-            expected_cols = [
-                "cnpj", "rank_nacional", "total_nacional", "rank_uf", "total_uf",
-                "rank_regiao_saude", "total_regiao_saude", "rank_municipio", "total_municipio",
-                "score_risco_final", "classificacao_risco"
-            ]
-            # Apenas seleciona colunas que de fato existem na matriz
-            available_cols = [c for c in expected_cols if c in risco_df.columns]
-            
-            if "cnpj" in available_cols and len(available_cols) > 1:
-                risco_df = risco_df.select(available_cols)
-                cnpj_df = cnpj_df.join(risco_df, on="cnpj", how="left")
-        except Exception as e:
-            print(f"⚠️ Erro ao cruzar rankings: {e}")
-            cnpj_df = cnpj_df.with_columns([
-                pl.lit(None).cast(pl.Int64).alias("rank_nacional"),
-                pl.lit(None).cast(pl.Int64).alias("total_nacional"),
-                pl.lit(None).cast(pl.Int64).alias("rank_uf"),
-                pl.lit(None).cast(pl.Int64).alias("total_uf"),
-                pl.lit(None).cast(pl.Int64).alias("rank_regiao_saude"),
-                pl.lit(None).cast(pl.Int64).alias("total_regiao_saude"),
-                pl.lit(None).cast(pl.Int64).alias("rank_municipio"),
-                pl.lit(None).cast(pl.Int64).alias("total_municipio"),
-            ])
+        risco_cols = [
+            "id_cnpj",
+            "score_risco_final",
+            "classificacao_risco",
+            "rank_nacional",
+            "total_nacional",
+            "rank_uf",
+            "total_uf",
+            "rank_regiao_saude",
+            "total_regiao_saude",
+            "rank_municipio",
+            "total_municipio",
+        ]
+        risco_df = build_dynamic_matriz_risco(
+            data_inicio=inicio,
+            data_fim=fim,
+        ).select(risco_cols)
+        cnpj_df = cnpj_df.join(risco_df, on="id_cnpj", how="left")
 
         resultado_cnpjs = [
             ResultadoSentinelaCnpjSchema(**r)
@@ -292,7 +282,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         import traceback
         print(f"❌ ERRO NO MOTOR POLARS (Analytics): {e}")
         print(traceback.format_exc())
-        return AnalyticsResponse(kpis=[], resultado_sentinela_uf=[], resultado_municipios=None)
+        raise HTTPException(status_code=503, detail="Resumo analitico indisponivel: matriz dinamica de risco ou cache base invalido.") from e
 
 
 def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, estabelecimento: Optional[str] = None) -> ProducaoSemestralResponse:

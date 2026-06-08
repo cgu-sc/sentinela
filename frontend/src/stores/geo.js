@@ -7,6 +7,7 @@ export const useGeoStore = defineStore('geo', () => {
   const localidades = ref([]);
   const isLoading = ref(false);
   const estabelecimentos = ref([]);  // [{cnpj, razao_social, lat, lon, id_ibge7, score_risco, classificacao_risco}]
+  const estabelecimentosKey = ref(null);
 
   // Mapa O(1) para buscas rápidas (id_ibge7 -> localidade)
   const localidadesByIbge7 = computed(() => {
@@ -63,10 +64,17 @@ export const useGeoStore = defineStore('geo', () => {
     }
   }
 
-  async function fetchEstabelecimentos() {
+  async function fetchEstabelecimentos(inicio = null, fim = null) {
+    const key = `${inicio || ''}|${fim || ''}`;
+    if (estabelecimentosKey.value === key) return;
+
     try {
-      const response = await axios.get(API_ENDPOINTS.geoEstabelecimentos);
+      const params = {};
+      if (inicio) params.data_inicio = inicio;
+      if (fim)    params.data_fim    = fim;
+      const response = await axios.get(API_ENDPOINTS.geoEstabelecimentos, { params });
       estabelecimentos.value = response.data.estabelecimentos;
+      estabelecimentosKey.value = key;
     } catch (err) {
       console.error('Erro ao buscar estabelecimentos geo:', err);
     }

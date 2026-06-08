@@ -17,11 +17,11 @@ from data_cache import (
     get_df,
     get_rede_df,
     get_localidades_df,
-    get_df_matriz_risco,
     get_df_bench_crm_regiao,
     get_df_bench_crm_br,
     scan_crm_prescricoes_brasil_semestre,
     get_df_dados_farmacia,
+    get_df_perfil_estabelecimento,
     get_cache_dir,
 )
 from ...schemas.analytics import (
@@ -683,20 +683,19 @@ def get_crm_data(
         pass
     timing.mark("benchmarks CRM")
 
-    # â”€â”€ 6. Metadados do CNPJ (matriz de risco) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â”€â”€ 6. Metadados do CNPJ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     razao_social = municipio = uf_str = None
     try:
-        df_risco  = get_df_matriz_risco()
-        df_risco  = df_risco.rename({c: c.lower() for c in df_risco.columns})
-        row_risco = df_risco.filter(pl.col("cnpj") == cnpj)
-        if not row_risco.is_empty():
-            r            = row_risco.row(0, named=True)
-            razao_social = r.get("razaosocial") or r.get("razao_social")
-            municipio    = r.get("municipio")
-            uf_str       = r.get("uf")
+        perfil = get_df_perfil_estabelecimento()
+        row_perfil = perfil.filter(pl.col("cnpj") == cnpj)
+        if not row_perfil.is_empty():
+            r = row_perfil.row(0, named=True)
+            razao_social = r.get("razao_social")
+            municipio = r.get("no_municipio")
+            uf_str = r.get("uf")
     except Exception:
         pass
-    timing.mark("metadata matriz risco")
+    timing.mark("metadata farmacia")
 
     summary_dict = {
         "pct_concentracao_top1":          pct_top1,

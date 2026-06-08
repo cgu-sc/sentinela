@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+from typing import List, Optional
 from datetime import date
 import calendar
 import time
@@ -12,7 +12,12 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_df_matriz_risco, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
+from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from .matriz_risco_dinamica import (
+    INDICATOR_MAPPING,
+    _INDICATOR_FLAGS,
+    build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
+)
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...utils.text_search import apply_token_search
@@ -58,52 +63,6 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
-    'percentual_nao_comprovacao': ('pct_auditado',              'med_auditado_reg',             'med_auditado_uf',             'med_auditado_br',             'risco_auditado_reg',             'risco_auditado_uf',             'risco_auditado_br'),
-    'falecidos':                   ('pct_falecidos',             'med_falecidos_reg',            'med_falecidos_uf',            'med_falecidos_br',            'risco_falecidos_reg',            'risco_falecidos_uf',            'risco_falecidos_br'),
-    'incompatibilidade_patologica':('pct_clinico',               'med_clinico_reg',              'med_clinico_uf',              'med_clinico_br',              'risco_clinico_reg',              'risco_clinico_uf',              'risco_clinico_br'),
-    'teto':                  ('pct_teto',                  'med_teto_reg',                 'med_teto_uf',                 'med_teto_br',                 'risco_teto_reg',                 'risco_teto_uf',                 'risco_teto_br'),
-    'polimedicamento':       ('pct_polimedicamento',       'med_polimedicamento_reg',      'med_polimedicamento_uf',      'med_polimedicamento_br',      'risco_polimedicamento_reg',      'risco_polimedicamento_uf',      'risco_polimedicamento_br'),
-    'ticket_medio':               ('val_ticket_medio',          'med_ticket_reg',               'med_ticket_uf',               'med_ticket_br',               'risco_ticket_reg',               'risco_ticket_uf',               'risco_ticket_br'),
-    'receita_paciente':      ('val_receita_paciente',      'med_receita_paciente_reg',     'med_receita_paciente_uf',     'med_receita_paciente_br',     'risco_receita_paciente_reg',     'risco_receita_paciente_uf',     'risco_receita_paciente_br'),
-    'per_capita':            ('val_per_capita',            'med_per_capita_reg',           'med_per_capita_uf',           'med_per_capita_br',           'risco_per_capita_reg',           'risco_per_capita_uf',           'risco_per_capita_br'),
-    'alto_custo':            ('pct_alto_custo',            'med_alto_custo_reg',           'med_alto_custo_uf',           'med_alto_custo_br',           'risco_alto_custo_reg',           'risco_alto_custo_uf',           'risco_alto_custo_br'),
-    'vendas_rapidas':        ('pct_vendas_rapidas',        'med_vendas_rapidas_reg',       'med_vendas_rapidas_uf',       'med_vendas_rapidas_br',       'risco_vendas_rapidas_reg',       'risco_vendas_rapidas_uf',       'risco_vendas_rapidas_br'),
-    'volume_atipico':        ('val_volume_atipico',        'med_volume_atipico_reg',       'med_volume_atipico_uf',       'med_volume_atipico_br',       'risco_volume_atipico_reg',       'risco_volume_atipico_uf',       'risco_volume_atipico_br'),
-    'recorrencia_sistemica': ('pct_recorrencia_sistemica', 'med_recorrencia_sistemica_reg','med_recorrencia_sistemica_uf','med_recorrencia_sistemica_br','risco_recorrencia_sistemica_reg','risco_recorrencia_sistemica_uf','risco_recorrencia_sistemica_br'),
-    'dias_pico':                  ('pct_pico',                  'med_pico_reg',                 'med_pico_uf',                 'med_pico_br',                 'risco_pico_reg',                 'risco_pico_uf',                 'risco_pico_br'),
-    'dispersao_geografica':       ('pct_geografico',            'med_geografico_reg',           'med_geografico_uf',           'med_geografico_br',           'risco_geografico_reg',           'risco_geografico_uf',           'risco_geografico_br'),
-    'hhi_crm':               ('val_hhi_crm',               'med_hhi_crm_reg',              'med_hhi_crm_uf',              'med_hhi_crm_br',              'risco_crm_reg',                  'risco_crm_uf',                  'risco_crm_br'),
-    'crms_irregulares':      ('pct_crms_irregulares',      'med_crms_irregulares_reg',     'med_crms_irregulares_uf',     'med_crms_irregulares_br',     'risco_crms_irregulares_reg',     'risco_crms_irregulares_uf',     'risco_crms_irregulares_br'),
-}
-
-# Mapeamento indicador → (col_flag_atencao, col_flag_critico) na fp.matriz_risco_consolidada.
-# Flags calculadas via Modified Z-Score (MAD) no SQL — fonte de verdade para Status na UI.
-_INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
-    # 1. Auditoria Financeira
-    'percentual_nao_comprovacao':   ('flag_percentual_sem_comprovacao_atencao', 'flag_percentual_sem_comprovacao_critico'),
-    # 2. Elegibilidade & Clínica
-    'falecidos':                    ('flag_falecidos_atencao',                  'flag_falecidos_critico'),
-    'incompatibilidade_patologica': ('flag_incompatibilidade_patologica_atencao', 'flag_incompatibilidade_patologica_critico'),
-    # 3. Padrões de Quantidade
-    'teto':                         ('flag_estouro_teto_atencao',               'flag_estouro_teto_critico'),
-    'polimedicamento':               ('flag_polimedicamento_atencao',            'flag_polimedicamento_critico'),
-    # 4. Padrões Financeiros
-    'ticket_medio':                  ('flag_ticket_medio_atencao',               'flag_ticket_medio_critico'),
-    'receita_paciente':              ('flag_receita_paciente_atencao',           'flag_receita_paciente_critico'),
-    'per_capita':                    ('flag_per_capita_atencao',                 'flag_per_capita_critico'),
-    'alto_custo':                    ('flag_alto_custo_atencao',                 'flag_alto_custo_critico'),
-    # 5. Automação & Geografia
-    'vendas_rapidas':                ('flag_vendas_rapidas_atencao',             'flag_vendas_rapidas_critico'),
-    'volume_atipico':                ('flag_volume_atipico_atencao',             'flag_volume_atipico_critico'),
-    'recorrencia_sistemica':         ('flag_recorrencia_sistemica_atencao',      'flag_recorrencia_sistemica_critico'),
-    'dias_pico':                     ('flag_concentracao_pico_atencao',          'flag_concentracao_pico_critico'),
-    'dispersao_geografica':          ('flag_dispersao_geografica_atencao',       'flag_dispersao_geografica_critico'),
-    # 6. Integridade Médica
-    'hhi_crm':                       ('flag_hhi_crm_atencao',                   'flag_hhi_crm_critico'),
-    'crms_irregulares':              ('flag_crms_irregulares_atencao',           'flag_crms_irregulares_critico'),
-}
-
 def _optional_float(value: object) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -115,6 +74,7 @@ def _optional_float(value: object) -> float | None:
         except ValueError:
             return None
     return None
+
 
 def _apply_estabelecimento_search(df: pl.DataFrame, estabelecimento: str | None) -> pl.DataFrame:
     return apply_token_search(df, estabelecimento, ("cnpj", "razao_social", "nome_fantasia"))
@@ -251,12 +211,21 @@ def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]]
         del cache[key]
 
 
-def get_indicadores(cnpj: str) -> IndicadoresResponse:
-    """Retorna os 16 indicadores de risco para um CNPJ a partir da matriz_risco_consolidada."""
+def get_indicadores(
+    cnpj: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+) -> IndicadoresResponse:
+    """Retorna os indicadores de risco para um CNPJ calculados a partir da matriz anual."""
     try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
+        perfil_df = get_df_perfil_estabelecimento()
+        cnpj_limpo = "".join(ch for ch in str(cnpj) if ch.isdigit()).zfill(14)
+        target = perfil_df.filter(pl.col("cnpj") == cnpj_limpo)
+        if target.is_empty():
+            return IndicadoresResponse(cnpj=cnpj, indicadores={})
+
+        df = _build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
+        rows = df.filter(pl.col("cnpj") == cnpj_limpo)
         if rows.is_empty():
             return IndicadoresResponse(cnpj=cnpj, indicadores={})
         row = rows.row(0, named=True)
@@ -273,10 +242,12 @@ def get_indicadores(cnpj: str) -> IndicadoresResponse:
             )
             for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items()
         }
-        return IndicadoresResponse(cnpj=cnpj, indicadores=indicadores)
-    except Exception:
-        print(f"[ ANALYTICS ] {cnpj} ● INDICADORES ● ❌ INDISPONÍVEL (Sem Cache e Banco Offline)")
-        return IndicadoresResponse(cnpj=cnpj, indicadores={})
+        return IndicadoresResponse(cnpj=cnpj_limpo, indicadores=indicadores)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[ ANALYTICS ] {cnpj} ● INDICADORES ● ❌ INDISPONÍVEL: {exc}")
+        raise HTTPException(status_code=503, detail="Indicadores indisponiveis: matriz anual de risco nao carregada ou invalida.")
 
 def _build_indicador_scope_base(
     data_inicio: date | None = None,
@@ -360,6 +331,8 @@ def _build_indicador_dataset(
     indicador: str,
     scope_base: pl.DataFrame,
     perfil_df: pl.DataFrame,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
     if indicador not in INDICATOR_MAPPING:
         raise HTTPException(
@@ -374,11 +347,18 @@ def _build_indicador_dataset(
     if scope_base.is_empty():
         return scope_base, perfil_df, pl.DataFrame(), c_val, c_mr, None, score_col
 
-    df_risco = get_df_matriz_risco()
-    df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-    risco_cols = ["cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
-    risco_cols_available = [c for c in risco_cols if c in df_risco.columns]
-    indicador_dataset = scope_base.join(df_risco.select(risco_cols_available), on="cnpj", how="inner")
+    df_risco = _build_dynamic_matriz_risco(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+    risco_cols = ["id_cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
+    missing_cols = [col for col in risco_cols if col not in df_risco.columns]
+    if missing_cols:
+        raise RuntimeError(
+            f"Colunas dinamicas obrigatorias ausentes para indicador '{indicador}': "
+            + ", ".join(missing_cols)
+        )
+    indicador_dataset = scope_base.join(df_risco.select(risco_cols), on="id_cnpj", how="inner")
     if indicador_dataset.is_empty():
         return indicador_dataset, perfil_df, df_risco, c_val, c_mr, None, score_col
 
@@ -454,7 +434,13 @@ def _build_indicador_dataset_cached(
             _prune_indicador_cache(_INDICADOR_SCOPE_BASE_CACHE, now, generation)
             _INDICADOR_SCOPE_BASE_CACHE[scope_cache_key] = (now, (scope_base, perfil_df))
 
-    result = _build_indicador_dataset(indicador, scope_base, perfil_df)
+    result = _build_indicador_dataset(
+        indicador,
+        scope_base,
+        perfil_df,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
 
     with _INDICADOR_CACHE_LOCK:
         now = time.monotonic()
@@ -680,10 +666,10 @@ def get_indicadores_analise(
         # Buscamos a mediana e MAD do indicador para o contexto regional completo
         mediana_reg = None
         mad_reg = None
-        # df_geo original contém todos os CNPJs com geo; filtramos os do contexto
-        df_context_geo = perfil_df.select(["id_cnpj", "cnpj", "uf", "id_regiao_saude"]).filter(context_mask)
+        # Perfil contém todos os CNPJs com geografia; filtramos os do contexto por id_cnpj.
+        df_context_geo = perfil_df.select(["id_cnpj", "uf", "id_regiao_saude"]).filter(context_mask)
         
-        df_context = df_context_geo.join(df_risco.select(["cnpj", c_val, rr_col]), on="cnpj", how="inner")
+        df_context = df_context_geo.join(df_risco.select(["id_cnpj", c_val, rr_col]), on="id_cnpj", how="inner")
         
         if not df_context.is_empty():
             s_valores = df_context.select(c_val).drop_nulls().to_series().sort()

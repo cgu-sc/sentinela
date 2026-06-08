@@ -10,7 +10,8 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_localidades_df, get_df_perfil_estabelecimento, get_cache_dir
+from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -59,9 +60,6 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
     try:
         df_mov   = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
         df_loc   = get_localidades_df()
-        df_risco = get_df_matriz_risco()
-        df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-
         # ── Resolução de Nome para Exibição ──────────────────────────────
         id_regiao: Optional[str] = str(regiao_id) if regiao_id is not None else None
 
@@ -194,22 +192,11 @@ def get_regional_benchmarking(uf: Optional[str] = None, data_inicio: Optional[da
             ])
         )
 
-        # Enriquece com score e classificação de risco da matriz_risco_consolidada
-        risco_cols = ["cnpj"]
-        risco_available = []
-        for col in ["score_risco_final", "classificacao_risco"]:
-            if col in df_risco.columns:
-                risco_available.append(col)
-                risco_cols.append(col)
-
-        if risco_available:
-            df_risco_slim = df_risco.select(risco_cols)
-            cnpj_enriched = cnpj_agg.join(df_risco_slim, on="cnpj", how="left")
-        else:
-            cnpj_enriched = cnpj_agg.with_columns([
-                pl.lit(None).cast(pl.Float64).alias("score_risco_final"),
-                pl.lit(None).cast(pl.Utf8).alias("classificacao_risco"),
-            ])
+        df_risco_slim = build_dynamic_matriz_risco(
+            data_inicio=inicio,
+            data_fim=fim,
+        ).select(["id_cnpj", "score_risco_final", "classificacao_risco"])
+        cnpj_enriched = cnpj_agg.join(df_risco_slim, on="id_cnpj", how="left")
 
         # Ordena pelo score de risco (maior risco primeiro)
         cnpj_sorted = cnpj_enriched.sort(
@@ -273,9 +260,6 @@ def get_regional_benchmarking_animation(
                 if not uf or uf == 'Todos':
                     uf = loc_row.get_column("sg_uf")[0]
 
-        df_risco = get_df_matriz_risco()
-        df_risco = df_risco.rename({c: c.lower() for c in df_risco.columns})
-
         MIN_DATA = date(2015, 7, 1)
         MAX_DATA = date(2024, 12, 31)
         inicio = (data_inicio if data_inicio and data_inicio >= MIN_DATA else MIN_DATA) if data_inicio else MIN_DATA
@@ -334,18 +318,12 @@ def get_regional_benchmarking_animation(
             ])
         )
 
-        # ── Enriquece com score de risco consolidado ────────────────────
-        risco_cols = ["cnpj"]
-        for col in ["score_risco_final", "classificacao_risco"]:
-            if col in df_risco.columns:
-                risco_cols.append(col)
-        df_risco_slim = df_risco.select(risco_cols)
-        cnpj_q = cnpj_q.join(df_risco_slim, on="cnpj", how="left")
-
-        if "score_risco_final" not in cnpj_q.columns:
-            cnpj_q = cnpj_q.with_columns(pl.lit(None).cast(pl.Float64).alias("score_risco_final"))
-        if "classificacao_risco" not in cnpj_q.columns:
-            cnpj_q = cnpj_q.with_columns(pl.lit(None).cast(pl.Utf8).alias("classificacao_risco"))
+        # ── Enriquece com score de risco dinâmico ───────────────────────
+        df_risco_slim = build_dynamic_matriz_risco(
+            data_inicio=inicio,
+            data_fim=fim,
+        ).select(["id_cnpj", "score_risco_final", "classificacao_risco"])
+        cnpj_q = cnpj_q.join(df_risco_slim, on="id_cnpj", how="left")
 
         # Ordena por trimestre (asc) e risco (desc) para ranking correto
         cnpj_q = cnpj_q.sort(
@@ -449,10 +427,7 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
             )
             df = df_agg
         else:
-            # Caso contrário, usa a matriz consolidada (mais rápido)
-            from data_cache import get_df_matriz_risco
-            df = get_df_matriz_risco()
-            df = df.rename({c: c.lower() for c in df.columns})
+            df = build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
 
         # Mapeamento de colunas conforme o schema real do cache
         col_target = "score_risco_final"

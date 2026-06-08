@@ -11,13 +11,16 @@ from docx.shared import Inches, Pt
 from data_cache import (
     get_df_dados_ibge_demografia,
     get_df_dados_farmacia,
-    get_df_matriz_risco,
     get_df_perfil_estabelecimento,
     scan_analise_gtin_inconsistencia_clinica,
     scan_geografico_origem_uf,
 )
 from .falecidos import get_falecidos_data
-from .indicadores import INDICATOR_MAPPING, _INDICATOR_FLAGS
+from .matriz_risco_dinamica import (
+    INDICATOR_MAPPING,
+    _INDICATOR_FLAGS,
+    build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
+)
 from .nota_tecnica_docx_utils import (
     _add_bookmark,
     _add_internal_hyperlink,
@@ -458,29 +461,73 @@ def _vez_ou_vezes(valor_formatado: str) -> str:
     return "vez" if abs(valor) <= 1 else "vezes"
 
 
-def _get_criticos(cnpj: str) -> set[str]:
+def _get_matriz_dinamica_nota(
+    cnpj: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> tuple[pl.DataFrame, dict[str, Any]]:
+    cnpj_norm = _cnpj_digits(cnpj)
+    perfil_df = get_df_perfil_estabelecimento()
+    df = _build_dynamic_matriz_risco(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        perfil_df=perfil_df,
+    )
+    if df.is_empty():
+        raise RuntimeError("Matriz dinamica de risco sem linhas para a Nota Tecnica.")
+
+    rows = df.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
+    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if rows.height == 0:
+        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz dinamica de risco.")
+    if rows.height > 1:
+        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz dinamica de risco.")
+    return df, rows.row(0, named=True)
+
+
+def _get_matriz_row_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    descricao: str,
+) -> dict[str, Any]:
+    try:
+        _df, row = _get_matriz_dinamica_nota(cnpj, data_inicio, data_fim)
+        return row
+    except Exception as exc:
+        raise RuntimeError(
+            f"Matriz de risco dinamica indisponivel para {descricao} {cnpj}: {exc}"
+        ) from exc
+
+
+def _get_criticos(
+    cnpj: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> set[str]:
     """Identifica quais indicadores estão em nível CRÍTICO para o CNPJ."""
     if _FORCAR_TODOS_CRITICOS_NOTA_TECNICA:
         return {key for key, _, _ in _SECAO5_MAP}
 
     try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return set()
-        row = rows.row(0, named=True)
+        _df, row = _get_matriz_dinamica_nota(cnpj, data_inicio, data_fim)
         return {
             key for key, (_, flag_c) in _INDICATOR_FLAGS.items()
             if row.get(flag_c.lower()) == 1
         }
-    except Exception:
-        return set()
+    except Exception as exc:
+        raise RuntimeError(f"Falha ao identificar indicadores criticos para {cnpj}: {exc}") from exc
 
 
-def _get_criticos_ordenados_por_risco(cnpj: str, criticos: set[str] | None = None) -> list[str]:
+def _get_criticos_ordenados_por_risco(
+    cnpj: str,
+    criticos: set[str] | None = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> list[str]:
     """Ordena indicadores criticos pela severidade regional usada na Nota Tecnica."""
-    criticos = set(criticos if criticos is not None else _get_criticos(cnpj))
+    criticos = set(criticos if criticos is not None else _get_criticos(cnpj, data_inicio, data_fim))
     if not criticos:
         return []
 
@@ -488,8 +535,7 @@ def _get_criticos_ordenados_por_risco(cnpj: str, criticos: set[str] | None = Non
         return [key for key, _, _ in _SECAO5_MAP if key in criticos]
 
     cnpj_norm = _cnpj_digits(cnpj)
-    df = get_df_matriz_risco()
-    df = df.rename({c: c.lower() for c in df.columns})
+    _df, matriz_row = _get_matriz_dinamica_nota(cnpj_norm, data_inicio, data_fim)
 
     required_columns = {"cnpj"}
     for key in criticos:
@@ -498,22 +544,12 @@ def _get_criticos_ordenados_por_risco(cnpj: str, criticos: set[str] | None = Non
         _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
         required_columns.add(c_risco_reg)
 
-    missing_columns = sorted(required_columns - set(df.columns))
+    missing_columns = sorted(required_columns - set(matriz_row.keys()))
     if missing_columns:
         raise RuntimeError(
             "Matriz de risco sem colunas obrigatorias para ordenar indicadores criticos da Nota Tecnica: "
             + ", ".join(missing_columns)
         )
-
-    rows = df.with_columns(
-        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
-    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
-    if rows.height == 0:
-        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para ordenacao da Nota Tecnica.")
-    if rows.height > 1:
-        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco.")
-
-    matriz_row = rows.row(0, named=True)
     risco_por_key: dict[str, float] = {}
     for key in criticos:
         _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
@@ -561,11 +597,14 @@ def _indicador_valor_farmacia_header(formato: str) -> str:
     raise RuntimeError(f"Formato de indicador critico nao mapeado para cabecalho da Nota Tecnica: {formato}")
 
 
-def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
+def _build_indicadores_criticos_quadro(
+    cnpj: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> list[dict[str, Any]]:
     """Monta linhas do quadro-resumo de indicadores críticos a partir da matriz de risco."""
     cnpj_norm = _cnpj_digits(cnpj)
-    df = get_df_matriz_risco()
-    df = df.rename({c: c.lower() for c in df.columns})
+    _df, matriz_row = _get_matriz_dinamica_nota(cnpj_norm, data_inicio, data_fim)
     required_columns = {"cnpj"}
     for key in _INDICATOR_FLAGS:
         if key not in INDICATOR_MAPPING:
@@ -576,22 +615,12 @@ def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
         _c_atencao, c_critico = _INDICATOR_FLAGS[key]
         required_columns.update({c_val, c_med_reg, c_risco_reg, c_critico})
 
-    missing_columns = sorted(required_columns - set(df.columns))
+    missing_columns = sorted(required_columns - set(matriz_row.keys()))
     if missing_columns:
         raise RuntimeError(
             "Matriz de risco sem colunas obrigatorias para o quadro de indicadores criticos da Nota Tecnica: "
             + ", ".join(missing_columns)
         )
-
-    rows = df.with_columns(
-        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
-    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
-    if rows.height == 0:
-        raise RuntimeError(f"CNPJ {cnpj_norm} nao encontrado na matriz de risco para a Nota Tecnica.")
-    if rows.height > 1:
-        raise RuntimeError(f"CNPJ {cnpj_norm} possui mais de uma linha na matriz de risco.")
-
-    matriz_row = rows.row(0, named=True)
     quadro_rows: list[dict[str, Any]] = []
     for key, (_c_atencao, c_critico) in _INDICATOR_FLAGS.items():
         if int(matriz_row.get(c_critico) or 0) != 1:
@@ -617,12 +646,17 @@ def _build_indicadores_criticos_quadro(cnpj: str) -> list[dict[str, Any]]:
             "status": "CRÍTICO",
         })
 
-    ordem = _get_criticos_ordenados_por_risco(cnpj, {row["key"] for row in quadro_rows})
+    ordem = _get_criticos_ordenados_por_risco(cnpj, {row["key"] for row in quadro_rows}, data_inicio, data_fim)
     ordem_por_key = {key: idx for idx, key in enumerate(ordem)}
     return sorted(quadro_rows, key=lambda item: ordem_por_key[item["key"]])
 
 
-def _build_indicador_regional_context(cnpj: str, indicador_key: str) -> dict[str, Any]:
+def _build_indicador_regional_context(
+    cnpj: str,
+    indicador_key: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> dict[str, Any]:
     """Monta o enquadramento da farmácia auditada na região de saúde do indicador."""
     if indicador_key not in INDICATOR_MAPPING:
         raise RuntimeError(f"Indicador sem mapeamento para enquadramento regional da Nota Tecnica: {indicador_key}")
@@ -633,8 +667,7 @@ def _build_indicador_regional_context(cnpj: str, indicador_key: str) -> dict[str
     label, formato = _INDICADOR_QUADRO_META[indicador_key]
     c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[indicador_key]
 
-    df = get_df_matriz_risco()
-    df = df.rename({c: c.lower() for c in df.columns})
+    df, _target_row = _get_matriz_dinamica_nota(cnpj_norm, data_inicio, data_fim)
     required_columns = {
         "cnpj",
         "id_regiao_saude",
@@ -994,15 +1027,8 @@ def _build_incompatibilidade_patologica_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca matriz e, quando houver detalhamento, ranking anual de patologias."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para incompatibilidade patologica {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "incompatibilidade patologica")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -1721,15 +1747,8 @@ def _build_teto_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de vendas no teto maximo."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para teto maximo {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "teto maximo")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -1814,15 +1833,8 @@ def _build_polimedicamento_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de quatro ou mais itens por cupom."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para polimedicamento {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "polimedicamento")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -1901,15 +1913,8 @@ def _build_ticket_medio_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de ticket medio."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para ticket medio {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "ticket medio")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -1988,15 +1993,8 @@ def _build_receita_paciente_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de faturamento medio mensal por cliente."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para receita por paciente {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "receita por paciente")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2075,15 +2073,8 @@ def _build_per_capita_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de faturamento mensal per capita."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para per capita {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "per capita")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2162,15 +2153,8 @@ def _build_alto_custo_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de medicamentos de alto custo."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para alto custo {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "alto custo")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2249,15 +2233,8 @@ def _build_vendas_rapidas_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de vendas em menos de 60 segundos."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para vendas rapidas {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "vendas rapidas")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2340,15 +2317,8 @@ def _build_recorrencia_sistemica_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de recorrencia sistemica de 30 dias."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para recorrencia sistemica {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "recorrencia sistemica")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2427,15 +2397,8 @@ def _build_dias_pico_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de vendas em dias de pico."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para dias de pico {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "dias de pico")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:
@@ -2514,15 +2477,8 @@ def _build_dispersao_geografica_context(
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
     """Busca os dados atuais da matriz para o texto de dispersao geografica."""
-    try:
-        df = get_df_matriz_risco()
-        df = df.rename({c: c.lower() for c in df.columns})
-        rows = df.filter(pl.col("cnpj") == cnpj)
-        if rows.is_empty():
-            return None
-        row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para dispersao geografica {cnpj}: {exc}")
+    row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "dispersao geografica")
+    if row is None:
         return None
 
     def as_float(key: str) -> float:

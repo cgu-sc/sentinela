@@ -8,7 +8,6 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 from cache_files import CRM_RAIOX_TX_PARQUET
-from data_cache import get_df_matriz_risco
 from ._cache import _get_cnpj_cache_dir
 from .crm import (
     _build_alertas_crm_multiplos_por_medico,
@@ -17,6 +16,7 @@ from .crm import (
     _filter_crm_date_range,
     get_crm_data,
 )
+from .matriz_risco_dinamica import build_dynamic_matriz_risco as _build_dynamic_matriz_risco
 from cache_producers.crm import (
     load_or_sync_crm_multi_alertas,
     load_or_sync_crm_timeline_hora,
@@ -568,8 +568,8 @@ def _build_hhi_crm_context(
     if not crms:
         return None
 
-    df_matriz = get_df_matriz_risco()
-    df_matriz = df_matriz.rename({c: c.lower() for c in df_matriz.columns})
+    cnpj_norm = "".join(ch for ch in str(cnpj) if ch.isdigit()).zfill(14)
+    df_matriz = _build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
     required_matriz_cols = [
         "cnpj",
         "val_hhi_crm",
@@ -584,9 +584,11 @@ def _build_hhi_crm_context(
             + ", ".join(missing_cols)
         )
 
-    matriz_rows = df_matriz.filter(pl.col("cnpj") == cnpj)
+    matriz_rows = df_matriz.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
+    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
     if matriz_rows.is_empty():
-        raise RuntimeError(f"Matriz de risco sem registro obrigatorio para HHI/CRM do CNPJ {cnpj}.")
+        raise RuntimeError(f"Matriz de risco sem registro obrigatorio para HHI/CRM do CNPJ {cnpj_norm}.")
     matriz_row = matriz_rows.row(0, named=True)
     indice_hhi = _required_positive_float(matriz_row.get("val_hhi_crm"), "val_hhi_crm", "comparativo HHI/CRM")
     multiplicador_regiao = _required_positive_float(
@@ -678,15 +680,27 @@ def _build_crms_irregulares_context(
     crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de CRMs irregulares ou invalidos."""
-    matriz_row: dict[str, Any] = {}
-    try:
-        df_matriz = get_df_matriz_risco()
-        df_matriz = df_matriz.rename({c: c.lower() for c in df_matriz.columns})
-        rows = df_matriz.filter(df_matriz["cnpj"] == cnpj)
-        if not rows.is_empty():
-            matriz_row = rows.row(0, named=True)
-    except Exception as exc:
-        print(f"[NOTA_TECNICA] Matriz de risco indisponivel para CRMs irregulares {cnpj}: {exc}")
+    cnpj_norm = "".join(ch for ch in str(cnpj) if ch.isdigit()).zfill(14)
+    df_matriz = _build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
+    required_matriz_cols = [
+        "cnpj",
+        "pct_crms_irregulares",
+        "risco_crms_irregulares_reg",
+        "risco_crms_irregulares_uf",
+        "risco_crms_irregulares_br",
+    ]
+    missing_cols = [col for col in required_matriz_cols if col not in df_matriz.columns]
+    if missing_cols:
+        raise RuntimeError(
+            "Matriz de risco sem colunas obrigatorias para CRMs irregulares: "
+            + ", ".join(missing_cols)
+        )
+    rows = df_matriz.with_columns(
+        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14).alias("_cnpj_norm")
+    ).filter(pl.col("_cnpj_norm") == cnpj_norm)
+    if rows.is_empty():
+        raise RuntimeError(f"Matriz de risco sem registro obrigatorio para CRMs irregulares do CNPJ {cnpj_norm}.")
+    matriz_row = rows.row(0, named=True)
 
     def matriz_float(key: str) -> float:
         try:

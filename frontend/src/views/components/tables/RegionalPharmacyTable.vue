@@ -2,7 +2,7 @@
 /**
  * RegionalPharmacyTable.vue
  * Ranking de farmácias da Região de Saúde ordenado por Score de Risco.
- * A classificação de risco usa o campo `classificacao_risco` da matriz_risco_consolidada,
+ * A classificação de risco usa o campo `classificacao_risco` calculado pela matriz dinâmica,
  * espelhando a lógica da coluna "Classificação" do relatório Excel (aba_regiao.py).
  * A coluna "Conexão" usa o campo `conexao_ms` já presente no backend.
  */

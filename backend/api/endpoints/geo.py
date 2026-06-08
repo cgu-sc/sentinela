@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from database import get_db
 from ..schemas.geo import LocalidadesResponseSchema, EstabelecimentosGeoResponseSchema
@@ -15,9 +18,12 @@ def get_localidades(db: Session = Depends(get_db)):
     return GeoService.get_localidades(db)
 
 @router.get("/estabelecimentos", response_model=EstabelecimentosGeoResponseSchema)
-def get_estabelecimentos_geo():
+def get_estabelecimentos_geo(
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
     """
     Retorna lat/lon + score de risco de todos os estabelecimentos geocodificados.
     Usado para plotar pontos no mapa interativo e no PDF.
     """
-    return GeoService.get_estabelecimentos_geo()
+    return GeoService.get_estabelecimentos_geo(data_inicio=data_inicio, data_fim=data_fim)

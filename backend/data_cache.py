@@ -407,9 +407,11 @@ def _buscar_cnpjs_matriz(engine) -> list[str]:
     """Busca os CNPJs ativos da matriz de risco para sincronizacao em lote."""
     with engine.connect() as conn:
         res = conn.execute(text("""
-            SELECT DISTINCT cnpj
-            FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]
-            ORDER BY cnpj
+            SELECT DISTINCT F.cnpj
+            FROM [temp_CGUSC].[fp].[matriz_risco_consolidada] M
+            INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] F
+                ON F.id = M.id_cnpj
+            ORDER BY F.cnpj
         """))
         return [str(row[0]).strip() for row in res if row[0]]
 
@@ -599,9 +601,9 @@ def _sync_rede(engine, progress_callback=None):
     _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="zstd")
 
 def _sync_matriz_risco(engine, progress_callback=None):
-    """Tarefa 4: Sincroniza a matriz de risco consolidada por CNPJ em chunks."""
+    """Tarefa 4: Sincroniza a matriz anual de componentes dos indicadores."""
     global _df_matriz_risco
-    print("Sincronizando Matriz de Risco Consolidada (Matriz Resultados)...")
+    print("Sincronizando Matriz Anual de Componentes dos Indicadores...")
     sql = "SELECT * FROM [temp_CGUSC].[fp].[matriz_risco_consolidada]"
     
     with engine.connect() as conn:
@@ -619,7 +621,16 @@ def _sync_matriz_risco(engine, progress_callback=None):
         print(f"   -> Progresso Matriz: {p}% ({rows_processed:,} / {total_rows:,})")
         if progress_callback: progress_callback(p)
             
-    _df_matriz_risco = pl.concat(chunk_list).sort("cnpj")
+    if not chunk_list:
+        raise RuntimeError("matriz_risco_consolidada nao retornou linhas para sincronizacao.")
+
+    schema = _GLOBAL_PARQUET_SCHEMAS["matriz_risco"]
+    _df_matriz_risco = (
+        pl.concat(chunk_list)
+        .with_columns([pl.col(col).cast(dtype) for col, dtype in schema.items()])
+        .select(list(schema.keys()))
+        .sort(["id_cnpj", "ano_base"])
+    )
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
 
 def _sync_volume_atipico_semestral(engine, progress_callback=None):
@@ -2376,7 +2387,13 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
     if not cnpjs:
         try:
             with engine.connect() as conn:
-                res = conn.execute(text("SELECT DISTINCT cnpj FROM temp_CGUSC.fp.matriz_risco_consolidada"))
+                res = conn.execute(text("""
+                    SELECT DISTINCT F.cnpj
+                    FROM temp_CGUSC.fp.matriz_risco_consolidada M
+                    INNER JOIN temp_CGUSC.fp.dados_farmacia F
+                        ON F.id = M.id_cnpj
+                    ORDER BY F.cnpj
+                """))
                 cnpjs = [r[0] for r in res]
         except Exception as e:
             print(f"[ERRO] Erro ao buscar lista de CNPJs: {e}")

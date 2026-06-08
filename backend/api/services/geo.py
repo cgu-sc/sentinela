@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
+from datetime import date
 from ..schemas.geo import LocalidadeSchema, LocalidadesResponseSchema, EstabelecimentoGeoSchema, EstabelecimentosGeoResponseSchema
-from data_cache import get_localidades_df, get_df_dados_farmacia, get_df_matriz_risco, get_df
+from data_cache import get_localidades_df, get_df_dados_farmacia, get_df
+from .analytics.matriz_risco_dinamica import build_dynamic_matriz_risco
 import polars as pl
 
 class GeoService:
@@ -33,19 +36,53 @@ class GeoService:
             import traceback
             print("❌ ERRO AO BUSCAR LOCALIDADES DO CACHE:")
             print(traceback.format_exc())
-            return LocalidadesResponseSchema(localidades=[])
+            raise HTTPException(
+                status_code=503,
+                detail="Localidades indisponiveis: cache de localidades nao carregado ou invalido.",
+            ) from e
 
     @staticmethod
-    def get_estabelecimentos_geo() -> EstabelecimentosGeoResponseSchema:
+    def get_estabelecimentos_geo(
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+    ) -> EstabelecimentosGeoResponseSchema:
         """
-        Retorna coordenadas e indicadores de risco consolidados de todos os estabelecimentos.
-        Utiliza os dados pré-calculados e enriquecidos no cache farmacias.parquet.
+        Retorna coordenadas e indicadores de risco dinâmicos de todos os estabelecimentos.
+        O score e a classificação são calculados a partir da matriz anual de componentes.
         """
         try:
             df = get_df_dados_farmacia()
+            risco_df = build_dynamic_matriz_risco(
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+            ).select([
+                "id_cnpj",
+                "score_risco_final",
+                "classificacao_risco",
+            ])
+            mov_base = get_df()
+            if data_inicio is not None:
+                mov_base = mov_base.filter(pl.col("periodo") >= pl.lit(data_inicio).cast(pl.Date))
+            if data_fim is not None:
+                mov_base = mov_base.filter(pl.col("periodo") <= pl.lit(data_fim).cast(pl.Date))
+
+            mov_df = (
+                mov_base
+                .group_by("id_cnpj")
+                .agg([
+                    pl.col("total_vendas").sum().alias("total_mov"),
+                    pl.col("total_sem_comprovacao").sum().alias("val_sem_comp"),
+                ])
+                .with_columns(
+                    pl.when(pl.col("total_mov") > 0)
+                    .then(pl.col("val_sem_comp") / pl.col("total_mov") * 100)
+                    .otherwise(pl.lit(None, dtype=pl.Float64))
+                    .alias("perc_val_sem_comp")
+                )
+            )
 
             # Filtra apenas quem tem coordenadas (necessário para o mapa)
-            df = df.filter(
+            df = df.join(risco_df, on="id_cnpj", how="left").join(mov_df, on="id_cnpj", how="left").filter(
                 pl.col("latitude").is_not_null() & pl.col("longitude").is_not_null()
             )
 
@@ -72,4 +109,4 @@ class GeoService:
             import traceback
             print("❌ ERRO AO BUSCAR ESTABELECIMENTOS GEO:")
             print(traceback.format_exc())
-            return EstabelecimentosGeoResponseSchema(estabelecimentos=[])
+            raise HTTPException(status_code=503, detail="Estabelecimentos georreferenciados indisponiveis: matriz dinamica de risco nao carregada ou invalida.") from e

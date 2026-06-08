@@ -97,7 +97,6 @@ const initializeApp = async () => {
       analyticsStore.fetchFatorRisco(filters),
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
-      geoStore.fetchEstabelecimentos(),
       geoStore.fetchCnpjLookup(),
       configStore.fetchThresholds(),
     ];

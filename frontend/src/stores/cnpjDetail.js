@@ -362,7 +362,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
 
       if (tabSlug === 'indicadores') {
-        await this.fetchIndicadores(cnpj);
+        await this.fetchIndicadores(cnpj, inicio, fim);
         return;
       }
 
@@ -424,7 +424,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       const tasks = [
         ['movimentacao-financeira', () => this.fetchEvolucaoFinanceira(clean, inicio, fim, volumeAtipicoPercentual)],
         ['movimentacao-gtin', () => this.fetchEvolucaoMensalGtin(clean, inicio, fim)],
-        ['indicadores', () => this.fetchIndicadores(clean)],
+        ['indicadores', () => this.fetchIndicadores(clean, inicio, fim)],
         ['crm-prescritores', () => this.fetchCrmData(clean, inicio, fim)],
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
         ['falecidos', () => this.fetchFalecidos(clean, inicio, fim)],
@@ -590,27 +590,31 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Indicadores ───────────────────────────────────────────────────────────
-    async fetchIndicadores(cnpj) {
+    async fetchIndicadores(cnpj, inicio = null, fim = null) {
       const clean = normalizeCnpj(cnpj);
       if (!clean) return;
-      if (this.indicadoresLoadedKey === clean || this.indicadoresLoadingKey === clean) return;
+      const requestKey = `${clean}|${inicio || ''}|${fim || ''}`;
+      if (this.indicadoresLoadedKey === requestKey || this.indicadoresLoadingKey === requestKey) return;
       this.indicadoresLoading = true;
-      this.indicadoresLoadingKey = clean;
+      this.indicadoresLoadingKey = requestKey;
       try {
         const t0 = performance.now();
-        const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(clean));
-        if (this.indicadoresLoadingKey !== clean) return;
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(clean), { params });
+        if (this.indicadoresLoadingKey !== requestKey) return;
         this.requestTimes['indicadores'] = { label: 'Indicadores de Risco', ms: Math.round(performance.now() - t0) };
         this.indicadoresData   = data;
         this.indicadoresLoaded = true;
-        this.indicadoresLoadedKey = clean;
+        this.indicadoresLoadedKey = requestKey;
         this.indicadoresError  = null;
       } catch (e) {
-        if (this.indicadoresLoadingKey !== clean) return;
+        if (this.indicadoresLoadingKey !== requestKey) return;
         console.error('Erro ao buscar indicadores:', e);
         this.indicadoresError = ERROR_MSG;
       } finally {
-        if (this.indicadoresLoadingKey === clean) {
+        if (this.indicadoresLoadingKey === requestKey) {
           this.indicadoresLoading = false;
           this.indicadoresLoadingKey = null;
         }

@@ -22,7 +22,7 @@ from cache_files import (
     TEIA_GRAFO_NIVEL4_NODES_PARQUET,
 )
 from data_cache import (
-    get_df, get_rede_df, get_localidades_df, get_df_matriz_risco, 
+    get_df, get_rede_df, get_localidades_df,
     get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
     get_df_dados_socios, scan_teia_fonte_nivel2, scan_teia_fonte_nivel3,
     scan_teia_fonte_nivel4, get_df_dados_par, get_cache_dir

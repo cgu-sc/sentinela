@@ -265,9 +265,13 @@ def get_gtin_ranking(
     return AnalyticsService.get_gtin_ranking_periodo(cnpj, periodo)
 
 @router.get("/cnpj/{cnpj}/indicadores", response_model=IndicadoresResponse)
-def get_indicadores(cnpj: str):
+def get_indicadores(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
     """Retorna os indicadores detalhados para um CNPJ."""
-    return AnalyticsService.get_indicadores(cnpj)
+    return AnalyticsService.get_indicadores(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/falecidos", response_model=FalecidosResponse)
 def get_falecidos(

@@ -7,10 +7,10 @@ from fastapi import HTTPException
 from data_cache import (
     get_df,
     get_df_dados_farmacia,
-    get_df_matriz_risco,
     get_df_perfil_estabelecimento,
     get_localidades_df,
 )
+from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from ...schemas.analytics import (
     CnpjAccessStatusSchema,
     CnpjBootstrapResponse,
@@ -100,11 +100,19 @@ def _period_summary(
     )
 
 
-def _risk_row(cnpj: str) -> dict:
-    matriz_df = get_df_matriz_risco()
-    risco_df = matriz_df.rename({column: column.lower() for column in matriz_df.columns})
+def _risk_row(
+    cnpj: str,
+    data_inicio: date | None,
+    data_fim: date | None,
+) -> dict:
+    risco_df = build_dynamic_matriz_risco(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
     required = [
         "cnpj",
+        "score_risco_final",
+        "classificacao_risco",
         "rank_nacional",
         "total_nacional",
         "rank_uf",
@@ -113,12 +121,11 @@ def _risk_row(cnpj: str) -> dict:
         "total_regiao_saude",
         "rank_municipio",
         "total_municipio",
-        "score_risco_final",
-        "classificacao_risco",
     ]
-    _require_columns(risco_df, required, "matriz_risco")
+    _require_columns(risco_df, required, "matriz_risco_dinamica")
     row_df = risco_df.filter(pl.col("cnpj") == cnpj).select(required)
-    return _first_row(row_df, "Registro da matriz de risco para CNPJ")
+    row = _first_row(row_df, "Registro da matriz dinamica de risco para CNPJ")
+    return row
 
 
 def _geo_row(perfil_row: dict) -> tuple[CnpjGeoDataSchema, int]:
@@ -219,7 +226,7 @@ def get_cnpj_bootstrap(
 
     id_cnpj = int(perfil_row["id_cnpj"])
     period_summary = _period_summary(id_cnpj, data_inicio, data_fim)
-    risco = _risk_row(clean_cnpj)
+    risco = _risk_row(clean_cnpj, data_inicio, data_fim)
     geo_data, qtd_municipios_regiao = _geo_row(perfil_row)
 
     cnpj_data = ResultadoSentinelaCnpjSchema(

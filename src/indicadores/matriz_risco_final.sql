@@ -78,7 +78,6 @@ BEGIN TRY
         ('indicador_falecidos_detalhado', 'ano_base'),
         ('indicador_falecidos_detalhado', 'total_autorizacoes'),
         ('indicador_falecidos_detalhado', 'qtd_autorizacoes_falecidos'),
-        ('indicador_falecidos_detalhado', 'valor_total_auditado'),
         ('indicador_falecidos_detalhado', 'valor_falecidos'),
 
         ('indicador_inconsistencia_clinica_detalhado', 'id_cnpj'),
@@ -99,7 +98,6 @@ BEGIN TRY
         ('indicador_polimedicamento_detalhado', 'ano_base'),
         ('indicador_polimedicamento_detalhado', 'total_autorizacoes_monitoradas'),
         ('indicador_polimedicamento_detalhado', 'total_autorizacoes_suspeitas'),
-        ('indicador_polimedicamento_detalhado', 'valor_total_auditado'),
         ('indicador_polimedicamento_detalhado', 'valor_autorizacoes_suspeitas'),
 
         ('indicador_ticket_medio_detalhado', 'id_cnpj'),
@@ -109,13 +107,11 @@ BEGIN TRY
 
         ('indicador_receita_por_paciente_detalhado', 'id_cnpj'),
         ('indicador_receita_por_paciente_detalhado', 'ano_base'),
-        ('indicador_receita_por_paciente_detalhado', 'valor_total_auditado'),
         ('indicador_receita_por_paciente_detalhado', 'total_pacientes_distintos'),
         ('indicador_receita_por_paciente_detalhado', 'total_meses_ativos'),
 
         ('indicador_venda_per_capita_detalhado', 'id_cnpj'),
         ('indicador_venda_per_capita_detalhado', 'ano_base'),
-        ('indicador_venda_per_capita_detalhado', 'valor_total_auditado'),
         ('indicador_venda_per_capita_detalhado', 'total_meses_ativos'),
         ('indicador_venda_per_capita_detalhado', 'populacao_municipio'),
         ('indicador_venda_per_capita_detalhado', 'denominador_per_capita'),
@@ -124,7 +120,6 @@ BEGIN TRY
         ('indicador_vendas_consecutivas_detalhado', 'ano_base'),
         ('indicador_vendas_consecutivas_detalhado', 'total_intervalos_analisados'),
         ('indicador_vendas_consecutivas_detalhado', 'total_vendas_rapidas'),
-        ('indicador_vendas_consecutivas_detalhado', 'valor_total_auditado'),
         ('indicador_vendas_consecutivas_detalhado', 'valor_vendas_rapidas'),
 
         ('indicador_volume_atipico_detalhado', 'id_cnpj'),
@@ -145,13 +140,11 @@ BEGIN TRY
 
         ('indicador_alto_custo_detalhado', 'id_cnpj'),
         ('indicador_alto_custo_detalhado', 'ano_base'),
-        ('indicador_alto_custo_detalhado', 'valor_total_auditado'),
         ('indicador_alto_custo_detalhado', 'valor_vendas_alto_custo'),
 
         ('indicador_concentracao_pico_detalhado', 'id_cnpj'),
         ('indicador_concentracao_pico_detalhado', 'ano_base'),
         ('indicador_concentracao_pico_detalhado', 'valor_top3_dias'),
-        ('indicador_concentracao_pico_detalhado', 'valor_total_auditado'),
 
         ('indicador_crm_hhi_detalhado', 'id_cnpj'),
         ('indicador_crm_hhi_detalhado', 'ano_base'),
@@ -247,14 +240,14 @@ BEGIN TRY
         -- Auditoria financeira
         CAST(IA.valor_total_auditado AS DECIMAL(19,2)) AS auditado_valor_total,
         CAST(IA.valor_sem_comprovacao AS DECIMAL(19,2)) AS auditado_valor_sem_comprovacao,
-        CAST(IA.total_caixas_vendidas AS BIGINT) AS auditado_total_caixas,
-        CAST(IA.total_caixas_sem_comprovacao AS BIGINT) AS auditado_total_caixas_sem_comprovacao,
-        CAST(IA.total_autorizacoes AS BIGINT) AS auditado_total_autorizacoes,
+        CAST(IA.total_caixas_vendidas AS INT) AS auditado_total_caixas,
+        CAST(IA.total_caixas_sem_comprovacao AS INT) AS auditado_total_caixas_sem_comprovacao,
+        CAST(IA.total_autorizacoes AS INT) AS auditado_total_autorizacoes,
+        CAST(TIC.valor_total_auditado AS DECIMAL(19,2)) AS valor_total_vendas,
 
         -- Falecidos
         CAST(FAL.total_autorizacoes AS INT) AS falecidos_total_autorizacoes,
         CAST(FAL.qtd_autorizacoes_falecidos AS INT) AS falecidos_qtd_autorizacoes,
-        CAST(FAL.valor_total_auditado AS DECIMAL(19,2)) AS falecidos_valor_total,
         CAST(FAL.valor_falecidos AS DECIMAL(19,2)) AS falecidos_valor,
 
         -- Inconsistencia clinica
@@ -272,33 +265,28 @@ BEGIN TRY
         -- Polimedicamento
         CAST(POL.total_autorizacoes_monitoradas AS INT) AS polimedicamento_total_autorizacoes,
         CAST(POL.total_autorizacoes_suspeitas AS INT) AS polimedicamento_total_autorizacoes_4mais,
-        CAST(POL.valor_total_auditado AS DECIMAL(19,2)) AS polimedicamento_valor_total,
         CAST(POL.valor_autorizacoes_suspeitas AS DECIMAL(19,2)) AS polimedicamento_valor,
 
         -- Ticket medio
-        CAST(TIC.valor_total_auditado AS DECIMAL(19,2)) AS ticket_valor_total,
-        CAST(TIC.total_autorizacoes AS BIGINT) AS ticket_total_autorizacoes,
+        CAST(TIC.total_autorizacoes AS INT) AS ticket_total_autorizacoes,
 
         -- Receita por paciente
-        CAST(RCP.valor_total_auditado AS DECIMAL(19,2)) AS receita_paciente_valor_total,
         CAST(RCP.total_pacientes_distintos AS INT) AS receita_paciente_total_pacientes_distintos,
-        CAST(RCP.total_meses_ativos AS INT) AS receita_paciente_total_meses_ativos,
+        CAST(RCP.total_meses_ativos AS TINYINT) AS receita_paciente_total_meses_ativos,
 
         -- Venda per capita
-        CAST(VPC.valor_total_auditado AS DECIMAL(19,2)) AS per_capita_valor_total,
-        CAST(VPC.total_meses_ativos AS INT) AS per_capita_total_meses_ativos,
+        CAST(VPC.total_meses_ativos AS TINYINT) AS per_capita_total_meses_ativos,
         CAST(VPC.populacao_municipio AS INT) AS per_capita_populacao_municipio,
-        CAST(VPC.denominador_per_capita AS BIGINT) AS per_capita_denominador,
+        CAST(VPC.denominador_per_capita AS INT) AS per_capita_denominador,
 
         -- Vendas rapidas
         CAST(VR.total_intervalos_analisados AS INT) AS vendas_rapidas_total_intervalos,
         CAST(VR.total_vendas_rapidas AS INT) AS vendas_rapidas_total,
-        CAST(VR.valor_total_auditado AS DECIMAL(19,2)) AS vendas_rapidas_valor_total,
         CAST(VR.valor_vendas_rapidas AS DECIMAL(19,2)) AS vendas_rapidas_valor,
 
         -- Volume atipico
-        CAST(VA.total_semestres_comparaveis AS INT) AS volume_atipico_total_semestres_comparaveis,
-        CAST(VA.total_semestres_atipicos AS INT) AS volume_atipico_total_semestres_atipicos,
+        CAST(VA.total_semestres_comparaveis AS TINYINT) AS volume_atipico_total_semestres_comparaveis,
+        CAST(VA.total_semestres_atipicos AS TINYINT) AS volume_atipico_total_semestres_atipicos,
         CAST(VA.soma_excesso_crescimento_pct AS DECIMAL(18,4)) AS volume_atipico_soma_excesso_crescimento_pct,
         CAST(VA.valor_aumento_total AS DECIMAL(19,2)) AS volume_atipico_valor_aumento_total,
         CAST(VA.valor_aumento_atipico AS DECIMAL(19,2)) AS volume_atipico_valor_aumento_atipico,
@@ -311,16 +299,14 @@ BEGIN TRY
         CAST(GEO.valor_vendas_outra_uf AS DECIMAL(19,2)) AS geografico_valor_outra_uf,
 
         -- Medicamentos de alto custo
-        CAST(AC.valor_total_auditado AS DECIMAL(19,2)) AS alto_custo_valor_total,
         CAST(AC.valor_vendas_alto_custo AS DECIMAL(19,2)) AS alto_custo_valor,
 
         -- Dias de pico
-        CAST(PIC.valor_total_auditado AS DECIMAL(19,2)) AS pico_valor_total,
         CAST(PIC.valor_top3_dias AS DECIMAL(19,2)) AS pico_valor_top3_dias,
 
         -- CRM HHI
         CAST(HHI.total_prescritores AS INT) AS hhi_total_prescritores,
-        CAST(HHI.total_prescricoes AS BIGINT) AS hhi_total_prescricoes,
+        CAST(HHI.total_prescricoes AS INT) AS hhi_total_prescricoes,
         CAST(HHI.valor_total_prescricoes AS DECIMAL(19,2)) AS hhi_valor_total,
         CAST(HHI.valor_top1 AS DECIMAL(19,2)) AS hhi_valor_top1,
         CAST(HHI.valor_top5 AS DECIMAL(19,2)) AS hhi_valor_top5,
@@ -330,7 +316,7 @@ BEGIN TRY
 
         -- CRMs irregulares
         CAST(CI.total_prescritores AS INT) AS crms_irregulares_total_prescritores,
-        CAST(CI.total_prescricoes AS BIGINT) AS crms_irregulares_total_prescricoes,
+        CAST(CI.total_prescricoes AS INT) AS crms_irregulares_total_prescricoes,
         CAST(CI.valor_total_auditado AS DECIMAL(19,2)) AS crms_irregulares_valor_total,
         CAST(CI.qtd_crms_nao_localizados AS INT) AS crms_irregulares_qtd_nao_localizados,
         CAST(CI.valor_crms_nao_localizados AS DECIMAL(19,2)) AS crms_irregulares_valor_nao_localizados,

@@ -68,8 +68,6 @@ BEGIN TRY
     VALUES
         ('indicador_auditado_detalhado', 'id_cnpj'),
         ('indicador_auditado_detalhado', 'ano_base'),
-        ('indicador_auditado_detalhado', 'periodo_min'),
-        ('indicador_auditado_detalhado', 'periodo_max'),
         ('indicador_auditado_detalhado', 'valor_total_auditado'),
         ('indicador_auditado_detalhado', 'valor_sem_comprovacao'),
         ('indicador_auditado_detalhado', 'total_caixas_vendidas'),
@@ -241,9 +239,7 @@ BEGIN TRY
     ;WITH BaseAnual AS (
         SELECT
             CAST(IA.id_cnpj AS INT) AS id_cnpj,
-            CAST(IA.ano_base AS SMALLINT) AS ano_base,
-            CAST(IA.periodo_min AS DATE) AS periodo_min,
-            CAST(IA.periodo_max AS DATE) AS periodo_max
+            CAST(IA.ano_base AS SMALLINT) AS ano_base
         FROM temp_CGUSC.fp.indicador_auditado_detalhado AS IA
         WHERE IA.id_cnpj IS NOT NULL
           AND IA.ano_base IS NOT NULL
@@ -251,8 +247,6 @@ BEGIN TRY
     SELECT
         B.id_cnpj,
         B.ano_base,
-        B.periodo_min,
-        B.periodo_max,
 
         -- Auditoria financeira
         CAST(IA.valor_total_auditado AS DECIMAL(19,2)) AS auditado_valor_total,
@@ -450,9 +444,7 @@ GO
 SELECT
     ano_base,
     COUNT(*) AS qtd_linhas,
-    COUNT(DISTINCT id_cnpj) AS qtd_cnpjs,
-    MIN(periodo_min) AS periodo_min,
-    MAX(periodo_max) AS periodo_max
+    COUNT(DISTINCT id_cnpj) AS qtd_cnpjs
 FROM temp_CGUSC.fp.matriz_risco_consolidada
 GROUP BY ano_base
 ORDER BY ano_base;

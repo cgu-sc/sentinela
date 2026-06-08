@@ -76,8 +76,6 @@ _INDICATOR_AGGREGATIONS: dict[str, dict[str, object]] = {
 _MATRIX_COMPONENT_COLUMNS = {
     "id_cnpj",
     "ano_base",
-    "periodo_min",
-    "periodo_max",
     "auditado_valor_total",
     "auditado_valor_sem_comprovacao",
     "auditado_total_caixas",
@@ -260,8 +258,6 @@ def _compute_dynamic_matriz_risco(
         ])
         .group_by("id_cnpj")
         .agg([
-            pl.col("periodo_min").min().alias("periodo_min"),
-            pl.col("periodo_max").max().alias("periodo_max"),
             pl.col("auditado_valor_total").sum().alias("auditado_valor_total"),
             pl.col("auditado_valor_sem_comprovacao").sum().alias("auditado_valor_sem_comprovacao"),
             pl.col("auditado_total_caixas").sum().alias("auditado_total_caixas"),
@@ -436,4 +432,3 @@ def build_dynamic_matriz_risco(
 
 
 _build_dynamic_matriz_risco = build_dynamic_matriz_risco
-

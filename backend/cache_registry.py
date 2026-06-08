@@ -69,8 +69,6 @@ def _matriz_risco_schema() -> dict:
     return {
         "id_cnpj": pl.Int32,
         "ano_base": pl.Int16,
-        "periodo_min": pl.Date,
-        "periodo_max": pl.Date,
         "auditado_valor_total": pl.Float64,
         "auditado_valor_sem_comprovacao": pl.Float64,
         "auditado_total_caixas": pl.Int64,

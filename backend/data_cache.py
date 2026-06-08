@@ -625,10 +625,10 @@ def _sync_matriz_risco(engine, progress_callback=None):
         raise RuntimeError("matriz_risco_consolidada nao retornou linhas para sincronizacao.")
 
     schema = _GLOBAL_PARQUET_SCHEMAS["matriz_risco"]
+    cast_exprs = [pl.col(col).cast(dtype, strict=False) for col, dtype in schema.items()]
+    typed_chunks = [chunk.with_columns(cast_exprs).select(list(schema.keys())) for chunk in chunk_list]
     _df_matriz_risco = (
-        pl.concat(chunk_list)
-        .with_columns([pl.col(col).cast(dtype) for col, dtype in schema.items()])
-        .select(list(schema.keys()))
+        pl.concat(typed_chunks)
         .sort(["id_cnpj", "ano_base"])
     )
     _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")

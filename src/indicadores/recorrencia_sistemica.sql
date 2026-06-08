@@ -52,8 +52,9 @@ END;
 
 IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
    OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'principio_ativo') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/principio_ativo.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/principio_ativo/qnt_comprimidos_caixa.', 16, 1);
     RETURN;
 END;
 
@@ -141,6 +142,7 @@ IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj')
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cpf') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'qnt_autorizada') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
 BEGIN
     RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para recorrencia sistemica.', 16, 1);
@@ -183,13 +185,16 @@ DROP TABLE IF EXISTS #medicamentos_recorrencia;
 SELECT DISTINCT
     MP.codigo_barra,
     CAST(UPPER(LTRIM(RTRIM(MP.principio_ativo))) AS VARCHAR(255)) AS principio_ativo,
+    CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa,
     CAST(P.PROXIMA_COMPRA AS INT) AS dias_para_bloqueio
 INTO #medicamentos_recorrencia
 FROM temp_CGUSC.fp.medicamentos_patologia MP
 INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P
     ON UPPER(LTRIM(RTRIM(P.PRINCIPIO_ATIVO))) = UPPER(LTRIM(RTRIM(MP.principio_ativo)))
 WHERE MP.codigo_barra IS NOT NULL
-  AND NULLIF(LTRIM(RTRIM(MP.principio_ativo)), '') IS NOT NULL;
+  AND NULLIF(LTRIM(RTRIM(MP.principio_ativo)), '') IS NOT NULL
+  AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0;
 
 IF NOT EXISTS (SELECT 1 FROM #medicamentos_recorrencia)
 BEGIN
@@ -234,6 +239,8 @@ WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
   AND NULLIF(LTRIM(RTRIM(CAST(A.cpf AS VARCHAR(20)))), '') IS NOT NULL
   AND A.codigo_barra IS NOT NULL
+  AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / M.qnt_comprimidos_caixa) <> 0
   AND A.valor_pago IS NOT NULL
 GROUP BY
     F.id_cnpj,

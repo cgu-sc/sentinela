@@ -72,8 +72,9 @@ BEGIN
 END;
 
 IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/qnt_comprimidos_caixa.', 16, 1);
     RETURN;
 END;
 
@@ -127,6 +128,7 @@ IF COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'cnpj') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'num_autorizacao') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'valor_pago') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'data_hora') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'qnt_autorizada') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'codigo_barra') IS NULL
 BEGIN
     RAISERROR('Tabela db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP sem colunas obrigatorias para CRMs irregulares.', 16, 1);
@@ -145,6 +147,7 @@ IF COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024'
    OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'num_autorizacao') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'valor_pago') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'qnt_autorizada') IS NULL
    OR COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'codigo_barra') IS NULL
 BEGIN
     RAISERROR('Tabela db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 sem colunas obrigatorias para CRMs irregulares.', 16, 1);
@@ -185,10 +188,13 @@ ON #farmacias_dim(id_cnpj);
 DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 SELECT DISTINCT
-    C.codigo_barra
+    C.codigo_barra,
+    CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa
 INTO #medicamentos_patologia_gtin
 FROM temp_CGUSC.fp.medicamentos_patologia C
-WHERE C.codigo_barra IS NOT NULL;
+WHERE C.codigo_barra IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0;
 
 IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
 BEGIN
@@ -280,6 +286,7 @@ SELECT
     CAST(UPPER(LTRIM(RTRIM(CAST(crm_uf AS VARCHAR(10))))) AS VARCHAR(10)) AS sg_uf_crm,
     num_autorizacao,
     CAST(valor_pago AS DECIMAL(19,2)) AS valor_pago,
+    qnt_autorizada,
     data_hora,
     codigo_barra
 INTO #MovimentacaoCRM
@@ -290,6 +297,7 @@ FROM (
         crm_uf,
         num_autorizacao,
         valor_pago,
+        qnt_autorizada,
         data_hora,
         codigo_barra
     FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
@@ -299,6 +307,7 @@ FROM (
       AND crm_uf IS NOT NULL
       AND crm > 0
       AND num_autorizacao IS NOT NULL
+      AND qnt_autorizada IS NOT NULL
       AND valor_pago IS NOT NULL
       AND valor_pago >= 0
       AND codigo_barra IS NOT NULL
@@ -311,6 +320,7 @@ FROM (
         crm_uf,
         num_autorizacao,
         valor_pago,
+        qnt_autorizada,
         data_hora,
         codigo_barra
     FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
@@ -320,6 +330,7 @@ FROM (
       AND crm_uf IS NOT NULL
       AND crm > 0
       AND num_autorizacao IS NOT NULL
+      AND qnt_autorizada IS NOT NULL
       AND valor_pago IS NOT NULL
       AND valor_pago >= 0
       AND codigo_barra IS NOT NULL
@@ -335,6 +346,7 @@ IF EXISTS (
        OR NULLIF(LTRIM(RTRIM(nu_crm)), '') IS NULL
        OR LEN(sg_uf_crm) <> 2
        OR num_autorizacao IS NULL
+       OR qnt_autorizada IS NULL
        OR valor_pago IS NULL
        OR data_hora IS NULL
        OR codigo_barra IS NULL
@@ -383,6 +395,7 @@ INNER JOIN #medicamentos_patologia_gtin C
 LEFT JOIN #CFM_Base CFM
     ON CFM.NU_CRM = U.nu_crm
    AND CFM.SG_uf = U.sg_uf_crm
+WHERE (U.qnt_autorizada / C.qnt_comprimidos_caixa) <> 0
 GROUP BY
     F.id_cnpj,
     YEAR(U.data_hora),

@@ -51,8 +51,9 @@ END;
 
 IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
    OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'principio_ativo') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/principio_ativo.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/principio_ativo/qnt_comprimidos_caixa.', 16, 1);
     RETURN;
 END;
 
@@ -170,6 +171,7 @@ DROP TABLE IF EXISTS #medicamentos_teto;
 
 SELECT DISTINCT
     C.codigo_barra,
+    CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa,
     CAST(P.QUANTIDADE_MAXIMA AS DECIMAL(18,4)) AS quantidade_maxima
 INTO #medicamentos_teto
 FROM temp_CGUSC.fp.medicamentos_patologia C
@@ -177,6 +179,8 @@ INNER JOIN temp_CGUSC.fp.posologia_tempo_bloqueio P
     ON UPPER(LTRIM(RTRIM(CAST(P.PRINCIPIO_ATIVO AS VARCHAR(255))))) = UPPER(LTRIM(RTRIM(CAST(C.principio_ativo AS VARCHAR(255)))))
 WHERE C.codigo_barra IS NOT NULL
   AND C.principio_ativo IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
   AND P.QUANTIDADE_MAXIMA > 0;
 
 IF NOT EXISTS (SELECT 1 FROM #medicamentos_teto)
@@ -234,6 +238,7 @@ WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
   AND A.codigo_barra IS NOT NULL
   AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / M.qnt_comprimidos_caixa) <> 0
   AND A.valor_pago IS NOT NULL
 GROUP BY
     F.id_cnpj,

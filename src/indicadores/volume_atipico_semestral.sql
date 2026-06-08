@@ -47,6 +47,35 @@ DECLARE @DataFim    DATE = '2024-12-31';
 
 PRINT '>> GERANDO temp_CGUSC.fp.volume_atipico_semestral...';
 
+IF OBJECT_ID('temp_CGUSC.fp.medicamentos_patologia', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/qnt_comprimidos_caixa.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'qnt_autorizada') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para volume atipico semestral.', 16, 1);
+    RETURN;
+END;
+
 DROP TABLE IF EXISTS temp_CGUSC.fp.volume_atipico_semestral;
 DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 DROP TABLE IF EXISTS #vol_base_vendas_mensais;
@@ -59,10 +88,13 @@ DROP TABLE IF EXISTS #vol_base_semestres;
 -- Garante uma linha por codigo_barra para evitar multiplicar vendas no join.
 -- ============================================================================
 SELECT DISTINCT
-    C.codigo_barra
+    C.codigo_barra,
+    CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa
 INTO #medicamentos_patologia_gtin
 FROM temp_CGUSC.fp.medicamentos_patologia C
-WHERE C.codigo_barra IS NOT NULL;
+WHERE C.codigo_barra IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0;
 
 CREATE UNIQUE CLUSTERED INDEX IDX_medicamentos_patologia_gtin
 ON #medicamentos_patologia_gtin(codigo_barra);
@@ -81,6 +113,8 @@ INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+  AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / C.qnt_comprimidos_caixa) <> 0
 GROUP BY CAST(A.cnpj AS VARCHAR(14)), YEAR(A.data_hora), MONTH(A.data_hora);
 
 CREATE CLUSTERED INDEX IDX_vol_base_vendas_mensais_cnpj

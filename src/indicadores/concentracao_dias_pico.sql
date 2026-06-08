@@ -39,8 +39,9 @@ BEGIN
 END;
 
 IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem coluna obrigatoria codigo_barra.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/qnt_comprimidos_caixa.', 16, 1);
     RETURN;
 END;
 
@@ -82,6 +83,22 @@ BEGIN
     RETURN;
 END;
 
+IF OBJECT_ID('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 nao encontrada.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'qnt_autorizada') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
+BEGIN
+    RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para concentracao de dias de pico.', 16, 1);
+    RETURN;
+END;
+
 DROP TABLE IF EXISTS #farmacias_dim;
 
 SELECT
@@ -116,10 +133,13 @@ ON #farmacias_dim(id_cnpj);
 DROP TABLE IF EXISTS #medicamentos_patologia_gtin;
 
 SELECT DISTINCT
-    C.codigo_barra
+    C.codigo_barra,
+    CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa
 INTO #medicamentos_patologia_gtin
 FROM temp_CGUSC.fp.medicamentos_patologia C
-WHERE C.codigo_barra IS NOT NULL;
+WHERE C.codigo_barra IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0;
 
 IF NOT EXISTS (SELECT 1 FROM #medicamentos_patologia_gtin)
 BEGIN
@@ -152,6 +172,8 @@ INNER JOIN #medicamentos_patologia_gtin C
     ON C.codigo_barra = A.codigo_barra
 WHERE A.data_hora >= @DataInicio
   AND A.data_hora < DATEADD(DAY, 1, @DataFim)
+  AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / C.qnt_comprimidos_caixa) <> 0
 GROUP BY
     F.id_cnpj,
     YEAR(A.data_hora),

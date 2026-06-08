@@ -57,8 +57,9 @@ END;
 
 IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
    OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'Patologia') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
 BEGIN
-    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/Patologia.', 16, 1);
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/Patologia/qnt_comprimidos_caixa.', 16, 1);
     RETURN;
 END;
 
@@ -111,6 +112,7 @@ IF COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'cnpj')
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'num_autorizacao') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'valor_pago') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'data_hora') IS NULL
+   OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'qnt_autorizada') IS NULL
    OR COL_LENGTH('db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024', 'codigo_barra') IS NULL
 BEGIN
     RAISERROR('Tabela db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 sem colunas obrigatorias para inconsistencia clinica.', 16, 1);
@@ -166,10 +168,13 @@ DROP TABLE IF EXISTS #medicamentos_clinicos;
 
 SELECT DISTINCT
     C.codigo_barra,
+    CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa,
     UPPER(LTRIM(RTRIM(C.Patologia))) AS patologia
 INTO #medicamentos_clinicos
 FROM temp_CGUSC.fp.medicamentos_patologia C
 WHERE C.codigo_barra IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(C.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
   AND UPPER(LTRIM(RTRIM(C.Patologia))) IN ('OSTEOPOROSE', 'DIABETES', 'DOENCA DE PARKINSON', 'HIPERTENSAO');
 
 IF NOT EXISTS (SELECT 1 FROM #medicamentos_clinicos)
@@ -251,6 +256,9 @@ WHERE A.data_hora >= @DataInicio
   AND A.num_autorizacao IS NOT NULL
   AND A.cpf IS NOT NULL
   AND A.codigo_barra IS NOT NULL
+  AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / M.qnt_comprimidos_caixa) <> 0
+  AND A.valor_pago IS NOT NULL
 GROUP BY
     F.id_cnpj,
     YEAR(A.data_hora),

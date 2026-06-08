@@ -194,15 +194,34 @@ BEGIN
         RETURN;
     END;
 
+    IF COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'codigo_barra') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.medicamentos_patologia', 'qnt_comprimidos_caixa') IS NULL
+    BEGIN
+        RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem colunas obrigatorias codigo_barra/qnt_comprimidos_caixa.', 16, 1);
+        RETURN;
+    END;
+
     IF OBJECT_ID('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP') IS NULL
     BEGIN
         RAISERROR('Fonte nacional db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP nao encontrada.', 16, 1);
         RETURN;
     END;
 
+    IF COL_LENGTH('db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP', 'qnt_autorizada') IS NULL
+    BEGIN
+        RAISERROR('Fonte nacional db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP sem coluna obrigatoria qnt_autorizada.', 16, 1);
+        RETURN;
+    END;
+
     IF OBJECT_ID('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024') IS NULL
     BEGIN
         RAISERROR('Fonte nacional db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 nao encontrada.', 16, 1);
+        RETURN;
+    END;
+
+    IF COL_LENGTH('db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024', 'qnt_autorizada') IS NULL
+    BEGIN
+        RAISERROR('Fonte nacional db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024 sem coluna obrigatoria qnt_autorizada.', 16, 1);
         RETURN;
     END;
 
@@ -478,10 +497,10 @@ ProximaUF:
             M.codigo_barra
         INTO #crm_mov_fonte_atual
         FROM (
-            SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+            SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, qnt_autorizada, codigo_barra
             FROM db_FarmaciaPopular.dbo.Relatorio_movimentacaoFP
             UNION ALL
-            SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, codigo_barra
+            SELECT cnpj, crm, crm_uf, data_hora, num_autorizacao, valor_pago, qnt_autorizada, codigo_barra
             FROM db_FarmaciaPopular.carga_2024.relatorio_movimentacaoFP_2021_2024
         ) M
         INNER JOIN temp_CGUSC.fp.dados_farmacia F
@@ -492,11 +511,15 @@ ProximaUF:
           AND M.crm_uf <> 'BR'
           AND M.data_hora >= @DataInicio
           AND M.data_hora < DATEADD(DAY, 1, @DataFim)
+          AND M.qnt_autorizada IS NOT NULL
           AND EXISTS (
               SELECT 1
               FROM temp_CGUSC.fp.medicamentos_patologia PAT
               WHERE PAT.codigo_barra = M.codigo_barra
-        );
+                AND TRY_CAST(PAT.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+                AND TRY_CAST(PAT.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
+                AND (M.qnt_autorizada / TRY_CAST(PAT.qnt_comprimidos_caixa AS DECIMAL(10,0))) <> 0
+          );
 
         SET @nu_registros_etapa = @@ROWCOUNT;
         SET @nu_registros = @nu_registros_etapa;

@@ -51,8 +51,52 @@ _INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
     "crms_irregulares": ("flag_crms_irregulares_atencao", "flag_crms_irregulares_critico"),
 }
 
-RISCO_REG_ATENCAO = 3.0
-RISCO_REG_CRITICO = 5.0
+MZ_SCALE = 0.6745
+MIN_REGIAO_BENCHMARK = 40
+
+_INDICATOR_MZ_THRESHOLDS: dict[str, tuple[float, float]] = {
+    "percentual_nao_comprovacao": (3.50, 5.00),
+    "falecidos": (2.00, 3.00),
+    "incompatibilidade_patologica": (2.00, 2.80),
+    "teto": (1.17, 1.25),
+    "polimedicamento": (2.00, 2.40),
+    "ticket_medio": (1.60, 2.00),
+    "receita_paciente": (2.50, 3.50),
+    "per_capita": (2.50, 3.50),
+    "alto_custo": (1.40, 1.70),
+    "vendas_rapidas": (3.00, 4.00),
+    "volume_atipico": (1.80, 2.00),
+    "recorrencia_sistemica": (1.50, 1.90),
+    "dias_pico": (2.50, 3.00),
+    "dispersao_geografica": (1.85, 2.49),
+    "hhi_crm": (2.50, 3.50),
+    "crms_irregulares": (2.50, 3.50),
+}
+
+_INDICATOR_SCORE_WEIGHTS: dict[str, float] = {
+    "percentual_nao_comprovacao": 5.0,
+    "falecidos": 2.5,
+    "incompatibilidade_patologica": 1.5,
+    "teto": 1.0,
+    "polimedicamento": 1.5,
+    "ticket_medio": 1.0,
+    "receita_paciente": 1.0,
+    "per_capita": 1.0,
+    "alto_custo": 1.5,
+    "vendas_rapidas": 2.0,
+    "volume_atipico": 2.5,
+    "recorrencia_sistemica": 2.0,
+    "dias_pico": 1.0,
+    "dispersao_geografica": 1.0,
+    "hhi_crm": 0.5,
+    "crms_irregulares": 1.0,
+}
+
+_ZERO_BASELINE_CRITICAL_INDICATORS = {
+    "falecidos",
+    "incompatibilidade_patologica",
+    "volume_atipico",
+}
 
 _INDICATOR_AGGREGATIONS: dict[str, dict[str, object]] = {
     "percentual_nao_comprovacao": {"numerator": "auditado_valor_sem_comprovacao", "denominator": "auditado_valor_total", "factor": 100.0},
@@ -168,22 +212,56 @@ def _metric_ratio_expr(numerator: str, denominator: str, factor: float, alias: s
 
 
 def _risk_ratio_expr(value_col: str, median_col: str, alias: str) -> pl.Expr:
-    denominator = (
-        pl.when(pl.col(median_col).is_not_null() & (pl.col(median_col) > 0))
-        .then(pl.col(median_col))
-        .otherwise(pl.lit(0.0001))
-    )
     return (
-        pl.when(pl.col(value_col).is_null() | pl.col(median_col).is_null())
+        pl.when(pl.col(value_col).is_null() | pl.col(median_col).is_null() | (pl.col(median_col) <= 0))
         .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(value_col) / denominator)
+        .otherwise(pl.col(value_col) / pl.col(median_col))
+        .alias(alias)
+    )
+
+
+def _deviation_expr(value_col: str, median_col: str, alias: str) -> pl.Expr:
+    return (
+        pl.when(pl.col(value_col).is_not_null() & pl.col(median_col).is_not_null())
+        .then((pl.col(value_col) - pl.col(median_col)).abs())
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias(alias)
+    )
+
+
+def _modified_z_expr(value_col: str, median_col: str, mad_col: str, alias: str) -> pl.Expr:
+    return (
+        pl.when(
+            pl.col(value_col).is_not_null()
+            & pl.col(median_col).is_not_null()
+            & pl.col(mad_col).is_not_null()
+            & (pl.col(mad_col) > 0)
+        )
+        .then((pl.lit(MZ_SCALE) * (pl.col(value_col) - pl.col(median_col))) / pl.col(mad_col))
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias(alias)
+    )
+
+
+def _percent_rank_expr(order_col: str, scope_cols: list[str] | None, alias: str) -> pl.Expr:
+    order_expr = pl.col(order_col).fill_null(0.0)
+    rank = order_expr.rank(method="min")
+    total = pl.len()
+    if scope_cols:
+        rank = rank.over(scope_cols)
+        total = total.over(scope_cols)
+    return (
+        pl.when(total > 1)
+        .then(((rank - 1) / (total - 1)) * 100.0)
+        .otherwise(pl.lit(0.0))
+        .cast(pl.Float64)
         .alias(alias)
     )
 
 
 def _rank_expr(scope_cols: list[str] | None, alias: str) -> pl.Expr:
     valid_score = pl.col("score_risco_final").is_not_null()
-    rank = pl.col("score_risco_final").rank(method="ordinal", descending=True)
+    rank = pl.col("score_risco_final").rank(method="min", descending=True)
     if scope_cols:
         rank = rank.over(scope_cols)
     return pl.when(valid_score).then(rank).otherwise(pl.lit(None, dtype=pl.UInt32)).cast(pl.Int64).alias(alias)
@@ -197,13 +275,17 @@ def _total_expr(scope_cols: list[str] | None, alias: str) -> pl.Expr:
 
 
 def _with_classificacao_and_rankings(df: pl.DataFrame) -> pl.DataFrame:
+    critical_cols = [cols[1] for cols in _INDICATOR_FLAGS.values()]
+    attention_cols = [cols[0] for cols in _INDICATOR_FLAGS.values()]
     return (
         df.with_columns([
-            pl.when(pl.col("score_risco_final").is_null())
-            .then(pl.lit(None, dtype=pl.Utf8))
-            .when(pl.col("score_risco_final") >= RISCO_REG_CRITICO)
+            pl.sum_horizontal(*(pl.col(col).fill_null(0).cast(pl.Int32) for col in critical_cols)).alias("qtd_indicadores_criticos"),
+            pl.sum_horizontal(*(pl.col(col).fill_null(0).cast(pl.Int32) for col in attention_cols)).alias("qtd_indicadores_atencao"),
+        ])
+        .with_columns([
+            pl.when(pl.col("qtd_indicadores_criticos") > 0)
             .then(pl.lit("CRÍTICO"))
-            .when(pl.col("score_risco_final") >= RISCO_REG_ATENCAO)
+            .when(pl.col("qtd_indicadores_atencao") > 0)
             .then(pl.lit("ATENÇÃO"))
             .otherwise(pl.lit("NORMAL"))
             .alias("classificacao_risco"),
@@ -357,6 +439,9 @@ def _compute_dynamic_matriz_risco(
         on="id_cnpj",
         how="inner",
     )
+    enriched = enriched.with_columns(
+        pl.len().over("id_regiao_saude").cast(pl.Int64).alias("_total_regiao_benchmark")
+    )
 
     median_exprs = []
     for _key, (c_val, c_mr, c_mu, c_mb, _c_rr, _c_ru, _c_rb) in INDICATOR_MAPPING.items():
@@ -367,37 +452,150 @@ def _compute_dynamic_matriz_risco(
         ])
     enriched = enriched.with_columns(median_exprs)
 
+    deviation_exprs = []
+    for key, (c_val, c_mr, c_mu, _c_mb, _c_rr, _c_ru, _c_rb) in INDICATOR_MAPPING.items():
+        deviation_exprs.extend([
+            _deviation_expr(c_val, c_mr, f"_dev_{key}_reg"),
+            _deviation_expr(c_val, c_mu, f"_dev_{key}_uf"),
+        ])
+    enriched = enriched.with_columns(deviation_exprs)
+
+    mad_exprs = []
+    for key in INDICATOR_MAPPING:
+        mad_exprs.extend([
+            pl.col(f"_dev_{key}_reg").median().over("id_regiao_saude").alias(f"_mad_{key}_reg"),
+            pl.col(f"_dev_{key}_uf").median().over("uf").alias(f"_mad_{key}_uf"),
+        ])
+    enriched = enriched.with_columns(mad_exprs)
+
     risk_exprs = []
+    mz_exprs = []
+    modified_z_exprs = []
     flag_exprs = []
+    score_percentile_exprs = []
+    score_scope_exprs = []
     for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items():
         c_aten, c_crit = _INDICATOR_FLAGS[key]
+        mz_col = f"mz_{key}"
+        benchmark_value_col = f"_bench_val_{key}"
+        benchmark_median_col = f"_bench_med_{key}"
+        benchmark_mad_col = f"_bench_mad_{key}"
+        zero_baseline_critical_col = f"_zero_baseline_crit_{key}"
+        score_pct_reg_col = f"_score_pct_{key}_reg"
+        score_pct_uf_col = f"_score_pct_{key}_uf"
+        score_pct_col = f"_score_pct_{key}"
+        attention_threshold, critical_threshold = _INDICATOR_MZ_THRESHOLDS[key]
         risk_exprs.extend([
             _risk_ratio_expr(c_val, c_mr, c_rr),
             _risk_ratio_expr(c_val, c_mu, c_ru),
             _risk_ratio_expr(c_val, c_mb, c_rb),
         ])
+        mz_exprs.extend([
+            pl.col(c_val).alias(benchmark_value_col),
+            (
+                pl.when(pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK)
+                .then(pl.col(c_mr))
+                .otherwise(pl.col(c_mu))
+                .alias(benchmark_median_col)
+            ),
+            (
+                pl.when(pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK)
+                .then(pl.col(f"_mad_{key}_reg"))
+                .otherwise(pl.col(f"_mad_{key}_uf"))
+                .alias(benchmark_mad_col)
+            ),
+        ])
+        modified_z_exprs.extend([
+            _modified_z_expr(benchmark_value_col, benchmark_median_col, benchmark_mad_col, mz_col),
+        ])
+        zero_baseline_expr = (
+            pl.when(
+                (pl.lit(key in _ZERO_BASELINE_CRITICAL_INDICATORS))
+                & pl.col(c_val).is_not_null()
+                & (pl.col(c_val) > 0)
+                & (pl.col(benchmark_median_col).is_null() | (pl.col(benchmark_median_col) <= 0))
+            )
+            .then(pl.lit(1))
+            .otherwise(pl.lit(0))
+            .cast(pl.Int8)
+            .alias(zero_baseline_critical_col)
+        )
+        modified_z_exprs.append(zero_baseline_expr)
         flag_exprs.extend([
             (
-                pl.when(pl.col(c_rr).is_not_null() & (pl.col(c_rr) >= RISCO_REG_ATENCAO))
+                pl.when(
+                    (pl.col(zero_baseline_critical_col) == 0)
+                    & pl.col(mz_col).is_not_null()
+                    & (pl.col(mz_col) >= attention_threshold)
+                    & (pl.col(mz_col) < critical_threshold)
+                )
                 .then(pl.lit(1))
                 .otherwise(pl.lit(0))
                 .cast(pl.Int8)
                 .alias(c_aten)
             ),
             (
-                pl.when(pl.col(c_rr).is_not_null() & (pl.col(c_rr) >= RISCO_REG_CRITICO))
+                pl.when(
+                    (pl.col(zero_baseline_critical_col) == 1)
+                    | (pl.col(mz_col).is_not_null() & (pl.col(mz_col) >= critical_threshold))
+                )
                 .then(pl.lit(1))
                 .otherwise(pl.lit(0))
                 .cast(pl.Int8)
                 .alias(c_crit)
             ),
         ])
-    enriched = enriched.with_columns(risk_exprs).with_columns(flag_exprs)
+        score_percentile_exprs.extend([
+            _percent_rank_expr(c_val, ["id_regiao_saude"], score_pct_reg_col),
+            _percent_rank_expr(c_val, ["uf"], score_pct_uf_col),
+        ])
+        score_scope_exprs.append(
+            pl.when((pl.col("id_regiao_saude").is_not_null()) & (pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK))
+            .then(pl.col(score_pct_reg_col))
+            .otherwise(pl.col(score_pct_uf_col))
+            .alias(score_pct_col)
+        )
+    enriched = (
+        enriched
+        .with_columns(risk_exprs)
+        .with_columns(mz_exprs)
+        .with_columns(modified_z_exprs)
+        .with_columns(flag_exprs)
+        .with_columns(score_percentile_exprs)
+        .with_columns(score_scope_exprs)
+    )
 
-    risk_reg_cols = [cols[4] for cols in INDICATOR_MAPPING.values()]
+    critical_cols = [cols[1] for cols in _INDICATOR_FLAGS.values()]
+    attention_cols = [cols[0] for cols in _INDICATOR_FLAGS.values()]
+    score_numerator_terms = []
+    score_denominator_terms = []
+    for key, (c_val, *_rest) in INDICATOR_MAPPING.items():
+        weight = _INDICATOR_SCORE_WEIGHTS[key]
+        active_weight = (
+            pl.when(pl.col(c_val).is_not_null())
+            .then(pl.lit(weight))
+            .otherwise(pl.lit(0.0))
+        )
+        score_denominator_terms.append(active_weight)
+        score_numerator_terms.append(pl.col(f"_score_pct_{key}").fill_null(0.0) * active_weight)
+
     return _with_classificacao_and_rankings(
-        enriched.with_columns(
-            pl.max_horizontal(*(pl.col(col) for col in risk_reg_cols)).alias("score_risco_final")
+        enriched.with_columns([
+            pl.sum_horizontal(*(pl.col(col).fill_null(0).cast(pl.Int32) for col in critical_cols)).alias("qtd_indicadores_criticos"),
+            pl.sum_horizontal(*(pl.col(col).fill_null(0).cast(pl.Int32) for col in attention_cols)).alias("qtd_indicadores_atencao"),
+            pl.sum_horizontal(*score_numerator_terms).alias("_score_numerador"),
+            pl.sum_horizontal(*score_denominator_terms).alias("soma_pesos_ativos"),
+        ]).with_columns([
+            (pl.col("qtd_indicadores_criticos") * 10 + pl.col("qtd_indicadores_atencao") * 3).cast(pl.Float64).alias("pontos_penalidade"),
+            (
+                pl.when(pl.col("soma_pesos_ativos") > 0)
+                .then(pl.col("_score_numerador") / pl.col("soma_pesos_ativos"))
+                .otherwise(pl.lit(0.0))
+                .round(2)
+                .alias("score_base")
+            ),
+        ]).with_columns(
+            (pl.col("score_base") + pl.col("pontos_penalidade")).round(2).alias("score_risco_final")
         )
     )
 

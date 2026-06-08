@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
-import { useConfigStore } from '@/stores/config';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
@@ -10,7 +9,6 @@ import TabPlaceholder from './TabPlaceholder.vue';
 
 const { formatCurrencyFull } = useFormatting();
 const cnpjDetailStore = useCnpjDetailStore();
-const configStore = useConfigStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
 
 // ── Cache de Dados para Transição Suave ──────────────────
@@ -28,13 +26,18 @@ watch(showOnlyHighRisk, (newVal) => {
 
 
 // ── Helpers de indicadores ────────────────────────────────
-function getIndicadorStatus(riscoUf, thresholdKey) {
-  const t = configStore.thresholds[thresholdKey];
-  const r = riscoUf != null ? Math.round(riscoUf * 10) / 10 : null;
-  if (r == null || !t) return { label: 'SEM DADOS', color: 'var(--text-muted)',  severity: 'secondary' };
-  if (r >= t.critico)  return { label: 'CRÍTICO',  color: 'var(--risk-indicator-critical)', severity: 'danger'    };
-  if (r >= t.atencao)  return { label: 'ATENÇÃO',  color: 'var(--risk-indicator-warning)',  severity: 'warning'   };
-  return               { label: 'NORMAL',   color: 'var(--risk-indicator-normal)',   severity: 'success'   };
+function getIndicadorStatus(indicadorData) {
+  const status = indicadorData?.status;
+  if (status === 'CRÍTICO' || status === 'CRITICO') {
+    return { label: 'CRÍTICO', color: 'var(--risk-indicator-critical)', severity: 'danger' };
+  }
+  if (status === 'ATENÇÃO' || status === 'ATENCAO') {
+    return { label: 'ATENÇÃO', color: 'var(--risk-indicator-warning)', severity: 'warning' };
+  }
+  if (status === 'NORMAL') {
+    return { label: 'NORMAL', color: 'var(--risk-indicator-normal)', severity: 'success' };
+  }
+  return { label: 'SEM DADOS', color: 'var(--text-muted)', severity: 'secondary' };
 }
 
 function formatIndicadorValue(valor, formato) {
@@ -53,12 +56,10 @@ const pontosCriticos = computed(() => {
     for (const ind of grupo.indicators) {
       const d = cachedIndicadoresData.value.indicadores[ind.key];
       if (!d || d.valor == null) continue;
-      const t = configStore.thresholds[ind.thresholdKey];
-      if (!t) continue;
+      const status = getIndicadorStatus(d);
       const riscoReg = d.risco_reg != null ? Math.round(d.risco_reg * 10) / 10 : null;
-      const isCriticoReg = riscoReg != null && riscoReg >= t.critico;
 
-      if (isCriticoReg) {
+      if (status.label === 'CRÍTICO') {
         result.push({
           key:     ind.key,
           label:   ind.label,
@@ -85,7 +86,7 @@ const filteredGroups = computed(() => {
     const indicators = grupo.indicators.filter(ind => {
       const d = cachedIndicadoresData.value?.indicadores?.[ind.key];
       if (!d || d.valor == null) return false;
-      const status = getIndicadorStatus(d.risco_reg, ind.thresholdKey);
+      const status = getIndicadorStatus(d);
       return status.label !== 'NORMAL';
     });
     return { ...grupo, indicators };
@@ -97,8 +98,8 @@ defineExpose({
   getPontosCriticos: () => pontosCriticos.value,
 });
 
-function riscoPillStyle(risco, thresholdKey = 'default') {
-  const s = getIndicadorStatus(risco, thresholdKey);
+function riscoPillStyle(indicadorData) {
+  const s = getIndicadorStatus(indicadorData);
   const c = s.color;
   return { 
     background: `color-mix(in srgb, ${c} 15%, transparent)`, 
@@ -106,8 +107,8 @@ function riscoPillStyle(risco, thresholdKey = 'default') {
   };
 }
 
-function riscoTextStyle(risco, thresholdKey = 'default') {
-  const s = getIndicadorStatus(risco, thresholdKey);
+function riscoTextStyle(indicadorData) {
+  const s = getIndicadorStatus(indicadorData);
   return { color: s.color };
 }
 </script>
@@ -210,20 +211,20 @@ function riscoTextStyle(risco, thresholdKey = 'default') {
                   <td class="ind-risco-cell">
                     <span
                       class="ind-risco-pill"
-                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
+                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key])"
                     >{{ cachedIndicadoresData.indicadores[ind.key].risco_reg != null ? cachedIndicadoresData.indicadores[ind.key].risco_reg.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-risco-cell ind-secondary-cell">
-                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key].risco_uf, ind.thresholdKey)">{{ cachedIndicadoresData.indicadores[ind.key].risco_uf != null ? cachedIndicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
+                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key])">{{ cachedIndicadoresData.indicadores[ind.key].risco_uf != null ? cachedIndicadoresData.indicadores[ind.key].risco_uf.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-risco-cell ind-secondary-cell">
-                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key].risco_br, ind.thresholdKey)">{{ cachedIndicadoresData.indicadores[ind.key].risco_br != null ? cachedIndicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
+                    <span class="ind-risco-muted" :style="riscoTextStyle(cachedIndicadoresData.indicadores[ind.key])">{{ cachedIndicadoresData.indicadores[ind.key].risco_br != null ? cachedIndicadoresData.indicadores[ind.key].risco_br.toFixed(1) + 'x' : '—' }}</span>
                   </td>
                   <td class="ind-status-cell">
                     <span
                       class="ind-status-pill"
-                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey)"
-                    >{{ getIndicadorStatus(cachedIndicadoresData.indicadores[ind.key].risco_reg, ind.thresholdKey).label }}</span>
+                      :style="riscoPillStyle(cachedIndicadoresData.indicadores[ind.key])"
+                    >{{ getIndicadorStatus(cachedIndicadoresData.indicadores[ind.key]).label }}</span>
                   </td>
                 </template>
                 <template v-else>

@@ -267,6 +267,7 @@ class IndicadorDataSchema(BaseModel):
     risco_reg: Optional[float] = None
     risco_uf: Optional[float] = None
     risco_br: Optional[float] = None
+    status: str = "SEM DADOS"
 
 class IndicadoresResponse(BaseModel):
     cnpj: str

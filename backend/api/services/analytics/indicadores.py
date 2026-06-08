@@ -12,7 +12,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir
+from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
 from .matriz_risco_dinamica import (
     INDICATOR_MAPPING,
     _INDICATOR_FLAGS,
@@ -230,6 +230,16 @@ def get_indicadores(
             return IndicadoresResponse(cnpj=cnpj, indicadores={})
         row = rows.row(0, named=True)
 
+        def indicador_status(key: str, value_col: str) -> str:
+            if row.get(value_col) is None:
+                return "SEM DADOS"
+            c_aten, c_crit = _INDICATOR_FLAGS[key]
+            if int(row.get(c_crit) or 0) == 1:
+                return "CRÍTICO"
+            if int(row.get(c_aten) or 0) == 1:
+                return "ATENÇÃO"
+            return "NORMAL"
+
         indicadores = {
             key: IndicadorDataSchema(
                 valor=_optional_float(row.get(c_val)),
@@ -239,6 +249,7 @@ def get_indicadores(
                 risco_reg=_optional_float(row.get(c_rr)),
                 risco_uf=_optional_float(row.get(c_ru)),
                 risco_br=_optional_float(row.get(c_rb)),
+                status=indicador_status(key, c_val),
             )
             for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items()
         }

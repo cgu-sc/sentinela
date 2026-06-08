@@ -73,7 +73,6 @@ BEGIN TRY
         ('indicador_auditado_detalhado', 'total_caixas_vendidas'),
         ('indicador_auditado_detalhado', 'total_caixas_sem_comprovacao'),
         ('indicador_auditado_detalhado', 'total_autorizacoes'),
-        ('indicador_auditado_detalhado', 'pct_auditado'),
 
         ('indicador_falecidos_detalhado', 'id_cnpj'),
         ('indicador_falecidos_detalhado', 'ano_base'),
@@ -107,14 +106,12 @@ BEGIN TRY
         ('indicador_ticket_medio_detalhado', 'ano_base'),
         ('indicador_ticket_medio_detalhado', 'valor_total_auditado'),
         ('indicador_ticket_medio_detalhado', 'total_autorizacoes'),
-        ('indicador_ticket_medio_detalhado', 'valor_ticket_medio'),
 
         ('indicador_receita_por_paciente_detalhado', 'id_cnpj'),
         ('indicador_receita_por_paciente_detalhado', 'ano_base'),
         ('indicador_receita_por_paciente_detalhado', 'valor_total_auditado'),
         ('indicador_receita_por_paciente_detalhado', 'total_pacientes_distintos'),
         ('indicador_receita_por_paciente_detalhado', 'total_meses_ativos'),
-        ('indicador_receita_por_paciente_detalhado', 'receita_por_paciente_mensal'),
 
         ('indicador_venda_per_capita_detalhado', 'id_cnpj'),
         ('indicador_venda_per_capita_detalhado', 'ano_base'),
@@ -155,7 +152,6 @@ BEGIN TRY
         ('indicador_concentracao_pico_detalhado', 'ano_base'),
         ('indicador_concentracao_pico_detalhado', 'valor_top3_dias'),
         ('indicador_concentracao_pico_detalhado', 'valor_total_auditado'),
-        ('indicador_concentracao_pico_detalhado', 'mediana_concentracao'),
 
         ('indicador_crm_hhi_detalhado', 'id_cnpj'),
         ('indicador_crm_hhi_detalhado', 'ano_base'),
@@ -254,60 +250,51 @@ BEGIN TRY
         CAST(IA.total_caixas_vendidas AS BIGINT) AS auditado_total_caixas,
         CAST(IA.total_caixas_sem_comprovacao AS BIGINT) AS auditado_total_caixas_sem_comprovacao,
         CAST(IA.total_autorizacoes AS BIGINT) AS auditado_total_autorizacoes,
-        CAST(IA.pct_auditado AS DECIMAL(18,4)) AS pct_auditado,
 
         -- Falecidos
         CAST(FAL.total_autorizacoes AS INT) AS falecidos_total_autorizacoes,
         CAST(FAL.qtd_autorizacoes_falecidos AS INT) AS falecidos_qtd_autorizacoes,
         CAST(FAL.valor_total_auditado AS DECIMAL(19,2)) AS falecidos_valor_total,
         CAST(FAL.valor_falecidos AS DECIMAL(19,2)) AS falecidos_valor,
-        CAST((FAL.valor_falecidos * 100.0) / NULLIF(FAL.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_falecidos,
 
         -- Inconsistencia clinica
         CAST(CLI.total_vendas_monitoradas AS INT) AS clinico_total_vendas_monitoradas,
         CAST(CLI.qtd_vendas_suspeitas AS INT) AS clinico_qtd_vendas_suspeitas,
         CAST(CLI.valor_vendas_monitoradas AS DECIMAL(19,2)) AS clinico_valor_monitorado,
         CAST(CLI.valor_vendas_suspeitas AS DECIMAL(19,2)) AS clinico_valor_suspeito,
-        CAST((CLI.valor_vendas_suspeitas * 100.0) / NULLIF(CLI.valor_vendas_monitoradas, 0) AS DECIMAL(18,4)) AS pct_clinico,
 
         -- Teto
         CAST(TET.total_itens_monitorados AS INT) AS teto_total_itens_monitorados,
         CAST(TET.total_itens_teto_maximo AS INT) AS teto_total_itens,
         CAST(TET.valor_total_auditado AS DECIMAL(19,2)) AS teto_valor_total,
         CAST(TET.valor_itens_teto_maximo AS DECIMAL(19,2)) AS teto_valor,
-        CAST((TET.valor_itens_teto_maximo * 100.0) / NULLIF(TET.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_teto,
 
         -- Polimedicamento
         CAST(POL.total_autorizacoes_monitoradas AS INT) AS polimedicamento_total_autorizacoes,
         CAST(POL.total_autorizacoes_suspeitas AS INT) AS polimedicamento_total_autorizacoes_4mais,
         CAST(POL.valor_total_auditado AS DECIMAL(19,2)) AS polimedicamento_valor_total,
         CAST(POL.valor_autorizacoes_suspeitas AS DECIMAL(19,2)) AS polimedicamento_valor,
-        CAST((POL.valor_autorizacoes_suspeitas * 100.0) / NULLIF(POL.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_polimedicamento,
 
         -- Ticket medio
         CAST(TIC.valor_total_auditado AS DECIMAL(19,2)) AS ticket_valor_total,
         CAST(TIC.total_autorizacoes AS BIGINT) AS ticket_total_autorizacoes,
-        CAST(TIC.valor_ticket_medio AS DECIMAL(18,4)) AS val_ticket_medio,
 
         -- Receita por paciente
         CAST(RCP.valor_total_auditado AS DECIMAL(19,2)) AS receita_paciente_valor_total,
         CAST(RCP.total_pacientes_distintos AS INT) AS receita_paciente_total_pacientes_distintos,
         CAST(RCP.total_meses_ativos AS INT) AS receita_paciente_total_meses_ativos,
-        CAST(RCP.receita_por_paciente_mensal AS DECIMAL(18,4)) AS val_receita_paciente,
 
         -- Venda per capita
         CAST(VPC.valor_total_auditado AS DECIMAL(19,2)) AS per_capita_valor_total,
         CAST(VPC.total_meses_ativos AS INT) AS per_capita_total_meses_ativos,
         CAST(VPC.populacao_municipio AS INT) AS per_capita_populacao_municipio,
         CAST(VPC.denominador_per_capita AS BIGINT) AS per_capita_denominador,
-        CAST(VPC.valor_total_auditado / NULLIF(CAST(VPC.denominador_per_capita AS DECIMAL(19,4)), 0) AS DECIMAL(18,4)) AS val_per_capita,
 
         -- Vendas rapidas
         CAST(VR.total_intervalos_analisados AS INT) AS vendas_rapidas_total_intervalos,
         CAST(VR.total_vendas_rapidas AS INT) AS vendas_rapidas_total,
         CAST(VR.valor_total_auditado AS DECIMAL(19,2)) AS vendas_rapidas_valor_total,
         CAST(VR.valor_vendas_rapidas AS DECIMAL(19,2)) AS vendas_rapidas_valor,
-        CAST((VR.valor_vendas_rapidas * 100.0) / NULLIF(VR.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_vendas_rapidas,
 
         -- Volume atipico
         CAST(VA.total_semestres_comparaveis AS INT) AS volume_atipico_total_semestres_comparaveis,
@@ -316,24 +303,20 @@ BEGIN TRY
         CAST(VA.valor_aumento_total AS DECIMAL(19,2)) AS volume_atipico_valor_aumento_total,
         CAST(VA.valor_aumento_atipico AS DECIMAL(19,2)) AS volume_atipico_valor_aumento_atipico,
         CAST(VA.maior_taxa_crescimento_pct AS DECIMAL(18,4)) AS volume_atipico_maior_taxa_crescimento_pct,
-        CAST(VA.soma_excesso_crescimento_pct / NULLIF(CAST(VA.total_semestres_comparaveis AS DECIMAL(18,4)), 0) AS DECIMAL(18,4)) AS val_volume_atipico,
 
         -- Dispersao geografica
         CAST(GEO.total_vendas_monitoradas AS INT) AS geografico_total_vendas_monitoradas,
         CAST(GEO.qtd_vendas_outra_uf AS INT) AS geografico_qtd_vendas_outra_uf,
         CAST(GEO.valor_total_auditado AS DECIMAL(19,2)) AS geografico_valor_total,
         CAST(GEO.valor_vendas_outra_uf AS DECIMAL(19,2)) AS geografico_valor_outra_uf,
-        CAST((GEO.valor_vendas_outra_uf * 100.0) / NULLIF(GEO.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_geografico,
 
         -- Medicamentos de alto custo
         CAST(AC.valor_total_auditado AS DECIMAL(19,2)) AS alto_custo_valor_total,
         CAST(AC.valor_vendas_alto_custo AS DECIMAL(19,2)) AS alto_custo_valor,
-        CAST((AC.valor_vendas_alto_custo * 100.0) / NULLIF(AC.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_alto_custo,
 
         -- Dias de pico
         CAST(PIC.valor_total_auditado AS DECIMAL(19,2)) AS pico_valor_total,
         CAST(PIC.valor_top3_dias AS DECIMAL(19,2)) AS pico_valor_top3_dias,
-        CAST(PIC.mediana_concentracao AS DECIMAL(18,4)) AS pct_pico,
 
         -- CRM HHI
         CAST(HHI.total_prescritores AS INT) AS hhi_total_prescritores,
@@ -355,14 +338,12 @@ BEGIN TRY
         CAST(CI.valor_crms_antes_registro AS DECIMAL(19,2)) AS crms_irregulares_valor_antes_registro,
         CAST(CI.qtd_crms_irregulares AS INT) AS crms_irregulares_qtd,
         CAST(CI.valor_crms_irregulares AS DECIMAL(19,2)) AS crms_irregulares_valor,
-        CAST((CI.valor_crms_irregulares * 100.0) / NULLIF(CI.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_crms_irregulares,
 
         -- Recorrencia sistemica
         CAST(RS.total_renovacoes_monitoradas AS INT) AS recorrencia_total_renovacoes_monitoradas,
         CAST(RS.total_renovacoes_sistemicas AS INT) AS recorrencia_total_renovacoes_sistemicas,
         CAST(RS.valor_total_auditado AS DECIMAL(19,2)) AS recorrencia_valor_total,
-        CAST(RS.valor_renovacoes_sistemicas AS DECIMAL(19,2)) AS recorrencia_valor_sistemico,
-        CAST((RS.valor_renovacoes_sistemicas * 100.0) / NULLIF(RS.valor_total_auditado, 0) AS DECIMAL(18,4)) AS pct_recorrencia_sistemica
+        CAST(RS.valor_renovacoes_sistemicas AS DECIMAL(19,2)) AS recorrencia_valor_sistemico
 
     INTO temp_CGUSC.fp.matriz_risco_consolidada
     FROM BaseAnual AS B

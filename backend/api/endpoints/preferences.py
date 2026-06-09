@@ -75,3 +75,7 @@ def save_nota_tecnica(payload: NotaTecnicaPayload):
         payload.nota_tecnica.get("assinantes_tecnicos")
     )
     return PreferencesService.update_nota_tecnica(payload.nota_tecnica)
+
+
+
+

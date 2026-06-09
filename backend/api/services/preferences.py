@@ -29,6 +29,13 @@ class PreferencesService:
     BACKUP_PATH = BASE_DIR / "preferences.backup.json"
 
     @classmethod
+    def _copy_file(cls, src: Path, dst: Path) -> None:
+        try:
+            dst.write_bytes(src.read_bytes())
+        except OSError:
+            pass
+
+    @classmethod
     def default_preferences(cls) -> Dict[str, Any]:
         return {
             "schema_version": cls.SCHEMA_VERSION,
@@ -52,7 +59,7 @@ class PreferencesService:
             return
 
         try:
-            shutil.copy2(legacy_file, cls.FILE_PATH)
+            cls._copy_file(legacy_file, cls.FILE_PATH)
         except OSError:
             pass
 
@@ -84,7 +91,7 @@ class PreferencesService:
         except (json.JSONDecodeError, OSError):
             corrupt_path = cls.BASE_DIR / "preferences.corrupt.json"
             try:
-                shutil.copy2(cls.FILE_PATH, corrupt_path)
+                cls._copy_file(cls.FILE_PATH, corrupt_path)
             except OSError:
                 pass
             data = cls.default_preferences()
@@ -98,16 +105,29 @@ class PreferencesService:
         tmp_path = cls.FILE_PATH.with_suffix(".tmp")
 
         if cls.FILE_PATH.exists():
+            cls._copy_file(cls.FILE_PATH, cls.BACKUP_PATH)
+
+        try:
+            with tmp_path.open("w", encoding="utf-8") as file:
+                json.dump(normalized, file, ensure_ascii=False, indent=2)
+                file.write("\n")
+            os.replace(tmp_path, cls.FILE_PATH)
+        except OSError as exc:
+            # Disco cheio ou permissão negada — retorna os dados normalizados
+            # sem persistir, evitando HTTP 500 no frontend.
+            import warnings
+            import traceback
+            traceback.print_exc()
+            warnings.warn(
+                f"[PreferencesService] Nao foi possivel salvar preferencias em '{cls.FILE_PATH}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             try:
-                shutil.copy2(cls.FILE_PATH, cls.BACKUP_PATH)
+                tmp_path.unlink(missing_ok=True)
             except OSError:
                 pass
 
-        with tmp_path.open("w", encoding="utf-8") as file:
-            json.dump(normalized, file, ensure_ascii=False, indent=2)
-            file.write("\n")
-
-        os.replace(tmp_path, cls.FILE_PATH)
         return normalized
 
     @classmethod

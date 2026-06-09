@@ -248,9 +248,12 @@ class IndicadorDataSchema(BaseModel):
     med_reg: Optional[float] = None
     med_uf: Optional[float] = None
     med_br: Optional[float] = None
+    med_benchmark: Optional[float] = None
+    benchmark_escopo: Optional[str] = None
     risco_reg: Optional[float] = None
     risco_uf: Optional[float] = None
     risco_br: Optional[float] = None
+    risco_benchmark: Optional[float] = None
     status: str = "SEM DADOS"
 
 class IndicadoresResponse(BaseModel):
@@ -578,7 +581,10 @@ class IndicadorCnpjRowSchema(BaseModel):
     id_ibge7: Optional[int] = None
     valor: Optional[float] = None
     med_reg: Optional[float] = None
+    med_benchmark: Optional[float] = None
+    benchmark_escopo: Optional[str] = None
     risco_reg: Optional[float] = None
+    risco_benchmark: Optional[float] = None
     status: str = "SEM DADOS"          # "CRÍTICO" | "ATENÇÃO" | "NORMAL" | "SEM DADOS"
     is_matriz: bool
     is_grande_rede: Optional[bool] = False

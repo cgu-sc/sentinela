@@ -15,6 +15,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
 from .matriz_risco_dinamica import (
     INDICATOR_MAPPING,
+    MIN_REGIAO_BENCHMARK,
     _INDICATOR_FLAGS,
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
@@ -210,6 +211,20 @@ def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]]
         del cache[key]
 
 
+def _benchmark_escopo_expr() -> pl.Expr:
+    return (
+        pl.when(pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK)
+        .then(pl.lit("REGIÃO"))
+        .otherwise(pl.lit("UF"))
+        .alias("benchmark_escopo")
+    )
+
+
+def _benchmark_escopo_from_row(row: dict) -> str:
+    total_regiao = row.get("_total_regiao_benchmark")
+    return "REGIÃO" if total_regiao is not None and int(total_regiao) >= MIN_REGIAO_BENCHMARK else "UF"
+
+
 def get_indicadores(
     cnpj: str,
     data_inicio: date | None = None,
@@ -239,15 +254,19 @@ def get_indicadores(
                 return "ATENÇÃO"
             return "NORMAL"
 
+        benchmark_escopo = _benchmark_escopo_from_row(row)
         indicadores = {
             key: IndicadorDataSchema(
                 valor=_optional_float(row.get(c_val)),
                 med_reg=_optional_float(row.get(c_mr)),
                 med_uf=_optional_float(row.get(c_mu)),
                 med_br=_optional_float(row.get(c_mb)),
+                med_benchmark=_optional_float(row.get(c_mr) if benchmark_escopo == "REGIÃO" else row.get(c_mu)),
+                benchmark_escopo=benchmark_escopo,
                 risco_reg=_optional_float(row.get(c_rr)),
                 risco_uf=_optional_float(row.get(c_ru)),
                 risco_br=_optional_float(row.get(c_rb)),
+                risco_benchmark=_optional_float(row.get(c_rr) if benchmark_escopo == "REGIÃO" else row.get(c_ru)),
                 status=indicador_status(key, c_val),
             )
             for key, (c_val, c_mr, c_mu, c_mb, c_rr, c_ru, c_rb) in INDICATOR_MAPPING.items()
@@ -350,7 +369,7 @@ def _build_indicador_dataset(
             detail=f"Indicador '{indicador}' inválido. Valores aceitos: {sorted(INDICATOR_MAPPING.keys())}"
         )
 
-    c_val, c_mr, _c_mu, _c_mb, c_rr, _c_ru, _c_rb = INDICATOR_MAPPING[indicador]
+    c_val, c_mr, c_mu, _c_mb, c_rr, c_ru, _c_rb = INDICATOR_MAPPING[indicador]
     c_aten, c_crit = _INDICATOR_FLAGS[indicador]
     score_col = "score_risco_final"
 
@@ -361,7 +380,7 @@ def _build_indicador_dataset(
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
-    risco_cols = ["id_cnpj", c_val, c_mr, c_rr, c_aten, c_crit, score_col]
+    risco_cols = ["id_cnpj", "_total_regiao_benchmark", c_val, c_mr, c_mu, c_rr, c_ru, c_aten, c_crit, score_col]
     missing_cols = [col for col in risco_cols if col not in df_risco.columns]
     if missing_cols:
         raise RuntimeError(
@@ -376,6 +395,15 @@ def _build_indicador_dataset(
     has_flags = c_crit in indicador_dataset.columns and c_aten in indicador_dataset.columns
     if has_flags:
         indicador_dataset = indicador_dataset.with_columns([
+            _benchmark_escopo_expr(),
+            pl.when(pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK)
+              .then(pl.col(c_mr))
+              .otherwise(pl.col(c_mu))
+              .alias("med_benchmark"),
+            pl.when(pl.col("_total_regiao_benchmark") >= MIN_REGIAO_BENCHMARK)
+              .then(pl.col(c_rr))
+              .otherwise(pl.col(c_ru))
+              .alias("risco_benchmark"),
             pl.when(pl.col(c_val).is_null())
               .then(pl.lit("SEM DADOS"))
               .when(pl.col(c_crit).cast(pl.Int32) == 1)
@@ -481,7 +509,10 @@ def _build_indicador_cnpj_rows(
             id_ibge7=int(row["id_ibge7"]) if row.get("id_ibge7") is not None else None,
             valor=_optional_float(row.get(c_val)),
             med_reg=_optional_float(row.get(c_mr)),
+            med_benchmark=_optional_float(row.get("med_benchmark")),
+            benchmark_escopo=row.get("benchmark_escopo"),
             risco_reg=_optional_float(row.get(rr_col)) if rr_col else None,
+            risco_benchmark=_optional_float(row.get("risco_benchmark")),
             status=row.get("status", "SEM DADOS"),
             is_matriz=bool(is_matriz),
             is_grande_rede=bool(row.get("is_grande_rede", False)),
@@ -792,7 +823,8 @@ def get_indicadores_analise_cnpjs(
             "uf": "uf",
             "valor": c_val,
             "med_reg": c_mr,
-            "risco_reg": rr_col,
+            "risco_reg": "risco_benchmark",
+            "risco_benchmark": "risco_benchmark",
             "status": "status",
             "is_matriz": "is_matriz",
             "is_conexao_ativa": "is_conexao_ativa",

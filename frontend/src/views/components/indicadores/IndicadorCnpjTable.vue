@@ -72,6 +72,14 @@ function formatCurrencyCompact(valor) {
   return `R$ ${formattedValue}${rule.suffix}`;
 }
 
+function benchmarkLabel(row) {
+  return String(row?.benchmark_escopo ?? '').toUpperCase() === 'UF' ? 'UF' : 'região';
+}
+
+function benchmarkValue(row) {
+  return row?.med_benchmark ?? row?.med_reg;
+}
+
 function statusClass(status) {
   switch (status) {
     case 'CRÍTICO': return 'status-danger';
@@ -246,26 +254,26 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
         <template #body="{ data }">
           <div class="indicator-cell" :class="{ muted: data.valor == null }">
             <span class="indicator-value">{{ formatValue(data.valor) }}</span>
-            <span class="indicator-median">região {{ formatValue(data.med_reg) }}</span>
+            <span class="indicator-median">{{ benchmarkLabel(data) }} {{ formatValue(benchmarkValue(data)) }}</span>
           </div>
         </template>
       </Column>
 
       <Column
-        field="risco_reg"
+        field="risco_benchmark"
         header="Risco"
         sortable
         headerClass="col-risk"
         bodyClass="col-risk"
       >
         <template #body="{ data }">
-          <div class="risk-cell" :class="{ muted: data.risco_reg == null }">
+          <div class="risk-cell" :class="{ muted: data.risco_benchmark == null }">
             <span
-              v-if="data.risco_reg != null"
+              v-if="data.risco_benchmark != null"
               class="risk-value"
               :class="statusClass(data.status)"
             >
-              {{ data.risco_reg.toFixed(1) }}x
+              {{ data.risco_benchmark.toFixed(1) }}x
             </span>
             <span v-else>—</span>
             <span

@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -396,27 +396,6 @@ def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, pe
         print(traceback.format_exc())
         return ProducaoSemestralResponse(pontos=[])
 
-def get_resultado_sentinela(db: Session) -> List[ResultadoSentinelaSchema]:
-    """
-    Busca TODOS os registros da tabela de resultados detalhados (CNPJs).
-    """
-    try:
-        sql = text("""
-            SELECT 
-                uf, id_ibge7, municipio, nu_populacao, cnpj, razao_social, 
-                qnt_caixas_vendidas, qnt_caixas_sem_comprovacao,
-                nu_autorizacoes, valor_vendas, valor_sem_comprovacao, 
-                percentual_sem_comprovacao, num_estabelecimentos_mesmo_municipio, 
-                num_meses_movimentacao, CodPorteEmpresa
-            FROM [temp_CGUSC].[fp].[resultado_sentinela]
-        """)
-        result = db.execute(sql).fetchall()
-        return [ResultadoSentinelaSchema.model_validate(dict(row._mapping)) for row in result]
-    except Exception as e:
-        import traceback
-        print("❌ ERRO AO BUSCAR RESULTADOS DETALHADOS:")
-        print(traceback.format_exc())
-        return []
 
 def get_rede_por_cnpj_raiz(cnpj_raiz: str) -> List[RedeEstabelecimentoSchema]:
     """Retorna todos os estabelecimentos de uma rede dado o CNPJ raiz (8 dígitos)."""

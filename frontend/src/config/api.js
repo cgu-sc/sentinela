@@ -4,7 +4,6 @@ export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,
   analyticsFatorRisco:  `${BASE_URL}/api/v1/analytics/faixas-risco`,
   analyticsProducaoSemestral: `${BASE_URL}/api/v1/analytics/producao-semestral`,
-  analyticsResultados:  `${BASE_URL}/api/v1/analytics/resultados-detalhados`,
   analyticsRegionalBenchmarking: (uf, regiaoId = null, inicio = null, fim = null) => {
     const params = new URLSearchParams();
     if (uf)       params.set('uf', uf);

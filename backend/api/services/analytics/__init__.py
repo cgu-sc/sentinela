@@ -20,7 +20,6 @@ from .dashboard import (
     get_dashboard_data,
     get_producao_semestral_data,
     get_rede_por_cnpj_raiz,
-    get_resultado_sentinela,
 )
 from .bootstrap import get_cnpj_bootstrap
 from .falecidos import get_falecidos_data, get_timeline_cpf
@@ -69,7 +68,6 @@ class AnalyticsService:
     get_cnpj_bootstrap = staticmethod(get_cnpj_bootstrap)
     get_dashboard_data = staticmethod(get_dashboard_data)
     get_producao_semestral_data = staticmethod(get_producao_semestral_data)
-    get_resultado_sentinela = staticmethod(get_resultado_sentinela)
     get_rede_por_cnpj_raiz = staticmethod(get_rede_por_cnpj_raiz)
     get_evolucao_financeira = staticmethod(get_evolucao_financeira)
     get_evolucao_mensal_gtin = staticmethod(get_evolucao_mensal_gtin)

@@ -1,10 +1,10 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from database import get_db, engine
 from ..schemas.analytics import (
-    AnalyticsResponse, ResultadoSentinelaSchema, FatorRiscoResponseSchema,
+    AnalyticsResponse, FatorRiscoResponseSchema,
     RedeEstabelecimentoSchema, EvolucaoFinanceiraResponse, IndicadoresResponse,
     ProducaoSemestralResponse,
     FalecidosResponse, MultiCnpjTimelineResponse, RegionalResponse, RegionalAnimationResponse,
@@ -201,10 +201,6 @@ def get_producao_semestral(
         par_teia=par_teia,
         estabelecimento=estabelecimento,
     )
-
-@router.get("/resultados-detalhados", response_model=List[ResultadoSentinelaSchema])
-def get_resultados_detalhados(db: Session = Depends(get_db)):
-    return AnalyticsService.get_resultado_sentinela(db)
 
 @router.get("/faixas-risco", response_model=FatorRiscoResponseSchema)
 def get_resultado_faixas_risco(

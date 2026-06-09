@@ -1,6 +1,5 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useResultadoStore } from '@/stores/resultados';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
 import { useConfigStore } from '@/stores/config';
@@ -11,7 +10,6 @@ import { TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import Toast from 'primevue/toast';
 
-const resultadoStore = useResultadoStore();
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
 const configStore = useConfigStore();
@@ -92,7 +90,6 @@ const initializeApp = async () => {
     const { uf, regiaoId, idIbge7, unidadePf } = filters;
 
     const fetchList = [
-      resultadoStore.fetchResultados(),
       analyticsStore.fetchDashboardSummary(filters),
       analyticsStore.fetchFatorRisco(filters),
       geoStore.fetchLocalidades(),

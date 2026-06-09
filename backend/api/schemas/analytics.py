@@ -33,22 +33,6 @@ class ResultadoSentinelaMunicipioSchema(BaseModel):
     populacao: Optional[int] = 0
     densidade: Optional[float] = 0.0
 
-class ResultadoSentinelaSchema(BaseModel):
-    uf: Optional[str] = None
-    id_ibge7: Optional[int] = None
-    municipio: Optional[str] = None
-    nu_populacao: Optional[int] = 0
-    cnpj: Optional[str] = None
-    razao_social: Optional[str] = None
-    qnt_caixas_vendidas: Optional[int] = 0
-    qnt_caixas_sem_comprovacao: Optional[int] = 0
-    nu_autorizacoes: Optional[int] = 0
-    valor_vendas: Optional[float] = 0.0
-    valor_sem_comprovacao: Optional[float] = 0.0
-    percentual_sem_comprovacao: Optional[float] = 0.0
-    num_estabelecimentos_mesmo_municipio: Optional[int] = 0
-    num_meses_movimentacao: Optional[int] = 0
-    CodPorteEmpresa: Optional[int] = None
 
 class ResultadoSentinelaCnpjSchema(BaseModel):
     municipio_uf: str

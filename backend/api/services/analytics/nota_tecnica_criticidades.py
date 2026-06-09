@@ -60,6 +60,11 @@ _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = False
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
 _CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
+_ZERO_BASELINE_CRITICAL_INDICATORS_NOTA = {
+    "falecidos",
+    "incompatibilidade_patologica",
+    "volume_atipico",
+}
 
 _INDICADOR_QUADRO_META = {
     "percentual_nao_comprovacao": ("Percentual não comprovação", "pct"),
@@ -541,8 +546,8 @@ def _get_criticos_ordenados_por_risco(
     for key in criticos:
         if key not in INDICATOR_MAPPING:
             raise RuntimeError(f"Indicador critico sem mapeamento de colunas para ordenacao da Nota Tecnica: {key}")
-        _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
-        required_columns.add(c_risco_reg)
+        c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        required_columns.update({c_val, c_med_reg, c_risco_reg})
 
     missing_columns = sorted(required_columns - set(matriz_row.keys()))
     if missing_columns:
@@ -552,11 +557,11 @@ def _get_criticos_ordenados_por_risco(
         )
     risco_por_key: dict[str, float] = {}
     for key in criticos:
-        _c_val, _c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
+        valor = matriz_row.get(c_val)
+        mediana_reg = matriz_row.get(c_med_reg)
         risco_reg = matriz_row.get(c_risco_reg)
-        if risco_reg is None:
-            raise RuntimeError(f"Indicador critico {key} sem risco regional na matriz.")
-        risco_por_key[key] = float(risco_reg)
+        risco_por_key[key] = _risco_regional_sort_value(key, valor, mediana_reg, risco_reg)
 
     return sorted(
         criticos,
@@ -585,6 +590,53 @@ def _format_indicador_quadro_value(value: Any, formato: str) -> str:
     if formato == "dec":
         return _format_decimal_pt(numeric_value, 2)
     raise RuntimeError(f"Formato de indicador critico nao mapeado para a Nota Tecnica: {formato}")
+
+
+def _format_indicador_quadro_optional(value: Any, formato: str) -> str:
+    if value is None:
+        return "—"
+    return _format_indicador_quadro_value(value, formato)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if numeric_value != numeric_value:
+        return None
+    return numeric_value
+
+
+def _is_zero_baseline_critical(indicador_key: str, valor: Any, mediana: Any, risco: Any) -> bool:
+    valor_float = _optional_float(valor)
+    mediana_float = _optional_float(mediana)
+    risco_float = _optional_float(risco)
+    return (
+        indicador_key in _ZERO_BASELINE_CRITICAL_INDICATORS_NOTA
+        and valor_float is not None
+        and valor_float > 0
+        and risco_float is None
+        and (mediana_float is None or mediana_float <= 0)
+    )
+
+
+def _risco_regional_sort_value(indicador_key: str, valor: Any, mediana: Any, risco: Any) -> float:
+    risco_float = _optional_float(risco)
+    if risco_float is not None:
+        return risco_float
+    if _is_zero_baseline_critical(indicador_key, valor, mediana, risco):
+        return float("inf")
+    raise RuntimeError(f"Indicador critico {indicador_key} sem risco regional na matriz.")
+
+
+def _format_risco_regional(value: Any) -> str:
+    risco_float = _optional_float(value)
+    if risco_float is None:
+        return "—"
+    return f'{_format_decimal_pt(risco_float, 1)}x'
 
 
 def _indicador_valor_farmacia_header(formato: str) -> str:
@@ -630,7 +682,11 @@ def _build_indicadores_criticos_quadro(
         valor = matriz_row.get(c_val)
         mediana_reg = matriz_row.get(c_med_reg)
         risco_reg = matriz_row.get(c_risco_reg)
-        if valor is None or mediana_reg is None or risco_reg is None:
+        if valor is None:
+            raise RuntimeError(f"Indicador critico {key} sem valor na matriz.")
+        if mediana_reg is None and not _is_zero_baseline_critical(key, valor, mediana_reg, risco_reg):
+            raise RuntimeError(f"Indicador critico {key} sem mediana regional na matriz.")
+        if risco_reg is None and not _is_zero_baseline_critical(key, valor, mediana_reg, risco_reg):
             raise RuntimeError(f"Indicador critico {key} sem valor, mediana regional ou risco regional na matriz.")
         quadro_rows.append({
             "key": key,
@@ -641,8 +697,8 @@ def _build_indicadores_criticos_quadro(
                 else f"secao7_{key}" if key in _SECAO5_ORDER else None
             ),
             "valor": _format_indicador_quadro_value(valor, formato),
-            "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
-            "risco_regional": float(risco_reg),
+            "mediana_regional": _format_indicador_quadro_optional(mediana_reg, formato),
+            "risco_regional": _optional_float(risco_reg),
             "status": "CRÍTICO",
         })
 
@@ -702,11 +758,21 @@ def _build_indicador_regional_context(
         .filter(
             (pl.col("_id_regiao_norm") == id_regiao)
             & pl.col(c_val).is_not_null()
-            & pl.col(c_risco_reg).is_not_null()
         )
         .with_columns([
             pl.col(c_val).cast(pl.Float64).alias("_valor_rank"),
-            pl.col(c_risco_reg).cast(pl.Float64).alias("_risco_rank"),
+            (
+                pl.when(
+                    (pl.lit(indicador_key in _ZERO_BASELINE_CRITICAL_INDICATORS_NOTA))
+                    & pl.col(c_val).is_not_null()
+                    & (pl.col(c_val) > 0)
+                    & (pl.col(c_med_reg).is_null() | (pl.col(c_med_reg) <= 0))
+                    & pl.col(c_risco_reg).is_null()
+                )
+                .then(pl.lit(float("inf")))
+                .otherwise(pl.col(c_risco_reg).cast(pl.Float64))
+                .alias("_risco_rank")
+            ),
         ])
         .sort(["_valor_rank", "_risco_rank", "_cnpj_norm"], descending=[True, True, False])
         .with_row_index("posicao_regional", offset=1)
@@ -722,8 +788,12 @@ def _build_indicador_regional_context(
     valor = regional_row.get(c_val)
     mediana_reg = regional_row.get(c_med_reg)
     risco_reg = regional_row.get(c_risco_reg)
-    if valor is None or mediana_reg is None or risco_reg is None:
-        raise RuntimeError(f"CNPJ {cnpj_norm} sem valor, mediana ou risco regional para indicador {indicador_key}.")
+    if valor is None:
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem valor para indicador {indicador_key}.")
+    if mediana_reg is None and not _is_zero_baseline_critical(indicador_key, valor, mediana_reg, risco_reg):
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem mediana regional para indicador {indicador_key}.")
+    if risco_reg is None and not _is_zero_baseline_critical(indicador_key, valor, mediana_reg, risco_reg):
+        raise RuntimeError(f"CNPJ {cnpj_norm} sem risco regional para indicador {indicador_key}.")
 
     total_regional = regional.height
     if total_regional <= 0:
@@ -739,8 +809,8 @@ def _build_indicador_regional_context(
         "formato": formato,
         "id_regiao_saude": id_regiao,
         "valor": _format_indicador_quadro_value(valor, formato),
-        "mediana_regional": _format_indicador_quadro_value(mediana_reg, formato),
-        "risco_regional": float(risco_reg),
+        "mediana_regional": _format_indicador_quadro_optional(mediana_reg, formato),
+        "risco_regional": _optional_float(risco_reg),
         "posicao_regional": int(regional_row["posicao_regional"]),
         "total_regional": total_regional,
         "percentil_regional": percentil_regional,
@@ -792,7 +862,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         context["indicador_label"],
         context["valor"],
         context["mediana_regional"],
-        f'{_format_decimal_pt(context["risco_regional"], 1)}x',
+        _format_risco_regional(context["risco_regional"]),
         _format_int_pt(context["posicao_regional"]),
         _format_int_pt(context["total_regional"]),
         f'{_format_decimal_pt(context["percentil_regional"], 1)}%',
@@ -861,7 +931,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
             row["indicador"],
             row["valor"],
             row["mediana_regional"],
-            f'{_format_decimal_pt(row["risco_regional"], 1)}x',
+            _format_risco_regional(row["risco_regional"]),
             row["status"],
         ]
         fill = 'F8FAFC' if row_idx % 2 else 'FFFFFF'

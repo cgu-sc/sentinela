@@ -175,7 +175,7 @@ export const INDICATOR_GROUPS = [
     indicators: [
       { key: 'vendas_rapidas', label: 'Vendas Rápidas (<60s)', formato: 'pct', thresholdKey: 'vendas_rapidas',
         metodologia: 'Percentual de vendas consecutivas realizadas em intervalo inferior a 60 segundos.' },
-      { key: 'volume_atipico', label: 'Volume Atípico', formato: 'dec', thresholdKey: 'volume_atipico',
+      { key: 'volume_atipico', label: 'Aumento atípico de vendas', formato: 'dec', thresholdKey: 'volume_atipico',
         metodologia: 'Mede explosões de crescimento semestral atípicas no faturamento do programa.' },
       { key: 'recorrencia_sistemica', label: 'Recorrência Sistêmica', formato: 'pct', thresholdKey: 'recorrencia_sistemica',
         metodologia: 'Percentual de compras sequenciais realizadas precisamente na linha de corte do sistema (ex: 30 dias exatos), indicando possível automação.' },

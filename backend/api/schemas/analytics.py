@@ -245,6 +245,7 @@ class FalecidosResponse(BaseModel):
 
 class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None
+    valor_aumento_atipico: Optional[float] = None
     med_reg: Optional[float] = None
     med_uf: Optional[float] = None
     med_br: Optional[float] = None

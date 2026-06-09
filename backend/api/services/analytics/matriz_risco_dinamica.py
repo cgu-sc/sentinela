@@ -492,26 +492,54 @@ def _compute_dynamic_matriz_risco(
         modified_z_exprs.extend([
             _modified_z_expr(benchmark_value_col, benchmark_median_col, benchmark_mad_col, mz_col),
         ])
-        zero_baseline_expr = (
-            pl.when(
+        zero_baseline_condition = pl.col(benchmark_median_col).is_null() | (pl.col(benchmark_median_col) <= 0)
+
+        if key == "falecidos":
+            zero_baseline_attention_condition = (
+                zero_baseline_condition
+                & pl.col("falecidos_valor").is_not_null()
+                & (pl.col("falecidos_valor") > 0)
+                & (pl.col("falecidos_valor") <= 3000)
+            )
+            zero_baseline_critical_condition = (
+                zero_baseline_condition
+                & pl.col("falecidos_valor").is_not_null()
+                & (pl.col("falecidos_valor") > 3000)
+            )
+        elif key == "volume_atipico":
+            zero_baseline_attention_condition = (
+                zero_baseline_condition
+                & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
+                & (pl.col("volume_atipico_valor_aumento_atipico") > 0)
+                & (pl.col("volume_atipico_valor_aumento_atipico") < 10000)
+            )
+            zero_baseline_critical_condition = (
+                zero_baseline_condition
+                & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
+                & (pl.col("volume_atipico_valor_aumento_atipico") >= 10000)
+            )
+        else:
+            zero_baseline_attention_condition = pl.lit(False)
+            zero_baseline_critical_condition = (
                 (pl.lit(key in _ZERO_BASELINE_CRITICAL_INDICATORS))
                 & pl.col(c_val).is_not_null()
                 & (pl.col(c_val) > 0)
-                & (pl.col(benchmark_median_col).is_null() | (pl.col(benchmark_median_col) <= 0))
+                & zero_baseline_condition
             )
-            .then(pl.lit(1))
-            .otherwise(pl.lit(0))
-            .cast(pl.Int8)
-            .alias(zero_baseline_critical_col)
+
+        modified_z_exprs.append(
+            zero_baseline_critical_condition.cast(pl.Int8).alias(zero_baseline_critical_col)
         )
-        modified_z_exprs.append(zero_baseline_expr)
         flag_exprs.extend([
             (
                 pl.when(
+                    zero_baseline_attention_condition
+                    | (
                     (pl.col(zero_baseline_critical_col) == 0)
                     & pl.col(mz_col).is_not_null()
                     & (pl.col(mz_col) >= attention_threshold)
                     & (pl.col(mz_col) < critical_threshold)
+                    )
                 )
                 .then(pl.lit(1))
                 .otherwise(pl.lit(0))
@@ -520,7 +548,7 @@ def _compute_dynamic_matriz_risco(
             ),
             (
                 pl.when(
-                    (pl.col(zero_baseline_critical_col) == 1)
+                    zero_baseline_critical_condition
                     | (pl.col(mz_col).is_not_null() & (pl.col(mz_col) >= critical_threshold))
                 )
                 .then(pl.lit(1))

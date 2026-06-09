@@ -215,7 +215,14 @@ function riscoTextStyle(indicadorData) {
                 </td>
 
                 <template v-if="cachedIndicadoresData.indicadores[ind.key]?.valor != null">
-                  <td class="ind-val-cell">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}</td>
+                  <td class="ind-val-cell">
+                    <span v-if="ind.key === 'volume_atipico'">
+                      {{ formatCurrencyFull(cachedIndicadoresData.indicadores[ind.key].valor_aumento_atipico) }}
+                    </span>
+                    <span v-else>
+                      {{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}
+                    </span>
+                  </td>
                   <td class="ind-med-cell">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
                   <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</span></td>
                   <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_br,  ind.formato) }}</span></td>

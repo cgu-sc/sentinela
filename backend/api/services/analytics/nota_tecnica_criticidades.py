@@ -77,13 +77,15 @@ _INDICADOR_QUADRO_META = {
     "per_capita": ("Venda per capita mensal", "val"),
     "alto_custo": ("Medicamentos de alto custo", "pct"),
     "vendas_rapidas": ("Vendas rápidas (<60s)", "pct"),
-    "volume_atipico": ("Volume atípico", "dec"),
+    "volume_atipico": ("Aumento atípico de vendas", "dec"),
     "recorrencia_sistemica": ("Recorrência sistêmica", "pct"),
     "dias_pico": ("Concentração em dias de pico", "pct"),
     "dispersao_geografica": ("Dispersão interestadual", "pct"),
     "hhi_crm": ("Concentração de CRMs (HHI)", "dec"),
     "crms_irregulares": ("CRMs irregulares", "pct"),
 }
+
+_VOLUME_ATIPICO_VALOR_AUMENTO_COL = "volume_atipico_valor_aumento_atipico"
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -666,6 +668,8 @@ def _build_indicadores_criticos_quadro(
         c_val, c_med_reg, _c_med_uf, _c_med_br, c_risco_reg, _c_risco_uf, _c_risco_br = INDICATOR_MAPPING[key]
         _c_atencao, c_critico = _INDICATOR_FLAGS[key]
         required_columns.update({c_val, c_med_reg, c_risco_reg, c_critico})
+        if key == "volume_atipico":
+            required_columns.add(_VOLUME_ATIPICO_VALOR_AUMENTO_COL)
 
     missing_columns = sorted(required_columns - set(matriz_row.keys()))
     if missing_columns:
@@ -688,6 +692,13 @@ def _build_indicadores_criticos_quadro(
             raise RuntimeError(f"Indicador critico {key} sem mediana regional na matriz.")
         if risco_reg is None and not _is_zero_baseline_critical(key, valor, mediana_reg, risco_reg):
             raise RuntimeError(f"Indicador critico {key} sem valor, mediana regional ou risco regional na matriz.")
+        valor_quadro = valor
+        formato_valor_quadro = formato
+        if key == "volume_atipico":
+            valor_quadro = matriz_row.get(_VOLUME_ATIPICO_VALOR_AUMENTO_COL)
+            formato_valor_quadro = "val"
+            if valor_quadro is None:
+                raise RuntimeError("Indicador critico volume_atipico sem valor financeiro de aumento atipico na matriz.")
         quadro_rows.append({
             "key": key,
             "indicador": label,
@@ -696,7 +707,7 @@ def _build_indicadores_criticos_quadro(
                 if key == "percentual_nao_comprovacao"
                 else f"secao7_{key}" if key in _SECAO5_ORDER else None
             ),
-            "valor": _format_indicador_quadro_value(valor, formato),
+            "valor": _format_indicador_quadro_value(valor_quadro, formato_valor_quadro),
             "mediana_regional": _format_indicador_quadro_optional(mediana_reg, formato),
             "risco_regional": _optional_float(risco_reg),
             "status": "CRÍTICO",

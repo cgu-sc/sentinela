@@ -246,6 +246,7 @@ class FalecidosResponse(BaseModel):
 class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None
     valor_aumento_atipico: Optional[float] = None
+    valor_financeiro: Optional[float] = None
     med_reg: Optional[float] = None
     med_uf: Optional[float] = None
     med_br: Optional[float] = None
@@ -262,6 +263,133 @@ class IndicadoresResponse(BaseModel):
     indicadores: Dict[str, IndicadorDataSchema]
 
 # ── Multi-CNPJ Timeline (Audit History) ──────────────────
+class GeograficoOrigemUfRowSchema(BaseModel):
+    uf_farmacia: str
+    uf_paciente: str
+    is_outra_uf: bool
+    qtd_autorizacoes: int
+    valor_autorizado: float
+    percentual_sobre_total: float
+    percentual_sobre_outra_uf: Optional[float] = None
+
+class GeograficoOrigemUfResponse(BaseModel):
+    cnpj: str
+    uf_farmacia: str
+    periodo_inicio: Optional[date] = None
+    periodo_fim: Optional[date] = None
+    total_valor_origem: float
+    total_valor_outra_uf: float
+    total_autorizacoes_origem: int
+    total_autorizacoes_outra_uf: int
+    percentual_financeiro_outra_uf: float
+    principal_uf_externa: Optional[GeograficoOrigemUfRowSchema] = None
+    rows: List[GeograficoOrigemUfRowSchema]
+
+
+class ClinicoEvolucaoAnualSchema(BaseModel):
+    ano_base: int
+    qtd_cpfs_distintos: int
+    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes: int
+    qtd_autorizacoes_incompativeis: int
+    valor_total_pago: float
+    valor_incompativel_pago: float
+    percentual_cpfs_incompativeis: float
+    percentual_autorizacoes_incompativeis: Optional[float] = None
+
+
+class ClinicoMunicipalResumoRowSchema(BaseModel):
+    grupo: str
+    qtd_farmacias: int
+    qtd_cpfs_distintos: int
+    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes_incompativeis: int
+    valor_incompativel_pago: float
+    participacao_valor_municipal: Optional[float] = None
+
+
+class ClinicoMunicipalRankingRowSchema(BaseModel):
+    posicao: int
+    id_cnpj: int
+    cnpj: str
+    razao_social: str
+    is_alvo: bool
+    qtd_cpfs_distintos: int
+    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes_incompativeis: int
+    valor_incompativel_pago: float
+    percentual_cpfs_incompativeis: Optional[float] = None
+    participacao_municipal: Optional[float] = None
+
+
+class ClinicoFaixaEtariaSchema(BaseModel):
+    faixa: str
+    faixa_inicio: int
+    populacao: int
+    percentual: float
+    destacar_50_mais: bool
+
+
+class ClinicoParkinsonDemografiaSchema(BaseModel):
+    municipio: str
+    uf: str
+    ano_censo: int
+    ano_observado: int
+    prevalencia_50_mais: float
+    populacao_total: int
+    populacao_50_mais: int
+    casos_esperados: float
+    cpfs_observados: int
+    razao_observado_esperado: Optional[float] = None
+    faixas_etarias: List[ClinicoFaixaEtariaSchema]
+
+
+class ClinicoPatologiaSchema(BaseModel):
+    patologia: str
+    regra_clinica: str
+    titulo: str
+    objeto: str
+    criterio: str
+    descricao: str
+    ano_inicio: int
+    ano_fim: int
+    qtd_cpfs_distintos: int
+    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes: int
+    qtd_autorizacoes_incompativeis: int
+    valor_total_pago: float
+    valor_incompativel_pago: float
+    percentual_medio_cpfs_incompativeis: float
+    percentual_medio_regional_cpfs_incompativeis: Optional[float] = None
+    razao_media_percentual_vs_regiao: Optional[float] = None
+    excesso_cpfs_incompativeis_vs_regiao: Optional[float] = None
+    evolucao_anual: List[ClinicoEvolucaoAnualSchema]
+    municipal_resumo: List[ClinicoMunicipalResumoRowSchema]
+    ranking_municipal: List[ClinicoMunicipalRankingRowSchema]
+    demografia_parkinson: Optional[ClinicoParkinsonDemografiaSchema] = None
+
+
+class ClinicoIncompatibilidadeSummarySchema(BaseModel):
+    qtd_cpfs_distintos: int
+    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes: int
+    qtd_autorizacoes_incompativeis: int
+    valor_total_pago: float
+    valor_incompativel_pago: float
+    percentual_valor_incompativel: Optional[float] = None
+
+
+class ClinicoIncompatibilidadeResponse(BaseModel):
+    cnpj: str
+    razao_social: str
+    municipio: str
+    uf: str
+    periodo_inicio: Optional[date] = None
+    periodo_fim: Optional[date] = None
+    periodo_label: str
+    summary: ClinicoIncompatibilidadeSummarySchema
+    patologias: List[ClinicoPatologiaSchema]
+
 class TimelineEventSchema(BaseModel):
     cnpj: str
     razao_social: Optional[str] = None

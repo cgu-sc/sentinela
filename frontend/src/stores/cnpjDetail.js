@@ -99,6 +99,20 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     indicadoresLoadedKey:  null,
     indicadoresError:   null,
 
+    // ── Dispersão Geográfica por UF ──────────────────────────────────────────
+    geograficoOrigemUfData: null,
+    geograficoOrigemUfLoading: false,
+    geograficoOrigemUfLoadedKey: null,
+    geograficoOrigemUfRequestKey: null,
+    geograficoOrigemUfError: null,
+
+    // ── Incompatibilidade Patológica ─────────────────────────────────────────
+    incompatibilidadePatologicaData: null,
+    incompatibilidadePatologicaLoading: false,
+    incompatibilidadePatologicaLoadedKey: null,
+    incompatibilidadePatologicaRequestKey: null,
+    incompatibilidadePatologicaError: null,
+
     // ── Falecidos ─────────────────────────────────────────────────────────────
     falecidosData:    null,
     falecidosLoading: false,
@@ -594,6 +608,80 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchGeograficoOrigemUf(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return null;
+      const requestKey = `${clean}|${inicio || ''}|${fim || ''}`;
+      if (this.geograficoOrigemUfLoadedKey === requestKey && this.geograficoOrigemUfData) {
+        return this.geograficoOrigemUfData;
+      }
+      if (this.geograficoOrigemUfRequestKey === requestKey) return null;
+
+      this.geograficoOrigemUfLoading = true;
+      this.geograficoOrigemUfRequestKey = requestKey;
+      this.geograficoOrigemUfError = null;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsGeograficoOrigemUf(clean), { params });
+        if (this.geograficoOrigemUfRequestKey !== requestKey) return null;
+        if (!data || !Array.isArray(data.rows) || data.uf_farmacia == null) {
+          throw new Error('Contrato invalido em geografico/origem-uf: rows e uf_farmacia obrigatorios.');
+        }
+        this.geograficoOrigemUfData = data;
+        this.geograficoOrigemUfLoadedKey = requestKey;
+        return data;
+      } catch (e) {
+        if (this.geograficoOrigemUfRequestKey !== requestKey) return null;
+        console.error('Erro ao buscar dispersão geográfica por UF:', e);
+        this.geograficoOrigemUfError = e?.response?.data?.detail || ERROR_MSG;
+        return null;
+      } finally {
+        if (this.geograficoOrigemUfRequestKey === requestKey) {
+          this.geograficoOrigemUfLoading = false;
+          this.geograficoOrigemUfRequestKey = null;
+        }
+      }
+    },
+
+    async fetchIncompatibilidadePatologica(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return null;
+      const requestKey = `${clean}|${inicio || ''}|${fim || ''}`;
+      if (this.incompatibilidadePatologicaLoadedKey === requestKey && this.incompatibilidadePatologicaData) {
+        return this.incompatibilidadePatologicaData;
+      }
+      if (this.incompatibilidadePatologicaRequestKey === requestKey) return null;
+
+      this.incompatibilidadePatologicaLoading = true;
+      this.incompatibilidadePatologicaRequestKey = requestKey;
+      this.incompatibilidadePatologicaError = null;
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIncompatibilidadePatologica(clean), { params });
+        if (this.incompatibilidadePatologicaRequestKey !== requestKey) return null;
+        if (!data || !data.summary || !Array.isArray(data.patologias)) {
+          throw new Error('Contrato invalido em clinico/incompatibilidades: summary e patologias obrigatorios.');
+        }
+        this.incompatibilidadePatologicaData = data;
+        this.incompatibilidadePatologicaLoadedKey = requestKey;
+        return data;
+      } catch (e) {
+        if (this.incompatibilidadePatologicaRequestKey !== requestKey) return null;
+        console.error('Erro ao buscar incompatibilidade patologica:', e);
+        this.incompatibilidadePatologicaError = e?.response?.data?.detail || ERROR_MSG;
+        return null;
+      } finally {
+        if (this.incompatibilidadePatologicaRequestKey === requestKey) {
+          this.incompatibilidadePatologicaLoading = false;
+          this.incompatibilidadePatologicaRequestKey = null;
+        }
+      }
+    },
+
     // ── Quadro Societário ─────────────────────────────────────────────────────
     async fetchSocios(cnpj) {
       const clean = normalizeCnpj(cnpj);
@@ -989,6 +1077,18 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.indicadoresLoadingKey = null;
       this.indicadoresLoadedKey  = null;
       this.indicadoresError   = null;
+
+      this.geograficoOrigemUfData = null;
+      this.geograficoOrigemUfLoading = false;
+      this.geograficoOrigemUfLoadedKey = null;
+      this.geograficoOrigemUfRequestKey = null;
+      this.geograficoOrigemUfError = null;
+
+      this.incompatibilidadePatologicaData = null;
+      this.incompatibilidadePatologicaLoading = false;
+      this.incompatibilidadePatologicaLoadedKey = null;
+      this.incompatibilidadePatologicaRequestKey = null;
+      this.incompatibilidadePatologicaError = null;
 
       this.falecidosData    = null;
       this.falecidosLoading = false;

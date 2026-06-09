@@ -705,6 +705,7 @@ def _build_indicadores_criticos_quadro(
             "bookmark": (
                 "secao6_percentual_nao_comprovacao"
                 if key == "percentual_nao_comprovacao"
+                else "tabela_evolucao_financeira" if key == "volume_atipico"
                 else f"secao7_{key}" if key in _SECAO5_ORDER else None
             ),
             "valor": _format_indicador_quadro_value(valor_quadro, formato_valor_quadro),

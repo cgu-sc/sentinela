@@ -15,6 +15,8 @@ from ..schemas.analytics import (
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
     SociosResponse, NetworkResponse,
     CnpjBootstrapResponse,
+    GeograficoOrigemUfResponse,
+    ClinicoIncompatibilidadeResponse,
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -268,6 +270,24 @@ def get_indicadores(
 ):
     """Retorna os indicadores detalhados para um CNPJ."""
     return AnalyticsService.get_indicadores(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/geografico/origem-uf", response_model=GeograficoOrigemUfResponse)
+def get_geografico_origem_uf(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna a distribuicao financeira por UF de residencia do beneficiario."""
+    return AnalyticsService.get_geografico_origem_uf(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/clinico/incompatibilidades", response_model=ClinicoIncompatibilidadeResponse)
+def get_incompatibilidade_patologica(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna o detalhamento clinico/patologico por recorte monitorado."""
+    return AnalyticsService.get_incompatibilidade_patologica_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
 
 @router.get("/cnpj/{cnpj}/falecidos", response_model=FalecidosResponse)
 def get_falecidos(

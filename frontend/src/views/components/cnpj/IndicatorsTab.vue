@@ -1,17 +1,23 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
+import ClinicalIncompatibilityDialog from './ClinicalIncompatibilityDialog.vue';
+import GeographicDispersionDialog from './GeographicDispersionDialog.vue';
 import TabPlaceholder from './TabPlaceholder.vue';
 
 const { formatCurrencyFull, formatarData, toLocalISO } = useFormatting();
+const route = useRoute();
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
+const showGeographicDialog = ref(false);
+const showClinicalDialog = ref(false);
 
 const formattedPeriod = computed(() => {
   const [start, end] = filterStore.periodo ?? [];
@@ -54,6 +60,41 @@ function formatIndicadorValue(valor, formato) {
   if (formato === 'pct3') return valor.toFixed(3) + '%';
   if (formato === 'val')  return formatCurrencyFull(valor);
   return valor.toFixed(2);
+}
+
+function valorFinanceiroTooltip(indicadorData) {
+  if (indicadorData?.valor_financeiro == null) return null;
+  return `Valor financeiro: ${formatCurrencyFull(indicadorData.valor_financeiro)}`;
+}
+
+function normalizeCnpj(value) {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
+function openGeographicDialog() {
+  const cnpj = normalizeCnpj(route.params.cnpj);
+  if (!cnpj) return;
+  showGeographicDialog.value = true;
+}
+
+function openClinicalDialog() {
+  const cnpj = normalizeCnpj(route.params.cnpj);
+  if (!cnpj) return;
+  showClinicalDialog.value = true;
+}
+
+function canDetailIndicator(key) {
+  return key === 'dispersao_geografica' || key === 'incompatibilidade_patologica';
+}
+
+function openIndicatorDetail(key) {
+  if (key === 'dispersao_geografica') {
+    openGeographicDialog();
+    return;
+  }
+  if (key === 'incompatibilidade_patologica') {
+    openClinicalDialog();
+  }
 }
 
 // ── Pontos críticos (resumo de auditoria) ────────────────
@@ -211,17 +252,33 @@ function riscoTextStyle(indicadorData) {
                       class="pi pi-info-circle ind-info-icon"
                       v-tooltip.right="{ value: ind.metodologia, class: 'ind-tooltip' }"
                     />
+                    <button
+                      v-if="canDetailIndicator(ind.key)"
+                      type="button"
+                      class="ind-action-btn"
+                      v-tooltip.top="{ value: 'Ver detalhamento do indicador', class: 'ind-tooltip' }"
+                      @click.stop="openIndicatorDetail(ind.key)"
+                    >
+                      <span>Detalhar</span>
+                    </button>
                   </div>
                 </td>
 
                 <template v-if="cachedIndicadoresData.indicadores[ind.key]?.valor != null">
                   <td class="ind-val-cell">
-                    <span v-if="ind.key === 'volume_atipico'">
-                      {{ formatCurrencyFull(cachedIndicadoresData.indicadores[ind.key].valor_aumento_atipico) }}
-                    </span>
-                    <span v-else>
-                      {{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}
-                    </span>
+                    <div class="ind-value-inner">
+                      <span v-if="ind.key === 'volume_atipico'">
+                        {{ formatCurrencyFull(cachedIndicadoresData.indicadores[ind.key].valor_aumento_atipico) }}
+                      </span>
+                      <span v-else>
+                        {{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}
+                      </span>
+                      <i
+                        v-if="valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key])"
+                        class="pi pi-info-circle ind-finance-icon"
+                        v-tooltip.top="{ value: valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key]), class: 'ind-tooltip' }"
+                      />
+                    </div>
                   </td>
                   <td class="ind-med-cell">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_reg, ind.formato) }}</td>
                   <td class="ind-med-cell ind-secondary-cell"><span class="ind-muted-text">{{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].med_uf,  ind.formato) }}</span></td>
@@ -253,9 +310,18 @@ function riscoTextStyle(indicadorData) {
           </tbody>
         </table>
         </div><!-- ind-table-wrap -->
-        </div><!-- ind-card -->
+      </div><!-- ind-card -->
       </div><!-- ind-section -->
     </template>
+
+    <GeographicDispersionDialog
+      v-model="showGeographicDialog"
+      :cnpj="normalizeCnpj(route.params.cnpj)"
+    />
+    <ClinicalIncompatibilityDialog
+      v-model="showClinicalDialog"
+      :cnpj="normalizeCnpj(route.params.cnpj)"
+    />
 
   </div>
 </template>
@@ -641,6 +707,25 @@ function riscoTextStyle(indicadorData) {
   text-align: center;
 }
 
+.ind-value-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.ind-finance-icon {
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  transition: color 0.15s ease;
+}
+
+.ind-finance-icon:hover {
+  color: var(--text-color);
+}
+
 .ind-med-cell {
   text-align: center;
 }
@@ -701,6 +786,80 @@ function riscoTextStyle(indicadorData) {
   transition: color 0.15s;
 }
 .ind-info-icon:hover { color: var(--text-color); }
+
+.ind-action-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.9rem;
+  height: 1.55rem;
+  padding: 0 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-warning) 58%, var(--card-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--risk-indicator-warning) 14%, var(--card-bg));
+  color: var(--risk-indicator-warning);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--risk-indicator-warning) 12%, transparent);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.ind-action-btn span {
+  position: relative;
+  z-index: 1;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ind-action-btn::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px solid color-mix(in srgb, var(--risk-indicator-warning) 58%, transparent);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  animation: geoActionPulse 2.4s ease-out infinite;
+}
+
+.ind-action-btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--risk-indicator-warning) 80%, var(--card-border));
+  background: color-mix(in srgb, var(--risk-indicator-warning) 22%, var(--card-bg));
+  color: var(--risk-indicator-warning);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--risk-indicator-warning) 22%, transparent),
+    0 8px 18px color-mix(in srgb, var(--risk-indicator-warning) 22%, transparent);
+}
+
+.ind-action-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--risk-indicator-warning) 62%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes geoActionPulse {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.94);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ind-action-btn::after {
+    animation: none;
+  }
+}
 
 /* Sem dados */
 .ind-sem-dados {

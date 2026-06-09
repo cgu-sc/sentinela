@@ -6,6 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import (
+    _add_bookmark,
     _cell_bg,
     _format_block_footnote,
     _format_block_title,
@@ -242,6 +243,7 @@ def _add_quadro_evolucao_financeira(
         size=8,
         bold=True,
     )
+    _add_bookmark(p_title, "tabela_evolucao_financeira")
 
     rows_data = evolucao_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)

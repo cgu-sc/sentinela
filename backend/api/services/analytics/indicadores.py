@@ -84,6 +84,21 @@ _INDICADOR_CACHE_TTL_SECONDS = 300
 _INDICADOR_CACHE_MAX_ENTRIES = 64
 _INDICADOR_CACHE_LOCK = RLock()
 
+_INDICADOR_VALOR_FINANCEIRO_COLS = {
+    "percentual_nao_comprovacao": "valor_sem_comprovacao",
+    "falecidos": "falecidos_valor",
+    "incompatibilidade_patologica": "clinico_valor_suspeito",
+    "teto": "teto_valor",
+    "polimedicamento": "polimedicamento_valor",
+    "alto_custo": "alto_custo_valor",
+    "vendas_rapidas": "vendas_rapidas_valor",
+    "recorrencia_sistemica": "recorrencia_valor_sistemico",
+    "dias_pico": "pico_valor_top3_dias",
+    "dispersao_geografica": "geografico_valor_outra_uf",
+    "hhi_crm": "hhi_valor_total",
+    "crms_irregulares": "crms_irregulares_valor",
+}
+
 _INDICADOR_SCOPE_BASE_CACHE: dict[
     tuple[object, ...],
     tuple[float, tuple[pl.DataFrame, pl.DataFrame]],
@@ -225,6 +240,15 @@ def _benchmark_escopo_from_row(row: dict) -> str:
     return "REGIÃO" if total_regiao is not None and int(total_regiao) >= MIN_REGIAO_BENCHMARK else "UF"
 
 
+def _valor_financeiro_indicador(row: dict, key: str) -> float | None:
+    col = _INDICADOR_VALOR_FINANCEIRO_COLS.get(key)
+    if col is None:
+        return None
+    if col not in row:
+        raise RuntimeError(f"Indicador {key} sem coluna financeira obrigatoria na matriz dinamica: {col}")
+    return _optional_float(row.get(col))
+
+
 def get_indicadores(
     cnpj: str,
     data_inicio: date | None = None,
@@ -259,6 +283,7 @@ def get_indicadores(
             key: IndicadorDataSchema(
                 valor=_optional_float(row.get(c_val)),
                 valor_aumento_atipico=_optional_float(row.get("volume_atipico_valor_aumento_atipico")) if key == "volume_atipico" else None,
+                valor_financeiro=_valor_financeiro_indicador(row, key),
                 med_reg=_optional_float(row.get(c_mr)),
                 med_uf=_optional_float(row.get(c_mu)),
                 med_br=_optional_float(row.get(c_mb)),

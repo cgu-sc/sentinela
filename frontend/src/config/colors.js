@@ -98,6 +98,15 @@ export const MAP_VISUAL_SCALE = {
   ],
 };
 
+export const GEOGRAPHIC_DISTRIBUTION_SCALE = [
+  { min: 0, max: 2, color: "#FAF6F6", borderColor: "#D4B3B3" },
+  { min: 2, max: 5, color: "#FCE8E8", borderColor: "#E7A8A8" },
+  { min: 5, max: 10, color: "#F9CACA", borderColor: "#DA7E7E" },
+  { min: 10, max: 20, color: "#F59C9C", borderColor: "#C95C5C" },
+  { min: 20, max: 35, color: "#EB6A6A", borderColor: "#A63A3A" },
+  { min: 35, color: "#C81E1E", borderColor: "#7F1D1D" },
+];
+
 // ── Constantes de tooltip ECharts ─────────────────────────────────────────────
 // Sombra do axisPointer — usada em todos os gráficos ECharts do projeto.
 export const CHART_TOOLTIP_SHADOW = "rgba(255, 255, 255, 0.04)";

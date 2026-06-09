@@ -9,8 +9,6 @@ import { useCnpjNavStore } from "@/stores/cnpjNav";
 import { useFarmaciaListsStore } from "@/stores/farmaciaLists";
 import { useFilterStore } from "@/stores/filters";
 import { useGeoStore } from "@/stores/geo";
-import { useCnpjDetailStore } from "@/stores/cnpjDetail";
-import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
 import { MONTH_LABELS } from "@/config/constants";
@@ -19,20 +17,6 @@ import ObservationDialog from "./ObservationDialog.vue";
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
 const geoStore = useGeoStore();
-
-const cnpjDetailStore = useCnpjDetailStore();
-const { requestTimes } = storeToRefs(cnpjDetailStore);
-
-const requestTimesTooltip = computed(() => {
-  const entries = Object.values(requestTimes.value);
-  if (!entries.length) return null;
-  const rows = entries.map(e => {
-    let line = `<b>${e.label}:</b> ${e.ms}ms`;
-    if (e.detail) line += ` <span style="opacity:0.7">(${e.detail})</span>`;
-    return `<div style="line-height:1.7">${line}</div>`;
-  }).join('');
-  return { value: `<div style="font-size:0.8rem;min-width:200px">${rows}</div>`, escape: false };
-});
 
 const qtdMunicipiosRegiao = computed(() =>
   props.qtdMunicipiosRegiao ?? geoStore.qtdMunicipiosPorRegiao(props.geoData?.id_regiao_saude),
@@ -96,11 +80,25 @@ const displayValSemComp     = computed(() => displaySummary.value?.valSemComp ??
 const displayTotalMov       = computed(() => displaySummary.value?.totalMov ?? 0);
 const displayPercValSemComp = computed(() => displaySummary.value?.percValSemComp ?? 0);
 
+const hasRiskScore = computed(() => props.cnpjData?.score_risco_final != null);
 const risco = computed(() => displayPercValSemComp.value);
 
 const riskPanelClass = computed(() => {
+  if (!hasRiskScore.value) return "";
   const rc = getRiskClass(risco.value);
   return rc === 'risk-critical' ? 'risk-high' : rc;
+});
+
+const riskScoreDisplay = computed(() => {
+  if (!hasRiskScore.value) return "—";
+  return Number(props.cnpjData.score_risco_final).toFixed(1);
+});
+
+const riskScoreBadge = computed(() => {
+  if (hasRiskScore.value) {
+    return props.cnpjData?.classificacao_risco?.replace("RISCO ", "") ?? "";
+  }
+  return displayTotalMov.value === 0 ? "Sem movimentação" : "Não calculado";
 });
 
 const formatPeriodMonth = (date) => {
@@ -344,12 +342,12 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
           </div>
           <div class="rcp-metrics">
-            <div class="rcp-score-row" v-if="cnpjData.score_risco_final != null">
+            <div class="rcp-score-row">
               <div class="rcp-item">
                 <span class="rcp-label">Score de Risco</span>
-                <span class="rcp-value">
-                  {{ cnpjData.score_risco_final.toFixed(1) }}
-                  <span class="rcp-badge">{{ cnpjData.classificacao_risco?.replace("RISCO ", "") ?? "" }}</span>
+                <span class="rcp-value" :class="{ 'rcp-value--neutral': !hasRiskScore }">
+                  {{ riskScoreDisplay }}
+                  <span class="rcp-badge">{{ riskScoreBadge }}</span>
                 </span>
               </div>
             </div>
@@ -395,7 +393,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <span class="rank-label">Rank Nacional</span>
             <span class="rank-val"
               >{{ formatRank(cnpjData.rank_nacional) }}
-              <small>/ {{ cnpjData.total_nacional }}</small></span
+              <small v-if="cnpjData.total_nacional != null">/ {{ cnpjData.total_nacional }}</small></span
             >
           </div>
         </div>
@@ -405,7 +403,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <span class="rank-label">Rank Estadual</span>
             <span class="rank-val"
               >{{ formatRank(cnpjData.rank_uf) }}
-              <small>/ {{ cnpjData.total_uf }}</small></span
+              <small v-if="cnpjData.total_uf != null">/ {{ cnpjData.total_uf }}</small></span
             >
           </div>
         </div>
@@ -415,7 +413,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <span class="rank-label">Rank Regional</span>
             <span class="rank-val"
               >{{ formatRank(cnpjData.rank_regiao_saude) }}
-              <small>/ {{ cnpjData.total_regiao_saude }}</small></span
+              <small v-if="cnpjData.total_regiao_saude != null">/ {{ cnpjData.total_regiao_saude }}</small></span
             >
           </div>
         </div>
@@ -425,7 +423,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
             <span class="rank-label">Rank Municipal</span>
             <span class="rank-val"
               >{{ formatRank(cnpjData.rank_municipio) }}
-              <small>/ {{ cnpjData.total_municipio }}</small></span
+              <small v-if="cnpjData.total_municipio != null">/ {{ cnpjData.total_municipio }}</small></span
             >
           </div>
         </div>
@@ -438,7 +436,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
         </div>
         <div
           class="rank-stat rank-stat--clickable"
-          v-if="cnpjData.total_regiao_saude"
+          v-if="cnpjData.total_regiao_saude != null"
           v-tooltip.top="'Ver ranking completo da Região de Saúde'"
           @click="cnpjNav.navigateToRegiao(null)"
         >
@@ -453,7 +451,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
         </div>
         <div
           class="rank-stat rank-stat--clickable"
-          v-if="cnpjData.total_municipio"
+          v-if="cnpjData.total_municipio != null"
           v-tooltip.top="'Ver ranking do município na Região de Saúde'"
           @click="
             cnpjNav.navigateToRegiao(
@@ -481,14 +479,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
         </div>
       </div>
       <div class="list-actions list-actions--vertical">
-          <button
-            v-if="requestTimesTooltip"
-            class="list-btn list-btn--icon-only list-btn--timing"
-            v-tooltip.bottom="requestTimesTooltip"
-            style="cursor: default;"
-          >
-            <i class="pi pi-stopwatch" />
-          </button>
           <button
             class="list-btn list-btn--icon-only list-btn--export"
             @click="emit('export')"
@@ -608,17 +598,6 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 
 .list-btn--icon-only i {
   font-size: 1rem;
-}
-
-.list-btn--timing {
-  color: var(--text-muted);
-  border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
-  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
-}
-.list-btn--timing:hover {
-  opacity: 1;
 }
 
 .list-btn--export {
@@ -1166,7 +1145,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 }
 
 .rank-val {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--establishment-header-text);
 }

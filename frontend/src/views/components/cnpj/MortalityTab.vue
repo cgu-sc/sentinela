@@ -16,11 +16,19 @@ const props = defineProps({
   cnpj: {
     type: String,
     required: true
+  },
+  periodSummary: {
+    type: Object,
+    default: null
+  },
+  periodLoading: {
+    type: Boolean,
+    default: false
   }
 });
 
 const filterStore = useFilterStore();
-const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError, evolucaoFinanceira } = storeToRefs(useCnpjDetailStore());
+const { falecidosData, falecidosLoading, falecidosLoaded, falecidosError } = storeToRefs(useCnpjDetailStore());
 
 // Mantém os dados anteriores visíveis durante a transição de período (evita flicker).
 const {
@@ -53,6 +61,12 @@ const formattedPeriod = computed(() => {
     end:   formatarData(toLocalISO(end))
   };
 });
+
+const noMovementInPeriod = computed(() =>
+  !props.periodLoading &&
+  Boolean(props.periodSummary) &&
+  Number(props.periodSummary.totalMov ?? 0) === 0
+);
 
 
 const getEstabelecimentoInfo = (estabStr) => {
@@ -186,7 +200,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
     />
 
     <TabPlaceholder
-      v-else-if="falecidosLoaded && !cachedFalecidosData?.transacoes?.length && !evolucaoFinanceira?.semestres?.length"
+      v-else-if="noMovementInPeriod"
       variant="info"
       icon="pi-chart-bar"
       title="Sem movimentação no período"

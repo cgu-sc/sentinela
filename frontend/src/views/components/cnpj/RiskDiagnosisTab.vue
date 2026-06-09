@@ -25,8 +25,14 @@ const props = defineProps({
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
 const { getApiParams } = useFilterParameters();
-const { toLocalISO } = useFormatting();
+const { formatarData, toLocalISO } = useFormatting();
 const { regionalData, regionalError, fetchRegional } = useRegional();
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
 
 // Escopo do scatter regional
 const regionalScope = ref('regiao');
@@ -131,6 +137,24 @@ const previewCurrentFarmacia = computed(() => {
   const frame = periodsCache.get(`${inicio}|${fim}`);
   return frame?.farmacias?.find((item) => String(item.cnpj) === String(props.cnpj)) ?? null;
 });
+
+const hasMovementInPeriod = computed(() => {
+  if (isAnimationPreviewActive.value) {
+    return Number(previewCurrentFarmacia.value?.totalMov ?? 0) > 0;
+  }
+
+  if (props.periodSummary) {
+    return Number(props.periodSummary.totalMov ?? 0) > 0;
+  }
+
+  return Number(props.cnpjData?.totalMov ?? 0) > 0;
+});
+
+const noMovementInPeriod = computed(() =>
+  !props.periodLoading &&
+  Boolean(props.cnpjData) &&
+  !hasMovementInPeriod.value
+);
 
 // Máximos globais calculados sobre todos os trimestres — usados para fixar os
 // eixos do scatter durante a animação e evitar que a escala salte entre passos.
@@ -486,6 +510,7 @@ watch(() => filterStore.animationMode, (isActive) => {
 const rankingText = computed(() => {
   const d = props.cnpjData;
   if (!d) return null;
+  if (noMovementInPeriod.value) return null;
   
   // O Rank textual (ex: 4º de 1000) por enquanto só está disponível para o Score final consolidado nos dados do CNPJ
   // Se estiver visualizando apenas a métrica de %, removemos o texto fixo de rank consolidado para não confundir
@@ -503,6 +528,10 @@ const rankingText = computed(() => {
 
 // Calcula em qual "topo" de risco a farmácia está — exibido dentro do box do gráfico
 const riskRankBadge = computed(() => {
+  if (noMovementInPeriod.value) {
+    return { label: 'Sem movimentacao', value: 'No periodo', color: '#64748b' };
+  }
+
   const data = cnpjDetailStore.metricPercentiles;
   if (!data?.length || currentScore.value === null || currentScore.value === undefined) return null;
   const idx = data.findIndex(d => d.score >= currentScore.value);
@@ -527,6 +556,17 @@ const riskRankBadge = computed(() => {
       title="Erro ao carregar"
       description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
     />
+
+    <TabPlaceholder
+      v-else-if="noMovementInPeriod"
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
 
     <TabPlaceholder
       v-else-if="regionalError"
@@ -644,6 +684,7 @@ const riskRankBadge = computed(() => {
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
                 :rank-badge="riskRankBadge"
+                :show-marker="!noMovementInPeriod"
                 :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
               />
             <!-- AJUDA CONTEXTUAL CARD 2 -->

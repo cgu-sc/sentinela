@@ -1,16 +1,26 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import TabPlaceholder from './TabPlaceholder.vue';
 
-defineProps({
-  cnpj: { type: String, required: true }
+const props = defineProps({
+  cnpj: { type: String, required: true },
+  periodSummary: { type: Object, default: null },
+  periodLoading: { type: Boolean, default: false },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { formatCurrencyFull: _fmt } = useFormatting();
+const filterStore = useFilterStore();
+const { formatCurrencyFull: _fmt, formatarData, toLocalISO } = useFormatting();
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
 
 // Wrapper null-safe
 const fmt = (val) => (val === null || val === undefined) ? '—' : _fmt(val);
@@ -26,6 +36,11 @@ const {
 } = useStableTabState(data, loading, error);
 const rows    = computed(() => cachedMovimentacaoData.value?.rows ?? []);
 const summary = computed(() => cachedMovimentacaoData.value?.summary ?? null);
+const noMovementInPeriod = computed(() =>
+  !props.periodLoading &&
+  Boolean(props.periodSummary) &&
+  Number(props.periodSummary.totalMov ?? 0) === 0
+);
 
 // ── Agrupa linhas em seções por GTIN ─────────────────────────────────────────
 const sections = computed(() => {
@@ -323,14 +338,28 @@ const pctIrregular = (section) => {
       aria-hidden="true"
     />
 
+    <TabPlaceholder
+      v-else-if="noMovementInPeriod"
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
+
     <!-- ── ESTADO: Sem dados ───────────────────────────────────────────────── -->
     <TabPlaceholder
       v-else-if="loaded && !rows.length"
-      variant="error"
-      icon="pi-exclamation-circle"
-      title="Erro ao carregar"
-      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
-    />
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
 
     <!-- ── ESTADO: Dados carregados ───────────────────────────────────────── -->
     <template v-else-if="cachedMovimentacaoData && rows.length">

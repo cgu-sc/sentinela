@@ -89,6 +89,7 @@ const {
   evolucaoFinanceira,
   evolucaoLoading,
   evolucaoLoaded,
+  bootstrapLoading,
   bootstrapGeoData,
   bootstrapPeriodSummary,
 } =
@@ -274,19 +275,21 @@ watch(
 
 const cnpjData = computed(
   () =>
-    resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ??
     cnpjDetailStore.cnpjsAvulsos.get(cnpj.value) ??
+    resultadoCnpjs.value?.find((c) => c.cnpj === cnpj.value) ??
     null,
 );
 
-// Totais calculados a partir dos semestres da evolução financeira —
-// refletem exatamente o período de análise selecionado (incluindo semestres parciais).
-// Substitui valSemComp/totalMov do cnpjData quando disponível.
+const isPeriodSummaryLoading = computed(() => bootstrapLoading.value || evolucaoLoading.value);
+
+// O bootstrap é a fonte canônica dos KPIs do período exibidos no header.
+// A evolução financeira pode estar stale se outra aba estiver ativa.
 const periodSummary = computed(() => {
-  const semestres = evolucaoFinanceira.value?.semestres;
-  if (!semestres?.length && bootstrapPeriodSummary.value) {
+  if (bootstrapPeriodSummary.value) {
     return bootstrapPeriodSummary.value;
   }
+
+  const semestres = evolucaoFinanceira.value?.semestres;
   if (!semestres?.length) {
     return evolucaoLoaded.value ? { totalMov: 0, valSemComp: 0, percValSemComp: 0 } : null;
   }
@@ -583,7 +586,7 @@ watch(
       :is-exporting="isExporting"
       :is-generating-note="isGeneratingNote"
       :period-summary="periodSummary"
-      :period-loading="evolucaoLoading"
+      :period-loading="isPeriodSummaryLoading"
       @export="handleExport"
       @generate-note="handleGenerateNote"
     />
@@ -627,7 +630,7 @@ watch(
           :cnpj-data="cnpjData"
           :geo-data="geoData"
           :period-summary="periodSummary"
-          :period-loading="evolucaoLoading"
+          :period-loading="isPeriodSummaryLoading"
           :is-active="cnpjNav.activeTabIndex === 1"
           class="tab-content detail-tab-enter"
         />
@@ -642,6 +645,8 @@ watch(
         <CalculationMemoryTab
           v-if="hasVisitedTab(TAB_INDEX.MOVEMENT)"
           :cnpj="cnpj"
+          :period-summary="periodSummary"
+          :period-loading="isPeriodSummaryLoading"
           class="tab-content detail-tab-enter"
         />
       </TabPanel>
@@ -668,6 +673,8 @@ watch(
           ref="authTabRef"
           :cnpj="cnpj"
           :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
+          :period-summary="periodSummary"
+          :period-loading="isPeriodSummaryLoading"
           class="tab-content detail-tab-enter"
         />
       </TabPanel>

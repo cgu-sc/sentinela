@@ -29,6 +29,7 @@ const props = defineProps({
   rankingText:  { type: String,  default: null },
   metricLabel:  { type: String,  default: 'Score de Risco' },
   rankBadge:    { type: Object,  default: null },
+  showMarker:   { type: Boolean, default: true },
   yAxisMax:     { type: Number,  default: null }
 });
 
@@ -175,16 +176,18 @@ const chartOption = computed(() => {
             ]
           }
         },
-        markLine: {
-          silent:     true,
-          symbol:     ['none', 'circle'],
-          symbolSize: 5,
-          lineStyle:  { color: 'rgba(239,68,68,0.6)', type: 'dashed', width: 1.5 },
-          label: {
-            show: false
-          },
-          data: [{ xAxis: markerXIndex }]
-        }
+        markLine: props.showMarker
+          ? {
+              silent:     true,
+              symbol:     ['none', 'circle'],
+              symbolSize: 5,
+              lineStyle:  { color: 'rgba(239,68,68,0.6)', type: 'dashed', width: 1.5 },
+              label: {
+                show: false
+              },
+              data: [{ xAxis: markerXIndex }]
+            }
+          : undefined
       }
     ]
   };

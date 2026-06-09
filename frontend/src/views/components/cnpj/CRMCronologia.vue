@@ -2,11 +2,13 @@
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useFilterStore } from '@/stores/filters';
 import { useThemeStore } from '@/stores/theme';
 import { useDelayedLoading } from '@/composables/useDelayedLoading';
 import { useFormatting } from "@/composables/useFormatting";
 import { useChartTheme } from '@/config/chartTheme';
 import { API_ENDPOINTS } from '@/config/api';
+import TabPlaceholder from './TabPlaceholder.vue';
 
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
@@ -18,18 +20,33 @@ use([BarChart, LineChart, GridComponent, TooltipComponent, DataZoomComponent, Ma
 
 const props = defineProps({
   cnpj: { type: String, required: true },
+  periodSummary: { type: Object, default: null },
+  periodLoading: { type: Boolean, default: false },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
+const filterStore = useFilterStore();
 const {
   crmTimelineDataset,
   crmTimelineDatasetLoading,
   selectedTimelineEvent,
 } = storeToRefs(cnpjDetailStore);
-const { formatarData } = useFormatting();
+const { formatarData, toLocalISO } = useFormatting();
 const { chartTheme, chartUFAccents } = useChartTheme();
 const themeStore = useThemeStore();
 const raioxBg = computed(() => themeStore.isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)');
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
+
+const noMovementInPeriod = computed(() =>
+  !props.periodLoading &&
+  Boolean(props.periodSummary) &&
+  Number(props.periodSummary.totalMov ?? 0) === 0
+);
 
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const cachedCrmTimelineDataset = ref(crmTimelineDataset.value);
@@ -478,18 +495,11 @@ async function loadRaiox(dt_janela, hourInt = null) {
   try {
     const request = raioxRequests.get(key) ?? (async () => {
       const url = API_ENDPOINTS.analyticsCrmRaioX(props.cnpj, dt_janela, hourInt);
-      const t0 = performance.now();
       const res = await fetch(url);
       if (!res.ok) throw new Error('Falha HTTP');
       const data = await res.json();
       assertRaioxPayload(data);
-      const ms = Math.round(performance.now() - t0);
       raioxCache.set(key, data);
-      cnpjDetailStore.requestTimes['crm-raio-x'] = {
-        label: 'Raio-X CRM',
-        ms,
-        detail: data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : null,
-      };
       return data;
     })();
 
@@ -1238,7 +1248,18 @@ function toggleActiveRow(auth) {
 </script>
 
 <template>
-  <div class="cronologia-flow animate-fade-in">
+  <TabPlaceholder
+    v-if="noMovementInPeriod"
+    variant="info"
+    icon="pi-chart-bar"
+    title="Sem movimentação no período"
+  >
+    <template #description>
+      Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+    </template>
+  </TabPlaceholder>
+
+  <div v-else class="cronologia-flow animate-fade-in">
     
     <!-- Breadcrumb de Navegação Dinâmico -->
     <div class="drill-breadcrumb">

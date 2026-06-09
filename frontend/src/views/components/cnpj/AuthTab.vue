@@ -24,10 +24,12 @@ const formattedPeriod = computed(() => {
 const props = defineProps({
   cnpj: { type: String, required: true },
   isActive: { type: Boolean, default: false },
+  periodSummary: { type: Object, default: null },
+  periodLoading: { type: Boolean, default: false },
 });
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode, evolucaoFinanceira } = storeToRefs(cnpjDetailStore);
+const { prescritoresData, prescritoresLoading, prescritoresError, activeCrmViewMode } = storeToRefs(cnpjDetailStore);
 // ── Flicker-Free Cache ────────────────────────────────────────────────────
 const filterStore = useFilterStore();
 const { getApiParams } = useFilterParameters();
@@ -79,6 +81,11 @@ watch(() => props.isActive, (active) => {
 // ── Dados Base ────────────────────────────────────────────────────────────
 const summary = computed(() => cachedPrescritoresData.value?.summary || {});
 const crmsInteresse = computed(() => cachedPrescritoresData.value?.crms_interesse || []);
+const noMovementInPeriod = computed(() =>
+  !props.periodLoading &&
+  Boolean(props.periodSummary) &&
+  Number(props.periodSummary.totalMov ?? 0) === 0
+);
 
 function requireLoadedSummaryNumber(field) {
   if (!cachedPrescritoresData.value) return 0;
@@ -244,7 +251,7 @@ defineExpose({
         class="medicos-view"
       >
         <TabPlaceholder
-          v-if="cachedPrescritoresData && crmsInteresse.length === 0 && !evolucaoFinanceira?.semestres?.length"
+          v-if="cachedPrescritoresData && crmsInteresse.length === 0 && noMovementInPeriod"
           variant="info"
           icon="pi-chart-bar"
           title="Sem movimentação no período"
@@ -286,6 +293,8 @@ defineExpose({
         v-if="hasOpenedCrmView('cronologia')"
         v-show="activeCrmViewMode === 'cronologia'"
         :cnpj="cnpj"
+        :period-summary="periodSummary"
+        :period-loading="periodLoading"
       />
 
       <MortalityTab
@@ -293,6 +302,8 @@ defineExpose({
         v-show="activeCrmViewMode === 'falecidos'"
         ref="mortalityTabRef"
         :cnpj="cnpj"
+        :period-summary="periodSummary"
+        :period-loading="periodLoading"
         class="animate-fade-in"
       />
     </div>

@@ -2,14 +2,22 @@
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 import TabPlaceholder from './TabPlaceholder.vue';
 
-const { formatCurrencyFull } = useFormatting();
+const { formatCurrencyFull, formatarData, toLocalISO } = useFormatting();
 const cnpjDetailStore = useCnpjDetailStore();
+const filterStore = useFilterStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
+
+const formattedPeriod = computed(() => {
+  const [start, end] = filterStore.periodo ?? [];
+  if (!start || !end) return null;
+  return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
+});
 
 // ── Cache de Dados para Transição Suave ──────────────────
 const {
@@ -132,11 +140,14 @@ function riscoTextStyle(indicadorData) {
 
     <TabPlaceholder
       v-else-if="indicadoresLoaded && !Object.keys(cachedIndicadoresData?.indicadores ?? {}).length"
-      variant="error"
-      icon="pi-exclamation-circle"
-      title="Erro ao carregar"
-      description="Não foi possível carregar os dados. Verifique a conexão com o servidor."
-    />
+      variant="info"
+      icon="pi-chart-bar"
+      title="Sem movimentação no período"
+    >
+      <template #description>
+        Não foram encontradas movimentações financeiras para este CNPJ no período de <u>{{ formattedPeriod?.start }}</u> até <u>{{ formattedPeriod?.end }}</u>.
+      </template>
+    </TabPlaceholder>
 
     <template v-else-if="cachedIndicadoresData">
 

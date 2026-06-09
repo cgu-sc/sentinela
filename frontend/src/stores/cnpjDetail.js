@@ -28,17 +28,6 @@ function normalizeCnpj(value) {
 
 const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
 
-function buildTimingDetail(data) {
-  if (!('from_cache' in data)) return null;
-  if (data.from_cache) {
-    return data.read_time_ms != null ? `parquet ${data.read_time_ms}ms` : 'cache';
-  }
-  return [
-    data.query_time_ms != null ? `servidor: SQL ${data.query_time_ms}ms` : null,
-    data.save_time_ms  != null ? `disco ${data.save_time_ms}ms`          : null,
-  ].filter(Boolean).join(' | ') || null;
-}
-
 function assertCrmTimelineDataset(data) {
   if (!data || !Array.isArray(data.days)) {
     throw new Error('Contrato invalido em crm/timeline-dataset: campo days obrigatorio.');
@@ -193,10 +182,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     networkError:   null,
 
     prefetchRequestKey: null,
-
-    // ── Timing de Requisições (diagnóstico de performance) ───────────────────
-    // Chave → { label: string, ms: number }  — preenchido após cada fetch bem-sucedido.
-    requestTimes: {},
   }),
 
   actions: {
@@ -235,7 +220,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       } catch (error) {
         const statusCode = error?.response?.status;
         const detail = error?.response?.data?.detail;
-        if (statusCode === 404) {
+        if (statusCode === 404 && detail?.status) {
           this.cnpjAccessStatus = detail?.status || 'not_in_program';
           this.cnpjAccessMessage = detail?.message || 'CNPJ nao encontrado na base carregada do Programa Farmacia Popular.';
         } else if (statusCode === 422) {
@@ -284,12 +269,10 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
 
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCnpjBootstrap(clean), { params });
         if (this.bootstrapRequestKey !== key) {
           return null;
         }
-        this.requestTimes['bootstrap'] = { label: 'Bootstrap', ms: Math.round(performance.now() - t0) };
 
         if (!data.status?.status || !data.cadastro || !data.cnpj_data || !data.geo_data || !data.period_summary) {
           throw new Error('Resposta de bootstrap incompleta para a tela de estabelecimento.');
@@ -493,10 +476,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
           params.volume_atipico_limite = volumeAtipicoPercentual;
         }
 
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucao(cnpj), { params });
         if (this.evolucaoRequestKey !== key) return;
-        this.requestTimes['evolucao'] = { label: 'Movimentação Financeira', ms: Math.round(performance.now() - t0) };
         this.evolucaoFinanceira = data;
         this.evolucaoKey        = key;
         this.evolucaoLoaded     = true;
@@ -524,11 +505,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsEvolucaoMensalGtin(cnpj), { params });
         if (this.evolucaoMensalGtinRequestKey !== key) return;
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['movimentacao-gtin'] = { label: 'Movimentação GTIN', ms, detail: buildTimingDetail(data) };
         this.evolucaoMensalGtin    = data;
         this.evolucaoMensalGtinKey = key;
       } catch (e) {
@@ -568,11 +546,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.movimentacaoLoading = true;
       this.movimentacaoLoadingKey = clean;
       try {
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsMovimentacao(clean));
         if (this.movimentacaoLoadingKey !== clean) return;
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['movimentacao'] = { label: 'Memória de Cálculo', ms, detail: buildTimingDetail(data) };
         this.movimentacaoData   = data;
         this.movimentacaoLoaded = true;
         this.movimentacaoLoadedKey = clean;
@@ -598,13 +573,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.indicadoresLoading = true;
       this.indicadoresLoadingKey = requestKey;
       try {
-        const t0 = performance.now();
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
         const { data } = await axios.get(API_ENDPOINTS.analyticsIndicadores(clean), { params });
         if (this.indicadoresLoadingKey !== requestKey) return;
-        this.requestTimes['indicadores'] = { label: 'Indicadores de Risco', ms: Math.round(performance.now() - t0) };
         this.indicadoresData   = data;
         this.indicadoresLoaded = true;
         this.indicadoresLoadedKey = requestKey;
@@ -629,10 +602,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.sociosRequestKey = clean;
       this.sociosError   = null;
       try {
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsSocios(clean));
         if (this.sociosRequestKey !== clean) return;
-        this.requestTimes['socios'] = { label: 'Quadro Societário', ms: Math.round(performance.now() - t0) };
         this.sociosData   = data;
         this.sociosLoaded = clean;
       } catch (e) {
@@ -658,10 +629,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.networkError   = null;
 
       const request = (async () => {
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(clean));
         if (this.networkRequestKey !== clean) return null;
-        this.requestTimes['network'] = { label: 'Teia Societária', ms: Math.round(performance.now() - t0) };
         this.networkData   = data;
         this.networkLoaded = clean;
         return data;
@@ -718,13 +687,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const endpoint = numericLevel === 3
           ? API_ENDPOINTS.analyticsNetworkLevel3(clean)
           : API_ENDPOINTS.analyticsNetworkLevel4(clean);
-        const t0 = performance.now();
         const { data } = await axios.get(endpoint);
         if (this.networkLevelRequestKey[numericLevel] !== key) return null;
-        this.requestTimes[`network-n${numericLevel}`] = {
-          label: `Teia Societária N${numericLevel}`,
-          ms: Math.round(performance.now() - t0),
-        };
         this.networkLevelData[numericLevel] = data;
         this.networkLevelLoaded[numericLevel] = key;
         return data;
@@ -776,11 +740,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
 
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsFalecidos(clean), { params });
         if (this.falecidosRequestKey !== key) return;
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['falecidos'] = { label: 'Falecidos', ms, detail: buildTimingDetail(data) };
 
         this.falecidosData   = data;
         this.falecidosLoaded = key;
@@ -810,12 +771,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmData(clean), { params });
         if (this.prescritoresRequestKey !== key) return;
         assertCrmDataLight(data);
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['crm-data'] = { label: 'CRM Data', ms, detail: buildTimingDetail(data) };
         this.prescritoresData   = data;
         this.prescritoresLoaded = key;
         this.prescritoresError  = null;
@@ -853,11 +811,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmMedicoAlertas(clean, medico), { params });
         assertCrmMedicoAlertas(data);
-        const ms = Math.round(performance.now() - t0);
-        this.requestTimes['crm-medico-alertas'] = { label: 'Alertas CRM', ms, detail: medico };
         this.crmMedicoAlertasByKey = {
           ...this.crmMedicoAlertasByKey,
           [key]: data,
@@ -895,12 +850,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        const t0 = performance.now();
         const { data } = await axios.get(API_ENDPOINTS.analyticsCrmTimelineDataset(clean), { params });
-        const ms = Math.round(performance.now() - t0);
         if (this.crmTimelineDatasetRequestKey !== key) return;
         assertCrmTimelineDataset(data);
-        this.requestTimes['crm-timeline'] = { label: 'Timeline CRM', ms, detail: buildTimingDetail(data) };
         this.crmTimelineDataset        = data;
         this.crmTimelineDatasetLoaded  = key;
       } catch (e) {
@@ -1060,8 +1012,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
 
       this.activeCrmViewMode = 'medicos';
       this.selectedTimelineEvent = null;
-
-      this.requestTimes = {};
 
       this.cnpjsAvulsos        = new Map();
       this.cnpjsAvulsosLoading = false;

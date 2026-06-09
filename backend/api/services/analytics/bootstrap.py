@@ -100,8 +100,28 @@ def _period_summary(
     )
 
 
+def _scope_total(df: pl.DataFrame, scope_col: str | None, scope_value: object) -> int | None:
+    if df.is_empty() or "score_risco_final" not in df.columns:
+        return None
+
+    scoped = df
+    if scope_col:
+        if scope_col not in df.columns or scope_value is None:
+            return None
+        scoped = scoped.filter(pl.col(scope_col).cast(pl.Utf8) == str(scope_value))
+
+    return int(
+        scoped.select(pl.col("score_risco_final").is_not_null().sum().alias("total"))
+        .item()
+        or 0
+    )
+
+
 def _risk_row(
     cnpj: str,
+    uf: str | None,
+    id_regiao_saude: int | str | None,
+    id_ibge7: int | str | None,
     data_inicio: date | None,
     data_fim: date | None,
 ) -> dict:
@@ -124,6 +144,15 @@ def _risk_row(
     ]
     _require_columns(risco_df, required, "matriz_risco_dinamica")
     row_df = risco_df.filter(pl.col("cnpj") == cnpj).select(required)
+    if row_df.is_empty():
+        totals = {column: None for column in required}
+        totals["cnpj"] = cnpj
+        totals["total_nacional"] = _scope_total(risco_df, None, None)
+        totals["total_uf"] = _scope_total(risco_df, "uf", uf)
+        totals["total_regiao_saude"] = _scope_total(risco_df, "id_regiao_saude", id_regiao_saude)
+        totals["total_municipio"] = _scope_total(risco_df, "id_ibge7", id_ibge7)
+        return totals
+
     row = _first_row(row_df, "Registro da matriz dinamica de risco para CNPJ")
     return row
 
@@ -209,6 +238,7 @@ def get_cnpj_bootstrap(
         "cnpj",
         "no_municipio",
         "id_ibge7",
+        "id_regiao_saude",
         "uf",
         "razao_social",
         "is_grande_rede",
@@ -226,7 +256,14 @@ def get_cnpj_bootstrap(
 
     id_cnpj = int(perfil_row["id_cnpj"])
     period_summary = _period_summary(id_cnpj, data_inicio, data_fim)
-    risco = _risk_row(clean_cnpj, data_inicio, data_fim)
+    risco = _risk_row(
+        clean_cnpj,
+        perfil_row.get("uf"),
+        perfil_row.get("id_regiao_saude"),
+        perfil_row.get("id_ibge7"),
+        data_inicio,
+        data_fim,
+    )
     geo_data, qtd_municipios_regiao = _geo_row(perfil_row)
 
     cnpj_data = ResultadoSentinelaCnpjSchema(

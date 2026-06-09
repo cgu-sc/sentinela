@@ -25,7 +25,6 @@ from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
     AnalyticsResponse,
-    ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,

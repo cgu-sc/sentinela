@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+from typing import List, Optional
 from datetime import date
 import calendar
 import polars as pl
@@ -13,7 +13,6 @@ from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
     AnalyticsResponse,
-    ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,

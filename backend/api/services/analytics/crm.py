@@ -1,4 +1,4 @@
-﻿from typing import Any, List, Optional
+from typing import Any, List, Optional
 from datetime import date, datetime
 import polars as pl
 from sqlalchemy.orm import Session
@@ -28,7 +28,6 @@ from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
     AnalyticsResponse,
-    ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,

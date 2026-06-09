@@ -21,7 +21,6 @@ from ...schemas.analytics import (
     ProducaoSemestralResponse,
     ResultadoSentinelaUFSchema,
     AnalyticsResponse,
-    ResultadoSentinelaSchema,
     ResultadoSentinelaMunicipioSchema,
     ResultadoSentinelaCnpjSchema,
     RedeEstabelecimentoSchema,

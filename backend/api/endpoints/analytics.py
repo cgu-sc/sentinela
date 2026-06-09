@@ -285,9 +285,15 @@ def get_incompatibilidade_patologica(
     cnpj: str,
     data_inicio: Optional[date] = Query(None),
     data_fim: Optional[date] = Query(None),
+    ranking_municipal_limite: int = Query(10, ge=0),
 ):
     """Retorna o detalhamento clinico/patologico por recorte monitorado."""
-    return AnalyticsService.get_incompatibilidade_patologica_data(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+    return AnalyticsService.get_incompatibilidade_patologica_data(
+        cnpj,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        ranking_municipal_limite=ranking_municipal_limite,
+    )
 
 @router.get("/cnpj/{cnpj}/falecidos", response_model=FalecidosResponse)
 def get_falecidos(

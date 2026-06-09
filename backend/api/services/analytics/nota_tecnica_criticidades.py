@@ -15,6 +15,7 @@ from data_cache import (
     scan_analise_gtin_inconsistencia_clinica,
     scan_geografico_origem_uf,
 )
+from .clinico import get_incompatibilidade_patologica_data
 from .falecidos import get_falecidos_data
 from .matriz_risco_dinamica import (
     INDICATOR_MAPPING,
@@ -59,7 +60,6 @@ _SECAO5_ORDER = {key: idx for idx, (key, _, _) in enumerate(_SECAO5_MAP)}
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = False
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
-_CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
 _ZERO_BASELINE_CRITICAL_INDICATORS_NOTA = {
     "falecidos",
     "incompatibilidade_patologica",
@@ -1108,7 +1108,7 @@ def _build_incompatibilidade_patologica_context(
     data_inicio: Optional[date],
     data_fim: Optional[date],
 ) -> dict[str, Any] | None:
-    """Busca matriz e, quando houver detalhamento, ranking anual de patologias."""
+    """Busca matriz e reaproveita o serviço clínico como fonte única do detalhamento."""
     row = _get_matriz_row_context(cnpj, data_inicio, data_fim, "incompatibilidade patologica")
     if row is None:
         return None
@@ -1129,122 +1129,41 @@ def _build_incompatibilidade_patologica_context(
     else:
         periodo_desc = 'no período analisado'
 
-    cnpj_limpo = _cnpj_digits(cnpj)
-    farmacias = get_df_dados_farmacia()
-    _require_columns(farmacias, {"id_cnpj", "cnpj", "id_ibge7", "municipio", "uf"}, "Cache de farmacias")
-    farmacias = farmacias.with_columns(
-        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").alias("_cnpj_limpo")
-    )
-    farmacia_rows = farmacias.filter(pl.col("_cnpj_limpo") == cnpj_limpo)
-    if farmacia_rows.is_empty():
-        raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_cnpj no cache de farmacias.")
-    farmacia_row = farmacia_rows.row(0, named=True)
-    id_cnpj = int(farmacia_row["id_cnpj"])
-    id_ibge7 = str(farmacia_row["id_ibge7"]).strip()
-    if not id_ibge7:
-        raise RuntimeError(f"CNPJ {cnpj_limpo} sem id_ibge7 no cache de farmacias.")
+    try:
+        clinico_data = get_incompatibilidade_patologica_data(cnpj, data_inicio, data_fim).model_dump()
+    except Exception as exc:
+        raise RuntimeError(f"Detalhamento clinico indisponivel para a Nota Tecnica: {exc}") from exc
 
-    clinica = (
-        scan_analise_gtin_inconsistencia_clinica()
-        .filter(pl.col("id_cnpj") == id_cnpj)
-        .collect()
-    )
-    _require_columns(clinica, _CLINICA_COLUNAS_OBRIGATORIAS, "Cache clinico por CNPJ")
-    clinica_municipio = (
-        scan_analise_gtin_inconsistencia_clinica()
-        .filter(pl.col("id_ibge7").cast(pl.Utf8) == id_ibge7)
-        .collect()
-    )
-    _require_columns(clinica_municipio, _CLINICA_COLUNAS_OBRIGATORIAS, "Cache clinico municipal")
-    if data_inicio:
-        clinica = clinica.filter(pl.col("ano_base") >= data_inicio.year)
-        clinica_municipio = clinica_municipio.filter(pl.col("ano_base") >= data_inicio.year)
-    if data_fim:
-        clinica = clinica.filter(pl.col("ano_base") <= data_fim.year)
-        clinica_municipio = clinica_municipio.filter(pl.col("ano_base") <= data_fim.year)
-    perfil_estabelecimento = get_df_perfil_estabelecimento()
-    ranking = []
-    clinica_anual = clinica
-    if not clinica_anual.is_empty():
-        clinica_incompativel = clinica_anual.filter(pl.col("qtd_cpfs_incompativeis") > 0)
-        if not clinica_incompativel.is_empty():
-            ranking_df = (
-                clinica_incompativel
-                .group_by(["patologia", "regra_clinica"])
-                .agg(
-                    pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
-                    pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
-                    pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
-                    pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
-                    pl.sum("valor_total_pago").alias("valor_total_pago"),
-                    pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
-                    pl.sum("cpfs_incompativeis_esperados_regiao").alias("cpfs_incompativeis_esperados_regiao"),
-                    pl.sum("excesso_cpfs_incompativeis_vs_regiao").alias("excesso_cpfs_incompativeis_vs_regiao"),
-                    pl.mean("percentual_cpfs_incompativeis").alias("percentual_medio_cpfs_incompativeis"),
-                    pl.mean("percentual_regional_cpfs_incompativeis").alias("percentual_medio_regional_cpfs_incompativeis"),
-                    pl.mean("razao_percentual_vs_regiao").alias("razao_media_percentual_vs_regiao"),
-                    pl.min("rank_regional_qtd_cpfs_incompativeis").alias("melhor_rank_regional_qtd_cpfs_incompativeis"),
-                    pl.max("percentil_regional_qtd_cpfs_incompativeis").alias("maior_percentil_regional_qtd_cpfs_incompativeis"),
-                    pl.max("participacao_cpfs_incompativeis_regiao").alias("maior_participacao_cpfs_incompativeis_regiao"),
-                    pl.min("ano_base").alias("ano_inicio"),
-                    pl.max("ano_base").alias("ano_fim"),
-                    pl.len().alias("qtd_linhas_anuais"),
-                )
-                .filter(
-                    (pl.col("valor_incompativel_pago") >= _CLINICA_VALOR_MINIMO_DETALHAMENTO)
-                )
-            )
+    ranking: list[dict[str, Any]] = []
+    for item in clinico_data["patologias"]:
+        item_context = dict(item)
+        municipal_resumo = item_context.pop("municipal_resumo")
+        ranking_municipal = item_context.pop("ranking_municipal")
+        item_context["municipal"] = {
+            "resumo": municipal_resumo,
+            "top20": ranking_municipal,
+        }
 
-            for item in ranking_df.iter_rows(named=True):
-                key = _clinica_meta_key(item["patologia"], item["regra_clinica"])
-                meta = _CLINICA_PATOLOGIA_META.get(key)
-                if meta is None:
-                    raise RuntimeError(
-                        "Recorte clinico sem mapeamento textual para a Nota Tecnica: "
-                        f"patologia={item['patologia']}; regra_clinica={item['regra_clinica']}."
-                    )
-                evolucao_anual = sorted(
-                    [
-                        row
-                        for row in clinica_anual.iter_rows(named=True)
-                        if _clinica_meta_key(row["patologia"], row["regra_clinica"]) == key
-                    ],
-                    key=lambda row: int(row["ano_base"]),
-                )
-                item_context = {
-                    **item,
-                    "titulo": meta["titulo"],
-                    "objeto": meta["objeto"],
-                    "criterio": meta["criterio"],
-                    "descricao": meta["descricao"],
-                    "evolucao_anual": evolucao_anual,
-                    "municipal": _build_clinica_municipal_context(
-                        item,
-                        clinica_municipio,
-                        perfil_estabelecimento,
-                        id_cnpj,
-                    ),
-                }
-                if key == ("DOENCA DE PARKINSON", "IDADE_MENOR_50"):
-                    item_context["demografia_parkinson"] = _build_parkinson_demografia_context(
-                        farmacia_row,
-                        evolucao_anual,
-                    )
-                ranking.append(item_context)
-
-    ranking.sort(
-        key=lambda item: (
-            float(item["excesso_cpfs_incompativeis_vs_regiao"])
-            if item["excesso_cpfs_incompativeis_vs_regiao"] is not None
-            else float("-inf"),
-            float(item["qtd_cpfs_incompativeis"]),
-            float(item["valor_incompativel_pago"]),
-            float(item["percentual_medio_cpfs_incompativeis"])
-            if item["percentual_medio_cpfs_incompativeis"] is not None
-            else float("-inf"),
-        ),
-        reverse=True,
-    )
+        demografia = item_context.get("demografia_parkinson")
+        if demografia is not None:
+            pop_total = demografia["populacao_total"]
+            pop_50_mais = demografia["populacao_50_mais"]
+            casos_esperados = demografia["casos_esperados"]
+            cpfs_observados = demografia["cpfs_observados"]
+            if pop_total <= 0 or pop_50_mais <= 0 or casos_esperados <= 0:
+                raise RuntimeError("Demografia de Parkinson invalida no detalhamento clinico da Nota Tecnica.")
+            razao_observado_esperado = demografia["razao_observado_esperado"]
+            if razao_observado_esperado is None:
+                razao_observado_esperado = cpfs_observados / casos_esperados
+            item_context["demografia_parkinson"] = {
+                **demografia,
+                "prevalencia_referencia": demografia["prevalencia_50_mais"],
+                "qtd_cpfs_distintos_observado": cpfs_observados,
+                "percentual_50_mais": pop_50_mais / pop_total,
+                "razao_observado_esperado": razao_observado_esperado,
+                "percentual_superior": (razao_observado_esperado - 1) * 100,
+            }
+        ranking.append(item_context)
 
     return {
         "periodo_desc": periodo_desc,
@@ -1255,7 +1174,7 @@ def _build_incompatibilidade_patologica_context(
         "multiplicador_regiao": as_float("risco_clinico_reg"),
         "multiplicador_uf": as_float("risco_clinico_uf"),
         "multiplicador_brasil": as_float("risco_clinico_br"),
-        "id_cnpj": id_cnpj,
+        "id_cnpj": row.get("id_cnpj"),
         "ranking_patologias": ranking,
     }
 

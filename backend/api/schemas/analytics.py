@@ -247,6 +247,7 @@ class IndicadorDataSchema(BaseModel):
     valor: Optional[float] = None
     valor_aumento_atipico: Optional[float] = None
     valor_financeiro: Optional[float] = None
+    pode_detalhar: bool = False
     med_reg: Optional[float] = None
     med_uf: Optional[float] = None
     med_br: Optional[float] = None
@@ -363,6 +364,9 @@ class ClinicoPatologiaSchema(BaseModel):
     percentual_medio_regional_cpfs_incompativeis: Optional[float] = None
     razao_media_percentual_vs_regiao: Optional[float] = None
     excesso_cpfs_incompativeis_vs_regiao: Optional[float] = None
+    melhor_rank_regional_qtd_cpfs_incompativeis: Optional[int] = None
+    maior_percentil_regional_qtd_cpfs_incompativeis: Optional[float] = None
+    maior_participacao_cpfs_incompativeis_regiao: Optional[float] = None
     evolucao_anual: List[ClinicoEvolucaoAnualSchema]
     municipal_resumo: List[ClinicoMunicipalResumoRowSchema]
     ranking_municipal: List[ClinicoMunicipalRankingRowSchema]

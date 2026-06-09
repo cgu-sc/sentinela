@@ -83,8 +83,12 @@ function openClinicalDialog() {
   showClinicalDialog.value = true;
 }
 
-function canDetailIndicator(key) {
-  return key === 'dispersao_geografica' || key === 'incompatibilidade_patologica';
+function canDetailIndicator(key, indicadorData = null) {
+  if (key === 'dispersao_geografica') return true;
+  if (key === 'incompatibilidade_patologica') {
+    return indicadorData?.pode_detalhar === true;
+  }
+  return false;
 }
 
 function openIndicatorDetail(key) {
@@ -253,7 +257,7 @@ function riscoTextStyle(indicadorData) {
                       v-tooltip.right="{ value: ind.metodologia, class: 'ind-tooltip' }"
                     />
                     <button
-                      v-if="canDetailIndicator(ind.key)"
+                      v-if="canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key])"
                       type="button"
                       class="ind-action-btn"
                       v-tooltip.top="{ value: 'Ver detalhamento do indicador', class: 'ind-tooltip' }"

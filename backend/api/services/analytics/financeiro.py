@@ -52,8 +52,8 @@ from ...schemas.analytics import (
 )
 
 from ._cache import _get_cnpj_cache_dir
+from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
 from .volume_atipico import (
-    DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
     is_volume_atipico_relevante,
     normalize_volume_atipico_limite,
 )
@@ -206,7 +206,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                 status_semestre=int(volume_info["status_semestre"]) if volume_info.get("status_semestre") is not None else None,
                 qtd_meses_presentes=int(volume_info["qtd_meses_presentes"]) if volume_info.get("qtd_meses_presentes") is not None else None,
                 limite_volume_atipico_pct=limite_volume_atipico,
-                limite_aumento_volume_atipico=DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
+                limite_aumento_volume_atipico=VOLUME_ATIPICO_AUMENTO_MINIMO,
                 meses=[
                     {
                         "mes": m["mes"],

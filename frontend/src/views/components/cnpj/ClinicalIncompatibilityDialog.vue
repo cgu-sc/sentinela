@@ -286,13 +286,10 @@ const close = () => emit('update:modelValue', false);
                 <Column field="qtd_farmacias" header="Farmácias">
                   <template #body="{ data }">{{ formatNumberFull(data.qtd_farmacias) }}</template>
                 </Column>
-                <Column field="qtd_cpfs_incompativeis" header="CPFs">
-                  <template #body="{ data }">{{ formatNumberFull(data.qtd_cpfs_incompativeis) }}</template>
-                </Column>
-                <Column field="valor_incompativel_pago" header="Valor">
+                <Column field="valor_incompativel_pago" header="Valor incompatível">
                   <template #body="{ data }">{{ formatCurrencyFull(data.valor_incompativel_pago) }}</template>
                 </Column>
-                <Column field="participacao_valor_municipal" header="Part.">
+                <Column field="participacao_valor_municipal" header="Participação">
                   <template #body="{ data }">{{ formatRatioPercent(data.participacao_valor_municipal) }}</template>
                 </Column>
               </DataTable>

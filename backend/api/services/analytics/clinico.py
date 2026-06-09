@@ -10,6 +10,7 @@ from data_cache import (
     get_df_perfil_estabelecimento,
     scan_analise_gtin_inconsistencia_clinica,
 )
+from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
 from ...schemas.analytics import (
     ClinicoEvolucaoAnualSchema,
     ClinicoFaixaEtariaSchema,
@@ -24,7 +25,6 @@ from ...schemas.analytics import (
 
 _PARKINSON_PREVALENCIA_50_MAIS = 0.0086
 _IBGE_ANO_CENSO_DEMOGRAFIA = 2022
-_CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -152,7 +152,11 @@ def _build_municipal_context(
     clinica_municipio: pl.DataFrame,
     perfil_estabelecimento: pl.DataFrame,
     id_cnpj_alvo: int,
+    ranking_municipal_limite: int = 10,
 ) -> tuple[list[ClinicoMunicipalResumoRowSchema], list[ClinicoMunicipalRankingRowSchema]]:
+    if ranking_municipal_limite < 0:
+        raise HTTPException(status_code=422, detail="ranking_municipal_limite deve ser maior ou igual a zero.")
+
     clinica_recorte = clinica_municipio.filter(
         _clinica_raw_key_expr() == _clinica_raw_key_value(item["patologia"], item["regra_clinica"])
     )
@@ -241,13 +245,18 @@ def _build_municipal_context(
         )
         .unique(subset=["id_cnpj"], keep="first")
     )
-    top = (
+    ranking_base = (
         agregado
         .sort(
             ["valor_incompativel_pago", "qtd_cpfs_incompativeis", "qtd_cpfs_distintos"],
             descending=[True, True, True],
         )
-        .head(10)
+    )
+    if ranking_municipal_limite > 0:
+        ranking_base = ranking_base.head(ranking_municipal_limite)
+
+    top = (
+        ranking_base
         .join(perfil, on="id_cnpj", how="left")
         .with_row_index("posicao", offset=1)
     )
@@ -353,7 +362,11 @@ def get_incompatibilidade_patologica_data(
     cnpj: str,
     data_inicio: date | None = None,
     data_fim: date | None = None,
+    ranking_municipal_limite: int = 10,
 ) -> ClinicoIncompatibilidadeResponse:
+    if ranking_municipal_limite < 0:
+        raise HTTPException(status_code=422, detail="ranking_municipal_limite deve ser maior ou igual a zero.")
+
     clean_cnpj = _clean_cnpj(cnpj)
     if len(clean_cnpj) != 14:
         raise HTTPException(status_code=422, detail="CNPJ deve conter 14 digitos.")
@@ -437,7 +450,7 @@ def get_incompatibilidade_patologica_data(
             pl.max("ano_base").alias("ano_fim"),
             pl.len().alias("qtd_linhas_anuais"),
         )
-        .filter(pl.col("valor_incompativel_pago") >= _CLINICA_VALOR_MINIMO_DETALHAMENTO)
+        .filter(pl.col("valor_incompativel_pago") >= CLINICA_VALOR_MINIMO_DETALHAMENTO)
     )
     ranking_items = list(ranking_df.iter_rows(named=True))
 
@@ -503,6 +516,7 @@ def get_incompatibilidade_patologica_data(
             clinica_municipio_df,
             perfil,
             id_cnpj,
+            ranking_municipal_limite=ranking_municipal_limite,
         )
         demografia = (
             _build_parkinson_demografia(farmacia_row, evolucao)
@@ -539,6 +553,21 @@ def get_incompatibilidade_patologica_data(
                 excesso_cpfs_incompativeis_vs_regiao=(
                     float(item["excesso_cpfs_incompativeis_vs_regiao"])
                     if item["excesso_cpfs_incompativeis_vs_regiao"] is not None
+                    else None
+                ),
+                melhor_rank_regional_qtd_cpfs_incompativeis=(
+                    int(item["melhor_rank_regional_qtd_cpfs_incompativeis"])
+                    if item["melhor_rank_regional_qtd_cpfs_incompativeis"] is not None
+                    else None
+                ),
+                maior_percentil_regional_qtd_cpfs_incompativeis=(
+                    float(item["maior_percentil_regional_qtd_cpfs_incompativeis"])
+                    if item["maior_percentil_regional_qtd_cpfs_incompativeis"] is not None
+                    else None
+                ),
+                maior_participacao_cpfs_incompativeis_regiao=(
+                    float(item["maior_participacao_cpfs_incompativeis_regiao"])
+                    if item["maior_participacao_cpfs_incompativeis_regiao"] is not None
                     else None
                 ),
                 evolucao_anual=evolucao,

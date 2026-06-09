@@ -11,6 +11,10 @@ from data_cache import (
     get_df_matriz_risco,
     get_df_perfil_estabelecimento,
 )
+from .indicator_rules import (
+    FALECIDOS_VALOR_LIMITE_ATENCAO,
+    VOLUME_ATIPICO_AUMENTO_MINIMO,
+)
 
 
 INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
@@ -499,24 +503,24 @@ def _compute_dynamic_matriz_risco(
                 zero_baseline_condition
                 & pl.col("falecidos_valor").is_not_null()
                 & (pl.col("falecidos_valor") > 0)
-                & (pl.col("falecidos_valor") <= 3000)
+                & (pl.col("falecidos_valor") <= FALECIDOS_VALOR_LIMITE_ATENCAO)
             )
             zero_baseline_critical_condition = (
                 zero_baseline_condition
                 & pl.col("falecidos_valor").is_not_null()
-                & (pl.col("falecidos_valor") > 3000)
+                & (pl.col("falecidos_valor") > FALECIDOS_VALOR_LIMITE_ATENCAO)
             )
         elif key == "volume_atipico":
             zero_baseline_attention_condition = (
                 zero_baseline_condition
                 & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
                 & (pl.col("volume_atipico_valor_aumento_atipico") > 0)
-                & (pl.col("volume_atipico_valor_aumento_atipico") < 10000)
+                & (pl.col("volume_atipico_valor_aumento_atipico") < VOLUME_ATIPICO_AUMENTO_MINIMO)
             )
             zero_baseline_critical_condition = (
                 zero_baseline_condition
                 & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
-                & (pl.col("volume_atipico_valor_aumento_atipico") >= 10000)
+                & (pl.col("volume_atipico_valor_aumento_atipico") >= VOLUME_ATIPICO_AUMENTO_MINIMO)
             )
         else:
             zero_baseline_attention_condition = pl.lit(False)

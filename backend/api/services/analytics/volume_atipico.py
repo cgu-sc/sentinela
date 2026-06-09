@@ -5,11 +5,11 @@ import polars as pl
 
 from data_cache import get_df_dados_farmacia, get_df_volume_atipico_semestral
 
+from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
 
 DEFAULT_VOLUME_ATIPICO_LIMITE = 50.0
 MIN_VOLUME_ATIPICO_LIMITE = 40.0
 MAX_VOLUME_ATIPICO_LIMITE = 2000.0
-DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO = 10000.0
 STATUS_SEMESTRE_COMPARAVEL = 1
 _VOLUME_ATIPICO_ID_CNPJS_CACHE: dict[
     tuple[int, Optional[int], Optional[int], float, float],
@@ -99,7 +99,7 @@ def volume_atipico_flag_expr(limite_percentual: float) -> pl.Expr:
     """Regra unica: crescimento percentual acima do limite e aumento material."""
     return (
         (pl.col("taxa_crescimento_pct") > limite_percentual)
-        & (pl.col("aumento_valor_semestre") >= DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO)
+        & (pl.col("aumento_valor_semestre") >= VOLUME_ATIPICO_AUMENTO_MINIMO)
     ).fill_null(False)
 
 
@@ -113,7 +113,7 @@ def is_volume_atipico_relevante(
         return False
     return (
         taxa_crescimento_pct > limite_percentual
-        and aumento_valor_semestre >= DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO
+        and aumento_valor_semestre >= VOLUME_ATIPICO_AUMENTO_MINIMO
     )
 
 
@@ -196,7 +196,7 @@ def get_volume_atipico_id_cnpjs_df(
         inicio_key,
         fim_key,
         limite,
-        DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
+        VOLUME_ATIPICO_AUMENTO_MINIMO,
     )
     cached = _VOLUME_ATIPICO_ID_CNPJS_CACHE.get(cache_key)
     if cached is not None:

@@ -19,6 +19,7 @@ from .matriz_risco_dinamica import (
     _INDICATOR_FLAGS,
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
+from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...utils.text_search import apply_token_search
@@ -249,6 +250,13 @@ def _valor_financeiro_indicador(row: dict, key: str) -> float | None:
     return _optional_float(row.get(col))
 
 
+def _pode_detalhar_indicador(row: dict, key: str) -> bool:
+    if key != "incompatibilidade_patologica":
+        return False
+    valor_financeiro = _valor_financeiro_indicador(row, key)
+    return valor_financeiro is not None and valor_financeiro >= CLINICA_VALOR_MINIMO_DETALHAMENTO
+
+
 def get_indicadores(
     cnpj: str,
     data_inicio: date | None = None,
@@ -284,6 +292,7 @@ def get_indicadores(
                 valor=_optional_float(row.get(c_val)),
                 valor_aumento_atipico=_optional_float(row.get("volume_atipico_valor_aumento_atipico")) if key == "volume_atipico" else None,
                 valor_financeiro=_valor_financeiro_indicador(row, key),
+                pode_detalhar=_pode_detalhar_indicador(row, key),
                 med_reg=_optional_float(row.get(c_mr)),
                 med_uf=_optional_float(row.get(c_mu)),
                 med_br=_optional_float(row.get(c_mb)),

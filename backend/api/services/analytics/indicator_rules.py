@@ -1,0 +1,5 @@
+"""Shared methodological thresholds for Sentinela indicators."""
+
+CLINICA_VALOR_MINIMO_DETALHAMENTO = 1000.0
+VOLUME_ATIPICO_AUMENTO_MINIMO = 10000.0
+FALECIDOS_VALOR_LIMITE_ATENCAO = 3000.0

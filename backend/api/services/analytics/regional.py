@@ -422,7 +422,7 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
                     pl.sum("total_sem_comprovacao").alias("tsc")
                 ])
                 .with_columns([
-                    (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(pl.lit(1.0)) * 100).alias("pct_auditado")
+                    (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(pl.lit(1.0)) * 100).alias("pct_sem_comprovacao")
                 ])
             )
             df = df_agg
@@ -432,7 +432,7 @@ def get_metric_percentiles(scope: str, uf: Optional[str] = None, regiao_id: Opti
         # Mapeamento de colunas conforme o schema real do cache
         col_target = "score_risco_final"
         if metric == "percentual_sem_comprovacao":
-            col_target = "pct_auditado"
+            col_target = "pct_sem_comprovacao"
 
         # ── 1. Aplica o Filtro de Escopo ──────────────────────────────────
         df_scoped = df

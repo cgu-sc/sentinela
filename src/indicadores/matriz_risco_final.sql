@@ -37,8 +37,9 @@ BEGIN TRY
     END;
 
     IF COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'id') IS NULL
+       OR COL_LENGTH('temp_CGUSC.fp.dados_farmacia', 'cnpj') IS NULL
     BEGIN
-        RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem coluna obrigatoria id.', 16, 1);
+        RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia sem colunas obrigatorias id/cnpj.', 16, 1);
         RETURN;
     END;
 
@@ -53,9 +54,14 @@ BEGIN TRY
         RETURN;
     END;
 
-    IF OBJECT_ID('temp_CGUSC.fp.indicador_auditado_detalhado', 'U') IS NULL
+    IF EXISTS (
+        SELECT 1
+        FROM temp_CGUSC.fp.dados_farmacia
+        GROUP BY cnpj
+        HAVING COUNT_BIG(*) > 1
+    )
     BEGIN
-        RAISERROR('Tabela temp_CGUSC.fp.indicador_auditado_detalhado nao encontrada.', 16, 1);
+        RAISERROR('Tabela temp_CGUSC.fp.dados_farmacia possui CNPJs duplicados.', 16, 1);
         RETURN;
     END;
 
@@ -66,13 +72,13 @@ BEGIN TRY
 
     INSERT INTO @Contrato (tabela, coluna)
     VALUES
-        ('indicador_auditado_detalhado', 'id_cnpj'),
-        ('indicador_auditado_detalhado', 'ano_base'),
-        ('indicador_auditado_detalhado', 'valor_total_auditado'),
-        ('indicador_auditado_detalhado', 'valor_sem_comprovacao'),
-        ('indicador_auditado_detalhado', 'total_caixas_vendidas'),
-        ('indicador_auditado_detalhado', 'total_caixas_sem_comprovacao'),
-        ('indicador_auditado_detalhado', 'total_autorizacoes'),
+        ('movimentacao_mensal_cnpj', 'cnpj'),
+        ('movimentacao_mensal_cnpj', 'periodo'),
+        ('movimentacao_mensal_cnpj', 'total_vendas'),
+        ('movimentacao_mensal_cnpj', 'total_sem_comprovacao'),
+        ('movimentacao_mensal_cnpj', 'total_qnt_caixas_vendidas'),
+        ('movimentacao_mensal_cnpj', 'total_qnt_caixas_sem_comprovacao'),
+        ('movimentacao_mensal_cnpj', 'total_num_autorizacoes'),
 
         ('indicador_falecidos_detalhado', 'id_cnpj'),
         ('indicador_falecidos_detalhado', 'ano_base'),
@@ -211,39 +217,43 @@ BEGIN TRY
         RETURN;
     END;
 
-    IF EXISTS (
-        SELECT id_cnpj, ano_base
-        FROM temp_CGUSC.fp.indicador_auditado_detalhado
-        GROUP BY id_cnpj, ano_base
-        HAVING COUNT_BIG(*) > 1
-    )
-    BEGIN
-        RAISERROR('indicador_auditado_detalhado possui duplicidade por id_cnpj/ano_base.', 16, 1);
-        RETURN;
-    END;
-
     -- ========================================================================
     -- BASE ANUAL
     -- ========================================================================
-    ;WITH BaseAnual AS (
+    ;WITH MovimentacaoAnual AS (
         SELECT
-            CAST(IA.id_cnpj AS INT) AS id_cnpj,
-            CAST(IA.ano_base AS SMALLINT) AS ano_base
-        FROM temp_CGUSC.fp.indicador_auditado_detalhado AS IA
-        WHERE IA.id_cnpj IS NOT NULL
-          AND IA.ano_base IS NOT NULL
+            CAST(F.id AS INT) AS id_cnpj,
+            CAST(YEAR(M.periodo) AS SMALLINT) AS ano_base,
+            CAST(SUM(CAST(M.total_vendas AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_total_vendas,
+            CAST(SUM(CAST(M.total_sem_comprovacao AS DECIMAL(19,2))) AS DECIMAL(19,2)) AS valor_sem_comprovacao,
+            CAST(SUM(CAST(M.total_qnt_caixas_vendidas AS BIGINT)) AS INT) AS total_caixas,
+            CAST(SUM(CAST(M.total_qnt_caixas_sem_comprovacao AS BIGINT)) AS INT) AS total_caixas_sem_comprovacao,
+            CAST(SUM(CAST(M.total_num_autorizacoes AS BIGINT)) AS INT) AS total_autorizacoes
+        FROM temp_CGUSC.fp.movimentacao_mensal_cnpj AS M
+        INNER JOIN temp_CGUSC.fp.dados_farmacia AS F
+            ON F.cnpj = M.cnpj
+        WHERE M.periodo IS NOT NULL
+        GROUP BY
+            F.id,
+            YEAR(M.periodo)
+        HAVING SUM(CAST(M.total_vendas AS DECIMAL(19,2))) > 0
+    ),
+    BaseAnual AS (
+        SELECT
+            id_cnpj,
+            ano_base
+        FROM MovimentacaoAnual
     )
     SELECT
         B.id_cnpj,
         B.ano_base,
 
-        -- Auditoria financeira
-        CAST(IA.valor_total_auditado AS DECIMAL(19,2)) AS auditado_valor_total,
-        CAST(IA.valor_sem_comprovacao AS DECIMAL(19,2)) AS auditado_valor_sem_comprovacao,
-        CAST(IA.total_caixas_vendidas AS INT) AS auditado_total_caixas,
-        CAST(IA.total_caixas_sem_comprovacao AS INT) AS auditado_total_caixas_sem_comprovacao,
-        CAST(IA.total_autorizacoes AS INT) AS auditado_total_autorizacoes,
-        CAST(TIC.valor_total_auditado AS DECIMAL(19,2)) AS valor_total_vendas,
+        -- Movimentacao financeira
+        MVA.valor_total_vendas,
+        MVA.valor_sem_comprovacao,
+        MVA.total_caixas,
+        MVA.total_caixas_sem_comprovacao,
+        MVA.total_autorizacoes,
 
         -- Falecidos
         CAST(FAL.total_autorizacoes AS INT) AS falecidos_total_autorizacoes,
@@ -333,9 +343,9 @@ BEGIN TRY
 
     INTO temp_CGUSC.fp.matriz_risco_consolidada
     FROM BaseAnual AS B
-    INNER JOIN temp_CGUSC.fp.indicador_auditado_detalhado AS IA
-        ON IA.id_cnpj = B.id_cnpj
-       AND IA.ano_base = B.ano_base
+    INNER JOIN MovimentacaoAnual AS MVA
+        ON MVA.id_cnpj = B.id_cnpj
+       AND MVA.ano_base = B.ano_base
     LEFT JOIN temp_CGUSC.fp.indicador_falecidos_detalhado AS FAL
         ON FAL.id_cnpj = B.id_cnpj
        AND FAL.ano_base = B.ano_base

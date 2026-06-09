@@ -14,7 +14,7 @@ from data_cache import (
 
 
 INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
-    "percentual_nao_comprovacao": ("pct_auditado", "med_auditado_reg", "med_auditado_uf", "med_auditado_br", "risco_auditado_reg", "risco_auditado_uf", "risco_auditado_br"),
+    "percentual_nao_comprovacao": ("pct_sem_comprovacao", "med_sem_comprovacao_reg", "med_sem_comprovacao_uf", "med_sem_comprovacao_br", "risco_sem_comprovacao_reg", "risco_sem_comprovacao_uf", "risco_sem_comprovacao_br"),
     "falecidos": ("pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br"),
     "incompatibilidade_patologica": ("pct_clinico", "med_clinico_reg", "med_clinico_uf", "med_clinico_br", "risco_clinico_reg", "risco_clinico_uf", "risco_clinico_br"),
     "teto": ("pct_teto", "med_teto_reg", "med_teto_uf", "med_teto_br", "risco_teto_reg", "risco_teto_uf", "risco_teto_br"),
@@ -99,7 +99,7 @@ _ZERO_BASELINE_CRITICAL_INDICATORS = {
 }
 
 _INDICATOR_AGGREGATIONS: dict[str, dict[str, object]] = {
-    "percentual_nao_comprovacao": {"numerator": "auditado_valor_sem_comprovacao", "denominator": "auditado_valor_total", "factor": 100.0},
+    "percentual_nao_comprovacao": {"numerator": "valor_sem_comprovacao", "denominator": "valor_total_vendas", "factor": 100.0},
     "falecidos": {"numerator": "falecidos_valor", "denominator": "valor_total_vendas", "factor": 100.0},
     "incompatibilidade_patologica": {"numerator": "clinico_valor_suspeito", "denominator": "clinico_valor_monitorado", "factor": 100.0},
     "teto": {"numerator": "teto_valor", "denominator": "teto_valor_total", "factor": 100.0},
@@ -120,12 +120,11 @@ _INDICATOR_AGGREGATIONS: dict[str, dict[str, object]] = {
 _MATRIX_COMPONENT_COLUMNS = {
     "id_cnpj",
     "ano_base",
-    "auditado_valor_total",
-    "auditado_valor_sem_comprovacao",
-    "auditado_total_caixas",
-    "auditado_total_caixas_sem_comprovacao",
-    "auditado_total_autorizacoes",
     "valor_total_vendas",
+    "valor_sem_comprovacao",
+    "total_caixas",
+    "total_caixas_sem_comprovacao",
+    "total_autorizacoes",
     "falecidos_total_autorizacoes",
     "falecidos_qtd_autorizacoes",
     "falecidos_valor",
@@ -333,12 +332,11 @@ def _compute_dynamic_matriz_risco(
         ])
         .group_by("id_cnpj")
         .agg([
-            pl.col("auditado_valor_total").sum().alias("auditado_valor_total"),
-            pl.col("auditado_valor_sem_comprovacao").sum().alias("auditado_valor_sem_comprovacao"),
-            pl.col("auditado_total_caixas").sum().alias("auditado_total_caixas"),
-            pl.col("auditado_total_caixas_sem_comprovacao").sum().alias("auditado_total_caixas_sem_comprovacao"),
-            pl.col("auditado_total_autorizacoes").sum().alias("auditado_total_autorizacoes"),
             pl.col("valor_total_vendas").sum().alias("valor_total_vendas"),
+            pl.col("valor_sem_comprovacao").sum().alias("valor_sem_comprovacao"),
+            pl.col("total_caixas").sum().alias("total_caixas"),
+            pl.col("total_caixas_sem_comprovacao").sum().alias("total_caixas_sem_comprovacao"),
+            pl.col("total_autorizacoes").sum().alias("total_autorizacoes"),
             pl.col("falecidos_total_autorizacoes").sum().alias("falecidos_total_autorizacoes"),
             pl.col("falecidos_qtd_autorizacoes").sum().alias("falecidos_qtd_autorizacoes"),
             pl.col("falecidos_valor").sum().alias("falecidos_valor"),

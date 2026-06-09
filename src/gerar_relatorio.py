@@ -927,7 +927,7 @@ def gerarRelatorioMovimentacao(cnpj_analise, dados_memoria, tipo_relatorio, curs
             # Sincronizado com INDICATOR_GROUPS do riskConfig.js
             grupos_sentinela = [
                 ("1. Auditoria Financeira", [
-                    ("Percentual de Não Comprovação", "pct_auditado", "med_auditado_reg", "med_auditado_uf", "med_auditado_br", "risco_auditado_reg", "risco_auditado_uf", "risco_auditado_br", "pct"),
+                    ("Percentual de Não Comprovação", "pct_sem_comprovacao", "med_sem_comprovacao_reg", "med_sem_comprovacao_uf", "med_sem_comprovacao_br", "risco_sem_comprovacao_reg", "risco_sem_comprovacao_uf", "risco_sem_comprovacao_br", "pct"),
                 ]),
                 ("2. Elegibilidade & Clínica", [
                     ("Vendas p/ Falecidos", "pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br", "pct3"),

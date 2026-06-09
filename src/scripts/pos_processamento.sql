@@ -16,11 +16,131 @@ CREATE TABLE fp.movimentacao_mensal_cnpj (
     total_sem_comprovacao DECIMAL(9, 2),
     total_qnt_caixas_vendidas INT,                    -- Voltando para INT (SMALLINT estourou com 55k)
     total_qnt_caixas_sem_comprovacao INT,           -- Voltando para INT
-    total_num_autorizacoes INT
+    total_num_autorizacoes INT                       -- COUNT(DISTINCT num_autorizacao)
 );
 GO
 
 -- 3. CARGA INICIAL DOS DADOS
+DROP TABLE IF EXISTS #MovimentacaoGtin;
+DROP TABLE IF EXISTS #MedicamentosPatologia;
+DROP TABLE IF EXISTS #AutorizacoesElegiveis;
+DROP TABLE IF EXISTS #AutorizacoesMensais;
+
+SELECT
+    p.cnpj,
+    m.periodo,
+    CAST(SUM(m.valor_vendas) AS DECIMAL(9,2)) AS total_vendas,
+    CAST(SUM(m.valor_sem_comprovacao) AS DECIMAL(9,2)) AS total_sem_comprovacao,
+    SUM(m.qnt_caixas_vendidas) AS total_qnt_caixas_vendidas,
+    SUM(m.qnt_caixas_sem_comprovacao) AS total_qnt_caixas_sem_comprovacao
+INTO #MovimentacaoGtin
+FROM fp.movimentacao_mensal_gtin m
+INNER JOIN fp.processamento p
+    ON p.id = m.id_processamento
+GROUP BY
+    p.cnpj,
+    m.periodo;
+
+CREATE UNIQUE CLUSTERED INDEX IX_TmpMovimentacaoGtin
+ON #MovimentacaoGtin(cnpj, periodo);
+
+IF NOT EXISTS (SELECT 1 FROM #MovimentacaoGtin)
+BEGIN
+    RAISERROR('Tabela fp.movimentacao_mensal_gtin sem dados para consolidar por CNPJ/periodo.', 16, 1);
+    RETURN;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.medicamentos_patologia AS MP
+    WHERE MP.codigo_barra IS NOT NULL
+      AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+      AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
+    GROUP BY
+        MP.codigo_barra
+    HAVING COUNT(DISTINCT TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0))) > 1
+)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia possui qnt_comprimidos_caixa conflitante para o mesmo codigo_barra.', 16, 1);
+    RETURN;
+END;
+
+SELECT
+    MP.codigo_barra,
+    MAX(TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0))) AS qnt_comprimidos_caixa
+INTO #MedicamentosPatologia
+FROM temp_CGUSC.fp.medicamentos_patologia AS MP
+WHERE MP.codigo_barra IS NOT NULL
+  AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
+  AND TRY_CAST(MP.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
+GROUP BY
+    MP.codigo_barra;
+
+CREATE UNIQUE CLUSTERED INDEX IX_TmpMedicamentosPatologia
+ON #MedicamentosPatologia(codigo_barra);
+
+IF NOT EXISTS (SELECT 1 FROM #MedicamentosPatologia)
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.medicamentos_patologia sem GTIN valido para calcular autorizacoes distintas.', 16, 1);
+    RETURN;
+END;
+
+SELECT DISTINCT
+    A.cnpj,
+    G.periodo,
+    A.num_autorizacao
+INTO #AutorizacoesElegiveis
+FROM db_farmaciapopular.dbo.relatorio_movimentacao_2015_2024 AS A
+INNER JOIN #MedicamentosPatologia AS MP
+    ON MP.codigo_barra = A.codigo_barra
+INNER JOIN #MovimentacaoGtin AS G
+    ON G.cnpj = A.cnpj
+   AND A.data_hora >= G.periodo
+   AND A.data_hora < DATEADD(MONTH, 1, G.periodo)
+WHERE A.data_hora >= (SELECT MIN(periodo) FROM #MovimentacaoGtin)
+  AND A.data_hora < DATEADD(MONTH, 1, (SELECT MAX(periodo) FROM #MovimentacaoGtin))
+  AND A.num_autorizacao IS NOT NULL
+  AND A.valor_pago IS NOT NULL
+  AND A.valor_pago >= 0
+  AND A.codigo_barra IS NOT NULL
+  AND A.qnt_autorizada IS NOT NULL
+  AND (A.qnt_autorizada / MP.qnt_comprimidos_caixa) <> 0;
+
+CREATE UNIQUE CLUSTERED INDEX IX_TmpAutorizacoesElegiveis
+ON #AutorizacoesElegiveis(cnpj, periodo, num_autorizacao);
+
+IF NOT EXISTS (SELECT 1 FROM #AutorizacoesElegiveis)
+BEGIN
+    RAISERROR('Nao ha autorizacoes elegiveis para consolidar total_num_autorizacoes.', 16, 1);
+    RETURN;
+END;
+
+SELECT
+    cnpj,
+    periodo,
+    COUNT_BIG(*) AS total_num_autorizacoes
+INTO #AutorizacoesMensais
+FROM #AutorizacoesElegiveis
+GROUP BY
+    cnpj,
+    periodo;
+
+CREATE UNIQUE CLUSTERED INDEX IX_TmpAutorizacoesMensais
+ON #AutorizacoesMensais(cnpj, periodo);
+
+IF EXISTS (
+    SELECT 1
+    FROM #MovimentacaoGtin AS G
+    LEFT JOIN #AutorizacoesMensais AS A
+        ON A.cnpj = G.cnpj
+       AND A.periodo = G.periodo
+    WHERE A.cnpj IS NULL
+)
+BEGIN
+    RAISERROR('Existem CNPJ/periodo com movimentacao mensal sem autorizacoes distintas calculadas.', 16, 1);
+    RETURN;
+END;
+
 INSERT INTO fp.movimentacao_mensal_cnpj (
     cnpj, periodo,
     total_vendas, total_sem_comprovacao,
@@ -28,16 +148,22 @@ INSERT INTO fp.movimentacao_mensal_cnpj (
     total_num_autorizacoes
 )
 SELECT
-    p.cnpj,
-    m.periodo,
-    CAST(SUM(m.valor_vendas) AS DECIMAL(9,2)),
-    CAST(SUM(m.valor_sem_comprovacao) AS DECIMAL(9,2)),
-    SUM(m.qnt_caixas_vendidas),
-    SUM(m.qnt_caixas_sem_comprovacao),
-    SUM(m.num_autorizacoes)
-FROM fp.movimentacao_mensal_gtin m
-INNER JOIN fp.processamento p ON p.id = m.id_processamento
-GROUP BY p.cnpj, m.periodo;
+    G.cnpj,
+    G.periodo,
+    G.total_vendas,
+    G.total_sem_comprovacao,
+    G.total_qnt_caixas_vendidas,
+    G.total_qnt_caixas_sem_comprovacao,
+    A.total_num_autorizacoes
+FROM #MovimentacaoGtin AS G
+INNER JOIN #AutorizacoesMensais AS A
+    ON A.cnpj = G.cnpj
+   AND A.periodo = G.periodo;
+
+DROP TABLE IF EXISTS #MovimentacaoGtin;
+DROP TABLE IF EXISTS #MedicamentosPatologia;
+DROP TABLE IF EXISTS #AutorizacoesElegiveis;
+DROP TABLE IF EXISTS #AutorizacoesMensais;
 GO
 
 -- 4. ÍNDICE CLUSTERIZADO (Acesso principal por Período + CNPJ)

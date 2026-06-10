@@ -13,10 +13,12 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
-from .matriz_risco_dinamica import (
+from .indicator_config import (
     INDICATOR_MAPPING,
+    INDICATOR_FLAGS as _INDICATOR_FLAGS,
+)
+from .matriz_risco_dinamica import (
     MIN_REGIAO_BENCHMARK,
-    _INDICATOR_FLAGS,
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO

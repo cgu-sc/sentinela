@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { INDICATOR_GROUPS, INDICATOR_THRESHOLDS, RISK_COLORS_RGB } from '@/config/riskConfig';
+import { INDICATOR_GROUPS, RISK_COLORS_RGB } from '@/config/riskConfig';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -77,13 +77,11 @@ async function loadFontsInto(pdf) {
 }
 
 // ── Helpers de cor/risco ───────────────────────────────────
-function getRiscoStatus(risco, thresholdKey = 'default') {
-  const t = INDICATOR_THRESHOLDS[thresholdKey] ?? INDICATOR_THRESHOLDS.default;
-  const r = risco != null ? Math.round(risco * 10) / 10 : null;
-  if (r == null)      return { label: 'SEM DADOS', rgb: [150, 150, 150] };
-  if (r >= t.critico) return { label: 'CRÍTICO',   rgb: [239, 68,  68]  };
-  if (r >= t.atencao) return { label: 'ATENÇÃO',   rgb: [249, 115, 22]  };
-  return                     { label: 'NORMAL',    rgb: [16,  185, 129] };
+function getOfficialStatus(indicatorKey, indicadorData) {
+  if (!indicadorData?.status) {
+    throw new Error(`Indicador ${indicatorKey} sem status oficial retornado pela API.`);
+  }
+  return String(indicadorData.status).toUpperCase();
 }
 
 function fmtVal(valor, formato, formatCurrencyFull) {
@@ -831,18 +829,15 @@ export function usePdfExport() {
       y3 = sectionTitle('INDICADORES DE RISCO POR GRUPO', y3, [30, 41, 59], PI.CHART_BAR);
 
       const indRows = [];
-      const rowThresholdKeys = []; // paralelo a indRows: thresholdKey por linha (null = cabeçalho de grupo)
       for (const grupo of INDICATOR_GROUPS) {
         indRows.push([{ content: grupo.label, colSpan: 9, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [30, 41, 59], fontSize: 7.5 } }]);
-        rowThresholdKeys.push(null);
         for (const ind of grupo.indicators) {
           const d = indicadores[ind.key];
           if (!d || d.valor == null) {
             indRows.push([ind.label, { content: 'SEM DADOS', colSpan: 8, styles: { halign: 'center', textColor: [150, 150, 150] } }]);
-            rowThresholdKeys.push(null);
             continue;
           }
-          const status = getRiscoStatus(d.risco_reg, ind.thresholdKey);
+          const status = getOfficialStatus(ind.key, d);
           indRows.push([
             ind.label,
             fmtVal(d.valor,   ind.formato, formatCurrencyFull),
@@ -852,9 +847,8 @@ export function usePdfExport() {
             fmtRisco(d.risco_reg),
             fmtRisco(d.risco_uf),
             fmtRisco(d.risco_br),
-            status.label,
+            status,
           ]);
-          rowThresholdKeys.push(ind.thresholdKey ?? 'default');
         }
       }
 
@@ -901,16 +895,7 @@ export function usePdfExport() {
           const raw = data.cell.raw;
           if (typeof raw !== 'string') return;
 
-          if (col >= 5 && col <= 7) {
-            // Colunas numéricas de risco: usa threshold específico do indicador
-            const risco = parseFloat(raw);
-            if (!isNaN(risco)) {
-              const tKey = rowThresholdKeys[data.row.index] ?? 'default';
-              const t = INDICATOR_THRESHOLDS[tKey] ?? INDICATOR_THRESHOLDS.default;
-              if      (risco >= t.critico) data.cell.styles.textColor = [239, 68,  68];
-              else if (risco >= t.atencao) data.cell.styles.textColor = [249, 115, 22];
-            }
-          } else if (col === 8) {
+          if (col === 8) {
             if      (raw === 'CRÍTICO') { data.cell.styles.textColor = [239, 68, 68];  data.cell.styles.fillColor = [255, 240, 240]; }
             else if (raw === 'ATENÇÃO') { data.cell.styles.textColor = [180, 83,  9];  data.cell.styles.fillColor = [255, 250, 235]; }
             else if (raw === 'NORMAL')  { data.cell.styles.textColor = [5,  150, 105]; }

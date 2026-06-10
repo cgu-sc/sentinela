@@ -84,46 +84,10 @@ export const FALECIDOS_KPI_THRESHOLDS = {
 };
 
 /**
- * Limiares de risco por indicador (ratio = valor_farmacia / mediana_regional).
- * Cada indicador possui sua própria entrada para calibragem independente.
- * Fonte: gerar_relatorio.py → get_limiares_indicador()
- */
-export const INDICATOR_THRESHOLDS = {
-  // 1. Auditoria Financeira
-  percentual_nao_comprovacao:    { atencao: 2.0, critico: 3.0 },
-
-  // 2. Elegibilidade & Clínica
-  falecidos:                     { atencao: 2.0, critico: 3.0 },
-  incompatibilidade_patologica:  { atencao: 2.0, critico: 3.0 },
-
-  // 3. Padrões de Quantidade
-  teto:                   { atencao: 1.2, critico: 1.39 },
-  polimedicamento:        { atencao: 2.0, critico: 3.0 },
-
-  // 4. Padrões Financeiros
-  ticket_medio:           { atencao: 2.0, critico: 3.0 },
-  receita_paciente:       { atencao: 2.0, critico: 3.0 },
-  per_capita:             { atencao: 2.0, critico: 3.0 },
-  alto_custo:             { atencao: 1.4, critico: 1.7 },
-
-  // 5. Automação & Geografia
-  vendas_rapidas:         { atencao: 2.0, critico: 3.0 },
-  volume_atipico:         { atencao: 2.0, critico: 3.0 },
-  recorrencia_sistemica:  { atencao: 1.4, critico: 1.7 },
-  dias_pico:              { atencao: 1.4, critico: 1.7 },
-  dispersao_geografica:   { atencao: 2.0, critico: 3.0 },
-
-  // 6. Integridade Médica
-  hhi_crm:                { atencao: 2.0, critico: 3.0 },
-  crms_irregulares:       { atencao: 2.0, critico: 3.0 },
-};
-
-/**
  * Definição dos 6 grupos de indicadores e seus 16 indicadores.
  * - key:          identificador no objeto `indicadores` retornado pela API
  * - label:        nome exibido no card
  * - formato:      'pct' | 'pct3' | 'val' | 'dec'
- * - thresholdKey: chave em INDICATOR_THRESHOLDS (igual ao key do indicador)
  * - metodologia:  texto exibido no tooltip ℹ️
  */
 export const INDICATOR_GROUPS = [
@@ -131,7 +95,7 @@ export const INDICATOR_GROUPS = [
     id: 'auditoria',
     label: '1. Auditoria Financeira',
     indicators: [
-      { key: 'percentual_nao_comprovacao', label: 'Percentual Não Comprovação', formato: 'pct', thresholdKey: 'percentual_nao_comprovacao',
+      { key: 'percentual_nao_comprovacao', label: 'Percentual Não Comprovação', formato: 'pct',
         metodologia: 'Percentual do valor total de vendas sem comprovação fiscal/clínica na auditoria.' },
     ],
   },
@@ -139,9 +103,9 @@ export const INDICATOR_GROUPS = [
     id: 'elegibilidade',
     label: '2. Elegibilidade & Clínica',
     indicators: [
-      { key: 'falecidos', label: 'Vendas p/ Falecidos', formato: 'pct3', thresholdKey: 'falecidos',
+      { key: 'falecidos', label: 'Vendas p/ Falecidos', formato: 'pct3',
         metodologia: 'Confronto direto entre a data da dispensação e a data oficial de óbito (SIM/SIRC/SISOBI).' },
-      { key: 'incompatibilidade_patologica', label: 'Incompatibilidade Patológica', formato: 'pct', thresholdKey: 'incompatibilidade_patologica',
+      { key: 'incompatibilidade_patologica', label: 'Incompatibilidade Patológica', formato: 'pct',
         metodologia: 'Confronta a indicação terapêutica com os dados do beneficiário (Idade e Sexo). Sinaliza: Osteoporose em homens, Parkinson <50 anos, Hipertensão <20 anos, Diabetes <20 anos.' },
     ],
   },
@@ -149,9 +113,9 @@ export const INDICATOR_GROUPS = [
     id: 'quantidades',
     label: '3. Padrões de Quantidade',
     indicators: [
-      { key: 'teto', label: 'Dispensação em Teto Máximo', formato: 'pct', thresholdKey: 'teto',
+      { key: 'teto', label: 'Dispensação em Teto Máximo', formato: 'pct',
         metodologia: 'Percentual de dispensações onde a quantidade vendida atinge exatamente o limite máximo permitido por medicamento.' },
-      { key: 'polimedicamento', label: '4+ Itens por Autorização', formato: 'pct', thresholdKey: 'polimedicamento',
+      { key: 'polimedicamento', label: '4+ Itens por Autorização', formato: 'pct',
         metodologia: 'Percentual de autorizações (cupons fiscais) que contêm 4 ou mais medicamentos distintos dispensados no mesmo ato.' },
     ],
   },
@@ -159,13 +123,13 @@ export const INDICATOR_GROUPS = [
     id: 'financeiro',
     label: '4. Padrões Financeiros',
     indicators: [
-      { key: 'ticket_medio', label: 'Valor do Ticket Médio', formato: 'val', thresholdKey: 'ticket_medio',
+      { key: 'ticket_medio', label: 'Valor do Ticket Médio', formato: 'val',
         metodologia: 'Valor monetário médio de cada autorização de venda.' },
-      { key: 'receita_paciente', label: 'Faturamento Médio por Cliente', formato: 'val', thresholdKey: 'receita_paciente',
+      { key: 'receita_paciente', label: 'Faturamento Médio por Cliente', formato: 'val',
         metodologia: 'Faturamento médio mensal da farmácia dividido pelo número de CPFs distintos atendidos (normalizado pelo tempo de atividade).' },
-      { key: 'per_capita', label: 'Venda Per Capita Mensal', formato: 'val', thresholdKey: 'per_capita',
+      { key: 'per_capita', label: 'Venda Per Capita Mensal', formato: 'val',
         metodologia: 'Faturamento médio mensal da farmácia dividido pela população total do município (estimativa IBGE).' },
-      { key: 'alto_custo', label: 'Medicamentos de Alto Custo', formato: 'pct', thresholdKey: 'alto_custo',
+      { key: 'alto_custo', label: 'Medicamentos de Alto Custo', formato: 'pct',
         metodologia: 'Percentual do faturamento total proveniente de medicamentos no 90º percentil de preço.' },
     ],
   },
@@ -173,15 +137,15 @@ export const INDICATOR_GROUPS = [
     id: 'automacao',
     label: '5. Automação & Geografia',
     indicators: [
-      { key: 'vendas_rapidas', label: 'Vendas Rápidas (<60s)', formato: 'pct', thresholdKey: 'vendas_rapidas',
+      { key: 'vendas_rapidas', label: 'Vendas Rápidas (<60s)', formato: 'pct',
         metodologia: 'Percentual de vendas consecutivas realizadas em intervalo inferior a 60 segundos.' },
-      { key: 'volume_atipico', label: 'Aumento atípico de vendas', formato: 'dec', thresholdKey: 'volume_atipico',
+      { key: 'volume_atipico', label: 'Aumento atípico de vendas', formato: 'dec',
         metodologia: 'Mede explosões de crescimento semestral atípicas no faturamento do programa.' },
-      { key: 'recorrencia_sistemica', label: 'Recorrência Sistêmica', formato: 'pct', thresholdKey: 'recorrencia_sistemica',
+      { key: 'recorrencia_sistemica', label: 'Recorrência Sistêmica', formato: 'pct',
         metodologia: 'Percentual de compras sequenciais realizadas precisamente na linha de corte do sistema (ex: 30 dias exatos), indicando possível automação.' },
-      { key: 'dias_pico', label: 'Concentração em Dias de Pico', formato: 'pct', thresholdKey: 'dias_pico',
+      { key: 'dias_pico', label: 'Concentração em Dias de Pico', formato: 'pct',
         metodologia: 'Percentual do faturamento mensal concentrado nos 3 dias de maior movimento do mês.' },
-      { key: 'dispersao_geografica', label: 'Dispersão Interestadual', formato: 'pct', thresholdKey: 'dispersao_geografica',
+      { key: 'dispersao_geografica', label: 'Dispersão Interestadual', formato: 'pct',
         metodologia: 'Percentual de vendas para pacientes cuja UF de residência difere da UF da farmácia.' },
     ],
   },
@@ -189,9 +153,9 @@ export const INDICATOR_GROUPS = [
     id: 'crm',
     label: '6. Integridade Médica',
     indicators: [
-      { key: 'hhi_crm', label: 'Concentração de CRMs (HHI)', formato: 'dec', thresholdKey: 'hhi_crm',
+      { key: 'hhi_crm', label: 'Concentração de CRMs (HHI)', formato: 'dec',
         metodologia: 'Índice Herfindahl-Hirschman (HHI) que mede a concentração de prescrições. HHI elevado indica dependência excessiva de poucos CRMs.' },
-      { key: 'crms_irregulares', label: 'Faturamento CRMs Irregulares', formato: 'pct', thresholdKey: 'crms_irregulares',
+      { key: 'crms_irregulares', label: 'Faturamento CRMs Irregulares', formato: 'pct',
         metodologia: 'Percentual do faturamento vinculado a CRMs inexistentes no CFM ou com prescrições anteriores à primeira inscrição do médico na UF do CRM.' },
     ],
   },

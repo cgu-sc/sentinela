@@ -2,7 +2,6 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useGeoStore } from '@/stores/geo';
-import { useConfigStore } from '@/stores/config';
 import { useFilterParameters } from '@/composables/useFilterParameters';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
@@ -12,7 +11,6 @@ import Toast from 'primevue/toast';
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
-const configStore = useConfigStore();
 const themeStore = useThemeStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
@@ -95,7 +93,6 @@ const initializeApp = async () => {
       geoStore.fetchLocalidades(),
       geoStore.loadMunicipiosGeo(),
       geoStore.fetchCnpjLookup(),
-      configStore.fetchThresholds(),
     ];
 
     // Se houver filtros geográficos ativos, o fetchDashboardSummary NÃO popula

@@ -1,0 +1,101 @@
+"""Methodological configuration for Sentinela risk indicators."""
+
+INDICATOR_MAPPING: dict[str, tuple[str, str, str, str, str, str, str]] = {
+    "percentual_nao_comprovacao": ("pct_sem_comprovacao", "med_sem_comprovacao_reg", "med_sem_comprovacao_uf", "med_sem_comprovacao_br", "risco_sem_comprovacao_reg", "risco_sem_comprovacao_uf", "risco_sem_comprovacao_br"),
+    "falecidos": ("pct_falecidos", "med_falecidos_reg", "med_falecidos_uf", "med_falecidos_br", "risco_falecidos_reg", "risco_falecidos_uf", "risco_falecidos_br"),
+    "incompatibilidade_patologica": ("pct_clinico", "med_clinico_reg", "med_clinico_uf", "med_clinico_br", "risco_clinico_reg", "risco_clinico_uf", "risco_clinico_br"),
+    "teto": ("pct_teto", "med_teto_reg", "med_teto_uf", "med_teto_br", "risco_teto_reg", "risco_teto_uf", "risco_teto_br"),
+    "polimedicamento": ("pct_polimedicamento", "med_polimedicamento_reg", "med_polimedicamento_uf", "med_polimedicamento_br", "risco_polimedicamento_reg", "risco_polimedicamento_uf", "risco_polimedicamento_br"),
+    "ticket_medio": ("val_ticket_medio", "med_ticket_reg", "med_ticket_uf", "med_ticket_br", "risco_ticket_reg", "risco_ticket_uf", "risco_ticket_br"),
+    "receita_paciente": ("val_receita_paciente", "med_receita_paciente_reg", "med_receita_paciente_uf", "med_receita_paciente_br", "risco_receita_paciente_reg", "risco_receita_paciente_uf", "risco_receita_paciente_br"),
+    "per_capita": ("val_per_capita", "med_per_capita_reg", "med_per_capita_uf", "med_per_capita_br", "risco_per_capita_reg", "risco_per_capita_uf", "risco_per_capita_br"),
+    "alto_custo": ("pct_alto_custo", "med_alto_custo_reg", "med_alto_custo_uf", "med_alto_custo_br", "risco_alto_custo_reg", "risco_alto_custo_uf", "risco_alto_custo_br"),
+    "vendas_rapidas": ("pct_vendas_rapidas", "med_vendas_rapidas_reg", "med_vendas_rapidas_uf", "med_vendas_rapidas_br", "risco_vendas_rapidas_reg", "risco_vendas_rapidas_uf", "risco_vendas_rapidas_br"),
+    "volume_atipico": ("val_volume_atipico", "med_volume_atipico_reg", "med_volume_atipico_uf", "med_volume_atipico_br", "risco_volume_atipico_reg", "risco_volume_atipico_uf", "risco_volume_atipico_br"),
+    "recorrencia_sistemica": ("pct_recorrencia_sistemica", "med_recorrencia_sistemica_reg", "med_recorrencia_sistemica_uf", "med_recorrencia_sistemica_br", "risco_recorrencia_sistemica_reg", "risco_recorrencia_sistemica_uf", "risco_recorrencia_sistemica_br"),
+    "dias_pico": ("pct_pico", "med_pico_reg", "med_pico_uf", "med_pico_br", "risco_pico_reg", "risco_pico_uf", "risco_pico_br"),
+    "dispersao_geografica": ("pct_geografico", "med_geografico_reg", "med_geografico_uf", "med_geografico_br", "risco_geografico_reg", "risco_geografico_uf", "risco_geografico_br"),
+    "hhi_crm": ("val_hhi_crm", "med_hhi_crm_reg", "med_hhi_crm_uf", "med_hhi_crm_br", "risco_crm_reg", "risco_crm_uf", "risco_crm_br"),
+    "crms_irregulares": ("pct_crms_irregulares", "med_crms_irregulares_reg", "med_crms_irregulares_uf", "med_crms_irregulares_br", "risco_crms_irregulares_reg", "risco_crms_irregulares_uf", "risco_crms_irregulares_br"),
+}
+
+INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
+    "percentual_nao_comprovacao": ("flag_percentual_sem_comprovacao_atencao", "flag_percentual_sem_comprovacao_critico"),
+    "falecidos": ("flag_falecidos_atencao", "flag_falecidos_critico"),
+    "incompatibilidade_patologica": ("flag_incompatibilidade_patologica_atencao", "flag_incompatibilidade_patologica_critico"),
+    "teto": ("flag_estouro_teto_atencao", "flag_estouro_teto_critico"),
+    "polimedicamento": ("flag_polimedicamento_atencao", "flag_polimedicamento_critico"),
+    "ticket_medio": ("flag_ticket_medio_atencao", "flag_ticket_medio_critico"),
+    "receita_paciente": ("flag_receita_paciente_atencao", "flag_receita_paciente_critico"),
+    "per_capita": ("flag_per_capita_atencao", "flag_per_capita_critico"),
+    "alto_custo": ("flag_alto_custo_atencao", "flag_alto_custo_critico"),
+    "vendas_rapidas": ("flag_vendas_rapidas_atencao", "flag_vendas_rapidas_critico"),
+    "volume_atipico": ("flag_volume_atipico_atencao", "flag_volume_atipico_critico"),
+    "recorrencia_sistemica": ("flag_recorrencia_sistemica_atencao", "flag_recorrencia_sistemica_critico"),
+    "dias_pico": ("flag_concentracao_pico_atencao", "flag_concentracao_pico_critico"),
+    "dispersao_geografica": ("flag_dispersao_geografica_atencao", "flag_dispersao_geografica_critico"),
+    "hhi_crm": ("flag_hhi_crm_atencao", "flag_hhi_crm_critico"),
+    "crms_irregulares": ("flag_crms_irregulares_atencao", "flag_crms_irregulares_critico"),
+}
+
+INDICATOR_MZ_THRESHOLDS: dict[str, tuple[float, float]] = {
+    "falecidos": (2.00, 3.00),
+    "incompatibilidade_patologica": (2.00, 2.80),
+    "teto": (1.17, 1.25),
+    "polimedicamento": (2.00, 2.40),
+    "ticket_medio": (1.40, 1.80),
+    "receita_paciente": (2, 3),
+    "per_capita": (2, 3),
+    "alto_custo": (1.02, 1.05),
+    "vendas_rapidas": (3.00, 4.00),
+    "volume_atipico": (1.80, 2.00),
+    "recorrencia_sistemica": (1.50, 1.90),
+    "dias_pico": (2, 2.50),
+    "dispersao_geografica": (1.85, 2.49),
+    "hhi_crm": (2, 2.5),
+    "crms_irregulares": (2, 3),
+}
+
+INDICATOR_SCORE_WEIGHTS: dict[str, float] = {
+    "percentual_nao_comprovacao": 5.0,
+    "falecidos": 2.5,
+    "incompatibilidade_patologica": 1.5,
+    "teto": 1.0,
+    "polimedicamento": 1.5,
+    "ticket_medio": 1.0,
+    "receita_paciente": 1.0,
+    "per_capita": 1.0,
+    "alto_custo": 1.5,
+    "vendas_rapidas": 2.0,
+    "volume_atipico": 2.5,
+    "recorrencia_sistemica": 2.0,
+    "dias_pico": 1.0,
+    "dispersao_geografica": 1.0,
+    "hhi_crm": 0.5,
+    "crms_irregulares": 1.0,
+}
+
+ZERO_BASELINE_CRITICAL_INDICATORS = {
+    "falecidos",
+    "incompatibilidade_patologica",
+    "volume_atipico",
+}
+
+INDICATOR_AGGREGATIONS: dict[str, dict[str, object]] = {
+    "percentual_nao_comprovacao": {"numerator": "valor_sem_comprovacao", "denominator": "valor_total_vendas", "factor": 100.0},
+    "falecidos": {"numerator": "falecidos_valor", "denominator": "valor_total_vendas", "factor": 100.0},
+    "incompatibilidade_patologica": {"numerator": "clinico_valor_suspeito", "denominator": "clinico_valor_monitorado", "factor": 100.0},
+    "teto": {"numerator": "teto_valor", "denominator": "teto_valor_total", "factor": 100.0},
+    "polimedicamento": {"numerator": "polimedicamento_valor", "denominator": "valor_total_vendas", "factor": 100.0},
+    "ticket_medio": {"numerator": "valor_total_vendas", "denominator": "ticket_total_autorizacoes", "factor": 1.0},
+    "receita_paciente": {"numerator": "valor_total_vendas", "denominator": "receita_paciente_denominador", "factor": 1.0},
+    "per_capita": {"numerator": "valor_total_vendas", "denominator": "per_capita_denominador", "factor": 1.0},
+    "alto_custo": {"numerator": "alto_custo_valor", "denominator": "valor_total_vendas", "factor": 100.0},
+    "vendas_rapidas": {"numerator": "vendas_rapidas_valor", "denominator": "valor_total_vendas", "factor": 100.0},
+    "volume_atipico": {"numerator": "volume_atipico_soma_excesso_crescimento_pct", "denominator": "volume_atipico_total_semestres_comparaveis", "factor": 1.0},
+    "recorrencia_sistemica": {"numerator": "recorrencia_valor_sistemico", "denominator": "recorrencia_valor_total", "factor": 100.0},
+    "dias_pico": {"numerator": "pico_valor_top3_dias", "denominator": "valor_total_vendas", "factor": 100.0},
+    "dispersao_geografica": {"numerator": "geografico_valor_outra_uf", "denominator": "geografico_valor_total", "factor": 100.0},
+    "hhi_crm": {"numerator": "hhi_valor_ponderado", "denominator": "hhi_valor_total", "factor": 1.0},
+    "crms_irregulares": {"numerator": "crms_irregulares_valor", "denominator": "crms_irregulares_valor_total", "factor": 100.0},
+}

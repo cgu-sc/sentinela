@@ -38,9 +38,11 @@ from .financeiro import (
     get_evolucao_mensal_gtin,
     get_gtin_ranking_periodo,
 )
-from .indicadores import (
+from .indicator_config import (
     INDICATOR_MAPPING,
-    _INDICATOR_FLAGS,
+    INDICATOR_FLAGS as _INDICATOR_FLAGS,
+)
+from .indicadores import (
     get_indicadores,
     get_indicadores_analise,
     get_indicadores_analise_cnpjs,

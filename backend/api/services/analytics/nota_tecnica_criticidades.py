@@ -17,9 +17,11 @@ from data_cache import (
 )
 from .clinico import get_incompatibilidade_patologica_data
 from .falecidos import get_falecidos_data
-from .matriz_risco_dinamica import (
+from .indicator_config import (
     INDICATOR_MAPPING,
-    _INDICATOR_FLAGS,
+    INDICATOR_FLAGS as _INDICATOR_FLAGS,
+)
+from .matriz_risco_dinamica import (
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
 from .nota_tecnica_docx_utils import (

@@ -386,7 +386,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
 
       if (tabSlug === 'teia') {
-        await this.fetchNetwork(cnpj);
+        await this.fetchNetwork(cnpj, inicio, fim);
       }
     },
 
@@ -426,7 +426,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
         ['falecidos', () => this.fetchFalecidos(clean, inicio, fim)],
         ['socios', () => this.fetchSocios(clean)],
-        ['teia-n2', () => this.fetchNetwork(clean)],
+        ['teia-n2', () => this.fetchNetwork(clean, inicio, fim)],
       ];
 
       if (uf) {
@@ -708,44 +708,58 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     },
 
     // ── Teia Societária ─────────────────────────────────────────────────────
-    async fetchNetwork(cnpj) {
+    async fetchNetwork(cnpj, inicio = null, fim = null) {
       const clean = normalizeCnpj(cnpj);
-      if (!clean || this.networkLoaded === clean) return this.networkData;
-      if (networkRequests.has(clean)) return networkRequests.get(clean);
+      const key = `${clean}|${inicio || ''}|${fim || ''}`;
+      if (!clean || this.networkLoaded === key) return this.networkData;
+      if (networkRequests.has(key)) return networkRequests.get(key);
 
       this.networkLoading = true;
-      this.networkRequestKey = clean;
+      this.networkRequestKey = key;
       this.networkError   = null;
 
       const request = (async () => {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(clean));
-        if (this.networkRequestKey !== clean) return null;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsNetwork(clean), {
+          params: {
+            data_inicio: inicio,
+            data_fim: fim,
+          },
+        });
+        if (this.networkRequestKey !== key) return null;
         this.networkData   = data;
-        this.networkLoaded = clean;
+        this.networkLoaded = key;
         return data;
       })();
 
-      networkRequests.set(clean, request);
+      networkRequests.set(key, request);
       try {
         return await request;
       } catch (e) {
-        if (this.networkRequestKey !== clean) return null;
+        if (this.networkRequestKey !== key) return null;
         console.error('Erro ao buscar teia societária:', e);
         this.networkError = ERROR_MSG;
         return null;
       } finally {
-        networkRequests.delete(clean);
-        if (this.networkRequestKey === clean) {
+        networkRequests.delete(key);
+        if (this.networkRequestKey === key) {
           this.networkLoading = false;
           this.networkRequestKey = null;
         }
       }
     },
 
-    async expandNetworkNode(cnpj, targetCnpj) {
+    async expandNetworkNode(cnpj, targetCnpj, inicio = null, fim = null) {
       if (!cnpj || !targetCnpj) return null;
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsNetworkExpand(cnpj, targetCnpj));
+        const { data } = await axios.get(
+          API_ENDPOINTS.analyticsNetworkExpand(cnpj, targetCnpj),
+          {
+            params: {
+              data_inicio: inicio,
+              data_fim: fim,
+            },
+          },
+        );
         return data;
       } catch (e) {
         console.error(`Erro ao expandir nó ${targetCnpj}:`, e);
@@ -753,7 +767,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchNetworkLevel(cnpj, level) {
+    async fetchNetworkLevel(cnpj, level, inicio = null, fim = null) {
       const clean = normalizeCnpj(cnpj);
       const numericLevel = Number(level);
       if (!clean) return null;
@@ -761,7 +775,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         throw new Error(`Nivel de teia invalido: ${level}`);
       }
 
-      const key = `${clean}|${numericLevel}`;
+      const key = `${clean}|${numericLevel}|${inicio || ''}|${fim || ''}`;
       if (this.networkLevelLoaded[numericLevel] === key) {
         return this.networkLevelData[numericLevel];
       }
@@ -776,7 +790,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const endpoint = numericLevel === 3
           ? API_ENDPOINTS.analyticsNetworkLevel3(clean)
           : API_ENDPOINTS.analyticsNetworkLevel4(clean);
-        const { data } = await axios.get(endpoint);
+        const { data } = await axios.get(endpoint, {
+          params: {
+            data_inicio: inicio,
+            data_fim: fim,
+          },
+        });
         if (this.networkLevelRequestKey[numericLevel] !== key) return null;
         this.networkLevelData[numericLevel] = data;
         this.networkLevelLoaded[numericLevel] = key;

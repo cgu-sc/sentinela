@@ -55,6 +55,36 @@ sentinela_cache/
 !package.json
 
 # === EXTERNAL MODELS ===
+
+# === SISTEMA & IDEs ===
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+AGENTS.md
+CLAUDE.md
+
+# === ARQUIVOS DE DADOS DO PROJETO ===
+relatorios/
+*.xlsx
+*.xls
+site/
+site2/
+
+dist/
+build/
+src-tauri/bin/
+sentinela_cache/
+*.exe
+*.parquet
+*.db
+*.csv
+*.json
+!frontend/package.json
+!package.json
+
+# === EXTERNAL MODELS ===
 # Incluído conforme solicitado
 arbflow-frontend-models/
 
@@ -66,3 +96,4 @@ CLAUDE.md
 CLAUDE_backup.md
 AGENTS.md
 CLAUDE.md
+roteiro_apresentacao_sentinela.md

@@ -590,6 +590,9 @@ class NetworkNodeSchema(BaseModel):
     label: str
     type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA_POPULAR' | 'PJ_OUTRAS_FARMACIAS' | 'PJ_DEMAIS_EMPRESAS'
     network_level: Optional[str] = None
+    percentual_nao_comprovacao: Optional[float] = None
+    criticidade_nao_comprovacao: Optional[str] = None
+    conexao_ms: Optional[str] = None
     razao_social: Optional[str] = None
     nome_socio: Optional[str] = None
     nome_fantasia: Optional[str] = None

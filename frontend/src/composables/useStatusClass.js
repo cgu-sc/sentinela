@@ -14,9 +14,11 @@ export function useStatusClass() {
    * @returns {string} classe CSS
    */
   function situacaoRfClass(v) {
-    if (v === 'Ativa')                     return 'status-success';
-    if (v === 'Suspensa')                  return 'status-warn';
-    if (v === 'Baixada' || v === 'Inapta') return 'status-danger';
+    const status = String(v || '').trim().toLocaleUpperCase('pt-BR');
+    if (status === 'ATIVA') return 'status-success';
+    if (['SUSPENSA', 'BAIXADA', 'INAPTA'].includes(status)) {
+      return 'status-danger';
+    }
     return 'status-secondary';
   }
 

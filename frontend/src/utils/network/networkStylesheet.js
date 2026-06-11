@@ -50,6 +50,23 @@ export function buildNetworkStylesheet() {
   });
 
   styles.push({
+    selector: 'node[type="PJ_FARMACIA_POPULAR"]',
+    style: {
+      "border-color": "data(risk_border_color)",
+      "border-width": 4,
+      label: "data(label)",
+      "text-valign": "bottom",
+      "text-halign": "center",
+      "text-wrap": "wrap",
+      "text-max-width": 116,
+      "font-size": "10px",
+      "line-height": 1.25,
+      "text-margin-y": 5,
+      "text-outline-width": 1.5,
+    },
+  });
+
+  styles.push({
     selector: "edge",
     style: {
       "curve-style": "bezier",

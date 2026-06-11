@@ -1,4 +1,6 @@
 <script setup>
+import { NETWORK_RISK_BORDER_COLORS } from "@/utils/network/networkConstants";
+
 defineProps({
   typeLabels: {
     type: Object,
@@ -28,9 +30,22 @@ defineProps({
     <span class="legend-deceased-cross"></span>
     <span class="legend-label">Falecido</span>
   </div>
-  <div class="legend-item">
-    <span class="legend-line inactive"></span>
-    <span class="legend-label">Vínculo Inativo</span>
+  <div class="legend-item risk-legend">
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.NORMAL }"
+    ></span>
+    <span class="legend-label">Normal</span>
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.ATTENTION }"
+    ></span>
+    <span class="legend-label">Atenção</span>
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.CRITICAL }"
+    ></span>
+    <span class="legend-label">Crítico</span>
   </div>
 </template>
 
@@ -119,13 +134,26 @@ defineProps({
   border-top: 2px dotted #f59e0b;
 }
 
-.legend-line.inactive {
-  border-top: 2px dotted #ef4444;
-}
-
 .legend-label {
   font-size: 0.68rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
+.risk-legend {
+  gap: 0.25rem;
+}
+
+.legend-risk-box {
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: var(--card-bg);
+  flex-shrink: 0;
+}
+
+.risk-legend .legend-label {
+  margin-right: 0.25rem;
+}
+
 </style>

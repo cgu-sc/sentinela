@@ -1,22 +1,22 @@
 <script setup>
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
-import { useIndicadoresStore } from '@/stores/indicadores';
+import { useRiskIndicatorsStore } from '@/stores/riskIndicators';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
 const props = defineProps({
   /** Metadados do indicador ativo { label, metodologia } */
-  activeIndicadorMeta: { type: Object, default: null },
+  activeRiskIndicatorMeta: { type: Object, default: null },
 });
 
 const emit = defineEmits(['select']);
 
-const indicadoresStore = useIndicadoresStore();
-const { selectedIndicador, kpis, isLoading } = storeToRefs(indicadoresStore);
+const riskIndicatorsStore = useRiskIndicatorsStore();
+const { selectedRiskIndicator, kpis, isLoading } = storeToRefs(riskIndicatorsStore);
 
 
 
-function selectIndicador(key) {
+function selectRiskIndicator(key) {
   emit('select', key);
 }
 </script>
@@ -40,14 +40,14 @@ function selectIndicador(key) {
           v-for="ind in grupo.indicators"
           :key="ind.key"
           class="ind-btn"
-          :class="{ 'ind-btn--active': selectedIndicador === ind.key }"
-          @click="selectIndicador(ind.key)"
+          :class="{ 'ind-btn--active': selectedRiskIndicator === ind.key }"
+          @click="selectRiskIndicator(ind.key)"
           :title="ind.metodologia"
         >
           <span class="ind-btn-label">{{ ind.label }}</span>
 
           <i
-            v-if="isLoading && selectedIndicador === ind.key"
+            v-if="isLoading && selectedRiskIndicator === ind.key"
             class="pi pi-spin pi-spinner ind-loading-icon"
           />
         </button>
@@ -56,9 +56,9 @@ function selectIndicador(key) {
 
     <!-- Info do indicador ativo -->
     <Transition name="ind-info">
-      <div v-if="activeIndicadorMeta" class="ind-info-box">
-        <div class="ind-info-label">{{ activeIndicadorMeta.label }}</div>
-        <p class="ind-info-metodologia">{{ activeIndicadorMeta.metodologia }}</p>
+      <div v-if="activeRiskIndicatorMeta" class="ind-info-box">
+        <div class="ind-info-label">{{ activeRiskIndicatorMeta.label }}</div>
+        <p class="ind-info-metodologia">{{ activeRiskIndicatorMeta.metodologia }}</p>
       </div>
     </Transition>
   </aside>

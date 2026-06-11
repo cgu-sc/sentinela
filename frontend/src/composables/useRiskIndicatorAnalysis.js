@@ -1,41 +1,41 @@
 import { onScopeDispose, watch } from 'vue';
 import { useFilterStore } from '@/stores/filters';
-import { useIndicadoresStore } from '@/stores/indicadores';
+import { useRiskIndicatorsStore } from '@/stores/riskIndicators';
 
 const ESTABELECIMENTO_FETCH_DEBOUNCE_MS = 450;
 
 /**
  * Orquestra o fetch da analise de indicadores reagindo aos filtros globais.
  */
-export function useFetchIndicadores() {
+export function useRiskIndicatorAnalysis() {
   const filterStore = useFilterStore();
-  const indicadoresStore = useIndicadoresStore();
+  const riskIndicatorsStore = useRiskIndicatorsStore();
   let estabelecimentoFetchTimer = null;
   let lastEstabelecimentoKey = filterStore.estabelecimentoFilterKey;
 
-  function getIndicadorParams() {
+  function getRiskIndicatorParams() {
     return { ...filterStore.indicadoresApiParams };
   }
 
-  function getIndicadorTabelaParams() {
+  function getRiskIndicatorTableParams() {
     return { ...filterStore.indicadoresTabelaApiParams };
   }
 
-  function fetchForIndicador(indicadorKey) {
-    indicadoresStore.fetchIndicadorAnalise(indicadorKey, getIndicadorParams());
-    indicadoresStore.fetchIndicadorCnpjs(indicadorKey, getIndicadorTabelaParams(), { page: 1 });
+  function fetchRiskIndicator(indicatorKey) {
+    riskIndicatorsStore.fetchRiskIndicatorSummary(indicatorKey, getRiskIndicatorParams());
+    riskIndicatorsStore.fetchRiskIndicatorEstablishments(indicatorKey, getRiskIndicatorTableParams(), { page: 1 });
   }
 
-  function fetchCnpjsForIndicador(indicadorKey, tableState = {}) {
-    indicadoresStore.fetchIndicadorCnpjs(indicadorKey, getIndicadorTabelaParams(), tableState);
+  function fetchRiskIndicatorEstablishmentsPage(indicatorKey, tableState = {}) {
+    riskIndicatorsStore.fetchRiskIndicatorEstablishments(indicatorKey, getRiskIndicatorTableParams(), tableState);
   }
 
   watch(
     () => filterStore.indicadoresTabelaApiParamsKey,
     () => {
       const run = () => {
-        if (indicadoresStore.selectedIndicador) {
-          fetchForIndicador(indicadoresStore.selectedIndicador);
+        if (riskIndicatorsStore.selectedRiskIndicator) {
+          fetchRiskIndicator(riskIndicatorsStore.selectedRiskIndicator);
         }
       };
 
@@ -56,5 +56,5 @@ export function useFetchIndicadores() {
     clearTimeout(estabelecimentoFetchTimer);
   });
 
-  return { fetchForIndicador, fetchCnpjsForIndicador };
+  return { fetchRiskIndicator, fetchRiskIndicatorEstablishmentsPage };
 }

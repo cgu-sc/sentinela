@@ -39,14 +39,14 @@ INDICATOR_FLAGS: dict[str, tuple[str, str]] = {
 }
 
 INDICATOR_MZ_THRESHOLDS: dict[str, tuple[float, float]] = {
-    "falecidos": (2.00, 3.00),
+    "falecidos": (4, 4.5),
     "incompatibilidade_patologica": (2.00, 2.80),
-    "teto": (1.17, 1.25),
+    "teto": (0.85, 1.35),
     "polimedicamento": (2.00, 2.40),
     "ticket_medio": (1.40, 1.80),
     "receita_paciente": (2, 3),
     "per_capita": (2, 3),
-    "alto_custo": (1.02, 1.05),
+    "alto_custo": (1.02, 1.3),
     "vendas_rapidas": (3.00, 4.00),
     "volume_atipico": (1.80, 2.00),
     "recorrencia_sistemica": (1.50, 1.90),

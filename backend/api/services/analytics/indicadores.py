@@ -816,7 +816,7 @@ def get_indicadores_analise_cnpjs(
     volume_atipico_limite: float | None = None,
     page: int = 1,
     page_size: int = 20,
-    sort_field: str = "risco_reg",
+    sort_field: str = "val_sem_comp",
     sort_order: str | int | None = "desc",
 ) -> IndicadorCnpjPageResponse:
     try:

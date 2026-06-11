@@ -755,7 +755,7 @@ class IndicadorCnpjPageResponse(BaseModel):
     total: int = 0
     page: int = 1
     page_size: int = 20
-    sort_field: str = "risco_reg"
+    sort_field: str = "val_sem_comp"
     sort_order: str = "desc"
 
 

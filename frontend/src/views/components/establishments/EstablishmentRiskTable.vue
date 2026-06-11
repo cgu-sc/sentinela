@@ -23,7 +23,7 @@ const props = defineProps({
   totalRecords: { type: Number, default: 0 },
   first: { type: Number, default: 0 },
   rows: { type: Number, default: 20 },
-  sortField: { type: String, default: 'risco_reg' },
+  sortField: { type: String, default: 'val_sem_comp' },
   sortOrder: { type: Number, default: -1 },
   tableKpis: { type: Object, default: null },
   selectedRegiaoNome: { type: String, default: null },
@@ -223,7 +223,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       <!-- UF + Município -->
       <Column
         field="municipio"
-        header="Localização"
+        header="Município"
         sortable
         headerClass="col-location"
         bodyClass="col-location"

@@ -49,8 +49,15 @@ function formatShare(value, total) {
 }
 
 const summaryItems = computed(() => {
-  if (!props.kpis) return [];
-  const k = props.kpis;
+  const estabelecimentos = props.mapData.reduce(
+    (total, row) => total + Number(row.total_cnpjs ?? 0),
+    0
+  );
+  const criticos = props.mapData.reduce(
+    (total, row) => total + Number(row.total_critico ?? 0),
+    0
+  );
+  const k = props.kpis ?? {};
   const total = (k.total_critico ?? 0)
     + (k.total_atencao ?? 0)
     + (k.total_normal ?? 0)
@@ -59,8 +66,8 @@ const summaryItems = computed(() => {
   return [
     {
       label: 'Crítico',
-      value: k.total_critico ?? 0,
-      sub: formatShare(k.total_critico ?? 0, total),
+      value: criticos,
+      sub: formatShare(criticos, estabelecimentos),
       tone: 'critical',
     },
     {
@@ -335,8 +342,9 @@ const optimalLayoutSize = computed(() => {
     const factor = containerAspect / geoAspect;
     return `${Math.round((1 / factor) * 96)}%`;
   }
-  // Mapa mais alto que container → limitado pela altura → layoutSize padrão
-  return '96%';
+  const roomFactor = Math.max(0, (containerAspect / geoAspect) - 1);
+  const fillBoost = Math.min(1.03, 1 + (roomFactor * 0.08));
+  return `${Math.round(96 * fillBoost)}%`;
 });
 
 // ── Chart option ──────────────────────────────────────────────────────────────
@@ -362,7 +370,7 @@ const chartOption = computed(() => {
         if (!d.hasData || d.total_cnpjs === 0) {
           return `
             <div style="padding: 2px; min-width: 140px; color: ${c.tooltipText}">
-              <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">${label}</div>
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">${label}</div>
               <div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Sem dados disponíveis</div>
             </div>
           `;
@@ -373,7 +381,7 @@ const chartOption = computed(() => {
 
         return `
           <div style="padding: 2px; min-width: 180px; color: ${c.tooltipText}">
-            <div style="font-weight: 700; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid ${c.tooltipBorder}; padding-bottom: 6px;">
+            <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid ${c.tooltipBorder}; padding-bottom: 6px;">
               ${label}
             </div>
             
@@ -440,8 +448,24 @@ function onMapClick(params) {
   <div class="ind-map-card" :class="{ 'is-refreshing': isLoading }">
     <div class="map-header">
       <i class="pi pi-map" />
-      <h3>{{ indicadorLabel?.toUpperCase() }}</h3>
-      <span class="map-subtitle">% de farmácias CRÍTICAS por {{ isNational ? 'UF' : 'município' }}</span>
+      <div class="map-title">
+        <h2>Municípios</h2>
+        <span>% de farmácias críticas por {{ isNational ? 'UF' : 'município' }} · {{ indicadorLabel }}</span>
+      </div>
+      <div v-if="summaryItems.length" class="map-summary">
+        <div
+          v-for="item in summaryItems"
+          :key="item.label"
+          class="summary-item"
+          :class="`summary-item--${item.tone}`"
+        >
+          <span>{{ item.label }}</span>
+          <div class="summary-inline">
+            <strong class="summary-main">{{ item.value }}</strong>
+            <small v-if="item.sub" class="summary-sub">{{ item.sub }}</small>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- v-show em vez de v-if: mantém o elemento no DOM para ECharts medir dimensões -->
@@ -455,30 +479,15 @@ function onMapClick(params) {
         @click="onMapClick"
       />
 
-      <div v-if="summaryItems.length" class="map-summary-panel">
-        <div
-          v-for="item in summaryItems"
-          :key="item.label"
-          class="summary-row"
-          :class="`summary-row--${item.tone}`"
-        >
-          <span class="summary-label">{{ item.label }}</span>
-          <span class="summary-value">
-            {{ item.value }}
-            <small v-if="item.sub">{{ item.sub }}</small>
-          </span>
-        </div>
-      </div>
-
       <!-- Controles de Zoom -->
       <div class="map-controls">
-        <button class="zoom-btn" @click="handleZoom(0.5)" title="Aumentar Zoom">
+        <button class="zoom-btn" type="button" @click="handleZoom(0.5)" v-tooltip.bottom="'Aumentar zoom'">
           <i class="pi pi-plus" />
         </button>
-        <button class="zoom-btn" @click="handleZoom(-0.5)" title="Diminuir Zoom">
+        <button class="zoom-btn" type="button" @click="handleZoom(-0.5)" v-tooltip.bottom="'Diminuir zoom'">
           <i class="pi pi-minus" />
         </button>
-        <button class="zoom-btn" @click="zoomLevel = 1" title="Resetar Zoom">
+        <button class="zoom-btn" type="button" @click="zoomLevel = 1" v-tooltip.bottom="'Reiniciar zoom'">
           <i class="pi pi-refresh" />
         </button>
       </div>
@@ -494,130 +503,125 @@ function onMapClick(params) {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
+  height: calc(40vh + 42px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .ind-map-card.is-refreshing {
-  opacity: 0.5;
+  opacity: 0.55;
   pointer-events: none;
 }
 
 .map-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  gap: 0.8rem;
+  padding: 0.8rem 1.15rem;
   border-bottom: 1px solid var(--tabs-border);
   flex-shrink: 0;
 }
 
-.map-header i {
+.map-header > i {
   color: var(--primary-color);
   font-size: 1rem;
   flex-shrink: 0;
 }
 
-.map-header h3 {
+.map-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.map-title h2 {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-color-85);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color-85);
-  opacity: 0.8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.map-subtitle {
+.map-title span {
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+.map-summary {
   margin-left: auto;
-  white-space: nowrap;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
-.map-wrapper {
-  height: 40vh;
-  position: relative;
-}
-
-.map-summary-panel {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 5;
-  width: 220px;
-  padding: 0.55rem 0.65rem;
+.summary-item {
+  min-width: 104px;
+  padding: 0.48rem 0.62rem;
   border: 1px solid color-mix(in srgb, var(--card-border) 82%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-  backdrop-filter: blur(12px) saturate(145%);
-  -webkit-backdrop-filter: blur(12px) saturate(145%);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
-  pointer-events: none;
+  background: color-mix(in srgb, var(--card-bg) 86%, transparent);
 }
 
-.summary-row {
+.summary-item--critical {
+  min-width: 146px;
+  border-color: color-mix(in srgb, var(--risk-critical) 34%, var(--card-border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--risk-critical) 13%, var(--card-bg)),
+      color-mix(in srgb, var(--card-bg) 92%, transparent)
+    );
+}
+
+.summary-item span {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.summary-item strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-color);
+  line-height: 1;
+}
+
+.summary-item--critical .summary-main {
+  color: var(--risk-critical);
+}
+
+.summary-inline {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.34rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 70%, transparent);
+  gap: 0.45rem;
 }
 
-.summary-row:last-child {
-  border-bottom: none;
-}
-
-.summary-label {
-  min-width: 0;
-  font-size: 0.66rem;
-  font-weight: 700;
+.summary-sub {
+  font-size: 0.75rem;
+  font-weight: 500;
   line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-color-85);
-  opacity: 0.68;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--risk-critical) 78%, var(--text-muted));
 }
 
-.summary-value {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  flex-shrink: 0;
-  font-size: 0.95rem;
-  font-weight: 750;
-  line-height: 1;
-  color: var(--text-color-85);
-}
-
-.summary-value small {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  opacity: 0.75;
-}
-
-.summary-row--critical .summary-value {
-  color: var(--risk-indicator-critical);
-}
-
-.summary-row--warning .summary-value {
+.summary-item--warning .summary-main {
   color: var(--risk-indicator-warning);
 }
 
-.summary-row--normal .summary-value {
-  color: var(--risk-indicator-normal);
+.summary-item--warning .summary-sub {
+  color: color-mix(in srgb, var(--risk-indicator-warning) 78%, var(--text-muted));
+}
+
+.map-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .echart {
@@ -626,53 +630,47 @@ function onMapClick(params) {
 }
 
 .map-loading {
-  height: 40vh;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 1.5rem;
+  font-size: 1.4rem;
 }
 
-/* ── CONTROLES DE ZOOM ── */
 .map-controls {
   position: absolute;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  right: 1rem;
+  bottom: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  z-index: 10;
+  gap: 0.45rem;
 }
 
 .zoom-btn {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  color: var(--text-color-85);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  color: var(--text-color);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .zoom-btn:hover {
-  background: var(--bg-color);
   border-color: var(--primary-color);
   color: var(--primary-color);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .zoom-btn i {
-  font-size: 0.75rem;
-}
-
-:global(.dark-mode) .zoom-btn {
-  background: rgba(45, 45, 45, 0.85);
-  backdrop-filter: blur(4px);
+  font-size: 0.72rem;
 }
 </style>

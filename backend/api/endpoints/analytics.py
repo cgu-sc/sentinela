@@ -465,7 +465,7 @@ def get_indicadores_analise_cnpjs(
     volume_atipico_limite: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
-    sort_field: str = Query("risco_reg"),
+    sort_field: str = Query("val_sem_comp"),
     sort_order: str = Query("desc"),
 ):
     """Retorna uma pagina server-side da tabela de CNPJs de /indicadores."""
